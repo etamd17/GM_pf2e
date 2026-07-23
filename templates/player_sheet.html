@@ -17,25 +17,11 @@
             try { localStorage.setItem('pf2e_theme', 'dark'); } catch(_) {}
         })();
     </script>
-    <script src="https://cdn.tailwindcss.com"></script>
+    {# Precompiled Tailwind utilities — replaces the runtime Tailwind Play CDN
+       (full engine + in-browser JIT). Regenerate: cd tools/tailwind &&
+       npm install && node build.mjs (see docs/tailwind-build.md). #}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tw-player_sheet.css') }}">
     <script type="module" src="{{ url_for('static', filename='js/dice-engine.js') }}"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        gray: { 950: '#0d0d12', 900: '#191920', 800: '#24242e', 700: '#2e2e3c', 600: '#42425a', 500: '#6b6b8a', 400: '#9494b0', 300: '#b8b8cc', 200: '#d8d8e6', 100: '#ededf4', },
-                        amber: { 50: '#fef9ec', 100: '#fcefc5', 200: '#f9dc86', 300: '#d4a244', 400: '#b8860b', 500: '#9a7209', 600: '#7a5a07', 700: '#5c4305', 800: '#3d2d04', 900: '#1e1602' },
-                        red: { 300: '#fca5a5', 400: '#f87171', 500: '#c53131', 800: '#6b1525', 900: '#3D0A13', },
-                        green: { 200: '#A7F3D0', 400: '#4ADE80', 500: '#22C55E', 800: '#14532D', 900: '#022C22', },
-                        blue: { 300: '#93C5FD', 400: '#60A5FA', 900: '#1e2a4a' },
-                        purple: { 300: '#C4B5FD', 400: '#A78BFA' },
-                    },
-                    fontFamily: { header: ['Cinzel', 'serif'], body: ['Inter', 'system-ui', 'sans-serif'], mono: ['ui-monospace', 'monospace'], }
-                }
-            }
-        }
-    </script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Cinzel:wght@400;600;700;900&family=Alegreya:ital,wght@0,400;0,500;0,700;1,400;1,500&display=swap');
 
@@ -2058,6 +2044,10 @@
             #roll-toast-container { width: calc(100vw - 24px) !important; right: 12px !important; top: 12px !important; }
             /* d20 FAB: push above the tab bar so they don't overlap on mobile */
             #dice-widget { bottom: 60px !important; }
+            /* Scroll buffer so the last content — and the conditions / persistent-damage
+               controls — can always be scrolled clear of the fixed FAB cluster at the
+               bottom-right, instead of sitting permanently underneath it on phones. */
+            body { padding-bottom: 104px !important; }
         }
         @media (max-width: 480px) {
             .max-w-6xl { padding-left:8px !important; padding-right:8px !important; }
@@ -5059,6 +5049,7 @@
             }
         }
 
+        let _spellSaveToastTimer = null;
         async function _saveSpellState() {
             try {
                 await fetch(`/api/spell_slots/${pcNameEncoded}`, {
@@ -5070,6 +5061,13 @@
                         cast_prep: window._castPrep
                     })
                 });
+                // Persistence confidence: prep writes to the PC's file on disk, but it
+                // happens silently. Flash a debounced confirmation so the player trusts
+                // their choices carry to the next session (one toast per burst of edits).
+                clearTimeout(_spellSaveToastTimer);
+                _spellSaveToastTimer = setTimeout(function () {
+                    if (window.pf2eToast) window.pf2eToast('Spell prep saved', 'success');
+                }, 500);
             } catch(e) {}
         }
 
@@ -7345,6 +7343,22 @@
                     if (sp.actions) spellActions[sp.name] = sp.actions;
                 });
             });
+
+            // Caster-type + prep-interaction guidance (clarity pass): players found it
+            // unclear what type of caster they are and whether to drag or click to prep.
+            const _tType = (caster.type || 'prepared').toLowerCase();
+            const _tTrad = (caster.tradition || '').charAt(0).toUpperCase() + (caster.tradition || '').slice(1);
+            const _typeBlurb = _tType === 'spontaneous'
+                ? 'You know a fixed repertoire and cast any known spell into any same-or-higher-rank slot — no daily prep.'
+                : 'You prepare spells each day from your list; each prepared spell fills one slot until you cast it.';
+            const _howTo = _tType === 'spontaneous'
+                ? 'Your repertoire is fixed — use <b style="color:var(--color-spell);">+ Learn Spell</b> to change known spells.'
+                : 'To prepare: <b>drag</b> a spell onto a slot, or click <b style="color:var(--color-spell);">+ Prep</b> to auto-fill the lowest open slot.';
+            html += `<div class="mb-3 p-2.5 rounded-lg" style="background:rgba(167,139,250,0.06); border:1px solid rgba(167,139,250,0.18);">
+                <div class="text-[11px] font-header uppercase tracking-wider mb-1" style="color:var(--color-spell);">${_tTrad} ${_tType} caster${caster.name ? ' &middot; ' + caster.name : ''}</div>
+                <div class="text-[11px] leading-snug" style="color:var(--text-secondary);">${_typeBlurb}</div>
+                <div class="text-[10px] mt-1.5" style="color:var(--text-muted);">${_howTo} Changes save automatically.</div>
+            </div>`;
 
             // (R2) Cantrip section — flat selection, NOT slot drop-zones.
             // Per PF2e cantrip rules: a prepared caster picks N cantrips per day;

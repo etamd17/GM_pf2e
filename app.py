@@ -6227,10 +6227,60 @@ def api_leave_campaign():
     session.pop('player_name', None)
     return jsonify({'success': True})
 
+_SKILL_MATRIX_ORDER = ['Acrobatics', 'Arcana', 'Athletics', 'Crafting', 'Deception',
+    'Diplomacy', 'Intimidation', 'Medicine', 'Nature', 'Occultism', 'Performance',
+    'Religion', 'Society', 'Stealth', 'Survival', 'Thievery']
+
+
+def _build_party_skill_matrix(party):
+    """Cross-party skill comparison: rows = skills, columns = PCs, each cell the PC's
+    bonus + proficiency, with the party-best in each row flagged. Lets the GM see at a
+    glance who to call for a given check ("who's best at Athletics?")."""
+    def _num(t):
+        try:
+            return int(str(t).replace('+', '').strip())
+        except (ValueError, TypeError):
+            return None
+    pc_maps, order, seen = [], [], set()
+    for pc in party:
+        m = {}
+        for sk in (getattr(pc, 'skills', None) or []):
+            nm = sk.get('name') if isinstance(sk, dict) else getattr(sk, 'name', None)
+            if not nm:
+                continue
+            m[nm] = sk
+            if nm not in seen:
+                seen.add(nm)
+                order.append(nm)
+        pc_maps.append(m)
+    ordered = [s for s in _SKILL_MATRIX_ORDER if s in seen] + sorted(n for n in order if n not in _SKILL_MATRIX_ORDER)
+    rows = []
+    for nm in ordered:
+        cells, best = [], None
+        for m in pc_maps:
+            sk = m.get(nm)
+            if sk:
+                total = sk.get('total') if isinstance(sk, dict) else getattr(sk, 'total', None)
+                prof = sk.get('prof_letter') if isinstance(sk, dict) else getattr(sk, 'prof_letter', '')
+                n = _num(total)
+                cells.append({'total': total, 'num': n, 'prof': prof})
+                if n is not None and (best is None or n > best):
+                    best = n
+            else:
+                cells.append(None)
+        for c in cells:
+            if c and c['num'] is not None and c['num'] == best:
+                c['best'] = True
+        rows.append({'skill': nm, 'cells': cells})
+    return {'pcs': [{'name': getattr(pc, 'name', '?'), 'level': getattr(pc, 'level', None)} for pc in party], 'rows': rows}
+
+
 @app.route('/party')
 def party_view():
     _sync_party_from_disk()
-    return render_template('party_view.html', party=list(PARTY_LIBRARY.values()))
+    party = list(PARTY_LIBRARY.values())
+    return render_template('party_view.html', party=party,
+                           skill_matrix=_build_party_skill_matrix(party))
 
 @app.route('/gm/login', methods=['GET', 'POST'])
 def gm_login():
@@ -7008,6 +7058,22 @@ def gm_hub():
     if gm_home != '/gm':
         return redirect(gm_home)
     now_playing = None  # vault removed; manual session summary wired in separately
+    # Live-status for the hub tiles (so cards carry real state, not just links).
+    party_health = []
+    for pc in PARTY_LIBRARY.values():
+        mx = getattr(pc, 'hp', 0) or 0
+        cur = getattr(pc, 'current_hp', mx)
+        cur = mx if cur is None else cur
+        party_health.append({'name': getattr(pc, 'name', '?'),
+                             'pct': round(cur / mx * 100) if mx else 100})
+    party_health.sort(key=lambda h: h['pct'])  # worst-off first, so the GM sees who needs help
+    # Modal party level — scales the hub's one-tap "Roll an NPC" quick-action.
+    _levels = [getattr(pc, 'level', 1) or 1 for pc in PARTY_LIBRARY.values()]
+    party_level = max(set(_levels), key=_levels.count) if _levels else 1
+    cal = _load_calendar()
+    ingame_date = '%s %s %s' % (cal.get('day', 1),
+                                GOLARION_MONTHS[cal.get('month', 0) % len(GOLARION_MONTHS)]['name'],
+                                cal.get('year', 4724))
     return render_template(
         'gm_hub.html',
         party_count=len(PARTY_LIBRARY),
@@ -7016,6 +7082,10 @@ def gm_hub():
         campaign=_load_campaign_config(),
         free_archetype=_free_archetype_enabled(),
         now_playing=now_playing,
+        party_health=party_health,
+        party_level=party_level,
+        ingame_date=ingame_date,
+        session_stats=_load_campaign_stats(),
     )
 
 
@@ -7525,7 +7595,15 @@ def _get_tracker_state():
             entry['hp_pct'] = round(hp_pct)
             if c.is_pc:
                 entry['strikes'] = [{'name': a['name'], 'hit': a['strikes'][0]['label'] if a.get('strikes') else '+?', 'damage': a['damage']} for a in getattr(c, 'attacks', [])]
-                entry['feats'] = [{'name': f['name'], 'desc': f.get('desc', '')} for f in getattr(c, 'feats', [])]
+                # Trim to exactly what the tracker's feat pills render: the
+                # first 20 feats, each with a plain-text, 240-char tooltip
+                # (the client does `.replace(/<[^>]*>/g,'').substring(0,240)`).
+                # Full HTML descriptions for all ~50 feats were ~9.5 KB per PC
+                # of the tracker_state payload; this cuts it to the visible tips.
+                entry['feats'] = [
+                    {'name': f['name'], 'desc': re.sub(r'<[^>]*>', '', f.get('desc') or '')[:240]}
+                    for f in getattr(c, 'feats', [])[:20]
+                ]
                 # Spell casters: name, tradition, type, and per-rank known
                 # spell list. The active-combatant card on the tracker uses
                 # this so the GM can see the PC's spell options at a glance.
@@ -9207,6 +9285,7 @@ def api_plot_die():
 def add_combatant():
     c_type = request.form.get('type') or (request.json or {}).get('type')
     path = request.form.get('path') or (request.json or {}).get('path')
+    new_c = None
     if c_type == 'monster' and path in MONSTER_LIBRARY:
         new_c = copy.deepcopy(MONSTER_LIBRARY[path])
         new_c.instance_id = str(uuid.uuid4())
@@ -9220,6 +9299,14 @@ def add_combatant():
         if new_c is not None:
             new_c.instance_id = str(uuid.uuid4())
             ACTIVE_ENCOUNTER.append(new_c)
+    # Mid-fight reinforcement: if an initiative order is already established (some
+    # combatant has a non-zero initiative), roll the newcomer in and re-sort so it
+    # takes its place instead of sitting at init 0 at the bottom. Non-PCs only —
+    # PCs still roll their own. _sort_encounter preserves whose turn it is.
+    if new_c is not None and not getattr(new_c, 'is_pc', False):
+        if any(getattr(c, 'initiative', 0) for c in ACTIVE_ENCOUNTER if c is not new_c):
+            _roll_initiative_for(new_c)
+            _sort_encounter()
     _persist_encounter_state()
     _broadcast_encounter_state()
     if _is_ajax(): return _tracker_json_response()
@@ -9909,6 +9996,52 @@ def delete_handout(handout_id):
     sse_broadcast('handout_deleted', {'id': handout_id})
     return jsonify({"success": True})
 
+def _save_image_compressed(file_storage, filepath, *, max_dim=1600, quality=82):
+    """Downscale (preserving aspect) + recompress an uploaded image before it
+    lands on the Railway volume, so a player's 8 MP phone photo doesn't sit on
+    disk at full size. Saves in the SAME format as `filepath`'s extension so the
+    served URL stays consistent.
+
+    Best-effort by design: if Pillow is missing, the image is animated, or
+    anything goes wrong, the ORIGINAL bytes are saved (an upload is never lost
+    to a compression hiccup). Returns the on-disk byte count."""
+    def _save_original():
+        try:
+            file_storage.stream.seek(0)
+        except Exception:
+            pass
+        file_storage.save(filepath)
+        return os.path.getsize(filepath) if os.path.exists(filepath) else 0
+
+    try:
+        from PIL import Image, ImageOps
+    except Exception:
+        return _save_original()
+
+    try:
+        file_storage.stream.seek(0)
+        img = Image.open(file_storage.stream)
+        # Animated GIFs/WebP: don't flatten to a single frame — keep original.
+        if getattr(img, 'n_frames', 1) > 1:
+            return _save_original()
+        img = ImageOps.exif_transpose(img)  # bake in camera orientation
+        if max(img.size) > max_dim:
+            img.thumbnail((max_dim, max_dim), Image.LANCZOS)
+        ext = os.path.splitext(filepath)[1].lower()
+        if ext in ('.jpg', '.jpeg'):
+            if img.mode not in ('RGB', 'L'):
+                img = img.convert('RGB')
+            img.save(filepath, quality=quality, optimize=True, progressive=True)
+        elif ext == '.png':
+            img.save(filepath, optimize=True)
+        elif ext == '.webp':
+            img.save(filepath, quality=quality, method=6)
+        else:
+            return _save_original()
+        return os.path.getsize(filepath) if os.path.exists(filepath) else 0
+    except Exception:
+        return _save_original()
+
 @app.route('/api/handout_upload', methods=['POST'])
 def upload_handout_image():
     """Upload an image for a handout."""
@@ -9940,7 +10073,7 @@ def upload_handout_image():
 
     filename = f"{uuid.uuid4().hex[:12]}{ext}"
     filepath = os.path.join(upload_dir, filename)
-    f.save(filepath)
+    _save_image_compressed(f, filepath, max_dim=1600)
 
     url = f"/handouts/{filename}"
     return jsonify({"success": True, "url": url})
@@ -11730,6 +11863,17 @@ def _cosmere_init_bonus(c):
     """A Cosmere combatant's initiative bonus = the Speed attribute (the Dex
     analog) for the 'traditional' rolled-initiative house-rule."""
     return int((getattr(c, 'attributes', {}) or {}).get('spd', 0) or 0)
+
+
+def _roll_initiative_for(c):
+    """Roll one combatant's initiative (d20 + the relevant bonus), matching
+    roll_npc_initiative's per-combatant logic. Used to slot a mid-fight
+    reinforcement into the established order instead of dumping it at init 0."""
+    if getattr(c, 'system', 'pf2e') == 'cosmere':
+        c.initiative = random.randint(1, 20) + _cosmere_init_bonus(c)
+    else:
+        c.initiative = random.randint(1, 20) + getattr(c, 'perception', 0)
+    return c.initiative
 
 
 @app.route('/api/roll_npc_initiative', methods=['POST'])
@@ -15145,6 +15289,67 @@ def save_notes(pc_name):
     save_and_reload_character(pc_name, pc_json, file_path)
     return jsonify({"success": True})
 
+# ── Feat/spell pack payload trimming ─────────────────────────────────────
+# The builder + level-up pickers list ~8,600 feats and ~1,800 spells, but a
+# feat/spell's `description` HTML (3.7 MB across feats, ~1.5 MB across spells)
+# is only ever shown in the on-click detail panel — never in the list. Inlining
+# every description made both pages ~10 MB. We ship the lists WITHOUT
+# descriptions and fetch the clicked one from /api/pack_detail, cutting each
+# page to ~4 MB. The RAM copies (BUILDER_FEATS/BUILDER_SPELLS) keep full text.
+def _pack_list_lean(items, *, feat=False):
+    """A feat/spell list minus the heavy `description` field. Keeps every key
+    the picker LIST + prereq-eligibility read (name/level/traits/prereqs/_id).
+    For feats, preserves a tiny `grants_focus` flag the level-up recap used to
+    derive from the (now lazy-loaded) description text."""
+    out = []
+    for it in items:
+        lean = {k: v for k, v in it.items() if k != 'description'}
+        if feat:
+            desc = (it.get('description') or '').lower()
+            if 'focus point' in desc and 'maximum' in desc:
+                lean['grants_focus'] = True
+        out.append(lean)
+    return out
+
+def _builder_feats_lean():
+    """BUILDER_FEATS ({category: [feat, ...]}) with descriptions stripped."""
+    return {cat: _pack_list_lean(arr, feat=True) for cat, arr in BUILDER_FEATS.items()}
+
+_PACK_DESC_INDEX = None
+def _pack_desc_index():
+    """Lazy key -> description map over the in-RAM packs, for /api/pack_detail.
+    Feats key by _id (and name as fallback); spells key by name (no _id). Built
+    once — BUILDER_FEATS/BUILDER_SPELLS are static after boot."""
+    global _PACK_DESC_INDEX
+    if _PACK_DESC_INDEX is None:
+        feats, spells = {}, {}
+        for arr in BUILDER_FEATS.values():
+            for it in arr:
+                d = it.get('description') or ''
+                if it.get('_id'):
+                    feats[it['_id']] = d
+                if it.get('name'):
+                    feats.setdefault(it['name'], d)
+        for it in BUILDER_SPELLS:
+            if it.get('name'):
+                spells[it['name']] = it.get('description') or ''
+        _PACK_DESC_INDEX = {'feat': feats, 'spell': spells}
+    return _PACK_DESC_INDEX
+
+@app.route('/api/pack_detail/<kind>/<path:key>')
+def pack_detail(kind, key):
+    """Return one feat/spell's full description on demand. The pickers ship the
+    lists description-less (see _pack_list_lean) and fetch the clicked row here.
+    Player-facing (not in GM_API_PREFIXES) — read-only reference text."""
+    idx = _pack_desc_index()
+    # Try the named kind first, then the other. Feat _ids and spell names don't
+    # collide; a rare name collision resolves to the requested kind.
+    for k in [kind] + [o for o in ('feat', 'spell') if o != kind]:
+        m = idx.get(k)
+        if m and key in m:
+            return jsonify({"description": m[key]})
+    return jsonify({"description": ""})
+
 @app.route('/player/builder')
 def player_builder():
     # Filter weapons/armor to level 0-1 items for starting gear
@@ -15154,8 +15359,8 @@ def player_builder():
         ancestries=BUILDER_ANCESTRIES,
         backgrounds=BUILDER_BACKGROUNDS,
         classes=BUILDER_CLASSES,
-        spells=BUILDER_SPELLS,
-        feats=BUILDER_FEATS,
+        spells=_pack_list_lean(BUILDER_SPELLS),
+        feats=_builder_feats_lean(),
         builder_data=BUILDER_DATA,
         subclass_descriptions=SUBCLASS_DESCRIPTIONS,
         weapons=starting_weapons,
@@ -15810,7 +16015,7 @@ def upload_portrait(pc_name):
         if old.startswith(safe_name + '.'):
             os.remove(os.path.join(portraits_dir, old))
 
-    file.save(os.path.join(portraits_dir, filename))
+    _save_image_compressed(file, os.path.join(portraits_dir, filename), max_dim=768)
 
     # Update the character JSON
     file_path = get_pc_file_path(pc_name)
@@ -16192,7 +16397,8 @@ def api_campaign_hero_image():
     stamp = int(time.time())
     filename = f"hero_image_{stamp}.{ext}"
     new_path = os.path.join(CAMPAIGN_ASSETS_DIR, filename)
-    f.save(new_path)
+    # Hero splash is a full-screen backdrop — allow a larger cap than portraits.
+    size = _save_image_compressed(f, new_path, max_dim=2000) or size
 
     public_url = f"/campaign_assets/{filename}"
     _save_campaign_config({'hero_image': public_url})
@@ -16247,7 +16453,8 @@ def api_campaign_crest():
     stamp = int(time.time())
     filename = f"crest_{stamp}.{ext}"
     new_path = os.path.join(CAMPAIGN_ASSETS_DIR, filename)
-    f.save(new_path)
+    # Crest is a small decorative mark — a tight cap is plenty.
+    _save_image_compressed(f, new_path, max_dim=512)
 
     public_url = f"/campaign_assets/{filename}"
     _save_campaign_config({'crest_image': public_url})
@@ -16834,7 +17041,7 @@ def player_levelup(pc_name):
         # Filter class-level features by the PC's subclass before passing
         # to the template — Storm Druid only sees Storm entries, etc.
         clf = _filter_class_level_features_for_pc(pc)
-        return render_template('player_levelup.html', pc=pc, feats=BUILDER_FEATS, spells=BUILDER_SPELLS, class_matrix=CLASS_MATRIX, builder_data=BUILDER_DATA, class_progression=CLASS_PROGRESSION, subclass_progression=SUBCLASS_PROGRESSION, monk_path_config=MONK_PATH_CONFIG, skill_feat_prereqs=SKILL_FEAT_PREREQS, char_proficiencies=pc.proficiencies, class_level_features=clf, free_archetype=_free_archetype_enabled())
+        return render_template('player_levelup.html', pc=pc, feats=_builder_feats_lean(), spells=_pack_list_lean(BUILDER_SPELLS), class_matrix=CLASS_MATRIX, builder_data=BUILDER_DATA, class_progression=CLASS_PROGRESSION, subclass_progression=SUBCLASS_PROGRESSION, monk_path_config=MONK_PATH_CONFIG, skill_feat_prereqs=SKILL_FEAT_PREREQS, char_proficiencies=pc.proficiencies, class_level_features=clf, free_archetype=_free_archetype_enabled())
     return redirect(url_for('player_view'))
 
 def _count_feats_at_level(feats, level, slot_type):

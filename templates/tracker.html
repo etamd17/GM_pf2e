@@ -117,7 +117,7 @@ body.system-cosmere .trk {
 
 .trk .hb-turn {
   display:flex; align-items:center; gap:14px;
-  background:linear-gradient(180deg, rgba(38,43,58,0.9), rgba(26,30,41,0.95));
+  background:linear-gradient(180deg, rgba(44,38,29,0.9), rgba(28,24,19,0.95));
   border:1px solid var(--t-border); border-radius:14px;
   padding:5px 12px;
   box-shadow:0 3px 14px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.04);
@@ -153,7 +153,7 @@ body.system-cosmere .trk {
 .trk .prev-btn:hover { color:var(--t-t1); border-color:var(--t-t4); }
 
 .trk .hb-right { display:flex; gap:6px; justify-content:flex-end; flex-wrap:wrap; }
-.trk .hb-btn { padding:6px 11px; background:rgba(26,30,41,0.6); border:1px solid var(--t-border); border-radius:7px; color:var(--t-t1); font-size:11px; font-weight:600; cursor:pointer; white-space:nowrap; }
+.trk .hb-btn { padding:6px 11px; background:rgba(28,24,19,0.6); border:1px solid var(--t-border); border-radius:7px; color:var(--t-t1); font-size:11px; font-weight:600; cursor:pointer; white-space:nowrap; }
 .trk .hb-btn:hover { background:var(--t-bg-higher); border-color:var(--t-t4); }
 .trk .hb-btn.gold { color:var(--t-gold); border-color:rgba(200,168,78,0.3); }
 .trk .hb-btn.gold:hover { background:rgba(200,168,78,0.08); }
@@ -246,7 +246,7 @@ body.system-cosmere .trk {
 /* ═══ COLLAPSIBLE PANELS ═══ */
 .trk .panel {
   margin-bottom:10px; padding:13px; border-radius:10px;
-  background:linear-gradient(180deg, rgba(26,30,41,0.9), rgba(19,22,31,0.9));
+  background:linear-gradient(180deg, rgba(28,24,19,0.9), rgba(20,17,12,0.9));
   border:1px solid var(--t-border);
 }
 .trk .panel.hidden { display:none; }
@@ -320,7 +320,7 @@ body.system-cosmere .trk {
    levelup rail shipped a z-55 overlay that ate clicks meant for a modal;
    this lane must never repeat that). */
 .trk .re-lane {
-  background:linear-gradient(180deg, rgba(26,30,41,0.7), rgba(19,22,31,0.75));
+  background:linear-gradient(180deg, rgba(28,24,19,0.7), rgba(20,17,12,0.75));
   border:1px solid var(--t-border); border-radius:12px;
   margin-bottom:12px; padding:0;
   box-shadow:0 6px 20px rgba(0,0,0,0.2);
@@ -388,7 +388,7 @@ body.system-cosmere .trk {
 
 /* ═══ DATA GRID ═══ */
 .trk .grid-wrap {
-  background:linear-gradient(180deg, rgba(26,30,41,0.8), rgba(19,22,31,0.85));
+  background:linear-gradient(180deg, rgba(28,24,19,0.8), rgba(20,17,12,0.85));
   border:1px solid var(--t-border); border-radius:12px; overflow:hidden;
   position:relative;
   box-shadow:0 8px 28px rgba(0,0,0,0.25);
@@ -399,9 +399,9 @@ body.system-cosmere .trk {
      primary) | conditions (1fr, flex) | actions (auto). The conditions
      column shrinks first under pressure; HP holds at 200 so the gauge
      stays readable. */
-  grid-template-columns: 36px 72px minmax(160px, 1.4fr) 52px 200px minmax(120px, 1fr) auto;
+  grid-template-columns: 36px 72px minmax(190px, 1fr) 104px 180px minmax(150px, 1.15fr) 88px;
   gap:8px; padding:10px 12px;
-  background:rgba(19,22,31,0.95);
+  background:rgba(20,17,12,0.95);
   border-bottom:1px solid var(--t-border);
   font-size:9px; letter-spacing:1.5px; color:var(--t-t3); text-transform:uppercase; font-weight:700;
   /* Sticky so column labels stay visible no matter how many combatants are
@@ -411,10 +411,11 @@ body.system-cosmere .trk {
 }
 .trk .grid-head > div { display:flex; align-items:center; }
 .trk .grid-head .h-center { justify-content:center; }
+.trk .grid-head .h-right { justify-content:flex-end; }
 
 .trk .combatant {
   display:grid;
-  grid-template-columns: 36px 72px minmax(160px, 1.4fr) 52px 200px minmax(120px, 1fr) auto;
+  grid-template-columns: 36px 72px minmax(190px, 1fr) 104px 180px minmax(150px, 1.15fr) 88px;
   gap:8px; padding:10px 12px;
   /* Fixed minimum row height — prevents content collapse when many rows
      compete for vertical space, and keeps the in-grid HP gauge readable. */
@@ -724,13 +725,21 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
   border-color:var(--t-trig-border);
 }
 
-.trk .c-ac { font-family:'JetBrains Mono',monospace; font-weight:700; font-size:15px; color:var(--t-t1); text-align:center; }
+/* Defenses cluster: AC (big) over the three saves so the GM can call a save DC
+   or read a monster's save mid-round without opening a statblock. Values are live
+   (they already fold in condition penalties like frightened). */
+.trk .c-ac { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; min-width:0; }
+.trk .c-ac .ac-main { font-family:'JetBrains Mono',monospace; font-weight:700; font-size:15px; color:var(--t-t1); line-height:1; }
+.trk .combatant.active .c-ac .ac-main { font-size:17px; }
+.trk .c-ac .ac-saves { display:flex; flex-wrap:wrap; justify-content:center; gap:2px 6px; font-family:'JetBrains Mono',monospace; font-size:9px; font-weight:600; color:var(--t-t3); line-height:1.1; }
+.trk .c-ac .ac-saves .sv { white-space:nowrap; }
+.trk .c-ac .ac-saves .sv b { color:var(--t-t2); font-weight:700; }
 
 .trk .c-hp { display:flex; flex-direction:column; gap:5px; min-width:0; }
 /* HP number sits ABOVE the gauge in a single row with the % label. The
    gauge itself is the primary signal for triage — the GM scans the bar
    colors from across the table, not the digits. */
-.trk .c-hp-top { display:flex; justify-content:space-between; align-items:baseline; font-size:13px; gap:6px; }
+.trk .c-hp-top { display:flex; justify-content:center; align-items:baseline; font-size:13px; gap:6px; }
 .trk .c-hp-top .cur { font-family:'JetBrains Mono',monospace; font-weight:700; font-size:15px; color:var(--t-t1); }
 .trk .combatant.active .c-hp-top .cur { font-size:17px; }
 .trk .combatant.active .c-hp-top .max { font-size:13px; }
@@ -738,7 +747,9 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 .trk .c-hp-top .cur.mi { color:var(--t-gold); }
 .trk .c-hp-top .cur.hi { color:var(--t-green); }
 .trk .c-hp-top .max { color:var(--t-t3); font-family:'JetBrains Mono',monospace; font-weight:500; font-size:12px; }
-.trk .c-hp-top .pct { font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700; margin-left:auto; }
+/* Percent dropped: the fill bar already carries proportion and the number the exact
+   value — three encodings of one fact (and three disagreeing color scales) was noise. */
+.trk .c-hp-top .pct { display:none; }
 /* In-grid gauge: 12px tall (vs old 6px) so the GM can read severity from
    across the table. Threshold colors are unchanged. */
 .trk .c-hp-bar { height:12px; background:var(--t-bg-higher); border-radius:4px; overflow:hidden; box-shadow: inset 0 1px 0 rgba(0,0,0,0.4); }
@@ -746,6 +757,20 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 .trk .c-hp-fill.mid { background:var(--t-gold); }
 .trk .c-hp-fill.mid-low { background:#c47a3a; }
 .trk .c-hp-fill.low { background:var(--t-red); }
+/* Inline quick damage/heal: the most frequent live action, one entry per row so a
+   hit is type-a-number-and-Enter instead of open-the-inspector-then-type. */
+.trk .c-hp-quick { display:flex; gap:0; margin-top:5px; height:24px; align-items:stretch; }
+.trk .c-hp-quick > * { height:100%; box-sizing:border-box; border:1px solid var(--t-border); }
+.trk .c-hp-quick .qhp { width:26px; flex:none; cursor:pointer; background:var(--t-bg-raised); color:var(--t-t2); font-size:15px; font-weight:700; line-height:1; display:flex; align-items:center; justify-content:center; transition:background var(--t-fast,.12s), color var(--t-fast,.12s), border-color var(--t-fast,.12s); }
+.trk .c-hp-quick .qhp.dmg { border-radius:5px 0 0 5px; }
+.trk .c-hp-quick .qhp.dmg:hover { background:rgba(168,58,58,0.22); color:var(--t-red-b); border-color:var(--t-red); }
+.trk .c-hp-quick .qhp.heal { border-radius:0 5px 5px 0; }
+.trk .c-hp-quick .qhp.heal:hover { background:rgba(74,124,42,0.22); color:var(--t-green); border-color:var(--t-green); }
+.trk .c-hp-quick .qhp-in { flex:1; min-width:0; border-left:none; border-right:none; background:var(--t-bg-surface); color:var(--t-t1); text-align:center; font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:600; }
+.trk .c-hp-quick .qhp-in::placeholder { color:var(--t-t4); font-weight:400; }
+.trk .c-hp-quick .qhp-in:focus { outline:none; border-color:var(--t-gold); position:relative; z-index:1; }
+.trk .c-hp-quick .qhp-in::-webkit-outer-spin-button,
+.trk .c-hp-quick .qhp-in::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
 /* Damage entry — segmented control: amount + type + [−][+] visually joined */
 .trk .c-hp-ctrl { display:flex; gap:0; margin-top:6px; align-items:stretch; height:32px; }
 .trk .c-hp-ctrl > * { border-radius:0; height:100%; box-sizing:border-box; }
@@ -783,14 +808,27 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 }
 .trk .c-hp-ctrl .plus:hover { background:rgba(62,186,104,0.32); }
 
-.trk .c-cond { display:flex; flex-wrap:wrap; gap:3px; align-content:center; min-width:0; }
+.trk .c-cond { display:flex; flex-wrap:wrap; gap:3px; align-content:center; align-items:center; min-width:0; }
+/* One-tap condition "+" and its popover (fixed-positioned in JS to escape the grid clip). */
+.trk .cq-wrap { position:relative; display:inline-flex; }
+.trk .cq-add { width:18px; height:18px; padding:0; border-radius:4px; border:1px dashed var(--t-border); background:transparent; color:var(--t-t3); font-size:14px; line-height:1; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; transition:color .12s, border-color .12s, background .12s; }
+.trk .cq-add:hover, .trk .cq-add[aria-expanded="true"] { color:var(--t-accent); border-color:var(--t-accent-line); border-style:solid; background:var(--t-accent-soft); }
+.trk .cq-menu { display:none; position:absolute; z-index:var(--z-dock); flex-direction:column; gap:1px; min-width:130px; padding:4px; background:var(--t-bg-higher); border:1px solid var(--t-border); border-radius:6px; box-shadow:0 8px 22px rgba(0,0,0,0.55); }
+.trk .cq-menu.open { display:flex; }
+.trk .cq-chip { text-align:left; background:transparent; border:none; border-radius:4px; color:var(--t-t1); font-family:'Inter',sans-serif; font-size:11px; font-weight:500; padding:5px 9px; cursor:pointer; white-space:nowrap; }
+.trk .cq-chip:hover { background:var(--t-accent-soft); color:var(--t-accent); }
+.trk .cq-chip.cq-more { margin-top:2px; padding-top:6px; border-top:1px solid var(--t-border); color:var(--t-t3); font-size:10px; }
 .trk .cp {
   font-size:10px; padding:1px 7px; border-radius:4px; font-weight:600;
   letter-spacing:.2px; text-transform:capitalize;
   display:inline-flex; gap:4px; align-items:center;
   background:transparent; color:var(--t-accent); border:1px solid var(--t-accent-line);
 }
-.trk .cp.red, .trk .cp.gold { background:transparent; color:var(--t-accent); border-color:var(--t-accent-line); }
+/* Severity read: condChipClass() tags dangerous conditions (dying/wounded/doomed/
+   frightened/sickened) .red and detection ones (off-guard/concealed/hidden) .gold —
+   tint them so the CONDITIONS column carries danger at a glance, not one flat gold. */
+.trk .cp.red  { background:rgba(168,58,58,0.16); color:var(--t-red-b); border-color:rgba(168,58,58,0.5); }
+.trk .cp.gold { background:rgba(200,168,78,0.13); color:var(--t-gold); border-color:var(--t-accent-line); }
 .trk .cp button {
   background:none; border:none; padding:2px 4px; cursor:pointer; color:inherit; opacity:.85; font-size:14px; line-height:1;
   border-radius:3px;
@@ -912,7 +950,7 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 }
 .trk .pd-entry .act-btn:hover { background: rgba(200,168,78,0.22); border-color: var(--t-gold); }
 
-.trk .c-act { display:flex; flex-direction:column; gap:3px; align-items:stretch; }
+.trk .c-act { display:flex; flex-direction:column; gap:3px; align-items:flex-end; }
 .trk .ew-row { display:flex; gap:2px; justify-content:center; }
 .trk .ew-btn {
   flex:1; padding:2px 0; border-radius:4px; font-size:9px; font-weight:700;
@@ -1048,7 +1086,7 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 .trk .cond-chip button:hover { opacity:1; color:var(--t-red-b); }
 
 .trk .abl-row {
-  background:rgba(26,30,41,0.7); border:1px solid var(--t-border); border-radius:7px;
+  background:rgba(28,24,19,0.7); border:1px solid var(--t-border); border-radius:7px;
   padding:8px 10px; margin-bottom:5px;
 }
 .trk .abl-row .abl-nm { font-weight:700; font-size:12px; color:var(--t-gold); margin-bottom:3px; font-family:'Cinzel',serif; letter-spacing:.3px; }
@@ -1110,12 +1148,12 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 
 /* ═══ COMBAT LOG (collapsible bottom) ═══ */
 .trk .log-wrap {
-  margin-top:12px; background:linear-gradient(180deg, rgba(26,30,41,0.7), rgba(19,22,31,0.8));
+  margin-top:12px; background:linear-gradient(180deg, rgba(28,24,19,0.7), rgba(20,17,12,0.8));
   border:1px solid var(--t-border); border-radius:10px; overflow:hidden;
 }
 .trk .log-head {
   padding:8px 12px; display:flex; justify-content:space-between; align-items:center;
-  background:rgba(19,22,31,0.5); border-bottom:1px solid var(--t-border); cursor:pointer;
+  background:rgba(20,17,12,0.5); border-bottom:1px solid var(--t-border); cursor:pointer;
 }
 .trk .log-ttl { font-family:'Cinzel',serif; font-size:10px; letter-spacing:1.4px; text-transform:uppercase; color:var(--t-t2); font-weight:700; }
 .trk .log-body {
@@ -1202,7 +1240,7 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 }
 .trk-modal-head {
   padding:14px 18px; display:flex; justify-content:space-between; align-items:flex-start;
-  border-bottom:1px solid var(--t-border); background:rgba(19,22,31,0.5);
+  border-bottom:1px solid var(--t-border); background:rgba(20,17,12,0.5);
 }
 .trk-modal-head h3 { font-family:'Cinzel',serif; font-size:17px; font-weight:700; color:var(--t-gold); margin:0; }
 .trk-modal-head .sub { font-size:10px; color:var(--t-t3); letter-spacing:1px; text-transform:uppercase; margin-top:3px; }
@@ -1221,7 +1259,7 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 .trk .secret-result {
   display:flex; justify-content:space-between; align-items:center;
   padding:7px 10px; border:1px solid var(--t-border); border-radius:6px; margin-top:5px;
-  background:rgba(26,30,41,0.7);
+  background:rgba(28,24,19,0.7);
 }
 .trk .secret-result .sr-tot { font-family:'JetBrains Mono',monospace; font-weight:700; font-size:17px; color:var(--t-t1); }
 .trk .secret-result .sr-lbl { font-size:11px; color:var(--t-gold); font-weight:600; }
@@ -1234,6 +1272,13 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 /* XP difficulty bar */
 .trk .xp-bar-wrap { margin:0 0 8px; padding:0 18px; }
 .trk .xp-bar-wrap.hidden { display:none !important; }
+/* Once initiative is rolling the XP/difficulty bar is a spent setup metric, so
+   collapse the full gradient track + tier ticks to just the one-line header
+   (PARTY LVL / XP / difficulty pill), reclaiming prime space above the roster. */
+.trk .xp-bar-wrap.compact { margin-bottom:6px; }
+.trk .xp-bar-wrap.compact .xp-bar-track,
+.trk .xp-bar-wrap.compact .xp-bar-ticks { display:none; }
+.trk .xp-bar-wrap.compact .xp-bar-header { margin-bottom:0; }
 .trk .xp-bar-header { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px; }
 .trk .xp-bar-header .xp-meta { font-size:9px; color:var(--t-t3); text-transform:uppercase; letter-spacing:.8px; font-weight:700; }
 .trk .xp-bar-header .xp-meta strong { color:var(--t-t1); }
@@ -1890,10 +1935,10 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
                 <div></div>
                 <div class="h-center">Init</div>
                 <div>Combatant</div>
-                <div class="h-center">AC</div>
+                <div class="h-center">Defenses</div>
                 <div class="h-center">Hit Points</div>
                 <div>Conditions</div>
-                <div class="h-center">Actions</div>
+                <div class="h-right">Actions</div>
             </div>
 
             <div id="initiative-list">
@@ -2534,14 +2579,20 @@ function _closeRowOverflow(m) {
     m.classList.remove('open');
     // reset the inline fixed-position styles so the CSS (absolute) takes back over
     m.style.position = ''; m.style.left = ''; m.style.right = ''; m.style.top = ''; m.style.bottom = '';
+    const btn = m.parentElement && m.parentElement.querySelector('.c-of-btn');
+    if (btn) btn.setAttribute('aria-expanded', 'false');
 }
 function toggleRowOverflow(btn) {
     const menu = btn.parentElement.querySelector('.c-of-menu');
     if (!menu) return;
     const wasOpen = menu.classList.contains('open');
     document.querySelectorAll('.c-of-menu.open').forEach(_closeRowOverflow);
+    document.querySelectorAll('.cq-menu.open').forEach(_closeCondQuick);
     if (wasOpen) return;
     menu.classList.add('open');
+    btn.setAttribute('aria-expanded', 'true');
+    const _firstItem = menu.querySelector('[role="menuitem"], button');
+    if (_firstItem) requestAnimationFrame(function(){ _firstItem.focus(); });
     // Render the menu at the VIEWPORT level (position:fixed) so it escapes the
     // grid-wrap's overflow:hidden -- otherwise Remove / elite-weak / visibility
     // get clipped off the right edge and can't be clicked (the reported "can't
@@ -2561,10 +2612,80 @@ function toggleRowOverflow(btn) {
 }
 document.addEventListener('click', function () {
     document.querySelectorAll('.c-of-menu.open').forEach(_closeRowOverflow);
+    document.querySelectorAll('.cq-menu.open').forEach(_closeCondQuick);
 });
 window.addEventListener('resize', function () {
     document.querySelectorAll('.c-of-menu.open').forEach(_closeRowOverflow);
+    document.querySelectorAll('.cq-menu.open').forEach(_closeCondQuick);
 });
+// Escape closes an open row menu / condition popover and returns focus to its trigger.
+document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    const of = document.querySelector('.c-of-menu.open');
+    if (of) {
+        const b = of.parentElement && of.parentElement.querySelector('.c-of-btn');
+        _closeRowOverflow(of);
+        if (b) b.focus();
+    }
+    const cq = document.querySelector('.cq-menu.open');
+    if (cq) {
+        const b = cq.parentElement && cq.parentElement.querySelector('.cq-add');
+        _closeCondQuick(cq);
+        if (b) b.focus();
+    }
+});
+
+// One-tap conditions: a "+" in the row's Conditions cell pops the 5 highest-frequency
+// PF2e conditions, so applying off-guard/frightened/prone/etc. is one tap instead of
+// pin-inspector -> 16-item dropdown -> scroll -> Add. Full list stays in the inspector.
+const QUICK_CONDS = [
+    {k:'off_guard',  l:'Off-guard'},
+    {k:'frightened', l:'Frightened'},
+    {k:'prone',      l:'Prone'},
+    {k:'sickened',   l:'Sickened'},
+    {k:'slowed',     l:'Slowed'},
+];
+function _closeCondQuick(m) {
+    m.classList.remove('open');
+    m.style.position=''; m.style.left=''; m.style.right=''; m.style.top=''; m.style.bottom='';
+    const btn = m.parentElement && m.parentElement.querySelector('.cq-add');
+    if (btn) btn.setAttribute('aria-expanded','false');
+}
+function toggleCondQuick(btn) {
+    const menu = btn.parentElement.querySelector('.cq-menu');
+    if (!menu) return;
+    const wasOpen = menu.classList.contains('open');
+    document.querySelectorAll('.cq-menu.open').forEach(_closeCondQuick);
+    document.querySelectorAll('.c-of-menu.open').forEach(_closeRowOverflow);
+    if (wasOpen) return;
+    menu.classList.add('open');
+    btn.setAttribute('aria-expanded','true');
+    // Fixed-position to escape the grid's overflow:hidden, right-aligned to the button.
+    const r = btn.getBoundingClientRect();
+    menu.style.position='fixed';
+    menu.style.left='auto';
+    menu.style.right = Math.max(6, window.innerWidth - r.right) + 'px';
+    menu.style.top = (r.bottom + 4) + 'px';
+    requestAnimationFrame(function () {
+        const mr = menu.getBoundingClientRect();
+        if (mr.bottom > window.innerHeight - 8) menu.style.top = Math.max(8, r.top - mr.height - 4) + 'px';
+    });
+}
+async function quickCond(id, cond) {
+    document.querySelectorAll('.cq-menu.open').forEach(_closeCondQuick);
+    await condAction(id, cond, 'add');
+}
+
+// Disambiguate identically-named combatants (4x "Batkin Guard", a PC added twice)
+// with a per-instance ordinal, deterministic by initiative order so the row label
+// and the now-acting banner agree. No shared state — safe from any render path.
+function dispName(c) {
+    if (!c) return '';
+    const same = STATE.combatants.filter(x => x.name === c.name);
+    const idx = same.indexOf(c);
+    if (same.length < 2 || idx < 0) return c.name;
+    return c.name + ' ' + (idx + 1);
+}
 
 function renderInitList() {
     const list = document.getElementById('initiative-list');
@@ -2681,13 +2802,13 @@ function renderInitList() {
             ofItems.push(`<div class="of-ew"><span class="of-lbl">Adjust</span><button class="ew-btn ${eCls}" onclick="eliteWeak('${c.instance_id}','elite')" title="Elite">E</button><button class="ew-btn" onclick="eliteWeak('${c.instance_id}','normal')" title="Normal">N</button><button class="ew-btn ${wCls}" onclick="eliteWeak('${c.instance_id}','weak')" title="Weak">W</button></div>`);
         }
         if (!c.is_pc && c.epithet && c.epithet.trim()) {
-            ofItems.push(`<button class="act-btn of-item" onclick="bossReveal('${c.instance_id}')" title="Reveal this foe with a cinematic name card on every screen">Announce reveal</button>`);
+            ofItems.push(`<button class="act-btn of-item" role="menuitem" onclick="bossReveal('${c.instance_id}')" title="Reveal this foe with a cinematic name card on every screen">Announce reveal</button>`);
         }
         if (!c.is_pc) {
-            ofItems.push(`<button class="act-btn of-item" onclick="toggleVisibility('${c.instance_id}')">${isHidden ? 'Reveal to players' : 'Hide from players'}</button>`);
+            ofItems.push(`<button class="act-btn of-item" role="menuitem" onclick="toggleVisibility('${c.instance_id}')">${isHidden ? 'Reveal to players' : 'Hide from players'}</button>`);
         }
-        ofItems.push(`<button class="act-btn of-item danger" onclick="removeCombatant('${c.instance_id}')">Remove</button>`);
-        const overflowHtml = `<div class="c-of-wrap"><button class="act-btn c-of-btn" onclick="event.stopPropagation();toggleRowOverflow(this)" aria-label="More actions for ${escapeHtml(c.name)}" title="More actions">⋯</button><div class="c-of-menu" onclick="event.stopPropagation()">${ofItems.join('')}</div></div>`;
+        ofItems.push(`<button class="act-btn of-item danger" role="menuitem" onclick="removeCombatant('${c.instance_id}')">Remove</button>`);
+        const overflowHtml = `<div class="c-of-wrap"><button class="act-btn c-of-btn" onclick="event.stopPropagation();toggleRowOverflow(this)" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${escapeHtml(dispName(c))}" title="More actions">⋯</button><div class="c-of-menu" role="menu" onclick="event.stopPropagation()">${ofItems.join('')}</div></div>`;
 
         const portCls = c.is_pc ? 'pc' : 'enemy';
 
@@ -2697,7 +2818,7 @@ function renderInitList() {
                 <input type="checkbox" class="multi-check" data-id="${c.instance_id}" onclick="event.stopPropagation();updateMultiCount();" aria-label="Select for multi-target action">
             </div>
             <div class="c-init">
-                <input type="number" value="${c.initiative}"
+                <input type="number" value="${c.initiative}" aria-label="Initiative for ${escapeHtml(dispName(c))}"
                        onkeydown="if(event.key==='Enter'){updateInit('${c.instance_id}',this.value);this.blur()}"
                        onblur="updateInit('${c.instance_id}',this.value)">
             </div>
@@ -2710,7 +2831,7 @@ function renderInitList() {
                     : ''
                 }<span class="port-init">${initials(c.name)}</span></div>
                 <div class="nm-wrap">
-                    <button class="nm" onclick="inspectCombatant('${c.instance_id}')" title="Preview this combatant in the inspector">${c.name}${c.elite_weak === 1 ? ' (E)' : ''}${c.elite_weak === -1 ? ' (W)' : ''}</button>
+                    <button class="nm" onclick="inspectCombatant('${c.instance_id}')" title="Preview this combatant in the inspector">${escapeHtml(dispName(c))}${c.elite_weak === 1 ? ' (E)' : ''}${c.elite_weak === -1 ? ' (W)' : ''}</button>
                     <div class="nm-sub">${subText}</div>
                     ${(c.system === 'cosmere' && c.cosmere) ? `<div class="nm-sub" style="color:#5eead4;font-size:10px;letter-spacing:.02em;" title="Cosmere defenses (Physical / Cognitive / Spiritual) + Deflect + injury count">Phy ${c.cosmere.defenses.phy} · Cog ${c.cosmere.defenses.cog} · Spi ${c.cosmere.defenses.spi}${c.cosmere.deflect.value ? ` · Defl ${c.cosmere.deflect.value}` : ''}${c.cosmere.injuries ? ` · <span style="color:#f87171">Injuries ${c.cosmere.injuries}</span>` : ''}</div>` : ''}
                     ${(c.system === 'cosmere' && c.cosmere && COSMERE_INIT_MODE === 'phases') ? `<div class="nm-sub" style="margin-top:2px;"><button onclick="event.stopPropagation();cosmereSpeed('${c.instance_id}','${c.cosmere.speed_choice==='fast'?'slow':'fast'}')" style="background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.4);color:#5eead4;border-radius:4px;padding:0 6px;font-size:9px;cursor:pointer;letter-spacing:.03em;" title="Cosmere turn phase — toggle Fast (2 actions, acts early) / Slow (3 actions, acts late)">${c.cosmere.speed_choice==='fast'?'FAST · 2 act':'SLOW · 3 act'}</button></div>` : ''}
@@ -2718,16 +2839,39 @@ function renderInitList() {
                 </div>
                 ${heroFlamesHtml(c)}${investitureSphereHtml(c)}
             </div>
-            <div class="c-ac" title="${(c.system === 'cosmere' && c.cosmere) ? 'Physical Defense' : 'Armor Class'}">${(c.system === 'cosmere' && c.cosmere) ? c.cosmere.defenses.phy : c.ac}</div>
+            <div class="c-ac">${(function(){
+                const sgn = function(v){ return (v == null || v === '') ? '&mdash;' : (v >= 0 ? '+' + v : '' + v); };
+                if (c.system === 'cosmere' && c.cosmere) {
+                    const d = c.cosmere.defenses;
+                    return `<div class="ac-main" title="Physical Defense">${d.phy}</div>`
+                         + `<div class="ac-saves"><span class="sv" title="Cognitive Defense">C&#8202;<b>${d.cog}</b></span><span class="sv" title="Spiritual Defense">S&#8202;<b>${d.spi}</b></span></div>`;
+                }
+                const saves = (c.fort != null || c.ref != null || c.will != null)
+                    ? `<div class="ac-saves"><span class="sv" title="Fortitude save">F&#8202;<b>${sgn(c.fort)}</b></span><span class="sv" title="Reflex save">R&#8202;<b>${sgn(c.ref)}</b></span><span class="sv" title="Will save">W&#8202;<b>${sgn(c.will)}</b></span></div>`
+                    : '';
+                return `<div class="ac-main" title="Armor Class">${c.ac}</div>${saves}`;
+            })()}</div>
             <div class="c-hp">
                 <div class="c-hp-top">
                     <span class="cur ${hpTextClass(hpPct, c.is_pc)}">${c.current_hp}<span class="max">/${c.max_hp}</span></span>
                     <span class="pct" style="color:${hpPctColor(hpPct, c.is_pc)};">${hpPct}%</span>
                 </div>
                 <div class="c-hp-bar"><div class="c-hp-ghost" style="width:0"></div><div class="c-hp-fill ${hpBarClass(hpPct, c.is_pc)}" style="width:${hpPct}%"></div></div>
+                ${!c.is_hazard ? `<div class="c-hp-quick" onclick="event.stopPropagation()">
+                    <button class="qhp dmg" title="Apply damage" onclick="rowHP('${c.instance_id}','damage')">&minus;</button>
+                    <input id="rhp-${c.instance_id}" type="number" min="0" class="qhp-in" placeholder="dmg" aria-label="Damage or healing for ${escapeHtml(dispName(c))}" onkeydown="if(event.key==='Enter'){event.preventDefault();rowHP('${c.instance_id}','damage')}">
+                    <button class="qhp heal" title="Apply healing" onclick="rowHP('${c.instance_id}','heal')">+</button>
+                </div>` : ''}
             </div>
             <div class="c-cond">
                 ${condsHtml}
+                ${!c.is_hazard ? `<div class="cq-wrap" onclick="event.stopPropagation()">
+                    <button class="cq-add" title="Add a condition" aria-haspopup="true" aria-expanded="false" aria-label="Add a condition to ${escapeHtml(dispName(c))}" onclick="event.stopPropagation();toggleCondQuick(this)">+</button>
+                    <div class="cq-menu" role="menu">
+                        ${QUICK_CONDS.map(function(qc){ return `<button class="cq-chip" role="menuitem" onclick="event.stopPropagation();quickCond('${c.instance_id}','${qc.k}')">${qc.l}</button>`; }).join('')}
+                        <button class="cq-chip cq-more" role="menuitem" onclick="event.stopPropagation();inspectCombatant('${c.instance_id}')">More&hellip;</button>
+                    </div>
+                </div>` : ''}
                 ${c.is_hazard && (c.trigger || c.routine) ? `
                     <div class="hz-prose">
                         ${c.trigger ? `<div><b>Trigger:</b> ${escapeHtml(c.trigger)}</div>` : ''}
@@ -3266,13 +3410,15 @@ function renderMeta() {
     const na = document.getElementById('now-acting-name');
     if (na) {
         const c = STATE.combatants[STATE.turn_index];
-        na.textContent = c ? c.name.toUpperCase() : '—';
+        na.textContent = c ? dispName(c).toUpperCase() : '—';
     }
 
     // XP bar
     const xpWrap = document.getElementById('xp-bar-wrap');
     if (xpWrap && STATE.encounter_xp > 0) {
         xpWrap.classList.remove('hidden');
+        // Full bar while budgeting (round 0); collapse to the header once in initiative.
+        xpWrap.classList.toggle('compact', (STATE.round || 0) >= 1);
         document.getElementById('xp-party-level').textContent = STATE.party_level;
         document.getElementById('xp-value').textContent = STATE.encounter_xp;
 
@@ -3378,6 +3524,17 @@ async function adjustHPAP(id, action) {
     fd.append('damage_type', dmgType);
     const d = await apiPost('/api/adjust_hp/' + id, fd, null);
     if (d) hpAdjustToast(action, d, amt);
+}
+
+// Inline row HP adjust: reads the row's own quick-entry field (rhp-<id>), applies
+// untyped damage/heal, then clears so the next hit is just type-and-Enter. Typed
+// damage (resist/weakness) still lives in the inspector.
+async function rowHP(id, action) {
+    const input = document.getElementById('rhp-' + id);
+    const amt = parseInt(input && input.value, 10) || 0;
+    if (!amt) { if (input) input.focus(); return; }
+    await adjustHPDirect(id, action, amt);
+    if (input) input.value = '';
 }
 
 // Direct HP adjust for keyboard shortcuts (no DOM lookup needed)
@@ -4698,6 +4855,7 @@ window.__trkFlourishReady = true;
 
 let evtSource = null;
 let _trackerSseLastMsg = 0;
+let _trackerFirstConnect = true;
 function _trackerMarkSseAlive() { _trackerSseLastMsg = Date.now(); }
 function connectSSE() {
     // Register on the shared SSE hub (base.html <head>) — one socket per tab,
@@ -4710,6 +4868,10 @@ function connectSSE() {
     // (phone asleep, Wi-Fi blip) are reconciled, not just silently dropped.
     window.appSSE('connected', function () {
         _trackerMarkSseAlive();
+        // The inline initial_state already seeded + rendered STATE at load, so the
+        // FIRST connect needs no refetch (it was a redundant second full GET). Only
+        // RE-connects (phone asleep, Wi-Fi blip) refetch to reconcile missed events.
+        if (_trackerFirstConnect) { _trackerFirstConnect = false; return; }
         apiGet('/api/tracker_state').then(data => applyState(data)).catch(() => {});
     });
     window.appSSE('keepalive', _trackerMarkSseAlive);
@@ -4728,8 +4890,13 @@ function connectSSE() {
                 return;
             }
             const cur = STATE.combatants || [];
+            // Match by instance_id at each position — NOT name. Two identically-named
+            // combatants (Batkin Guard 1 & 2) that swap order would pass a name check,
+            // and the by-index HP patch below would then land on the wrong duplicate.
+            // Comparing instance_id makes any reorder/add/remove fall back to a full GET
+            // (which also keeps turn_index, index-based, pointing at the right actor).
             const sameShape = cur.length === ssEnc.length
-                && cur.every((c, i) => c && ssEnc[i] && c.name === ssEnc[i].name && c.is_pc === ssEnc[i].is_pc);
+                && cur.every((c, i) => c && ssEnc[i] && c.instance_id === ssEnc[i].instance_id);
             if (!sameShape) {
                 apiGet('/api/tracker_state').then(data => applyState(data)).catch(()=>{});
                 return;
@@ -5033,7 +5200,7 @@ async function doRecallKnowledge() {
         };
         const cfg = degreeCfg[r.degree] || degreeCfg.failure;
 
-        let html = `<div style="background:rgba(26,30,41,0.8);border:1px solid var(--t-border);border-radius:8px;overflow:hidden;">`;
+        let html = `<div style="background:rgba(28,24,19,0.8);border:1px solid var(--t-border);border-radius:8px;overflow:hidden;">`;
         html += `<div style="background:${cfg.bg};border-bottom:1px solid ${cfg.border};padding:10px 14px;display:flex;align-items:center;justify-content:space-between;">
             <div style="display:flex;align-items:center;gap:8px;">
                 <span style="font-size:16px;color:${cfg.color};">${cfg.icon}</span>
@@ -5047,7 +5214,7 @@ async function doRecallKnowledge() {
                 <div style="font-size:9px;color:var(--t-t3);">vs DC ${r.dc}</div>
             </div>
         </div>`;
-        html += `<div style="padding:8px 14px;background:rgba(20,24,34,0.5);font-size:10px;color:var(--t-t3);font-family:'JetBrains Mono',monospace;border-bottom:1px solid var(--t-border);">
+        html += `<div style="padding:8px 14px;background:rgba(20,17,12,0.5);font-size:10px;color:var(--t-t3);font-family:'JetBrains Mono',monospace;border-bottom:1px solid var(--t-border);">
             ${r.skill} check: d20(${r.d20}) + ${r.modifier} = ${r.total}${r.d20 === 20 ? ' [NAT 20]' : ''}${r.d20 === 1 ? ' [NAT 1]' : ''}
         </div>`;
 

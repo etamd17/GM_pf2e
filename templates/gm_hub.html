@@ -7,7 +7,7 @@
             background:
                 radial-gradient(circle at 20% 0%, rgba(201,163,78,0.05), transparent 55%),
                 radial-gradient(circle at 80% 100%, rgba(168,58,58,0.04), transparent 50%);
-            padding: var(--sp-7) var(--sp-6);
+            padding: var(--sp-5) var(--sp-6);
         }
         .gm-hub-quick-link {
             font-size: 11px;
@@ -24,106 +24,207 @@
             color: var(--text-on-dark-3);
             margin: 0 0 var(--sp-2); padding-left: var(--sp-1);
         }
+        .gm-group-label.run { color: var(--gilt-200); }
+        /* Compact identity band: crest + name/arc + status pills */
+        .gm-hub-header {
+            display: flex; align-items: center; gap: var(--sp-4);
+            margin-bottom: var(--sp-3); padding-bottom: var(--sp-3);
+            border-bottom: 1px solid var(--border-card);
+        }
+        .gm-crest { width: 58px; height: 58px; flex: none; color: var(--gilt-200); }
+        .gm-crest svg { width: 100%; height: 100%; display: block; }
+        .gm-id { min-width: 0; }
+        .gm-id .eyebrow { font-family: var(--font-display); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--text-on-dark-3); }
+        .gm-id h1 { font-family: var(--font-display); font-size: 25px; letter-spacing: 0.03em; color: var(--gilt-100); margin: 1px 0 3px; line-height: 1.05; }
+        .gm-id .arc { font-family: var(--font-flavor); font-size: 12px; font-style: italic; color: var(--text-on-dark-2); margin: 0; }
+        .gm-pills { margin-left: auto; display: flex; gap: var(--sp-2); flex-wrap: wrap; justify-content: flex-end; }
+        /* Resume-combat banner (only when an encounter is live) */
+        .resume-combat {
+            display: flex; align-items: center; gap: var(--sp-3); text-decoration: none;
+            margin-bottom: var(--sp-4); padding: var(--sp-3) var(--sp-4); border-radius: var(--r-md);
+            border: 1px solid var(--ruby-300);
+            background: linear-gradient(90deg, rgba(168,58,58,0.16), rgba(168,58,58,0.03));
+            transition: border-color var(--t-fast);
+        }
+        .resume-combat:hover { border-color: var(--ruby-200); }
+        .resume-combat .rc-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ruby-200); box-shadow: 0 0 0 0 rgba(211,110,110,0.5); animation: rcpulse 2s infinite; }
+        @keyframes rcpulse { 70% { box-shadow: 0 0 0 8px rgba(211,110,110,0); } 100% { box-shadow: 0 0 0 0 rgba(211,110,110,0); } }
+        .resume-combat .rc-txt { color: var(--text-on-dark); font-size: 13px; }
+        .resume-combat .rc-txt b { font-family: var(--font-display); color: var(--gilt-100); font-weight: 700; }
+        .resume-combat .rc-cta { margin-left: auto; font-family: var(--font-display); font-weight: 700; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gilt-100); white-space: nowrap; }
+        /* RUN emphasis: a gilt accent rail on the live-at-the-table tiles */
+        .tile--run { position: relative; }
+        .tile--run::before { content: ""; position: absolute; left: 0; top: 14px; bottom: 14px; width: 2px; border-radius: 2px; background: var(--gilt-300); opacity: 0.55; }
+        /* Unified line-icon set (replaces the mixed glyph/letter icons) */
+        .tile__glyph svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+        /* Live status on tiles: party health at a glance + counters */
+        .tile-health { display: flex; flex-direction: column; gap: 5px; margin-top: var(--sp-3); }
+        .hrow { display: flex; align-items: center; gap: 8px; }
+        .hrow i { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+        .hrow .nm { font-family: var(--font-display); font-size: 12px; color: var(--text-on-dark-2); }
+        .hrow .bd { margin-left: auto; font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+        .hrow.ok i { background: #4a7c2a; } .hrow.ok .bd { color: #7fae6e; }
+        .hrow.hurt i { background: #a4842b; } .hrow.hurt .bd { color: #cfa54e; }
+        .hrow.bloodied i { background: #c07a2e; } .hrow.bloodied .bd { color: #dd9a52; }
+        .hrow.crit i { background: #a83a3a; } .hrow.crit .bd { color: #d67a7a; }
+        .tile-stat { margin-top: var(--sp-3); font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.02em; color: var(--gilt-200); }
+        /* Quick-action tiles: a stretched nav link + one raised action button */
+        .tile__link { position: static; }
+        .tile__link::after { content: ""; position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
+        .tile__qa { position: relative; z-index: 2; margin-top: var(--sp-3); display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
+        .tile-stat + .tile__qa { margin-top: var(--sp-2); }
+        .qa-btn {
+            font-family: var(--font-display); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+            color: var(--gilt-100); background: rgba(201,163,78,0.09);
+            border: 1px solid var(--gilt-300); border-radius: var(--r-sm);
+            padding: 5px var(--sp-3); cursor: pointer; white-space: nowrap;
+            transition: background var(--t-fast), border-color var(--t-fast), transform var(--t-fast);
+        }
+        .qa-btn:hover { background: rgba(201,163,78,0.18); border-color: var(--gilt-200); }
+        .qa-btn:active { transform: translateY(1px); }
+        .qa-out { font-family: var(--font-mono); font-size: 13px; color: var(--text-on-dark-2); min-height: 1em; }
+        .qa-out b { color: var(--gilt-100); font-size: 18px; vertical-align: -1px; }
+        .qa-out .crit { color: #7fae6e; } .qa-out .fumble { color: #d67a7a; }
+        .qa-out .lbl { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-on-dark-3); margin-right: 4px; }
+        /* Lightweight NPC quick-roll modal */
+        .qa-modal { position: fixed; inset: 0; z-index: 200; display: none; align-items: center; justify-content: center; padding: var(--sp-4); background: rgba(6,5,3,0.66); }
+        .qa-modal.open { display: flex; }
+        .qa-modal__panel { max-width: 460px; width: 100%; max-height: 82vh; display: flex; flex-direction: column; background: var(--bg-card); border: 1px solid var(--gilt-300); border-radius: var(--r-md); box-shadow: var(--shadow-2); }
+        .qa-modal__head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); padding: var(--sp-4) var(--sp-4) var(--sp-3); border-bottom: 1px solid var(--border-card); }
+        .qa-modal__head h3 { font-family: var(--font-display); font-size: 14px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gilt-100); margin: 0; }
+        .qa-modal__x { background: none; border: none; color: var(--text-on-dark-3); font-size: 20px; line-height: 1; cursor: pointer; padding: 0 4px; }
+        .qa-modal__x:hover { color: var(--text-on-dark); }
+        .qa-modal__body { padding: var(--sp-4); overflow-y: auto; font-size: 13px; line-height: 1.65; color: var(--text-on-dark); }
+        .qa-modal__body b { color: var(--gilt-200); font-weight: 700; }
+        .qa-modal__foot { display: flex; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); border-top: 1px solid var(--border-card); }
+        @media (prefers-reduced-motion: reduce) { .resume-combat .rc-dot { animation: none; } .qa-btn:active { transform: none; } }
 {% endblock %}
 {% block content %}
 
     <div class="gm-hub-stage">
         <div class="max-w-5xl mx-auto">
 
-            {# ── Hero ── #}
-            <header class="text-center" style="margin-bottom: var(--sp-7);">
-                <div class="font-display" style="font-size:10px; letter-spacing:0.18em; text-transform:uppercase; color:var(--text-on-dark-3); margin-bottom:var(--sp-1);">Game Master</div>
-                <h1 class="font-display illuminated-cap" style="font-size:28px; letter-spacing:0.04em; color:var(--gilt-100); margin:0 0 var(--sp-1);">{{ campaign.name }}</h1>
-                <p class="font-flavor" style="font-size:12px; font-style:italic; color:var(--text-on-dark-3); margin:0 0 var(--sp-3);" id="campaign-tagline">
-                    {% if campaign.tagline %}{{ campaign.tagline }}{% else %}Dashboard &amp; Tools{% endif %}
-                </p>
-                <div class="flex flex-wrap justify-center" style="gap: var(--sp-2);">
+            {# ── Identity band: crest + name/arc + status pills ── #}
+            <header class="gm-hub-header">
+                <div class="gm-crest" aria-hidden="true">
+                    <svg viewBox="0 0 48 48" fill="none">
+                        <path d="M24 3 41 9v12c0 11-8 18-17 23C15 39 7 32 7 21V9z" stroke="currentColor" stroke-width="1.6" opacity=".85"/>
+                        <path fill="currentColor" opacity=".92" d="M24 17 C22.5 15.6 20.5 15.1 19 15.6 C16 14.2 12 14.6 9 16.6 C11 16.9 12 18 12 19.4 C13.5 18.8 15.5 19 17 20.2 C15.5 20.2 14 20.6 13 21.7 C15 21 17.3 21.3 19 22.6 C18 22.5 16.8 23 16.2 24 C18.5 23.3 21 24.2 22.5 25.9 L24 27.8 L25.5 25.9 C27 24.2 29.5 23.3 31.8 24 C31.2 23 30 22.5 29 22.6 C30.7 21.3 33 21 35 21.7 C34 20.6 32.5 20.2 31 20.2 C32.5 19 34.5 18.8 36 19.4 C36 18 37 16.9 39 16.6 C36 14.6 32 14.2 29 15.6 C27.5 15.1 25.5 15.6 24 17 Z"/>
+                    </svg>
+                </div>
+                <div class="gm-id">
+                    <div class="eyebrow">Game Master</div>
+                    <h1 class="illuminated-cap">{{ campaign.name }}</h1>
+                    <p class="arc" id="campaign-tagline">{% if campaign.tagline %}{{ campaign.tagline }}{% else %}Dashboard &amp; Tools{% endif %}</p>
+                </div>
+                <div class="gm-pills">
                     <span class="pill accent">Session <span class="v">{{ campaign.session_number }}</span></span>
-                    {% if campaign.next_session_at %}
-                    <span class="pill">Next <span class="v">{{ campaign.next_session_at }}</span></span>
-                    {% endif %}
+                    {% if campaign.next_session_at %}<span class="pill">Next <span class="v">{{ campaign.next_session_at }}</span></span>{% endif %}
                     <span class="pill">Party <span class="v">{{ party_count }}</span></span>
                     <span class="pill">Bestiary <span class="v">{{ monster_count }}</span></span>
-                    {% if encounter_count > 0 %}
-                    <span class="pill live">Combat <span class="v">{{ encounter_count }} active</span></span>
-                    {% endif %}
                 </div>
             </header>
 
+            {# ── Resume-combat banner (only while an encounter is live) ── #}
+            {% if encounter_count > 0 %}
+            <a href="/tracker" class="resume-combat">
+                <span class="rc-dot" aria-hidden="true"></span>
+                <span class="rc-txt"><b>Combat in progress</b> &mdash; {{ encounter_count }} in initiative</span>
+                <span class="rc-cta">Resume &rarr;</span>
+            </a>
+            {% endif %}
+
             {# ── RUN — live at the table ── #}
-            <div class="gm-group-label">Run &mdash; live at the table</div>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3" style="gap: var(--sp-3); margin-bottom: var(--sp-5);">
-                <a href="/tracker" class="tile" {% if encounter_count > 0 %}data-tone="alert"{% endif %}>
-                    <div class="tile__glyph">&#9876;</div>
+            <div class="gm-group-label run">Run &mdash; live at the table</div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3" style="gap: var(--sp-3); margin-bottom: var(--sp-4);">
+                <a href="/tracker" class="tile tile--run" {% if encounter_count > 0 %}data-tone="alert"{% endif %}>
+                    <div class="tile__glyph"><svg viewBox="0 0 24 24"><polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"/><line x1="13" y1="19" x2="19" y2="13"/><line x1="16" y1="16" x2="20" y2="20"/><line x1="19" y1="21" x2="21" y2="19"/><polyline points="14.5 6.5 18 3 21 3 21 6 17.5 9.5"/><line x1="5" y1="14" x2="9" y2="18"/><line x1="7" y1="17" x2="4" y2="20"/><line x1="3" y1="19" x2="5" y2="21"/></svg></div>
                     <h2 class="tile__title">Encounter Tracker</h2>
                     <p class="tile__desc">Initiative order, turns, HP, conditions, persistent damage. The combat surface.</p>
                     <span class="pill {% if encounter_count > 0 %}live{% endif %}" style="margin-top:var(--sp-3);">
                         {% if encounter_count > 0 %}{{ encounter_count }} in initiative{% else %}no active combat{% endif %}
                     </span>
                 </a>
-                <a href="/party" class="tile">
-                    <div class="tile__glyph">P</div>
+                <a href="/party" class="tile tile--run">
+                    <div class="tile__glyph"><svg viewBox="0 0 24 24"><circle cx="9" cy="8.5" r="3"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5"/><circle cx="16.5" cy="9.5" r="2.3"/><path d="M13.5 20c.4-2.6 1.9-4.2 4-4.2 2 0 3.4 1.4 3.9 3.5"/></svg></div>
                     <h2 class="tile__title">Party View</h2>
                     <p class="tile__desc">HP, conditions, prepared spells &mdash; the at-a-glance party status board.</p>
-                    <span class="pill {% if party_count > 0 %}live{% endif %}" style="margin-top:var(--sp-3);">{{ party_count }} character{{ '' if party_count == 1 else 's' }}</span>
+                    {% if party_health %}
+                    <div class="tile-health">
+                        {% for h in party_health %}
+                        {% set bcls = 'ok' if h.pct > 75 else 'hurt' if h.pct > 50 else 'bloodied' if h.pct > 25 else 'crit' %}
+                        {% set band = 'Healthy' if h.pct > 75 else 'Hurt' if h.pct > 50 else 'Bloodied' if h.pct > 25 else 'Badly hurt' %}
+                        <span class="hrow {{ bcls }}"><i></i><span class="nm">{{ h.name }}</span><span class="bd">{{ band }}</span></span>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <span class="pill" style="margin-top:var(--sp-3);">no characters</span>
+                    {% endif %}
                 </a>
                 {% if active_system == 'cosmere' %}
-                <a href="/cosmere/gm/vitals" class="tile">
-                    <div class="tile__glyph">&#9830;</div>
+                <a href="/cosmere/gm/vitals" class="tile tile--run">
+                    <div class="tile__glyph"><svg viewBox="0 0 24 24"><path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"/></svg></div>
                     <h2 class="tile__title">Party Vitals</h2>
                     <p class="tile__desc">Live Health, Focus, Investiture, injuries &amp; conditions for every hero.</p>
                 </a>
                 {% endif %}
-                <a href="/gmscreen" class="tile">
-                    <div class="tile__glyph">&#9776;</div>
+                <div class="tile tile--run has-action">
+                    <a href="/gmscreen" class="tile__link" aria-label="Open GM Screen"></a>
+                    <div class="tile__glyph"><svg viewBox="0 0 24 24"><path d="M3 5h5.5v14H3zM8.5 5H15v14H8.5zM15 5h6v14h-6z"/><path d="M5 9h1.5M17 9h2"/></svg></div>
                     <h2 class="tile__title">GM Screen</h2>
                     <p class="tile__desc">DCs, conditions, combat math, compendium &amp; rules at a glance. <kbd class="kbd">C</kbd> opens checks.</p>
-                </a>
+                    <div class="tile__qa">
+                        <button type="button" class="qa-btn" onclick="qaRollD20()">Roll d20</button>
+                        <span class="qa-out" id="qa-d20-out" aria-live="polite"></span>
+                    </div>
+                </div>
             </div>
 
             {# ── PREP — build the encounter ── #}
             <div class="gm-group-label">Prep &mdash; build the encounter</div>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3" style="gap: var(--sp-3); margin-bottom: var(--sp-5);">
-                <a href="/gm/encounter_templates" class="tile">
-                    <div class="tile__glyph">&#9876;</div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3" style="gap: var(--sp-3); margin-bottom: var(--sp-4);">
+                <a href="/encounter_builder" class="tile">
+                    <div class="tile__glyph"><svg viewBox="0 0 24 24"><path d="M12 3 21 8l-9 5-9-5z"/><path d="M3 12l9 5 9-5M3 16l9 5 9-5"/></svg></div>
                     <h2 class="tile__title">Encounter Builder</h2>
                     <p class="tile__desc">XP-budget encounter builder &mdash; pick creatures by level difference, then stage them.</p>
                 </a>
-                <a href="/generator" class="tile">
-                    <div class="tile__glyph">&#9881;</div>
+                <div class="tile has-action">
+                    <a href="/generator" class="tile__link" aria-label="Open Generators"></a>
+                    <div class="tile__glyph"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1"/><circle cx="15" cy="15" r="1"/><circle cx="15" cy="9" r="1"/><circle cx="9" cy="15" r="1"/></svg></div>
                     <h2 class="tile__title">Generators</h2>
                     <p class="tile__desc">NPCs, taverns, loot, hazards, weather &mdash; scaled to party level &amp; biome.</p>
-                </a>
-                <a href="/gm/skill_challenge" class="tile">
-                    <div class="tile__glyph">&#10070;</div>
-                    <h2 class="tile__title">Skill Challenge</h2>
-                    <p class="tile__desc">Structured multi-check challenges with success/failure pips and live SSE broadcast.</p>
-                </a>
+                    <div class="tile__qa">
+                        <button type="button" class="qa-btn" onclick="qaRollNpc()">Roll an NPC</button>
+                        <span class="qa-out"><span class="lbl">lvl {{ party_level }}</span></span>
+                    </div>
+                </div>
             </div>
 
             {# ── MANAGE — the campaign ── #}
             <div class="gm-group-label">Manage &mdash; the campaign</div>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3" style="gap: var(--sp-3); margin-bottom: var(--sp-7);">
                 <a href="/player" class="tile">
-                    <div class="tile__glyph">&#9823;</div>
+                    <div class="tile__glyph"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></div>
                     <h2 class="tile__title">Player Hub</h2>
                     <p class="tile__desc">See what the players see &mdash; sheets, builders, the read-only initiative bar.</p>
                 </a>
-                <a href="/gm/loot" class="tile">
-                    <div class="tile__glyph">&#9878;</div>
-                    <h2 class="tile__title">Loot Ledger</h2>
-                    <p class="tile__desc">Party treasury, per-PC wealth, award history, and wealth-by-level compliance.</p>
-                </a>
                 <a href="/gm/stats" class="tile">
-                    <div class="tile__glyph">#</div>
+                    <div class="tile__glyph"><svg viewBox="0 0 24 24"><path d="M4 20V11M10 20V4M16 20v-6M22 20H2"/></svg></div>
                     <h2 class="tile__title">Campaign Stats</h2>
                     <p class="tile__desc">Lifetime counters &mdash; rolls, crits, damage dealt, healing, combat rounds.</p>
+                    <div class="tile-stat">{{ session_stats.total_rolls }} rolls &middot; {{ session_stats.total_crits }} crits &middot; {{ session_stats.total_combat_rounds }} rounds</div>
                 </a>
-                <a href="/gm/calendar" class="tile">
-                    <div class="tile__glyph">&#9776;</div>
+                <div class="tile has-action">
+                    <a href="/gm/calendar" class="tile__link" aria-label="Open Calendar"></a>
+                    <div class="tile__glyph"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16.5" rx="2"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg></div>
                     <h2 class="tile__title">Calendar</h2>
                     <p class="tile__desc">Golarion in-world calendar &mdash; track dates, advance days, and log events.</p>
-                </a>
+                    <div class="tile-stat" id="qa-cal-date">{{ ingame_date }}</div>
+                    <div class="tile__qa">
+                        <button type="button" class="qa-btn" onclick="qaAdvanceDay()">+1 day</button>
+                        <span class="qa-out" id="qa-cal-out" aria-live="polite"></span>
+                    </div>
+                </div>
             </div>
 
             {# ── Advancement: GM XP / level award (PR2) ── #}
@@ -205,4 +306,56 @@
             </div>
         </div>
     </div>
+
+    {# ── NPC quick-roll modal (Generators tile action) ── #}
+    <div class="qa-modal" id="qa-npc-modal" role="dialog" aria-modal="true" aria-labelledby="qa-npc-title" onclick="if(event.target===this)qaCloseNpc()">
+        <div class="qa-modal__panel">
+            <div class="qa-modal__head">
+                <h3 id="qa-npc-title">Random NPC &mdash; level {{ party_level }}</h3>
+                <button type="button" class="qa-modal__x" onclick="qaCloseNpc()" aria-label="Close">&times;</button>
+            </div>
+            <div class="qa-modal__body" id="qa-npc-body"></div>
+            <div class="qa-modal__foot">
+                <button type="button" class="qa-btn" onclick="qaRollNpc()">Roll again</button>
+                <a href="/generator" class="qa-btn" style="text-decoration:none;">Full generators &rarr;</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // GM Screen tile: one-tap d20 at the table (no round-trip).
+    function qaRollD20(){
+        var r = 1 + Math.floor(Math.random() * 20);
+        var cls = r === 20 ? 'crit' : (r === 1 ? 'fumble' : '');
+        var tag = r === 20 ? ' <span class="crit">nat 20</span>' : (r === 1 ? ' <span class="fumble">nat 1</span>' : '');
+        document.getElementById('qa-d20-out').innerHTML = '<span class="lbl">d20</span><b class="' + cls + '">' + r + '</b>' + tag;
+    }
+    // Generators tile: roll a random NPC scaled to the party level, shown in a modal.
+    function qaRollNpc(){
+        var modal = document.getElementById('qa-npc-modal');
+        var body = document.getElementById('qa-npc-body');
+        body.innerHTML = '<span style="color:var(--text-on-dark-3)">Rolling&hellip;</span>';
+        modal.classList.add('open');
+        fetch('/api/generate/npc', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({level: {{ party_level }}, biome: 'City'})})
+          .then(function(r){ return r.json(); })
+          .then(function(d){ body.innerHTML = d.html || '<span style="color:var(--ruby-200)">Could not generate an NPC.</span>'; })
+          .catch(function(){ body.innerHTML = '<span style="color:var(--ruby-200)">Request failed. Try again.</span>'; });
+    }
+    function qaCloseNpc(){ document.getElementById('qa-npc-modal').classList.remove('open'); }
+    document.addEventListener('keydown', function(e){ if(e.key === 'Escape') qaCloseNpc(); });
+    // Calendar tile: advance the in-world date by one day (survival/downtime bookkeeping).
+    function qaAdvanceDay(){
+        var out = document.getElementById('qa-cal-out');
+        out.textContent = '';
+        fetch('/api/calendar/advance', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({days: 1})})
+          .then(function(r){ return r.json(); })
+          .then(function(d){
+            if(!d.success){ out.innerHTML = '<span class="fumble">failed</span>'; return; }
+            document.getElementById('qa-cal-date').textContent = d.day + ' ' + d.month_name + ' ' + d.year;
+            out.innerHTML = '<span class="lbl">now</span>' + d.weekday;
+            if(window.pf2eToast) window.pf2eToast('Advanced to ' + d.day + ' ' + d.month_name + ' ' + d.year + ' (' + d.weekday + ')');
+          })
+          .catch(function(){ out.innerHTML = '<span class="fumble">request failed</span>'; });
+    }
+    </script>
 {% endblock %}

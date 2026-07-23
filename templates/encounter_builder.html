@@ -2,6 +2,24 @@
 {% block title %}Encounter Builder - PF2E Dashboard{% endblock %}
 
 {% block content %}
+<style>
+/* Warm-ink remap: this page leans on Tailwind's default (cold blue-slate) gray
+   utilities, which the app's Tailwind config never warmed. Remap them to warm-ink
+   so the builder matches the tracker / party board / hub. Inline = page-scoped. */
+.bg-gray-950 { background-color: #0c0a07 !important; }
+.bg-gray-900 { background-color: #14110c !important; }
+.bg-gray-800 { background-color: #1c1813 !important; }
+.bg-gray-700 { background-color: #241d14 !important; }
+.bg-gray-600 { background-color: #2e2619 !important; }
+.border-gray-700 { border-color: rgba(201,163,78,0.14) !important; }
+.border-gray-600 { border-color: rgba(201,163,78,0.22) !important; }
+.text-gray-200 { color: #ede4cf !important; }
+.text-gray-300 { color: #d9cfb8 !important; }
+.text-gray-400 { color: #c8bd9e !important; }
+.text-gray-500 { color: #a79d88 !important; }
+.text-gray-600 { color: #8a7f68 !important; }
+.text-gray-700 { color: #6f6553 !important; }
+</style>
 <div class="flex justify-between items-end mb-6 border-b border-gray-700 pb-2">
     <div>
         <h1 class="text-3xl font-header text-accent-300">Encounter Builder</h1>
@@ -164,19 +182,21 @@
             </div>
             <div class="relative h-4 bg-gray-900 rounded-full overflow-hidden border border-gray-700">
                 <div id="xp-bar" class="absolute top-0 left-0 h-full transition-all duration-300 rounded-full" style="width: 0%; background: var(--ink-500);"></div>
-                <div class="absolute top-0 h-full border-r border-gray-600" style="left: 20%;" title="Low (40 XP)"></div>
-                <div class="absolute top-0 h-full border-r border-accent-500/50" style="left: 30%;" title="Moderate (60 XP)"></div>
-                <div class="absolute top-0 h-full border-r border-danger-200/50" style="left: 40%;" title="Severe (80 XP)"></div>
-                <div class="absolute top-0 h-full border-r border-danger-300/50" style="left: 60%;" title="Extreme (120 XP)"></div>
-                <div class="absolute top-0 h-full border-r border-danger-500/50" style="left: 80%;" title="Impossible (160 XP)"></div>
+                <!-- Tier-boundary ticks — positioned at the REAL thresholds by recalcXP (they scale with party size). -->
+                <div id="xp-tick-1" class="absolute top-0 h-full border-r border-gray-600" title="Low begins"></div>
+                <div id="xp-tick-2" class="absolute top-0 h-full border-r border-accent-500/50" title="Moderate begins"></div>
+                <div id="xp-tick-3" class="absolute top-0 h-full border-r border-danger-200/50" title="Severe begins"></div>
+                <div id="xp-tick-4" class="absolute top-0 h-full border-r border-danger-300/50" title="Extreme begins"></div>
+                <div id="xp-tick-5" class="absolute top-0 h-full border-r border-danger-500/50" title="Impossible begins"></div>
             </div>
-            <div class="flex justify-between text-[11px] text-gray-400 font-bold uppercase tracking-wider mt-1.5 px-1">
-                <span title="0 XP — minimal threat">Trivial</span>
-                <span class="text-success-400" title="Low: small skirmish">Low</span>
-                <span class="text-accent-300" title="Moderate: standard fight">Moderate</span>
-                <span class="text-danger-200" title="Severe: tough — expect resource burn">Severe</span>
-                <span class="text-danger-300" title="Extreme: PCs may go down">Extreme</span>
-                <span class="text-danger-400" title="Beyond Extreme — likely TPK">Impossible</span>
+            <!-- Tier labels — centered on each tier's range-midpoint by recalcXP, so they track the real thresholds. -->
+            <div class="relative mt-1.5 text-[11px] font-bold uppercase tracking-wider" style="height:13px; color:var(--text-on-dark-3);">
+                <span id="xp-lbl-1" class="absolute whitespace-nowrap" style="transform:translateX(-50%);" title="0 XP — minimal threat">Trivial</span>
+                <span id="xp-lbl-2" class="absolute whitespace-nowrap text-success-400" style="transform:translateX(-50%);" title="Low: small skirmish">Low</span>
+                <span id="xp-lbl-3" class="absolute whitespace-nowrap text-accent-300" style="transform:translateX(-50%);" title="Moderate: standard fight">Moderate</span>
+                <span id="xp-lbl-4" class="absolute whitespace-nowrap text-danger-200" style="transform:translateX(-50%);" title="Severe: tough — expect resource burn">Severe</span>
+                <span id="xp-lbl-5" class="absolute whitespace-nowrap text-danger-300" style="transform:translateX(-50%);" title="Extreme: PCs may go down">Extreme</span>
+                <span id="xp-lbl-6" class="absolute whitespace-nowrap text-danger-400" style="transform:translateX(-50%);" title="Beyond Extreme — likely TPK">Impossible</span>
             </div>
             <!-- Difficulty-spike warnings strip — populated by recalcXP() -->
             <div id="diff-warnings" class="hidden mt-3"></div>
@@ -311,6 +331,11 @@
                 ? `<div class="flex flex-wrap gap-1 mt-1">${m.traits.map(t => `<span class=\"text-[9px] bg-gray-800 text-gray-500 px-1 py-0.5 rounded border border-gray-700\">${esc(t)}</span>`).join('')}</div>`
                 : '';
             const json = JSON.stringify(m).replace(/'/g, "&#39;");
+            // Per-result XP preview: what one of these contributes at the current party
+            // level, so the GM sees the budget impact before staging.
+            const _pl = parseInt((document.getElementById('builder-party-level') || {}).value) || 1;
+            const _diff = Math.max(-4, Math.min(4, m.level - _pl));
+            const _xp = (xpMap[String(_diff)] != null) ? xpMap[String(_diff)] : (m.level - _pl > 4 ? 160 : 10);
             // Click the whole card = add 1. The ×N dropdown on the right adds in bulk
             // (common case: "3 goblins"). event.stopPropagation keeps those from firing
             // the card's click.
@@ -321,6 +346,7 @@
                     <span class="font-bold text-gray-200 text-sm">${esc(m.name)}</span>
                     <div class="flex gap-2 text-[10px] items-center">
                         <span class="bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded border border-gray-700">Lv ${m.level}</span>
+                        <span class="bg-accent-600/20 text-accent-300 px-1.5 py-0.5 rounded border border-accent-600/40" title="Contributes this XP at party level ${_pl} (before any Elite/Weak)">${_xp} XP</span>
                         <span class="text-gray-500">HP ${m.hp}</span>
                         <span class="text-sky-400">AC ${m.ac}</span>
                         <div class="flex items-center gap-0.5 ml-1" onclick="event.stopPropagation()">
@@ -480,6 +506,17 @@
         const tS = _thresholdFor('Severe',   partySize);
         const tE = _thresholdFor('Extreme',  partySize);
         const barCap = tE * 1.25;
+
+        // Position the tier ticks at the REAL boundaries and the labels at each
+        // tier's range-midpoint, so both track the actual thresholds for this
+        // party size (they were hardcoded to the 4-player baseline before).
+        const _pos = xp => Math.max(0, Math.min(100, (xp / barCap) * 100));
+        const _left = (id, xp) => { const el = document.getElementById(id); if (el) el.style.left = _pos(xp) + '%'; };
+        _left('xp-tick-1', tT); _left('xp-tick-2', tL); _left('xp-tick-3', tM); _left('xp-tick-4', tS); _left('xp-tick-5', tE);
+        _left('xp-lbl-1', tT / 2);          _left('xp-lbl-2', (tT + tL) / 2);
+        _left('xp-lbl-3', (tL + tM) / 2);   _left('xp-lbl-4', (tM + tS) / 2);
+        _left('xp-lbl-5', (tS + tE) / 2);   _left('xp-lbl-6', (tE + barCap) / 2);
+
         let label, color, barColor;
         // XP-tier colors: muted ink → success → warn → rust → ruby gradient.
         // Stays within the brand palette while preserving the green-to-red
@@ -709,7 +746,10 @@
         } catch(_) {}
     }
     // Initial load when the page first renders.
-    document.addEventListener('DOMContentLoaded', refreshSavedEncounters);
+    document.addEventListener('DOMContentLoaded', function () {
+        refreshSavedEncounters();
+        renderStage();   // paints the empty stage + runs recalcXP so the budget-bar tier markers are positioned on load
+    });
 
     async function loadToTracker() {
         const btn = document.getElementById('btn-load');

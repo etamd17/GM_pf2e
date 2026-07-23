@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <title>Level Up Forge</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = { theme: { extend: { colors: { gray: { 950: '#0d0d12', 900: '#191920', 800: '#24242e', 700: '#2e2e3c', 600: '#42425a', 500: '#6b6b8a', 400: '#9494b0', 300: '#b8b8cc', 200: '#d8d8e6', 100: '#ededf4' }, amber: { 50: '#fef9ec', 100: '#fcefc5', 200: '#f9dc86', 300: '#d4a244', 400: '#b8860b', 500: '#9a7209', 600: '#7a5a07', 700: '#5c4305', 800: '#3d2d04', 900: '#1e1602' }, red: { 300: '#fca5a5', 400: '#f87171', 500: '#c53131', 600: '#c43c3c', 800: '#6b1525', 900: '#3D0A13' }, green: { 200: '#A7F3D0', 400: '#4ADE80', 900: '#022C22', }, blue: { 300: '#93C5FD', 400: '#60A5FA' }, purple: { 300: '#C4B5FD', 400: '#A78BFA' } }, fontFamily: { header: ['Cinzel', 'serif'], body: ['Inter', 'system-ui', 'sans-serif'] } } } }
-    </script>
+    {# Precompiled Tailwind utilities — replaces the runtime Tailwind Play CDN
+       (full engine + in-browser JIT). Regenerate: cd tools/tailwind &&
+       npm install && node build.mjs (see docs/tailwind-build.md). #}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tw-player_levelup.css') }}">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Cinzel:wght@400;600;700;900&display=swap');
         body { margin: 0; overflow: hidden; font-family: 'Inter', system-ui, sans-serif; }
@@ -49,7 +49,11 @@
         .stat-pill.locked { background: rgba(62,186,104,0.2); border-color: #22C55E; color: #A7F3D0; cursor: not-allowed; opacity: 0.8; }
         
         .rank-box { width: 12px; height: 12px; border: 1px solid rgba(255,255,255,0.10); display: inline-block; margin-right: 2px; border-radius: 2px; }
-        .rank-box.fill { background-color: #5a8ee8; border-color: #5a8ee8; }
+        /* Filled = a rank you already have (warm gilt, on-theme with the
+           ember-forge accent); fill-new = a rank you gain THIS level (green
+           pulse). One consistent language across class-features, skills, and
+           the monk save picker. */
+        .rank-box.fill { background-color: #c9a34e; border-color: #c9a34e; }
         .rank-box.fill-new { background-color: #4ADE80; border-color: #4ADE80; animation: pulse 1.5s infinite; }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
 
@@ -231,7 +235,8 @@
             </button>
         </div>
         {# Tiny progress strip — gilt for completed sections, ruby tint for incomplete. Built by buildSectionProgress() #}
-        <div id="lvl-section-progress" style="display:flex; gap:2px; max-width:980px; margin: 0 auto; padding: 0 var(--sp-5) var(--sp-2);"></div>
+        <div id="lvl-section-progress" style="display:flex; gap:2px; max-width:980px; margin: 0 auto; padding: 0 var(--sp-5) 3px;"></div>
+        <div id="lvl-section-labels" style="max-width:980px; margin: 0 auto; padding: 0 var(--sp-5) var(--sp-2);"></div>
         {# Hidden anchors retained so the legacy runValidation() writes
            to chk-X spans don't error. The visible signal is the
            progress strip above; these are display:none. #}
@@ -269,7 +274,7 @@
                flip it to unlock a greyed option without closing the modal
                first). #}
             <div id="gains-rail-header" style="display:flex; align-items:center; justify-content:space-between; gap:var(--sp-3); flex-wrap:wrap; margin-bottom:var(--sp-2);">
-                <h3 style="margin:0; font-family:var(--font-display); font-size:12px; letter-spacing:0.12em; text-transform:uppercase; color:var(--text-on-dark-2);">This Level's Gains</h3>
+                <h3 style="margin:0; font-family:var(--font-display); font-size:12px; letter-spacing:0.12em; text-transform:uppercase; color:var(--text-on-dark-2);">This Level's Gains <span id="gains-count" style="font-size:11px; letter-spacing:0.04em; color:var(--text-on-dark-3);"></span></h3>
                 <label id="gm-override-switch" for="chk-gm-override" style="display:flex; align-items:center; gap:6px; cursor:pointer; user-select:none; font-family:var(--font-ui); font-size:10.5px; letter-spacing:0.04em; color:var(--text-on-dark-3); padding:3px 8px; border-radius:999px; border:1px solid var(--border-strong); transition: background .2s, border-color .2s, color .2s;">
                     <input type="checkbox" id="chk-gm-override" onchange="toggleGmOverride(this.checked)" style="accent-color:#f59e0b; margin:0;">
                     GM override: ignore prerequisites
@@ -311,7 +316,7 @@
                     </div>
                 </div>
                 <div class="flex items-center gap-2">
-                    <span id="hp-preview-old" class="text-lg font-bold text-red-400"></span>
+                    <span id="hp-preview-old" class="text-lg font-bold text-gray-400"></span>
                     <span class="text-gray-500">→</span>
                     <span id="hp-preview-new" class="text-lg font-bold text-green-400"></span>
                 </div>
@@ -724,12 +729,6 @@
                 'class_dc': 'Class DC', 'spell_attack': 'Spell Attack', 'spell_dc': 'Spell DC', 'ac': 'Armor Class'
             };
             
-            const iconMap = {
-                'perception': '👁', 'fortitude': '', 'reflex': '', 'will': '🧠',
-                'simple': '️', 'martial': '️', 'advanced': '️', 'unarmed': '👊',
-                'unarmored': '🧥', 'light': '🧥', 'medium': '🧥', 'heavy': '🧥',
-                'class_dc': '🎯', 'spell_attack': '✨', 'spell_dc': '✨'
-            };
             
             let html = '';
             bumpKeys.forEach(key => {
@@ -738,7 +737,6 @@
                 let rankName = RANK_NAMES[newRank] || `Rank ${newRank}`;
                 let oldRankName = RANK_NAMES[oldRank] || `Rank ${oldRank}`;
                 let name = friendlyNames[key] || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                let icon = iconMap[key] || '📈';
                 
                 let isUpgrade = newRank > oldRank;
                 let borderColor = isUpgrade ? 'border-green-600' : 'border-gray-700';
@@ -759,7 +757,6 @@
                 html += `
                 <div class="${bgColor} ${borderColor} border rounded-lg p-4 flex items-center justify-between">
                     <div class="flex items-center gap-3">
-                        <span class="text-xl">${icon}</span>
                         <div>
                             <div class="font-bold text-white text-sm">${name}</div>
                             <div class="text-xs mt-1">${arrowText}</div>
@@ -801,7 +798,6 @@
                 
                 let saveButtons = availableSaves.map(save => {
                     let saveName = save.charAt(0).toUpperCase() + save.slice(1);
-                    let saveIcon = iconMap[save] || '🧠';
                     let currentRank = state.base_profs[save] || 0;
                     let currentRankName = RANK_NAMES[currentRank] || 'Untrained';
                     let isSelected = state.monk_path_choice === save;
@@ -821,7 +817,6 @@
                     return `
                     <button onclick="selectMonkPath('${save}')" class="flex items-center justify-between p-4 rounded-lg border ${btnBorder} transition-all cursor-pointer w-full">
                         <div class="flex items-center gap-3">
-                            <span class="text-xl">${saveIcon}</span>
                             <div class="text-left">
                                 <div class="font-bold ${btnText} text-sm">${saveName}</div>
                                 <div class="text-xs text-gray-500">${currentRankName} → <span class="${isSelected ? 'text-green-400 font-bold' : 'text-gray-400'}">${targetRankName}</span></div>
@@ -837,7 +832,6 @@
                 html += `
                 <div class="mt-6 bg-purple-900/20 border border-purple-700 rounded-lg p-6">
                     <div class="flex items-center gap-3 mb-2">
-                        <span class="text-2xl">🙏</span>
                         <div>
                             <h3 class="font-bold text-purple-300 text-lg">${pathConfig.feature_name}</h3>
                             <p class="text-xs text-gray-400 mt-1">${pathConfig.description}</p>
@@ -905,6 +899,9 @@
                     p.classList.toggle('current', p.dataset.step === stepId);
                 });
             }
+            document.querySelectorAll('#lvl-section-labels > .section-label').forEach(l => {
+                l.classList.toggle('current', l.dataset.step === stepId);
+            });
             if (stepId === 'review') renderReview();
             runValidation();
         }
@@ -1021,6 +1018,17 @@
             strip.querySelectorAll('.section-pip').forEach(p => {
                 p.addEventListener('click', () => navTo(p.dataset.step));
             });
+            // Labels row under the strip — mirrors the pips 1:1 so each
+            // section is readable/clickable by name, not just on hover.
+            const labels = document.getElementById('lvl-section-labels');
+            if (labels) {
+                labels.innerHTML = sections.map(s =>
+                    `<span class="section-label" data-step="${s.id}" title="${s.label}">${s.label}</span>`
+                ).join('');
+                labels.querySelectorAll('.section-label').forEach(l => {
+                    l.addEventListener('click', () => navTo(l.dataset.step));
+                });
+            }
         }
         // "Retrain a feat?" surfaced as a button near the Review section
         // so the optional step is reachable without rendering a whole
@@ -1049,10 +1057,15 @@
                     const chk = document.getElementById('chk-' + step);
                     isError = chk && (chk.innerText || '').trim() === '!';
                 }
+                const cls = !required ? 'optional' : (isError ? 'incomplete' : 'complete');
                 p.classList.remove('complete', 'incomplete', 'optional');
-                if (!required) p.classList.add('optional');
-                else if (isError) p.classList.add('incomplete');
-                else p.classList.add('complete');
+                p.classList.add(cls);
+                // Mirror the same state onto the text label under the strip.
+                const lbl = document.querySelector(`#lvl-section-labels > .section-label[data-step="${step}"]`);
+                if (lbl) {
+                    lbl.classList.remove('complete', 'incomplete', 'optional');
+                    lbl.classList.add(cls);
+                }
             });
         }
 
@@ -1191,8 +1204,11 @@
         function paintGainsRail() {
             const body = document.getElementById('gains-rail-body');
             if (!body) return;
+            let total = 0, doneCount = 0;
             body.querySelectorAll('.gains-item').forEach(el => {
+                total++;
                 const done = _gainsEntryDone(el.dataset.gainsKey);
+                if (done) doneCount++;
                 const ring = el.querySelector('.gains-ring');
                 const wasDone = el.classList.contains('gains-done');
                 el.classList.toggle('gains-done', done);
@@ -1210,6 +1226,15 @@
                     ring.classList.remove('trk-cond-in');
                 }
             });
+            // Explicit progress read-out — turns the rail from a set of pills
+            // into a checklist you can see filling up. Gilt once everything's
+            // chosen so "done" is unmistakable.
+            const counter = document.getElementById('gains-count');
+            if (counter) {
+                counter.textContent = total ? `${doneCount} / ${total}` : '';
+                counter.style.color = (total && doneCount === total)
+                    ? 'var(--gilt-200)' : 'var(--text-on-dark-3)';
+            }
         }
 
         // GM override — one visible wizard-level switch, replacing the old
@@ -1932,7 +1957,12 @@
         function _focusPointsGainedThisLevel() {
             let n = 0;
             Object.values(state.feats_selected || {}).forEach(f => {
-                const d = ((f && (f.desc || f.description)) || '').toLowerCase();
+                if (!f) return;
+                // Feats ship description-less now; the server precomputes
+                // grants_focus. Fall back to text scan for any feat that still
+                // carries an inline description (class features, older data).
+                if (f.grants_focus) { n++; return; }
+                const d = ((f.desc || f.description) || '').toLowerCase();
                 if (d.includes('focus point') && d.includes('maximum')) n++;
             });
             return n;
@@ -1989,7 +2019,7 @@
             html += `<div class="mb-6 bg-red-950/20 border border-red-900/50 rounded-lg p-4">
                 <h4 class="${SECTION_H}">Hit Points</h4>
                 <div class="flex items-center gap-4">
-                    <span class="text-2xl font-bold text-red-400">${oldHp}</span>
+                    <span class="text-2xl font-bold text-gray-400">${oldHp}</span>
                     <span class="text-gray-500">→</span>
                     <span class="text-2xl font-bold text-green-400">${newHp}</span>
                     <span class="text-xs text-gray-500 ml-2">(+${hpPerLevel} = ${classHp} class + ${conMod} CON${(pc.attributes || {}).bonushpPerLevel ? ' + ' + (pc.attributes || {}).bonushpPerLevel + ' bonus' : ''})</span>
@@ -2039,7 +2069,7 @@
                 let saveName = state.monk_path_choice.charAt(0).toUpperCase() + state.monk_path_choice.slice(1);
                 let rankName = RANK_NAMES[pathConf.target_rank] || `Rank ${pathConf.target_rank}`;
                 html += `<div class="mb-6"><h4 class="${SECTION_H}">${pathConf.feature_name}</h4>
-                    <span class="bg-purple-900/30 border border-purple-800 px-3 py-1.5 rounded text-sm font-bold text-purple-300">🙏 ${saveName} → ${rankName}</span>
+                    <span class="bg-purple-900/30 border border-purple-800 px-3 py-1.5 rounded text-sm font-bold text-purple-300">${saveName} → ${rankName}</span>
                 </div>`;
             }
 

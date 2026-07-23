@@ -5,17 +5,26 @@
 {% block extra_head %}
     /* -------- Card shell -------- */
     .pc-card {
-        background: #1e1e27;
+        background: #1c1813;
         border: 1px solid rgba(255,255,255,0.05);
         border-radius: 0.75rem;
         overflow: hidden;
         transition: border-color 0.2s;
     }
     .pc-card:hover { border-color: rgba(201,163,78,0.18); }
+    /* Whole-card danger emphasis so a hurt/downed PC reads across the table:
+       bloodied (<=50% HP) gets an amber rail, dying gets a ruby rail + soft pulse. */
+    .pc-card.is-bloodied { border-color: rgba(196,113,51,0.38); box-shadow: inset 3px 0 0 rgba(196,113,51,0.6); }
+    .pc-card.is-dying { border-color: rgba(168,58,58,0.55); box-shadow: inset 3px 0 0 var(--ruby-300), 0 0 16px rgba(168,58,58,0.14); animation: pcDyingPulse 2.4s ease-in-out infinite; }
+    @keyframes pcDyingPulse {
+        0%, 100% { box-shadow: inset 3px 0 0 var(--ruby-300), 0 0 12px rgba(168,58,58,0.12); }
+        50%      { box-shadow: inset 3px 0 0 var(--ruby-300), 0 0 22px rgba(168,58,58,0.30); }
+    }
+    @media (prefers-reduced-motion: reduce) { .pc-card.is-dying { animation: none; } }
 
     .pc-head {
         padding: 0.9rem 1.1rem;
-        background: linear-gradient(180deg, #1e1e27 0%, #191920 100%);
+        background: linear-gradient(180deg, #1c1813 0%, #17130d 100%);
         border-bottom: 1px solid rgba(255,255,255,0.05);
     }
     .portrait-ring {
@@ -24,7 +33,7 @@
         border: 1px solid rgba(201,163,78,0.25);
         overflow: hidden;
         display: flex; align-items: center; justify-content: center;
-        background: #282838;
+        background: #28221a;
         flex-shrink: 0;
     }
     .portrait-ring img { width: 100%; height: 100%; object-fit: cover; }
@@ -69,7 +78,7 @@
         gap: 4px;
     }
     .stat-chip {
-        background: #16161d;
+        background: #14110c;
         border: 1px solid rgba(255,255,255,0.05);
         border-radius: 6px;
         padding: 6px 4px 5px;
@@ -77,7 +86,7 @@
     }
     .stat-chip .stat-lbl {
         font-size: 8px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
-        color: #7a7a90;
+        color: #a79d88;
     }
     .stat-chip .stat-val {
         font-size: 13px; font-weight: 700; color: #e8e8f0; line-height: 1.2;
@@ -90,7 +99,7 @@
         gap: 3px;
     }
     .ability-chip {
-        background: #16161d;
+        background: #14110c;
         border: 1px solid rgba(255,255,255,0.05);
         border-radius: 5px;
         padding: 5px 0 4px;
@@ -98,7 +107,7 @@
     }
     .ability-chip .ab-lbl {
         font-size: 7px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
-        color: #7a7a90;
+        color: #a79d88;
     }
     .ability-chip .ab-val {
         font-size: 12px; font-weight: 700; color: #d8d8e0; line-height: 1.2;
@@ -155,11 +164,21 @@
         font-size: 10px; font-weight: 600; letter-spacing: 0.04em;
         padding: 2px 8px;
         border-radius: 9999px;
-        background: rgba(168,58,58,0.12);
-        border: 1px solid rgba(168,58,58,0.32);
-        color: var(--ruby-100);
         text-transform: capitalize;
         flex-shrink: 0;
+    }
+    /* Severity read (matches the tracker): debilitating conditions are ruby, minor/
+       detection ones (off-guard, concealed, prone…) are gold, so danger stands out.
+       Scoped + !important to beat system.css's global .condition-pill reset. */
+    .conditions-row .condition-pill {
+        background: rgba(201,163,78,0.12) !important;
+        border: 1px solid rgba(201,163,78,0.35) !important;
+        color: var(--gilt-200) !important;
+    }
+    .conditions-row .condition-pill.sev-red {
+        background: rgba(168,58,58,0.16) !important;
+        border-color: rgba(168,58,58,0.42) !important;
+        color: var(--ruby-100) !important;
     }
     /* When a PC has many active conditions, the strip stays on a single row
        and scrolls horizontally instead of ballooning the whole card vertically. */
@@ -233,7 +252,7 @@
         letter-spacing: 0.06em;
         text-transform: uppercase;
         text-align: center;
-        background: #16161d;
+        background: #14110c;
         border: 1px solid rgba(255,255,255,0.05);
         color: #b0b0c0;
         cursor: pointer;
@@ -255,7 +274,7 @@
 
     .pc-tab-panel {
         display: none;
-        background: #16161d;
+        background: #14110c;
         border: 1px solid rgba(255,255,255,0.04);
         border-radius: 6px;
         padding: 8px 10px;
@@ -343,10 +362,10 @@
         gap: 8px;
         flex-shrink: 0;
         font-size: 10px;
-        color: #7a7a90;
+        color: #a79d88;
     }
     .inv-qty { color: #b0b0c0; }
-    .inv-bulk { color: #7a7a90; font-style: italic; }
+    .inv-bulk { color: #a79d88; font-style: italic; }
     .bulk-summary {
         display: flex;
         align-items: center;
@@ -356,7 +375,7 @@
         background: rgba(255,255,255,0.02);
         border-radius: 4px;
         font-size: 10px;
-        color: #7a7a90;
+        color: #a79d88;
     }
     .bulk-summary .bulk-val { color: #c8c8d8; font-weight: 600; }
     .bulk-summary .bulk-warn { color: #ef6b6b; }
@@ -375,7 +394,7 @@
         color: var(--gilt-200);
     }
     .detail-link .meta {
-        font-size: 10px; color: #7a7a90;
+        font-size: 10px; color: #a79d88;
         margin-left: 6px;
     }
     .spell-line {
@@ -418,7 +437,7 @@
         pointer-events: none;
     }
     .detail-card {
-        background: #1e1e27;
+        background: #1c1813;
         border: 1px solid rgba(201,163,78,0.25);
         border-right: none;
         border-radius: 12px 0 0 12px;
@@ -444,7 +463,7 @@
     .detail-card-head {
         padding: 14px 18px;
         border-bottom: 1px solid rgba(255,255,255,0.06);
-        background: #191920;
+        background: #17130d;
         display: flex; align-items: flex-start; justify-content: space-between;
         gap: 12px;
     }
@@ -517,6 +536,35 @@
     .pc-card.card-flash-dmg  { animation: pcFlashDmg 0.7s ease-out; }
     .pc-card.card-flash-heal { animation: pcFlashHeal 0.7s ease-out; }
     .pc-card.card-flash-cond { animation: pcFlashCond 0.7s ease-out; }
+
+    /* -------- Skill comparison matrix -------- */
+    .sm-overlay { position: fixed; inset: 0; z-index: 200; display: none; align-items: center; justify-content: center; padding: 24px; background: rgba(6,5,3,0.72); }
+    .sm-overlay.open { display: flex; }
+    .sm-panel { max-width: 780px; width: 100%; max-height: 84vh; display: flex; flex-direction: column; background: var(--bg-card); border: 1px solid var(--gilt-300); border-radius: 10px; box-shadow: 0 20px 60px rgba(0,0,0,0.6); }
+    .sm-head { display: flex; align-items: center; justify-content: space-between; padding: 13px 18px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .sm-head h3 { font-family: 'Cinzel', serif; font-size: 15px; letter-spacing: 0.06em; color: var(--gilt-100); margin: 0; }
+    .sm-x { background: none; border: none; color: var(--text-on-dark-3); font-size: 22px; line-height: 1; cursor: pointer; padding: 0 4px; }
+    .sm-x:hover { color: var(--text-on-dark); }
+    .sm-scroll { overflow: auto; padding: 2px; }
+    .sm-table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
+    .sm-table th, .sm-table td { padding: 5px 8px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sm-table .sm-skcol { width: 150px; }
+    .sm-table thead th { position: sticky; top: 0; background: var(--bg-sunken); color: var(--gilt-200); font-family: 'Cinzel', serif; font-size: 11px; letter-spacing: 0.04em; border-bottom: 1px solid rgba(201,163,78,0.25); z-index: 1; }
+    .sm-lvl { font-size: 9px; color: var(--text-on-dark-3); margin-left: 4px; font-family: 'JetBrains Mono', monospace; }
+    .sm-skcol { text-align: left !important; font-weight: 600; color: var(--text-on-dark-2); position: sticky; left: 0; background: var(--bg-card); }
+    .sm-table thead .sm-skcol { background: var(--bg-sunken); z-index: 2; }
+    .sm-table tbody tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
+    .sm-table tbody tr:nth-child(even) .sm-skcol { background: #201a12; }
+    .sm-cell { font-family: 'JetBrains Mono', monospace; font-weight: 600; color: var(--text-on-dark-2); }
+    .sm-cell .sm-prof { font-size: 8px; margin-left: 3px; opacity: 0.7; }
+    .sm-cell.sm-empty { color: var(--text-on-dark-3); opacity: 0.4; }
+    .sm-cell.sm-best { color: var(--gilt-100); background: rgba(201,163,78,0.16) !important; font-weight: 700; }
+    .sm-cell.smp-T .sm-prof { color: var(--gilt-300); }
+    .sm-cell.smp-E .sm-prof { color: #7dc4c4; }
+    .sm-cell.smp-M .sm-prof { color: #c47dbc; }
+    .sm-cell.smp-L .sm-prof { color: #ef6b6b; }
+    .sm-cell.smp-U { opacity: 0.5; }
+    .sm-foot { padding: 8px 18px; border-top: 1px solid rgba(255,255,255,0.06); font-size: 10px; color: var(--text-on-dark-3); }
 {% endblock %}
 
 {% block content %}
@@ -536,6 +584,11 @@
         <p class="text-xs text-base-500 mt-0.5">Real-time character status &mdash; click a spell, feat, attack, or feature for details</p>
     </div>
     <div class="flex gap-2 items-center" style="position:relative;">
+        {% if skill_matrix and skill_matrix.rows %}
+        <button type="button" id="skill-compare-toggle" class="text-xs font-medium text-base-400 hover:text-accent-300 px-3 py-1.5 rounded border border-white/[0.06] hover:border-accent-400/20 transition-colors" style="background:var(--bg-card); cursor:pointer;" onclick="openSkillMatrix()" title="Compare every PC's skills side by side — see who to call for a given check">
+            Compare Skills
+        </button>
+        {% endif %}
         <button type="button" id="party-damage-toggle" class="text-xs font-medium text-base-400 hover:text-accent-300 px-3 py-1.5 rounded border border-white/[0.06] hover:border-accent-400/20 transition-colors" style="background:var(--bg-card); cursor:pointer;" onclick="toggleAllPartyDamage()" title="Apply damage or healing to every PC at once (trap, environmental, mass effect)">
             Party-Wide
         </button>
@@ -625,6 +678,50 @@
 </div>
 {% endif %}
 
+<!-- Skill comparison matrix (GM tool) -->
+{% if skill_matrix and skill_matrix.rows %}
+<div id="skill-matrix-overlay" class="sm-overlay" role="dialog" aria-modal="true" aria-labelledby="sm-title" onclick="if(event.target===this)closeSkillMatrix()">
+    <div class="sm-panel">
+        <div class="sm-head">
+            <h3 id="sm-title">Party Skills &mdash; who to call</h3>
+            <button type="button" class="sm-x" onclick="closeSkillMatrix()" aria-label="Close">&times;</button>
+        </div>
+        <div class="sm-scroll">
+            <table class="sm-table">
+                <thead>
+                    <tr>
+                        <th class="sm-skcol">Skill</th>
+                        {% for pc in skill_matrix.pcs %}
+                        <th>{{ pc.name }}{% if pc.level %}<span class="sm-lvl">L{{ pc.level }}</span>{% endif %}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in skill_matrix.rows %}
+                    <tr>
+                        <td class="sm-skcol">{{ row.skill }}</td>
+                        {% for cell in row.cells %}
+                        {% if cell %}
+                        <td class="sm-cell smp-{{ cell.prof }}{% if cell.best %} sm-best{% endif %}">{{ cell.total }}<span class="sm-prof">{{ cell.prof }}</span></td>
+                        {% else %}
+                        <td class="sm-cell sm-empty">&mdash;</td>
+                        {% endif %}
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="sm-foot">Best bonus in each row is highlighted &middot; U/T/E/M/L = untrained / trained / expert / master / legendary</div>
+    </div>
+</div>
+<script>
+    function openSkillMatrix(){ var o = document.getElementById('skill-matrix-overlay'); if (o) o.classList.add('open'); }
+    function closeSkillMatrix(){ var o = document.getElementById('skill-matrix-overlay'); if (o) o.classList.remove('open'); }
+    document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closeSkillMatrix(); });
+</script>
+{% endif %}
+
 <!-- Party Grid -->
 <div class="grid grid-cols-1 xl:grid-cols-2 gap-5" id="party-grid">
     {% for pc in party %}
@@ -640,7 +737,7 @@
         {% endfor %}
     {% endif %}
 
-    <div class="pc-card" data-pc-name="{{ pc.name }}">
+    <div class="pc-card{% if pc.conditions and pc.conditions.dying %} is-dying{% elif hp_pct <= 50 %} is-bloodied{% endif %}" data-pc-name="{{ pc.name }}">
         <!-- Header -->
         <div class="pc-head flex items-center justify-between">
             <div class="flex items-center gap-3">
@@ -706,7 +803,7 @@
                 <div class="conditions-row flex flex-wrap gap-1 ml-auto" {% if not pc.conditions %}style="display:none;"{% endif %}>
                     {% for cond, val in pc.conditions.items() %}
                         {% if val and val != 0 and val is not false %}
-                        <span class="condition-pill" data-cond-name="{{ cond|replace('_','-') }}">{{ cond }}{% if val is number and val > 0 %} {{ val }}{% endif %}</span>
+                        <span class="condition-pill{% if cond in ['dying','wounded','doomed','frightened','sickened','stunned','slowed','paralyzed','unconscious','drained','enfeebled','clumsy','stupefied','confused','fleeing','grabbed','restrained','immobilized'] %} sev-red{% endif %}" data-cond-name="{{ cond|replace('_','-') }}">{{ cond }}{% if val is number and val > 0 %} {{ val }}{% endif %}</span>
                         {% endif %}
                     {% endfor %}
                 </div>
@@ -1103,7 +1200,11 @@
         if (conditions !== undefined) {
             updateConditions(card, conditions);
             card._prevConds = JSON.stringify(conditions);
+            card.classList.toggle('is-dying', !!conditions.dying);
         }
+        // Whole-card danger rail: dying wins; else bloodied at <=50% HP.
+        const _dying = card.classList.contains('is-dying');
+        card.classList.toggle('is-bloodied', !_dying && pct > 0 && pct <= 50);
         // Flash unless caller explicitly suppresses (e.g. initial paint)
         if (!opts.noFlash) {
             if (prevHP !== null && currentHP < prevHP) flashCard(card, 'dmg');
@@ -1114,6 +1215,7 @@
         }
     }
 
+    const PV_SEV_RED = new Set(['dying','wounded','doomed','frightened','sickened','stunned','slowed','paralyzed','unconscious','drained','enfeebled','clumsy','stupefied','confused','fleeing','grabbed','restrained','immobilized']);
     function updateConditions(card, conditions) {
         const row = card.querySelector('.conditions-row');
         if (!row) return;
@@ -1122,7 +1224,7 @@
             if (val && val !== 0 && val !== false) {
                 let label = cond;
                 if (typeof val === 'number' && val > 0) label += ' ' + val;
-                html += '<span class="condition-pill" data-cond-name="' + cond.replace(/_/g, '-') + '">' + escHTML(label) + '</span>';
+                html += '<span class="condition-pill' + (PV_SEV_RED.has(cond) ? ' sev-red' : '') + '" data-cond-name="' + cond.replace(/_/g, '-') + '">' + escHTML(label) + '</span>';
             }
         }
         row.innerHTML = html;

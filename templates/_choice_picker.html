@@ -238,6 +238,23 @@
         return true;
     }
 
+    // Lazy description loader for feats/spells (shipped description-less to
+    // keep the builder + level-up light). Caches per key and guards against a
+    // stale fetch overwriting a newer selection via the slot's data-desckey.
+    const _cpDescCache = {};
+    function _cpFetchDesc(kind, key, ck) {
+        const paint = (html) => {
+            const slot = document.getElementById('cp-desc-slot');
+            if (slot && slot.dataset.desckey === ck) {
+                slot.innerHTML = html || '<span class="text-gray-500 italic">No description available.</span>';
+            }
+        };
+        if (_cpDescCache[ck] !== undefined) { paint(_cpDescCache[ck]); return; }
+        fetch(`/api/pack_detail/${encodeURIComponent(kind)}/${encodeURIComponent(key)}`)
+            .then(r => r.ok ? r.json() : { description: '' })
+            .then(j => { _cpDescCache[ck] = j.description || ''; paint(_cpDescCache[ck]); })
+            .catch(() => paint(''));
+    }
     function renderModalList() {
         const term = document.getElementById('mod-search').value.toLowerCase();
         const list = document.getElementById('mod-list'); list.innerHTML = "";
@@ -354,10 +371,22 @@
                 let pHtml = `<h2 class="text-4xl font-header text-white mb-4">${n}</h2>`;
                 if (d.traits && d.traits.length > 0) pHtml += `<div class="flex flex-wrap gap-2 mb-6">` + d.traits.map(t => `<span class="bg-gray-800 border border-gray-700 text-gray-300 text-xs px-2 py-1 uppercase font-bold tracking-wider rounded">${t}</span>`).join('') + `</div>`;
                 pHtml += reqHtml;
-                pHtml += `<div class="text-base text-gray-300 foundry-content leading-relaxed">${d.desc || d.description || 'No description available.'}</div>`;
+                // Feats/spells ship description-less (page-weight trim, ~6 MB
+                // off the builder + level-up); their text loads on demand from
+                // /api/pack_detail. Ancestry/heritage/background/class still
+                // carry inline `desc`, so they never hit the network.
+                const _descInline = d.desc || d.description;
+                pHtml += `<div id="cp-desc-slot" class="text-base text-gray-300 foundry-content leading-relaxed">${_descInline || '<span class="text-gray-500 italic">Loading description…</span>'}</div>`;
                 document.getElementById('mod-preview').innerHTML = pHtml;
-
                 document.getElementById('btn-lock').classList.remove('hidden');
+                if (!_descInline) {
+                    const kind = mCtx.type === 'spell' ? 'spell' : 'feat';
+                    const key = d._id || (typeof d.name === 'string' ? d.name : String(d.name));
+                    const ck = kind + ':' + key;
+                    const slot = document.getElementById('cp-desc-slot');
+                    if (slot) slot.dataset.desckey = ck;
+                    _cpFetchDesc(kind, key, ck);
+                }
             };
             list.appendChild(btn);
         });
