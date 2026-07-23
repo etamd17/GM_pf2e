@@ -122,7 +122,11 @@
     --font-display: 'Cinzel', 'Cormorant Garamond', Georgia, serif;
     --font-flavor:  'Alegreya', Georgia, 'Times New Roman', serif;
     --font-ui:      'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
-    --font-mono:    'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+    /* Retired the coding font (JetBrains Mono) for a calmer, less "developer-
+       built" look: stat numbers now use the text sans with tabular figures, so
+       they still align in columns without the monospace tell. --font-mono is
+       kept as an alias so any var(--font-mono) reference resolves to the sans. */
+    --font-mono:    var(--font-ui);
 
     /* Save-tint accents for the GM screen check pills. These are the ONLY
        hue tokens outside gilt+ruby — kept warm-tinted so they don't fight
@@ -5057,3 +5061,9 @@ body.system-cosmere .trk .grid-wrap::after {
 @media (prefers-reduced-motion: reduce) {
     .chron-tab, .chron-card, .chron-live-bar__link { transition: none; }
 }
+
+/* ── Coding-font retirement (app-wide) ───────────────────────────────────
+   The Tailwind `.font-mono` utility (compiled into tw-*.css) and any stray
+   monospace default now resolve to the text sans with tabular figures, so
+   numbers stay column-aligned without the "built by a developer" look. */
+.font-mono { font-family: var(--font-ui) !important; font-variant-numeric: tabular-nums; }
