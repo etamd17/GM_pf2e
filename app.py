@@ -6227,10 +6227,60 @@ def api_leave_campaign():
     session.pop('player_name', None)
     return jsonify({'success': True})
 
+_SKILL_MATRIX_ORDER = ['Acrobatics', 'Arcana', 'Athletics', 'Crafting', 'Deception',
+    'Diplomacy', 'Intimidation', 'Medicine', 'Nature', 'Occultism', 'Performance',
+    'Religion', 'Society', 'Stealth', 'Survival', 'Thievery']
+
+
+def _build_party_skill_matrix(party):
+    """Cross-party skill comparison: rows = skills, columns = PCs, each cell the PC's
+    bonus + proficiency, with the party-best in each row flagged. Lets the GM see at a
+    glance who to call for a given check ("who's best at Athletics?")."""
+    def _num(t):
+        try:
+            return int(str(t).replace('+', '').strip())
+        except (ValueError, TypeError):
+            return None
+    pc_maps, order, seen = [], [], set()
+    for pc in party:
+        m = {}
+        for sk in (getattr(pc, 'skills', None) or []):
+            nm = sk.get('name') if isinstance(sk, dict) else getattr(sk, 'name', None)
+            if not nm:
+                continue
+            m[nm] = sk
+            if nm not in seen:
+                seen.add(nm)
+                order.append(nm)
+        pc_maps.append(m)
+    ordered = [s for s in _SKILL_MATRIX_ORDER if s in seen] + sorted(n for n in order if n not in _SKILL_MATRIX_ORDER)
+    rows = []
+    for nm in ordered:
+        cells, best = [], None
+        for m in pc_maps:
+            sk = m.get(nm)
+            if sk:
+                total = sk.get('total') if isinstance(sk, dict) else getattr(sk, 'total', None)
+                prof = sk.get('prof_letter') if isinstance(sk, dict) else getattr(sk, 'prof_letter', '')
+                n = _num(total)
+                cells.append({'total': total, 'num': n, 'prof': prof})
+                if n is not None and (best is None or n > best):
+                    best = n
+            else:
+                cells.append(None)
+        for c in cells:
+            if c and c['num'] is not None and c['num'] == best:
+                c['best'] = True
+        rows.append({'skill': nm, 'cells': cells})
+    return {'pcs': [{'name': getattr(pc, 'name', '?'), 'level': getattr(pc, 'level', None)} for pc in party], 'rows': rows}
+
+
 @app.route('/party')
 def party_view():
     _sync_party_from_disk()
-    return render_template('party_view.html', party=list(PARTY_LIBRARY.values()))
+    party = list(PARTY_LIBRARY.values())
+    return render_template('party_view.html', party=party,
+                           skill_matrix=_build_party_skill_matrix(party))
 
 @app.route('/gm/login', methods=['GET', 'POST'])
 def gm_login():
@@ -7008,6 +7058,22 @@ def gm_hub():
     if gm_home != '/gm':
         return redirect(gm_home)
     now_playing = None  # vault removed; manual session summary wired in separately
+    # Live-status for the hub tiles (so cards carry real state, not just links).
+    party_health = []
+    for pc in PARTY_LIBRARY.values():
+        mx = getattr(pc, 'hp', 0) or 0
+        cur = getattr(pc, 'current_hp', mx)
+        cur = mx if cur is None else cur
+        party_health.append({'name': getattr(pc, 'name', '?'),
+                             'pct': round(cur / mx * 100) if mx else 100})
+    party_health.sort(key=lambda h: h['pct'])  # worst-off first, so the GM sees who needs help
+    # Modal party level — scales the hub's one-tap "Roll an NPC" quick-action.
+    _levels = [getattr(pc, 'level', 1) or 1 for pc in PARTY_LIBRARY.values()]
+    party_level = max(set(_levels), key=_levels.count) if _levels else 1
+    cal = _load_calendar()
+    ingame_date = '%s %s %s' % (cal.get('day', 1),
+                                GOLARION_MONTHS[cal.get('month', 0) % len(GOLARION_MONTHS)]['name'],
+                                cal.get('year', 4724))
     return render_template(
         'gm_hub.html',
         party_count=len(PARTY_LIBRARY),
@@ -7016,6 +7082,10 @@ def gm_hub():
         campaign=_load_campaign_config(),
         free_archetype=_free_archetype_enabled(),
         now_playing=now_playing,
+        party_health=party_health,
+        party_level=party_level,
+        ingame_date=ingame_date,
+        session_stats=_load_campaign_stats(),
     )
 
 
@@ -9207,6 +9277,7 @@ def api_plot_die():
 def add_combatant():
     c_type = request.form.get('type') or (request.json or {}).get('type')
     path = request.form.get('path') or (request.json or {}).get('path')
+    new_c = None
     if c_type == 'monster' and path in MONSTER_LIBRARY:
         new_c = copy.deepcopy(MONSTER_LIBRARY[path])
         new_c.instance_id = str(uuid.uuid4())
@@ -9220,6 +9291,14 @@ def add_combatant():
         if new_c is not None:
             new_c.instance_id = str(uuid.uuid4())
             ACTIVE_ENCOUNTER.append(new_c)
+    # Mid-fight reinforcement: if an initiative order is already established (some
+    # combatant has a non-zero initiative), roll the newcomer in and re-sort so it
+    # takes its place instead of sitting at init 0 at the bottom. Non-PCs only —
+    # PCs still roll their own. _sort_encounter preserves whose turn it is.
+    if new_c is not None and not getattr(new_c, 'is_pc', False):
+        if any(getattr(c, 'initiative', 0) for c in ACTIVE_ENCOUNTER if c is not new_c):
+            _roll_initiative_for(new_c)
+            _sort_encounter()
     _persist_encounter_state()
     _broadcast_encounter_state()
     if _is_ajax(): return _tracker_json_response()
@@ -11730,6 +11809,17 @@ def _cosmere_init_bonus(c):
     """A Cosmere combatant's initiative bonus = the Speed attribute (the Dex
     analog) for the 'traditional' rolled-initiative house-rule."""
     return int((getattr(c, 'attributes', {}) or {}).get('spd', 0) or 0)
+
+
+def _roll_initiative_for(c):
+    """Roll one combatant's initiative (d20 + the relevant bonus), matching
+    roll_npc_initiative's per-combatant logic. Used to slot a mid-fight
+    reinforcement into the established order instead of dumping it at init 0."""
+    if getattr(c, 'system', 'pf2e') == 'cosmere':
+        c.initiative = random.randint(1, 20) + _cosmere_init_bonus(c)
+    else:
+        c.initiative = random.randint(1, 20) + getattr(c, 'perception', 0)
+    return c.initiative
 
 
 @app.route('/api/roll_npc_initiative', methods=['POST'])

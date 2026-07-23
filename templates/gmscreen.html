@@ -322,6 +322,16 @@
     .dc-card .dc-row .v { color:var(--t-t1); font-family:'JetBrains Mono',monospace; font-weight:700; }
     .dc-card .dc-row .v.pos { color:var(--t-red-b); }
     .dc-card .dc-row .v.neg { color:var(--tint-perc); }
+
+    /* GM Screen polish: pin cards, reference-search highlight, condition cross-links */
+    .gm-ref-header { position: relative; padding-right: 22px; }
+    .gm-pin-btn { position: absolute; top: -2px; right: -4px; background: none; border: none; cursor: pointer; color: var(--text-on-dark-3); font-size: 13px; line-height: 1; padding: 3px; opacity: 0.3; transition: opacity .12s, color .12s; }
+    .gm-ref-card:hover .gm-pin-btn { opacity: 0.65; }
+    .gm-pin-btn:hover, .gm-pin-btn.pinned { opacity: 1; color: var(--gilt-300); }
+    .gm-ref-card.is-pinned { border-color: rgba(201,163,78,0.28); }
+    .gm-ref-card.ref-match { border-color: var(--gilt-300) !important; box-shadow: 0 0 0 1px var(--gilt-300), 0 0 18px rgba(201,163,78,0.18); }
+    .gm-cond dt.xlink { cursor: pointer; transition: color .12s; }
+    .gm-cond dt.xlink:hover { color: var(--gilt-100); text-decoration: underline dotted; }
 </style>
 {% endblock %}
 
@@ -546,6 +556,77 @@
         <p class="text-[11px] text-base-500 mt-2 leading-relaxed">
             Creatures grant Lesser. Take Cover (1 action) upgrades Lesser&rarr;Standard or Standard&rarr;Greater while you stay in cover.
         </p>
+    </div>
+
+    <div class="masonry-item gm-ref-card">
+        <h2 class="gm-ref-header">Travel &amp; Exploration <span class="sub">per 8-hr day</span></h2>
+        <table class="gm-table" style="font-size:12px;">
+            <thead><tr><th>Speed</th><th>/ hour</th><th>/ day</th></tr></thead>
+            <tbody>
+                <tr><td>20 ft</td><td class="num">2 mi</td><td class="num">16 mi</td></tr>
+                <tr><td>25 ft</td><td class="num">2.5 mi</td><td class="num">20 mi</td></tr>
+                <tr><td>30 ft</td><td class="num">3 mi</td><td class="num">24 mi</td></tr>
+                <tr><td>35 ft</td><td class="num">3.5 mi</td><td class="num">28 mi</td></tr>
+                <tr><td>40 ft</td><td class="num">4 mi</td><td class="num">32 mi</td></tr>
+            </tbody>
+        </table>
+        <div class="gm-callout-row"><span class="label">Difficult</span><span>&times;2 movement cost &middot; greater difficult &times;3.</span></div>
+        <div class="gm-callout-row"><span class="label">Hustle</span><span>Double travel speed for (Con mod &times; 10) min, min 10.</span></div>
+        <p class="text-[11px] text-base-500 italic mt-2 leading-relaxed">Miles/hour = Speed &divide; 10. Standard day is 8 hrs; pushing further risks fatigue.</p>
+    </div>
+
+    <div class="masonry-item gm-ref-card">
+        <h2 class="gm-ref-header">Environmental Damage</h2>
+        <div class="gm-callout-row"><span class="label">Falling</span><span>Bludgeoning = <strong style="color:var(--ruby-100);">half the distance</strong> fallen (20 ft &rarr; 10). None under 5 ft; max 750. Grab an Edge to reduce.</span></div>
+        <div class="gm-callout-row"><span class="label">Persistent</span><span>Take it at end of turn, then <strong style="color:var(--gilt-200);">DC 15 flat</strong> to end (DC 10 with good help).</span></div>
+        <div class="gm-callout-row"><span class="label">Suffocation</span><span>Hold breath 5 + Con mod rounds. Out of air &rarr; unconscious, then Dying 1 (+1 each round).</span></div>
+        <div class="gm-callout-row"><span class="label">Heat / Cold</span><span>Extreme temps deal environmental damage per interval and can apply Fatigued / Clumsy; scale by severity.</span></div>
+    </div>
+
+    <div class="masonry-item gm-ref-card">
+        <h2 class="gm-ref-header">Light, Vision &amp; Senses</h2>
+        <table class="gm-table" style="font-size:12px;">
+            <thead><tr><th>Light</th><th>Effect (no special vision)</th></tr></thead>
+            <tbody>
+                <tr><td>Bright</td><td>Normal</td></tr>
+                <tr><td>Dim</td><td><span class="hurt">Concealed</span> &mdash; DC 5 flat</td></tr>
+                <tr><td>Darkness</td><td><span class="hurt">Blinded</span>; foes Hidden &mdash; DC 11</td></tr>
+            </tbody>
+        </table>
+        <div class="gm-callout-row"><span class="label">Low-light</span><span>Treat dim light as bright light.</span></div>
+        <div class="gm-callout-row"><span class="label">Darkvision</span><span>See in darkness (greyscale); ignore that concealment.</span></div>
+        <div class="gm-callout-row"><span class="label">Flat checks</span><span>Concealed <strong>DC 5</strong> &middot; Hidden / Undetected <strong>DC 11</strong>.</span></div>
+    </div>
+
+    <div class="masonry-item gm-ref-card">
+        <h2 class="gm-ref-header">Creature Size &amp; Reach</h2>
+        <table class="gm-table" style="font-size:12px;">
+            <thead><tr><th>Size</th><th>Space</th><th>Reach*</th></tr></thead>
+            <tbody>
+                <tr><td>Tiny</td><td class="num">2.5 ft</td><td class="num">0</td></tr>
+                <tr><td>Small / Medium</td><td class="num">5 ft</td><td class="num">5 ft</td></tr>
+                <tr><td>Large</td><td class="num">10 ft</td><td class="num">10 ft</td></tr>
+                <tr><td>Huge</td><td class="num">15 ft</td><td class="num">15 ft</td></tr>
+                <tr><td>Gargantuan</td><td class="num">20 ft</td><td class="num">20 ft</td></tr>
+            </tbody>
+        </table>
+        <p class="text-[11px] text-base-500 italic mt-2 leading-relaxed">*Typical reach; many creatures list a longer reach in their stat block.</p>
+    </div>
+
+    <div class="masonry-item gm-ref-card">
+        <h2 class="gm-ref-header">Afflictions <span class="sub">disease / poison</span></h2>
+        <div class="gm-callout-row"><span class="label">Save</span><span>Usually Fortitude &mdash; at exposure and each stage interval.</span></div>
+        <div class="gm-callout-row"><span class="label">Onset</span><span>Delay before Stage 1 takes effect (if the affliction has one).</span></div>
+        <div class="text-[11px] text-base-500 uppercase tracking-widest font-semibold mb-2 mt-3">On each stage save</div>
+        <table class="gm-table" style="font-size:12px;">
+            <tbody>
+                <tr><td><strong>Crit Success</strong></td><td><span class="heal">Reduce 2 stages (ends below 1)</span></td></tr>
+                <tr><td><strong>Success</strong></td><td><span class="heal">Reduce 1 stage</span></td></tr>
+                <tr><td><strong>Failure</strong></td><td><span class="hurt">Advance 1 stage</span></td></tr>
+                <tr><td><strong>Crit Failure</strong></td><td><span class="hurt">Advance 2 stages</span></td></tr>
+            </tbody>
+        </table>
+        <p class="text-[11px] text-base-500 italic mt-2 leading-relaxed"><strong>Virulent:</strong> needs 2 successes to reduce a stage. The affliction ends after its final stage.</p>
     </div>
 
 </div>
@@ -1026,4 +1107,91 @@
         </div>
     </div>
 </div>
+
+<script>
+/* GM Screen polish: (1) pin/reorder cards, (2) unified reference search, (3) condition cross-links */
+(function () {
+    var grid = document.querySelector('.masonry');
+    if (!grid) return;
+    var cards = Array.prototype.slice.call(grid.querySelectorAll('.gm-ref-card'));
+    var PIN_KEY = 'gmscreen_pinned_v1';
+
+    function cardKey(card) {
+        var h = card.querySelector('.gm-ref-header');
+        var t = h && h.childNodes.length ? h.childNodes[0].textContent : (card.textContent || '');
+        return t.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    }
+    function getPinned() { try { return JSON.parse(localStorage.getItem(PIN_KEY) || '[]'); } catch (e) { return []; } }
+    function setPinned(a) { try { localStorage.setItem(PIN_KEY, JSON.stringify(a)); } catch (e) {} }
+
+    // ---- 1. Pin buttons + persisted reorder ----
+    cards.forEach(function (card) {
+        card.dataset.cardKey = cardKey(card);
+        var h = card.querySelector('.gm-ref-header');
+        if (h && !h.querySelector('.gm-pin-btn')) {
+            var b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'gm-pin-btn';
+            b.innerHTML = '☆';               // outline star
+            b.title = 'Pin this card to the top';
+            b.setAttribute('aria-label', 'Pin card to top');
+            b.addEventListener('click', function (e) { e.stopPropagation(); togglePin(card.dataset.cardKey); });
+            h.appendChild(b);
+        }
+    });
+    function applyPins() {
+        var pinned = getPinned(), byKey = {};
+        cards.forEach(function (c) { byKey[c.dataset.cardKey] = c; });
+        pinned.forEach(function (k) { if (byKey[k]) grid.appendChild(byKey[k]); });
+        cards.forEach(function (c) { if (pinned.indexOf(c.dataset.cardKey) === -1) grid.appendChild(c); });
+        cards.forEach(function (c) {
+            var isP = pinned.indexOf(c.dataset.cardKey) !== -1;
+            c.classList.toggle('is-pinned', isP);
+            var b = c.querySelector('.gm-pin-btn');
+            if (b) { b.classList.toggle('pinned', isP); b.innerHTML = isP ? '★' : '☆'; b.title = isP ? 'Unpin' : 'Pin this card to the top'; }
+        });
+    }
+    function togglePin(key) {
+        var p = getPinned(), i = p.indexOf(key);
+        if (i === -1) p.push(key); else p.splice(i, 1);
+        setPinned(p); applyPins();
+    }
+    applyPins();
+
+    // ---- 2. Unified search: highlight (and jump to) reference cards that match ----
+    var search = document.getElementById('comp-search');
+    if (search) {
+        var refTimer = null;
+        search.addEventListener('input', function () {
+            clearTimeout(refTimer);
+            var q = search.value.trim().toLowerCase();
+            if (q.length < 2) { cards.forEach(function (c) { c.classList.remove('ref-match'); }); return; }
+            refTimer = setTimeout(function () {
+                var first = null;
+                cards.forEach(function (c) {
+                    var hit = c.textContent.toLowerCase().indexOf(q) !== -1;
+                    c.classList.toggle('ref-match', hit);
+                    if (hit && !first) first = c;
+                });
+                if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 350);
+        });
+    }
+
+    // ---- 3. Cross-link condition names -> compendium detail ----
+    document.querySelectorAll('.gm-cond dt').forEach(function (dt) {
+        var name = dt.textContent.replace(/\s+[Xx]$/, '').trim();   // "Frightened X" -> "Frightened"
+        if (!name) return;
+        dt.classList.add('xlink');
+        dt.title = 'Open ' + name + ' in the compendium';
+        dt.addEventListener('click', function () {
+            if (typeof showCompDetail === 'function') {
+                showCompDetail(name, 'condition');
+                var d = document.getElementById('comp-detail');
+                if (d) setTimeout(function () { d.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 60);
+            }
+        });
+    });
+})();
+</script>
 {% endblock %}
