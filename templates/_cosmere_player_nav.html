@@ -100,7 +100,7 @@
             + '<span style="font-weight:700; font-size:11px; color:var(--accent,#5fa8e0); text-transform:uppercase; letter-spacing:.05em;">' + _esc(roll.name) + '</span>'
             + '<span style="font-size:9px; color:var(--text-on-dark-3,#7c8694);">' + _esc(roll.time || '') + '</span></div>'
             + '<div style="font-size:13px; color:var(--text-on-dark-2,#c4ccd6);">' + _esc(roll.action) + ': <b style="color:var(--text-on-dark,#e8eef5);">' + _esc(roll.result) + '</b></div>'
-            + (roll.detail ? '<div style="font-size:10px; font-family:monospace; color:var(--text-on-dark-3,#7c8694); margin-top:3px;">' + _esc(roll.detail) + '</div>' : '');
+            + (roll.detail ? '<div style="font-size:10px; font-family:var(--font-ui); color:var(--text-on-dark-3,#7c8694); margin-top:3px;">' + _esc(roll.detail) + '</div>' : '');
         c.prepend(el);
         while (c.children.length > 4) c.removeChild(c.lastChild);
         setTimeout(function() {

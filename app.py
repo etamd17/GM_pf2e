@@ -8581,6 +8581,10 @@ def _cosmere_player_card(doc):
         'attributes': b.eff_attributes(),
         'defenses': b.defenses(), 'deflect': b.deflect_value(),
         'health': b.health_max(), 'focus': b.focus_max(), 'investiture': b.investiture_max(),
+        # Active conditions from the PC's runtime play_state (e.g. Exhausted
+        # magnitude), so the hub shows status at a glance instead of only in the
+        # tracker -- parity with the PF2e player card's condition row.
+        'conditions': {k: v for k, v in ((doc.get('play_state') or {}).get('conditions') or {}).items() if v},
         'is_radiant': b.is_radiant,
         'order': o['name'] if o else '', 'spren': b.spren_name or (o['spren'] if o else ''),
         'ideals': b.ideals_sworn, 'first_ideal': b.first_ideal_sworn,
@@ -8674,6 +8678,11 @@ def api_cosmere_combat_state():
                 'injuries': int(getattr(c, 'injuries', 0) or 0),
                 'conditions': [k for k, v in (getattr(c, 'conditions', {}) or {}).items() if v],
                 'health': (cb['health'] if (cb and is_pc) else None),   # PCs only
+                # Defenses/deflect are a player-side quick-reference (parity with
+                # the PF2e tracker's per-combatant cluster). PCs ONLY — adversary
+                # defenses stay hidden for the same anti-meta-gaming reason HP is.
+                'defenses': (cb['defenses'] if (cb and is_pc) else None),
+                'deflect': (cb['deflect'] if (cb and is_pc) else None),
                 'tier': getattr(c, 'tier', None),
                 'role': getattr(c, 'role', None),
             })

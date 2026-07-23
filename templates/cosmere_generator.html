@@ -4,16 +4,21 @@
   /* Cosmere generators. Raw CSS -- base.html already wraps extra_head in <style>;
      never nest a <style> here (the CSS parser eats the first rule). */
   .cg-head { display:flex; align-items:baseline; justify-content:space-between; gap:.8rem; flex-wrap:wrap; border-bottom:1px solid var(--border-rule); padding-bottom:.7rem; margin-bottom:1.1rem; }
-  .cg-title { font-family:var(--font-display, serif); font-size:1.7rem; font-weight:700; color:var(--storm-100, var(--accent)); }
+  .cg-title { display:inline-block; margin:0; font-family:var(--font-display, serif); font-size:1.7rem; font-weight:700; color:var(--storm-100, var(--accent)); }
   .cg-sub { font-size:12px; color:var(--text-on-dark-3); }
   .cg-all { font-size:12px; text-decoration:none; padding:.45rem .9rem; border-radius:8px; background:var(--bg-card-2); border:1px solid var(--accent); color:var(--accent); cursor:pointer; }
   .cg-all:hover { background:rgba(95,168,224,.14); }
+  .cg-head-actions { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
   .cg-grid { display:grid; gap:1rem; grid-template-columns:repeat(auto-fill, minmax(320px,1fr)); align-items:start; }
   .cg-card { background:var(--bg-card); border:1px solid var(--border-card); border-radius:var(--r-md); padding:.9rem 1rem; }
   .cg-card-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:.5rem; }
   .cg-label { font-family:var(--font-display, serif); font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); }
   .cg-reroll { background:none; border:1px solid var(--border-card); color:var(--text-on-dark-3); border-radius:6px; width:26px; height:26px; cursor:pointer; font-size:14px; line-height:1; transition:color .12s, border-color .12s; }
   .cg-reroll:hover { color:var(--accent); border-color:var(--accent); }
+  .cg-card-actions { display:flex; align-items:center; gap:.35rem; }
+  .cg-copy { background:none; border:1px solid var(--border-card); color:var(--text-on-dark-3); border-radius:6px; width:26px; height:26px; cursor:pointer; line-height:1; display:inline-flex; align-items:center; justify-content:center; transition:color .12s, border-color .12s; }
+  .cg-copy:hover { color:var(--accent); border-color:var(--accent); }
+  .cg-copy svg { width:14px; height:14px; }
   .cg-body { font-size:13px; color:var(--text-on-dark); line-height:1.55; min-height:2.6em; }
   .cg-body b { color:var(--storm-100, var(--accent)); }
   .cg-body .muted { color:var(--text-on-dark-3); }
@@ -23,10 +28,13 @@
 {% block content %}
 <div class="cg-head">
   <span>
-    <span class="cg-title">Cosmere Generators</span>
+    <h1 class="cg-title">Cosmere Generators</h1>
     <span class="cg-sub">&nbsp; Rosharan prep, one tap at a time.</span>
   </span>
-  <button class="cg-all" onclick="cgRerollAll()">&#8635; Reroll all</button>
+  <span class="cg-head-actions">
+    <button class="cg-all" onclick="cgRerollAll()"><span aria-hidden="true">&#8635;</span> Reroll all</button>
+    <button class="cg-all" onclick="cgCopyAll(this)" title="Copy every card as text for your session notes">Copy all</button>
+  </span>
 </div>
 
 <div class="cg-grid">
@@ -34,7 +42,10 @@
   <div class="cg-card" data-type="{{ c.type }}">
     <div class="cg-card-head">
       <span class="cg-label">{{ c.label }}</span>
-      <button class="cg-reroll" title="Reroll {{ c.label }}" onclick="cgReroll('{{ c.type }}')">&#8635;</button>
+      <span class="cg-card-actions">
+        <button class="cg-copy" title="Copy {{ c.label }}" aria-label="Copy {{ c.label }}" onclick="cgCopy('{{ c.type }}', this)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M3 11V3a1 1 0 0 1 1-1h7"/></svg></button>
+        <button class="cg-reroll" title="Reroll {{ c.label }}" aria-label="Reroll {{ c.label }}" onclick="cgReroll('{{ c.type }}')"><span aria-hidden="true">&#8635;</span></button>
+      </span>
     </div>
     <div class="cg-body" id="cg-{{ c.type }}">{{ c.html|safe }}</div>
   </div>
@@ -51,14 +62,54 @@ function cgReroll(t) {
       if (d && d.html) {
         el.innerHTML = d.html;
         el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+      } else {
+        if (window.pf2eToast) pf2eToast('Generate failed', 'error');
       }
     })
-    .catch(function () {});
+    .catch(function (e) {
+      console.error('Cosmere generate error:', e);
+      if (window.pf2eToast) pf2eToast('Generate failed', 'error');
+    });
 }
 function cgRerollAll() {
   document.querySelectorAll('.cg-card').forEach(function (card) {
     cgReroll(card.getAttribute('data-type'));
   });
+}
+
+// Copy a string to the clipboard, with a brief checkmark swap on the button
+// (icon buttons only) and a toast either way.
+function cgCopyText(text, btn) {
+  navigator.clipboard.writeText(text).then(function () {
+    if (btn) {
+      var o = btn.innerHTML;
+      btn.innerHTML = '<span aria-hidden="true">&#10003;</span>';
+      setTimeout(function () { btn.innerHTML = o; }, 900);
+    }
+    if (window.pf2eToast) pf2eToast('Copied', 'info');
+  }).catch(function (e) {
+    console.error('Cosmere copy error:', e);
+    if (window.pf2eToast) pf2eToast('Copy failed', 'error');
+  });
+}
+function cgCopy(t, btn) {
+  var el = document.getElementById('cg-' + t);
+  if (!el) return;
+  cgCopyText(el.innerText.trim(), btn);
+}
+// Copy every generated card as one plain-text block for the GM's session notes.
+function cgCopyAll() {
+  var parts = [];
+  document.querySelectorAll('.cg-card').forEach(function (card) {
+    var label = card.querySelector('.cg-label');
+    var body = card.querySelector('.cg-body');
+    if (body) {
+      var t = label ? label.innerText.replace(/\s+/g, ' ').trim().toUpperCase() : '';
+      parts.push((t ? t + '\n' : '') + body.innerText.trim());
+    }
+  });
+  if (!parts.length) { if (window.pf2eToast) pf2eToast('Nothing to copy', 'info'); return; }
+  cgCopyText(parts.join('\n\n————————————\n\n'), null);
 }
 </script>
 {% endblock %}

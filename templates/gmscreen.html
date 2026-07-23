@@ -70,7 +70,7 @@
     .gm-table tbody tr:nth-child(even) { background: rgba(255,255,255,0.025); }
     .gm-table tbody tr:hover td { background: rgba(201,163,78,0.04); }
     .gm-table tr:last-child td { border-bottom: none; }
-    .gm-table .num { font-family: 'JetBrains Mono', monospace; font-weight: 700; color: var(--text-on-dark); }
+    .gm-table .num { font-family:var(--font-ui); font-variant-numeric:tabular-nums; font-weight: 700; color: var(--text-on-dark); }
     .gm-table .pos { color: var(--ruby-100); }   /* danger-300 */
     .gm-table .neg { color: var(--success); }   /* success-300 */
     .gm-table .heal { color: var(--success); font-weight: 700; }
@@ -264,7 +264,7 @@
       font-family:'Cinzel',serif; font-size:12px; font-weight:700; letter-spacing:1px; text-transform:uppercase;
       color:var(--t-gold); margin:0 0 3px; display:flex; justify-content:space-between; align-items:baseline;
     }
-    .check-card h4 .ability-tag { font-size:9px; color:var(--t-t3); font-family:'JetBrains Mono',monospace; font-weight:600; letter-spacing:.5px; }
+    .check-card h4 .ability-tag { font-size:9px; color:var(--t-t3); font-family:var(--font-ui); font-variant-numeric:tabular-nums; font-weight:600; letter-spacing:.5px; }
     .check-card .desc { font-size:11px; color:var(--t-t2); line-height:1.5; margin-bottom:6px; }
     .check-card .actions { display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; }
     /* Skill check pills + save cards. Per-category tint stays inside the
@@ -303,7 +303,7 @@
     .situation-table td.notes { color:var(--t-t3); font-size:11px; font-style:italic; }
     .situation-table tr:hover td { background:rgba(255,255,255,0.02); }
 
-    .dc-table { width:100%; border-collapse:collapse; font-size:13px; font-family:'JetBrains Mono',monospace; line-height: 1.5; }
+    .dc-table { width:100%; border-collapse:collapse; font-size:13px; font-family:var(--font-ui); font-variant-numeric:tabular-nums; line-height: 1.5; }
     .dc-table th {
       text-align:center; padding:8px 8px; color:var(--t-gold); font-family:'Cinzel',serif;
       font-size:11px; letter-spacing:1px; text-transform:uppercase;
@@ -319,7 +319,7 @@
     .dc-card .dc-row { display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px dotted rgba(255,255,255,0.05); font-size:12px; }
     .dc-card .dc-row:last-child { border-bottom:none; }
     .dc-card .dc-row .k { color:var(--t-t2); }
-    .dc-card .dc-row .v { color:var(--t-t1); font-family:'JetBrains Mono',monospace; font-weight:700; }
+    .dc-card .dc-row .v { color:var(--t-t1); font-family:var(--font-ui); font-variant-numeric:tabular-nums; font-weight:700; }
     .dc-card .dc-row .v.pos { color:var(--t-red-b); }
     .dc-card .dc-row .v.neg { color:var(--tint-perc); }
 
