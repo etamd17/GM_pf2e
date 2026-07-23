@@ -2058,6 +2058,10 @@
             #roll-toast-container { width: calc(100vw - 24px) !important; right: 12px !important; top: 12px !important; }
             /* d20 FAB: push above the tab bar so they don't overlap on mobile */
             #dice-widget { bottom: 60px !important; }
+            /* Scroll buffer so the last content — and the conditions / persistent-damage
+               controls — can always be scrolled clear of the fixed FAB cluster at the
+               bottom-right, instead of sitting permanently underneath it on phones. */
+            body { padding-bottom: 104px !important; }
         }
         @media (max-width: 480px) {
             .max-w-6xl { padding-left:8px !important; padding-right:8px !important; }
