@@ -8273,7 +8273,10 @@ def cosmere_gm_vitals():
     cosmere_player_state SSE as players adjust their sheets."""
     party = _cosmere_status_party(_list_cosmere_pcs())
     party.sort(key=lambda r: r['name'].lower())
-    return render_template('cosmere_gm_vitals.html', party=party)
+    active = ACTIVE_ENCOUNTER[TURN_INDEX] if (ACTIVE_ENCOUNTER and 0 <= TURN_INDEX < len(ACTIVE_ENCOUNTER)) else None
+    return render_template('cosmere_gm_vitals.html', party=party,
+                           active_name=(getattr(active, 'name', '') if active else ''),
+                           cond_info=systems.cosmere.CONDITION_INFO)
 
 
 @app.route('/cosmere/pc/import_pdf', methods=['POST'])
@@ -18651,6 +18654,7 @@ def _cosmere_status_party(docs):
             'class_name': (o['name'] if o else b.path) or '',
             'level': b.level,
             'ac': b.defenses().get('phy', 10),
+            'defenses': b.defenses(), 'deflect': b.deflect_value(),
             'current_hp': cur, 'max_hp': hmax,
             'hp_pct': round(cur / hmax * 100) if hmax > 0 else 0,
             'temp_hp': 0,
