@@ -23,7 +23,7 @@
   .cs-card::before { content:''; position:absolute; left:0; right:0; top:0; height:1px;
              background:linear-gradient(90deg, transparent, rgba(255,255,255,.07), transparent); }
   .cs-card .l { font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-on-dark-3); }
-  .cs-card .v { font-family:'JetBrains Mono',monospace; font-size:1.7rem; font-weight:700; color:var(--cs-accent-2); }
+  .cs-card .v { font-family:var(--font-ui); font-variant-numeric:tabular-nums; font-size:1.7rem; font-weight:700; color:var(--cs-accent-2); }
   .cs-card .v.sm { font-size:1.15rem; }
   .cs-card .x { font-size:11px; color:var(--text-on-dark-3); }
   .cs-def { border-color:rgba(95,168,224,.35); box-shadow:0 0 0 1px rgba(95,168,224,.05) inset; }
@@ -44,13 +44,20 @@
   .cs-section-h > span { font-family:var(--font-body, inherit); font-weight:400; color:var(--text-on-dark-3); }
   .cs-attrs { grid-template-columns:repeat(auto-fit, minmax(110px,1fr)); }
   .cs-skills { grid-template-columns:repeat(auto-fill, minmax(165px,1fr)); }
+  /* Flattened: skills are clean cells (faint wash, no per-cell border) rather
+     than 28 boxes-in-a-box; the roll hover supplies the only outline. */
   .cs-skill { display:flex; align-items:center; justify-content:space-between; gap:.4rem;
-              background:var(--bg-sunken,#131922); border:1px solid var(--border-card); border-radius:8px; padding:.4rem .6rem; }
+              background:rgba(255,255,255,.022); border:1px solid transparent; border-radius:7px; padding:.4rem .6rem; }
   .cs-skill.locked { opacity:.42; }
   .cs-skill .nm { font-size:13px; }
   .cs-skill .nm small { color:var(--text-on-dark-4,#7c8694); font-size:10px; text-transform:uppercase; }
-  .cs-skill .mod { font-family:'JetBrains Mono',monospace; font-weight:700; color:var(--cs-accent-2); }
+  .cs-skill .mod { font-family:var(--font-ui); font-variant-numeric:tabular-nums; font-weight:700; color:var(--cs-accent-2); }
   .cs-skill .rk { font-size:9px; color:var(--cs-accent); }
+  .cs-surge-toggle { margin-left:auto; font-family:var(--font-ui); font-size:10px; text-transform:uppercase; letter-spacing:.06em;
+                     color:var(--text-on-dark-3); background:none; border:1px solid var(--border-card); border-radius:6px;
+                     padding:2px 9px; cursor:pointer; transition:color .15s, border-color .15s; white-space:nowrap; }
+  .cs-surge-toggle:hover { color:var(--accent); border-color:var(--accent); }
+  #cs-skills-grid.hide-locked .cs-skill.locked { display:none; }
   .cs-chips { display:flex; gap:.35rem; flex-wrap:wrap; }
   /* Folded conditions: show only ACTIVE chips; the full picker expands via
      the edit toggle. Purely display -- chip DOM and cosCond() are unchanged,
@@ -133,7 +140,7 @@
   .cs-vbtn:last-child { border-right:0; }
   .cs-vbtn.on { color:var(--accent); background:rgba(95,168,224,.14); font-weight:600; }
   .cs-result { flex:1; min-width:140px; text-align:right; font-size:13px; color:var(--text-on-dark-2); }
-  .cs-result b { font-family:'JetBrains Mono',monospace; font-size:17px; color:var(--cs-accent-2); }
+  .cs-result b { font-family:var(--font-ui); font-variant-numeric:tabular-nums; font-size:17px; color:var(--cs-accent-2); }
   .cs-result .opp { color:#34d399; } .cs-result .comp { color:#f59e0b; }
   .cs-hint { font-size:11px; color:var(--text-on-dark-3); margin:-.3rem 0 .6rem; }
   .cs-rad-btn { font-size:12px; padding:.45rem .8rem; border-radius:8px; cursor:pointer;
@@ -212,7 +219,7 @@
     background:rgba(13,17,23,.97); border:1px solid var(--accent); box-shadow:0 8px 30px rgba(0,0,0,.5);
     color:var(--text-on-dark,#e8eef5); font-size:14px; text-align:center; opacity:0; transition:opacity .18s, transform .18s; }
   #cs-toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
-  #cs-toast b { font-family:'JetBrains Mono',monospace; font-size:20px; color:var(--cs-accent-2); }
+  #cs-toast b { font-family:var(--font-ui); font-variant-numeric:tabular-nums; font-size:20px; color:var(--cs-accent-2); }
   #cs-toast .opp { color:#34d399; } #cs-toast .comp { color:#f59e0b; }
 
   /* ===== Sphere-gauge redesign: "Stormlight Gauges" + Shardplate order-glow ===== */
@@ -221,7 +228,7 @@
   .cs-facet { flex:1 1 0; min-width:88px; text-align:center; background:#0c1825; border:1px solid var(--border-card);
     padding:.6rem .3rem; clip-path:polygon(13% 0,87% 0,100% 50%,87% 100%,13% 100%,0 50%); }
   .cs-facet .l { font-size:9px; text-transform:uppercase; letter-spacing:.1em; color:var(--text-on-dark-3); }
-  .cs-facet .n { font-family:'JetBrains Mono',monospace; font-size:1.4rem; font-weight:700; color:var(--text-on-dark); }
+  .cs-facet .n { font-family:var(--font-ui); font-variant-numeric:tabular-nums; font-size:1.4rem; font-weight:700; color:var(--text-on-dark); }
   .cs-facet.deflect { clip-path:none; border-radius:9px; border-color:color-mix(in srgb,var(--order-accent,var(--accent)) 40%, var(--border-card)); }
   .cs-facet.deflect .n { color:var(--order-accent,var(--accent)); }
   .cs-facet.deflect .cs-chips { justify-content:center; margin-top:.3rem; }
@@ -238,8 +245,8 @@
   .orb-arc .trk { fill:none; stroke:var(--orb-rim,#22303f); stroke-width:3; }
   .orb-arc .prg { fill:none; stroke:var(--orb-mid,#5fa8e0); stroke-width:3; stroke-linecap:round; transition:stroke-dasharray .55s cubic-bezier(.2,.8,.2,1); }
   .orb-val { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:2; pointer-events:none; }
-  .orb-num { font-family:'JetBrains Mono',monospace; font-size:1.7rem; font-weight:700; color:var(--orb-core,#fff); line-height:1; text-shadow:0 1px 6px rgba(0,0,0,.7); }
-  .orb-max { font-family:'JetBrains Mono',monospace; font-size:.78rem; color:#5e7790; }
+  .orb-num { font-family:var(--font-ui); font-variant-numeric:tabular-nums; font-size:1.7rem; font-weight:700; color:var(--orb-core,#fff); line-height:1; text-shadow:0 1px 6px rgba(0,0,0,.7); }
+  .orb-max { font-family:var(--font-ui); font-variant-numeric:tabular-nums; font-size:.78rem; color:#5e7790; }
   .orb.dun .orb-fill { display:none; } .orb.dun { box-shadow:inset 0 0 0 3px rgba(0,0,0,.45); }
   .orb.dun .orb-num { color:#5e7790; }
   .orb.low .orb-fill { animation:orbpulse 1.6s ease-in-out infinite; }
@@ -273,7 +280,7 @@
      no IntersectionObserver (or JS dead) it stays always-visible as before. */
   .cs-vbar { transition:opacity .25s ease, transform .25s ease; }
   .cs-vbar.gated { opacity:0; transform:translateY(-8px); pointer-events:none; }
-  .cs-vb { display:inline-flex; align-items:center; gap:.32rem; font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--text-on-dark-2); }
+  .cs-vb { display:inline-flex; align-items:center; gap:.32rem; font-family:var(--font-ui); font-variant-numeric:tabular-nums; font-size:13px; color:var(--text-on-dark-2); }
   .cs-vb .d { width:9px; height:9px; border-radius:50%; flex:0 0 auto; }
   .cs-vb b { font-weight:700; color:var(--text-on-dark); }
   .cs-vbar .vb-cond { font-size:11px; color:#fbbf24; }
@@ -339,7 +346,7 @@
   @media (max-width:768px){ body.system-cosmere{ padding-bottom:104px; } }
   /* Collapsible reference sections (combat-first: fold away the non-combat stuff). */
   .cs-section-h.cs-foldable { cursor:pointer; user-select:none; }
-  .cs-fold-chev { font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text-on-dark-3); flex:0 0 auto; margin-left:.2rem; }
+  .cs-fold-chev { font-family:var(--font-ui); font-variant-numeric:tabular-nums; font-size:11px; color:var(--text-on-dark-3); flex:0 0 auto; margin-left:.2rem; }
   .cs-fold-body.collapsed { display:none; }
 
   /* ===== Print / PDF: a clean light paper sheet (hide all chrome, ink on white) ===== */
@@ -487,8 +494,12 @@
 
   {# --- Defenses (quiet hex facets) + the sphere bank (the hero region) --- #}
   <div class="cs-facets">
+    {# Defense = 10 + a pair of attributes (Ch.3). Show the breakdown on hover so
+       the number is legible, not magic. #}
+    {% set _def_attrs = {'phy':['str','spd'], 'cog':['int','wil'], 'spi':['awa','pre']} %}
     {% for key in ['phy','cog','spi'] %}
-    <div class="cs-facet"><div class="l">{{ defense_names[key] }}</div><div class="n">{{ a.defenses[key] }}</div></div>
+    {% set _p = _def_attrs[key] %}
+    <div class="cs-facet" title="{{ defense_names[key] }} = 10 + {{ attr_names[_p[0]] }} {{ a.attributes[_p[0]] }} + {{ attr_names[_p[1]] }} {{ a.attributes[_p[1]] }}"><div class="l">{{ defense_names[key] }}</div><div class="n">{{ a.defenses[key] }}</div></div>
     {% endfor %}
     <div class="cs-facet deflect" id="cs-deflect" data-base="{{ a.deflect.value }}" data-base-types="{{ a.deflect.types.items()|selectattr('1')|map(attribute='0')|join(',') }}">
       <div class="l">Deflect <span id="cs-deflect-plate" style="display:{{ '' if cur.shardplate else 'none' }}; color:var(--order-accent,var(--accent)); font-size:9px;">&middot; Plate</span></div><div class="n" id="cs-deflect-n">{{ 5 if cur.shardplate else a.deflect.value }}</div>
@@ -562,10 +573,10 @@
   {# Attribute-derived sheet values (Ch.3) — auto-calculated. #}
   {% if derived %}
   <div class="cs-derived">
-    <span><b>Move</b> {{ derived.movement }} ft</span>
-    <span><b>Senses</b> {{ derived.senses }}{% if derived.senses != 'Unaffected' %} ft{% endif %}</span>
-    <span><b>Lift</b> {{ derived.lifting }} lb <span class="dim">/ carry {{ derived.carrying }}</span></span>
-    <span><b>Recovery</b> {{ derived.recovery_die }}</span>
+    <span title="Movement rate is derived from your Speed (Ch.3)."><b>Move</b> {{ derived.movement }} ft</span>
+    <span title="Senses range is derived from your Awareness (Ch.3)."><b>Senses</b> {{ derived.senses }}{% if derived.senses != 'Unaffected' %} ft{% endif %}</span>
+    <span title="Lifting &amp; carrying capacity are derived from your Strength (Ch.3)."><b>Lift</b> {{ derived.lifting }} lb <span class="dim">/ carry {{ derived.carrying }}</span></span>
+    <span title="Recovery die is derived from your Willpower (Ch.3)."><b>Recovery</b> {{ derived.recovery_die }}</span>
   </div>
   {% endif %}
   {% if pc and build and build.connections %}
@@ -640,7 +651,11 @@
   </div>
 
   {# --- Skills --- #}
-  <div class="cs-section-h">Skills <span style="text-transform:none;letter-spacing:0;">(Surge skills dimmed until a Radiant unlocks them)</span></div>
+  {% set _sk_ns = namespace(locked=false) %}
+  {% for _c, _s in a.skills.items() %}{% if not _s.unlocked %}{% set _sk_ns.locked = true %}{% endif %}{% endfor %}
+  <div class="cs-section-h">Skills <span style="text-transform:none;letter-spacing:0;">(the small label is the governing attribute; R# is your rank)</span>
+    {% if _sk_ns.locked %}<button type="button" id="cs-surge-toggle" class="cs-surge-toggle" onclick="toggleLockedSurges(this)" aria-pressed="false">Hide locked Surges</button>{% endif %}
+  </div>
   <div style="font-size:11px; color:var(--text-on-dark-3); margin:-.3rem 0 .65rem; line-height:1.4;">A skill&rsquo;s modifier is its <b>ranks</b> plus its governing attribute (the small label below each). <b>R#</b> shows your rank.</div>
   {% if interactive %}
   <div class="cs-rolltools">
@@ -657,10 +672,11 @@
   </div>
   <div class="cs-hint">Meet-or-beat: <b>d20 + modifier</b> vs the GM&rsquo;s difficulty (Easy 10 / Standard 15 / Hard 20 / Very Hard 25). <b>Seen by</b> sets who gets the result &mdash; the whole table, the GM only, or just you.</div>
   {% endif %}
-  <div class="cs-grid cs-skills">
+  <div class="cs-grid cs-skills" id="cs-skills-grid">
     {% for code, label in skill_names.items() if code in a.skills %}
     {% set sk = a.skills[code] %}
     <div class="cs-skill {{ '' if sk.unlocked else 'locked' }}{% if interactive and sk.unlocked %} roll{% endif %}"
+         title="{{ label }} modifier = ranks {{ sk.rank or 0 }} + {{ sk.attribute|upper }} {{ a.attributes[sk.attribute] }} = {{ '+' if sk.mod >= 0 else '' }}{{ sk.mod }}"
          {% if interactive and sk.unlocked %}onclick='cosRoll({{ label|tojson }}, {{ sk.mod }}, {{ sk.attribute|tojson }})'{% endif %}>
       <div class="nm">{{ label }} <small>{{ sk.attribute }}</small>{% if sk.rank %} <span class="rk">R{{ sk.rank }}</span>{% endif %}</div>
       <div class="mod">{{ '+' if sk.mod >= 0 else '' }}{{ sk.mod }}</div>
@@ -754,7 +770,7 @@
     <div class="an">{{ f.name }}{% if f.tier %} <span class="cs-chip">Tier {{ f.tier }}</span>{% endif %}
       <span style="float:right; font-size:12px; color:var(--text-on-dark-2); white-space:nowrap;">
         {% if interactive %}<button type="button" class="cs-fab-btn" onclick='cosFabrial({{ f.id|tojson }},-1)' aria-label="Spend a charge">&minus;</button>{% endif %}
-        <b data-fab-cur="{{ f.id }}" style="font-family:'JetBrains Mono',monospace; color:var(--order-accent,var(--accent));">{{ f.current }}</b><span style="color:var(--text-on-dark-3);">/{{ f.charges }} charges</span>
+        <b data-fab-cur="{{ f.id }}" style="font-family:var(--font-ui); font-variant-numeric:tabular-nums; color:var(--order-accent,var(--accent));">{{ f.current }}</b><span style="color:var(--text-on-dark-3);">/{{ f.charges }} charges</span>
         {% if interactive %}<button type="button" class="cs-fab-btn" onclick='cosFabrial({{ f.id|tojson }},1)' aria-label="Recharge">+</button>{% endif %}
       </span></div>
     <div class="ad">{{ f.effect }}</div>
@@ -892,7 +908,10 @@
         rows.push('<div class="fx-row"><span class="fx-name">' + _cap(code) + (val ? ' ['+val+']' : '') +
                   '</span><span class="fx-desc">' + COND_FX[code](val) + '</span></div>');
       });
-      box.innerHTML = rows.length ? ('<div class="fx-h">Active effects</div>' + rows.join('')) : '';
+      // Merged into the single Conditions block: the effect rows sit directly
+      // under the active chips (no separate "Active effects" sub-header), so a
+      // condition + what it does read as one thing, not two stacked sections.
+      box.innerHTML = rows.join('');
       if(typeof syncVbar === 'function') syncVbar();   // keep the sticky bar's condition count fresh
     }
     // Annotate a roll with the conditions that touched it (shown after the total).
@@ -1053,6 +1072,24 @@
       var any = !!box.querySelector('.cs-cond.on');
       box.classList.toggle('none-active', !any);
     }
+    // Skill grid: hide/show the dimmed locked (Surge) skills for a tighter,
+    // less-cluttered grid before a Radiant unlocks them. Persists per browser.
+    window.toggleLockedSurges = function(btn){
+      var g = document.getElementById('cs-skills-grid');
+      if(!g) return;
+      var hide = g.classList.toggle('hide-locked');
+      if(btn){ btn.textContent = hide ? 'Show Surges' : 'Hide locked Surges'; btn.setAttribute('aria-pressed', hide ? 'true' : 'false'); }
+      try { localStorage.setItem('cos_hide_locked_surges', hide ? '1' : '0'); } catch(_){}
+    };
+    (function(){
+      try {
+        if(localStorage.getItem('cos_hide_locked_surges') === '1'){
+          var g = document.getElementById('cs-skills-grid'), b = document.getElementById('cs-surge-toggle');
+          if(g){ g.classList.add('hide-locked'); }
+          if(b){ b.textContent = 'Show Surges'; b.setAttribute('aria-pressed','true'); }
+        }
+      } catch(_){}
+    })();
     function syncVbar(){
       const set = (id, v) => { const e = document.getElementById(id); if(e) e.textContent = v; };
       set('vb-health', cur.health); set('vb-focus', cur.focus); set('vb-investiture', cur.investiture);
@@ -1195,7 +1232,7 @@
         const ud=(c.upgrades||[]).map(u=>`<div class="ud up">&#9650; ${_esc2(u)}</div>`).join('')+(c.drawbacks||[]).map(x=>`<div class="ud dn">&#9660; ${_esc2(x)}</div>`).join('');
         return `<div class="cs-ability cs-crafted" style="margin-bottom:.5rem;"><div class="an">${_esc2(c.name)} <span class="cs-chip">Tier ${c.tier}</span> <span class="cs-chip">crafted</span>`
           +`<span style="float:right; font-size:12px; white-space:nowrap;"><button type="button" class="cs-fab-btn" onclick="cosCrafted(${i},-1)" aria-label="Spend">&minus;</button>`
-          +`<b style="font-family:'JetBrains Mono',monospace; color:var(--order-accent,var(--accent));">${c.current}</b><span style="color:var(--text-on-dark-3);">/${c.charges}</span>`
+          +`<b style="font-family:var(--font-ui); font-variant-numeric:tabular-nums; color:var(--order-accent,var(--accent));">${c.current}</b><span style="color:var(--text-on-dark-3);">/${c.charges}</span>`
           +`<button type="button" class="cs-fab-btn" onclick="cosCrafted(${i},1)" aria-label="Recharge">+</button>`
           +`<button type="button" class="x" style="cursor:pointer; color:#f87171; margin-left:.45rem; font-weight:700; background:none; border:none; padding:0; font:inherit;" onclick="cosCraftedRemove(${i})" aria-label="Discard crafted fabrial" title="Discard">&times;</button></span></div>`
           +`<div class="ad">${_esc2(c.effect)}${ud}</div></div>`;
