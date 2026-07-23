@@ -8580,17 +8580,30 @@ def _cosmere_player_card(doc):
     import systems.cosmere.radiant as _rad
     b = _cb.CosmereBuild(doc.get('build'), homebrew=_cosmere_homebrew_store())
     o = b.order()
+    # Live values from the PC's runtime play_state (the same keys the Vitals
+    # board + roster read), so the player's own landing shows how hurt/spent
+    # they are -- not just the maxes. Falls back to the max when unset.
+    _ps = doc.get('play_state') if isinstance(doc.get('play_state'), dict) else {}
+    def _psi(key, default):
+        try:
+            return int(_ps[key])
+        except (KeyError, TypeError, ValueError):
+            return int(default)
+    _hmax, _fmax, _imax = b.health_max(), b.focus_max(), b.investiture_max()
     return {
         'id': doc['id'], 'name': doc.get('name', 'Unknown'),
         'ancestry': b.ancestry, 'culture': b.culture, 'path': b.path,
         'level': b.level, 'tier': b.tier,
         'attributes': b.eff_attributes(),
         'defenses': b.defenses(), 'deflect': b.deflect_value(),
-        'health': b.health_max(), 'focus': b.focus_max(), 'investiture': b.investiture_max(),
+        'health': _hmax, 'focus': _fmax, 'investiture': _imax,
+        'current_health': _psi('health', _hmax), 'current_focus': _psi('focus', _fmax),
+        'current_investiture': _psi('investiture', _imax),
+        'injuries': max(0, _psi('injuries', 0)),
         # Active conditions from the PC's runtime play_state (e.g. Exhausted
         # magnitude), so the hub shows status at a glance instead of only in the
         # tracker -- parity with the PF2e player card's condition row.
-        'conditions': {k: v for k, v in ((doc.get('play_state') or {}).get('conditions') or {}).items() if v},
+        'conditions': {k: v for k, v in (_ps.get('conditions') or {}).items() if v},
         'is_radiant': b.is_radiant,
         'order': o['name'] if o else '', 'spren': b.spren_name or (o['spren'] if o else ''),
         'ideals': b.ideals_sworn, 'first_ideal': b.first_ideal_sworn,
@@ -8620,6 +8633,19 @@ def cosmere_player_hub():
         if cid_char:
             mine = [d for d in all_pcs if d.get('id') == cid_char]
     cards = [_cosmere_player_card(d) for d in mine]
+    # In-combat awareness: if the player's character is in the live encounter,
+    # the hub shows a jump-in banner (and flags whose turn it is), so they land
+    # straight into the fight instead of hunting for the Combat tab.
+    combat = {'active': False, 'turn_name': '', 'names': []}
+    try:
+        with ENCOUNTER_LOCK:
+            if ACTIVE_ENCOUNTER:
+                combat['active'] = True
+                combat['names'] = [getattr(c, 'name', '') for c in ACTIVE_ENCOUNTER]
+                _ac = ACTIVE_ENCOUNTER[TURN_INDEX] if TURN_INDEX < len(ACTIVE_ENCOUNTER) else None
+                combat['turn_name'] = getattr(_ac, 'name', '') if _ac else ''
+    except Exception:
+        pass
     # Reference iconography (theming PR-C): the ten Radiant orders (with colors +
     # surges) for the Stormlight skin, and the 16-metal Allomantic table for the
     # Mistborn skin. The template shows whichever matches the campaign's world.
@@ -8633,7 +8659,7 @@ def cosmere_player_hub():
     } for k, o in _all_orders.items()]
     return render_template(
         'cosmere_player.html', cards=cards, has_pc=bool(cards),
-        roster_count=len(all_pcs), is_gm=_is_gm(),
+        roster_count=len(all_pcs), is_gm=_is_gm(), combat=combat,
         order_ref=order_ref, metal_families=_lore.metals_by_family(),
         attr_names=systems.cosmere.ATTR_NAMES, defense_names=systems.cosmere.DEFENSE_NAMES,
     )
