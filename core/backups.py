@@ -23,6 +23,14 @@ KEEP_PER_CAMPAIGN = 7          # most-recent snapshots kept per campaign
 MAX_AGE_DAYS = 30
 INTERVAL_SECS = 24 * 3600      # one automatic snapshot per day
 
+# Top-level campaign subdirs excluded from snapshots. The published Chronicle
+# export (campaign_dir/chronicle) is a large, REGENERABLE artifact — the GM
+# re-publishes it from their Obsidian vault — so zipping it into 7 daily
+# snapshots would bloat the volume for no recovery value. Backups exist to
+# protect live campaign data (PCs, encounters, config, threads), not derived
+# output.
+_BACKUP_EXCLUDE_DIRS = {'chronicle'}
+
 
 def _stamp():
     return time.strftime('%Y%m%d-%H%M%S')
@@ -42,7 +50,11 @@ def snapshot_campaign(cid, stamp=None):
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, (stamp or _stamp()) + '.zip')
     with zipfile.ZipFile(path, 'w', zipfile.ZIP_DEFLATED) as z:
-        for root, _dirs, files in os.walk(src):
+        for root, dirs, files in os.walk(src):
+            # Prune excluded top-level dirs in place so os.walk never descends
+            # into them (skips the large, regenerable Chronicle export).
+            if root == src:
+                dirs[:] = [d for d in dirs if d not in _BACKUP_EXCLUDE_DIRS]
             for f in files:
                 full = os.path.join(root, f)
                 z.write(full, os.path.relpath(full, src))
