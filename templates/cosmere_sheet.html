@@ -209,6 +209,17 @@
   .cs-cbtn { font-size:11px; padding:.35rem .7rem; border-radius:7px; cursor:pointer; background:var(--bg-page,#0d1117);
     border:1px solid var(--accent); color:var(--accent); font-weight:600; }
   .cs-cbtn.on { background:var(--accent); color:#06242b; }
+  /* Heads-up combat popup: a brief, attention-grabbing toast when it becomes
+     your turn (or you're up next) while you're looking at your own sheet. */
+  .cos-turn-pop { position:fixed; top:64px; left:50%; transform:translateX(-50%) translateY(-14px); z-index:1200;
+    min-width:230px; max-width:88vw; padding:.7rem 1.1rem; border-radius:12px; text-align:center; cursor:pointer;
+    background:var(--bg-card,#161d27); box-shadow:0 10px 34px rgba(0,0,0,.5);
+    opacity:0; pointer-events:none; transition:opacity .25s ease, transform .25s ease; }
+  .cos-turn-pop.show { opacity:1; transform:translateX(-50%) translateY(0); pointer-events:auto; }
+  .cos-turn-pop b { display:block; font-family:var(--font-display,serif); font-size:1.05rem; }
+  .cos-turn-pop span { display:block; font-size:11.5px; color:var(--text-on-dark-3); margin-top:.15rem; }
+  .cos-turn-pop.turn { border:1px solid rgba(52,211,153,.6); } .cos-turn-pop.turn b { color:#34d399; }
+  .cos-turn-pop.next { border:1px solid color-mix(in srgb, var(--accent) 55%, transparent); } .cos-turn-pop.next b { color:var(--accent); }
   /* Read-only notice for a sheet you don't own (no roll/stat controls). */
   .cs-readonly { margin:0 0 1rem; padding:.55rem .85rem; border-radius:9px; font-size:12.5px;
     background:rgba(245,158,11,.10); border:1px solid rgba(245,158,11,.5); color:#fbbf24; }
@@ -1364,16 +1375,37 @@
           + '<span style="font-size:11px;color:var(--text-on-dark-3)">'+(st.max_actions||3)+' actions</span>';
       }
     }
+    // Heads-up popup: fires once on the transition INTO your turn / up-next, so a
+    // player watching their own sheet gets an attention-grab instead of only the
+    // passive strip. Click to dismiss; auto-hides after a few seconds.
+    let _prevTurn=false, _prevNext=false;
+    function combatPopup(kind){
+      let el=document.getElementById('cos-turn-pop');
+      if(!el){ el=document.createElement('div'); el.id='cos-turn-pop'; el.className='cos-turn-pop';
+        el.setAttribute('role','status'); document.body.appendChild(el);
+        el.addEventListener('click', ()=>el.classList.remove('show')); }
+      const turn = kind==='turn';
+      el.classList.toggle('turn', turn); el.classList.toggle('next', !turn);
+      el.setAttribute('aria-live', turn ? 'assertive' : 'polite');
+      el.innerHTML = turn
+        ? '<b>Your turn</b><span>You&rsquo;re up in the fight &mdash; take your actions</span>'
+        : '<b>You&rsquo;re up next</b><span>Get ready &mdash; your turn is coming</span>';
+      el.classList.add('show');
+      clearTimeout(el._t); el._t = setTimeout(()=>el.classList.remove('show'), turn ? 6000 : 4500);
+    }
     function refreshCombat(){
       fetch('/api/cosmere/my_combat?pid='+encodeURIComponent(PID)).then(r=>r.json()).then(st=>{
         const box=document.getElementById('cos-combat'); if(!box) return;
-        if(!st || !st.ok || !st.in_encounter){ box.style.display='none'; return; }
+        if(!st || !st.ok || !st.in_encounter){ box.style.display='none'; _prevTurn=false; _prevNext=false; return; }
         box.style.display='';
         box.classList.toggle('myturn', !!st.is_my_turn);
         document.getElementById('cc-round').textContent='Round '+st.round;
         const turn=document.getElementById('cc-turn');
         turn.textContent = st.is_my_turn ? 'YOUR TURN' : ('Acting: '+(st.active_name||'—'));
         turn.style.color = st.is_my_turn ? '#34d399' : '#e8eef5';
+        if(st.is_my_turn){ if(!_prevTurn) combatPopup('turn'); }
+        else if(st.up_next && !_prevNext){ combatPopup('next'); }
+        _prevTurn = !!st.is_my_turn; _prevNext = !!st.up_next;
         renderControls(st);
       }).catch(()=>{});
     }

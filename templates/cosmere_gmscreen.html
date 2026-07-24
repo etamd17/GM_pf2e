@@ -6,11 +6,22 @@
   .gms-head { display:flex; align-items:baseline; gap:.8rem; flex-wrap:wrap; border-bottom:1px solid var(--border-rule); padding-bottom:.7rem; margin-bottom:1rem; }
   .gms-title { font-family:var(--font-display, serif); font-size:1.7rem; font-weight:700; color:var(--storm-100, var(--accent)); }
   .gms-sub { font-size:12px; color:var(--text-on-dark-3); }
-  .gms-nav { display:flex; flex-wrap:wrap; gap:.4rem; margin-bottom:1.3rem; }
+  /* Sticky section nav: jump to any rule without scrolling back up. */
+  .gms-nav { display:flex; flex-wrap:wrap; gap:.4rem; margin-bottom:1.3rem; position:sticky; top:48px; z-index:6;
+             background:color-mix(in srgb, var(--bg-page) 92%, transparent); backdrop-filter:blur(6px);
+             padding:.5rem 0; border-bottom:1px solid var(--border-rule); }
   .gms-nav a { font-size:11px; text-decoration:none; color:var(--text-on-dark-2); background:var(--bg-card-2); border:1px solid var(--border-card); border-radius:999px; padding:.3rem .75rem; transition:color .12s, border-color .12s; }
-  .gms-nav a:hover { color:var(--accent); border-color:var(--accent); }
+  .gms-nav a:hover, .gms-nav a.current { color:var(--accent); border-color:var(--accent); }
   .gms-grid { display:grid; gap:1rem; grid-template-columns:repeat(auto-fit, minmax(320px,1fr)); align-items:start; }
-  .gms-panel { background:var(--bg-card); border:1px solid var(--border-card); border-radius:var(--r-md); padding:1rem 1.1rem; scroll-margin-top:64px; }
+  /* Flatter panels (minimal): a faint wash + hairline instead of a heavy box. */
+  .gms-panel { background:rgba(255,255,255,.014); border:1px solid rgba(255,255,255,.05); border-radius:var(--r-md); padding:1rem 1.1rem; scroll-margin-top:104px; order:1; }
+  .gms-panel.pinned { order:0; border-color:color-mix(in srgb, var(--accent) 40%, transparent); }
+  .gms-panel h2 { display:flex; align-items:center; justify-content:space-between; gap:.5rem; }
+  .gms-pin { background:none; border:none; cursor:pointer; color:var(--text-on-dark-3); font-size:13px; line-height:1; padding:2px 4px; border-radius:5px; transition:color .12s; flex:0 0 auto; }
+  .gms-pin:hover { color:var(--accent); }
+  .gms-pin.on { color:var(--accent); }
+  .gms-xref { color:var(--accent); text-decoration:none; border-bottom:1px dotted color-mix(in srgb, var(--accent) 45%, transparent); }
+  .gms-xref:hover { border-bottom-style:solid; }
   .gms-panel.wide { grid-column:1 / -1; }
   .gms-panel h2 { font-family:var(--font-display, serif); font-size:13px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--accent); margin:0 0 .7rem; }
   .gms-tbl { width:100%; border-collapse:collapse; font-size:12.5px; }
@@ -190,4 +201,62 @@
   </section>
 
 </div>
+<script>
+(function(){
+  const panels = [...document.querySelectorAll('.gms-panel')];
+  // ---- Pin favorite reference cards (persist per browser) ----
+  let pins = []; try { pins = JSON.parse(localStorage.getItem('cos_gms_pins') || '[]') || []; } catch(_){}
+  const savePins = () => { try { localStorage.setItem('cos_gms_pins', JSON.stringify(pins)); } catch(_){} };
+  function applyPin(p, on){
+    p.classList.toggle('pinned', on);
+    const b = p.querySelector('.gms-pin');
+    if(b){ b.classList.toggle('on', on); b.textContent = on ? '★' : '☆'; b.setAttribute('aria-pressed', on?'true':'false'); }
+  }
+  window.gmsTogglePin = function(id){
+    const p = document.getElementById(id); if(!p) return;
+    const on = !pins.includes(id);
+    pins = on ? pins.concat(id) : pins.filter(x=>x!==id);
+    savePins(); applyPin(p, on);
+  };
+  panels.forEach(p=>{
+    const h2 = p.querySelector('h2'); if(!h2 || !p.id) return;
+    const btn = document.createElement('button');
+    btn.type='button'; btn.className='gms-pin';
+    btn.setAttribute('aria-label','Pin '+(h2.textContent||'').trim()+' to top');
+    btn.textContent='☆'; btn.onclick = () => window.gmsTogglePin(p.id);
+    h2.appendChild(btn);
+    applyPin(p, pins.includes(p.id));
+  });
+  // ---- Cross-link rule terms to their section (safe text-node walk) ----
+  const XREF = { 'Plot Die':'plot', 'Deflect':'damage', 'Opportunity':'plot', 'Complication':'plot',
+                 'Surge':'surges', 'Ideal':'orders', 'recovery die':'rest' };
+  const terms = Object.keys(XREF).sort((a,b)=>b.length-a.length);
+  panels.forEach(p=>{
+    const here = p.id, linked = new Set();
+    const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT, { acceptNode(n){
+      const par = n.parentElement;
+      return (par && !par.closest('a, h2, button, .gms-pin')) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+    }});
+    const nodes=[]; let tn; while(tn=walker.nextNode()) nodes.push(tn);
+    nodes.forEach(node=>{
+      for(const t of terms){
+        if(linked.has(t) || XREF[t]===here) continue;
+        const idx = node.nodeValue.indexOf(t); if(idx<0) continue;
+        const before=node.nodeValue[idx-1], after=node.nodeValue[idx+t.length];
+        if((before && /\w/.test(before)) || (after && /\w/.test(after))) continue;
+        const a=document.createElement('a'); a.className='gms-xref'; a.href='#'+XREF[t]; a.textContent=t;
+        const rest = node.splitText(idx); rest.nodeValue = rest.nodeValue.slice(t.length);
+        node.parentNode.insertBefore(a, rest); linked.add(t); break;
+      }
+    });
+  });
+  // ---- Scrollspy: highlight the current section in the sticky nav ----
+  const navLinks = [...document.querySelectorAll('.gms-nav a')];
+  function spy(){
+    let cur=null; panels.forEach(p=>{ if(p.getBoundingClientRect().top <= 120) cur=p.id; });
+    navLinks.forEach(a=>a.classList.toggle('current', a.getAttribute('href')==='#'+cur));
+  }
+  window.addEventListener('scroll', spy, {passive:true}); spy();
+})();
+</script>
 {% endblock %}

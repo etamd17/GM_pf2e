@@ -5,11 +5,22 @@
   .vit-h { font-family:var(--font-display,serif); font-size:1.5rem; color:var(--accent); margin:0 0 .2rem; }
   .vit-lead { font-size:12.5px; color:var(--text-on-dark-3); margin:0 0 1.1rem; }
   .vit-grid { display:grid; gap:.8rem; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); }
-  .vit-card { background:var(--bg-sunken,#131922); border:1px solid var(--border-card); border-radius:11px; padding:.8rem .9rem; position:relative; overflow:hidden; }
-  .vit-card::before { content:''; position:absolute; left:0; right:0; top:0; height:2px; background:linear-gradient(90deg, transparent, var(--accent), transparent); opacity:.5; }
+  /* Flat single-elevation panel on the page (calmer than a recessed well); the
+     accent bar is a quiet hairline, not a glow, so a grid of cards reads calm. */
+  .vit-card { background:var(--bg-card,#131b26); border:1px solid var(--border-card); border-radius:11px; padding:.8rem .9rem; position:relative; overflow:hidden; }
+  .vit-card::before { content:''; position:absolute; left:0; right:0; top:0; height:1px; background:linear-gradient(90deg, transparent, var(--accent), transparent); opacity:.28; }
   .vit-head { display:flex; align-items:baseline; justify-content:space-between; gap:.5rem; margin-bottom:.6rem; }
   .vit-name { font-family:var(--font-display,serif); font-size:1.15rem; color:var(--text-on-dark); }
   .vit-sub { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-on-dark-3); }
+  /* Static defense reference so the board doubles as the GM's attack/DC lookup. */
+  .vit-defs { display:flex; gap:.7rem; flex-wrap:wrap; margin:0 0 .5rem; font-size:10.5px; color:var(--text-on-dark-3); }
+  .vit-defs b { color:var(--text-on-dark-2); font-variant-numeric:tabular-nums; font-weight:700; }
+  /* Whose turn it is now (green outline + badge), tied to the live encounter. */
+  .vit-card.acting { outline:2px solid rgba(52,211,153,.55); outline-offset:1px; }
+  .vit-acting { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; margin-left:.4rem;
+                padding:1px 6px; border-radius:5px; vertical-align:middle;
+                background:color-mix(in srgb, #34d399 18%, transparent); border:1px solid rgba(52,211,153,.5); color:#34d399; }
+  .vit-card:not(.acting) .vit-acting { display:none; }
   .vit-row { display:flex; align-items:center; gap:.5rem; margin:.3rem 0; }
   .vit-l { font-size:9.5px; text-transform:uppercase; letter-spacing:.07em; color:var(--text-on-dark-3); width:30px; flex:0 0 auto; }
   .vit-track { flex:1; height:8px; border-radius:5px; background:rgba(255,255,255,.07); overflow:hidden; }
@@ -42,10 +53,11 @@
   .vit-conds::-webkit-scrollbar { height:4px; }
   .vit-conds::-webkit-scrollbar-thumb { background:rgba(95,168,224,.35); border-radius:2px; }
   .vit-conds::-webkit-scrollbar-track { background:transparent; }
-  .cond-chip { font-size:10px; padding:2px 7px; border-radius:6px; background:rgba(245,158,11,.14); border:1px solid rgba(245,158,11,.45); color:#fbbf24; flex:0 0 auto; }
+  .cond-chip { font-size:10px; padding:2px 7px; border-radius:6px; background:color-mix(in srgb, var(--accent) 12%, transparent); border:1px solid color-mix(in srgb, var(--accent) 34%, transparent); color:var(--accent-hover,#9fd2f2); flex:0 0 auto; }
   /* Severity read (mirrors party_view's sev-red): debilitating states (Unconscious,
      Exhausted, Stunned, Afflicted, Immobilized, Restrained, Slowed, Disoriented)
-     go ruby; minor/buff conditions keep the default amber. */
+     go ruby; minor/buff conditions sit on the calm Stormlight accent (parity with
+     the PF2e sibling, which tints its non-severe chips in its own gilt accent). */
   .cond-chip.sev-red { background:rgba(211,110,110,.16); border-color:rgba(211,110,110,.5); color:#f0a3a3; }
   .cond-more { font-size:10px; font-weight:700; padding:2px 7px; border-radius:6px; background:rgba(255,255,255,.06); border:1px solid var(--border-card); color:var(--text-on-dark-3); flex:0 0 auto; }
   .vit-empty { color:var(--text-on-dark-3); font-size:13px; padding:1.5rem 0; }
@@ -59,16 +71,20 @@
   <h1 class="vit-h">Party Vitals</h1>
   <p class="vit-lead">Every hero's Health, Focus, Investiture, injuries and conditions &mdash; live, updating as players adjust their sheets. <a href="/cosmere/pcs" style="color:var(--accent);">Character roster &rarr;</a></p>
   {% if party %}
-  <div class="vit-grid" id="vit-grid">
+  <div class="vit-grid" id="vit-grid" role="list" aria-label="Party vitals">
     {% for p in party %}
-    <div class="vit-card{% if p.hp_pct <= 0 %} downed{% elif p.hp_pct <= 25 %} crit{% elif p.hp_pct <= 50 %} hurt{% endif %}" data-name="{{ p.name }}" data-hpmax="{{ p.max_hp }}" data-focmax="{{ p.focus_max }}" data-invmax="{{ p.investiture_max }}">
-      <div class="vit-head"><span class="vit-name">{{ p.name }}</span><span class="vit-sub">{{ p.class_name }}{% if p.level %} &middot; L{{ p.level }}{% endif %}</span></div>
+    {# Derived at-risk "why" — spells out the band behind the ruby rail for a GM
+       scanning the board; kept in sync on live updates by _setBar below. #}
+    {% set _risk = 'Downed (0 Health)' if p.hp_pct <= 0 else 'Critical (quarter Health or less)' if p.hp_pct <= 25 else 'Hurt (below half Health)' if p.hp_pct <= 50 else '' %}
+    <div class="vit-card{% if p.name == active_name %} acting{% endif %}{% if p.hp_pct <= 0 %} downed{% elif p.hp_pct <= 25 %} crit{% elif p.hp_pct <= 50 %} hurt{% endif %}" role="listitem" data-name="{{ p.name }}" data-hpmax="{{ p.max_hp }}" data-focmax="{{ p.focus_max }}" data-invmax="{{ p.investiture_max }}"{% if _risk %} title="{{ p.name }}: {{ _risk }}"{% endif %}>
+      <div class="vit-head"><span class="vit-name">{{ p.name }}<span class="vit-acting">Acting</span></span><span class="vit-sub">{{ p.class_name }}{% if p.level %} &middot; L{{ p.level }}{% endif %}</span></div>
+      {% if p.defenses %}<div class="vit-defs" title="Static defenses -- Physical / Cognitive / Spiritual{% if p.deflect %}, plus Deflect{% endif %}"><span>Phy <b>{{ p.defenses.phy }}</b></span><span>Cog <b>{{ p.defenses.cog }}</b></span><span>Spi <b>{{ p.defenses.spi }}</b></span>{% if p.deflect %}<span>Defl <b>{{ p.deflect }}</b></span>{% endif %}</div>{% endif %}
       <div class="vit-row"><span class="vit-l">HP</span><div class="vit-track"><div class="vit-fill hp" data-bar="health" style="width:{{ p.hp_pct }}%"></div></div><span class="vit-v"><b data-f="health">{{ p.current_hp }}</b>/<span data-m="health">{{ p.max_hp }}</span></span></div>
       {% if p.investiture_max %}<div class="vit-row"><span class="vit-l">Inv</span><div class="vit-track"><div class="vit-fill inv" data-bar="investiture" style="width:{{ (100 * p.investiture_current / p.investiture_max)|round|int if p.investiture_max else 0 }}%"></div></div><span class="vit-v"><b data-f="investiture">{{ p.investiture_current }}</b>/<span data-m="investiture">{{ p.investiture_max }}</span></span></div>{% endif %}
       <div class="vit-row"><span class="vit-l">Foc</span><div class="vit-track"><div class="vit-fill foc" data-bar="focus" style="width:{{ (100 * p.focus_current / p.focus_max)|round|int if p.focus_max else 0 }}%"></div></div><span class="vit-v"><b data-f="focus">{{ p.focus_current }}</b>/<span data-m="focus">{{ p.focus_max }}</span></span></div>
       <div class="vit-foot">
         <span class="vit-inj" data-f="injuries" style="{{ '' if p.injuries else 'display:none' }}">Injuries {{ p.injuries }}</span>
-        <span class="vit-conds" data-f="conditions">{% set _cslist = p.conditions|list %}{% for c in _cslist[:4] %}<span class="cond-chip{{ ' sev-red' if c|lower in _COS_SEV }}">{{ c|capitalize }}{% if p.conditions[c] is number and p.conditions[c] > 1 %} {{ p.conditions[c] }}{% endif %}</span>{% endfor %}{% if _cslist|length > 4 %}<span class="cond-more">+{{ _cslist|length - 4 }}</span>{% endif %}</span>
+        <span class="vit-conds" data-f="conditions">{% set _cslist = p.conditions|list %}{% for c in _cslist[:4] %}<span class="cond-chip{{ ' sev-red' if c|lower in _COS_SEV }}"{% if cond_info.get(c|lower) %} title="{{ c|capitalize }} &mdash; {{ cond_info.get(c|lower) }}"{% endif %}>{{ c|capitalize }}{% if p.conditions[c] is number and p.conditions[c] > 1 %} {{ p.conditions[c] }}{% endif %}</span>{% endfor %}{% if _cslist|length > 4 %}<span class="cond-more">+{{ _cslist|length - 4 }}</span>{% endif %}</span>
       </div>
     </div>
     {% endfor %}
@@ -81,6 +97,8 @@
 (function(){
   // Kept in sync with the _COS_SEV Jinja set above: debilitating conditions render ruby.
   var COS_SEV = new Set(['unconscious','stunned','exhausted','afflicted','immobilized','restrained','slowed','disoriented']);
+  // Condition -> rulebook effect, for the hover tooltips (mirrors cond_info server-side).
+  var COND_INFO = {{ cond_info|tojson }};
   var COND_CAP = 4;
   function _esc(s){ var d=document.createElement('div'); d.textContent=(s==null?'':String(s)); return d.innerHTML; }
   function _card(name){ return document.querySelector('.vit-card[data-name="'+(window.CSS&&CSS.escape?CSS.escape(name):name)+'"]'); }
@@ -93,6 +111,10 @@
       card.classList.toggle('downed', pct<=0);
       card.classList.toggle('crit', pct>0 && pct<=25);
       card.classList.toggle('hurt', pct>25 && pct<=50);
+      // Keep the derived at-risk "why" tooltip in sync with the live band.
+      var risk = pct<=0 ? 'Downed (0 Health)' : (pct<=25 ? 'Critical (quarter Health or less)' : (pct<=50 ? 'Hurt (below half Health)' : ''));
+      var nm = card.getAttribute('data-name') || '';
+      if(risk){ card.title = nm ? nm+': '+risk : risk; } else { card.removeAttribute('title'); }
     }
   }
   function _apply(name, ps){
@@ -106,13 +128,27 @@
         var label=c.charAt(0).toUpperCase()+c.slice(1);
         if(typeof v==='number' && v>1) label+=' '+v;
         var sev=COS_SEV.has(c.toLowerCase())?' sev-red':'';
-        return '<span class="cond-chip'+sev+'">'+_esc(label)+'</span>';
+        var eff=COND_INFO[c.toLowerCase()];
+        var t=eff?(' title="'+_esc(c.charAt(0).toUpperCase()+c.slice(1)+' — '+eff)+'"'):'';
+        return '<span class="cond-chip'+sev+'"'+t+'>'+_esc(label)+'</span>';
       }).join('');
       if(active.length>COND_CAP) html+='<span class="cond-more">+'+(active.length-COND_CAP)+'</span>';
       box.innerHTML=html;
     }}
   }
+  // "Acting now": outline whoever's turn it is, tied to the live encounter.
+  function _applyActing(name){
+    document.querySelectorAll('.vit-card').forEach(function(c){
+      c.classList.toggle('acting', !!name && c.getAttribute('data-name') === name);
+    });
+  }
+  function _refreshActing(){
+    fetch('/api/cosmere/combat_state').then(function(r){return r.json();}).then(function(d){
+      _applyActing(d && d.in_encounter ? (d.active_name || '') : '');
+    }).catch(function(){});
+  }
   try { window.appSSE('cosmere_player_state', function(e){ try{ var d=JSON.parse(e.data); _apply(d.name, d.play_state); }catch(ex){} }); } catch(e){}
+  try { window.appSSE('encounter_update', _refreshActing); } catch(e){}
 })();
 </script>
 {% endblock %}

@@ -8130,15 +8130,36 @@ def cosmere_gm_hub():
     adv_count = len(systems.cosmere.adversary_docs())
     camp = _active_campaign_doc() or {}
     cfg = _load_campaign_config()
+    ready_count, ready_total = _cosmere_ready_counts()
     return render_template(
         'cosmere_gm.html',
         campaign_name=camp.get('name') or 'Cosmere Campaign',
-        char_count=len(_list_cosmere_pcs()),
+        char_count=ready_total,
         adv_count=adv_count,
         encounter_count=len(ACTIVE_ENCOUNTER),
         active_cid=ACTIVE_CAMPAIGN_ID,
         session_number=cfg.get('session_number', 1),
+        party=_cosmere_hub_party(),
+        ready_count=ready_count, ready_total=ready_total,
     )
+
+
+@app.route('/api/cosmere/hub_status')
+@gm_required
+def api_cosmere_hub_status():
+    """Live snapshot for the Cosmere GM hub: party vitals strip, live counts, and
+    the ready-to-level tally -- so the command center repaints on the encounter /
+    player SSE instead of going stale until a manual refresh."""
+    if _active_system() != 'cosmere':
+        return jsonify({'ok': False}), 400
+    ready, total = _cosmere_ready_counts()
+    return jsonify({
+        'ok': True,
+        'char_count': total,
+        'encounter_count': len(ACTIVE_ENCOUNTER),
+        'ready_count': ready, 'ready_total': total,
+        'party': _cosmere_hub_party(),
+    })
 
 
 @app.route('/cosmere/gmscreen')
@@ -8224,9 +8245,15 @@ def cosmere_pcs():
     for d in _list_cosmere_pcs():
         b = _cb.CosmereBuild(d.get('build'), homebrew=_hb_store)
         o = b.order()
+        _ps = d.get('play_state') or {}
+        _cur_h = _ps.get('health')
         cards.append({
             'id': d['id'], 'name': d.get('name', 'Unknown'), 'level': b.level, 'tier': b.tier,
             'path': b.path, 'defenses': b.defenses(), 'health': b.health_max(),
+            # Current health + active conditions from runtime play_state, so the
+            # roster shows party status at a glance (parity with the hub card).
+            'current_health': int(_cur_h if _cur_h is not None else b.health_max()),
+            'conditions': {k: v for k, v in (_ps.get('conditions') or {}).items() if v},
             'deflect': b.deflect_value(), 'investiture': b.investiture_max(),
             'is_radiant': b.is_radiant,
             'order': o['name'] if o else '', 'spren': b.spren_name or (o['spren'] if o else ''),
@@ -8246,7 +8273,10 @@ def cosmere_gm_vitals():
     cosmere_player_state SSE as players adjust their sheets."""
     party = _cosmere_status_party(_list_cosmere_pcs())
     party.sort(key=lambda r: r['name'].lower())
-    return render_template('cosmere_gm_vitals.html', party=party)
+    active = ACTIVE_ENCOUNTER[TURN_INDEX] if (ACTIVE_ENCOUNTER and 0 <= TURN_INDEX < len(ACTIVE_ENCOUNTER)) else None
+    return render_template('cosmere_gm_vitals.html', party=party,
+                           active_name=(getattr(active, 'name', '') if active else ''),
+                           cond_info=systems.cosmere.CONDITION_INFO)
 
 
 @app.route('/cosmere/pc/import_pdf', methods=['POST'])
@@ -8574,17 +8604,30 @@ def _cosmere_player_card(doc):
     import systems.cosmere.radiant as _rad
     b = _cb.CosmereBuild(doc.get('build'), homebrew=_cosmere_homebrew_store())
     o = b.order()
+    # Live values from the PC's runtime play_state (the same keys the Vitals
+    # board + roster read), so the player's own landing shows how hurt/spent
+    # they are -- not just the maxes. Falls back to the max when unset.
+    _ps = doc.get('play_state') if isinstance(doc.get('play_state'), dict) else {}
+    def _psi(key, default):
+        try:
+            return int(_ps[key])
+        except (KeyError, TypeError, ValueError):
+            return int(default)
+    _hmax, _fmax, _imax = b.health_max(), b.focus_max(), b.investiture_max()
     return {
         'id': doc['id'], 'name': doc.get('name', 'Unknown'),
         'ancestry': b.ancestry, 'culture': b.culture, 'path': b.path,
         'level': b.level, 'tier': b.tier,
         'attributes': b.eff_attributes(),
         'defenses': b.defenses(), 'deflect': b.deflect_value(),
-        'health': b.health_max(), 'focus': b.focus_max(), 'investiture': b.investiture_max(),
+        'health': _hmax, 'focus': _fmax, 'investiture': _imax,
+        'current_health': _psi('health', _hmax), 'current_focus': _psi('focus', _fmax),
+        'current_investiture': _psi('investiture', _imax),
+        'injuries': max(0, _psi('injuries', 0)),
         # Active conditions from the PC's runtime play_state (e.g. Exhausted
         # magnitude), so the hub shows status at a glance instead of only in the
         # tracker -- parity with the PF2e player card's condition row.
-        'conditions': {k: v for k, v in ((doc.get('play_state') or {}).get('conditions') or {}).items() if v},
+        'conditions': {k: v for k, v in (_ps.get('conditions') or {}).items() if v},
         'is_radiant': b.is_radiant,
         'order': o['name'] if o else '', 'spren': b.spren_name or (o['spren'] if o else ''),
         'ideals': b.ideals_sworn, 'first_ideal': b.first_ideal_sworn,
@@ -8614,6 +8657,19 @@ def cosmere_player_hub():
         if cid_char:
             mine = [d for d in all_pcs if d.get('id') == cid_char]
     cards = [_cosmere_player_card(d) for d in mine]
+    # In-combat awareness: if the player's character is in the live encounter,
+    # the hub shows a jump-in banner (and flags whose turn it is), so they land
+    # straight into the fight instead of hunting for the Combat tab.
+    combat = {'active': False, 'turn_name': '', 'names': []}
+    try:
+        with ENCOUNTER_LOCK:
+            if ACTIVE_ENCOUNTER:
+                combat['active'] = True
+                combat['names'] = [getattr(c, 'name', '') for c in ACTIVE_ENCOUNTER]
+                _ac = ACTIVE_ENCOUNTER[TURN_INDEX] if TURN_INDEX < len(ACTIVE_ENCOUNTER) else None
+                combat['turn_name'] = getattr(_ac, 'name', '') if _ac else ''
+    except Exception:
+        pass
     # Reference iconography (theming PR-C): the ten Radiant orders (with colors +
     # surges) for the Stormlight skin, and the 16-metal Allomantic table for the
     # Mistborn skin. The template shows whichever matches the campaign's world.
@@ -8627,7 +8683,7 @@ def cosmere_player_hub():
     } for k, o in _all_orders.items()]
     return render_template(
         'cosmere_player.html', cards=cards, has_pc=bool(cards),
-        roster_count=len(all_pcs), is_gm=_is_gm(),
+        roster_count=len(all_pcs), is_gm=_is_gm(), combat=combat,
         order_ref=order_ref, metal_families=_lore.metals_by_family(),
         attr_names=systems.cosmere.ATTR_NAMES, defense_names=systems.cosmere.DEFENSE_NAMES,
     )
@@ -9101,11 +9157,19 @@ def api_cosmere_my_combat():
     if not c:
         return jsonify({'ok': True, 'in_encounter': False})
     active = ACTIVE_ENCOUNTER[TURN_INDEX] if (ACTIVE_ENCOUNTER and 0 <= TURN_INDEX < len(ACTIVE_ENCOUNTER)) else None
+    is_my_turn = bool(active and active.instance_id == c.instance_id)
+    # Am I the combatant who acts right after the current one? Powers the sheet's
+    # "you're up next" heads-up popup. Wraps to the top of the order (next round);
+    # never fires when it's already my turn or I'm the only one in the fight.
+    up_next = False
+    if active and not is_my_turn and ACTIVE_ENCOUNTER and len(ACTIVE_ENCOUNTER) > 1:
+        nxt = ACTIVE_ENCOUNTER[(TURN_INDEX + 1) % len(ACTIVE_ENCOUNTER)]
+        up_next = bool(nxt and nxt.instance_id == c.instance_id)
     return jsonify({
         'ok': True, 'in_encounter': True, 'round': ROUND_NUMBER,
         'mode': _cosmere_initiative_mode(),
         'active_name': active.name if active else '',
-        'is_my_turn': bool(active and active.instance_id == c.instance_id),
+        'is_my_turn': is_my_turn, 'up_next': up_next,
         'speed_choice': getattr(c, 'speed_choice', 'slow'),
         'max_actions': getattr(c, 'max_actions', 3),
         'initiative': int(getattr(c, 'initiative', 0) or 0),
@@ -18535,6 +18599,33 @@ def api_rest_apply():
     return jsonify({'success': True, 'results': results})
 
 # -- Quick Status Board -----------------------------------------------
+# Debilitating Cosmere conditions (mirrors the _COS_SEV list the templates use).
+_COSMERE_SEVERE_CONDS = {'unconscious', 'stunned', 'exhausted', 'afflicted',
+                         'immobilized', 'restrained', 'slowed', 'disoriented'}
+
+
+def _cosmere_hub_party():
+    """Compact per-hero vitals for the GM hub's at-a-glance party strip: name,
+    health band, injuries, and whether any condition is debilitating."""
+    rows = []
+    for r in _cosmere_status_party(_list_cosmere_pcs()):
+        conds = list(r.get('conditions') or {})
+        rows.append({
+            'name': r['name'], 'hp_pct': r['hp_pct'],
+            'current_hp': r['current_hp'], 'max_hp': r['max_hp'],
+            'injuries': int(r.get('injuries') or 0),
+            'conds': len(conds),
+            'sev': any(str(c).lower() in _COSMERE_SEVERE_CONDS for c in conds),
+        })
+    return rows
+
+
+def _cosmere_ready_counts():
+    """(ready, total) PCs flagged ready-to-level in the active Cosmere campaign."""
+    pcs = _list_cosmere_pcs()
+    return sum(1 for d in pcs if d.get('ready_to_level')), len(pcs)
+
+
 def _cosmere_status_party(docs):
     """Party-status rows for Cosmere PCs (mirrors the PF2e shape the status board
     expects). Live health/focus/investiture/conditions come from each PC's saved
@@ -18563,6 +18654,7 @@ def _cosmere_status_party(docs):
             'class_name': (o['name'] if o else b.path) or '',
             'level': b.level,
             'ac': b.defenses().get('phy', 10),
+            'defenses': b.defenses(), 'deflect': b.deflect_value(),
             'current_hp': cur, 'max_hp': hmax,
             'hp_pct': round(cur / hmax * 100) if hmax > 0 else 0,
             'temp_hp': 0,

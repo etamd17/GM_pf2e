@@ -9,7 +9,7 @@
   .ph-roster:hover { background:rgba(255,255,255,.09); }
 
   .hero { background:var(--bg-sunken,#131922); border:1px solid var(--border-card);
-          border-left:5px solid var(--accent); border-radius:14px;
+          border-left:3px solid var(--accent); border-radius:14px;
           padding:1.1rem 1.25rem; margin-bottom:1.2rem; }
   .hero-top { display:flex; align-items:baseline; justify-content:space-between; gap:.7rem; flex-wrap:wrap; }
   .hero-name { font-size:1.5rem; font-weight:800; color:#e8eef5; font-family:var(--font-display,serif); }
@@ -18,11 +18,32 @@
   .hero-sub .dim { color:var(--text-on-dark-3); font-weight:400; }
 
   .stat-row { display:flex; gap:.6rem; margin-top:1rem; flex-wrap:wrap; }
-  .stat { flex:1 1 80px; min-width:80px; text-align:center; background:rgba(255,255,255,.03);
-          border:1px solid var(--border-card); border-radius:9px; padding:.5rem .2rem; }
+  /* Flattened stat cells — a faint wash + hairline instead of a hard border, so
+     the cluster reads as one card rather than a grid of boxes-in-a-box. */
+  .stat { flex:1 1 80px; min-width:80px; text-align:center; background:rgba(255,255,255,.02);
+          border:1px solid rgba(255,255,255,.05); border-radius:9px; padding:.5rem .2rem; }
+  .stat[title], .attr[title] { cursor:help; }
   .stat .l { font-size:9.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-on-dark-3); }
   .stat .v { font-family:var(--font-ui); font-variant-numeric:tabular-nums; font-weight:700; font-size:20px; color:#e8eef5; line-height:1.25; }
   .stat.accent .v { color:var(--accent); }
+  /* Live resource gauges (Health/Focus/Investiture): current/max + a thin bar,
+     so the player's own landing shows how hurt or spent they are, not just the
+     ceiling. Health tiers green -> accent (hurt) -> ruby (critical). */
+  .stat .v .mx { font-size:12px; font-weight:600; color:var(--text-on-dark-3); }
+  .stat .bar { height:4px; border-radius:3px; background:rgba(255,255,255,.08); overflow:hidden; margin-top:.4rem; }
+  .stat .bar i { display:block; height:100%; border-radius:3px; background:var(--accent); transition:width .2s ease; }
+  .stat .bar i.hp { background:#4ade80; }
+  .stat .bar i.hp.hurt { background:var(--accent); }
+  .stat .bar i.hp.crit { background:#e06b6b; }
+
+  /* In-combat banner: shown only while this character is in the live encounter. */
+  .incombat { display:flex; align-items:center; justify-content:space-between; gap:.6rem; text-decoration:none;
+              margin-bottom:.8rem; padding:.55rem .9rem; border-radius:10px; font-size:13px; font-weight:600;
+              color:var(--accent); background:color-mix(in srgb, var(--accent) 10%, transparent);
+              border:1px solid color-mix(in srgb, var(--accent) 32%, transparent); }
+  .incombat:hover { background:color-mix(in srgb, var(--accent) 16%, transparent); }
+  .incombat .go { font-weight:700; }
+  .incombat.myturn { color:#34d399; background:color-mix(in srgb, #34d399 12%, transparent); border-color:rgba(52,211,153,.5); }
 
   .attr-row { display:grid; grid-template-columns:repeat(6, 1fr); gap:.4rem; margin-top:.7rem; }
   @media (max-width:560px) { .attr-row { grid-template-columns:repeat(3, 1fr); } }
@@ -37,6 +58,9 @@
                padding:.22rem .5rem; border-radius:6px; color:var(--accent);
                background:color-mix(in srgb, var(--accent) 14%, transparent);
                border:1px solid color-mix(in srgb, var(--accent) 38%, transparent); }
+  /* Debilitating states + injuries read ruby (parity with Vitals/Roster); minor
+     conditions keep the calm accent tint above. */
+  .cond-pill.sev { color:#f0a3a3; background:rgba(211,110,110,.16); border-color:rgba(211,110,110,.5); }
 
   .radiant { margin-top:.9rem; padding-top:.8rem; border-top:1px solid var(--border-card); font-size:12.5px; color:#aeb8c4; }
   .radiant b { color:var(--accent); }
@@ -49,8 +73,9 @@
   .act { text-decoration:none; font-size:13px; font-weight:600; padding:.55rem 1rem; border-radius:9px;
          border:1px solid var(--border-card); color:#e8eef5; background:rgba(255,255,255,.04); }
   .act:hover { background:rgba(255,255,255,.09); }
-  .act.primary { background:rgba(95,168,224,.16); border-color:rgba(95,168,224,.5); color:var(--accent); }
-  .act.primary:hover { background:rgba(95,168,224,.26); }
+  .act.primary { background:color-mix(in srgb, var(--accent) 14%, transparent);
+                 border-color:color-mix(in srgb, var(--accent) 45%, transparent); color:var(--accent); }
+  .act.primary:hover { background:color-mix(in srgb, var(--accent) 24%, transparent); }
 
   .ph-empty { background:var(--bg-sunken,#131922); border:1px solid var(--border-card); border-radius:14px;
               padding:1.6rem; text-align:center; color:var(--text-on-dark-2); }
@@ -71,7 +96,7 @@
   .oleg .os { font-size:10.5px; color:var(--text-on-dark-3); }
   .mtab { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
   @media (min-width:720px){ .mtab { grid-template-columns:repeat(4,1fr); } }
-  .mcol { background:rgba(255,255,255,.02); border:1px solid var(--border-card); border-radius:11px; padding:11px 12px; }
+  .mcol { background:rgba(255,255,255,.02); border:1px solid rgba(255,255,255,.05); border-radius:11px; padding:11px 12px; }
   .mcol .qh { font-size:10px; letter-spacing:.13em; text-transform:uppercase; margin-bottom:9px; font-weight:600; }
   .mrow { display:flex; align-items:center; gap:9px; margin-bottom:9px; }
   .mrow:last-child { margin-bottom:0; }
@@ -80,6 +105,9 @@
   .mrow .me { font-size:10px; color:var(--text-on-dark-3); }
 {% endblock %}
 {% block content %}
+{# Debilitating conditions render ruby -- kept in sync with the _COS_SEV set in
+   cosmere_gm_vitals.html (the single-source authority for this list). #}
+{% set _COS_SEV = ['unconscious','stunned','exhausted','afflicted','immobilized','restrained','slowed','disoriented'] %}
 <div class="ph-head">
   <span class="ph-title">My Character</span>
   <a class="ph-roster" href="/cosmere/pcs">View the party &rarr;</a>
@@ -87,6 +115,12 @@
 
 {% if has_pc %}
 {% for c in cards %}
+{% if combat.active and c.name in combat.names %}
+<a class="incombat{% if c.name == combat.turn_name %} myturn{% endif %}" href="/cosmere/combat">
+  <span>{% if c.name == combat.turn_name %}It's your turn in the fight{% else %}You're in the fight{% if combat.turn_name %} &mdash; {{ combat.turn_name }} is up{% endif %}{% endif %}</span>
+  <span class="go">Open combat &rarr;</span>
+</a>
+{% endif %}
 <div class="hero" style="--accent:{{ c.accent }};">
   <div class="hero-top">
     <span class="hero-name">{{ c.name }}</span>
@@ -97,16 +131,32 @@
     {% else %}{{ c.ancestry }}{% if c.path %} <span class="dim">&middot; {{ c.path|capitalize }}</span>{% endif %}{% if c.culture %} <span class="dim">&middot; {{ c.culture }}</span>{% endif %}{% endif %}
   </div>
 
+  {# Derived-stat "why" hover hints — each defense is 10 + its governing
+     attribute pair (rulebook Ch.1); resources trace to their own formulas. #}
   <div class="stat-row">
-    <div class="stat"><div class="l">{{ defense_names.phy }}</div><div class="v">{{ c.defenses.phy }}</div></div>
-    <div class="stat"><div class="l">{{ defense_names.cog }}</div><div class="v">{{ c.defenses.cog }}</div></div>
-    <div class="stat"><div class="l">{{ defense_names.spi }}</div><div class="v">{{ c.defenses.spi }}</div></div>
-    <div class="stat accent"><div class="l">Deflect</div><div class="v">{{ c.deflect }}</div></div>
+    <div class="stat" title="{{ defense_names.phy }} Defense = 10 + {{ attr_names.str }} + {{ attr_names.spd }}"><div class="l">{{ defense_names.phy }}</div><div class="v">{{ c.defenses.phy }}</div></div>
+    <div class="stat" title="{{ defense_names.cog }} Defense = 10 + {{ attr_names.int }} + {{ attr_names.wil }}"><div class="l">{{ defense_names.cog }}</div><div class="v">{{ c.defenses.cog }}</div></div>
+    <div class="stat" title="{{ defense_names.spi }} Defense = 10 + {{ attr_names.awa }} + {{ attr_names.pre }}"><div class="l">{{ defense_names.spi }}</div><div class="v">{{ c.defenses.spi }}</div></div>
+    <div class="stat accent" title="Deflect — damage reduction from armor and natural bonuses"><div class="l">Deflect</div><div class="v">{{ c.deflect }}</div></div>
   </div>
   <div class="stat-row">
-    <div class="stat"><div class="l">Health</div><div class="v">{{ c.health }}</div></div>
-    <div class="stat"><div class="l">Focus</div><div class="v">{{ c.focus }}</div></div>
-    {% if c.is_radiant %}<div class="stat accent"><div class="l">Investiture</div><div class="v">{{ c.investiture }}</div></div>{% endif %}
+    <div class="stat gauge" title="Health {{ c.current_health }} of {{ c.health }} (max = 10 + {{ attr_names.str }}, plus per-level gains)">
+      <div class="l">Health</div>
+      <div class="v">{{ c.current_health }}<span class="mx">/{{ c.health }}</span></div>
+      <div class="bar"><i class="hp{% if c.health and c.current_health <= c.health * 0.25 %} crit{% elif c.health and c.current_health <= c.health * 0.5 %} hurt{% endif %}" style="width:{{ [(100 * c.current_health / c.health)|round|int, 100]|min if c.health else 0 }}%"></i></div>
+    </div>
+    <div class="stat gauge" title="Focus {{ c.current_focus }} of {{ c.focus }} (max = 2 + {{ attr_names.wil }})">
+      <div class="l">Focus</div>
+      <div class="v">{{ c.current_focus }}<span class="mx">/{{ c.focus }}</span></div>
+      <div class="bar"><i style="width:{{ [(100 * c.current_focus / c.focus)|round|int, 100]|min if c.focus else 0 }}%"></i></div>
+    </div>
+    {% if c.is_radiant %}
+    <div class="stat gauge accent" title="Investiture {{ c.current_investiture }} of {{ c.investiture }} (max = 2 + the higher of {{ attr_names.awa }} or {{ attr_names.pre }})">
+      <div class="l">Investiture</div>
+      <div class="v">{{ c.current_investiture }}<span class="mx">/{{ c.investiture }}</span></div>
+      <div class="bar"><i style="width:{{ [(100 * c.current_investiture / c.investiture)|round|int, 100]|min if c.investiture else 0 }}%"></i></div>
+    </div>
+    {% endif %}
   </div>
 
   <div class="attr-row">
@@ -115,10 +165,11 @@
     {% endfor %}
   </div>
 
-  {% if c.conditions %}
-  <div class="cond-pills" aria-label="Active conditions">
+  {% if c.injuries or c.conditions %}
+  <div class="cond-pills" aria-label="Injuries and active conditions">
+    {% if c.injuries %}<span class="cond-pill sev" title="Injury spiral -- each injury adds a growing penalty until treated (rulebook Ch.3)">{{ c.injuries }} Injur{{ 'y' if c.injuries == 1 else 'ies' }}</span>{% endif %}
     {% for code, val in c.conditions.items() %}
-    <span class="cond-pill">{{ code|capitalize }}{% if val is number and val > 1 %} {{ val }}{% endif %}</span>
+    <span class="cond-pill{% if code|lower in _COS_SEV %} sev{% endif %}">{{ code|capitalize }}{% if val is number and val > 1 %} {{ val }}{% endif %}</span>
     {% endfor %}
   </div>
   {% endif %}
@@ -135,7 +186,7 @@
   <div class="actions">
     <a class="act primary" href="/cosmere/pc/{{ c.id }}">Full sheet</a>
     <a class="act" href="/cosmere/builder?pc={{ c.id }}">Level up / Edit</a>
-    <a class="act" href="/tracker">Combat</a>
+    <a class="act" href="/cosmere/combat">Combat</a>
     <a class="act" href="/notes">Notes</a>
   </div>
 </div>

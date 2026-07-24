@@ -8,15 +8,15 @@
   .cc-title { font-family:var(--font-display,serif); font-size:1.7rem; font-weight:700; color:var(--accent); }
   .cc-meta { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
   .cc-round { font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-on-dark-3); }
-  .cc-mode { font-size:11px; padding:2px 9px; border-radius:999px; background:rgba(95,168,224,.10);
-             border:1px solid rgba(95,168,224,.35); color:var(--accent); }
+  .cc-mode { font-size:11px; padding:2px 9px; border-radius:999px; background:color-mix(in srgb, var(--accent) 10%, transparent);
+             border:1px solid color-mix(in srgb, var(--accent) 32%, transparent); color:var(--accent); }
   .cc-banner { margin-bottom:1rem; padding:.6rem .9rem; border-radius:10px; font-weight:600; font-size:14px;
                background:var(--bg-sunken,#131922); border:1px solid var(--border-card); }
-  .cc-banner.myturn { border-color:#34d399; color:#34d399; box-shadow:0 0 0 1px rgba(52,211,153,.35), 0 0 20px rgba(52,211,153,.16); }
+  .cc-banner.myturn { border-color:rgba(52,211,153,.55); color:#34d399; background:color-mix(in srgb, #34d399 9%, var(--bg-sunken,#131922)); }
   .cc-list { display:flex; flex-direction:column; gap:.5rem; }
   .cc-row { display:flex; align-items:center; gap:.75rem; padding:.6rem .8rem; border-radius:10px;
-            background:var(--bg-sunken,#131922); border:1px solid var(--border-card); transition:border-color .15s, box-shadow .15s; }
-  .cc-row.active { border-color:#34d399; box-shadow:0 0 0 1px rgba(52,211,153,.35), 0 0 18px rgba(52,211,153,.14); }
+            background:rgba(255,255,255,.02); border:1px solid rgba(255,255,255,.05); transition:border-color .15s, background .15s; }
+  .cc-row.active { border-color:rgba(52,211,153,.5); background:color-mix(in srgb, #34d399 9%, transparent); }
   .cc-row.me { border-left:4px solid var(--accent); }
   .cc-row.hidden { opacity:.6; font-style:italic; }
   .cc-pos { font-size:13px; font-weight:700; color:var(--text-on-dark-3); width:1.5rem; text-align:center; flex:none; }
@@ -29,14 +29,19 @@
              background:rgba(255,255,255,.06); border:1px solid var(--border-card); color:var(--text-on-dark-3); }
   .cc-kind.adv { background:rgba(211,110,110,.12); border-color:rgba(211,110,110,.4); color:#f0a3a3; }
   .cc-sub { margin-top:.3rem; display:flex; gap:.35rem; flex-wrap:wrap; align-items:center; }
-  .cc-cond { font-size:10px; padding:1px 7px; border-radius:6px; background:rgba(245,158,11,.16);
-             border:1px solid #f59e0b; color:#fbbf24; }
+  .cc-cond { font-size:10px; padding:1px 7px; border-radius:6px; background:rgba(245,158,11,.14);
+             border:1px solid rgba(245,158,11,.45); color:#fbbf24; }
+  /* Debilitating states read ruby (parity with the sheet/vitals/roster severity read). */
+  .cc-cond.sev { background:rgba(211,110,110,.16); border-color:rgba(211,110,110,.5); color:#f0a3a3; }
   .cc-injury { font-size:10px; padding:1px 7px; border-radius:6px; background:rgba(211,110,110,.14);
                border:1px solid rgba(211,110,110,.45); color:#f0a3a3; }
-  .cc-def { font-size:10px; padding:1px 7px; border-radius:6px; background:rgba(95,168,224,.10);
-            border:1px solid rgba(95,168,224,.35); color:var(--accent); letter-spacing:.02em; }
+  .cc-def { font-size:10px; padding:1px 7px; border-radius:6px; background:color-mix(in srgb, var(--accent) 9%, transparent);
+            border:1px solid color-mix(in srgb, var(--accent) 28%, transparent); color:var(--accent); letter-spacing:.02em; }
   .cc-hpbar { width:90px; height:6px; border-radius:4px; background:rgba(255,255,255,.08); overflow:hidden; flex:none; }
-  .cc-hpfill { height:100%; background:linear-gradient(90deg,#34d399,#a3e635); }
+  .cc-hpfill { height:100%; background:linear-gradient(90deg,#34d399,#a3e635); transition:width .2s ease; }
+  /* Tier the bar so a hurt/critical hero is obvious at a glance across the order. */
+  .cc-hpfill.hurt { background:var(--accent); }
+  .cc-hpfill.crit { background:#e06b6b; }
   .cc-init { flex:none; text-align:right; min-width:64px; }
   .cc-init b { font-size:18px; color:#e8eef5; }
   .cc-init small { display:block; font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:var(--text-on-dark-3); }
@@ -75,6 +80,10 @@
   const bannerEl = document.getElementById('cc-banner');
   const cap = s => s ? s.charAt(0).toUpperCase()+s.slice(1) : s;
   const esc = s => String(s==null?'':s).replace(/[&<>"]/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
+  // Debilitating conditions render ruby -- kept in sync with the _COS_SEV list
+  // in cosmere_gm_vitals.html (the single-source authority for this set).
+  const COS_SEV = new Set(['unconscious','stunned','exhausted','afflicted','immobilized','restrained','slowed','disoriented']);
+  let _lastActiveKey = null;   // last acted turn we auto-scrolled to (round:index)
 
   // Disambiguate identically-named combatants (e.g. two "Skaa Thug") with a
   // per-instance ordinal, deterministic by turn order so the row label and the
@@ -105,12 +114,13 @@
       if(c.deflect && c.deflect.value) dtxt += ` · Defl ${c.deflect.value}`;
       sub += `<span class="cc-def" title="Cosmere defenses (Physical / Cognitive / Spiritual)${c.deflect&&c.deflect.value?' + Deflect':''}">${esc(dtxt)}</span>`;
     }
-    (c.conditions||[]).forEach(k => sub += `<span class="cc-cond">${esc(cap(k))}</span>`);
+    (c.conditions||[]).forEach(k => sub += `<span class="cc-cond${COS_SEV.has(String(k).toLowerCase())?' sev':''}">${esc(cap(k))}</span>`);
     if(c.injuries) sub += `<span class="cc-injury">Injuries ${c.injuries}</span>`;
     let hp = '';
     if(c.is_pc && c.health && c.health.max){
       const pct = Math.max(0, Math.min(100, Math.round(100*c.health.value/c.health.max)));
-      hp = `<div class="cc-hpbar" role="img" aria-label="Health ${c.health.value} of ${c.health.max}" title="${c.health.value} / ${c.health.max}"><div class="cc-hpfill" style="width:${pct}%"></div></div>`;
+      const tier = pct<=25 ? ' crit' : (pct<=50 ? ' hurt' : '');
+      hp = `<div class="cc-hpbar" role="img" aria-label="Health ${c.health.value} of ${c.health.max}" title="${c.health.value} / ${c.health.max}"><div class="cc-hpfill${tier}" style="width:${pct}%"></div></div>`;
     }
     // right side: traditional initiative number, or fast/slow phase badge
     let right;
@@ -145,6 +155,16 @@
     else { activeName = st.active_name || '—'; }
     bannerEl.textContent = meActive ? 'YOUR TURN' : ('Acting: ' + activeName);
     listEl.innerHTML = st.order.map((c,i)=>rowHTML(c,i,st.mode,st.order)).join('');
+    // Keep the acting combatant (or your own row on your turn) in view as turns
+    // advance -- only when the turn actually changes, so a condition/HP refresh
+    // doesn't yank the scroll position around.
+    const activeIdx = st.order.findIndex(c => c.is_active);
+    const key = st.round + ':' + activeIdx;
+    if(key !== _lastActiveKey && activeIdx >= 0){
+      _lastActiveKey = key;
+      const tgt = listEl.querySelector(meActive ? '.cc-row.me' : '.cc-row.active');
+      if(tgt) tgt.scrollIntoView({block:'nearest', behavior:'smooth'});
+    }
   }
 
   function load(){
