@@ -25,6 +25,20 @@
   .cg-copy:hover { color:var(--accent); border-color:var(--accent); }
   .cg-copy:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
   .cg-copy svg { width:14px; height:14px; }
+  /* Pin (keep on Reroll-all), step-back (result history), and batch (roll N). */
+  .cg-pin, .cg-back, .cg-batch { background:none; border:1px solid rgba(255,255,255,.08); color:var(--text-on-dark-3); border-radius:6px; height:26px; cursor:pointer; line-height:1; display:inline-flex; align-items:center; justify-content:center; transition:color .12s, border-color .12s, background .12s; }
+  .cg-pin, .cg-back { width:26px; }
+  .cg-batch { padding:0 7px; font-size:11px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .cg-pin:hover, .cg-back:hover, .cg-batch:hover { color:var(--accent); border-color:var(--accent); }
+  .cg-pin:focus-visible, .cg-back:focus-visible, .cg-batch:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  .cg-pin svg { width:13px; height:13px; }
+  .cg-back[disabled] { opacity:.35; cursor:default; }
+  .cg-back[disabled]:hover { color:var(--text-on-dark-3); border-color:rgba(255,255,255,.08); }
+  .cg-card.pinned { border-color:color-mix(in srgb, var(--accent) 45%, transparent); }
+  .cg-card.pinned .cg-pin { color:var(--accent); border-color:var(--accent); background:color-mix(in srgb, var(--accent) 12%, transparent); }
+  .cg-card.pinned .cg-pin svg { fill:currentColor; }
+  .cg-body ol.cg-batch-list { margin:.1rem 0 0; padding-left:1.25em; }
+  .cg-body ol.cg-batch-list li { margin:.2rem 0; }
   .cg-body { font-size:13px; color:var(--text-on-dark); line-height:1.55; min-height:2.6em; }
   .cg-body b { color:var(--storm-100, var(--accent)); }
   .cg-body .muted { color:var(--text-on-dark-3); }
@@ -49,8 +63,11 @@
     <div class="cg-card-head">
       <span class="cg-label">{{ c.label }}</span>
       <span class="cg-card-actions">
+        <button class="cg-pin" title="Pin &mdash; keep this when you Reroll all" aria-label="Pin {{ c.label }}" aria-pressed="false" onclick="cgTogglePin('{{ c.type }}', this)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M4 2h8v10l-4-3-4 3z"/></svg></button>
+        <button class="cg-back" title="Previous result" aria-label="Previous {{ c.label }}" onclick="cgBack('{{ c.type }}')" disabled><span aria-hidden="true">&#8592;</span></button>
         <button class="cg-copy" title="Copy {{ c.label }}" aria-label="Copy {{ c.label }}" onclick="cgCopy('{{ c.type }}', this)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M3 11V3a1 1 0 0 1 1-1h7"/></svg></button>
         <button class="cg-reroll" title="Reroll {{ c.label }}" aria-label="Reroll {{ c.label }}" onclick="cgReroll('{{ c.type }}')"><span aria-hidden="true">&#8635;</span></button>
+        {% if c.type in ['name', 'npc'] %}<button class="cg-batch" title="Roll 5 at once (a crowd)" aria-label="Roll 5 {{ c.label }}" onclick="cgBatch('{{ c.type }}', 5)">&times;5</button>{% endif %}
       </span>
     </div>
     <div class="cg-body" id="cg-{{ c.type }}">{{ c.html|safe }}</div>
@@ -59,27 +76,72 @@
 </div>
 
 <script>
+// Per-card result history (a back-stack) + pins, so "Reroll all" keeps the rolls
+// you liked and you can step back to an earlier one instead of re-rolling for it.
+var HIST = {};
+function _hist(t) {
+  if (!HIST[t]) { var el = document.getElementById('cg-' + t); HIST[t] = { list: [el ? el.innerHTML : ''], idx: 0 }; }
+  return HIST[t];
+}
+function _render(t, html) {
+  var el = document.getElementById('cg-' + t); if (!el) return;
+  el.innerHTML = html;
+  el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+  _updateBack(t);
+}
+function _updateBack(t) {
+  var h = HIST[t], card = document.querySelector('.cg-card[data-type="' + t + '"]');
+  if (!card) return; var back = card.querySelector('.cg-back');
+  if (back) back.disabled = !(h && h.idx > 0);
+}
+function _pushResult(t, html) {
+  var h = _hist(t);
+  h.list = h.list.slice(0, h.idx + 1);   // drop any forward history past the current
+  h.list.push(html); h.idx = h.list.length - 1;
+  _render(t, html);
+}
 function cgReroll(t) {
-  var el = document.getElementById('cg-' + t);
-  if (!el) return;
   fetch('/api/cosmere/generate/' + t, { method: 'POST' })
     .then(function (r) { return r.json(); })
     .then(function (d) {
-      if (d && d.html) {
-        el.innerHTML = d.html;
-        el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
-      } else {
-        if (window.pf2eToast) pf2eToast('Generate failed', 'error');
-      }
+      if (d && d.html) { _pushResult(t, d.html); }
+      else if (window.pf2eToast) { pf2eToast('Generate failed', 'error'); }
     })
     .catch(function (e) {
       console.error('Cosmere generate error:', e);
       if (window.pf2eToast) pf2eToast('Generate failed', 'error');
     });
 }
+function cgBack(t) {
+  var h = HIST[t]; if (!h || h.idx <= 0) return;
+  h.idx--; _render(t, h.list[h.idx]);
+}
 function cgRerollAll() {
   document.querySelectorAll('.cg-card').forEach(function (card) {
+    if (card.classList.contains('pinned')) return;   // keep pinned results
     cgReroll(card.getAttribute('data-type'));
+  });
+}
+function cgTogglePin(t, btn) {
+  var card = document.querySelector('.cg-card[data-type="' + t + '"]'); if (!card) return;
+  var on = card.classList.toggle('pinned');
+  if (btn) btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+}
+// Roll several at once (a crowd, a patrol) -> a numbered list in the card body.
+function cgBatch(t, n) {
+  var jobs = [];
+  for (var i = 0; i < n; i++) {
+    jobs.push(fetch('/api/cosmere/generate/' + t, { method: 'POST' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { return (d && d.html) ? d.html : ''; }));
+  }
+  Promise.all(jobs).then(function (items) {
+    items = items.filter(Boolean);
+    if (!items.length) { if (window.pf2eToast) pf2eToast('Generate failed', 'error'); return; }
+    _pushResult(t, '<ol class="cg-batch-list"><li>' + items.join('</li><li>') + '</li></ol>');
+  }).catch(function (e) {
+    console.error('Cosmere batch error:', e);
+    if (window.pf2eToast) pf2eToast('Generate failed', 'error');
   });
 }
 
