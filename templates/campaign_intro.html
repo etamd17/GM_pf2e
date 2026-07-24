@@ -10,8 +10,8 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tw-campaign_intro.css') }}">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;600;700&display=swap');
-        body { font-family:'Inter',system-ui,sans-serif; background:#0c0a07; color:#f0ead7; min-height:100vh; }
-        .font-display { font-family:'Cinzel',serif; }
+        body { font-family:var(--font-ui); background:#0c0a07; color:#f0ead7; min-height:100vh; }
+        .font-display { font-family:var(--font-display); }
         ::-webkit-scrollbar { width:6px; }
         ::-webkit-scrollbar-track { background:transparent; }
         ::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.08); border-radius:10px; }
@@ -44,7 +44,7 @@
            you want a calmer tone for a different campaign, drop the
            text-shadow. */
         .campaign-title {
-            font-family: 'Cinzel', serif;
+            font-family:var(--font-display);
             font-weight: 700;
             color: #f0d88a;
             letter-spacing: 0.06em;
@@ -55,7 +55,7 @@
                 0 4px 24px rgba(0,0,0,0.7);
         }
         .campaign-rune {
-            font-family: 'Cinzel', serif;
+            font-family:var(--font-display);
             font-size: 11px;
             letter-spacing: 0.4em;
             text-transform: uppercase;
@@ -68,7 +68,7 @@
            like ordinary body copy. Italic / Cormorant Garamond stack for
            a "movie poster pullquote" register. */
         .campaign-hero-tagline {
-            font-family: 'Cormorant Garamond', 'Cinzel', serif;
+            font-family: var(--font-display);
             font-style: italic;
             font-weight: 500;
             font-size: clamp(14px, 2vw, 22px);
@@ -98,7 +98,7 @@
             padding: 5px 12px;
         }
         .party-stand-pill .lbl {
-            font-family: 'Cinzel', serif;
+            font-family:var(--font-display);
             text-transform: uppercase;
             letter-spacing: 0.10em;
             font-size: 9px;
@@ -106,15 +106,18 @@
         }
         .party-stand-pill .val {
             color: #ede4cf;
-            font-family: 'Inter', sans-serif;
+            font-family:var(--font-ui);
             font-weight: 500;
         }
         .party-stand-pill .val a, .party-stand-pill .val .wikilink {
             color: #e0b65a; text-decoration: none;
         }
-        .panel { background:#191920; border:1px solid rgba(255,255,255,0.06); border-radius:14px; }
+        /* Minimal pass: the lobby panels + character tiles sit on the page as a
+           faint wash + hairline rather than solid boxes, matching the flatten
+           used on the GM screen / builder. */
+        .panel { background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); border-radius:14px; }
         .pc-tile {
-            background:#191920;
+            background:rgba(255,255,255,0.02);
             border:1px solid rgba(255,255,255,0.07);
             border-radius:12px;
             padding:12px 10px 10px;
@@ -123,8 +126,9 @@
             position:relative;
             text-align:center;
         }
-        .pc-tile:hover { transform:translateY(-3px); border-color:rgba(201,163,78,0.35); box-shadow:0 10px 28px rgba(0,0,0,0.45); }
-        .pc-tile.is-current { border-color:rgba(224,176,80,0.55); box-shadow:0 0 0 1px rgba(224,176,80,0.25), 0 8px 22px rgba(0,0,0,0.45); }
+        /* Quiet hover/selected: tint + border, no lift, no heavy drop shadow. */
+        .pc-tile:hover { border-color:rgba(201,163,78,0.35); background:rgba(201,163,78,0.05); }
+        .pc-tile.is-current { border-color:rgba(224,176,80,0.55); box-shadow:0 0 0 1px rgba(224,176,80,0.22); }
         .pc-tile .portrait-frame {
             width:68px; height:68px; border-radius:50%;
             margin:0 auto 8px;
@@ -136,15 +140,15 @@
         }
         .pc-tile.is-current .portrait-frame { border-color:rgba(224,176,80,0.6); }
         .pc-tile .portrait-frame img { width:100%; height:100%; object-fit:cover; }
-        .pc-tile .pc-initial { font-family:'Cinzel',serif; font-size:24px; font-weight:700; color:#e0b65a; }
+        .pc-tile .pc-initial { font-family:var(--font-display); font-size:24px; font-weight:700; color:#e0b65a; }
         .pc-tile .lvl-badge {
             position:absolute; top:8px; right:10px;
-            font-family:'Cinzel',serif; font-size:10px; font-weight:700;
+            font-family:var(--font-display); font-size:10px; font-weight:700;
             background:rgba(15,15,20,0.85); color:#e0b65a;
             padding:3px 7px; border-radius:4px;
             border:1px solid rgba(201,163,78,0.25);
         }
-        .pc-tile .pc-name { font-family:'Cinzel',serif; font-size:13px; color:#ededf4; font-weight:600; }
+        .pc-tile .pc-name { font-family:var(--font-display); font-size:13px; color:#ededf4; font-weight:600; }
         .pc-tile .pc-meta { font-size:11px; color:#9494b0; margin-top:2px; }
         .pc-tile .pc-cta {
             margin-top:6px; font-size:10px; font-weight:600;
@@ -155,7 +159,7 @@
         .pc-tile.is-current .pc-cta { color:#e0b050; opacity:1; }
 
         .btn-primary {
-            font-family:'Cinzel',serif; font-weight:600; letter-spacing:0.06em;
+            font-family:var(--font-display); font-weight:600; letter-spacing:0.06em;
             background:#a4842b; color:#0c0a07;
             padding:10px 22px; border-radius:6px; font-size:12px;
             text-transform:uppercase; border:1px solid rgba(201,163,78,0.3);
@@ -173,7 +177,7 @@
         }
         .btn-ghost:hover { border-color:rgba(201,163,78,0.35); color:#ededf4; }
         .btn-gold {
-            font-family:'Cinzel',serif; font-weight:600; letter-spacing:0.06em;
+            font-family:var(--font-display); font-weight:600; letter-spacing:0.06em;
             background:rgba(224,176,80,0.12); color:#e0b050;
             padding:10px 22px; border-radius:6px; font-size:12px;
             text-transform:uppercase; border:1px solid rgba(224,176,80,0.35);
@@ -187,10 +191,10 @@
             width:100%; padding:8px 10px; border-radius:6px;
             background:#0d0d12; color:#ededf4;
             border:1px solid rgba(255,255,255,0.10);
-            font-size:13px; font-family:'Inter',sans-serif;
+            font-size:13px; font-family:var(--font-ui);
         }
         .field-input:focus { outline:none; border-color:rgba(201,163,78,0.4); }
-        textarea.field-input { resize:vertical; min-height:64px; font-family:'Inter',sans-serif; }
+        textarea.field-input { resize:vertical; min-height:64px; font-family:var(--font-ui); }
 
         .toast {
             position:fixed; top:18px; right:18px;
