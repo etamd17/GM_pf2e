@@ -912,7 +912,7 @@ body.tracker, .layout, .grid-wrap, .tool-strip, .panel {
     color: var(--text-on-cream) !important;
     border: 1px solid var(--border-card) !important;
     border-radius: var(--r-md) !important;
-    box-shadow: var(--shadow-2) !important;
+    box-shadow: var(--shadow-1) !important;   /* minimal pass: calmer elevation (was shadow-2) */
     padding: var(--sp-5) !important;
 }
 .panel *, .panel label, .panel .tlabel, .panel option {
@@ -3325,7 +3325,7 @@ button[onclick^="rollDamage"]:hover {
 .tile:hover {
     transform: translateY(-2px);
     border-color: var(--accent);
-    box-shadow: var(--shadow-2);
+    box-shadow: var(--shadow-1);   /* minimal pass: lighter hover lift (was shadow-2) */
 }
 .tile::before {
     content: "";
@@ -3333,7 +3333,7 @@ button[onclick^="rollDamage"]:hover {
     inset: 0 0 auto 0;
     height: 2px;
     background: linear-gradient(90deg, transparent, var(--accent), transparent);
-    opacity: 0.55;
+    opacity: 0.22;   /* minimal pass: calm the always-on accent bar (was 0.55; full on hover) */
     transition: opacity var(--t-fast);
 }
 .tile:hover::before { opacity: 1; }
