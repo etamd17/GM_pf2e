@@ -2820,6 +2820,87 @@
             border-left: 3px solid rgba(90,142,232,0.55);
             padding-left: 6px;
         }
+
+        /* ══════════════════════════════════════════════════════════════════
+           MINIMAL PASS (de-AI) — appended last so it is easy to review/revert.
+           STRICTLY CSS: no markup and no JS are touched, so the pc_update SSE
+           repaint, spell preparation, drag-to-prepare and every inline handler
+           behave exactly as before. Values, layout structure and ids unchanged.
+           ══════════════════════════════════════════════════════════════════ */
+
+        /* 1 — Flatten the stat / defense boxing. Six ability cells, the saves
+           and the defence cells were each a hard bordered box sitting inside
+           further bordered panels (box-in-box-in-box). A faint wash + hairline
+           makes each cluster read as ONE panel. */
+        .ability-block, .stat-box, .defense-stat {
+            background: rgba(255,255,255,0.02);
+            border-color: rgba(255,255,255,0.06);
+        }
+        .skill-actions-row {
+            background: rgba(255,255,255,0.015);
+            border-color: rgba(255,255,255,0.05);
+        }
+        /* Inner panels nested in a .panel-card lose their own frame — they are
+           sections of the parent card, not separate boxes. */
+        .panel-card .panel-card,
+        .panel-card .ds-surface-sunken {
+            background: rgba(0,0,0,0.14);
+            border-color: rgba(255,255,255,0.05);
+            box-shadow: none;
+        }
+
+        /* 2 — Cinzel off UI chrome. The display serif stays on the character
+           name and section headings; small labels, tab names and stat values
+           move to the UI face (numbers also get tabular figures, which lines
+           the stat columns up and is easier to read at a glance). */
+        .ability-block .label, .stat-box .stat-label, .defense-stat .lbl,
+        .ds-label, .tab-btn, .skill-action-btn-name, .sec-h {
+            font-family: var(--font-ui);
+        }
+        .ability-block .mod, .stat-box .stat-value, .defense-stat .val, .ds-value {
+            font-family: var(--font-ui);
+            font-variant-numeric: lining-nums tabular-nums;
+        }
+
+        /* 3 — Calm the gilt. It was doing headings, labels, values, borders and
+           action names at once. Section headings keep it (they are the page's
+           structure); secondary labels drop to muted text so the eye can find
+           what actually matters. */
+        .ability-block .label, .stat-box .stat-label, .defense-stat .lbl, .ds-label {
+            color: var(--t3);
+        }
+        .stat-sub-label { color: var(--t4, var(--t3)); }
+
+        /* 4 — Tighten the vertical rhythm. Flattening removes the need for each
+           cell to pay for its own frame + padding, so more of the sheet fits on
+           one screen (less scrolling mid-session). */
+        .section-header { margin-bottom: 11px; padding-bottom: 5px; }
+        .skill-actions-row { padding: 6px; margin-bottom: 9px; }
+        .stat-box { padding: 6px 10px; }
+        .defense-stat { padding: 5px 10px; }
+
+        /* 5 — Stronger active-tab indicator. The active tab was a thin, low
+           contrast underline that is easy to lose across the table. */
+        .tab-btn { letter-spacing: 0.12em; }
+        .tab-btn.active {
+            color: var(--text-primary, #fff);
+            border-bottom-width: 3px;
+            border-bottom-color: var(--gilt);
+            background: rgba(201,163,78,0.07);
+        }
+
+        /* 6 — Unify the action / feat cards. A row of them read as decorated
+           tiles; now one calm consistent card so the name + DC is what you
+           read, with the gilt kept for hover/affordance. */
+        .skill-action-btn {
+            background: rgba(255,255,255,0.02);
+            border-color: rgba(255,255,255,0.06);
+        }
+        .skill-action-btn:hover {
+            background: rgba(201,163,78,0.06);
+            border-color: rgba(201,163,78,0.35);
+        }
+        .skill-action-btn-name { font-weight: 600; letter-spacing: 0.01em; }
     </style>
     <!-- Design system override (last in cascade — wins over inline styles) -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/system.css') }}">
