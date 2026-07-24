@@ -10,6 +10,17 @@
     @media (min-width: 1280px) { .masonry { column-count: 3; } }
     .masonry-item { break-inside: avoid; margin-bottom: 1rem; }
 
+    /* Minimal pass: the reference cards are grouped under quiet section labels
+       (Checks / Conditions / Adversaries / Exploration) so the page reads as
+       organized reference, not an undifferentiated wall of dashboard cards. */
+    .gm-group { margin-bottom: 26px; }
+    .gm-group-label { font-family: 'Cinzel', serif; font-size: 11px; font-weight: 700;
+        letter-spacing: 0.16em; text-transform: uppercase; color: var(--text-on-dark-3);
+        margin: 0 0 12px; padding-left: 2px; }
+    .gm-group-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1rem; align-items: start; }
+    .gm-group-grid .masonry-item { margin-bottom: 0; }
+
     /* ── GM-screen reference card system ─────────────────────────────────
        The page is at-the-table reference, not a settings dashboard. Cards
        need to be (a) high contrast, (b) immediately scannable by header,
@@ -41,14 +52,9 @@
         justify-content: space-between;
         gap: 10px;
     }
-    .gm-ref-header .sub {
-        font-family: 'Inter', sans-serif;
-        font-size: 10px;
-        font-weight: 600;
-        letter-spacing: 0.06em;
-        color: var(--text-on-dark-3);                 /* base-500 */
-        text-transform: uppercase;
-    }
+    /* Minimal pass: the right-aligned uppercase sub-labels added header noise;
+       the table's own column headers already convey the same thing. Dropped. */
+    .gm-ref-header .sub { display: none; }
 
     /* Reference tables — denser stripe + better column hierarchy */
     .gm-table { width: 100%; font-size: 13px; border-collapse: collapse; }
@@ -107,8 +113,9 @@
     }
     .gm-callout-row .label { color: var(--gilt-200); font-weight: 700; min-width: 110px; flex-shrink: 0; }
 
-    /* Compendium search — quieter chrome, brand palette */
-    .gm-search-wrap { background: var(--bg-card); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 16px 18px; margin-bottom: 16px; }
+    /* Compendium search — minimal pass: no boxed panel, the search sits on the
+       page as part of the header instead of reading as a separate widget. */
+    .gm-search-wrap { background: transparent; border: none; border-radius: 0; padding: 0; margin-bottom: 18px; }
     .gm-search-input {
         width: 100%; background: var(--bg-page); border: 1px solid rgba(255,255,255,0.10);
         color: var(--text-on-dark); border-radius: 6px;
@@ -374,262 +381,268 @@
     </div>
 </div>
 
-<div class="masonry">
-    
-    <div class="masonry-item gm-ref-card">
-        <h2 class="gm-ref-header">DCs by Level <span class="sub">level &rarr; DC</span></h2>
-        <table class="gm-table" style="font-size:12px;">
-            <thead><tr><th>Lvl</th><th>DC</th><th>Lvl</th><th>DC</th></tr></thead>
-            <tbody>
-                <tr><td>0</td><td class="num">14</td><td>11</td><td class="num">28</td></tr>
-                <tr><td>1</td><td class="num">15</td><td>12</td><td class="num">30</td></tr>
-                <tr><td>2</td><td class="num">16</td><td>13</td><td class="num">31</td></tr>
-                <tr><td>3</td><td class="num">18</td><td>14</td><td class="num">32</td></tr>
-                <tr><td>4</td><td class="num">19</td><td>15</td><td class="num">34</td></tr>
-                <tr><td>5</td><td class="num">20</td><td>16</td><td class="num">35</td></tr>
-                <tr><td>6</td><td class="num">22</td><td>17</td><td class="num">36</td></tr>
-                <tr><td>7</td><td class="num">23</td><td>18</td><td class="num">38</td></tr>
-                <tr><td>8</td><td class="num">24</td><td>19</td><td class="num">39</td></tr>
-                <tr><td>9</td><td class="num">26</td><td>20</td><td class="num">40</td></tr>
-                <tr><td>10</td><td class="num">27</td><td>21+</td><td class="num">42+</td></tr>
-            </tbody>
-        </table>
-        <div class="mt-3 pt-3 text-[12px] text-base-300" style="border-top:1px solid rgba(255,255,255,0.06);">
-            <div class="text-[10px] text-base-500 uppercase tracking-widest font-semibold mb-1">Adjust by difficulty</div>
-            <div class="grid grid-cols-3 gap-x-3 gap-y-1 font-mono text-[11px]">
-                <div>Incredibly easy <span class="neg">&minus;10</span></div>
-                <div>Very easy <span class="neg">&minus;5</span></div>
-                <div>Easy <span class="neg">&minus;2</span></div>
-                <div>Hard <span class="pos">+2</span></div>
-                <div>Very hard <span class="pos">+5</span></div>
-                <div>Incredibly hard <span class="pos">+10</span></div>
-            </div>
-        </div>
-    </div>
+<section class="gm-group">
+  <div class="gm-group-label">Checks, DCs & Actions</div>
+  <div class="gm-group-grid">
+      <div class="masonry-item gm-ref-card">
+          <h2 class="gm-ref-header">DCs by Level <span class="sub">level &rarr; DC</span></h2>
+          <table class="gm-table" style="font-size:12px;">
+              <thead><tr><th>Lvl</th><th>DC</th><th>Lvl</th><th>DC</th></tr></thead>
+              <tbody>
+                  <tr><td>0</td><td class="num">14</td><td>11</td><td class="num">28</td></tr>
+                  <tr><td>1</td><td class="num">15</td><td>12</td><td class="num">30</td></tr>
+                  <tr><td>2</td><td class="num">16</td><td>13</td><td class="num">31</td></tr>
+                  <tr><td>3</td><td class="num">18</td><td>14</td><td class="num">32</td></tr>
+                  <tr><td>4</td><td class="num">19</td><td>15</td><td class="num">34</td></tr>
+                  <tr><td>5</td><td class="num">20</td><td>16</td><td class="num">35</td></tr>
+                  <tr><td>6</td><td class="num">22</td><td>17</td><td class="num">36</td></tr>
+                  <tr><td>7</td><td class="num">23</td><td>18</td><td class="num">38</td></tr>
+                  <tr><td>8</td><td class="num">24</td><td>19</td><td class="num">39</td></tr>
+                  <tr><td>9</td><td class="num">26</td><td>20</td><td class="num">40</td></tr>
+                  <tr><td>10</td><td class="num">27</td><td>21+</td><td class="num">42+</td></tr>
+              </tbody>
+          </table>
+          <div class="mt-3 pt-3 text-[12px] text-base-300" style="border-top:1px solid rgba(255,255,255,0.06);">
+              <div class="text-[10px] text-base-500 uppercase tracking-widest font-semibold mb-1">Adjust by difficulty</div>
+              <div class="grid grid-cols-3 gap-x-3 gap-y-1 font-mono text-[11px]">
+                  <div>Incredibly easy <span class="neg">&minus;10</span></div>
+                  <div>Very easy <span class="neg">&minus;5</span></div>
+                  <div>Easy <span class="neg">&minus;2</span></div>
+                  <div>Hard <span class="pos">+2</span></div>
+                  <div>Very hard <span class="pos">+5</span></div>
+                  <div>Incredibly hard <span class="pos">+10</span></div>
+              </div>
+          </div>
+      </div>
+      <div class="masonry-item gm-ref-card">
+          <h2 class="gm-ref-header">Simple DCs <span class="sub">by proficiency</span></h2>
+          <table class="gm-table mb-4">
+              <thead><tr><th>Rank</th><th>DC</th></tr></thead>
+              <tbody>
+                  <tr><td>Untrained</td><td class="num">10</td></tr>
+                  <tr><td>Trained</td><td class="num">15</td></tr>
+                  <tr><td>Expert</td><td class="num">20</td></tr>
+                  <tr><td>Master</td><td class="num">30</td></tr>
+                  <tr><td>Legendary</td><td class="num">40</td></tr>
+              </tbody>
+          </table>
 
-    <div class="masonry-item gm-ref-card">
-        <h2 class="gm-ref-header">Simple DCs <span class="sub">by proficiency</span></h2>
-        <table class="gm-table mb-4">
-            <thead><tr><th>Rank</th><th>DC</th></tr></thead>
-            <tbody>
-                <tr><td>Untrained</td><td class="num">10</td></tr>
-                <tr><td>Trained</td><td class="num">15</td></tr>
-                <tr><td>Expert</td><td class="num">20</td></tr>
-                <tr><td>Master</td><td class="num">30</td></tr>
-                <tr><td>Legendary</td><td class="num">40</td></tr>
-            </tbody>
-        </table>
+          <h2 class="gm-ref-header">Treat Wounds <span class="sub">10 min</span></h2>
+          <table class="gm-table">
+              <thead><tr><th>Rank</th><th>DC</th><th>Heal</th></tr></thead>
+              <tbody>
+                  <tr><td>Trained</td><td class="num">15</td><td><span class="heal">2d8</span></td></tr>
+                  <tr><td>Expert</td><td class="num">20</td><td><span class="heal">2d8 + 10</span></td></tr>
+                  <tr><td>Master</td><td class="num">30</td><td><span class="heal">2d8 + 30</span></td></tr>
+                  <tr><td>Legendary</td><td class="num">40</td><td><span class="heal">2d8 + 50</span></td></tr>
+              </tbody>
+          </table>
+          <p class="text-[11px] text-base-500 mt-2 leading-relaxed">
+              Crit Success: heal +<span class="heal">2d8</span>.
+              &nbsp;Crit Failure: target takes <span class="hurt">1d8</span> damage.
+          </p>
+      </div>
+      <div class="masonry-item gm-ref-card">
+          <h2 class="gm-ref-header">Combat Maneuvers</h2>
+          <table class="gm-table">
+              <thead><tr><th>Action</th><th>Skill</th><th>vs DC</th></tr></thead>
+              <tbody>
+                  <tr><td>Grapple</td><td>Athletics</td><td>Fortitude</td></tr>
+                  <tr><td>Shove</td><td>Athletics</td><td>Fortitude</td></tr>
+                  <tr><td>Trip</td><td>Athletics</td><td>Reflex</td></tr>
+                  <tr><td>Disarm</td><td>Athletics</td><td>Reflex</td></tr>
+                  <tr><td>Demoralize</td><td>Intimidation</td><td>Will</td></tr>
+              </tbody>
+          </table>
+          <p class="text-[11px] text-base-500 mt-2 leading-relaxed">
+              Target DC = 10 + relevant defense modifier. Each maneuver carries the <strong>attack</strong> trait, so MAP applies (&minus;5 / &minus;10, or &minus;4 / &minus;8 if agile).
+          </p>
+      </div>
+  </div>
+</section>
 
-        <h2 class="gm-ref-header">Treat Wounds <span class="sub">10 min</span></h2>
-        <table class="gm-table">
-            <thead><tr><th>Rank</th><th>DC</th><th>Heal</th></tr></thead>
-            <tbody>
-                <tr><td>Trained</td><td class="num">15</td><td><span class="heal">2d8</span></td></tr>
-                <tr><td>Expert</td><td class="num">20</td><td><span class="heal">2d8 + 10</span></td></tr>
-                <tr><td>Master</td><td class="num">30</td><td><span class="heal">2d8 + 30</span></td></tr>
-                <tr><td>Legendary</td><td class="num">40</td><td><span class="heal">2d8 + 50</span></td></tr>
-            </tbody>
-        </table>
-        <p class="text-[11px] text-base-500 mt-2 leading-relaxed">
-            Crit Success: heal +<span class="heal">2d8</span>.
-            &nbsp;Crit Failure: target takes <span class="hurt">1d8</span> damage.
-        </p>
-    </div>
+<section class="gm-group">
+  <div class="gm-group-label">Conditions & Dying</div>
+  <div class="gm-group-grid">
+      <div class="masonry-item gm-ref-card">
+          <h2 class="gm-ref-header">Common Conditions <span class="sub">always-visible</span></h2>
+          <dl class="gm-cond">
+              <dt>Off-Guard</dt>
+              <dd>&minus;2 circumstance to AC. (Replaces "flat-footed" from old PF2e.)</dd>
 
-    <div class="masonry-item gm-ref-card">
-        <h2 class="gm-ref-header">Combat Maneuvers</h2>
-        <table class="gm-table">
-            <thead><tr><th>Action</th><th>Skill</th><th>vs DC</th></tr></thead>
-            <tbody>
-                <tr><td>Grapple</td><td>Athletics</td><td>Fortitude</td></tr>
-                <tr><td>Shove</td><td>Athletics</td><td>Fortitude</td></tr>
-                <tr><td>Trip</td><td>Athletics</td><td>Reflex</td></tr>
-                <tr><td>Disarm</td><td>Athletics</td><td>Reflex</td></tr>
-                <tr><td>Demoralize</td><td>Intimidation</td><td>Will</td></tr>
-            </tbody>
-        </table>
-        <p class="text-[11px] text-base-500 mt-2 leading-relaxed">
-            Target DC = 10 + relevant defense modifier. Each maneuver carries the <strong>attack</strong> trait, so MAP applies (&minus;5 / &minus;10, or &minus;4 / &minus;8 if agile).
-        </p>
-    </div>
+              <dt>Frightened X</dt>
+              <dd>Status penalty equal to X on every check &amp; DC. Decreases by 1 at end of turn.</dd>
 
-    <div class="masonry-item gm-ref-card">
-        <h2 class="gm-ref-header">Common Conditions <span class="sub">always-visible</span></h2>
-        <dl class="gm-cond">
-            <dt>Off-Guard</dt>
-            <dd>&minus;2 circumstance to AC. (Replaces "flat-footed" from old PF2e.)</dd>
+              <dt>Sickened X</dt>
+              <dd>Status &minus;X to checks &amp; DCs. Can't willingly ingest. Spend 1 action to retch (Fort save vs effect DC) to reduce by 1 (or 2 on crit).</dd>
 
-            <dt>Frightened X</dt>
-            <dd>Status penalty equal to X on every check &amp; DC. Decreases by 1 at end of turn.</dd>
+              <dt>Prone</dt>
+              <dd>Off-Guard. Attack rolls take &minus;2 circumstance. Only move available is Crawl. Stand = 1 action.</dd>
 
-            <dt>Sickened X</dt>
-            <dd>Status &minus;X to checks &amp; DCs. Can't willingly ingest. Spend 1 action to retch (Fort save vs effect DC) to reduce by 1 (or 2 on crit).</dd>
+              <dt>Slowed X</dt>
+              <dd>Lose X actions at the start of your turn. Stunned X also makes you Slowed during recovery.</dd>
 
-            <dt>Prone</dt>
-            <dd>Off-Guard. Attack rolls take &minus;2 circumstance. Only move available is Crawl. Stand = 1 action.</dd>
+              <dt>Stunned X</dt>
+              <dd>Lose actions at start of turn (up to your normal 3); Stunned reduces by amount lost. Also blocks reactions.</dd>
 
-            <dt>Slowed X</dt>
-            <dd>Lose X actions at the start of your turn. Stunned X also makes you Slowed during recovery.</dd>
+              <dt>Wounded X</dt>
+              <dd>Increase Dying value by X+1 if you go down again. Removed by full Treat Wounds + 10-min rest, or Long Rest.</dd>
 
-            <dt>Stunned X</dt>
-            <dd>Lose actions at start of turn (up to your normal 3); Stunned reduces by amount lost. Also blocks reactions.</dd>
+              <dt>Concealed</dt>
+              <dd>Attacker rolls a DC 5 flat check before damage; failure = miss.</dd>
 
-            <dt>Wounded X</dt>
-            <dd>Increase Dying value by X+1 if you go down again. Removed by full Treat Wounds + 10-min rest, or Long Rest.</dd>
+              <dt>Hidden</dt>
+              <dd>Off-Guard to you. DC 11 flat check before damage. You know the target's square.</dd>
 
-            <dt>Concealed</dt>
-            <dd>Attacker rolls a DC 5 flat check before damage; failure = miss.</dd>
+              <dt>Undetected</dt>
+              <dd>Off-Guard to you. You don't know the square — must Seek or guess (DC 11 flat).</dd>
+          </dl>
+      </div>
+      <div class="masonry-item gm-ref-card">
+          <h2 class="gm-ref-header">Dying &amp; Recovery</h2>
+          <div class="text-sm text-base-200 mb-3 leading-relaxed">
+              At 0 HP: move initiative to just before the attacker, gain <strong style="color:var(--ruby-100);">Dying 1</strong> (or 2 on crit hit / crit failure on the save).
+          </div>
+          <div class="text-[11px] text-base-500 uppercase tracking-widest font-semibold mb-2">Recovery — DC 10 + Dying</div>
+          <table class="gm-table mb-3" style="font-size:12px;">
+              <tbody>
+                  <tr><td><strong>Crit Success</strong></td><td><span class="heal">Dying &minus;2</span></td></tr>
+                  <tr><td><strong>Success</strong></td><td><span class="heal">Dying &minus;1</span></td></tr>
+                  <tr><td><strong>Failure</strong></td><td><span class="hurt">Dying +1</span></td></tr>
+                  <tr><td><strong>Crit Failure</strong></td><td><span class="hurt">Dying +2</span></td></tr>
+              </tbody>
+          </table>
+          <p class="text-[12px] text-base-300 leading-relaxed">
+              Dying back to 0 &rarr; clear Dying, gain <strong style="color:var(--gilt-200);">Wounded 1</strong> (or +1 if already Wounded).
+              Damage while Dying = Dying +1 (or +2 on crit). <strong style="color:var(--ruby-100);">Dead</strong> at Dying 4.
+          </p>
+      </div>
+      <div class="masonry-item gm-ref-card">
+          <h2 class="gm-ref-header">Afflictions <span class="sub">disease / poison</span></h2>
+          <div class="gm-callout-row"><span class="label">Save</span><span>Usually Fortitude &mdash; at exposure and each stage interval.</span></div>
+          <div class="gm-callout-row"><span class="label">Onset</span><span>Delay before Stage 1 takes effect (if the affliction has one).</span></div>
+          <div class="text-[11px] text-base-500 uppercase tracking-widest font-semibold mb-2 mt-3">On each stage save</div>
+          <table class="gm-table" style="font-size:12px;">
+              <tbody>
+                  <tr><td><strong>Crit Success</strong></td><td><span class="heal">Reduce 2 stages (ends below 1)</span></td></tr>
+                  <tr><td><strong>Success</strong></td><td><span class="heal">Reduce 1 stage</span></td></tr>
+                  <tr><td><strong>Failure</strong></td><td><span class="hurt">Advance 1 stage</span></td></tr>
+                  <tr><td><strong>Crit Failure</strong></td><td><span class="hurt">Advance 2 stages</span></td></tr>
+              </tbody>
+          </table>
+          <p class="text-[11px] text-base-500 italic mt-2 leading-relaxed"><strong>Virulent:</strong> needs 2 successes to reduce a stage. The affliction ends after its final stage.</p>
+      </div>
+  </div>
+</section>
 
-            <dt>Hidden</dt>
-            <dd>Off-Guard to you. DC 11 flat check before damage. You know the target's square.</dd>
+<section class="gm-group">
+  <div class="gm-group-label">Adversaries & Damage</div>
+  <div class="gm-group-grid">
+      <div class="masonry-item gm-ref-card">
+          <h2 class="gm-ref-header">Elite &amp; Weak Adjustments</h2>
+          <table class="gm-table" style="font-size:12px;">
+              <thead><tr><th></th><th style="color:var(--success);">Elite (+1 lvl)</th><th style="color:var(--ruby-100);">Weak (&minus;1 lvl)</th></tr></thead>
+              <tbody>
+                  <tr><td>AC / Saves / Attacks / DCs / Perception / Skills</td><td><span class="heal">+2</span></td><td><span class="hurt">&minus;2</span></td></tr>
+                  <tr><td>Damage rolls</td><td><span class="heal">+2</span></td><td><span class="hurt">&minus;2</span></td></tr>
+                  <tr><td>HP (scaled by level)</td><td><span class="heal">+10 to 30</span></td><td><span class="hurt">&minus;10 to 30</span></td></tr>
+              </tbody>
+          </table>
+          <p class="text-[11px] text-base-500 italic mt-2">Apply to a single creature, not the whole encounter. Recompute XP at the new effective level.</p>
+      </div>
+      <div class="masonry-item gm-ref-card">
+          <h2 class="gm-ref-header">Undead &amp; Void Healing</h2>
+          <div class="gm-callout-row"><span class="label">Immunities</span><span>Death effects, disease, poison, unconscious.</span></div>
+          <div class="gm-callout-row"><span class="label">Void Healing</span><span>Healed by <strong style="color:var(--success);">void</strong> (negative). Damaged by <strong style="color:var(--ruby-100);">vitality</strong> (positive).</span></div>
+          <div class="gm-callout-row"><span class="label">Destroyed</span><span>Auto-destroyed at 0 HP — Dying rules don't apply to basic undead.</span></div>
+      </div>
+      <div class="masonry-item gm-ref-card">
+          <h2 class="gm-ref-header">Environmental Damage</h2>
+          <div class="gm-callout-row"><span class="label">Falling</span><span>Bludgeoning = <strong style="color:var(--ruby-100);">half the distance</strong> fallen (20 ft &rarr; 10). None under 5 ft; max 750. Grab an Edge to reduce.</span></div>
+          <div class="gm-callout-row"><span class="label">Persistent</span><span>Take it at end of turn, then <strong style="color:var(--gilt-200);">DC 15 flat</strong> to end (DC 10 with good help).</span></div>
+          <div class="gm-callout-row"><span class="label">Suffocation</span><span>Hold breath 5 + Con mod rounds. Out of air &rarr; unconscious, then Dying 1 (+1 each round).</span></div>
+          <div class="gm-callout-row"><span class="label">Heat / Cold</span><span>Extreme temps deal environmental damage per interval and can apply Fatigued / Clumsy; scale by severity.</span></div>
+      </div>
+      <div class="masonry-item gm-ref-card">
+          <h2 class="gm-ref-header">Material Hardness <span class="sub">thin / typical</span></h2>
+          <table class="gm-table">
+              <thead><tr><th>Material</th><th>Hard</th><th>HP (BT)</th></tr></thead>
+              <tbody>
+                  <tr><td>Wood</td><td class="num">5</td><td class="num">20 (10)</td></tr>
+                  <tr><td>Stone</td><td class="num">14</td><td class="num">50 (25)</td></tr>
+                  <tr><td>Iron / Steel</td><td class="num">9</td><td class="num">36 (18)</td></tr>
+              </tbody>
+          </table>
+          <p class="text-[11px] text-base-500 mt-2 leading-relaxed">
+              Broken Threshold = half max HP. Past BT, items take penalties and can't be used normally.
+          </p>
+      </div>
+  </div>
+</section>
 
-            <dt>Undetected</dt>
-            <dd>Off-Guard to you. You don't know the square — must Seek or guess (DC 11 flat).</dd>
-        </dl>
-    </div>
-
-    <div class="masonry-item gm-ref-card">
-        <h2 class="gm-ref-header">Dying &amp; Recovery</h2>
-        <div class="text-sm text-base-200 mb-3 leading-relaxed">
-            At 0 HP: move initiative to just before the attacker, gain <strong style="color:var(--ruby-100);">Dying 1</strong> (or 2 on crit hit / crit failure on the save).
-        </div>
-        <div class="text-[11px] text-base-500 uppercase tracking-widest font-semibold mb-2">Recovery — DC 10 + Dying</div>
-        <table class="gm-table mb-3" style="font-size:12px;">
-            <tbody>
-                <tr><td><strong>Crit Success</strong></td><td><span class="heal">Dying &minus;2</span></td></tr>
-                <tr><td><strong>Success</strong></td><td><span class="heal">Dying &minus;1</span></td></tr>
-                <tr><td><strong>Failure</strong></td><td><span class="hurt">Dying +1</span></td></tr>
-                <tr><td><strong>Crit Failure</strong></td><td><span class="hurt">Dying +2</span></td></tr>
-            </tbody>
-        </table>
-        <p class="text-[12px] text-base-300 leading-relaxed">
-            Dying back to 0 &rarr; clear Dying, gain <strong style="color:var(--gilt-200);">Wounded 1</strong> (or +1 if already Wounded).
-            Damage while Dying = Dying +1 (or +2 on crit). <strong style="color:var(--ruby-100);">Dead</strong> at Dying 4.
-        </p>
-    </div>
-    
-    <div class="masonry-item gm-ref-card">
-        <h2 class="gm-ref-header">Elite &amp; Weak Adjustments</h2>
-        <table class="gm-table" style="font-size:12px;">
-            <thead><tr><th></th><th style="color:var(--success);">Elite (+1 lvl)</th><th style="color:var(--ruby-100);">Weak (&minus;1 lvl)</th></tr></thead>
-            <tbody>
-                <tr><td>AC / Saves / Attacks / DCs / Perception / Skills</td><td><span class="heal">+2</span></td><td><span class="hurt">&minus;2</span></td></tr>
-                <tr><td>Damage rolls</td><td><span class="heal">+2</span></td><td><span class="hurt">&minus;2</span></td></tr>
-                <tr><td>HP (scaled by level)</td><td><span class="heal">+10 to 30</span></td><td><span class="hurt">&minus;10 to 30</span></td></tr>
-            </tbody>
-        </table>
-        <p class="text-[11px] text-base-500 italic mt-2">Apply to a single creature, not the whole encounter. Recompute XP at the new effective level.</p>
-    </div>
-    
-    <div class="masonry-item gm-ref-card">
-        <h2 class="gm-ref-header">Undead &amp; Void Healing</h2>
-        <div class="gm-callout-row"><span class="label">Immunities</span><span>Death effects, disease, poison, unconscious.</span></div>
-        <div class="gm-callout-row"><span class="label">Void Healing</span><span>Healed by <strong style="color:var(--success);">void</strong> (negative). Damaged by <strong style="color:var(--ruby-100);">vitality</strong> (positive).</span></div>
-        <div class="gm-callout-row"><span class="label">Destroyed</span><span>Auto-destroyed at 0 HP — Dying rules don't apply to basic undead.</span></div>
-    </div>
-
-    <div class="masonry-item gm-ref-card">
-        <h2 class="gm-ref-header">Material Hardness <span class="sub">thin / typical</span></h2>
-        <table class="gm-table">
-            <thead><tr><th>Material</th><th>Hard</th><th>HP (BT)</th></tr></thead>
-            <tbody>
-                <tr><td>Wood</td><td class="num">5</td><td class="num">20 (10)</td></tr>
-                <tr><td>Stone</td><td class="num">14</td><td class="num">50 (25)</td></tr>
-                <tr><td>Iron / Steel</td><td class="num">9</td><td class="num">36 (18)</td></tr>
-            </tbody>
-        </table>
-        <p class="text-[11px] text-base-500 mt-2 leading-relaxed">
-            Broken Threshold = half max HP. Past BT, items take penalties and can't be used normally.
-        </p>
-    </div>
-
-    <div class="masonry-item gm-ref-card">
-        <h2 class="gm-ref-header">Cover</h2>
-        <table class="gm-table">
-            <thead><tr><th>Type</th><th>AC / Ref</th><th>Stealth</th></tr></thead>
-            <tbody>
-                <tr><td>Lesser</td><td><span class="num">+1</span> circ</td><td>&mdash;</td></tr>
-                <tr><td>Standard</td><td><span class="num">+2</span> circ</td><td>yes</td></tr>
-                <tr><td>Greater</td><td><span class="num">+4</span> circ</td><td>yes</td></tr>
-            </tbody>
-        </table>
-        <p class="text-[11px] text-base-500 mt-2 leading-relaxed">
-            Creatures grant Lesser. Take Cover (1 action) upgrades Lesser&rarr;Standard or Standard&rarr;Greater while you stay in cover.
-        </p>
-    </div>
-
-    <div class="masonry-item gm-ref-card">
-        <h2 class="gm-ref-header">Travel &amp; Exploration <span class="sub">per 8-hr day</span></h2>
-        <table class="gm-table" style="font-size:12px;">
-            <thead><tr><th>Speed</th><th>/ hour</th><th>/ day</th></tr></thead>
-            <tbody>
-                <tr><td>20 ft</td><td class="num">2 mi</td><td class="num">16 mi</td></tr>
-                <tr><td>25 ft</td><td class="num">2.5 mi</td><td class="num">20 mi</td></tr>
-                <tr><td>30 ft</td><td class="num">3 mi</td><td class="num">24 mi</td></tr>
-                <tr><td>35 ft</td><td class="num">3.5 mi</td><td class="num">28 mi</td></tr>
-                <tr><td>40 ft</td><td class="num">4 mi</td><td class="num">32 mi</td></tr>
-            </tbody>
-        </table>
-        <div class="gm-callout-row"><span class="label">Difficult</span><span>&times;2 movement cost &middot; greater difficult &times;3.</span></div>
-        <div class="gm-callout-row"><span class="label">Hustle</span><span>Double travel speed for (Con mod &times; 10) min, min 10.</span></div>
-        <p class="text-[11px] text-base-500 italic mt-2 leading-relaxed">Miles/hour = Speed &divide; 10. Standard day is 8 hrs; pushing further risks fatigue.</p>
-    </div>
-
-    <div class="masonry-item gm-ref-card">
-        <h2 class="gm-ref-header">Environmental Damage</h2>
-        <div class="gm-callout-row"><span class="label">Falling</span><span>Bludgeoning = <strong style="color:var(--ruby-100);">half the distance</strong> fallen (20 ft &rarr; 10). None under 5 ft; max 750. Grab an Edge to reduce.</span></div>
-        <div class="gm-callout-row"><span class="label">Persistent</span><span>Take it at end of turn, then <strong style="color:var(--gilt-200);">DC 15 flat</strong> to end (DC 10 with good help).</span></div>
-        <div class="gm-callout-row"><span class="label">Suffocation</span><span>Hold breath 5 + Con mod rounds. Out of air &rarr; unconscious, then Dying 1 (+1 each round).</span></div>
-        <div class="gm-callout-row"><span class="label">Heat / Cold</span><span>Extreme temps deal environmental damage per interval and can apply Fatigued / Clumsy; scale by severity.</span></div>
-    </div>
-
-    <div class="masonry-item gm-ref-card">
-        <h2 class="gm-ref-header">Light, Vision &amp; Senses</h2>
-        <table class="gm-table" style="font-size:12px;">
-            <thead><tr><th>Light</th><th>Effect (no special vision)</th></tr></thead>
-            <tbody>
-                <tr><td>Bright</td><td>Normal</td></tr>
-                <tr><td>Dim</td><td><span class="hurt">Concealed</span> &mdash; DC 5 flat</td></tr>
-                <tr><td>Darkness</td><td><span class="hurt">Blinded</span>; foes Hidden &mdash; DC 11</td></tr>
-            </tbody>
-        </table>
-        <div class="gm-callout-row"><span class="label">Low-light</span><span>Treat dim light as bright light.</span></div>
-        <div class="gm-callout-row"><span class="label">Darkvision</span><span>See in darkness (greyscale); ignore that concealment.</span></div>
-        <div class="gm-callout-row"><span class="label">Flat checks</span><span>Concealed <strong>DC 5</strong> &middot; Hidden / Undetected <strong>DC 11</strong>.</span></div>
-    </div>
-
-    <div class="masonry-item gm-ref-card">
-        <h2 class="gm-ref-header">Creature Size &amp; Reach</h2>
-        <table class="gm-table" style="font-size:12px;">
-            <thead><tr><th>Size</th><th>Space</th><th>Reach*</th></tr></thead>
-            <tbody>
-                <tr><td>Tiny</td><td class="num">2.5 ft</td><td class="num">0</td></tr>
-                <tr><td>Small / Medium</td><td class="num">5 ft</td><td class="num">5 ft</td></tr>
-                <tr><td>Large</td><td class="num">10 ft</td><td class="num">10 ft</td></tr>
-                <tr><td>Huge</td><td class="num">15 ft</td><td class="num">15 ft</td></tr>
-                <tr><td>Gargantuan</td><td class="num">20 ft</td><td class="num">20 ft</td></tr>
-            </tbody>
-        </table>
-        <p class="text-[11px] text-base-500 italic mt-2 leading-relaxed">*Typical reach; many creatures list a longer reach in their stat block.</p>
-    </div>
-
-    <div class="masonry-item gm-ref-card">
-        <h2 class="gm-ref-header">Afflictions <span class="sub">disease / poison</span></h2>
-        <div class="gm-callout-row"><span class="label">Save</span><span>Usually Fortitude &mdash; at exposure and each stage interval.</span></div>
-        <div class="gm-callout-row"><span class="label">Onset</span><span>Delay before Stage 1 takes effect (if the affliction has one).</span></div>
-        <div class="text-[11px] text-base-500 uppercase tracking-widest font-semibold mb-2 mt-3">On each stage save</div>
-        <table class="gm-table" style="font-size:12px;">
-            <tbody>
-                <tr><td><strong>Crit Success</strong></td><td><span class="heal">Reduce 2 stages (ends below 1)</span></td></tr>
-                <tr><td><strong>Success</strong></td><td><span class="heal">Reduce 1 stage</span></td></tr>
-                <tr><td><strong>Failure</strong></td><td><span class="hurt">Advance 1 stage</span></td></tr>
-                <tr><td><strong>Crit Failure</strong></td><td><span class="hurt">Advance 2 stages</span></td></tr>
-            </tbody>
-        </table>
-        <p class="text-[11px] text-base-500 italic mt-2 leading-relaxed"><strong>Virulent:</strong> needs 2 successes to reduce a stage. The affliction ends after its final stage.</p>
-    </div>
-
-</div>
+<section class="gm-group">
+  <div class="gm-group-label">Exploration & Environment</div>
+  <div class="gm-group-grid">
+      <div class="masonry-item gm-ref-card">
+          <h2 class="gm-ref-header">Cover</h2>
+          <table class="gm-table">
+              <thead><tr><th>Type</th><th>AC / Ref</th><th>Stealth</th></tr></thead>
+              <tbody>
+                  <tr><td>Lesser</td><td><span class="num">+1</span> circ</td><td>&mdash;</td></tr>
+                  <tr><td>Standard</td><td><span class="num">+2</span> circ</td><td>yes</td></tr>
+                  <tr><td>Greater</td><td><span class="num">+4</span> circ</td><td>yes</td></tr>
+              </tbody>
+          </table>
+          <p class="text-[11px] text-base-500 mt-2 leading-relaxed">
+              Creatures grant Lesser. Take Cover (1 action) upgrades Lesser&rarr;Standard or Standard&rarr;Greater while you stay in cover.
+          </p>
+      </div>
+      <div class="masonry-item gm-ref-card">
+          <h2 class="gm-ref-header">Travel &amp; Exploration <span class="sub">per 8-hr day</span></h2>
+          <table class="gm-table" style="font-size:12px;">
+              <thead><tr><th>Speed</th><th>/ hour</th><th>/ day</th></tr></thead>
+              <tbody>
+                  <tr><td>20 ft</td><td class="num">2 mi</td><td class="num">16 mi</td></tr>
+                  <tr><td>25 ft</td><td class="num">2.5 mi</td><td class="num">20 mi</td></tr>
+                  <tr><td>30 ft</td><td class="num">3 mi</td><td class="num">24 mi</td></tr>
+                  <tr><td>35 ft</td><td class="num">3.5 mi</td><td class="num">28 mi</td></tr>
+                  <tr><td>40 ft</td><td class="num">4 mi</td><td class="num">32 mi</td></tr>
+              </tbody>
+          </table>
+          <div class="gm-callout-row"><span class="label">Difficult</span><span>&times;2 movement cost &middot; greater difficult &times;3.</span></div>
+          <div class="gm-callout-row"><span class="label">Hustle</span><span>Double travel speed for (Con mod &times; 10) min, min 10.</span></div>
+          <p class="text-[11px] text-base-500 italic mt-2 leading-relaxed">Miles/hour = Speed &divide; 10. Standard day is 8 hrs; pushing further risks fatigue.</p>
+      </div>
+      <div class="masonry-item gm-ref-card">
+          <h2 class="gm-ref-header">Light, Vision &amp; Senses</h2>
+          <table class="gm-table" style="font-size:12px;">
+              <thead><tr><th>Light</th><th>Effect (no special vision)</th></tr></thead>
+              <tbody>
+                  <tr><td>Bright</td><td>Normal</td></tr>
+                  <tr><td>Dim</td><td><span class="hurt">Concealed</span> &mdash; DC 5 flat</td></tr>
+                  <tr><td>Darkness</td><td><span class="hurt">Blinded</span>; foes Hidden &mdash; DC 11</td></tr>
+              </tbody>
+          </table>
+          <div class="gm-callout-row"><span class="label">Low-light</span><span>Treat dim light as bright light.</span></div>
+          <div class="gm-callout-row"><span class="label">Darkvision</span><span>See in darkness (greyscale); ignore that concealment.</span></div>
+          <div class="gm-callout-row"><span class="label">Flat checks</span><span>Concealed <strong>DC 5</strong> &middot; Hidden / Undetected <strong>DC 11</strong>.</span></div>
+      </div>
+      <div class="masonry-item gm-ref-card">
+          <h2 class="gm-ref-header">Creature Size &amp; Reach</h2>
+          <table class="gm-table" style="font-size:12px;">
+              <thead><tr><th>Size</th><th>Space</th><th>Reach*</th></tr></thead>
+              <tbody>
+                  <tr><td>Tiny</td><td class="num">2.5 ft</td><td class="num">0</td></tr>
+                  <tr><td>Small / Medium</td><td class="num">5 ft</td><td class="num">5 ft</td></tr>
+                  <tr><td>Large</td><td class="num">10 ft</td><td class="num">10 ft</td></tr>
+                  <tr><td>Huge</td><td class="num">15 ft</td><td class="num">15 ft</td></tr>
+                  <tr><td>Gargantuan</td><td class="num">20 ft</td><td class="num">20 ft</td></tr>
+              </tbody>
+          </table>
+          <p class="text-[11px] text-base-500 italic mt-2 leading-relaxed">*Typical reach; many creatures list a longer reach in their stat block.</p>
+      </div>
+  </div>
+</section>
 
 <script>
     let compCat = 'all';
