@@ -10,8 +10,11 @@
        npm install && node build.mjs (see docs/tailwind-build.md). #}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tw-player_builder.css') }}">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&display=swap');
-        body { margin: 0; overflow: hidden; font-family: 'Crimson Text', Georgia, serif; }
+        /* Minimal pass: the app's 2-typeface system (Cinzel display + Inter UI),
+           matching base.html. Crimson Text -- a THIRD serif this page loaded just
+           for body/inputs -- is retired; fonts now come from the design tokens. */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;600;700&display=swap');
+        body { margin: 0; overflow: hidden; font-family: var(--font-ui); }
         body::before { content:''; position:fixed; inset:0; z-index:-1; background:radial-gradient(ellipse at 25% 15%,rgba(92,75,60,0.06) 0%,transparent 55%),#1C1917; }
         /* GM override switch -- armed = the app's amber warning vocabulary
            (matches the levelup rail's switch). */
@@ -27,28 +30,42 @@
         .foundry-content p { margin-bottom: 0.75rem; }
         .foundry-content ul { list-style-type: disc; margin-left: 1.5rem; margin-bottom: 0.75rem; }
         
-        .nav-item { font-family: 'Cinzel', serif; font-size: 12px; letter-spacing: 0.06em; }
+        .nav-item { font-family: var(--font-ui); font-size: 12px; letter-spacing: 0.06em; }
         .nav-item.active { background: linear-gradient(90deg, rgba(58,120,120,0.15), transparent); border-left: 3px solid #e0b65a; color: #f0d88a; }
         .step-panel { display: none; animation: fadeIn 0.25s ease-out; }
         .step-panel.active { display: block; }
+        /* Minimal pass: flatten the step form boxing. Each step's sections were
+           `bg-gray-800 + border-gray-700 + shadow-xl` (a hard box with a heavy
+           drop shadow) wrapping further `bg-gray-950 + shadow-inner` wells --
+           box-in-box. Soften to a faint wash + hairline, no shadow, so the form
+           reads as content on the page. Scoped to .step-panel; markup untouched. */
+        .step-panel .bg-gray-800 { background: rgba(255,255,255,0.02) !important; border-color: rgba(255,255,255,0.07) !important; box-shadow: none !important; }
+        .step-panel .bg-gray-900, .step-panel .bg-gray-950 { background: rgba(0,0,0,0.16) !important; border-color: rgba(255,255,255,0.05) !important; box-shadow: none !important; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         
-        .choice-card { background: linear-gradient(135deg, #33302A, #252320); border: 1px solid rgba(139,115,85,0.18); border-radius: 0.5rem; padding: 1rem; cursor: pointer; transition: all 0.3s; display: flex; flex-direction: column; justify-content: center; min-height: 80px; }
-        .choice-card:hover { border-color: rgba(201,163,78,0.35); background: linear-gradient(135deg, #3F3A33, #33302A); transform: translateY(-2px); box-shadow: 0 12px 24px rgba(0,0,0,0.4), 0 0 20px rgba(201,163,78,0.03); }
-        .choice-card .title { font-family: 'Cinzel', serif; font-weight: 700; color: #f0d88a; font-size: 1.05rem; margin-bottom: 0.2rem; letter-spacing: 0.02em; }
-        .choice-card .subtitle { font-family: 'Cinzel', serif; font-size: 0.65rem; color: #8B7355; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600; }
+        /* Minimal pass: a calm solid surface + faint hairline instead of a diagonal
+           gradient fill, and a quiet hover (border/tint only -- no lift, no glow,
+           no heavy drop shadow), so a grid of pickers reads clean, not decorated. */
+        .choice-card { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.07); border-radius: 0.5rem; padding: 1rem; cursor: pointer; transition: background .15s, border-color .15s; display: flex; flex-direction: column; justify-content: center; min-height: 80px; }
+        .choice-card:hover { border-color: rgba(201,163,78,0.30); background: rgba(201,163,78,0.05); }
+        .choice-card .title { font-family: var(--font-display); font-weight: 700; color: #f0d88a; font-size: 1.05rem; margin-bottom: 0.2rem; letter-spacing: 0.02em; }
+        .choice-card .subtitle { font-family: var(--font-ui); font-size: 0.65rem; color: #8B7355; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600; }
         
-        .stat-pill { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 0.5rem; background: #1C1917; border: 1px solid rgba(139,115,85,0.2); color: #D4C4A8; font-family: 'Cinzel', serif; font-weight: bold; cursor: pointer; transition: all 0.2s; user-select: none; }
+        /* Minimal pass: UI font + tabular numerals (these are numbers, not headings),
+           and calmer selected/flaw/locked states -- same semantics, less glow. */
+        .stat-pill { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 0.5rem; background: #1C1917; border: 1px solid rgba(139,115,85,0.2); color: #D4C4A8; font-family: var(--font-ui); font-variant-numeric: tabular-nums; font-weight: 700; cursor: pointer; transition: background .15s, border-color .15s, color .15s; user-select: none; }
         .stat-pill:hover:not(.locked):not(.flaw) { border-color: rgba(139,115,85,0.5); }
-        .stat-pill.selected { background: rgba(4,120,87,0.3); border-color: #4ADE80; color: #A7F3D0; }
-        .stat-pill.flaw { background: rgba(127,29,29,0.3); border-color: #FB7185; color: #FECDD3; cursor: not-allowed; }
-        .stat-pill.locked { background: rgba(6,95,70,0.25); border-color: #22C55E; color: #A7F3D0; cursor: not-allowed; opacity: 0.8; }
+        .stat-pill.selected { background: rgba(74,222,128,0.12); border-color: rgba(74,222,128,0.55); color: #A7F3D0; }
+        .stat-pill.flaw { background: rgba(251,113,133,0.10); border-color: rgba(251,113,133,0.5); color: #FECDD3; cursor: not-allowed; }
+        .stat-pill.locked { background: rgba(34,197,94,0.10); border-color: rgba(34,197,94,0.45); color: #A7F3D0; cursor: not-allowed; opacity: 0.8; }
 
-        .mod-tab-btn { flex: 1; transition: all 0.2s; border: 1px solid transparent; font-family: 'Cinzel', serif; font-size: 10px; letter-spacing: 0.08em; }
+        .mod-tab-btn { flex: 1; transition: all 0.2s; border: 1px solid transparent; font-family: var(--font-ui); font-size: 10px; letter-spacing: 0.08em; }
         .mod-tab-btn.active { color: #f0d88a; background: rgba(58,120,120,0.15); border-color: rgba(201,163,78,0.3); }
         
-        h2, h3, h4, label { font-family: 'Cinzel', serif; }
-        input, select, textarea { font-family: 'Crimson Text', Georgia, serif; }
+        /* Headings stay display; labels + inputs are UI text (were Cinzel/Crimson). */
+        h2, h3, h4 { font-family: var(--font-display); }
+        label { font-family: var(--font-ui); }
+        input, select, textarea { font-family: var(--font-ui); }
 
         /* ── MOBILE: stack the wizard ──
            The desktop layout is a fixed 256px sidebar + flex content row. On
