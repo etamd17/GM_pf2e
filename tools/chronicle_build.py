@@ -879,7 +879,7 @@ _PLAYER_VAULT_TYPE_SECTIONS = {
 }
 
 
-def _player_vault_section(note):
+def _player_vault_section(note, vault_dir=None):
     """Map a player-vault note to one of the app's fixed sections (home,
     recap, cast, atlas, lore, handout, fieldguide) - the player-vault-mode
     counterpart to `_section_for` above (kept separate; the two modes'
@@ -892,6 +892,22 @@ def _player_vault_section(note):
     direct child of the vault root, not a `Home.md` nested in any
     subfolder), else default `"lore"` - unmatched notes are always routed
     to `lore`, never dropped silently.
+
+    "Top-level" is only meaningful RELATIVE TO THE VAULT ROOT, so the
+    top-level-Home.md check needs to know where that root is:
+
+    - When `vault_dir` is given, the note's path is made relative to it
+      (`os.path.relpath`, `os.sep` normalized to `/` same as the rest of
+      this module) and top-level-ness is decided on THAT relative path -
+      exactly one segment, `"Home.md"`. This is what a real build must
+      pass: `_load_notes` builds notes from `os.path.join(root, fn)`
+      ABSOLUTE paths, so counting raw path segments (as the no-vault_dir
+      fallback below does) would misfire on any vault not sitting a fixed
+      two segments deep.
+    - When `vault_dir` is omitted (None), falls back to the previous
+      raw-segment-count heuristic (`len(segments) == 2`) for the existing
+      relative-path test style (e.g. `"v/Home.md"`), where there is no
+      real vault root to resolve against.
 
     Tolerates a `note` missing/empty `frontmatter` (only `path` is
     required); `os.sep` is replaced with `/` before matching, so the split
@@ -907,7 +923,12 @@ def _player_vault_section(note):
     ntype = fm.get("type")
     if ntype in _PLAYER_VAULT_TYPE_SECTIONS:
         return _PLAYER_VAULT_TYPE_SECTIONS[ntype]
-    if len(segments) == 2 and segments[-1] == "Home.md":
+    if vault_dir is not None:
+        rel = os.path.relpath(str(note["path"]), str(vault_dir)).replace(os.sep, "/")
+        is_top_level_home = rel == "Home.md"
+    else:
+        is_top_level_home = len(segments) == 2 and segments[-1] == "Home.md"
+    if is_top_level_home:
         return "home"
     return "lore"
 
