@@ -105,6 +105,22 @@ def test_session_number_non_numeric_frontmatter_falls_back_to_filename():
     assert cb._player_vault_session_number(note) == 2
 
 
+def test_session_number_unicode_digit_frontmatter_does_not_raise():
+    # "²" (superscript two) passes str.isdigit() but int("²")
+    # raises ValueError - the guard must use isdecimal() (or a try/except)
+    # so this falls through to the filename check instead of raising.
+    note = _note("v/01 - Chronicle/S05 - Deep.md", session="²")
+    assert cb._player_vault_session_number(note) == 5
+    assert cb._player_vault_session_number(_note("v/Cast/Romi.md", session="²")) is None
+
+
+def test_session_number_bool_frontmatter_falls_back_to_filename():
+    # bool is an int subclass; session=True must NOT be read as session 1.
+    note = _note("v/01 - Chronicle/S05 - Deep.md", session=True)
+    assert cb._player_vault_session_number(note) == 5
+    assert cb._player_vault_session_number(_note("v/Cast/Romi.md", session=True)) is None
+
+
 def test_session_number_missing_everywhere_is_none():
     assert cb._player_vault_session_number(_note("v/01 - Chronicle/Chronicle.md")) is None
     assert cb._player_vault_session_number(_note("v/02 - Cast/Romi Bracken.md")) is None

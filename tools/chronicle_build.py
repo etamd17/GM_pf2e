@@ -949,9 +949,15 @@ def _player_vault_session_number(note):
     `_coerce_scalar` turns an unquoted digit run into an int) or as a
     string of digits (a quoted `session: "5"` skips that coercion). Both
     are accepted and normalized to int. Anything else - missing, a
-    non-numeric string, a list, `None` - is NOT treated as the frontmatter
-    value; extraction falls through to the filename check instead of
-    raising.
+    non-numeric string, a bool, a list, `None` - is NOT treated as the
+    frontmatter value; extraction falls through to the filename check
+    instead of raising.
+
+    The string check uses `str.isdecimal()`, not `str.isdigit()`: `isdigit()`
+    also accepts Unicode digit characters (superscripts, circled digits,
+    etc.) that `int()` cannot parse, which would raise ValueError past the
+    guard. `isdecimal()` matches exactly the character set `int()` accepts,
+    same as the `\\d` in the filename regex below.
 
     A zero-padded filename number (`"S01"`) is returned as the plain int
     `1`, not the string `"01"` and not misread as octal - `int("01")` is
@@ -961,7 +967,7 @@ def _player_vault_session_number(note):
     raw = fm.get("session")
     if isinstance(raw, int) and not isinstance(raw, bool):
         return raw
-    if isinstance(raw, str) and raw.strip().isdigit():
+    if isinstance(raw, str) and raw.strip().isdecimal():
         return int(raw.strip())
     basename = os.path.basename(str(note["path"]))
     m = _SESSION_FILENAME_RE.match(basename)
