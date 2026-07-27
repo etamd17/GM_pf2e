@@ -888,11 +888,15 @@ def _player_vault_section(note):
 
     Precedence: folder segment (`_PLAYER_VAULT_FOLDER_SECTIONS`), then
     frontmatter `type` (`_PLAYER_VAULT_TYPE_SECTIONS`), then the top-level
-    `Home.md` special case, else default `"lore"` - unmatched notes are
-    always routed to `lore`, never dropped silently.
+    `Home.md` special case (exactly one path segment above it - i.e. a
+    direct child of the vault root, not a `Home.md` nested in any
+    subfolder), else default `"lore"` - unmatched notes are always routed
+    to `lore`, never dropped silently.
 
     Tolerates a `note` missing/empty `frontmatter` (only `path` is
-    required); path separators are normalized before matching.
+    required); `os.sep` is replaced with `/` before matching, so the split
+    into path segments doesn't depend on the running platform's separator
+    convention.
     """
     p = str(note["path"]).replace(os.sep, "/")
     segments = p.split("/")
@@ -903,7 +907,7 @@ def _player_vault_section(note):
     ntype = fm.get("type")
     if ntype in _PLAYER_VAULT_TYPE_SECTIONS:
         return _PLAYER_VAULT_TYPE_SECTIONS[ntype]
-    if os.path.basename(p) == "Home.md":
+    if len(segments) == 2 and segments[-1] == "Home.md":
         return "home"
     return "lore"
 
