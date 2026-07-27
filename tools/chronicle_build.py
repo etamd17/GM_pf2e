@@ -933,6 +933,43 @@ def _player_vault_section(note, vault_dir=None):
     return "lore"
 
 
+# Matches a LEADING "S<digits>" at the very start of a filename (e.g. "S01 -
+# Shadows Over Talmandor's Bounty.md" -> "01"). Anchored so an "S<digits>"
+# appearing later in the name (e.g. "Notes on S5 Recap.md") never matches.
+_SESSION_FILENAME_RE = re.compile(r"^S(\d+)")
+
+
+def _player_vault_session_number(note):
+    """Extract a session number for a player-vault note, or None.
+
+    Precedence: frontmatter `session` first, then a leading `S<digits>` in
+    the note's filename, else None.
+
+    Frontmatter `session` may arrive as a plain int (the common case -
+    `_coerce_scalar` turns an unquoted digit run into an int) or as a
+    string of digits (a quoted `session: "5"` skips that coercion). Both
+    are accepted and normalized to int. Anything else - missing, a
+    non-numeric string, a list, `None` - is NOT treated as the frontmatter
+    value; extraction falls through to the filename check instead of
+    raising.
+
+    A zero-padded filename number (`"S01"`) is returned as the plain int
+    `1`, not the string `"01"` and not misread as octal - `int("01")` is
+    always base-10 in Python.
+    """
+    fm = note.get("frontmatter") or {}
+    raw = fm.get("session")
+    if isinstance(raw, int) and not isinstance(raw, bool):
+        return raw
+    if isinstance(raw, str) and raw.strip().isdigit():
+        return int(raw.strip())
+    basename = os.path.basename(str(note["path"]))
+    m = _SESSION_FILENAME_RE.match(basename)
+    if m:
+        return int(m.group(1))
+    return None
+
+
 def _select_pages(notes, selection):
     """Return (included_notes, unmatched_entities). Default-exclude; `chronicle:`
     overrides win.
