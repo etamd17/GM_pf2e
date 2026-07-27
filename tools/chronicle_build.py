@@ -632,6 +632,55 @@ def _resolve_asset_source(vault_dir, ref):
     return _find_asset(vault_dir, base)
 
 
+def _resolve_asset_source_anywhere(vault_dir, ref):
+    """Locate `ref`'s basename ANYWHERE under `vault_dir`, for player-vault
+    mode's flat Obsidian attachment model: a note anywhere in the tree can
+    write `![[intake-map.png]]` while the file itself lives in one shared
+    attachments folder (e.g. `zz_Attachments/` in the real vault, or even
+    directly at the vault root) that has no relation to where the note
+    sits. Unlike `_resolve_asset_source` (GM-vault mode), there is no
+    "Player Handouts/" scope to prefer or confine the search to -- the
+    whole vault IS the content.
+
+    Walks `vault_dir` top-down with directory names sorted at every level,
+    so the SAME first match is returned on every build regardless of the
+    underlying filesystem's listing order. Directories player-vault mode
+    already treats as non-content -- `.obsidian/`, any other dot-directory,
+    and `_Site/` -- are pruned from the walk via `_player_vault_path_excluded`
+    (the SAME rule `select_player_vault` applies to notes; reused here, not
+    reimplemented). A dangling ref (no matching file anywhere in-scope)
+    returns None -- the caller (`collect_assets`) logs it and moves on;
+    this never raises.
+
+    Security: only the basename is ever used to search, and the search
+    never leaves `vault_dir` (os.walk is rooted there and only descends
+    into its own subdirectories) -- a traversal-shaped ref like
+    `../../etc/passwd` or an absolute path can, at most, coincidentally
+    match a same-named file that already exists somewhere INSIDE
+    `vault_dir`; it can never cause a file from outside the vault to be
+    found or copied.
+    """
+    base = os.path.basename(str(ref).strip().lstrip("/\\"))
+    if not base:
+        return None
+    vault_dir = str(vault_dir)
+    for root, dirs, files in os.walk(vault_dir):
+        # Prune excluded subdirectories (and sort what's left) BEFORE
+        # os.walk descends into them, so both the pruning and the
+        # first-match order are deterministic. The trailing path segment
+        # passed to `_player_vault_path_excluded` is never inspected by it
+        # (it only looks at the DIRECTORY segments between vault_dir and
+        # the final component) -- `base` is reused here only to avoid a
+        # throwaway constant, not because its value matters.
+        dirs[:] = sorted(
+            d for d in dirs
+            if not _player_vault_path_excluded(os.path.join(root, d, base), vault_dir)
+        )
+        if base in files:
+            return os.path.join(root, base)
+    return None
+
+
 def _strip_exif(src, dst):
     """Re-save an image without its metadata (EXIF, GPS, etc.) when Pillow
     is importable; otherwise (or on any decode/save failure) fall back to a
@@ -651,21 +700,29 @@ def _strip_exif(src, dst):
         shutil.copy2(src, dst)
 
 
-def collect_assets(pages, vault_dir, out_assets_dir):
+def collect_assets(pages, vault_dir, out_assets_dir, resolve_source=None):
     """Copy the player images referenced by `pages` from the vault into
     `out_assets_dir`, EXIF-stripped when possible, and return the sorted
     list of copied basenames.
 
     Refs are the union of each page's `portrait` field, `![[embed]]`, and
-    `![alt](path)` -- only the basename is used both for lookup (via
-    `_find_asset`, scoped to `Player Handouts/**`) and for the copy
-    destination, so a path-traversal ref (e.g. `../../secret.png`) can
-    only ever resolve to a same-named file actually found under
-    `Player Handouts/`, never escape `out_assets_dir`. An unreferenced
-    image, or a referenced non-image file, is never copied. A running
-    total enforces `ASSET_BUDGET_BYTES`: once adding an asset would
+    `![alt](path)` -- only the basename is used both for lookup and for the
+    copy destination, so a path-traversal ref (e.g. `../../secret.png`) can
+    only ever resolve to a same-named file actually found within the
+    resolver's own search scope, never escape `out_assets_dir`. An
+    unreferenced image, or a referenced non-image file, is never copied. A
+    running total enforces `ASSET_BUDGET_BYTES`: once adding an asset would
     exceed the budget, that asset (and only that asset) is logged and
     skipped -- smaller assets encountered later still get a chance.
+
+    `resolve_source`, when given, is a `(vault_dir, ref) -> path-or-None`
+    callable that REPLACES the default lookup, `_resolve_asset_source`
+    (GM-vault mode, confined to `Player Handouts/**`). Player-vault mode
+    passes `_resolve_asset_source_anywhere` here, since Obsidian's flat
+    attachment model means a note anywhere can embed a file that actually
+    lives in one shared folder (e.g. `zz_Attachments/`) unrelated to the
+    note's own location. Omitted (the default), behavior is byte-identical
+    to before this parameter existed.
 
     A basename collision -- two DIFFERENT source images that happen to
     share a basename across subfolders (e.g. `Maps/cover.png` vs
@@ -675,6 +732,7 @@ def collect_assets(pages, vault_dir, out_assets_dir):
     dropping the second one. A ref that resolves to the SAME file as the
     one already copied (a genuine duplicate reference) stays silent.
     """
+    resolve_source = resolve_source or _resolve_asset_source
     os.makedirs(str(out_assets_dir), exist_ok=True)
     copied = []
     seen = {}  # basename -> source path of the copy already made
@@ -687,7 +745,7 @@ def collect_assets(pages, vault_dir, out_assets_dir):
         if os.path.splitext(base)[1].lower() not in _IMG_EXTS:
             continue
         if base in seen:
-            other_src = _resolve_asset_source(vault_dir, ref_str)
+            other_src = resolve_source(vault_dir, ref_str)
             if other_src and os.path.normpath(other_src) != os.path.normpath(seen[base]):
                 log.warning(
                     "chronicle: asset basename collision for %s - kept %s, "
@@ -695,7 +753,7 @@ def collect_assets(pages, vault_dir, out_assets_dir):
                     base, seen[base], base, ref_str,
                 )
             continue
-        src = _resolve_asset_source(vault_dir, ref_str)
+        src = resolve_source(vault_dir, ref_str)
         if not src:
             log.warning("chronicle: referenced asset not found: %s", base)
             continue

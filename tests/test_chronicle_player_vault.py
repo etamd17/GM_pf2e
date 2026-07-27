@@ -1,3 +1,4 @@
+import logging
 import os
 import pathlib
 
@@ -221,3 +222,152 @@ def test_select_player_vault_is_sorted_by_slug():
     pages = cb.select_player_vault(FIXTURE)
     slugs = [p["slug"] for p in pages]
     assert slugs == sorted(slugs)
+
+
+# --- vault-wide asset resolution (Task 5) -------------------------------
+#
+# Player-vault mode's notes live anywhere in the tree, but Obsidian's own
+# attachment model is FLAT: a note anywhere can write `![[intake-map.png]]`
+# while the actual file sits in one shared folder (the fixture's
+# `zz_Attachments/`, matching the real vault). GM-vault mode's
+# `_resolve_asset_source`/`_find_asset` stay scoped to `Player Handouts/**`
+# and are exercised, unmodified, by the `collect_assets` tests in
+# test_chronicle_build.py - this section only covers the NEW vault-wide
+# resolver and collect_assets' injectable-resolver hook.
+
+
+def test_resolve_asset_source_anywhere_finds_basename_in_attachments_folder():
+    # "04 - Atlas/The Intake.md" embeds ![[intake-map.png]]; the file
+    # actually lives in the fixture's zz_Attachments/, not next to the note
+    # and not under any "Player Handouts"-style tree.
+    found = cb._resolve_asset_source_anywhere(FIXTURE, "intake-map.png")
+    assert found == str(FIXTURE / "zz_Attachments" / "intake-map.png")
+
+
+def test_resolve_asset_source_anywhere_dangling_ref_returns_none():
+    assert cb._resolve_asset_source_anywhere(FIXTURE, "missing.png") is None
+
+
+def test_resolve_asset_source_anywhere_excludes_dot_and_site_directories(tmp_path):
+    # A same-named file that exists ONLY inside .obsidian/, .remember/, or
+    # _Site/ must never resolve - those directories are treated as
+    # non-content, same rule select_player_vault already applies to notes
+    # (_player_vault_path_excluded), reused here rather than reimplemented.
+    vault = tmp_path / "vault"
+    (vault / ".obsidian").mkdir(parents=True)
+    (vault / ".obsidian" / "hidden.png").write_bytes(b"x")
+    (vault / "_Site").mkdir()
+    (vault / "_Site" / "hidden.png").write_bytes(b"x")
+    (vault / ".remember").mkdir()
+    (vault / ".remember" / "hidden.png").write_bytes(b"x")
+
+    assert cb._resolve_asset_source_anywhere(vault, "hidden.png") is None
+
+    # A file under a legitimately underscore-prefixed but non-excluded
+    # folder (mirrors "_maps/" from select_player_vault) still resolves.
+    (vault / "_maps").mkdir()
+    (vault / "_maps" / "visible.png").write_bytes(b"x")
+    assert cb._resolve_asset_source_anywhere(vault, "visible.png") == \
+        str(vault / "_maps" / "visible.png")
+
+
+def test_resolve_asset_source_anywhere_is_deterministic_first_match(tmp_path):
+    # Two DIFFERENT files share a basename in different folders - the sorted
+    # walk must return the SAME one on every call (alphabetically-first
+    # directory wins), never depend on filesystem iteration order.
+    vault = tmp_path / "vault"
+    (vault / "Alpha").mkdir(parents=True)
+    (vault / "Alpha" / "dup.png").write_bytes(b"a")
+    (vault / "Zeta").mkdir()
+    (vault / "Zeta" / "dup.png").write_bytes(b"z")
+
+    results = {cb._resolve_asset_source_anywhere(vault, "dup.png") for _ in range(5)}
+    assert results == {str(vault / "Alpha" / "dup.png")}
+
+
+def test_resolve_asset_source_anywhere_traversal_ref_cannot_escape_vault(tmp_path):
+    # A same-named file genuinely exists OUTSIDE the vault (simulating an
+    # /etc/passwd-style escape target). No matter how the ref spells the
+    # path - a `../`-climbing relative ref or a bare absolute path - the
+    # resolver only ever walks inside vault_dir, so it must never find or
+    # return the outside file.
+    outside = tmp_path / "secret.png"
+    outside.write_bytes(b"outside-vault-bytes")
+
+    vault = tmp_path / "vault"
+    vault.mkdir()
+
+    assert cb._resolve_asset_source_anywhere(vault, "../secret.png") is None
+    assert cb._resolve_asset_source_anywhere(vault, "../../secret.png") is None
+    assert cb._resolve_asset_source_anywhere(vault, str(outside)) is None
+
+
+def test_collect_assets_player_vault_scope_resolves_zz_attachments(tmp_path):
+    # End-to-end through collect_assets with the injectable resolver: pages
+    # come straight from select_player_vault, exactly as a real player-vault
+    # build would call it.
+    pages = cb.select_player_vault(FIXTURE)
+    out_assets = tmp_path / "assets"
+
+    copied = cb.collect_assets(pages, FIXTURE, str(out_assets),
+                                resolve_source=cb._resolve_asset_source_anywhere)
+
+    assert "intake-map.png" in copied
+    assert (out_assets / "intake-map.png").exists()
+
+
+def test_collect_assets_player_vault_scope_dangling_ref_copies_nothing_and_logs(tmp_path, caplog):
+    pages = [{"slug": "x", "body": "A cursed page. ![[missing.png]]"}]
+    out_assets = tmp_path / "assets"
+
+    with caplog.at_level(logging.WARNING, logger="chronicle_build"):
+        copied = cb.collect_assets(pages, FIXTURE, str(out_assets),
+                                    resolve_source=cb._resolve_asset_source_anywhere)
+
+    assert copied == []
+    assert not (out_assets / "missing.png").exists()
+    warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert any("missing.png" in w for w in warnings), warnings
+
+
+def test_collect_assets_player_vault_scope_traversal_cannot_read_outside_vault(tmp_path):
+    outside = tmp_path / "secret.png"
+    outside.write_bytes(b"outside-vault-bytes")
+
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    out_assets = tmp_path / "out" / "assets"
+
+    pages = [
+        {"slug": "a", "body": "![[../secret.png]]"},
+        {"slug": "b", "body": "![[%s]]" % str(outside)},
+    ]
+
+    copied = cb.collect_assets(pages, str(vault), str(out_assets),
+                                resolve_source=cb._resolve_asset_source_anywhere)
+
+    assert copied == []
+    assert not (out_assets / "secret.png").exists()
+
+
+def test_collect_assets_default_resolver_is_unchanged_gm_scope(tmp_path):
+    # Omitting resolve_source keeps collect_assets scoped to
+    # "Player Handouts/**" (GM-vault mode) - a file living anywhere else in
+    # the vault, even with a matching basename, must NOT resolve.
+    vault = tmp_path / "vault"
+    (vault / "Player Handouts" / "NPC Portraits").mkdir(parents=True)
+    (vault / "Player Handouts" / "NPC Portraits" / "romi.png").write_bytes(b"x")
+    (vault / "zz_Attachments").mkdir()
+    (vault / "zz_Attachments" / "elsewhere.png").write_bytes(b"y")
+
+    out_assets = tmp_path / "assets"
+    pages = [
+        {"slug": "romi", "body": "![[romi.png]]"},
+        {"slug": "elsewhere", "body": "![[elsewhere.png]]"},
+    ]
+
+    copied = cb.collect_assets(pages, str(vault), str(out_assets))
+
+    assert copied == ["romi.png"]
+    assert (out_assets / "romi.png").exists()
+    assert not (out_assets / "elsewhere.png").exists()
