@@ -2,11 +2,20 @@
 
 {% block title %}Encounter Tracker{% endblock %}
 
+{# Alegreya is the app's long-form reading serif (--font-flavor); base.html loads
+   only Inter + Cinzel. This MUST be a real <link> in head_extra: extra_head is
+   injected mid-<style>, and a late @import is invalid CSS and silently dropped.
+   The tracker previously @imported Crimson Pro + JetBrains Mono there -- neither
+   was ever requested, so its flavor text had been falling back to plain serif. #}
+{% block head_extra %}
+  <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,500;0,700;1,400;1,500&display=swap">
+{% endblock %}
+
 {% block extra_head %}
 /* ═══════════════════════════════════════════════════════════════════
    TRACKER — Design C (Tactical Grid + Hero Card)
    ═══════════════════════════════════════════════════════════════════ */
-@import url('https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500;700&display=swap');
 
 .trk {
   --t-bg-base:var(--bg-page); --t-bg-surface:var(--bg-sunken); --t-bg-raised:var(--bg-card); --t-bg-higher:var(--bg-card-2);
@@ -46,7 +55,7 @@ body.system-cosmere .trk {
   --t-accent-line:rgba(111,183,214,0.45);
 }
 .trk .font-d { font-family:'Cinzel',serif; }
-.trk .font-n { font-family:'Crimson Pro',serif; }
+.trk .font-n { font-family:var(--font-flavor); }
 .trk .mono { font-family:var(--font-ui); font-variant-numeric:tabular-nums; }
 
 /* ═══ HERO BAR ═══ */
@@ -699,7 +708,7 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 #gm-inbox-list .gm-msg.kind-journal .gm-msg-meta strong { color:var(--t-gold-b); }
 #gm-inbox-list .gm-msg .gm-msg-body {
   white-space:pre-wrap;
-  font-family:'Crimson Pro',serif;
+  font-family:var(--font-flavor);
   line-height:1.4;
 }
 
@@ -993,7 +1002,7 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 /* empty state */
 .trk .empty-state {
   padding:50px 20px; text-align:center; color:var(--t-t3); font-style:italic;
-  font-family:'Crimson Pro',serif; font-size:14px;
+  font-family:var(--font-flavor); font-size:14px;
 }
 .trk .empty-state.hidden { display:none; }
 
@@ -1026,7 +1035,7 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
   font-family:'Cinzel',serif; font-weight:900; font-size:22px; line-height:1.05; letter-spacing:.5px;
   color:var(--t-t1);
 }
-.trk .hero-ttl .role { font-family:'Crimson Pro',serif; font-style:italic; font-size:12px; color:var(--t-t2); margin-top:4px; line-height:1.3; }
+.trk .hero-ttl .role { font-family:var(--font-flavor); font-style:italic; font-size:12px; color:var(--t-t2); margin-top:4px; line-height:1.3; }
 .trk .hero-ttl .tag-row { display:flex; flex-wrap:wrap; gap:4px; margin-top:8px; }
 .trk .tagp { font-size:9px; padding:2px 8px; background:transparent; border:1px solid var(--t-border); color:var(--t-t2); border-radius:4px; font-weight:600; letter-spacing:.5px; text-transform:uppercase; }
 .trk .tagp.gold { border-color:var(--t-accent-line); color:var(--t-accent); }
@@ -1090,13 +1099,13 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
   padding:8px 10px; margin-bottom:5px;
 }
 .trk .abl-row .abl-nm { font-weight:700; font-size:12px; color:var(--t-gold); margin-bottom:3px; font-family:'Cinzel',serif; letter-spacing:.3px; }
-.trk .abl-row .abl-dsc { font-size:11px; color:var(--t-t2); line-height:1.4; font-family:'Crimson Pro',serif; }
+.trk .abl-row .abl-dsc { font-size:11px; color:var(--t-t2); line-height:1.4; font-family:var(--font-flavor); }
 
 .trk .reminder {
   background:var(--t-accent-soft);
   border:1px solid var(--t-accent-line); border-radius:8px;
   padding:8px 10px; margin-top:9px;
-  font-size:10.5px; color:var(--t-gold); font-family:'Crimson Pro',serif; font-style:italic;
+  font-size:10.5px; color:var(--t-gold); font-family:var(--font-flavor); font-style:italic;
   line-height:1.5;
 }
 
@@ -1424,7 +1433,7 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
   width:100%; min-height:60px; max-height:200px; resize:vertical;
   margin-top:4px; padding:6px 8px;
   font-size:11px; line-height:1.4; color:var(--t-t1);
-  font-family:'Crimson Pro',serif;
+  font-family:var(--font-flavor);
   background:var(--t-bg-higher); border:1px solid var(--t-border); border-radius:4px;
   outline:none;
 }
@@ -1744,7 +1753,7 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
     </div>
     <div style="margin-bottom:10px;">
         <label class="tlabel">Content</label>
-        <textarea id="handout-content" rows="3" placeholder="Handout text…" class="tinput" style="width:100%;resize:vertical;font-family:'Crimson Pro',serif;"></textarea>
+        <textarea id="handout-content" rows="3" placeholder="Handout text…" class="tinput" style="width:100%;resize:vertical;font-family:var(--font-flavor);"></textarea>
     </div>
     <div style="display:flex;gap:12px;align-items:center;">
         <div style="flex:1;display:flex;align-items:center;gap:8px;">

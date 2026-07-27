@@ -178,6 +178,17 @@ CONDITION_INFO = {
     'unconscious': 'Movement 0; you fall Prone, drop held items, and can act only via Breathe Stormlight / Regenerate (if Radiant). You always go slow. A PC may wake at the end of any turn or on being healed to 1+ health (recovering 1 health if at 0).',
 }
 
+# The debilitating conditions -- the ones a GM needs to spot instantly. Every
+# surface that tints a condition chip (player hub, combat view, GM vitals board,
+# and the hub party strip) reads THIS set, so the severity read can't drift
+# between screens. The rest of _CONDITION_KEYS are buffs (determined, empowered,
+# enhanced, focused) or minor states (prone, surprised) and stay on the calm
+# accent tint. Guarded by tests/test_cosmere_severe_conditions.py.
+SEVERE_CONDITIONS = frozenset({
+    'unconscious', 'stunned', 'exhausted', 'afflicted',
+    'immobilized', 'restrained', 'slowed', 'disoriented',
+})
+
 
 # --- ingested content ------------------------------------------------------
 _CONTENT_DIR = os.path.join(os.path.dirname(__file__), 'content')

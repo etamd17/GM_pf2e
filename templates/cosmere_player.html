@@ -105,9 +105,9 @@
   .mrow .me { font-size:10px; color:var(--text-on-dark-3); }
 {% endblock %}
 {% block content %}
-{# Debilitating conditions render ruby -- kept in sync with the _COS_SEV set in
-   cosmere_gm_vitals.html (the single-source authority for this list). #}
-{% set _COS_SEV = ['unconscious','stunned','exhausted','afflicted','immobilized','restrained','slowed','disoriented'] %}
+{# Debilitating conditions render ruby. Injected from the ONE source of truth
+   (systems.cosmere.SEVERE_CONDITIONS) via the cos_severe context processor. #}
+{% set _COS_SEV = cos_severe %}
 <div class="ph-head">
   <span class="ph-title">My Character</span>
   <a class="ph-roster" href="/cosmere/pcs">View the party &rarr;</a>
