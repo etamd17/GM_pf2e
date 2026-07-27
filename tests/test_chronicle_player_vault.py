@@ -1,4 +1,9 @@
+import os
+import pathlib
+
 from tools import chronicle_build as cb
+
+FIXTURE = pathlib.Path(__file__).parent / "fixtures" / "player_vault_sample"
 
 
 def _note(path, **fm):
@@ -124,3 +129,95 @@ def test_session_number_bool_frontmatter_falls_back_to_filename():
 def test_session_number_missing_everywhere_is_none():
     assert cb._player_vault_session_number(_note("v/01 - Chronicle/Chronicle.md")) is None
     assert cb._player_vault_session_number(_note("v/02 - Cast/Romi Bracken.md")) is None
+
+
+# --- select_player_vault -----------------------------------------------
+
+
+def test_select_player_vault_returns_expected_pages_with_sections():
+    pages = cb.select_player_vault(FIXTURE)
+    by_slug = {p["slug"]: p for p in pages}
+
+    assert by_slug["home"]["section"] == "home"
+    assert by_slug["the-docks"]["section"] == "recap"
+    assert by_slug["romi-bracken"]["section"] == "cast"
+    assert by_slug["the-intake"]["section"] == "atlas"
+    assert by_slug["watch-notice"]["section"] == "handout"
+
+    # _is_gm_meta skips: underscore-prefixed filename, and type: reference.
+    assert "about-handouts" not in by_slug
+    assert "about-this-chronicle" not in by_slug
+
+    # The recap page carries the session number.
+    assert by_slug["the-docks"]["session_updated"] == 1
+    assert by_slug["the-docks"]["session_introduced"] == 1
+
+    # A page with no session number anywhere carries neither session field.
+    assert "session_updated" not in by_slug["romi-bracken"]
+    assert "session_introduced" not in by_slug["romi-bracken"]
+
+
+def test_select_player_vault_page_dict_shape_matches_gm_mode():
+    pages = cb.select_player_vault(FIXTURE)
+    page = next(p for p in pages if p["slug"] == "romi-bracken")
+    assert page == {
+        "slug": "romi-bracken",
+        "section": "cast",
+        "title": "Romi Bracken",
+        "recipients": "all",
+        "source": "content/romi-bracken.md",
+        "body": cb.parse_note(FIXTURE / "02 - Cast" / "Romi Bracken.md")["body"],
+    }
+
+
+def test_select_player_vault_body_is_not_firewalled():
+    # Bodies pass through AS AUTHORED - strip_gm_content must never run
+    # here (this vault is already player-facing; stripping would delete
+    # legitimate [!info]/[!abstract] content the GM wrote for players).
+    pages = cb.select_player_vault(FIXTURE)
+    romi = next(p for p in pages if p["slug"] == "romi-bracken")
+    assert "[!info]" in romi["body"]
+    assert "A shopkeeper." in romi["body"]
+
+
+def test_select_player_vault_keeps_maps_subfolder():
+    # Decision: _maps/ is underscore-prefixed but holds real player content
+    # (a handout, per the real vault) - it must NOT be treated like a
+    # GM-meta skip. Folder precedence still routes it via "04 - Atlas".
+    pages = cb.select_player_vault(FIXTURE)
+    by_slug = {p["slug"]: p for p in pages}
+    assert "cavern-map" in by_slug
+    assert by_slug["cavern-map"]["section"] == "atlas"
+
+
+def test_select_player_vault_skips_site_and_dot_directories():
+    # _Site/ (Obsidian Publish-plugin setup docs) and any dot-directory
+    # (.obsidian/, .remember/ AI-agent session memory) are excluded at the
+    # DIRECTORY level, before any per-note check - so a note inside them
+    # with otherwise-ordinary, non-GM-meta frontmatter still never
+    # publishes. Neither fixture note here is underscore-prefixed or
+    # type: reference, so this only passes if the directory-level skip
+    # itself is implemented (not merely riding on _is_gm_meta).
+    pages = cb.select_player_vault(FIXTURE)
+    titles = {p["title"] for p in pages}
+    assert "Publish Config Note" not in titles
+    assert "Session Memory Note" not in titles
+
+
+def test_select_player_vault_home_section_via_absolute_path():
+    # _load_notes produces ABSOLUTE paths. Without vault_dir passed through
+    # to _player_vault_section at every call site, a top-level Home.md
+    # would silently misresolve to "lore" instead of "home". Assert this
+    # holds THROUGH select_player_vault (not merely at the
+    # _player_vault_section unit level), against a genuinely absolute
+    # fixture path.
+    assert os.path.isabs(str(FIXTURE))
+    pages = cb.select_player_vault(FIXTURE)
+    home = next(p for p in pages if p["slug"] == "home")
+    assert home["section"] == "home"
+
+
+def test_select_player_vault_is_sorted_by_slug():
+    pages = cb.select_player_vault(FIXTURE)
+    slugs = [p["slug"] for p in pages]
+    assert slugs == sorted(slugs)

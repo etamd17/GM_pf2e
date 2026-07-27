@@ -976,6 +976,114 @@ def _player_vault_session_number(note):
     return None
 
 
+# Directories that select_player_vault never walks for notes, regardless of
+# what's inside them: any dot-directory (Obsidian app config `.obsidian/`,
+# AI-agent session-memory scratch `.remember/`, ...) and `_Site/` (Obsidian
+# Publish-plugin setup docs, not campaign content). Deliberately a SMALL,
+# explicit exclusion list - NOT a blanket "any underscore-prefixed folder"
+# rule: `_maps/` is also underscore-prefixed but holds real, publishable
+# player content (handouts), so it is NOT in this set and must be walked
+# normally. Per-note skipping (an underscore-prefixed FILENAME, or
+# `type: reference`) is a separate, unconditional check - `_is_gm_meta` -
+# applied afterward, in select_player_vault itself.
+_PLAYER_VAULT_SKIP_DIR_NAMES = frozenset({"_Site"})
+
+
+def _player_vault_path_excluded(path, vault_dir):
+    """True if `path` (a note's path) sits inside a directory
+    select_player_vault never walks - see `_PLAYER_VAULT_SKIP_DIR_NAMES`
+    above. Checked against every directory SEGMENT between `vault_dir` and
+    the note's own filename (never the filename itself), so a file directly
+    named e.g. `_Site.md` at the vault root is unaffected - only an actual
+    containing directory triggers this. `os.sep` is normalized to `/`
+    first, same convention as `_player_vault_section`."""
+    rel = os.path.relpath(str(path), str(vault_dir)).replace(os.sep, "/")
+    dir_segments = rel.split("/")[:-1]
+    return any(seg.startswith(".") or seg in _PLAYER_VAULT_SKIP_DIR_NAMES
+               for seg in dir_segments)
+
+
+def select_player_vault(vault_dir):
+    """Walk `vault_dir` - an already player-facing, hand-authored Obsidian
+    vault - and return the list of page dicts for player-vault-mode
+    ingestion (the SELECTION step; rendering/wikilink-resolution/backlinks/
+    manifest assembly are all later, unchanged stages).
+
+    Two independent skips are applied, in order:
+
+    1. Directory-level (`_player_vault_path_excluded`): a note inside a
+       dot-directory anywhere in its path, or inside `_Site/`, is excluded
+       before any per-note check runs at all. `_maps/` is deliberately NOT
+       in that exclusion set - see its docstring.
+    2. Per-note (`_is_gm_meta`, reused as-is from GM-vault mode, never
+       duplicated): an underscore-prefixed FILENAME (e.g.
+       `_About Handouts.md`) or `type: reference` frontmatter is skipped
+       regardless of folder.
+
+    Every surviving note becomes a page dict in the SAME shape
+    `build_player_vault` already builds for GM mode:
+    `{slug, section, title, recipients: "all", source: "content/<slug>.md",
+    body}`, plus `session_introduced`/`session_updated` (both set to
+    `_player_vault_session_number(note)`) whenever that returns non-None -
+    the app reads both fields for a recap page's session badge (see
+    `_PAGE_OPTIONAL` above). `body` is the note's RAW body, UNMODIFIED:
+    `strip_gm_content` is never called here. That firewall exists for
+    deriving a player vault FROM a GM vault; this vault is already
+    player-facing, so stripping would delete legitimate `[!info]`/
+    `[!abstract]` content the GM wrote on purpose for players.
+
+    `vault_dir` is passed through to `_player_vault_section` at every call
+    site: `_load_notes` builds ABSOLUTE note paths, and without `vault_dir`
+    `_player_vault_section`'s top-level-Home.md special case falls back to
+    a raw-segment-count heuristic that is wrong for an absolute path (it
+    would misfile the vault's own Home page as "lore").
+
+    Slugging: `slugify(_note_title(note))`, same as GM mode. On a
+    collision (two different notes producing the same slug - e.g. the same
+    title in different folders) the FIRST note encountered, in
+    `_load_notes`'s `os.walk` order, is kept; every later collision is
+    dropped and logged as a warning. This is the conservative choice: two
+    pages silently sharing one output file (whichever gets written last
+    wins) would be worse than dropping the collision outright and warning
+    the GM to rename one of the notes.
+
+    Output is sorted by slug, so the resulting manifest does not churn
+    between builds that select the same notes.
+    """
+    pages = []
+    seen_slugs = set()
+    for note in _load_notes(vault_dir):
+        if _player_vault_path_excluded(note["path"], vault_dir):
+            continue
+        if _is_gm_meta(note):
+            continue
+        title = _note_title(note)
+        slug = slugify(title)
+        if slug in seen_slugs:
+            log.warning(
+                "chronicle: player-vault slug collision for %r (title %r) - "
+                "keeping the first note, dropping %s",
+                slug, title, note["path"],
+            )
+            continue
+        seen_slugs.add(slug)
+        page = {
+            "slug": slug,
+            "section": _player_vault_section(note, vault_dir=vault_dir),
+            "title": title,
+            "recipients": "all",
+            "source": "content/%s.md" % slug,
+            "body": note["body"],
+        }
+        session_number = _player_vault_session_number(note)
+        if session_number is not None:
+            page["session_introduced"] = session_number
+            page["session_updated"] = session_number
+        pages.append(page)
+    pages.sort(key=lambda p: p["slug"])
+    return pages
+
+
 def _select_pages(notes, selection):
     """Return (included_notes, unmatched_entities). Default-exclude; `chronicle:`
     overrides win.
