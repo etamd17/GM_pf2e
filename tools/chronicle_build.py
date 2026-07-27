@@ -847,6 +847,67 @@ def _section_for(note):
     return "lore"
 
 
+# player-vault mode's folder -> section map. Real-vault folders use the
+# numbered convention ("01 - Chronicle", "02 - Cast", ...); matched below
+# as a full path SEGMENT (never a bare substring), so an unrelated folder
+# that merely contains one of these words (e.g. "Cast/" without the "02 - "
+# prefix) does not match and instead falls through to the type map.
+# "03 - Quests" maps straight to "lore" here (unlike the GM-vault mapping
+# above) - this mode has no dedicated quest section.
+_PLAYER_VAULT_FOLDER_SECTIONS = {
+    "01 - Chronicle": "recap",
+    "02 - Cast": "cast",
+    "03 - Quests": "lore",
+    "04 - Atlas": "atlas",
+    "05 - Handouts": "handout",
+    "06 - Party": "cast",
+    "07 - Lore": "lore",
+}
+
+# Frontmatter `type` -> section, used only when no folder above matched.
+# "dashboard" is deliberately absent: Home.md's `type: dashboard` must fall
+# through to the top-level-Home.md special case below, not resolve here.
+_PLAYER_VAULT_TYPE_SECTIONS = {
+    "recap": "recap",
+    "npc": "cast",
+    "pc": "cast",
+    "companion": "cast",
+    "place": "atlas",
+    "handout": "handout",
+    "quest": "lore",
+    "lore": "lore",
+}
+
+
+def _player_vault_section(note):
+    """Map a player-vault note to one of the app's fixed sections (home,
+    recap, cast, atlas, lore, handout, fieldguide) - the player-vault-mode
+    counterpart to `_section_for` above (kept separate; the two modes'
+    mappings genuinely differ, e.g. "03 - Quests" lands in "lore" here but
+    GM-vault mode has no such folder at all).
+
+    Precedence: folder segment (`_PLAYER_VAULT_FOLDER_SECTIONS`), then
+    frontmatter `type` (`_PLAYER_VAULT_TYPE_SECTIONS`), then the top-level
+    `Home.md` special case, else default `"lore"` - unmatched notes are
+    always routed to `lore`, never dropped silently.
+
+    Tolerates a `note` missing/empty `frontmatter` (only `path` is
+    required); path separators are normalized before matching.
+    """
+    p = str(note["path"]).replace(os.sep, "/")
+    segments = p.split("/")
+    for folder, section in _PLAYER_VAULT_FOLDER_SECTIONS.items():
+        if folder in segments:
+            return section
+    fm = note.get("frontmatter") or {}
+    ntype = fm.get("type")
+    if ntype in _PLAYER_VAULT_TYPE_SECTIONS:
+        return _PLAYER_VAULT_TYPE_SECTIONS[ntype]
+    if os.path.basename(p) == "Home.md":
+        return "home"
+    return "lore"
+
+
 def _select_pages(notes, selection):
     """Return (included_notes, unmatched_entities). Default-exclude; `chronicle:`
     overrides win.
