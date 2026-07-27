@@ -52,17 +52,20 @@ Engine fidelity is audited and documented — check these before claiming a rule
 
 ## Current work
 
-**Next up: Campaign Hub v1** — the Stage (shared table screen) + push-to-stage + player mirror.
-Design is locked in `docs/superpowers/specs/2026-07-21-campaign-hub-design.md`; v1 scope is §9.1.
-Correction to that spec: it assumes the Stage "promotes the existing `?audience=table` frame" —
-**there is no such frame** (see the SSE note above), so v1 builds the Stage surface, not wraps one.
-The reusable pieces that *do* exist: `sse_broadcast` player-filtering, the `window.appSSE` hub,
-`ACTIVE_ENCOUNTER` + tracker broadcasts, recipient-scoped handouts, and the Chronicle documents layer.
+**No feature work is currently in flight.** The app-wide UI/UX + minimal-design arc finished and
+shipped (see below); pick up whatever the user asks for next.
 
-Deferred by the user (do not start unprompted): the battle-map/VTT (a separate parallel effort;
-the Stage just reserves a `mode: "map"` slot), player-sheet inventory reorg, a sticky HP/conditions
-chip on the player sheet, and player-vault ingestion (plan:
-`docs/superpowers/plans/2026-07-21-chronicle-player-vault-ingest.md`).
+**Do NOT work on these — explicitly owned elsewhere or deferred by the user:**
+- **Campaign Hub / the Stage** (`docs/superpowers/specs/2026-07-21-campaign-hub-design.md`). The user
+  is building this **separately, with its own multi-agent setup**, to see how that approach performs.
+  It is **out of scope for this repo's live site for now** and will be integrated much later. Do not
+  implement it, and do not start prep work for it, unless the user explicitly reopens it. (No Stage
+  code was ever written here — `api_stage_encounter()` in app.py is an unrelated pre-existing route
+  for staging an encounter.)
+- The **battle-map/VTT** — a separate parallel effort.
+- Player-sheet **inventory reorg** ("hold on inventory scope").
+- A **sticky HP/conditions chip** on the player sheet — considered and dropped by the user.
+- **Player-vault ingestion** (plan: `docs/superpowers/plans/2026-07-21-chronicle-player-vault-ingest.md`).
 
 ### Recently shipped (do NOT re-suggest as new work)
 - **App-wide UI/UX + minimal-design arc — COMPLETE**, live on Railway in three merges: `3c4cffba`
