@@ -64,9 +64,9 @@
 {% endblock %}
 
 {% block content %}
-{# Debilitating Cosmere conditions rendered ruby; buffs/minor stay amber. Kept in
-   sync with the COS_SEV set in the script below. #}
-{% set _COS_SEV = ['unconscious','stunned','exhausted','afflicted','immobilized','restrained','slowed','disoriented'] %}
+{# Debilitating Cosmere conditions render ruby; buffs/minor stay on the calm
+   accent. Injected from systems.cosmere.SEVERE_CONDITIONS (cos_severe). #}
+{% set _COS_SEV = cos_severe %}
 <div class="vit-wrap">
   <h1 class="vit-h">Party Vitals</h1>
   <p class="vit-lead">Every hero's Health, Focus, Investiture, injuries and conditions &mdash; live, updating as players adjust their sheets. <a href="/cosmere/pcs" style="color:var(--accent);">Character roster &rarr;</a></p>
@@ -95,8 +95,8 @@
 </div>
 <script>
 (function(){
-  // Kept in sync with the _COS_SEV Jinja set above: debilitating conditions render ruby.
-  var COS_SEV = new Set(['unconscious','stunned','exhausted','afflicted','immobilized','restrained','slowed','disoriented']);
+  // Same injected source as the Jinja set above (systems.cosmere.SEVERE_CONDITIONS).
+  var COS_SEV = new Set({{ cos_severe|tojson }});
   // Condition -> rulebook effect, for the hover tooltips (mirrors cond_info server-side).
   var COND_INFO = {{ cond_info|tojson }};
   var COND_CAP = 4;

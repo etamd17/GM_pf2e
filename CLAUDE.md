@@ -32,7 +32,8 @@ python tools/check_templates.py   # Jinja parse check (CI runs this) — run aft
 
 - **`app.py` is a ~17k-line monolith** — all Flask routes plus the `Character` (PF2e) and `Monster` classes. Live combat state is held in **process globals** (`ACTIVE_ENCOUNTER`, `ROUND_NUMBER`, `TURN_INDEX`, `PARTY_LIBRARY`, …), flushed to `server_state.json` (`_persist_encounter_state`) and re-hydrated on boot. There is **one live campaign slot** at a time; `load_campaign(cid)` rebinds the globals.
 - **Server-rendered Jinja + vanilla JS.** No build step, no SPA framework.
-- **SSE** (`/api/events`): every page subscribes through the shared hub `window.appSSE(eventName, handler)` in `templates/_sse_hub.html` — **never** `new EventSource('/api/events')` directly (one socket per tab; the hub multiplexes + reconnects). Broadcast from the server with `sse_broadcast(event, data, player_filter=...)`, which pre-renders GM vs player frames. `?audience=table` forces the player frame (for a shared table screen).
+- **SSE** (`/api/events`): every page subscribes through the shared hub `window.appSSE(eventName, handler)` in `templates/_sse_hub.html` — **never** `new EventSource('/api/events')` directly (one socket per tab; the hub multiplexes + reconnects). Broadcast from the server with `sse_broadcast(event, data, player_filter=...)`: `data` goes to GMs, and `player_filter(copy)` returns the player-facing payload (or `None` to drop it for players entirely) — computed once and shared by all player subscribers.
+  - **`?audience=table` is NOT a server-side feature.** Its only use is client-side in `_sse_hub.html`: a passive table screen has no operator, so it self-reloads on a new deploy instead of showing the "New version" toast. There is no audience concept in `app.py` (grep: 0 hits) and no shared-table frame yet — the Campaign Hub's Stage has to build one.
 - **Multi-system**: `systems/` registry; `_active_system()` / `_active_campaign_id()` are request/session-scoped. Templates branch on `body.system-pf2e` / `body.system-cosmere`. Cosmere actors are `systems/cosmere/actor.py::CosmereActor` (reads the Foundry `cosmere-rpg` schema); Cosmere combat is flat-integer, defenses are static (phy/cog/spi), conditions are mostly advantage/disadvantage + Exhausted (a flat test penalty).
 - **GM auth**: a `check_gm_access` before_request gates path-prefixes in `GM_API_PREFIXES` (don't re-flag prefix-gated routes as unauthenticated); `@gm_required` is a separate per-route gate. `_is_gm()` is true for the site admin, the active campaign's GM, or legacy-open mode (no `GM_PASSWORD`).
 - Atomic JSON writes via `_atomic_write_json`; a global `/api/*` JSON error handler.
@@ -51,6 +52,39 @@ Engine fidelity is audited and documented — check these before claiming a rule
 
 ## Current work
 
-- Branch **`feat/table-view-vtt-program`** — a "table view" program adding GM/table features: `audience=table` SSE, adversary HP-display modes (band/number/hidden), show-a-handout-on-the-table, and **auto-applied conditions** (PF2e monster AC/saves/Strikes + Cosmere Exhausted, with a "why" breakdown hint in the tracker inspector). Ships as **one PR at the end**.
-- **Next up: feature 7 — round-events lane** (a GM-authored timeline of round-triggered events on the tracker: reminder + optional auto-apply payload, GM-only with per-event "show on table"). Design is locked; build pending. Then feature 8 (minions) and 9 (GM quick actions).
-- Player-sheet interactivity fixes (1H/2H grip toggle; apostrophe-broken spell/item/handler buttons) are already merged to `main`.
+**No feature work is currently in flight.** The app-wide UI/UX + minimal-design arc finished and
+shipped (see below); pick up whatever the user asks for next.
+
+**Do NOT work on these — explicitly owned elsewhere or deferred by the user:**
+- **Campaign Hub / the Stage** (`docs/superpowers/specs/2026-07-21-campaign-hub-design.md`). The user
+  is building this **separately, with its own multi-agent setup**, to see how that approach performs.
+  It is **out of scope for this repo's live site for now** and will be integrated much later. Do not
+  implement it, and do not start prep work for it, unless the user explicitly reopens it. (No Stage
+  code was ever written here — `api_stage_encounter()` in app.py is an unrelated pre-existing route
+  for staging an encounter.)
+- The **battle-map/VTT** — a separate parallel effort.
+- Player-sheet **inventory reorg** ("hold on inventory scope").
+- A **sticky HP/conditions chip** on the player sheet — considered and dropped by the user.
+- **Player-vault ingestion** (plan: `docs/superpowers/plans/2026-07-21-chronicle-player-vault-ingest.md`).
+
+### Recently shipped (do NOT re-suggest as new work)
+- **App-wide UI/UX + minimal-design arc — COMPLETE**, live on Railway in three merges: `3c4cffba`
+  (Cosmere page-by-page audit), `7ad84d46` (shared-CSS minimal pass), `d0655aa3` (PF2e GM screen,
+  builder + level-up, landing/account chrome, player sheet).
+- **Two typefaces only: Cinzel (display) + Inter (UI)** — via `--font-display` / `--font-ui`.
+  Root cause of the old "mixed fonts" sprawl: standalone pages (builder, splash, `_account_base`,
+  campaign_intro, player_sheet) **hardcode font families instead of using the tokens**, so app-wide
+  sweeps miss them — each had smuggled in an extra face (Crimson Text, EB Garamond). If you add a
+  standalone page, use the tokens. Deliberate exception: **Alegreya** (`--font-flavor`) on the player
+  sheet, the reading serif for long-form rules prose.
+- Round-events, dying automation, ten-minute rest, and the Chronicle are all **shipped**; the old
+  `feat/table-view-vtt-program` branch is gone.
+
+### Editing conventions learned the hard way
+- **The player sheet is the highest-risk UI file.** Prefer *strictly additive* CSS appended at the
+  end of its stylesheet (the minimal pass was 81 insertions / 0 deletions) so no markup, id, handler
+  or JS moves — that is what keeps the `pc_update` repaint and spell preparation safe.
+- To flatten Tailwind-utility boxing (`bg-gray-800 … shadow-xl`), add a **scoped CSS override**
+  (e.g. `.step-panel .bg-gray-800 { … }`) rather than editing markup across many lines.
+- When a page is served from a **git worktree**, the dev server serves that worktree's files —
+  edit there, not in the main checkout, or your change silently won't appear.

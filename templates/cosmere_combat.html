@@ -80,9 +80,9 @@
   const bannerEl = document.getElementById('cc-banner');
   const cap = s => s ? s.charAt(0).toUpperCase()+s.slice(1) : s;
   const esc = s => String(s==null?'':s).replace(/[&<>"]/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
-  // Debilitating conditions render ruby -- kept in sync with the _COS_SEV list
-  // in cosmere_gm_vitals.html (the single-source authority for this set).
-  const COS_SEV = new Set(['unconscious','stunned','exhausted','afflicted','immobilized','restrained','slowed','disoriented']);
+  // Debilitating conditions render ruby. Injected from the ONE source of truth
+  // (systems.cosmere.SEVERE_CONDITIONS) via the cos_severe context processor.
+  const COS_SEV = new Set({{ cos_severe|tojson }});
   let _lastActiveKey = null;   // last acted turn we auto-scrolled to (round:index)
 
   // Disambiguate identically-named combatants (e.g. two "Skaa Thug") with a

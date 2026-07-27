@@ -5969,6 +5969,16 @@ def _inject_campaign_chrome():
 
 
 @app.context_processor
+def _inject_cosmere_conditions():
+    """One severity list for every Cosmere surface that tints a condition chip
+    (player hub, combat view, GM vitals). These used to be four hand-copied
+    literals across three templates plus a Python set -- a condition changing
+    severity would have shown ruby on some screens and calm on others.
+    `cos_severe` is sorted for stable Jinja/JSON output."""
+    return {'cos_severe': sorted(systems.cosmere.SEVERE_CONDITIONS)}
+
+
+@app.context_processor
 def _inject_chronicle_ctx():
     """`chronicle_published` gates the player nav's Chronicle tab (empty-state):
     true once the first publish exists. Checks content-dir existence (stat only,
@@ -18599,9 +18609,10 @@ def api_rest_apply():
     return jsonify({'success': True, 'results': results})
 
 # -- Quick Status Board -----------------------------------------------
-# Debilitating Cosmere conditions (mirrors the _COS_SEV list the templates use).
-_COSMERE_SEVERE_CONDS = {'unconscious', 'stunned', 'exhausted', 'afflicted',
-                         'immobilized', 'restrained', 'slowed', 'disoriented'}
+# Debilitating Cosmere conditions. Single source of truth lives with the rest of
+# the Cosmere domain constants; templates get the same set via
+# _inject_cosmere_conditions() below, so no surface can drift.
+_COSMERE_SEVERE_CONDS = systems.cosmere.SEVERE_CONDITIONS
 
 
 def _cosmere_hub_party():
