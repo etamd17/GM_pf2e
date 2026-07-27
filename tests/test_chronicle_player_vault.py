@@ -1,10 +1,27 @@
 import logging
 import os
 import pathlib
+import tempfile
+
+import pytest
 
 from tools import chronicle_build as cb
 
 FIXTURE = pathlib.Path(__file__).parent / "fixtures" / "player_vault_sample"
+
+# A SEPARATE fixture tree (not player_vault_sample/) carrying a planted
+# [!danger] marker, used ONLY by the leak-abort tests below. Kept separate
+# so player_vault_sample stays provably leak-free forever -- its own tests
+# assert a clean `leaks == []` build, and a stray planted marker living in
+# that tree would be one careless future edit away from silently breaking
+# that guarantee (or, worse, being "fixed" by someone who doesn't realize
+# it's load-bearing). A tmp_path copy-then-mutate was the other option
+# considered; a static fixture tree was chosen instead because it's reused
+# by more than one test below (the leak-abort test AND the
+# never-touches-out_dir test) without repeating setup/copy code in each,
+# and it reads the same way every other fixture-backed test in this module
+# already does (FIXTURE at module scope).
+LEAK_FIXTURE = pathlib.Path(__file__).parent / "fixtures" / "player_vault_leak_sample"
 
 
 def _note(path, **fm):
@@ -371,3 +388,150 @@ def test_collect_assets_default_resolver_is_unchanged_gm_scope(tmp_path):
     assert copied == ["romi.png"]
     assert (out_assets / "romi.png").exists()
     assert not (out_assets / "elsewhere.png").exists()
+
+
+# --- build_player_vault(mode="player-vault") orchestration (Task 6) ----
+#
+# The GM-vault path (mode="gm-vault", the default) is entirely unmodified by
+# this task -- test_chronicle_build.py's existing build_player_vault tests
+# cover it and must keep passing byte-for-byte, untouched. This section
+# covers only the NEW branch: mode="player-vault" wires select_player_vault
+# (not select_entities/_select_pages) in, skips strip_gm_content entirely
+# (bodies pass through as-authored), resolves assets vault-wide via
+# _resolve_asset_source_anywhere, and STILL runs leak_check as the fatal,
+# non-negotiable second firewall layer.
+
+
+def test_build_player_vault_player_mode_happy_path(tmp_path):
+    out = tmp_path / "out"
+    result = cb.build_player_vault(FIXTURE, str(out), "sample", mode="player-vault")
+
+    assert result["leaks"] == []
+
+    manifest = result["manifest"]
+    by_slug = {p["slug"]: p for p in manifest["pages"]}
+    assert by_slug["home"]["section"] == "home"
+    assert by_slug["the-docks"]["section"] == "recap"
+    assert by_slug["romi-bracken"]["section"] == "cast"
+    assert by_slug["the-intake"]["section"] == "atlas"
+    assert by_slug["watch-notice"]["section"] == "handout"
+
+    # The [!info] callout in Romi's body must survive -- strip_gm_content
+    # must NOT have run in this mode.
+    romi_body = (out / "content" / "romi-bracken.md").read_text(encoding="utf-8")
+    assert "[!info]" in romi_body
+    assert "A shopkeeper." in romi_body
+
+    # [[The Intake]] resolves to a real page link, not degraded plain text.
+    assert "/chronicle/page/the-intake" in romi_body
+
+    # The embedded map asset was copied and resolved into the page body.
+    assert (out / "assets" / "intake-map.png").exists()
+    intake_body = (out / "content" / "the-intake.md").read_text(encoding="utf-8")
+    assert "assets/intake-map.png" in intake_body
+
+    # manifest.json was actually synced to out_dir on a clean build.
+    assert (out / "manifest.json").exists()
+
+
+def test_build_player_vault_player_mode_leak_aborts(tmp_path):
+    out = tmp_path / "out"
+    result = cb.build_player_vault(LEAK_FIXTURE, str(out), "sample", mode="player-vault")
+
+    assert result["leaks"] != []
+    assert any("danger" in o.lower() for o in result["leaks"])
+    assert "leak" in result["review_summary"].lower()
+
+    # No manifest, no content -- the leak-abort path must never sync
+    # anything into out_dir.
+    assert not (out / "manifest.json").exists()
+    assert not (out / "content").exists()
+    assert not (out / "assets").exists()
+
+
+def test_build_player_vault_player_mode_never_touches_out_dir_on_leak(tmp_path):
+    # Same data-safety guard as the GM-mode regression test
+    # (test_build_player_vault_never_touches_out_dir_on_leak in
+    # test_chronicle_build.py), proven independently for player-vault mode:
+    # out_dir may be the GM's real, persistent Obsidian player vault and
+    # must survive a leaky build completely untouched.
+    out = tmp_path / "out"
+    out.mkdir()
+    sentinel = out / "GM_PRECIOUS.txt"
+    sentinel.write_text("do not delete", encoding="utf-8")
+    prior_manifest = out / "manifest.json"
+    prior_manifest.write_text('{"prior": true}', encoding="utf-8")
+
+    result = cb.build_player_vault(LEAK_FIXTURE, str(out), "sample", mode="player-vault")
+
+    assert result["leaks"] != []
+    assert sentinel.exists()
+    assert sentinel.read_text(encoding="utf-8") == "do not delete"
+    assert prior_manifest.read_text(encoding="utf-8") == '{"prior": true}'
+    assert not (out / "content").exists()
+    assert not (out / "assets").exists()
+
+
+def test_build_player_vault_player_mode_slug_collision_reported_in_review_summary(tmp_path):
+    # Carried-forward requirement: select_player_vault only signals a
+    # dropped slug-collision page via log.warning, which the GM (this
+    # tool's only user) never reads. build_player_vault must capture that
+    # warning (the same _WarningCapture mechanism already used for
+    # collect_assets' warnings) and fold it into review_summary.
+    vault = tmp_path / "vault"
+    cast_dir = vault / "02 - Cast"
+    cast_dir.mkdir(parents=True)
+    (cast_dir / "Romi Bracken.md").write_text(
+        '---\ntype: npc\ntitle: "Romi Bracken"\n---\n# Romi Bracken\nThe original.\n',
+        encoding="utf-8",
+    )
+    (cast_dir / "Also Romi.md").write_text(
+        '---\ntype: npc\ntitle: "Romi Bracken"\n---\n# Romi Bracken\nA same-titled duplicate.\n',
+        encoding="utf-8",
+    )
+
+    out = tmp_path / "out"
+    result = cb.build_player_vault(str(vault), str(out), "sample", mode="player-vault")
+
+    assert result["leaks"] == []
+    # Only one of the two colliding notes survives into the manifest.
+    slugs = [p["slug"] for p in result["manifest"]["pages"]]
+    assert slugs.count("romi-bracken") == 1
+
+    summary = result["review_summary"].lower()
+    assert "collision" in summary
+    assert "romi-bracken" in summary
+
+
+def test_build_player_vault_player_mode_asset_warning_reported_in_review_summary(tmp_path):
+    # collect_assets' own not-found warning must also still reach
+    # review_summary in this mode (same capture, not a second code path).
+    vault = tmp_path / "vault"
+    cast_dir = vault / "02 - Cast"
+    cast_dir.mkdir(parents=True)
+    (cast_dir / "Ghost.md").write_text(
+        '---\ntype: npc\ntitle: "Ghost"\n---\n# Ghost\n![[missing.png]]\n',
+        encoding="utf-8",
+    )
+
+    out = tmp_path / "out"
+    result = cb.build_player_vault(str(vault), str(out), "sample", mode="player-vault")
+
+    assert result["leaks"] == []
+    assert "missing.png" in result["review_summary"]
+
+
+def test_build_player_vault_player_mode_default_mode_is_gm_vault():
+    # The `mode` param defaults to "gm-vault" -- omitting it entirely must
+    # behave exactly as before this parameter existed. Calling with the
+    # player-vault fixture in default (gm-vault) mode must NOT select any
+    # pages via select_player_vault's rules (no session_notes/chronicle
+    # overrides exist in this fixture for select_entities to find).
+    with tempfile.TemporaryDirectory() as out:
+        result = cb.build_player_vault(FIXTURE, out, "sample")
+        assert result["manifest"]["pages"] == []
+
+
+def test_build_player_vault_unknown_mode_raises(tmp_path):
+    with pytest.raises(ValueError):
+        cb.build_player_vault(FIXTURE, str(tmp_path / "out"), "sample", mode="bogus-mode")

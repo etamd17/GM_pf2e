@@ -1276,20 +1276,146 @@ def _leak_abort_summary(offenders, session_number):
     return "\n".join(lines)
 
 
-def build_player_vault(vault_dir, out_dir, campaign_id):
+def _build_player_vault_curated(vault_dir, out_dir, campaign_id,
+                                  staging_dir, content_dir, assets_dir):
+    """The `mode="player-vault"` branch of `build_player_vault` -- selection,
+    asset resolution, wikilink/backlink resolution, manifest assembly, the
+    leak-check gate, and the leak-safe out_dir sync. Called ONLY from inside
+    `build_player_vault`'s `staging_dir`-scoped `try` block, so this
+    function does not itself manage `staging_dir` cleanup.
+
+    Deliberately does NOT call `select_entities` / `_select_pages` /
+    `strip_gm_content` -- those exist for DERIVING a player vault from a GM
+    vault; this vault is already curated, player-facing content, so
+    `select_player_vault` is the only selection step and note bodies pass
+    through untouched (see `select_player_vault`'s own docstring for why
+    stripping would be actively harmful here).
+    """
+    # Both select_player_vault (a dropped slug-collision is currently only
+    # a log.warning, with nothing in its return value to surface it) and
+    # collect_assets (asset-not-found / basename-collision warnings) can
+    # silently lose information the GM -- this tool's only user, who will
+    # not be reading log output -- needs to see. Capturing both under ONE
+    # _WarningCapture and folding the result into review_summary is the
+    # carried-forward fix for both.
+    with _WarningCapture() as cap:
+        raw_pages = select_player_vault(vault_dir)
+        copied = collect_assets(raw_pages, vault_dir, assets_dir,
+                                  resolve_source=_resolve_asset_source_anywhere)
+    warnings = list(cap.messages)
+
+    # ONE combined map for resolve_wikilinks, exactly like gm-vault mode:
+    # page title -> slug (page link) AND every actually-copied asset ref ->
+    # its published `assets/<basename>` path (embed).
+    title_to_slug = {p["title"]: p["slug"] for p in raw_pages}
+    link_map = dict(title_to_slug)
+    link_map.update(_asset_link_map(raw_pages, copied))
+
+    pages = []
+    for page in raw_pages:
+        page["body"] = resolve_wikilinks(page["body"], link_map)
+        page["body"] = _dedupe_leading_title_heading(page["body"], page["title"])
+        pages.append(page)
+
+    backlinks = build_backlinks(pages)
+    for page in pages:
+        bl = backlinks.get(page["slug"])
+        if bl:
+            page["backlinks"] = bl
+
+    for page in pages:
+        with open(os.path.join(content_dir, page["slug"] + ".md"), "w", encoding="utf-8") as f:
+            f.write(page["body"])
+
+    # No GM-authored `session_notes` union exists in this mode -- the
+    # closest analogue is the highest session number any selected page
+    # itself carries (recap pages via _player_vault_session_number).
+    session_numbers = [p["session_updated"] for p in pages
+                        if p.get("session_updated") is not None]
+    session_number = max(session_numbers) if session_numbers else None
+
+    # No mysteries harvesting (that's strip_gm_content's [!check]/[!question]
+    # harvest, not run here) and no spine (that's the GM-vault session-notes
+    # union above) -- both stay empty in this mode.
+    manifest = build_manifest(campaign_id, session_number, pages, [], [], {})
+    with open(os.path.join(staging_dir, "manifest.json"), "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2, ensure_ascii=False)
+
+    # Second, independent firewall layer -- identical contract to gm-vault
+    # mode: re-scan the WHOLE staged tree (never out_dir; out_dir is never
+    # written to until this check passes). Any survivor is fatal: the
+    # caller's `finally` discards staging_dir and out_dir is returned
+    # completely untouched.
+    offenders = leak_check(staging_dir)
+    if offenders:
+        review_summary = _leak_abort_summary(offenders, session_number)
+        return {"manifest": manifest, "review_summary": review_summary,
+                 "leaks": offenders}
+
+    # Clean build: sync ONLY the managed outputs into out_dir, exactly like
+    # gm-vault mode. Anything else already there (.obsidian/, .git/,
+    # unrelated files) is left completely alone; out_dir itself is never
+    # removed.
+    os.makedirs(out_dir, exist_ok=True)
+    with open(os.path.join(out_dir, "manifest.json"), "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2, ensure_ascii=False)
+    for sub, src_dir in (("content", content_dir), ("assets", assets_dir)):
+        dst = os.path.join(out_dir, sub)
+        if os.path.isdir(dst):
+            shutil.rmtree(dst)
+        elif os.path.exists(dst):
+            os.remove(dst)
+        shutil.copytree(src_dir, dst)
+
+    review_summary = _review_summary(pages, [], [], session_number, warnings)
+    return {"manifest": manifest, "review_summary": review_summary, "leaks": []}
+
+
+_BUILD_MODES = frozenset(("gm-vault", "player-vault"))
+
+
+def build_player_vault(vault_dir, out_dir, campaign_id, mode="gm-vault"):
     """Orchestrate the full player-vault build.
 
     Returns `{"manifest": <dict>, "review_summary": <str>, "leaks": <list>}`.
     `leaks` is empty on a clean build.
 
-    Data-safety redesign (PR0 Task 12): the ENTIRE build is assembled in a
-    private staging directory (`tempfile.mkdtemp`), never in `out_dir`
-    directly. `leak_check` then runs over the staged tree:
+    `mode` selects the ingestion strategy:
 
-    - If any GM marker survived the per-note firewall, the staging dir is
-      discarded and `out_dir` is NOT touched in any way -- not written to,
-      not removed, not even created if it didn't already exist. The
-      offenders are returned in `leaks` (with a loud-warning
+    - `"gm-vault"` (the default -- unchanged from before `mode` existed,
+      byte-for-byte): `vault_dir` is the GM's private authoring vault.
+      Pages are auto-selected via `select_entities` + `_select_pages`
+      (encountered-NPC/area union, `chronicle:` overrides), and every page
+      body is run through `strip_gm_content` -- the callout-stripping
+      firewall -- before anything else touches it.
+    - `"player-vault"`: `vault_dir` is ALREADY a player-facing,
+      hand-authored vault (e.g. the GM's real Obsidian Chronicle vault).
+      Pages come straight from `select_player_vault` (folder/type ->
+      section mapping, `_is_gm_meta` skip only -- no encountered-entity
+      selection) and bodies are NEVER passed through `strip_gm_content`:
+      that firewall's allowlist would delete legitimate `[!info]` content
+      and mangle `[!abstract]` blocks the GM wrote ON PURPOSE for players
+      in this vault. Assets resolve vault-wide
+      (`_resolve_asset_source_anywhere`), not confined to `Player
+      Handouts/**`, matching this vault's flat Obsidian attachment model.
+
+    Skipping the stripping firewall does NOT skip the second, independent
+    safety net: `leak_check` re-scans the staged tree in BOTH modes and is
+    STILL fatal on any surviving `[!danger]`/`[!secret]`/`[!gm]` marker --
+    a leak in player-vault mode means `out_dir` is never touched, exactly
+    like a leak in gm-vault mode (see the data-safety note below).
+
+    Data-safety redesign (PR0 Task 12), shared by both modes: the ENTIRE
+    build is assembled in a private staging directory (`tempfile.mkdtemp`),
+    never in `out_dir` directly. `leak_check` then runs over the staged
+    tree:
+
+    - If any GM marker survived (the per-note firewall in gm-vault mode, or
+      simply an author's own planted/accidental marker in player-vault
+      mode, which has no per-note firewall to catch it first), the staging
+      dir is discarded and `out_dir` is NOT touched in any way -- not
+      written to, not removed, not even created if it didn't already
+      exist. The offenders are returned in `leaks` (with a loud-warning
       `review_summary`) for the caller to act on; this function never
       raises and never deletes anything under `out_dir`. `out_dir` is the
       GM's real, persistent Obsidian player vault (may hold `.obsidian/`
@@ -1300,6 +1426,9 @@ def build_player_vault(vault_dir, out_dir, campaign_id):
       then recopied from staging). Nothing else already present in
       `out_dir` (`.obsidian/`, `.git/`, unrelated files) is ever touched.
     """
+    if mode not in _BUILD_MODES:
+        raise ValueError("unknown build_player_vault mode: %r" % mode)
+
     staging_dir = tempfile.mkdtemp(prefix="chronicle_build_")
     try:
         content_dir = os.path.join(staging_dir, "content")
@@ -1307,6 +1436,11 @@ def build_player_vault(vault_dir, out_dir, campaign_id):
         os.makedirs(content_dir, exist_ok=True)
         os.makedirs(assets_dir, exist_ok=True)
 
+        if mode == "player-vault":
+            return _build_player_vault_curated(
+                vault_dir, out_dir, campaign_id, staging_dir, content_dir, assets_dir)
+
+        # mode == "gm-vault": unchanged from before `mode` existed.
         selection = select_entities(vault_dir)
         sessions = selection["sessions"]
         included, unmatched = _select_pages(_load_notes(vault_dir), selection)
