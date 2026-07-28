@@ -15,6 +15,11 @@
  *                                          total, label, detail, isCrit, isFumble }
  *   - window.diceRoller.markLocalRoll(sig)   / .consumeLocalRoll(sig)
  *                                          self-echo dedup, see below
+ *   - DiceRoller.MATERIAL_OPTIONS          static [{key,label,swatch}, ...]
+ *                                          for a dice-theme picker UI
+ *   - window.diceRoller.materialKey        currently-selected theme key
+ *   - window.diceRoller.setMaterial(key)   switch theme, persists + applies
+ *                                          live (see "Dice theme" section below)
  *
  * window.diceRoller and window.DiceRoller are created synchronously below so
  * those guards work immediately at page load. dice-overlay.js itself (three.js
@@ -53,6 +58,50 @@ const DISMISS_MS = 2600;
 // forever. Tuned to comfortably exceed a visible 'tumble'-style throw.
 const SETTLE_TIMEOUT_MS = 2500;
 
+// ─── Dice theme (material) ───────────────────────────────────────────────
+//
+// dice-overlay.js's MATERIALS map (12 entries, from dice-geometry.js) is
+// only reachable through a dynamic import() of the three.js-backed engine —
+// this file deliberately never imports it eagerly (see the module docstring:
+// three.js is ~400KB gz and must stay lazy, pulled in only on first roll).
+// A theme *picker* still needs the label + swatch colour for every material
+// before any roll has happened, so that subset is duplicated here as plain
+// data. Keep in sync with the `label`/`swatch` fields in dice-geometry.js's
+// MATERIALS if a material is ever added, renamed, or recoloured there.
+const MATERIAL_OPTIONS = [
+    { key: 'steel', label: 'Forged steel', swatch: '#9aa1aa' },
+    { key: 'copper', label: 'Aged copper', swatch: '#b3714a' },
+    { key: 'obsidian', label: 'Obsidian & gold', swatch: '#d6ab5e' },
+    { key: 'bone', label: 'Carved bone', swatch: '#ded3bb' },
+    { key: 'ivory', label: 'Ivory plastic', swatch: '#eee7d9' },
+    { key: 'ruby', label: 'Ruby glass', swatch: '#d21f45' },
+    { key: 'frost', label: 'Frosted quartz', swatch: '#cfe2ec' },
+    { key: 'jade', label: 'Jade', swatch: '#3f8f6f' },
+    { key: 'amber', label: 'Amber resin', swatch: '#c9761c' },
+    { key: 'nebula', label: 'Nebula', swatch: '#6d5ac6' },
+    { key: 'liquid', label: 'Liquid core · aqua', swatch: '#3fd2c2' },
+    { key: 'liquidRose', label: 'Liquid core · rose', swatch: '#e0577f' },
+];
+const DEFAULT_MATERIAL = 'obsidian';
+const MATERIAL_STORAGE_KEY = 'pf2e_dice_material';
+
+function isValidMaterial(key) {
+    return MATERIAL_OPTIONS.some((m) => m.key === key);
+}
+
+function getStoredMaterial() {
+    try {
+        const v = localStorage.getItem(MATERIAL_STORAGE_KEY);
+        if (v && isValidMaterial(v)) return v;
+    } catch (e) { /* localStorage unavailable */ }
+    return DEFAULT_MATERIAL;
+}
+
+// Current material key. Module-scoped (not tied to the DiceRollerAdapter
+// instance) so getOverlay() below can read it without a `this` reference —
+// it's set once at load from localStorage and updated by setMaterial().
+let currentMaterialKey = getStoredMaterial();
+
 function isSupported() {
     try {
         const c = document.createElement('canvas');
@@ -65,6 +114,12 @@ function isSupported() {
 class DiceRoller {
     static isSupported() {
         return isSupported();
+    }
+
+    // {key, label, swatch} for every dice theme, safe to render into a
+    // picker at page load — no three.js import required.
+    static get MATERIAL_OPTIONS() {
+        return MATERIAL_OPTIONS;
     }
 }
 
@@ -142,6 +197,7 @@ function getOverlay() {
             const el = ensureContainer();
             const overlay = mod.createDiceOverlay({
                 container: el,
+                material: currentMaterialKey,
                 onRollStart() {
                     clearDismissTimer();
                     setInteractive(true);
@@ -252,6 +308,27 @@ class DiceRollerAdapter {
     // above. Both are no-ops (false/undefined) if `sig` is falsy.
     markLocalRoll(sig) { markLocalRoll(sig); }
     consumeLocalRoll(sig) { return consumeLocalRoll(sig); }
+
+    // Current dice theme (material) key — read by the picker UI to show
+    // which option is selected.
+    get materialKey() { return currentMaterialKey; }
+
+    // Switch the dice theme. Persists to localStorage so it survives a
+    // reload, and — if the overlay already exists (a roll has happened this
+    // session) — applies immediately via its own setMaterial(), which only
+    // changes what NEW dice are made from on the next roll(); it never
+    // touches bodies already in flight, so this is always safe to call
+    // mid-roll. If the overlay hasn't been created yet, getOverlay() reads
+    // currentMaterialKey when it does, so the very first roll already uses
+    // the picked theme.
+    setMaterial(key) {
+        if (!isValidMaterial(key)) return;
+        currentMaterialKey = key;
+        try { localStorage.setItem(MATERIAL_STORAGE_KEY, key); } catch (e) {}
+        if (overlayPromise) {
+            overlayPromise.then((overlay) => { try { overlay.setMaterial(key); } catch (e) {} }).catch(() => {});
+        }
+    }
 
     // config: { dice: [{sides, value}], modifier, total, label, detail, isCrit, isFumble }
     // Async: when 3D actually runs, resolves once the dice come to rest (so a

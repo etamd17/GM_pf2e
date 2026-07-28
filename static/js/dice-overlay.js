@@ -62,7 +62,7 @@ export function createDiceOverlay(options = {}) {
   // (fixed FOV below): doubling the distance roughly halves how large a die
   // reads, since the dice themselves sit near the origin. CAM_ZOOM is that
   // single lever - scale it to resize the dice without touching every mesh.
-  const CAM_ZOOM = 2;
+  const CAM_ZOOM = 1.5;
   const CAM_BASE = new THREE.Vector3(0, 9.2, 6.4).multiplyScalar(CAM_ZOOM);
   const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 200);
   camera.position.copy(CAM_BASE);
@@ -147,7 +147,20 @@ export function createDiceOverlay(options = {}) {
     bounds.cz = (near.z + far.z) / 2;
     bounds.z = Math.max(0.9, (near.z - far.z) / 2 - 0.3);
     const lp = corner(-1, -0.26), rp = corner(1, -0.26);
-    bounds.x = Math.min(4.6, Math.max(2.2, Math.min(Math.abs(lp.x), Math.abs(rp.x)) - 0.5));
+    // Dice-polish (2026-07-28): this max is a SEPARATE lever from CAM_ZOOM —
+    // it caps how far a settled die can bounce from center in world units, so
+    // it controls the play area's on-screen reach independently of how big a
+    // die reads. At a wide desktop viewport this clamp is what actually
+    // decides the horizontal bounds (the raycasted screen-edge value is
+    // usually larger than it), and since the play area is always centered on
+    // the viewport's horizontal midpoint, a host page whose content sits
+    // right-of-center (e.g. the player sheet's left character rail) needs
+    // this kept tight enough that a die can never settle over it. 2.3 keeps
+    // the worst-case settle comfortably clear of that rail at CAM_ZOOM 1.5
+    // (measured against the die's actual rendered silhouette, not just its
+    // center point — a die's vertices reach further sideways than a single
+    // sampled surface point would suggest).
+    bounds.x = Math.min(2.3, Math.max(2.2, Math.min(Math.abs(lp.x), Math.abs(rp.x)) - 0.5));
   }
   addEventListener('resize', resize);
   resize();

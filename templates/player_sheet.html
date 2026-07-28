@@ -2907,6 +2907,12 @@
             border-color: rgba(201,163,78,0.35);
         }
         .skill-action-btn-name { font-weight: 600; letter-spacing: 0.01em; }
+
+        /* Dice-polish (2026-07-28), strictly additive: shrink the little
+           bouncing d4-d20 face chips inside the roll toast (CHANGE 1). Width/
+           height/font-size aren't touched by system.css's own .dice-face rule
+           (background/border/color only), so this still controls their size. */
+        .dice-face { width: 26px; height: 26px; font-size: 12px; margin: 1.5px; }
     </style>
     <!-- Design system override (last in cascade — wins over inline styles) -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/system.css') }}">
@@ -6128,9 +6134,15 @@
 
             // Plain mode also shrinks the toast so a rapid-fire skill check sequence
             // doesn't flood the corner of the screen.
+            // Dice-polish (2026-07-28): the actual rendered padding comes from
+            // static/css/system.css's .roll-toast rule (it wins the cascade),
+            // but these classes are kept in step with it so the toast still
+            // looks right if that override is ever removed. The total number
+            // was the single biggest space offender — text-3xl/2xl read as a
+            // dashboard tile, not a compact readout.
             const isPlain = mode === 'plain';
-            const padClass = isPlain ? 'p-2.5' : 'p-4';
-            const totalClass = isPlain ? 'text-2xl' : 'text-3xl';
+            const padClass = isPlain ? 'p-2' : 'p-2.5';
+            const totalClass = isPlain ? 'text-lg' : 'text-xl';
             const dismissMs = isPlain ? 4000 : 8000;
 
             // Hero-point reroll (live-play QoL): when the caller supplies a reroll
@@ -6254,7 +6266,7 @@
                 </button>`;
             }
             
-            toast.className = `roll-toast bg-gray-800 border ${borderColor} rounded-lg shadow-2xl p-4 relative overflow-hidden pointer-events-auto`;
+            toast.className = `roll-toast bg-gray-800 border ${borderColor} rounded-lg shadow-2xl p-2.5 relative overflow-hidden pointer-events-auto`;
             toast.innerHTML = `
                 <div class="flex justify-between items-start mb-1">
                     <span class="font-bold text-amber-500 text-sm tracking-wide uppercase">Attack: ${weaponName}</span>
@@ -6262,7 +6274,7 @@
                 </div>
                 ${diceHTML}
                 <div class="flex items-center gap-2 mb-1">
-                    <span class="text-3xl font-header ${totalColor} roll-total-pop">${total}</span>
+                    <span class="text-xl font-header ${totalColor} roll-total-pop">${total}</span>
                     ${badge}
                 </div>
                 <div class="text-xs font-mono text-gray-400 bg-gray-950 p-2 rounded border border-gray-700 mb-2">1d20 (${d20}) ${modStr} = ${total}${critStr}</div>
@@ -6755,6 +6767,40 @@
         // Kept for anything still calling the old function name
         function update3DButton() { updateDiceButtons(); }
 
+        // Dice theme (material) picker — lives in the same dice-panel config
+        // row as the Render/2D-3D toggles above. Options + swatch colours come
+        // from DiceRoller.MATERIAL_OPTIONS (dice-adapter.js), which is plain
+        // data and safe to read at page load — it does NOT pull in the lazy
+        // three.js overlay. Changing the selection just calls
+        // window.diceRoller.setMaterial(key), which is safe to call at any
+        // time (including mid-roll): it only changes what the NEXT roll's
+        // dice are made from.
+        function setDiceTheme(key) {
+            if (window.diceRoller && typeof window.diceRoller.setMaterial === 'function') {
+                window.diceRoller.setMaterial(key);
+            }
+            const dot = document.getElementById('dice-theme-swatch');
+            const options = (window.DiceRoller && window.DiceRoller.MATERIAL_OPTIONS) || [];
+            const picked = options.find(m => m.key === key);
+            if (dot && picked) dot.style.background = picked.swatch;
+        }
+        window.setDiceTheme = setDiceTheme;
+
+        function _initDiceThemePicker() {
+            const sel = document.getElementById('dice-theme-select');
+            const dot = document.getElementById('dice-theme-swatch');
+            if (!sel || !dot) return;
+            const options = (window.DiceRoller && window.DiceRoller.MATERIAL_OPTIONS) || [];
+            if (!options.length) return;
+            const current = (window.diceRoller && window.diceRoller.materialKey) || options[0].key;
+            sel.innerHTML = options.map(m =>
+                `<option value="${m.key}"${m.key === current ? ' selected' : ''}>${m.label}</option>`
+            ).join('');
+            const cur = options.find(m => m.key === current) || options[0];
+            dot.style.background = cur.swatch;
+            sel.addEventListener('change', () => setDiceTheme(sel.value));
+        }
+
         // Init: wait briefly for dice-adapter.js to register window.diceRoller,
         // then sync the 3D engine's enabled flag and paint the button state.
         try {
@@ -6762,6 +6808,7 @@
                 setTimeout(() => {
                     _syncDiceEngine();
                     updateDiceButtons();
+                    _initDiceThemePicker();
                 }, 1000);
             })();
         } catch(e) { console.error('dice mode init:', e); }
