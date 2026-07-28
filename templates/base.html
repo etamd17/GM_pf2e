@@ -87,6 +87,14 @@
                     {% for ln in (system_ui.gm_nav if is_gm else system_ui.player_nav) %}
                     <a href="{{ ln.url }}" class="{{ 'text-accent-300 hover:text-accent-200' if ln.accent else 'text-base-300 hover:text-base-100' }} px-3 py-1.5 rounded transition-colors whitespace-nowrap"{% if ln.title %} title="{{ ln.title }}"{% endif %}>{{ ln.label }}</a>
                     {% endfor %}
+                    {# Chronicle is NOT in the registry nav: it only exists once the GM has
+                       published a vault, and NavLink is plain data with no conditional. Gated
+                       on the same `chronicle_published` processor the player nav uses, so the
+                       GM sees exactly what their players can see -- and no dead link before a
+                       first publish. Shared here, so both systems get it with no per-system edit. #}
+                    {% if is_gm and chronicle_published %}
+                    <a href="/chronicle" class="{% if request.path.startswith('/chronicle') %}text-accent-300 hover:text-accent-200{% else %}text-base-300 hover:text-base-100{% endif %} px-3 py-1.5 rounded transition-colors whitespace-nowrap" title="The published player Chronicle -- what your players can read">Chronicle</a>
+                    {% endif %}
                     {% if is_gm %}
                     <button type="button" onclick="window._qsOpen && window._qsOpen()" class="text-base-400 hover:text-base-200 px-2 py-1.5 rounded transition-colors whitespace-nowrap flex items-center gap-1" title="Quick Search (Cmd+K)">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
