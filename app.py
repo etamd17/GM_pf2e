@@ -13972,6 +13972,42 @@ def combatant_stats(instance_id):
     
     return jsonify({"error": "Combatant not found"}), 404
 
+def _sanitize_roll_dice(raw):
+    """Validate a client-supplied `dice` array for /api/log_roll: a list of
+    small {sides, value} objects describing the individual physical dice a
+    roll landed on, so the GM's 3D overlay can animate the SAME faces the
+    player already saw rather than re-rolling its own numbers.
+
+    This is unauthenticated, client-supplied data forwarded straight into an
+    SSE broadcast, so it's treated as hostile: wrong type, too many entries,
+    non-integer/out-of-range sides or values, or a value that doesn't fit its
+    own die all cause the WHOLE array to be dropped (never partially trusted
+    or coerced) rather than passed through. Returns a clean list of plain
+    {sides, value} dicts, or None if `raw` is absent/malformed."""
+    if not isinstance(raw, list) or not raw:
+        return None
+    if len(raw) > 20:  # sane upper bound — no legitimate roll needs more
+        return None
+    cleaned = []
+    for die in raw:
+        if not isinstance(die, dict):
+            return None
+        sides = die.get('sides')
+        value = die.get('value')
+        # bool is an int subclass in Python — exclude it explicitly so
+        # {"sides": true, ...} doesn't sneak through as sides=1.
+        if not isinstance(sides, int) or isinstance(sides, bool):
+            return None
+        if not isinstance(value, int) or isinstance(value, bool):
+            return None
+        if sides < 2 or sides > 100:
+            return None
+        if value < 1 or value > sides:
+            return None
+        cleaned.append({'sides': sides, 'value': value})
+    return cleaned
+
+
 @app.route('/api/log_roll', methods=['POST'])
 def log_roll():
     data = request.json
@@ -13983,6 +14019,13 @@ def log_roll():
     degree = data.get('degree')
     if degree not in ('crit_success', 'success', 'failure', 'crit_failure'):
         degree = None
+    # Optional: the individual die faces behind `result`, so the GM's 3D
+    # overlay can animate the roll the player actually saw instead of
+    # silently doing nothing (no dice) or rolling its own random numbers.
+    # Additive + defensive — see _sanitize_roll_dice. Absent/malformed input
+    # is dropped entirely; every existing caller that never sends `dice`
+    # behaves exactly as before.
+    dice = _sanitize_roll_dice(data.get('dice'))
     # Pin the actor name to the caller's session for non-GM callers — without
     # this a player could POST {"name": "GM"} and inject fake rolls into the
     # combat log. The GM can roll as anyone (NPCs etc.).
@@ -14000,6 +14043,8 @@ def log_roll():
         'time': datetime.now().strftime('%H:%M:%S'),
         'round': ROUND_NUMBER
     }
+    if dice:
+        log_entry['dice'] = dice
     COMBAT_LOGS.append(log_entry)
     if len(COMBAT_LOGS) > 200: COMBAT_LOGS.pop(0)
 
@@ -14025,6 +14070,8 @@ def log_roll():
         'degree': log_entry['degree'],
         'time': log_entry['time']
     }
+    if dice:
+        broadcast_payload['dice'] = dice
 
     def _roll_player_filter(p):
         hidden = _hidden_npc_names()

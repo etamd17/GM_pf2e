@@ -21,7 +21,13 @@
        (full engine + in-browser JIT). Regenerate: cd tools/tailwind &&
        npm install && node build.mjs (see docs/tailwind-build.md). #}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tw-player_sheet.css') }}">
-    <script type="module" src="{{ url_for('static', filename='js/dice-engine.js') }}"></script>
+    {# dice-overlay.js (the 3D dice engine) imports the bare specifier 'three';
+       this import map resolves it to the vendored build. Must appear before
+       the module script below. #}
+    <script type="importmap">
+    {"imports": {"three": "{{ url_for('static', filename='js/vendor/three.module.js') }}"}}
+    </script>
+    <script type="module" src="{{ url_for('static', filename='js/dice-adapter.js') }}"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Cinzel:wght@400;600;700;900&family=Alegreya:ital,wght@0,400;0,500;0,700;1,400;1,500&display=swap');
 
@@ -4299,13 +4305,13 @@
             if (!expr) return;
             const result = parseDiceAndRollDetailed(expr, false);
             if (result) {
-                broadcastToGM('Custom Roll', result.total.toString(), expr + ' = ' + result.detail);
+                broadcastToGM('Custom Roll', result.total.toString(), expr + ' = ' + result.detail, null, result.dice);
                 if (window.diceRoller?.enabled && DiceRoller.isSupported() && result.dice.length <= 12) {
                     window.diceRoller.roll({
                         dice: result.dice, modifier: 0, total: result.total,
                         label: 'Custom Roll: ' + expr, detail: result.detail,
                         isCrit: false, isFumble: false
-                    }).then(() => showRollToast('Custom Roll: ' + expr, result.total, result.detail, false, false, result.dice));
+                    }).finally(() => showRollToast('Custom Roll: ' + expr, result.total, result.detail, false, false, result.dice));
                 } else {
                     showRollToast('Custom Roll: ' + expr, result.total, result.detail, false, false, result.dice);
                 }
@@ -4346,7 +4352,7 @@
             const total = d20 + initMod;
             const detail = `1d20 (${d20}) + ${initMod} = ${total}`;
             showRollToast('Initiative', total, detail, d20 === 20, d20 === 1);
-            broadcastToGM('Initiative', total.toString(), detail);
+            broadcastToGM('Initiative', total.toString(), detail, null, [{sides: 20, value: d20}]);
             try {
                 await fetch(`/api/send_initiative/${pcNameEncoded}`, {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -5919,12 +5925,19 @@
         let _recentLocalRolls = [];
         function _rollSig(action, result, detail) { return `${action}|${result}|${detail || ''}`; }
 
-        async function broadcastToGM(actionName, rollResult, detailText, degree) {
+        // `dice` (optional): the individual die faces behind rollResult, e.g.
+        // [{sides:20,value:17}] — passed straight through to /api/log_roll so
+        // the GM's screen can animate the SAME physical dice this sheet just
+        // showed, instead of no dice at all. Only supplied by call sites that
+        // already computed the faces for their own local display; server-side
+        // validation (see _sanitize_roll_dice in app.py) drops anything else.
+        async function broadcastToGM(actionName, rollResult, detailText, degree, dice) {
             try {
                 _recentLocalRolls.push({ sig: _rollSig(actionName, rollResult, detailText), ts: Date.now() });
                 if (_recentLocalRolls.length > 12) _recentLocalRolls.shift();
                 const body = { name: pcName, action: actionName, result: rollResult, detail: detailText };
                 if (degree) body.degree = degree;
+                if (Array.isArray(dice) && dice.length) body.dice = dice;
                 await fetch('/api/log_roll', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(body)
@@ -5940,10 +5953,10 @@
         // Derived "mode" (physics | animated | plain) kept for back-compat with
         // the rest of the sheet, which was already written against a tri-state.
         //
-        // Default: render ON, style 'animated' (2D is lightweight, works
-        // everywhere, doesn't need WebGL). If the player turns render OFF,
-        // rolls behave "like they worked previously" — instant total + breakdown,
-        // no bouncing dice, same underlying RNG and broadcast to GM.
+        // Default: render ON, style 'physics' (3D dice via dice-adapter.js +
+        // dice-overlay.js when WebGL is available). If the player turns render
+        // OFF, rolls behave "like they worked previously" — instant total +
+        // breakdown, no bouncing dice, same underlying RNG and broadcast to GM.
         //
         // On first load we migrate the old single-key pf2e_dice_mode into the
         // new pair so nobody has to re-pick their preference.
@@ -5967,17 +5980,20 @@
                 const s = localStorage.getItem('pf2e_dice_style');
                 if (s === 'physics' || s === 'animated') return s;
             } catch (e) {}
-            // Legacy fallback
+            // Legacy fallback: an explicit prior choice stored under the old
+            // single-key pf2e_dice_mode must still be honored either way —
+            // don't let it silently fall through to the default below.
             try {
                 const m = localStorage.getItem('pf2e_dice_mode');
-                if (m === 'physics') return 'physics';
+                if (m === 'physics' || m === 'animated') return m;
             } catch (e) {}
-            return 'animated';
+            // No stored preference at all: 3D physics dice are the default.
+            return 'physics';
         }
         function _syncDiceEngine() {
-            // dice-engine only fires its 3D physics overlay when enabled=true.
-            // Anything else (style=animated or render off) → dice-engine stays quiet
-            // and the 2D toast / plain toast owns the UX.
+            // dice-adapter.js (window.diceRoller) only fires its 3D physics
+            // overlay when enabled=true. Anything else (style=animated or
+            // render off) → it stays quiet and the 2D toast / plain toast owns the UX.
             if (window.diceRoller) {
                 const shouldRun3D = getDiceRenderEnabled() && getDiceRenderStyle() === 'physics';
                 window.diceRoller.setEnabled(shouldRun3D);
@@ -6187,7 +6203,7 @@
             const detail = `1d20 (${d20}) ${modStr} = ${total}${critStr}${(typeof dc === 'number') ? ` vs DC ${dc}` : ''}`;
             // Phase 7: compute degree up-front so GM + player see the same label.
             const degree = (typeof dc === 'number') ? pf2eDegree(total, dc, d20) : null;
-            broadcastToGM(skillName, total.toString(), detail, degree);
+            broadcastToGM(skillName, total.toString(), detail, degree, [{sides: 20, value: d20}]);
             // 3D dice animation (non-blocking), fallback to toast
             if (window.diceRoller?.enabled && DiceRoller.isSupported()) {
                 window.diceRoller.roll({
@@ -6198,7 +6214,7 @@
                     detail: detail,
                     isCrit: isCrit,
                     isFumble: isFumble
-                }).then(() => {
+                }).finally(() => {
                     showRollToast(skillName, total, detail, isCrit, isFumble, [{sides: 20, value: d20}], dc, () => rollSkill(skillName, modifier, dc));
                 });
             } else {
@@ -6260,7 +6276,7 @@
                 setTimeout(() => toast.remove(), 300);
             }, 15000); // Longer timeout for attack toasts since they have damage button
             
-            broadcastToGM(`Attack: ${weaponName}`, total.toString(), detail);
+            broadcastToGM(`Attack: ${weaponName}`, total.toString(), detail, null, [{sides: 20, value: d20}]);
         }
 
         // Phase 9: spontaneous/focus casters can opt into auto-decrement by
@@ -6356,14 +6372,14 @@
                 const critClass = d20 === 20 ? ' (NAT 20!)' : d20 === 1 ? ' (NAT 1!)' : '';
                 rollResult = total.toString();
                 detail = `Spell Attack: d20(${d20}) + ${SPELL_ATTACK} = ${total}${critClass}`;
-                broadcastToGM(`Cast ${spellName}`, rollResult, detail);
+                broadcastToGM(`Cast ${spellName}`, rollResult, detail, null, [{sides: 20, value: d20}]);
                 if (window.diceRoller?.enabled && DiceRoller.isSupported()) {
                     window.diceRoller.roll({
                         dice: [{sides: 20, value: d20}],
                         modifier: SPELL_ATTACK, total: total,
                         label: `${spellName} — Spell Attack`,
                         detail: detail, isCrit: d20 === 20, isFumble: d20 === 1
-                    }).then(() => showRollToast(`${spellName} — Attack`, rollResult, detail, d20 === 20, d20 === 1));
+                    }).finally(() => showRollToast(`${spellName} — Attack`, rollResult, detail, d20 === 20, d20 === 1));
                 } else {
                     showRollToast(`${spellName} — Attack`, rollResult, detail, d20 === 20, d20 === 1);
                 }
@@ -6587,13 +6603,13 @@
                 let modStr = mod >= 0 ? `+${mod}` : `${mod}`;
                 const detail = `1d20 (${d20}) ${modStr} = ${total}`;
                 showRollToast(label, total, detail, isCrit, isFumble, [{sides: 20, value: d20}]);
-                broadcastToGM(label, total.toString(), detail);
+                broadcastToGM(label, total.toString(), detail, null, [{sides: 20, value: d20}]);
             } else {
                 // It's a dice expression (damage roll) — roll it
                 let result = parseDiceAndRollDetailed(valueStr, false);
                 if (result) {
                     showRollToast(label, result.total, result.detail, false, false, result.dice);
-                    broadcastToGM(label, result.total.toString(), result.detail);
+                    broadcastToGM(label, result.total.toString(), result.detail, null, result.dice);
                 }
             }
         }
@@ -6653,12 +6669,12 @@
             const d20 = rollD20();
             const detail = `1d20 = ${d20}${(typeof dc === 'number') ? ` vs DC ${dc}` : ''}`;
             const degree = (typeof dc === 'number') ? pf2eDegree(d20, dc, d20) : null;
-            broadcastToGM('Flat Check', d20.toString(), detail, degree);
+            broadcastToGM('Flat Check', d20.toString(), detail, degree, [{sides: 20, value: d20}]);
             if (window.diceRoller?.enabled && DiceRoller.isSupported()) {
                 window.diceRoller.roll({
                     dice: [{sides: 20, value: d20}], modifier: 0, total: d20,
                     label: 'Flat Check', detail: detail, isCrit: d20 === 20, isFumble: d20 === 1
-                }).then(() => showRollToast('Flat Check', d20, detail, d20 === 20, d20 === 1, [{sides: 20, value: d20}], dc));
+                }).finally(() => showRollToast('Flat Check', d20, detail, d20 === 20, d20 === 1, [{sides: 20, value: d20}], dc));
             } else {
                 showRollToast('Flat Check', d20, detail, d20 === 20, d20 === 1, [{sides: 20, value: d20}], dc);
             }
@@ -6739,7 +6755,7 @@
         // Kept for anything still calling the old function name
         function update3DButton() { updateDiceButtons(); }
 
-        // Init: wait briefly for dice-engine.js to register window.diceRoller,
+        // Init: wait briefly for dice-adapter.js to register window.diceRoller,
         // then sync the 3D engine's enabled flag and paint the button state.
         try {
             (function _initDiceMode() {
@@ -6760,13 +6776,13 @@
             document.getElementById('dice-breakdown').innerText = `1d${sides} = ${roll}`;
             document.getElementById('dice-total').classList.add('roll-total-pop');
             setTimeout(() => document.getElementById('dice-total').classList.remove('roll-total-pop'), 300);
-            broadcastToGM(`Quick Roll: 1d${sides}`, roll.toString(), `1d${sides} = ${roll}`);
+            broadcastToGM(`Quick Roll: 1d${sides}`, roll.toString(), `1d${sides} = ${roll}`, null, [{sides: sides, value: roll}]);
             if (window.diceRoller?.enabled && DiceRoller.isSupported()) {
                 window.diceRoller.roll({
                     dice: [{sides: sides, value: roll}], modifier: 0, total: roll,
                     label: `Quick Roll: 1d${sides}`, detail: `1d${sides} = ${roll}`,
                     isCrit: sides === 20 && roll === 20, isFumble: sides === 20 && roll === 1
-                }).then(() => showRollToast(`Quick Roll: 1d${sides}`, roll, `1d${sides} = ${roll}`, sides === 20 && roll === 20, sides === 20 && roll === 1, [{sides: sides, value: roll}]));
+                }).finally(() => showRollToast(`Quick Roll: 1d${sides}`, roll, `1d${sides} = ${roll}`, sides === 20 && roll === 20, sides === 20 && roll === 1, [{sides: sides, value: roll}]));
             } else {
                 showRollToast(`Quick Roll: 1d${sides}`, roll, `1d${sides} = ${roll}`, sides === 20 && roll === 20, sides === 20 && roll === 1, [{sides: sides, value: roll}]);
             }
@@ -6823,13 +6839,13 @@
             let result = parseDiceAndRollDetailed(damageStr, isCrit || false);
             if (result) {
                 let label = isCrit ? `CRIT Damage: ${weaponName}` : `Damage: ${weaponName}`;
-                broadcastToGM(label, result.total.toString(), result.detail);
+                broadcastToGM(label, result.total.toString(), result.detail, null, result.dice);
                 if (window.diceRoller?.enabled && DiceRoller.isSupported() && result.dice.length <= 12) {
                     window.diceRoller.roll({
                         dice: result.dice, modifier: 0, total: result.total,
                         label: label, detail: result.detail,
                         isCrit: isCrit || false, isFumble: false
-                    }).then(() => showRollToast(label, result.total, result.detail, isCrit || false, false, result.dice));
+                    }).finally(() => showRollToast(label, result.total, result.detail, isCrit || false, false, result.dice));
                 } else {
                     showRollToast(label, result.total, result.detail, isCrit || false, false, result.dice);
                 }
@@ -6901,13 +6917,13 @@
             if (result) {
                 document.getElementById('dice-total').innerText = result.total;
                 document.getElementById('dice-breakdown').innerText = result.detail;
-                broadcastToGM(`Custom: ${input}`, result.total.toString(), result.detail);
+                broadcastToGM(`Custom: ${input}`, result.total.toString(), result.detail, null, result.dice);
                 if (window.diceRoller?.enabled && DiceRoller.isSupported() && result.dice.length <= 12) {
                     window.diceRoller.roll({
                         dice: result.dice, modifier: 0, total: result.total,
                         label: 'Custom Roll: ' + input, detail: result.detail,
                         isCrit: false, isFumble: false
-                    }).then(() => showRollToast('Custom Roll', result.total, result.detail, false, false, result.dice));
+                    }).finally(() => showRollToast('Custom Roll', result.total, result.detail, false, false, result.dice));
                 } else {
                     showRollToast('Custom Roll', result.total, result.detail, false, false, result.dice);
                 }
@@ -8246,7 +8262,7 @@
             (function wireConditionPenaltyNote() {
                 const prev = window.broadcastToGM;
                 if (typeof prev !== 'function') return;
-                window.broadcastToGM = function(actionName, rollResult, detailText, degree) {
+                window.broadcastToGM = function(actionName, rollResult, detailText, degree, dice) {
                     try {
                         const c = (typeof currentConditions !== 'undefined') ? currentConditions : {};
                         const notes = [];
@@ -8258,7 +8274,7 @@
                             detailText = (detailText || '') + `  [cond: ${notes.join(', ')}]`;
                         }
                     } catch(_) {}
-                    return prev(actionName, rollResult, detailText, degree);
+                    return prev(actionName, rollResult, detailText, degree, dice);
                 };
             })();
         } catch(e) { console.error('condition penalty note init:', e); }
@@ -8654,7 +8670,7 @@
             else if (j.dying === 0) outcome = `Recovered — Dying 0, Wounded ${j.wounded}`;
             else outcome = `Dying ${j.dying}`;
             const detail = `1d20 (${j.d20}) vs DC ${j.dc} flat — ${labels[j.degree] || j.degree} → ${outcome}`;
-            try { broadcastToGM('Recovery Check', j.d20.toString(), detail, null); } catch(_) {}
+            try { broadcastToGM('Recovery Check', j.d20.toString(), detail, null, [{sides: 20, value: j.d20}]); } catch(_) {}
             // The crit/fumble flags mean NATURAL 20/1 everywhere else on the
             // sheet -- the degree (which can crit without a nat 20 elsewhere,
             // and here steps FROM the naturals) is already in the detail text.
@@ -8773,7 +8789,7 @@
             const isCrit = d20 === 20, isFumble = d20 === 1;
             const sign = mod >= 0 ? `+${mod}` : `${mod}`;
             const detail = `${name} (${skill} ${sign}): 1d20 (${d20}) ${sign} = ${total} — vs ${vsLabel}${isCrit ? ' [CRIT 20]' : isFumble ? ' [NAT 1]' : ''}`;
-            try { broadcastToGM(name, total.toString(), detail, null); } catch(_) {}
+            try { broadcastToGM(name, total.toString(), detail, null, [{sides:20,value:d20}]); } catch(_) {}
             try { showRollToast(name, total, detail, isCrit, isFumble, [{sides:20,value:d20}], null); } catch(_) {}
         }
 
@@ -8868,7 +8884,7 @@
             const prev = window.broadcastToGM;
             if (typeof prev !== 'function') return;
             const SPELL_DC = {{ pc.spell_dc | int }};
-            window.broadcastToGM = function(actionName, rollResult, detailText, degree) {
+            window.broadcastToGM = function(actionName, rollResult, detailText, degree, dice) {
                 try {
                     if ((actionName || '').toLowerCase().startsWith('cast ')) {
                         const nm = actionName.replace(/^cast /i, '').replace(/\s*\(rank \d+\).*$/, '').toLowerCase().trim();
@@ -8882,7 +8898,7 @@
                         if (extras.length) detailText = (detailText || '') + ` · ${extras.join(' · ')}`;
                     }
                 } catch(_) {}
-                return prev(actionName, rollResult, detailText, degree);
+                return prev(actionName, rollResult, detailText, degree, dice);
             };
         })();
 
@@ -9265,7 +9281,7 @@
             const label = String(j.degree || '').replace('_', ' ');
             const hpBit = j.healing >= 0 ? `+${j.healing}` : `${j.healing}`;
             const detail = `Treat Wounds (${tier}, DC ${j.dc}): 1d20 (${j.d20}) = ${j.total} → ${label} → ${hpBit} HP to ${j.target} (now ${j.target_hp})`;
-            try { broadcastToGM(`Treat Wounds → ${j.target}`, String(j.total), detail, j.degree); } catch(_) {}
+            try { broadcastToGM(`Treat Wounds → ${j.target}`, String(j.total), detail, j.degree, [{sides: 20, value: j.d20}]); } catch(_) {}
             try { showRollToast(`Treat Wounds → ${j.target}`, j.total, detail, j.d20 === 20, j.d20 === 1, [{sides: 20, value: j.d20}], j.dc); } catch(_) {}
         }
 
@@ -9891,7 +9907,7 @@
                         const total = d20 + (atk.bonus || 0);
                         const sign = atk.bonus >= 0 ? '+' : '';
                         const detail = `${pet.name}: ${atk.name} 1d20 (${d20}) ${sign}${atk.bonus} = ${total}${d20===20 ? ' [CRIT]' : d20===1 ? ' [MISS]' : ''} | ${atk.damage}`;
-                        try { broadcastToGM(`${pet.name}: ${atk.name}`, total.toString(), detail, null); } catch(_) {}
+                        try { broadcastToGM(`${pet.name}: ${atk.name}`, total.toString(), detail, null, [{sides:20,value:d20}]); } catch(_) {}
                         try { showRollToast(`${pet.name}: ${atk.name}`, total, detail, d20===20, d20===1, [{sides:20,value:d20}], null); } catch(_) {}
                     };
                 });
@@ -9908,7 +9924,7 @@
             const total = d20 + (mod || 0);
             const sign = mod >= 0 ? '+' : '';
             const detail = `${label}: 1d20 (${d20}) ${sign}${mod} = ${total}${d20===20 ? ' [CRIT]' : d20===1 ? ' [CRIT FAIL]' : ''}`;
-            try { broadcastToGM(label, total.toString(), detail, null); } catch(_) {}
+            try { broadcastToGM(label, total.toString(), detail, null, [{sides:20,value:d20}]); } catch(_) {}
             try { showRollToast(label, total, detail, d20===20, d20===1, [{sides:20,value:d20}], null); } catch(_) {}
         }
         function makePetActionsRow(pet, percChip) {

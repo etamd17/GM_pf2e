@@ -632,6 +632,55 @@ def _resolve_asset_source(vault_dir, ref):
     return _find_asset(vault_dir, base)
 
 
+def _resolve_asset_source_anywhere(vault_dir, ref):
+    """Locate `ref`'s basename ANYWHERE under `vault_dir`, for player-vault
+    mode's flat Obsidian attachment model: a note anywhere in the tree can
+    write `![[intake-map.png]]` while the file itself lives in one shared
+    attachments folder (e.g. `zz_Attachments/` in the real vault, or even
+    directly at the vault root) that has no relation to where the note
+    sits. Unlike `_resolve_asset_source` (GM-vault mode), there is no
+    "Player Handouts/" scope to prefer or confine the search to -- the
+    whole vault IS the content.
+
+    Walks `vault_dir` top-down with directory names sorted at every level,
+    so the SAME first match is returned on every build regardless of the
+    underlying filesystem's listing order. Directories player-vault mode
+    already treats as non-content -- `.obsidian/`, any other dot-directory,
+    and `_Site/` -- are pruned from the walk via `_player_vault_path_excluded`
+    (the SAME rule `select_player_vault` applies to notes; reused here, not
+    reimplemented). A dangling ref (no matching file anywhere in-scope)
+    returns None -- the caller (`collect_assets`) logs it and moves on;
+    this never raises.
+
+    Security: only the basename is ever used to search, and the search
+    never leaves `vault_dir` (os.walk is rooted there and only descends
+    into its own subdirectories) -- a traversal-shaped ref like
+    `../../etc/passwd` or an absolute path can, at most, coincidentally
+    match a same-named file that already exists somewhere INSIDE
+    `vault_dir`; it can never cause a file from outside the vault to be
+    found or copied.
+    """
+    base = os.path.basename(str(ref).strip().lstrip("/\\"))
+    if not base:
+        return None
+    vault_dir = str(vault_dir)
+    for root, dirs, files in os.walk(vault_dir):
+        # Prune excluded subdirectories (and sort what's left) BEFORE
+        # os.walk descends into them, so both the pruning and the
+        # first-match order are deterministic. The trailing path segment
+        # passed to `_player_vault_path_excluded` is never inspected by it
+        # (it only looks at the DIRECTORY segments between vault_dir and
+        # the final component) -- `base` is reused here only to avoid a
+        # throwaway constant, not because its value matters.
+        dirs[:] = sorted(
+            d for d in dirs
+            if not _player_vault_path_excluded(os.path.join(root, d, base), vault_dir)
+        )
+        if base in files:
+            return os.path.join(root, base)
+    return None
+
+
 def _strip_exif(src, dst):
     """Re-save an image without its metadata (EXIF, GPS, etc.) when Pillow
     is importable; otherwise (or on any decode/save failure) fall back to a
@@ -651,21 +700,29 @@ def _strip_exif(src, dst):
         shutil.copy2(src, dst)
 
 
-def collect_assets(pages, vault_dir, out_assets_dir):
+def collect_assets(pages, vault_dir, out_assets_dir, resolve_source=None):
     """Copy the player images referenced by `pages` from the vault into
     `out_assets_dir`, EXIF-stripped when possible, and return the sorted
     list of copied basenames.
 
     Refs are the union of each page's `portrait` field, `![[embed]]`, and
-    `![alt](path)` -- only the basename is used both for lookup (via
-    `_find_asset`, scoped to `Player Handouts/**`) and for the copy
-    destination, so a path-traversal ref (e.g. `../../secret.png`) can
-    only ever resolve to a same-named file actually found under
-    `Player Handouts/`, never escape `out_assets_dir`. An unreferenced
-    image, or a referenced non-image file, is never copied. A running
-    total enforces `ASSET_BUDGET_BYTES`: once adding an asset would
+    `![alt](path)` -- only the basename is used both for lookup and for the
+    copy destination, so a path-traversal ref (e.g. `../../secret.png`) can
+    only ever resolve to a same-named file actually found within the
+    resolver's own search scope, never escape `out_assets_dir`. An
+    unreferenced image, or a referenced non-image file, is never copied. A
+    running total enforces `ASSET_BUDGET_BYTES`: once adding an asset would
     exceed the budget, that asset (and only that asset) is logged and
     skipped -- smaller assets encountered later still get a chance.
+
+    `resolve_source`, when given, is a `(vault_dir, ref) -> path-or-None`
+    callable that REPLACES the default lookup, `_resolve_asset_source`
+    (GM-vault mode, confined to `Player Handouts/**`). Player-vault mode
+    passes `_resolve_asset_source_anywhere` here, since Obsidian's flat
+    attachment model means a note anywhere can embed a file that actually
+    lives in one shared folder (e.g. `zz_Attachments/`) unrelated to the
+    note's own location. Omitted (the default), behavior is byte-identical
+    to before this parameter existed.
 
     A basename collision -- two DIFFERENT source images that happen to
     share a basename across subfolders (e.g. `Maps/cover.png` vs
@@ -675,6 +732,7 @@ def collect_assets(pages, vault_dir, out_assets_dir):
     dropping the second one. A ref that resolves to the SAME file as the
     one already copied (a genuine duplicate reference) stays silent.
     """
+    resolve_source = resolve_source or _resolve_asset_source
     os.makedirs(str(out_assets_dir), exist_ok=True)
     copied = []
     seen = {}  # basename -> source path of the copy already made
@@ -687,7 +745,7 @@ def collect_assets(pages, vault_dir, out_assets_dir):
         if os.path.splitext(base)[1].lower() not in _IMG_EXTS:
             continue
         if base in seen:
-            other_src = _resolve_asset_source(vault_dir, ref_str)
+            other_src = resolve_source(vault_dir, ref_str)
             if other_src and os.path.normpath(other_src) != os.path.normpath(seen[base]):
                 log.warning(
                     "chronicle: asset basename collision for %s - kept %s, "
@@ -695,7 +753,7 @@ def collect_assets(pages, vault_dir, out_assets_dir):
                     base, seen[base], base, ref_str,
                 )
             continue
-        src = _resolve_asset_source(vault_dir, ref_str)
+        src = resolve_source(vault_dir, ref_str)
         if not src:
             log.warning("chronicle: referenced asset not found: %s", base)
             continue
@@ -847,6 +905,243 @@ def _section_for(note):
     return "lore"
 
 
+# player-vault mode's folder -> section map. Real-vault folders use the
+# numbered convention ("01 - Chronicle", "02 - Cast", ...); matched below
+# as a full path SEGMENT (never a bare substring), so an unrelated folder
+# that merely contains one of these words (e.g. "Cast/" without the "02 - "
+# prefix) does not match and instead falls through to the type map.
+# "03 - Quests" maps straight to "lore" here (unlike the GM-vault mapping
+# above) - this mode has no dedicated quest section.
+_PLAYER_VAULT_FOLDER_SECTIONS = {
+    "01 - Chronicle": "recap",
+    "02 - Cast": "cast",
+    "03 - Quests": "lore",
+    "04 - Atlas": "atlas",
+    "05 - Handouts": "handout",
+    "06 - Party": "cast",
+    "07 - Lore": "lore",
+}
+
+# Frontmatter `type` -> section, used only when no folder above matched.
+# "dashboard" is deliberately absent: Home.md's `type: dashboard` must fall
+# through to the top-level-Home.md special case below, not resolve here.
+_PLAYER_VAULT_TYPE_SECTIONS = {
+    "recap": "recap",
+    "npc": "cast",
+    "pc": "cast",
+    "companion": "cast",
+    "place": "atlas",
+    "handout": "handout",
+    "quest": "lore",
+    "lore": "lore",
+}
+
+
+def _player_vault_section(note, vault_dir=None):
+    """Map a player-vault note to one of the app's fixed sections (home,
+    recap, cast, atlas, lore, handout, fieldguide) - the player-vault-mode
+    counterpart to `_section_for` above (kept separate; the two modes'
+    mappings genuinely differ, e.g. "03 - Quests" lands in "lore" here but
+    GM-vault mode has no such folder at all).
+
+    Precedence: folder segment (`_PLAYER_VAULT_FOLDER_SECTIONS`), then
+    frontmatter `type` (`_PLAYER_VAULT_TYPE_SECTIONS`), then the top-level
+    `Home.md` special case (exactly one path segment above it - i.e. a
+    direct child of the vault root, not a `Home.md` nested in any
+    subfolder), else default `"lore"` - unmatched notes are always routed
+    to `lore`, never dropped silently.
+
+    "Top-level" is only meaningful RELATIVE TO THE VAULT ROOT, so the
+    top-level-Home.md check needs to know where that root is:
+
+    - When `vault_dir` is given, the note's path is made relative to it
+      (`os.path.relpath`, `os.sep` normalized to `/` same as the rest of
+      this module) and top-level-ness is decided on THAT relative path -
+      exactly one segment, `"Home.md"`. This is what a real build must
+      pass: `_load_notes` builds notes from `os.path.join(root, fn)`
+      ABSOLUTE paths, so counting raw path segments (as the no-vault_dir
+      fallback below does) would misfire on any vault not sitting a fixed
+      two segments deep.
+    - When `vault_dir` is omitted (None), falls back to the previous
+      raw-segment-count heuristic (`len(segments) == 2`) for the existing
+      relative-path test style (e.g. `"v/Home.md"`), where there is no
+      real vault root to resolve against.
+
+    Tolerates a `note` missing/empty `frontmatter` (only `path` is
+    required); `os.sep` is replaced with `/` before matching, so the split
+    into path segments doesn't depend on the running platform's separator
+    convention.
+    """
+    p = str(note["path"]).replace(os.sep, "/")
+    segments = p.split("/")
+    for folder, section in _PLAYER_VAULT_FOLDER_SECTIONS.items():
+        if folder in segments:
+            return section
+    fm = note.get("frontmatter") or {}
+    ntype = fm.get("type")
+    if ntype in _PLAYER_VAULT_TYPE_SECTIONS:
+        return _PLAYER_VAULT_TYPE_SECTIONS[ntype]
+    if vault_dir is not None:
+        rel = os.path.relpath(str(note["path"]), str(vault_dir)).replace(os.sep, "/")
+        is_top_level_home = rel == "Home.md"
+    else:
+        is_top_level_home = len(segments) == 2 and segments[-1] == "Home.md"
+    if is_top_level_home:
+        return "home"
+    return "lore"
+
+
+# Matches a LEADING "S<digits>" at the very start of a filename (e.g. "S01 -
+# Shadows Over Talmandor's Bounty.md" -> "01"). Anchored so an "S<digits>"
+# appearing later in the name (e.g. "Notes on S5 Recap.md") never matches.
+_SESSION_FILENAME_RE = re.compile(r"^S(\d+)")
+
+
+def _player_vault_session_number(note):
+    """Extract a session number for a player-vault note, or None.
+
+    Precedence: frontmatter `session` first, then a leading `S<digits>` in
+    the note's filename, else None.
+
+    Frontmatter `session` may arrive as a plain int (the common case -
+    `_coerce_scalar` turns an unquoted digit run into an int) or as a
+    string of digits (a quoted `session: "5"` skips that coercion). Both
+    are accepted and normalized to int. Anything else - missing, a
+    non-numeric string, a bool, a list, `None` - is NOT treated as the
+    frontmatter value; extraction falls through to the filename check
+    instead of raising.
+
+    The string check uses `str.isdecimal()`, not `str.isdigit()`: `isdigit()`
+    also accepts Unicode digit characters (superscripts, circled digits,
+    etc.) that `int()` cannot parse, which would raise ValueError past the
+    guard. `isdecimal()` matches exactly the character set `int()` accepts,
+    same as the `\\d` in the filename regex below.
+
+    A zero-padded filename number (`"S01"`) is returned as the plain int
+    `1`, not the string `"01"` and not misread as octal - `int("01")` is
+    always base-10 in Python.
+    """
+    fm = note.get("frontmatter") or {}
+    raw = fm.get("session")
+    if isinstance(raw, int) and not isinstance(raw, bool):
+        return raw
+    if isinstance(raw, str) and raw.strip().isdecimal():
+        return int(raw.strip())
+    basename = os.path.basename(str(note["path"]))
+    m = _SESSION_FILENAME_RE.match(basename)
+    if m:
+        return int(m.group(1))
+    return None
+
+
+# Directories that select_player_vault never walks for notes, regardless of
+# what's inside them: any dot-directory (Obsidian app config `.obsidian/`,
+# AI-agent session-memory scratch `.remember/`, ...) and `_Site/` (Obsidian
+# Publish-plugin setup docs, not campaign content). Deliberately a SMALL,
+# explicit exclusion list - NOT a blanket "any underscore-prefixed folder"
+# rule: `_maps/` is also underscore-prefixed but holds real, publishable
+# player content (handouts), so it is NOT in this set and must be walked
+# normally. Per-note skipping (an underscore-prefixed FILENAME, or
+# `type: reference`) is a separate, unconditional check - `_is_gm_meta` -
+# applied afterward, in select_player_vault itself.
+_PLAYER_VAULT_SKIP_DIR_NAMES = frozenset({"_Site"})
+
+
+def _player_vault_path_excluded(path, vault_dir):
+    """True if `path` (a note's path) sits inside a directory
+    select_player_vault never walks - see `_PLAYER_VAULT_SKIP_DIR_NAMES`
+    above. Checked against every directory SEGMENT between `vault_dir` and
+    the note's own filename (never the filename itself), so a file directly
+    named e.g. `_Site.md` at the vault root is unaffected - only an actual
+    containing directory triggers this. `os.sep` is normalized to `/`
+    first, same convention as `_player_vault_section`."""
+    rel = os.path.relpath(str(path), str(vault_dir)).replace(os.sep, "/")
+    dir_segments = rel.split("/")[:-1]
+    return any(seg.startswith(".") or seg in _PLAYER_VAULT_SKIP_DIR_NAMES
+               for seg in dir_segments)
+
+
+def select_player_vault(vault_dir):
+    """Walk `vault_dir` - an already player-facing, hand-authored Obsidian
+    vault - and return the list of page dicts for player-vault-mode
+    ingestion (the SELECTION step; rendering/wikilink-resolution/backlinks/
+    manifest assembly are all later, unchanged stages).
+
+    Two independent skips are applied, in order:
+
+    1. Directory-level (`_player_vault_path_excluded`): a note inside a
+       dot-directory anywhere in its path, or inside `_Site/`, is excluded
+       before any per-note check runs at all. `_maps/` is deliberately NOT
+       in that exclusion set - see its docstring.
+    2. Per-note (`_is_gm_meta`, reused as-is from GM-vault mode, never
+       duplicated): an underscore-prefixed FILENAME (e.g.
+       `_About Handouts.md`) or `type: reference` frontmatter is skipped
+       regardless of folder.
+
+    Every surviving note becomes a page dict in the SAME shape
+    `build_player_vault` already builds for GM mode:
+    `{slug, section, title, recipients: "all", source: "content/<slug>.md",
+    body}`, plus `session_introduced`/`session_updated` (both set to
+    `_player_vault_session_number(note)`) whenever that returns non-None -
+    the app reads both fields for a recap page's session badge (see
+    `_PAGE_OPTIONAL` above). `body` is the note's RAW body, UNMODIFIED:
+    `strip_gm_content` is never called here. That firewall exists for
+    deriving a player vault FROM a GM vault; this vault is already
+    player-facing, so stripping would delete legitimate `[!info]`/
+    `[!abstract]` content the GM wrote on purpose for players.
+
+    `vault_dir` is passed through to `_player_vault_section` at every call
+    site: `_load_notes` builds ABSOLUTE note paths, and without `vault_dir`
+    `_player_vault_section`'s top-level-Home.md special case falls back to
+    a raw-segment-count heuristic that is wrong for an absolute path (it
+    would misfile the vault's own Home page as "lore").
+
+    Slugging: `slugify(_note_title(note))`, same as GM mode. On a
+    collision (two different notes producing the same slug - e.g. the same
+    title in different folders) the FIRST note encountered, in
+    `_load_notes`'s `os.walk` order, is kept; every later collision is
+    dropped and logged as a warning. This is the conservative choice: two
+    pages silently sharing one output file (whichever gets written last
+    wins) would be worse than dropping the collision outright and warning
+    the GM to rename one of the notes.
+
+    Output is sorted by slug, so the resulting manifest does not churn
+    between builds that select the same notes.
+    """
+    pages = []
+    seen_slugs = set()
+    for note in _load_notes(vault_dir):
+        if _player_vault_path_excluded(note["path"], vault_dir):
+            continue
+        if _is_gm_meta(note):
+            continue
+        title = _note_title(note)
+        slug = slugify(title)
+        if slug in seen_slugs:
+            log.warning(
+                "chronicle: player-vault slug collision for %r (title %r) - "
+                "keeping the first note, dropping %s",
+                slug, title, note["path"],
+            )
+            continue
+        seen_slugs.add(slug)
+        page = {
+            "slug": slug,
+            "section": _player_vault_section(note, vault_dir=vault_dir),
+            "title": title,
+            "recipients": "all",
+            "source": "content/%s.md" % slug,
+            "body": note["body"],
+        }
+        session_number = _player_vault_session_number(note)
+        if session_number is not None:
+            page["session_introduced"] = session_number
+            page["session_updated"] = session_number
+        pages.append(page)
+    pages.sort(key=lambda p: p["slug"])
+    return pages
+
+
 def _select_pages(notes, selection):
     """Return (included_notes, unmatched_entities). Default-exclude; `chronicle:`
     overrides win.
@@ -981,20 +1276,146 @@ def _leak_abort_summary(offenders, session_number):
     return "\n".join(lines)
 
 
-def build_player_vault(vault_dir, out_dir, campaign_id):
+def _build_player_vault_curated(vault_dir, out_dir, campaign_id,
+                                  staging_dir, content_dir, assets_dir):
+    """The `mode="player-vault"` branch of `build_player_vault` -- selection,
+    asset resolution, wikilink/backlink resolution, manifest assembly, the
+    leak-check gate, and the leak-safe out_dir sync. Called ONLY from inside
+    `build_player_vault`'s `staging_dir`-scoped `try` block, so this
+    function does not itself manage `staging_dir` cleanup.
+
+    Deliberately does NOT call `select_entities` / `_select_pages` /
+    `strip_gm_content` -- those exist for DERIVING a player vault from a GM
+    vault; this vault is already curated, player-facing content, so
+    `select_player_vault` is the only selection step and note bodies pass
+    through untouched (see `select_player_vault`'s own docstring for why
+    stripping would be actively harmful here).
+    """
+    # Both select_player_vault (a dropped slug-collision is currently only
+    # a log.warning, with nothing in its return value to surface it) and
+    # collect_assets (asset-not-found / basename-collision warnings) can
+    # silently lose information the GM -- this tool's only user, who will
+    # not be reading log output -- needs to see. Capturing both under ONE
+    # _WarningCapture and folding the result into review_summary is the
+    # carried-forward fix for both.
+    with _WarningCapture() as cap:
+        raw_pages = select_player_vault(vault_dir)
+        copied = collect_assets(raw_pages, vault_dir, assets_dir,
+                                  resolve_source=_resolve_asset_source_anywhere)
+    warnings = list(cap.messages)
+
+    # ONE combined map for resolve_wikilinks, exactly like gm-vault mode:
+    # page title -> slug (page link) AND every actually-copied asset ref ->
+    # its published `assets/<basename>` path (embed).
+    title_to_slug = {p["title"]: p["slug"] for p in raw_pages}
+    link_map = dict(title_to_slug)
+    link_map.update(_asset_link_map(raw_pages, copied))
+
+    pages = []
+    for page in raw_pages:
+        page["body"] = resolve_wikilinks(page["body"], link_map)
+        page["body"] = _dedupe_leading_title_heading(page["body"], page["title"])
+        pages.append(page)
+
+    backlinks = build_backlinks(pages)
+    for page in pages:
+        bl = backlinks.get(page["slug"])
+        if bl:
+            page["backlinks"] = bl
+
+    for page in pages:
+        with open(os.path.join(content_dir, page["slug"] + ".md"), "w", encoding="utf-8") as f:
+            f.write(page["body"])
+
+    # No GM-authored `session_notes` union exists in this mode -- the
+    # closest analogue is the highest session number any selected page
+    # itself carries (recap pages via _player_vault_session_number).
+    session_numbers = [p["session_updated"] for p in pages
+                        if p.get("session_updated") is not None]
+    session_number = max(session_numbers) if session_numbers else None
+
+    # No mysteries harvesting (that's strip_gm_content's [!check]/[!question]
+    # harvest, not run here) and no spine (that's the GM-vault session-notes
+    # union above) -- both stay empty in this mode.
+    manifest = build_manifest(campaign_id, session_number, pages, [], [], {})
+    with open(os.path.join(staging_dir, "manifest.json"), "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2, ensure_ascii=False)
+
+    # Second, independent firewall layer -- identical contract to gm-vault
+    # mode: re-scan the WHOLE staged tree (never out_dir; out_dir is never
+    # written to until this check passes). Any survivor is fatal: the
+    # caller's `finally` discards staging_dir and out_dir is returned
+    # completely untouched.
+    offenders = leak_check(staging_dir)
+    if offenders:
+        review_summary = _leak_abort_summary(offenders, session_number)
+        return {"manifest": manifest, "review_summary": review_summary,
+                 "leaks": offenders}
+
+    # Clean build: sync ONLY the managed outputs into out_dir, exactly like
+    # gm-vault mode. Anything else already there (.obsidian/, .git/,
+    # unrelated files) is left completely alone; out_dir itself is never
+    # removed.
+    os.makedirs(out_dir, exist_ok=True)
+    with open(os.path.join(out_dir, "manifest.json"), "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2, ensure_ascii=False)
+    for sub, src_dir in (("content", content_dir), ("assets", assets_dir)):
+        dst = os.path.join(out_dir, sub)
+        if os.path.isdir(dst):
+            shutil.rmtree(dst)
+        elif os.path.exists(dst):
+            os.remove(dst)
+        shutil.copytree(src_dir, dst)
+
+    review_summary = _review_summary(pages, [], [], session_number, warnings)
+    return {"manifest": manifest, "review_summary": review_summary, "leaks": []}
+
+
+_BUILD_MODES = frozenset(("gm-vault", "player-vault"))
+
+
+def build_player_vault(vault_dir, out_dir, campaign_id, mode="gm-vault"):
     """Orchestrate the full player-vault build.
 
     Returns `{"manifest": <dict>, "review_summary": <str>, "leaks": <list>}`.
     `leaks` is empty on a clean build.
 
-    Data-safety redesign (PR0 Task 12): the ENTIRE build is assembled in a
-    private staging directory (`tempfile.mkdtemp`), never in `out_dir`
-    directly. `leak_check` then runs over the staged tree:
+    `mode` selects the ingestion strategy:
 
-    - If any GM marker survived the per-note firewall, the staging dir is
-      discarded and `out_dir` is NOT touched in any way -- not written to,
-      not removed, not even created if it didn't already exist. The
-      offenders are returned in `leaks` (with a loud-warning
+    - `"gm-vault"` (the default -- unchanged from before `mode` existed,
+      byte-for-byte): `vault_dir` is the GM's private authoring vault.
+      Pages are auto-selected via `select_entities` + `_select_pages`
+      (encountered-NPC/area union, `chronicle:` overrides), and every page
+      body is run through `strip_gm_content` -- the callout-stripping
+      firewall -- before anything else touches it.
+    - `"player-vault"`: `vault_dir` is ALREADY a player-facing,
+      hand-authored vault (e.g. the GM's real Obsidian Chronicle vault).
+      Pages come straight from `select_player_vault` (folder/type ->
+      section mapping, `_is_gm_meta` skip only -- no encountered-entity
+      selection) and bodies are NEVER passed through `strip_gm_content`:
+      that firewall's allowlist would delete legitimate `[!info]` content
+      and mangle `[!abstract]` blocks the GM wrote ON PURPOSE for players
+      in this vault. Assets resolve vault-wide
+      (`_resolve_asset_source_anywhere`), not confined to `Player
+      Handouts/**`, matching this vault's flat Obsidian attachment model.
+
+    Skipping the stripping firewall does NOT skip the second, independent
+    safety net: `leak_check` re-scans the staged tree in BOTH modes and is
+    STILL fatal on any surviving `[!danger]`/`[!secret]`/`[!gm]` marker --
+    a leak in player-vault mode means `out_dir` is never touched, exactly
+    like a leak in gm-vault mode (see the data-safety note below).
+
+    Data-safety redesign (PR0 Task 12), shared by both modes: the ENTIRE
+    build is assembled in a private staging directory (`tempfile.mkdtemp`),
+    never in `out_dir` directly. `leak_check` then runs over the staged
+    tree:
+
+    - If any GM marker survived (the per-note firewall in gm-vault mode, or
+      simply an author's own planted/accidental marker in player-vault
+      mode, which has no per-note firewall to catch it first), the staging
+      dir is discarded and `out_dir` is NOT touched in any way -- not
+      written to, not removed, not even created if it didn't already
+      exist. The offenders are returned in `leaks` (with a loud-warning
       `review_summary`) for the caller to act on; this function never
       raises and never deletes anything under `out_dir`. `out_dir` is the
       GM's real, persistent Obsidian player vault (may hold `.obsidian/`
@@ -1005,6 +1426,9 @@ def build_player_vault(vault_dir, out_dir, campaign_id):
       then recopied from staging). Nothing else already present in
       `out_dir` (`.obsidian/`, `.git/`, unrelated files) is ever touched.
     """
+    if mode not in _BUILD_MODES:
+        raise ValueError("unknown build_player_vault mode: %r" % mode)
+
     staging_dir = tempfile.mkdtemp(prefix="chronicle_build_")
     try:
         content_dir = os.path.join(staging_dir, "content")
@@ -1012,6 +1436,11 @@ def build_player_vault(vault_dir, out_dir, campaign_id):
         os.makedirs(content_dir, exist_ok=True)
         os.makedirs(assets_dir, exist_ok=True)
 
+        if mode == "player-vault":
+            return _build_player_vault_curated(
+                vault_dir, out_dir, campaign_id, staging_dir, content_dir, assets_dir)
+
+        # mode == "gm-vault": unchanged from before `mode` existed.
         selection = select_entities(vault_dir)
         sessions = selection["sessions"]
         included, unmatched = _select_pages(_load_notes(vault_dir), selection)
@@ -1260,12 +1689,25 @@ def main(argv=None):
     parser.add_argument("--vault", required=True, help="path to the GM Obsidian vault")
     parser.add_argument("--out", required=True, help="output dir for the player vault")
     parser.add_argument("--campaign-id", required=True, dest="campaign_id")
+    parser.add_argument("--mode", choices=sorted(_BUILD_MODES), default="gm-vault",
+                         help="'gm-vault' (default) derives a player vault from the GM's "
+                              "private authoring vault; 'player-vault' ingests an already "
+                              "player-facing, hand-authored vault as-is")
     parser.add_argument("--publish-url", default=None, dest="publish_url")
     parser.add_argument("--token", default=None)
     parser.add_argument("--dry-run", action="store_true", dest="dry_run")
     args = parser.parse_args(argv)
 
-    result = build_player_vault(args.vault, args.out, args.campaign_id)
+    # The default "gm-vault" path calls build_player_vault with the exact
+    # pre-Task-7 3-positional-arg shape (no `mode` kwarg at all) so its
+    # exit-code contract -- and any caller/test that monkeypatches
+    # build_player_vault with a 3-arg fake -- is byte-for-byte unchanged.
+    # `--mode player-vault` is the only case that actually passes `mode`
+    # through.
+    if args.mode == "gm-vault":
+        result = build_player_vault(args.vault, args.out, args.campaign_id)
+    else:
+        result = build_player_vault(args.vault, args.out, args.campaign_id, mode=args.mode)
     print(result["review_summary"])
 
     offenders = sorted(set(result.get("leaks") or [])
