@@ -21,7 +21,13 @@
        (full engine + in-browser JIT). Regenerate: cd tools/tailwind &&
        npm install && node build.mjs (see docs/tailwind-build.md). #}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tw-player_sheet.css') }}">
-    <script type="module" src="{{ url_for('static', filename='js/dice-engine.js') }}"></script>
+    {# dice-overlay.js (the 3D dice engine) imports the bare specifier 'three';
+       this import map resolves it to the vendored build. Must appear before
+       the module script below. #}
+    <script type="importmap">
+    {"imports": {"three": "{{ url_for('static', filename='js/vendor/three.module.js') }}"}}
+    </script>
+    <script type="module" src="{{ url_for('static', filename='js/dice-adapter.js') }}"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Cinzel:wght@400;600;700;900&family=Alegreya:ital,wght@0,400;0,500;0,700;1,400;1,500&display=swap');
 

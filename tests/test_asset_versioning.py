@@ -107,9 +107,11 @@ def test_no_unversioned_static_in_leaky_templates():
     mc = (_REPO / 'templates' / 'mobile_combat.html').read_text()
     ps = (_REPO / 'templates' / 'player_sheet.html').read_text()
     assert 'href="/static/css/system.css"' not in mc, 'mobile_combat still hardcodes system.css'
-    assert 'src="/static/js/dice-engine.js"' not in ps, 'player_sheet still hardcodes dice-engine.js'
+    # dice-engine.js was retired in favor of dice-adapter.js (dice-overlay.js +
+    # three.js, vendored) — same guard, new filename.
+    assert 'src="/static/js/dice-adapter.js"' not in ps, 'player_sheet still hardcodes dice-adapter.js'
     assert "url_for('static', filename='css/system.css')" in mc
-    assert "url_for('static', filename='js/dice-engine.js')" in ps
+    assert "url_for('static', filename='js/dice-adapter.js')" in ps
 
 
 # --------------------------------------------------------------------------
