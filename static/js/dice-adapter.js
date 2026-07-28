@@ -3,7 +3,9 @@
  * public surface (static/js/dice-engine.js, deleted) and the new dice-overlay.js
  * + dice-geometry.js engine (three.js, vendored at static/js/vendor/).
  *
- * templates/player_sheet.html is the only consumer, and it only ever touches:
+ * Consumers: templates/player_sheet.html, templates/base.html (GM/table toast
+ * for other players' rolls) and templates/cosmere_sheet.html. All of them only
+ * ever touch:
  *   - DiceRoller.isSupported()            static WebGL feature check
  *   - window.diceRoller.enabled           readable bool, driven by the sheet's
  *                                          own pf2e_dice_render/pf2e_dice_style
@@ -11,6 +13,8 @@
  *   - window.diceRoller.setEnabled(bool)  toggle 3D on/off
  *   - window.diceRoller.roll(config)      config: { dice:[{sides,value}], modifier,
  *                                          total, label, detail, isCrit, isFumble }
+ *   - window.diceRoller.markLocalRoll(sig)   / .consumeLocalRoll(sig)
+ *                                          self-echo dedup, see below
  *
  * window.diceRoller and window.DiceRoller are created synchronously below so
  * those guards work immediately at page load. dice-overlay.js itself (three.js
@@ -197,6 +201,38 @@ function buildRollPlan(diceList, modifier) {
     return { formula, rolls };
 }
 
+// ─── Self-echo dedup registry ───────────────────────────────────────────────
+//
+// Some pages both animate a roll locally AND broadcast it to the server for
+// re-display elsewhere (e.g. cosmere_sheet.html calls roll() directly, then
+// posts to /api/cosmere/roll, which re-broadcasts the same roll as a
+// 'player_roll' SSE event). Because cosmere_sheet.html extends base.html, its
+// own tab also runs base.html's GM/table toast listener — without a dedup
+// hook that SSE echo would trigger a second, redundant 3D animation of a roll
+// this exact tab just played. A caller that already animated a roll locally
+// registers its fingerprint here (markLocalRoll); the SSE-side listener
+// consumes it (consumeLocalRoll) to skip re-animating that one echo, while
+// still animating rolls that came from someone else. This is a fixed-size,
+// time-boxed ring buffer, not a correctness-critical structure — a missed
+// match just means one extra (harmless) animation.
+const LOCAL_ROLL_SIG_TTL_MS = 5000;
+const _recentLocalRollSigs = [];
+
+function markLocalRoll(sig) {
+    if (!sig) return;
+    _recentLocalRollSigs.push({ sig, ts: Date.now() });
+    if (_recentLocalRollSigs.length > 12) _recentLocalRollSigs.shift();
+}
+
+function consumeLocalRoll(sig) {
+    if (!sig) return false;
+    const now = Date.now();
+    const idx = _recentLocalRollSigs.findIndex((r) => r.sig === sig && (now - r.ts) < LOCAL_ROLL_SIG_TTL_MS);
+    if (idx === -1) return false;
+    _recentLocalRollSigs.splice(idx, 1);
+    return true;
+}
+
 // ─── Public window.diceRoller ───────────────────────────────────────────────
 
 class DiceRollerAdapter {
@@ -211,6 +247,11 @@ class DiceRollerAdapter {
         this.enabled = !!val;
         try { localStorage.setItem('dice3d_enabled', this.enabled ? 'true' : 'false'); } catch (e) {}
     }
+
+    // Registers/consumes a fingerprint for the self-echo dedup described
+    // above. Both are no-ops (false/undefined) if `sig` is falsy.
+    markLocalRoll(sig) { markLocalRoll(sig); }
+    consumeLocalRoll(sig) { return consumeLocalRoll(sig); }
 
     // config: { dice: [{sides, value}], modifier, total, label, detail, isCrit, isFumble }
     // Async: when 3D actually runs, resolves once the dice come to rest (so a

@@ -23,6 +23,16 @@
        (full engine + in-browser JIT). Regenerate: cd tools/tailwind &&
        npm install && node build.mjs (see docs/tailwind-build.md). #}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tw-base.css') }}">
+    {# dice-adapter.js + dice-overlay.js (the 3D dice engine) import the bare
+       specifier 'three'; this import map resolves it to the vendored build.
+       Must appear before the module script below. Same pattern as
+       templates/player_sheet.html. dice-adapter.js itself is tiny and does
+       NOT pull in three.js (~400 KB gzipped) until a roll actually happens —
+       every base.html page pays only for this small module, not the engine. #}
+    <script type="importmap">
+    {"imports": {"three": "{{ url_for('static', filename='js/vendor/three.module.js') }}"}}
+    </script>
+    <script type="module" src="{{ url_for('static', filename='js/dice-adapter.js') }}"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;600;700&display=swap');
         body { font-family:var(--font-ui); background:var(--bg-page); color:var(--text-on-dark); }
@@ -366,10 +376,6 @@
                 // is unauthenticated and forwards action/detail verbatim, so an
                 // attacker could otherwise inject script into every GM/player screen.
                 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-                const t = document.createElement('div');
-                t.className = 'rounded-lg shadow-xl p-3 toast-animate pointer-events-auto';
-                t.style.background = 'var(--bg-card-2)';
-                t.style.border = '1px solid var(--border-rule)';
                 const degHTML = _degBanner(log.degree);
 
                 // Phase 8: if this is a damage roll, show an Apply button that
@@ -386,22 +392,67 @@
                     </div>`;
                 }
 
-                t.classList.add('roll-toast');
-                t.innerHTML = `<div class="flex justify-between mb-1"><span class="font-semibold text-accent-300 text-xs">${esc(log.name)}</span><span class="text-[10px] text-base-400">Now</span></div><div class="text-xs mb-1" style="color:var(--text-on-cream)">${esc(log.action)}</div>${degHTML}<div class="text-[10px] font-mono text-base-400 p-1.5 rounded" style="background:var(--bg-page)">${esc(log.detail)}</div>${applyHTML}`;
-                c.prepend(t);
                 // Crit / nat-1 flourish + screen-edge flash (degree first, then
                 // fall back to sniffing the detail string for NAT 20 / NAT 1).
+                // Computed up front (not from the `t` element) so the same flags
+                // can also feed the optional 3D roll below.
                 const _blob = ((log.detail || '') + ' ' + (log.degree || '')).toUpperCase();
-                if (log.degree === 'crit_success' || _blob.indexOf('[CRIT SUCCESS') >= 0 || _blob.indexOf('NAT 20') >= 0) {
-                    t.classList.add('crit-flourish');
-                    try { window.pf2eFlash && window.pf2eFlash('crit'); } catch(_) {}
-                } else if (log.degree === 'crit_failure' || _blob.indexOf('[CRIT FAIL') >= 0 || _blob.indexOf('NAT 1]') >= 0 || /\bNAT 1\b/.test(_blob)) {
-                    t.classList.add('fumble-flourish');
-                    try { window.pf2eFlash && window.pf2eFlash('fumble'); } catch(_) {}
+                const isCritRoll = log.degree === 'crit_success' || _blob.indexOf('[CRIT SUCCESS') >= 0 || _blob.indexOf('NAT 20') >= 0;
+                const isFumbleRoll = !isCritRoll && (log.degree === 'crit_failure' || _blob.indexOf('[CRIT FAIL') >= 0 || _blob.indexOf('NAT 1]') >= 0 || /\bNAT 1\b/.test(_blob));
+
+                function appendToast() {
+                    const t = document.createElement('div');
+                    t.className = 'rounded-lg shadow-xl p-3 toast-animate pointer-events-auto';
+                    t.style.background = 'var(--bg-card-2)';
+                    t.style.border = '1px solid var(--border-rule)';
+                    t.classList.add('roll-toast');
+                    t.innerHTML = `<div class="flex justify-between mb-1"><span class="font-semibold text-accent-300 text-xs">${esc(log.name)}</span><span class="text-[10px] text-base-400">Now</span></div><div class="text-xs mb-1" style="color:var(--text-on-cream)">${esc(log.action)}</div>${degHTML}<div class="text-[10px] font-mono text-base-400 p-1.5 rounded" style="background:var(--bg-page)">${esc(log.detail)}</div>${applyHTML}`;
+                    c.prepend(t);
+                    if (isCritRoll) {
+                        t.classList.add('crit-flourish');
+                        try { window.pf2eFlash && window.pf2eFlash('crit'); } catch(_) {}
+                    } else if (isFumbleRoll) {
+                        t.classList.add('fumble-flourish');
+                        try { window.pf2eFlash && window.pf2eFlash('fumble'); } catch(_) {}
+                    }
+                    // Damage-apply toasts stick longer so the GM has time to pick a target.
+                    const ttl = isDamageRoll ? 15000 : 6000;
+                    setTimeout(() => { t.style.opacity='0'; t.style.transform='translateX(100%)'; t.style.transition='all 0.3s'; setTimeout(() => t.remove(), 300); }, ttl);
                 }
-                // Damage-apply toasts stick longer so the GM has time to pick a target.
-                const ttl = isDamageRoll ? 15000 : 6000;
-                setTimeout(() => { t.style.opacity='0'; t.style.transform='translateX(100%)'; t.style.transition='all 0.3s'; setTimeout(() => t.remove(), 300); }, ttl);
+
+                // 3D dice (dice-batch-b, Task 1): when this roll carries the
+                // individual die faces the roller actually saw (see
+                // _sanitize_roll_dice in app.py), and 3D is on + supported on
+                // THIS screen, animate them before the toast lands — the same
+                // "settle-or-timeout, then show the result" guarantee
+                // player_sheet.html uses, via window.diceRoller.roll()'s
+                // contract that it never rejects/hangs, so appendToast() in
+                // .finally() is guaranteed to run exactly once either way.
+                // consumeLocalRoll skips re-animating a roll THIS tab already
+                // played locally (e.g. the Cosmere sheet, which extends
+                // base.html and both animates its own rolls directly and
+                // receives them back over this same player_roll SSE event) —
+                // the toast still appends normally in that case too.
+                const dice = Array.isArray(log.dice) && log.dice.length ? log.dice : null;
+                const rollSig = `${log.action || ''}|${log.result || ''}|${log.detail || ''}`;
+                const selfEcho = !!(dice && window.diceRoller && window.diceRoller.consumeLocalRoll &&
+                    window.diceRoller.consumeLocalRoll(rollSig));
+                const can3D = dice && !selfEcho && window.diceRoller && window.diceRoller.enabled &&
+                    window.DiceRoller && window.DiceRoller.isSupported();
+                if (can3D) {
+                    const total = Number(log.result);
+                    const diceSum = dice.reduce((a, d) => a + (Number(d.value) || 0), 0);
+                    const haveTotal = Number.isFinite(total);
+                    window.diceRoller.roll({
+                        dice: dice,
+                        modifier: haveTotal ? (total - diceSum) : 0,
+                        total: haveTotal ? total : diceSum,
+                        label: log.action, detail: log.detail,
+                        isCrit: isCritRoll, isFumble: isFumbleRoll
+                    }).finally(appendToast);
+                } else {
+                    appendToast();
+                }
             }
             try {
                 // Shared SSE hub (see <head>): register on the one socket.

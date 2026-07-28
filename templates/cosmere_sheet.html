@@ -1000,8 +1000,34 @@
       const e=enhBonus(attr), fx=condRollFx(senseBased);
       const m=mod+e+fx.flat, roll=rollD20(senseBased), f=flair(roll), sign=m>=0?'+':'';
       const total=roll.v+m+f.bonus, tags=condTags(e, roll, senseBased), plain=tags.replace(/<[^>]+>/g,'').trim();
-      res(name+': <b>'+total+'</b> <span style="font-size:11px;color:var(--text-on-dark-3)">'+roll.note+' '+sign+m+(f.bonus?' +'+f.bonus:'')+'</span>'+f.extra+tags, roll.nat===20?'opp':(roll.nat===1?'comp':''));
-      post(name+' test', total, roll.note+' '+sign+m+(f.bonus?' (+'+f.bonus+')':'')+(f.label?' · '+f.label:'')+(plain?' · '+plain:''));
+      const flare = roll.nat===20?'opp':(roll.nat===1?'comp':'');
+      const postDetail = roll.note+' '+sign+m+(f.bonus?' (+'+f.bonus+')':'')+(f.label?' · '+f.label:'')+(plain?' · '+plain:'');
+      // The roll readout + SSE broadcast (res/post) are unchanged from
+      // before — just deferred into this closure so 3D dice (below) can
+      // settle first without ever risking losing them (roll() never rejects
+      // or hangs; finish() always runs, from .finally() or the else branch).
+      const finish = () => {
+        res(name+': <b>'+total+'</b> <span style="font-size:11px;color:var(--text-on-dark-3)">'+roll.note+' '+sign+m+(f.bonus?' +'+f.bonus:'')+'</span>'+f.extra+tags, flare);
+        post(name+' test', total, postDetail);
+      };
+      // 3D dice (dice-batch-b, Task 2): a Cosmere test is always exactly one
+      // physical d20 — even with Advantage/Disadvantage, roll.v is already
+      // the KEPT face (rollD20 discards the other roll), so animating a
+      // single die never misrepresents the roll. The Plot Die's flat bonus
+      // (f.bonus) folds into `modifier` so the overlay's own total (die +
+      // modifier) still lands on `total`. markLocalRoll registers this roll's
+      // fingerprint so base.html's showToast (this page extends base.html)
+      // doesn't re-animate the SAME roll when it echoes back over the
+      // player_roll SSE event from /api/cosmere/roll's broadcast.
+      if(window.diceRoller && window.diceRoller.enabled && window.DiceRoller && window.DiceRoller.isSupported()){
+        window.diceRoller.markLocalRoll((name+' test')+'|'+String(total)+'|'+postDetail);
+        window.diceRoller.roll({
+          dice:[{sides:20, value:roll.v}], modifier:m+f.bonus, total:total,
+          label:name, detail:postDetail, isCrit:roll.nat===20, isFumble:roll.nat===1
+        }).finally(finish);
+      } else {
+        finish();
+      }
     };
     window.cosStrike = function(name, mod, dmgFormula, dtype){
       // Exhausted + Adv/Dis hit the attack TEST; they don't modify damage (not a test).
