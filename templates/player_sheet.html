@@ -5946,10 +5946,10 @@
         // Derived "mode" (physics | animated | plain) kept for back-compat with
         // the rest of the sheet, which was already written against a tri-state.
         //
-        // Default: render ON, style 'animated' (2D is lightweight, works
-        // everywhere, doesn't need WebGL). If the player turns render OFF,
-        // rolls behave "like they worked previously" — instant total + breakdown,
-        // no bouncing dice, same underlying RNG and broadcast to GM.
+        // Default: render ON, style 'physics' (3D dice via dice-adapter.js +
+        // dice-overlay.js when WebGL is available). If the player turns render
+        // OFF, rolls behave "like they worked previously" — instant total +
+        // breakdown, no bouncing dice, same underlying RNG and broadcast to GM.
         //
         // On first load we migrate the old single-key pf2e_dice_mode into the
         // new pair so nobody has to re-pick their preference.
@@ -5973,17 +5973,20 @@
                 const s = localStorage.getItem('pf2e_dice_style');
                 if (s === 'physics' || s === 'animated') return s;
             } catch (e) {}
-            // Legacy fallback
+            // Legacy fallback: an explicit prior choice stored under the old
+            // single-key pf2e_dice_mode must still be honored either way —
+            // don't let it silently fall through to the default below.
             try {
                 const m = localStorage.getItem('pf2e_dice_mode');
-                if (m === 'physics') return 'physics';
+                if (m === 'physics' || m === 'animated') return m;
             } catch (e) {}
-            return 'animated';
+            // No stored preference at all: 3D physics dice are the default.
+            return 'physics';
         }
         function _syncDiceEngine() {
-            // dice-engine only fires its 3D physics overlay when enabled=true.
-            // Anything else (style=animated or render off) → dice-engine stays quiet
-            // and the 2D toast / plain toast owns the UX.
+            // dice-adapter.js (window.diceRoller) only fires its 3D physics
+            // overlay when enabled=true. Anything else (style=animated or
+            // render off) → it stays quiet and the 2D toast / plain toast owns the UX.
             if (window.diceRoller) {
                 const shouldRun3D = getDiceRenderEnabled() && getDiceRenderStyle() === 'physics';
                 window.diceRoller.setEnabled(shouldRun3D);
@@ -6745,7 +6748,7 @@
         // Kept for anything still calling the old function name
         function update3DButton() { updateDiceButtons(); }
 
-        // Init: wait briefly for dice-engine.js to register window.diceRoller,
+        // Init: wait briefly for dice-adapter.js to register window.diceRoller,
         // then sync the 3D engine's enabled flag and paint the button state.
         try {
             (function _initDiceMode() {

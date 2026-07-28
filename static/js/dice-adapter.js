@@ -42,6 +42,12 @@ const Z_INDEX = 150;
 // How long a settled roll stays on screen before it's cleared automatically —
 // mirrors the old engine's 3s auto-dismiss.
 const DISMISS_MS = 2600;
+// Hard cap on how long roll() will wait for the dice to settle before
+// resolving anyway. rAF (and so the overlay's own settle detection) is
+// paused whenever the tab/pane is hidden, so this is not just a nicety —
+// it's the only thing that keeps a hidden/backgrounded roll from hanging
+// forever. Tuned to comfortably exceed a visible 'tumble'-style throw.
+const SETTLE_TIMEOUT_MS = 2500;
 
 function isSupported() {
     try {
@@ -111,6 +117,21 @@ function dismiss(overlay) {
 
 let overlayPromise = null;
 
+// The overlay's `onResult` is a single-slot setter (see dice-overlay.js's
+// `set onResult(fn)`) — assigning it again would replace, not add to, the
+// dismiss-scheduling hook wired up below. So that hook is set exactly once,
+// here, and roll() below hooks into settle notifications by queueing onto
+// this array instead of touching overlay.onResult itself.
+let settleListeners = [];
+
+function notifySettleListeners(result) {
+    const listeners = settleListeners;
+    settleListeners = [];
+    listeners.forEach((fn) => {
+        try { fn(result); } catch (e) { /* never break other listeners */ }
+    });
+}
+
 function getOverlay() {
     if (!overlayPromise) {
         overlayPromise = import('./dice-overlay.js').then((mod) => {
@@ -121,9 +142,10 @@ function getOverlay() {
                     clearDismissTimer();
                     setInteractive(true);
                 },
-                onResult() {
+                onResult(result) {
                     clearDismissTimer();
                     dismissTimer = setTimeout(() => dismiss(overlay), DISMISS_MS);
+                    notifySettleListeners(result);
                 },
             });
             canvasEl = el.querySelector('canvas');
@@ -191,9 +213,12 @@ class DiceRollerAdapter {
     }
 
     // config: { dice: [{sides, value}], modifier, total, label, detail, isCrit, isFumble }
-    // Async, fire-and-forget: resolves once the throw has started (not once it
-    // settles), returns false (and does nothing) when disabled/unsupported/
-    // unrepresentable so the caller's existing 2D toast fallback still runs.
+    // Async: when 3D actually runs, resolves once the dice come to rest (so a
+    // caller's `.finally(() => showRollToast(...))` lands the toast WITH the
+    // dice, not before them) or after SETTLE_TIMEOUT_MS, whichever is first —
+    // never both, never neither. Returns false immediately (and does nothing)
+    // when disabled/unsupported/unrepresentable, so the caller's existing 2D
+    // toast fallback still runs with no pointless delay.
     // Total: this must NEVER reject and NEVER hang, no matter what throws -
     // callers chain a result toast off this promise, so a rejection (or a
     // promise that never settles) would silently swallow the roll result.
@@ -207,6 +232,23 @@ class DiceRollerAdapter {
 
             const overlay = await getOverlay();
             overlay.rollTo(plan.formula, { rolls: plan.rolls });
+
+            // Wait for the dice to settle (via notifySettleListeners, fed by
+            // the overlay's single onResult hook above) or for the hard
+            // timeout, whichever comes first. `done` guards against firing
+            // twice — e.g. a late settle notification arriving just after
+            // the timeout already resolved this same roll.
+            await new Promise((resolve) => {
+                let done = false;
+                const finish = () => {
+                    if (done) return;
+                    done = true;
+                    clearTimeout(timer);
+                    resolve();
+                };
+                const timer = setTimeout(finish, SETTLE_TIMEOUT_MS);
+                settleListeners.push(finish);
+            });
             return true;
         } catch (e) {
             console.warn('dice-adapter: 3D roll unavailable, falling back to 2D toast.', e);
