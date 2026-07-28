@@ -194,14 +194,17 @@ class DiceRollerAdapter {
     // Async, fire-and-forget: resolves once the throw has started (not once it
     // settles), returns false (and does nothing) when disabled/unsupported/
     // unrepresentable so the caller's existing 2D toast fallback still runs.
+    // Total: this must NEVER reject and NEVER hang, no matter what throws -
+    // callers chain a result toast off this promise, so a rejection (or a
+    // promise that never settles) would silently swallow the roll result.
     async roll(config) {
-        if (!this.enabled || !DiceRoller.isSupported()) return false;
-        if (!config || !Array.isArray(config.dice) || config.dice.length === 0) return false;
-
-        const plan = buildRollPlan(config.dice, config.modifier);
-        if (!plan) return false;
-
         try {
+            if (!this.enabled || !DiceRoller.isSupported()) return false;
+            if (!config || !Array.isArray(config.dice) || config.dice.length === 0) return false;
+
+            const plan = buildRollPlan(config.dice, config.modifier);
+            if (!plan) return false;
+
             const overlay = await getOverlay();
             overlay.rollTo(plan.formula, { rolls: plan.rolls });
             return true;

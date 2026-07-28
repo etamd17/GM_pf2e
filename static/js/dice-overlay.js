@@ -58,7 +58,12 @@ export function createDiceOverlay(options = {}) {
   host.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  const CAM_BASE = new THREE.Vector3(0, 9.2, 6.4);
+  // Camera distance from the origin directly sets the dice's on-screen size
+  // (fixed FOV below): doubling the distance roughly halves how large a die
+  // reads, since the dice themselves sit near the origin. CAM_ZOOM is that
+  // single lever - scale it to resize the dice without touching every mesh.
+  const CAM_ZOOM = 2;
+  const CAM_BASE = new THREE.Vector3(0, 9.2, 6.4).multiplyScalar(CAM_ZOOM);
   const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 200);
   camera.position.copy(CAM_BASE);
   camera.lookAt(0, 0, 0);

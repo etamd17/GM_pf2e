@@ -4311,7 +4311,7 @@
                         dice: result.dice, modifier: 0, total: result.total,
                         label: 'Custom Roll: ' + expr, detail: result.detail,
                         isCrit: false, isFumble: false
-                    }).then(() => showRollToast('Custom Roll: ' + expr, result.total, result.detail, false, false, result.dice));
+                    }).finally(() => showRollToast('Custom Roll: ' + expr, result.total, result.detail, false, false, result.dice));
                 } else {
                     showRollToast('Custom Roll: ' + expr, result.total, result.detail, false, false, result.dice);
                 }
@@ -6204,7 +6204,7 @@
                     detail: detail,
                     isCrit: isCrit,
                     isFumble: isFumble
-                }).then(() => {
+                }).finally(() => {
                     showRollToast(skillName, total, detail, isCrit, isFumble, [{sides: 20, value: d20}], dc, () => rollSkill(skillName, modifier, dc));
                 });
             } else {
@@ -6369,7 +6369,7 @@
                         modifier: SPELL_ATTACK, total: total,
                         label: `${spellName} — Spell Attack`,
                         detail: detail, isCrit: d20 === 20, isFumble: d20 === 1
-                    }).then(() => showRollToast(`${spellName} — Attack`, rollResult, detail, d20 === 20, d20 === 1));
+                    }).finally(() => showRollToast(`${spellName} — Attack`, rollResult, detail, d20 === 20, d20 === 1));
                 } else {
                     showRollToast(`${spellName} — Attack`, rollResult, detail, d20 === 20, d20 === 1);
                 }
@@ -6664,7 +6664,7 @@
                 window.diceRoller.roll({
                     dice: [{sides: 20, value: d20}], modifier: 0, total: d20,
                     label: 'Flat Check', detail: detail, isCrit: d20 === 20, isFumble: d20 === 1
-                }).then(() => showRollToast('Flat Check', d20, detail, d20 === 20, d20 === 1, [{sides: 20, value: d20}], dc));
+                }).finally(() => showRollToast('Flat Check', d20, detail, d20 === 20, d20 === 1, [{sides: 20, value: d20}], dc));
             } else {
                 showRollToast('Flat Check', d20, detail, d20 === 20, d20 === 1, [{sides: 20, value: d20}], dc);
             }
@@ -6772,7 +6772,7 @@
                     dice: [{sides: sides, value: roll}], modifier: 0, total: roll,
                     label: `Quick Roll: 1d${sides}`, detail: `1d${sides} = ${roll}`,
                     isCrit: sides === 20 && roll === 20, isFumble: sides === 20 && roll === 1
-                }).then(() => showRollToast(`Quick Roll: 1d${sides}`, roll, `1d${sides} = ${roll}`, sides === 20 && roll === 20, sides === 20 && roll === 1, [{sides: sides, value: roll}]));
+                }).finally(() => showRollToast(`Quick Roll: 1d${sides}`, roll, `1d${sides} = ${roll}`, sides === 20 && roll === 20, sides === 20 && roll === 1, [{sides: sides, value: roll}]));
             } else {
                 showRollToast(`Quick Roll: 1d${sides}`, roll, `1d${sides} = ${roll}`, sides === 20 && roll === 20, sides === 20 && roll === 1, [{sides: sides, value: roll}]);
             }
@@ -6835,7 +6835,7 @@
                         dice: result.dice, modifier: 0, total: result.total,
                         label: label, detail: result.detail,
                         isCrit: isCrit || false, isFumble: false
-                    }).then(() => showRollToast(label, result.total, result.detail, isCrit || false, false, result.dice));
+                    }).finally(() => showRollToast(label, result.total, result.detail, isCrit || false, false, result.dice));
                 } else {
                     showRollToast(label, result.total, result.detail, isCrit || false, false, result.dice);
                 }
@@ -6913,7 +6913,7 @@
                         dice: result.dice, modifier: 0, total: result.total,
                         label: 'Custom Roll: ' + input, detail: result.detail,
                         isCrit: false, isFumble: false
-                    }).then(() => showRollToast('Custom Roll', result.total, result.detail, false, false, result.dice));
+                    }).finally(() => showRollToast('Custom Roll', result.total, result.detail, false, false, result.dice));
                 } else {
                     showRollToast('Custom Roll', result.total, result.detail, false, false, result.dice);
                 }
