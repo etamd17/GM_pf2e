@@ -1689,12 +1689,25 @@ def main(argv=None):
     parser.add_argument("--vault", required=True, help="path to the GM Obsidian vault")
     parser.add_argument("--out", required=True, help="output dir for the player vault")
     parser.add_argument("--campaign-id", required=True, dest="campaign_id")
+    parser.add_argument("--mode", choices=sorted(_BUILD_MODES), default="gm-vault",
+                         help="'gm-vault' (default) derives a player vault from the GM's "
+                              "private authoring vault; 'player-vault' ingests an already "
+                              "player-facing, hand-authored vault as-is")
     parser.add_argument("--publish-url", default=None, dest="publish_url")
     parser.add_argument("--token", default=None)
     parser.add_argument("--dry-run", action="store_true", dest="dry_run")
     args = parser.parse_args(argv)
 
-    result = build_player_vault(args.vault, args.out, args.campaign_id)
+    # The default "gm-vault" path calls build_player_vault with the exact
+    # pre-Task-7 3-positional-arg shape (no `mode` kwarg at all) so its
+    # exit-code contract -- and any caller/test that monkeypatches
+    # build_player_vault with a 3-arg fake -- is byte-for-byte unchanged.
+    # `--mode player-vault` is the only case that actually passes `mode`
+    # through.
+    if args.mode == "gm-vault":
+        result = build_player_vault(args.vault, args.out, args.campaign_id)
+    else:
+        result = build_player_vault(args.vault, args.out, args.campaign_id, mode=args.mode)
     print(result["review_summary"])
 
     offenders = sorted(set(result.get("leaks") or [])

@@ -12,6 +12,8 @@ import pytest
 from tools import chronicle_build as cb
 
 FIXTURE = pathlib.Path(__file__).parent / "fixtures" / "gm_vault_sample"
+PLAYER_VAULT_FIXTURE = pathlib.Path(__file__).parent / "fixtures" / "player_vault_sample"
+PLAYER_VAULT_LEAK_FIXTURE = pathlib.Path(__file__).parent / "fixtures" / "player_vault_leak_sample"
 
 SLUG_RE = _re.compile(r"^[a-z0-9][a-z0-9-]{0,80}$")
 
@@ -2074,3 +2076,77 @@ def test_main_rescan_still_catches_leak_in_managed_content(tmp_path, monkeypatch
     err = capsys.readouterr().err
     assert "LEAK CHECK FAILED" in err
     assert "content/boom.md: [!secret]" in err
+
+
+# --- main / CLI: --mode -------------------------------------------------------
+#
+# Task 7: `--mode {gm-vault,player-vault}` on `main`, default "gm-vault",
+# passed through to `build_player_vault`. These tests exercise the NEW
+# player-vault CLI path end-to-end against the real fixtures (no
+# monkeypatching of build_player_vault itself) -- the default gm-vault path
+# and its exit-code contract are entirely unchanged and stay covered by the
+# tests above.
+
+
+def test_main_default_mode_omitted_is_gm_vault(tmp_path, monkeypatch, capsys):
+    # Omitting --mode entirely must behave exactly as before this flag
+    # existed: the fake build_player_vault below only accepts the pre-Task-7
+    # 3-positional-arg call shape, so this proves main() does not change how
+    # it calls build_player_vault on the default path.
+    out = tmp_path / "out"
+
+    def gm_vault_only_build(vault_dir, out_dir, campaign_id):
+        return {"manifest": {"schema_version": 1}, "review_summary": "Pages: 0", "leaks": []}
+
+    monkeypatch.setattr(cb, "build_player_vault", gm_vault_only_build)
+    monkeypatch.setattr(cb, "publish", lambda *a, **k: (_ for _ in ()).throw(
+        AssertionError("publish must not be called on --dry-run")))
+
+    rc = cb.main([
+        "--vault", str(tmp_path), "--out", str(out), "--campaign-id", "x", "--dry-run",
+    ])
+
+    assert rc == 0
+
+
+def test_main_player_vault_mode_dry_run_prints_summary_and_does_not_publish(tmp_path, monkeypatch, capsys):
+    out = tmp_path / "out"
+
+    monkeypatch.setattr(cb, "publish", lambda *a, **k: (_ for _ in ()).throw(
+        AssertionError("publish must not be called on --dry-run")))
+    monkeypatch.setattr(cb, "make_zip", lambda *a, **k: (_ for _ in ()).throw(
+        AssertionError("make_zip must not run on --dry-run")))
+
+    rc = cb.main([
+        "--vault", str(PLAYER_VAULT_FIXTURE), "--out", str(out),
+        "--campaign-id", "sample",
+        "--mode", "player-vault",
+        "--dry-run",
+    ])
+
+    assert rc == 0
+    printed = capsys.readouterr().out
+    assert "Pages:" in printed  # review summary reached stdout
+    assert not out.exists() or not (out / "chronicle.zip").exists()
+
+
+def test_main_player_vault_mode_leak_fixture_aborts_nonzero_and_never_zips(tmp_path, monkeypatch, capsys):
+    out = tmp_path / "out"
+
+    monkeypatch.setattr(cb, "make_zip", lambda *a, **k: (_ for _ in ()).throw(
+        AssertionError("make_zip must not run when a leak is present")))
+    monkeypatch.setattr(cb, "publish", lambda *a, **k: (_ for _ in ()).throw(
+        AssertionError("publish must not run when a leak is present")))
+
+    rc = cb.main([
+        "--vault", str(PLAYER_VAULT_LEAK_FIXTURE), "--out", str(out),
+        "--campaign-id", "sample",
+        "--mode", "player-vault",
+    ])
+
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "LEAK CHECK FAILED" in err
+    assert "danger" in err.lower()
+    # The leak-abort path in build_player_vault never touches out_dir at all.
+    assert not out.exists() or not (out / "chronicle.zip").exists()
