@@ -721,7 +721,11 @@ button.action-btn:focus-visible, .action-btn:focus-visible {
     border-left: 3px solid var(--accent) !important;
     border-radius: var(--r-md) !important;
     box-shadow: var(--shadow-2) !important;
-    padding: var(--sp-3) var(--sp-4) !important;
+    /* Dice-polish (2026-07-28): the roll toast was reading as a panel, not a
+       compact readout — this padding is the property that actually renders
+       (it wins the cascade over the toast's own inline Tailwind padding and
+       text-size classes, see the JS side of this change in player_sheet.html). */
+    padding: var(--sp-2) var(--sp-3) !important;
     background-image: none !important;
     pointer-events: auto !important;
 }
