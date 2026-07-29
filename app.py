@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, send_file, send_from_directory, jsonify, session, Response, abort
+from flask import Flask, render_template, request, redirect, url_for, send_file, send_from_directory, jsonify, session, Response, abort, has_request_context
 import sqlite3
 import json
 import math
@@ -711,13 +711,59 @@ def _bind_campaign_paths(cid):
 
 
 # --- Chronicle content resolution (empty-state gate keys on None) -----------
+#
+# CHRONICLE_DIR (the module global above) is bound by _bind_campaign_paths()
+# to whichever campaign currently holds the server-wide LIVE SLOT -- it is
+# rebound every time load_campaign() runs. That made it the wrong source of
+# truth for a browsing user's OWN chronicle: _active_campaign_id() is, in
+# account mode, deliberately the user's own selection and NEVER the live slot
+# (see its docstring) -- one table's live session could flip what another
+# user's browser reads. Every function below resolves the chronicle root PER
+# REQUEST from _active_campaign_id() instead. CHRONICLE_DIR itself is still
+# kept up to date by _bind_campaign_paths (informational, and read as a
+# fallback by the handful of call sites below that may run with no request in
+# flight) but is no longer load-bearing for read/write correctness.
+def _chronicle_dir_for(cid):
+    """Chronicle storage root for campaign `cid`, or the legacy flat
+    DATA_DIR/chronicle layout when cid is None -- mirrors
+    _bind_campaign_paths' cid=None branch exactly, so a pre-migration /
+    account-less deploy keeps reading and writing the same path it always
+    has."""
+    if cid:
+        return _storage.chronicle_dir(cid)
+    return os.path.join(DATA_DIR, 'chronicle')
+
+
+def _chronicle_root():
+    """Per-REQUEST chronicle storage root, resolved from the browsing
+    caller's OWN active campaign (_active_campaign_id()) -- NEVER the
+    live-slot-bound CHRONICLE_DIR global. This is the read-side fix for the
+    cross-campaign Chronicle bug described above; the write side is fixed in
+    chronicle_publish(), which resolves its target from the uploaded
+    manifest's campaign_id instead of either of these.
+
+    Outside of an active Flask request (a few call sites in
+    tests/test_chronicle_storage.py exercise these helpers as pure functions,
+    with no request/session to resolve a campaign against) this falls back to
+    the process-global CHRONICLE_DIR, exactly how every chronicle read worked
+    before this fix. Every real entry point -- a route, a template global, a
+    context processor -- always runs inside request dispatch, so this
+    fallback is inert in production.
+    """
+    if not has_request_context():
+        return CHRONICLE_DIR
+    return _chronicle_dir_for(_active_campaign_id())
+
+
 def _chronicle_content_dir():
-    """Absolute path to the currently-published chronicle content dir, or None
-    if nothing has been published yet. Resolves the `current` symlink under
-    CHRONICLE_DIR; the empty-state nav gate keys on the None return."""
-    if not CHRONICLE_DIR:
+    """Absolute path to the currently-published chronicle content dir for
+    THIS request's active campaign, or None if nothing has been published
+    yet. Resolves the `current` symlink under _chronicle_root(); the
+    empty-state nav gate keys on the None return."""
+    root = _chronicle_root()
+    if not root:
         return None
-    target = os.path.realpath(os.path.join(CHRONICLE_DIR, 'current'))
+    target = os.path.realpath(os.path.join(root, 'current'))
     if os.path.isdir(target) and os.path.isfile(os.path.join(target, 'manifest.json')):
         return target
     return None
@@ -731,10 +777,19 @@ def _chronicle_manifest():
     return _storage.load_json(os.path.join(content, 'manifest.json'))
 
 
-def _chronicle_swap(staging_dir, new_hash):
-    """Publish a fully-rendered staging dir as the new live content.
+def _chronicle_swap(staging_dir, new_hash, chronicle_dir=None):
+    """Publish a fully-rendered staging dir as the new live content under
+    `chronicle_dir` -- the TARGET campaign's own chronicle root, which the
+    caller resolves and passes explicitly. chronicle_publish() resolves it
+    from the manifest's campaign_id; it is NEVER CHRONICLE_DIR / the live
+    slot (that silent fallback was the write-side half of the cross-campaign
+    Chronicle bug -- see the block comment above _chronicle_dir_for).
+    `chronicle_dir` defaults to the process-global CHRONICLE_DIR only so the
+    direct-call unit tests in tests/test_chronicle_storage.py can keep
+    exercising this as a pure function against a monkeypatched CHRONICLE_DIR;
+    every real call site passes chronicle_dir explicitly.
 
-    Moves `staging_dir` -> CHRONICLE_DIR/content/<new_hash>, then ATOMICALLY
+    Moves `staging_dir` -> chronicle_dir/content/<new_hash>, then ATOMICALLY
     repoints the `current` symlink at it (write a temp symlink + os.replace,
     which is atomic on POSIX -- a reader never sees a half-swapped pointer).
     A directory os.replace is NOT atomic (ENOTEMPTY), hence the symlink repoint;
@@ -742,7 +797,9 @@ def _chronicle_swap(staging_dir, new_hash):
     The outgoing target is retained as `previous` for one-click rollback; older
     orphaned content dirs are pruned so disk stays bounded to current+previous.
     """
-    content_root = os.path.join(CHRONICLE_DIR, 'content')
+    if chronicle_dir is None:
+        chronicle_dir = CHRONICLE_DIR
+    content_root = os.path.join(chronicle_dir, 'content')
     os.makedirs(content_root, exist_ok=True)
     dest = os.path.join(content_root, new_hash)
     if os.path.isdir(dest):
@@ -755,13 +812,13 @@ def _chronicle_swap(staging_dir, new_hash):
     else:
         shutil.move(staging_dir, dest)
 
-    current = os.path.join(CHRONICLE_DIR, 'current')
-    previous = os.path.join(CHRONICLE_DIR, 'previous')
+    current = os.path.join(chronicle_dir, 'current')
+    previous = os.path.join(chronicle_dir, 'previous')
     old_target = os.path.realpath(current) if os.path.islink(current) else None
 
     _chronicle_repoint(current, dest)
     # Compare like-for-like: old_target is already realpath'd above, so dest
-    # must be resolved too here -- if any ancestor of CHRONICLE_DIR is itself
+    # must be resolved too here -- if any ancestor of chronicle_dir is itself
     # a symlink (e.g. macOS mktemp's /var -> /private/var), a same-hash
     # republish has old_target/dest naming the SAME real directory but
     # differing as strings (resolved vs literal), which would wrongly rotate
@@ -772,7 +829,7 @@ def _chronicle_swap(staging_dir, new_hash):
     keep = {os.path.realpath(p) for p in (current, previous) if os.path.islink(p)}
     for name in os.listdir(content_root):
         p = os.path.join(content_root, name)
-        # Resolve `p` before comparing -- if any ancestor of CHRONICLE_DIR is
+        # Resolve `p` before comparing -- if any ancestor of chronicle_dir is
         # itself a symlink (e.g. macOS mktemp's /var -> /private/var), the
         # unresolved `p` never string-matches the realpath'd `keep` set, so
         # this must compare like-for-like or it prunes the live content.
@@ -791,14 +848,19 @@ def _chronicle_repoint(link_path, target):
     os.replace(tmp, link_path)
 
 
-def _chronicle_rollback():
-    """One-click undo of the last publish: repoint `current` at `previous`.
-    Reversible -- the superseded target rotates back into `previous`. Returns
-    True if a rollback happened, False if there is no previous publish."""
-    if not CHRONICLE_DIR:
+def _chronicle_rollback(chronicle_dir=None):
+    """One-click undo of the last publish for `chronicle_dir` (the campaign's
+    own chronicle root -- see _chronicle_swap's docstring for why callers must
+    pass it explicitly, and why the default falls back to the process-global
+    CHRONICLE_DIR): repoint `current` at `previous`. Reversible -- the
+    superseded target rotates back into `previous`. Returns True if a
+    rollback happened, False if there is no previous publish."""
+    if chronicle_dir is None:
+        chronicle_dir = CHRONICLE_DIR
+    if not chronicle_dir:
         return False
-    current = os.path.join(CHRONICLE_DIR, 'current')
-    previous = os.path.join(CHRONICLE_DIR, 'previous')
+    current = os.path.join(chronicle_dir, 'current')
+    previous = os.path.join(chronicle_dir, 'previous')
     if not os.path.islink(previous):
         return False
     prev_target = os.path.realpath(previous)
@@ -5981,8 +6043,10 @@ def _inject_cosmere_conditions():
 @app.context_processor
 def _inject_chronicle_ctx():
     """`chronicle_published` gates the player nav's Chronicle tab (empty-state):
-    true once the first publish exists. Checks content-dir existence (stat only,
-    no JSON parse) per render -- cheaper than loading the manifest."""
+    true once THIS request's active campaign has a publish (_chronicle_content_dir
+    resolves per-request -- see _chronicle_root -- so this never leaks another
+    campaign's publish state). Checks content-dir existence (stat only, no
+    JSON parse) per render -- cheaper than loading the manifest."""
     return {'chronicle_published': _chronicle_content_dir() is not None}
 
 
@@ -10428,19 +10492,94 @@ def _chronicle_validate_manifest(manifest):
     return True, None
 
 
+def _chronicle_staging_root():
+    """Shared scratch space for an in-flight publish upload, before its
+    target campaign is known -- the manifest naming it lives INSIDE the zip
+    being extracted, so extraction has to happen before any campaign can be
+    resolved. Deliberately NOT campaign-scoped (unlike the final published
+    content, which _chronicle_swap moves into the resolved target's own
+    chronicle_dir/content/<hash>): reuses the legacy flat chronicle path,
+    which is always a valid location regardless of account/campaign mode."""
+    return os.path.join(_chronicle_dir_for(None), '.staging')
+
+
+def _chronicle_target_campaign(manifest):
+    """(campaign_id, campaign_doc, error) for a publish's target, resolved
+    from the uploaded manifest's `campaign_id` -- NEVER the live slot (that
+    silent fallback is the bug this closes; see the block comment above
+    _chronicle_dir_for).
+
+    Legacy/pre-accounts deploys (core.auth.any_users_exist() is False) have no
+    campaigns table to validate against -- campaigns can only be created
+    through the login-gated /campaigns/new flow -- so this returns
+    (None, None, None), meaning "publish to the single flat legacy layout",
+    exactly as before this fix. Once real accounts (and therefore campaigns)
+    exist, campaign_id becomes load-bearing: missing or unknown -> a clear
+    error, never a fallback.
+    """
+    if not _account_mode():
+        return None, None, None
+    cid = manifest.get('campaign_id') if isinstance(manifest, dict) else None
+    camp = None
+    if cid:
+        try:
+            camp = _campaigns.get_campaign(cid)
+        except ValueError:
+            camp = None   # malformed id -- fails storage's traversal check
+    if not camp:
+        return cid, None, (
+            'manifest.json "campaign_id" (%r) does not name an existing '
+            "campaign -- publish must target a real campaign id (see "
+            "/campaign/<id>/invites for a campaign's id)" % (cid,))
+    return cid, camp, None
+
+
+def _chronicle_authorize_publish(cid, camp):
+    """True if the current caller may publish into campaign `cid`. `cid` is
+    None only for the legacy/no-accounts case (see _chronicle_target_campaign)
+    -- always allowed there, since check_gm_access already required a GM
+    caller or a valid token to reach this route at all, and there is nothing
+    else to scope to.
+
+    GM session: must be THAT specific campaign's GM (or a site admin) --
+    reuses _require_campaign_gm(), the same per-campaign membership check the
+    invites/activate routes use (app.py, _require_campaign_gm), rather than
+    the caller's own _active_campaign_id(). That is the point: a GM of
+    campaign A must not be able to publish into campaign B just because A
+    happens to be their active campaign in this browser session.
+
+    X-Chronicle-Token (headless CLI path, see _chronicle_token_ok): this is a
+    single deploy-wide secret with NO per-user identity attached, so there is
+    no membership to check -- a valid token authorizes publishing to ANY
+    existing campaign the manifest names. Documented trade-off: the token is
+    only as safe as the secret itself; whoever holds it can publish to any
+    campaign on this deploy. Keep it out of client-side code and rotate it if
+    it ever leaks.
+    """
+    if cid is None:
+        return True
+    if _chronicle_token_ok(request.path):
+        return True
+    _, authed_camp = _require_campaign_gm(cid)
+    return authed_camp is not None
+
+
 @app.route('/api/chronicle/publish', methods=['POST'])
 def chronicle_publish():
     """Ingest a player-vault zip (manifest.json + content/**.md + assets/**),
     validate + leak-scan + render markdown -> html/<slug>.html, then atomically
-    repoint `current`. GM-only via the '/api/chronicle' GM_API_PREFIXES gate."""
+    repoint `current` for the campaign the manifest's campaign_id names (see
+    _chronicle_target_campaign) -- NEVER the live slot. GM-gated via the
+    '/api/chronicle' GM_API_PREFIXES prefix (check_gm_access) for the coarse
+    "is this caller a GM at all" check; this route additionally authorizes
+    the caller for the specific TARGET campaign (_chronicle_authorize_publish)
+    so a GM of one campaign can never publish into another's Chronicle."""
     import zipfile, hashlib, shutil
-    if not CHRONICLE_DIR:
-        return jsonify({'ok': False, 'error': 'no chronicle storage bound'}), 400
     f = request.files.get('archive')
     if not f or not f.filename:
         return jsonify({'ok': False, 'error': 'no archive uploaded (field "archive")'}), 400
 
-    staging_root = os.path.join(CHRONICLE_DIR, '.staging')
+    staging_root = _chronicle_staging_root()
     os.makedirs(staging_root, exist_ok=True)
     # Stream the upload to disk (NOT BytesIO(f.read()) -- the campaign_import
     # anti-pattern): a 48 MB read would balloon the single worker's RAM and the
@@ -10496,6 +10635,15 @@ def chronicle_publish():
         if not ok:
             return jsonify({'ok': False, 'error': err}), 400
 
+        # Resolve + authorize the TARGET campaign from the manifest itself --
+        # never the live slot (that silent fallback is the bug this closes).
+        target_cid, target_camp, target_err = _chronicle_target_campaign(manifest)
+        if target_err:
+            return jsonify({'ok': False, 'error': target_err}), 400
+        if not _chronicle_authorize_publish(target_cid, target_camp):
+            return jsonify({'ok': False,
+                            'error': 'not authorized to publish to that campaign'}), 403
+
         # Defense-in-depth spoiler re-check across the WHOLE staged tree.
         leaks = _chronicle_leak_scan(staging_dir)
         if leaks:
@@ -10529,13 +10677,21 @@ def chronicle_publish():
                 hp.write(html)
             _chronicle_coop_yield()
 
-        # Atomic symlink repoint + rotate previous (storage subsystem).
-        _chronicle_swap(staging_dir, new_hash)
+        # Atomic symlink repoint + rotate previous (storage subsystem), into
+        # the resolved TARGET campaign's own chronicle dir.
+        target_dir = _chronicle_dir_for(target_cid)
+        _chronicle_swap(staging_dir, new_hash, target_dir)
         staging_dir = None  # ownership handed to _chronicle_swap; don't rmtree it
-        sse_broadcast('chronicle_update', {'session_number': manifest.get('session_number')})
+        sse_broadcast('chronicle_update', {'session_number': manifest.get('session_number'),
+                                           'campaign_id': target_cid})
+        # State which campaign this landed in -- a wrong target used to look
+        # exactly like success (the bug this whole fix closes), so the
+        # response says so explicitly rather than leaving it implicit.
         return jsonify({'ok': True, 'hash': new_hash,
                         'pages': len(manifest['pages']),
-                        'session_number': manifest.get('session_number')})
+                        'session_number': manifest.get('session_number'),
+                        'campaign_id': target_cid,
+                        'campaign_name': target_camp.get('name') if target_camp else None})
     finally:
         try:
             os.remove(tmp_zip)
@@ -10551,14 +10707,22 @@ def chronicle_publish():
 @app.route('/api/chronicle/status', methods=['GET'])
 def chronicle_status():
     """Last-publish summary for the GM hub: session, page count, current hash,
-    and whether a rollback target exists. GM-only via the prefix gate."""
+    and whether a rollback target exists -- for THIS caller's own active
+    campaign (_active_campaign_id(); never the live slot, matching every
+    other read in this module -- see _chronicle_root). GM-only via the prefix
+    gate, which already checks GM-ness against that same active campaign
+    (_is_gm()), so no separate per-campaign authorization is needed here,
+    unlike chronicle_publish() (whose target comes from an uploaded manifest,
+    not the caller's own active campaign)."""
     man = _chronicle_manifest()
+    root = _chronicle_root()
     if man is None:
-        return jsonify({'published': False})
+        return jsonify({'published': False, 'campaign_id': _active_campaign_id()})
     content = _chronicle_content_dir()
-    prev = os.path.join(CHRONICLE_DIR, 'previous') if CHRONICLE_DIR else None
+    prev = os.path.join(root, 'previous') if root else None
     return jsonify({
         'published': True,
+        'campaign_id': _active_campaign_id(),
         'session_number': man.get('session_number'),
         'generated_at': man.get('generated_at'),
         'pages': len(man.get('pages') or []),
@@ -10574,14 +10738,19 @@ def chronicle_status():
 @app.route('/api/chronicle/rollback', methods=['POST'])
 def chronicle_rollback():
     """Repoint `current` back to the previous publish (one-click undo of a bad
-    publish). Swap logic + previous-dir bookkeeping live in the storage
-    subsystem's _chronicle_rollback(). GM-only via the prefix gate."""
-    if not _chronicle_rollback():
+    publish) for THIS caller's own active campaign -- never the live slot
+    (mirrors chronicle_status(); see _chronicle_root). Swap logic +
+    previous-dir bookkeeping live in the storage subsystem's
+    _chronicle_rollback(). GM-only via the prefix gate, which already checks
+    GM-ness against that same active campaign, so no separate per-campaign
+    authorization is needed here."""
+    if not _chronicle_rollback(_chronicle_root()):
         return jsonify({'ok': False, 'error': 'no previous publish to roll back to'}), 400
     man = _chronicle_manifest() or {}
     sse_broadcast('chronicle_update', {'session_number': man.get('session_number'),
                                        'rolled_back': True})
-    return jsonify({'ok': True, 'session_number': man.get('session_number')})
+    return jsonify({'ok': True, 'session_number': man.get('session_number'),
+                    'campaign_id': _active_campaign_id()})
 
 
 def _parse_damage_type_value(entry_str):
