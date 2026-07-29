@@ -243,6 +243,161 @@ print("STATUS_ROLLBACK_SCOPED_OK")
     assert 'STATUS_ROLLBACK_SCOPED_OK' in r.stdout, r.stdout + r.stderr
 
 
+def test_cross_campaign_asset_isolation():
+    # The "classic hole": /chronicle/assets/<path> serves files by path, so a
+    # viewer scoped to campaign A must never be able to pull an asset that
+    # only exists in campaign B's published content -- not even by guessing
+    # B's exact filename, and not even while B holds the server-wide live
+    # slot (the original bug's shape: live slot != the viewer's own
+    # campaign). Publish DIFFERENT content, each with its own asset file, to
+    # A and to B, including a same-named asset in both to rule out a naive
+    # "search by basename across campaigns" implementation too.
+    r = _run(_BOOT + '''
+def zip_with_assets(cid, marker, assets, session_number=1):
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        payload = {"schema_version": 1, "campaign_id": cid, "session_number": session_number,
+                   "pages": [{"slug": "home", "section": "recap", "title": "Session Recap",
+                              "recipients": "all", "session_updated": session_number,
+                              "source": "content/home.md",
+                              "assets": [name for name, _ in assets]}]}
+        z.writestr("manifest.json", json.dumps(payload))
+        z.writestr("content/home.md", "# " + marker)
+        for name, data in assets:
+            z.writestr("assets/" + name, data)
+    buf.seek(0)
+    return buf.read()
+
+rA = c.post("/api/chronicle/publish",
+            data={"archive": (io.BytesIO(zip_with_assets(
+                cid_a, "A_ONLY_MARKER_TEXT",
+                [("a-image.png", b"A-ASSET-BYTES"), ("shared.png", b"A-SHARED-BYTES")])), "a.zip")},
+            content_type="multipart/form-data")
+assert rA.status_code == 200, rA.data
+rB = c.post("/api/chronicle/publish",
+            data={"archive": (io.BytesIO(zip_with_assets(
+                cid_b, "B_ONLY_MARKER_TEXT",
+                [("b-image.png", b"B-ASSET-BYTES"), ("shared.png", b"B-SHARED-BYTES")])), "b.zip")},
+            content_type="multipart/form-data")
+assert rB.status_code == 200, rB.data
+
+auth.create_user("carol", "pw_carol12", "Carol")
+carol = auth.get_user_by_username("carol")
+campaigns.add_member(cid_a, carol["id"], "player")
+
+p = A.app.test_client()
+assert p.post("/login", data={"username":"carol","password":"pw_carol12"}).status_code == 302
+assert p.post("/campaign/"+cid_a+"/activate").status_code == 302
+# Carol is not a GM, so activating never moved the live slot -- it is still
+# pinned to B from _BOOT. This is exactly the bug's shape: her own campaign
+# (A) is not the server-wide live slot (B).
+assert storage.get_live_campaign_id() == cid_b
+
+own = p.get("/chronicle/assets/a-image.png")
+assert own.status_code == 200, (own.status_code, own.data)
+assert own.data == b"A-ASSET-BYTES", own.data
+
+other = p.get("/chronicle/assets/b-image.png")
+assert other.status_code == 404, (other.status_code, other.data)
+
+shared = p.get("/chronicle/assets/shared.png")
+assert shared.status_code == 200, (shared.status_code, shared.data)
+assert shared.data == b"A-SHARED-BYTES", shared.data   # never B's bytes under the same name
+
+home = p.get("/chronicle").data
+assert b"A_ONLY_MARKER_TEXT" in home, home
+assert b"B_ONLY_MARKER_TEXT" not in home, home
+print("ASSET_ISOLATION_OK")
+''')
+    assert 'ASSET_ISOLATION_OK' in r.stdout, r.stdout + r.stderr
+
+
+def test_non_gm_player_cannot_publish():
+    # An authenticated but non-GM member of campaign A must be refused
+    # outright by the coarse check_gm_access prefix gate -- before the route
+    # ever parses the manifest -- and must leave every chronicle dir
+    # (her own campaign, the live slot, and the legacy flat layout) untouched.
+    r = _run(_BOOT + '''
+auth.create_user("dave", "pw_dave1234", "Dave")
+dave = auth.get_user_by_username("dave")
+campaigns.add_member(cid_a, dave["id"], "player")
+
+p = A.app.test_client()
+assert p.post("/login", data={"username":"dave","password":"pw_dave1234"}).status_code == 302
+with p.session_transaction() as s:
+    s["active_campaign_id"] = cid_a   # a plain player never touches the live
+                                       # slot via /activate anyway, but set it
+                                       # directly to stay consistent with the
+                                       # other GM-scoping tests in this file.
+
+rr = post_zip(p, cid_a, "Dave the player should never be able to publish")
+assert rr.status_code == 403, (rr.status_code, rr.data)
+
+assert not os.path.exists(os.path.join(storage.chronicle_dir(cid_a), "current"))
+assert not os.path.exists(os.path.join(storage.chronicle_dir(cid_b), "current"))
+assert not os.path.exists(os.path.join(A.DATA_DIR, "chronicle", "current"))
+print("PLAYER_CANNOT_PUBLISH_OK")
+''')
+    assert 'PLAYER_CANNOT_PUBLISH_OK' in r.stdout, r.stdout + r.stderr
+
+
+def test_malformed_campaign_id_types_are_rejected():
+    # manifest.json comes from inside an uploaded zip, so campaign_id is
+    # attacker-influenced. Every non-string JSON type must be rejected with a
+    # 4xx and must never write anywhere -- in particular must never silently
+    # fall back to the live slot (cid_b), which is the exact fallback this
+    # fix closed for the (already-covered) unknown-string-id case.
+    r = _run(_BOOT + '''
+bad_ids = [
+    ("int", 424242),
+    ("list", [cid_a]),
+    ("dict", {"id": cid_a}),
+    ("bool_true", True),
+    ("bool_false", False),
+    ("null", None),
+]
+for label, bad_cid in bad_ids:
+    rr = post_zip(c, bad_cid, "Malformed campaign_id probe: " + label)
+    assert 400 <= rr.status_code < 500, (label, rr.status_code, rr.data)
+    j = rr.get_json()
+    assert j is not None and j.get("ok") is False, (label, rr.data)
+    assert not os.path.exists(os.path.join(storage.chronicle_dir(cid_a), "current")), label
+    assert not os.path.exists(os.path.join(storage.chronicle_dir(cid_b), "current")), label
+    assert not os.path.exists(os.path.join(A.DATA_DIR, "chronicle", "current")), label
+print("MALFORMED_TYPES_REJECTED_OK")
+''')
+    assert 'MALFORMED_TYPES_REJECTED_OK' in r.stdout, r.stdout + r.stderr
+
+
+def test_chronicle_token_does_not_unlock_other_gm_api():
+    # A valid X-Chronicle-Token exists solely to let the headless PR0 build
+    # tool hit /api/chronicle/publish without a real login. It must unlock
+    # ONLY /api/chronicle* -- confirm it is refused on an unrelated GM-gated
+    # API prefix (/api/tracker_state), even though the header carries a
+    # token that is genuinely valid.
+    r = _run(_BOOT + '''
+os.environ["CHRONICLE_PUBLISH_TOKEN"] = "sekret-token-value-xyz"
+headers = {"X-Chronicle-Token": "sekret-token-value-xyz"}
+anon = A.app.test_client()   # no login/session at all -- the token is the
+                              # only credential in play here
+
+# Sanity: the token really does unlock the chronicle API it exists for.
+st = anon.get("/api/chronicle/status", headers=headers)
+assert st.status_code == 200, (st.status_code, st.data)
+
+# It must NOT unlock an unrelated GM-only API prefix.
+tr = anon.get("/api/tracker_state", headers=headers)
+assert tr.status_code == 403, (tr.status_code, tr.data)
+
+# The wrong token is refused even on the chronicle route -- confirms the 200
+# above really came from the token match, not some other bypass.
+bad = anon.get("/api/chronicle/status", headers={"X-Chronicle-Token": "not-the-token"})
+assert bad.status_code == 403, (bad.status_code, bad.data)
+print("TOKEN_CONFINEMENT_OK")
+''')
+    assert 'TOKEN_CONFINEMENT_OK' in r.stdout, r.stdout + r.stderr
+
+
 def test_legacy_mode_without_accounts_still_publishes_to_flat_layout():
     # No accounts at all (true legacy/pre-migration): campaign_id is not
     # applicable (there is no campaigns table to validate it against), so the
