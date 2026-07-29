@@ -426,3 +426,233 @@ assert os.path.islink(content)
 print("LEGACY_OK")
 ''')
     assert 'LEGACY_OK' in r.stdout, r.stdout + r.stderr
+
+
+# --------------------------------------------------------------------------
+# /api/chronicle/unpublish (2026-07-29 addition)
+#
+# Retracts a campaign's published Chronicle: removes `current`/`previous`
+# AND the underlying rendered content -- for a spoiler accidentally
+# published, or an orphaned cross-campaign copy left by the routing bug the
+# tests above cover. DESTRUCTIVE, so every test here proves both that the
+# right thing gets deleted AND that everything else survives untouched.
+# --------------------------------------------------------------------------
+
+def test_unpublish_removes_target_content_leaves_other_campaign_intact():
+    r = _run(_BOOT + '''
+assert post_zip(c, cid_a, "A recap to retract").status_code == 200
+assert post_zip(c, cid_b, "B recap must survive").status_code == 200
+
+a_root = storage.chronicle_dir(cid_a)
+b_root = storage.chronicle_dir(cid_b)
+a_current_target = os.path.realpath(os.path.join(a_root, "current"))
+b_current_target = os.path.realpath(os.path.join(b_root, "current"))
+assert os.path.isdir(a_current_target) and os.path.isdir(b_current_target)
+b_manifest_before = open(os.path.join(b_current_target, "manifest.json")).read()
+
+r = c.post("/api/chronicle/unpublish", json={"campaign_id": cid_a})
+assert r.status_code == 200, r.data
+j = r.get_json()
+assert j["ok"] is True, j
+assert j["campaign_id"] == cid_a, j
+assert j["campaign_name"] == "Shades of Blood", j
+assert j["removed"] is True, j
+
+# A: pointers AND the underlying rendered bytes are gone -- not just
+# unlinked. This is the "actually retracts the spoiler" requirement.
+assert not os.path.islink(os.path.join(a_root, "current"))
+assert not os.path.exists(os.path.join(a_root, "current"))
+assert not os.path.isdir(os.path.join(a_root, "content"))
+assert not os.path.isdir(a_current_target), \\
+    "unpublish must delete the rendered content, not just repoint/remove the pointer"
+
+# A's players now get the empty state through the real read path. The
+# admin session's own active campaign is B (the live slot, from _BOOT), so
+# flip it to A directly (not via /activate, which would also move the live
+# slot) purely to view A's Chronicle as A's own reader would.
+with c.session_transaction() as s:
+    s["active_campaign_id"] = cid_a
+rv = c.get("/chronicle")
+assert b"opens after your first session" in rv.data, rv.data
+with c.session_transaction() as s:
+    s["active_campaign_id"] = cid_b   # restore, so the B assertions below
+                                       # reflect the live-slot session again
+
+# B: completely untouched -- same target dir, same bytes, still live.
+assert os.path.realpath(os.path.join(b_root, "current")) == b_current_target
+assert os.path.isdir(b_current_target)
+assert open(os.path.join(b_current_target, "manifest.json")).read() == b_manifest_before
+print("UNPUBLISH_REMOVES_TARGET_OK")
+''')
+    assert 'UNPUBLISH_REMOVES_TARGET_OK' in r.stdout, r.stdout + r.stderr
+
+
+def test_gm_of_campaign_a_cannot_unpublish_campaign_b():
+    # Alice is GM of A only (not a member of B at all), same shape as the
+    # equivalent publish-scoping test above.
+    r = _run(_BOOT + '''
+auth.create_user("alice", "pw_alice12", "Alice")
+alice = auth.get_user_by_username("alice")
+campaigns.add_member(cid_a, alice["id"], "gm")
+
+assert post_zip(c, cid_b, "B content Alice must not be able to retract").status_code == 200
+b_root = storage.chronicle_dir(cid_b)
+b_current_target = os.path.realpath(os.path.join(b_root, "current"))
+
+p = A.app.test_client()
+assert p.post("/login", data={"username":"alice","password":"pw_alice12"}).status_code == 302
+with p.session_transaction() as s:
+    s["active_campaign_id"] = cid_a   # do NOT go through /activate -- keep the
+                                       # live slot pinned at B from _BOOT.
+
+r = p.post("/api/chronicle/unpublish", json={"campaign_id": cid_b})
+assert r.status_code == 403, (r.status_code, r.data)
+assert r.get_json()["ok"] is False, r.data
+assert os.path.isdir(b_current_target), "B must remain published"
+assert os.path.realpath(os.path.join(b_root, "current")) == b_current_target
+
+# Sanity: the SAME alice CAN unpublish her own campaign A (nothing published
+# there yet, so this also exercises the no-op path) -- proves the 403 above
+# was scoped to B specifically, not a blanket auth failure for Alice.
+r2 = p.post("/api/chronicle/unpublish", json={"campaign_id": cid_a})
+assert r2.status_code == 200, (r2.status_code, r2.data)
+assert r2.get_json()["ok"] is True
+print("GM_SCOPE_UNPUBLISH_OK")
+''')
+    assert 'GM_SCOPE_UNPUBLISH_OK' in r.stdout, r.stdout + r.stderr
+
+
+def test_non_gm_player_cannot_unpublish():
+    r = _run(_BOOT + '''
+auth.create_user("dave", "pw_dave1234", "Dave")
+dave = auth.get_user_by_username("dave")
+campaigns.add_member(cid_a, dave["id"], "player")
+
+assert post_zip(c, cid_a, "Dave must not be able to retract this").status_code == 200
+a_root = storage.chronicle_dir(cid_a)
+a_current_target = os.path.realpath(os.path.join(a_root, "current"))
+
+p = A.app.test_client()
+assert p.post("/login", data={"username":"dave","password":"pw_dave1234"}).status_code == 302
+with p.session_transaction() as s:
+    s["active_campaign_id"] = cid_a
+
+r = p.post("/api/chronicle/unpublish", json={"campaign_id": cid_a})
+assert r.status_code == 403, (r.status_code, r.data)
+assert os.path.isdir(a_current_target), \\
+    "a non-GM player must never be able to retract the Chronicle"
+assert os.path.realpath(os.path.join(a_root, "current")) == a_current_target
+print("NON_GM_CANNOT_UNPUBLISH_OK")
+''')
+    assert 'NON_GM_CANNOT_UNPUBLISH_OK' in r.stdout, r.stdout + r.stderr
+
+
+def test_missing_unknown_malformed_campaign_id_rejected_nothing_removed():
+    # campaign_id must be given explicitly and must name a real campaign --
+    # this route must NEVER infer a target from the live slot (B, pinned by
+    # _BOOT) or the caller's own active campaign.
+    r = _run(_BOOT + '''
+assert post_zip(c, cid_a, "A must survive every rejected unpublish attempt").status_code == 200
+assert post_zip(c, cid_b, "B must survive every rejected unpublish attempt").status_code == 200
+a_target = os.path.realpath(os.path.join(storage.chronicle_dir(cid_a), "current"))
+b_target = os.path.realpath(os.path.join(storage.chronicle_dir(cid_b), "current"))
+
+def assert_untouched():
+    assert os.path.isdir(a_target)
+    assert os.path.isdir(b_target)
+    assert os.path.realpath(os.path.join(storage.chronicle_dir(cid_a), "current")) == a_target
+    assert os.path.realpath(os.path.join(storage.chronicle_dir(cid_b), "current")) == b_target
+
+# Missing entirely (no campaign_id key in the body at all).
+r0 = c.post("/api/chronicle/unpublish", json={})
+assert 400 <= r0.status_code < 500, (r0.status_code, r0.data)
+assert r0.get_json()["ok"] is False, r0.data
+assert_untouched()
+
+# Well-formed id, but names no real campaign.
+bogus = "0" * 32
+r1 = c.post("/api/chronicle/unpublish", json={"campaign_id": bogus})
+assert 400 <= r1.status_code < 500, (r1.status_code, r1.data)
+assert r1.get_json()["ok"] is False, r1.data
+assert_untouched()
+
+# Malformed JSON types (campaign_id comes from a request body, so every
+# non-string type must be rejected the same way the publish manifest's
+# campaign_id is).
+bad_ids = [424242, [cid_a], {"id": cid_a}, True, False, None, ""]
+for bad_cid in bad_ids:
+    rr = c.post("/api/chronicle/unpublish", json={"campaign_id": bad_cid})
+    assert 400 <= rr.status_code < 500, (bad_cid, rr.status_code, rr.data)
+    assert rr.get_json()["ok"] is False, (bad_cid, rr.data)
+    assert_untouched()
+print("MISSING_UNKNOWN_MALFORMED_REJECTED_OK")
+''')
+    assert 'MISSING_UNKNOWN_MALFORMED_REJECTED_OK' in r.stdout, r.stdout + r.stderr
+
+
+def test_unpublish_noop_when_nothing_published():
+    r = _run(_BOOT + '''
+assert c.post("/campaigns/new", data={"name":"Empty Table","system":"pf2e"}).status_code == 302
+names2 = {campaigns.get_campaign(x)["name"]: x for x in storage.list_campaign_ids()}
+cid_c = names2["Empty Table"]
+assert not os.path.exists(os.path.join(storage.chronicle_dir(cid_c), "current"))
+
+r = c.post("/api/chronicle/unpublish", json={"campaign_id": cid_c})
+assert r.status_code == 200, (r.status_code, r.data)
+j = r.get_json()
+assert j["ok"] is True, j
+assert j["removed"] is False, j              # nothing was there -> no-op, not an error
+assert j["campaign_id"] == cid_c, j
+assert j["campaign_name"] == "Empty Table", j
+
+# Calling it again (double-unpublish) stays a clean no-op.
+r2 = c.post("/api/chronicle/unpublish", json={"campaign_id": cid_c})
+assert r2.status_code == 200, (r2.status_code, r2.data)
+j2 = r2.get_json()
+assert j2["ok"] is True and j2["removed"] is False, j2
+print("NOOP_UNPUBLISH_OK")
+''')
+    assert 'NOOP_UNPUBLISH_OK' in r.stdout, r.stdout + r.stderr
+
+
+def test_blast_radius_confined_to_chronicle_root():
+    # Proves unpublish only ever touches the target campaign's chronicle
+    # root: its own campaign directory (and non-chronicle data in it), the
+    # chronicle root itself (just emptied, not removed), and every sibling
+    # campaign's directory/data must all survive byte-for-byte.
+    r = _run(_BOOT + '''
+assert post_zip(c, cid_a, "A content to retract").status_code == 200
+assert post_zip(c, cid_b, "B content that must survive").status_code == 200
+
+a_camp_dir = storage.campaign_dir(cid_a)
+b_camp_dir = storage.campaign_dir(cid_b)
+
+# Plant non-chronicle campaign data for A that must survive an unpublish.
+marker_dir = os.path.join(a_camp_dir, "party_data")
+os.makedirs(marker_dir, exist_ok=True)
+marker_file = os.path.join(marker_dir, "marker.json")
+with open(marker_file, "w") as fh:
+    json.dump({"marker": "must survive"}, fh)
+
+r = c.post("/api/chronicle/unpublish", json={"campaign_id": cid_a})
+assert r.status_code == 200 and r.get_json()["ok"] is True, r.data
+
+# A's own campaign directory, campaign.json, and unrelated data all survive
+# -- only the chronicle subtree was touched.
+assert os.path.isdir(a_camp_dir)
+assert campaigns.get_campaign(cid_a)["name"] == "Shades of Blood"
+assert os.path.isfile(marker_file)
+assert json.load(open(marker_file))["marker"] == "must survive"
+
+# The chronicle root ITSELF still exists (only current/previous/content
+# inside it were removed) -- unpublish is not campaign deletion.
+assert os.path.isdir(storage.chronicle_dir(cid_a))
+
+# Sibling campaign B: directory, campaign.json, and published chronicle all
+# completely untouched.
+assert os.path.isdir(b_camp_dir)
+assert campaigns.get_campaign(cid_b)["name"] == "Ember Court"
+assert os.path.isdir(os.path.realpath(os.path.join(storage.chronicle_dir(cid_b), "current")))
+print("BLAST_RADIUS_CONFINED_OK")
+''')
+    assert 'BLAST_RADIUS_CONFINED_OK' in r.stdout, r.stdout + r.stderr

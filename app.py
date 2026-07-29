@@ -874,6 +874,76 @@ def _chronicle_rollback(chronicle_dir=None):
     return True
 
 
+def _chronicle_unpublish_dir(chronicle_dir):
+    """Retract EVERYTHING published under `chronicle_dir` -- the TARGET
+    campaign's own chronicle root, resolved and authorized by the caller
+    (chronicle_unpublish()) exactly like _chronicle_swap's `chronicle_dir`
+    parameter. Removes the `current` / `previous` publish pointers AND the
+    underlying content/<hash> directories they (and any stray siblings left
+    by an interrupted swap) point to.
+
+    Removes the CONTENT, not just the pointers -- deliberate design choice.
+    Repointing `current` elsewhere (or just deleting it) would still leave
+    the rendered html/manifest bytes sitting on disk under
+    chronicle_dir/content/<hash>: unreachable through the app, but still
+    readable by anyone who can browse the data volume directly (a
+    filesystem backup, an admin shell, a future bug that re-links `current`
+    at a stale hash). Retracting a spoiler -- or cleaning up an orphaned
+    cross-campaign publish -- means the bytes themselves have to go, not
+    just the pointer to them.
+
+    Confined blast radius: every path this removes is verified (via
+    realpath) to resolve to somewhere inside `chronicle_dir` itself before
+    it is touched -- mirrors _chronicle_swap's realpath-then-verify-
+    containment pattern (see its docstring). `chronicle_dir` itself is
+    never removed, only its contents, so the campaign keeps a place to
+    publish into again later.
+
+    Idempotent: returns True if anything was actually removed, False if
+    there was nothing published (a no-op, not an error) -- callers should
+    treat False as success, not failure.
+    """
+    if not chronicle_dir:
+        return False
+    real_root = os.path.realpath(chronicle_dir)
+    removed = False
+
+    for name in ('current', 'previous'):
+        link_path = os.path.join(chronicle_dir, name)
+        if os.path.islink(link_path):
+            # Remove the link itself -- never follow it -- regardless of
+            # whether its target still exists (a dangling symlink still
+            # counts as "something to retract": a prior unpublish attempt
+            # that only got partway, or a manually-broken pointer).
+            os.remove(link_path)
+            removed = True
+        elif os.path.exists(link_path):
+            # Not expected in practice (every writer here always uses
+            # _chronicle_repoint, which only ever creates symlinks) but
+            # handled defensively rather than silently skipped.
+            if os.path.isdir(link_path):
+                shutil.rmtree(link_path)
+            else:
+                os.remove(link_path)
+            removed = True
+
+    content_root = os.path.join(chronicle_dir, 'content')
+    if os.path.isdir(content_root):
+        real_content_root = os.path.realpath(content_root)
+        if real_content_root != real_root and not real_content_root.startswith(real_root + os.sep):
+            # Defense in depth only -- content_root is a fixed child path of
+            # chronicle_dir and cannot normally resolve elsewhere. Refuse
+            # rather than ever rmtree outside the campaign's own chronicle
+            # root.
+            raise RuntimeError(
+                'refusing to unpublish: content dir %r resolves outside chronicle root %r'
+                % (real_content_root, real_root))
+        shutil.rmtree(content_root)
+        removed = True
+
+    return removed
+
+
 def load_campaign(cid):
     """Switch the active campaign: re-bind paths and reload all campaign-scoped
     in-memory state. `cid` may be None to fall back to the legacy flat layout."""
@@ -10751,6 +10821,77 @@ def chronicle_rollback():
                                        'rolled_back': True})
     return jsonify({'ok': True, 'session_number': man.get('session_number'),
                     'campaign_id': _active_campaign_id()})
+
+
+@app.route('/api/chronicle/unpublish', methods=['POST'])
+def chronicle_unpublish():
+    """Retract a campaign's published Chronicle -- removes its `current` /
+    `previous` publish pointers AND the underlying rendered content
+    (_chronicle_unpublish_dir) so its players see the empty state again on
+    their next visit. Exists for two real scenarios: (1) a GM who
+    accidentally publishes spoilery content has no other way to take it
+    down, and (2) a prior misrouted publish (the live-slot-vs-active-
+    campaign bug fixed by _chronicle_target_campaign / _chronicle_root --
+    see the block comment above _chronicle_dir_for) can leave an ORPHANED
+    copy of one campaign's content sitting in another campaign's chronicle
+    directory: a genuine cross-campaign exposure if that campaign's players
+    ever view their Chronicle.
+
+    DESTRUCTIVE -- this deletes player-visible data, so unlike every other
+    /api/chronicle/* route it does NOT operate on the caller's own active
+    campaign:
+
+    - Explicit target only. `campaign_id` MUST be given in the request body
+      and MUST name a real, existing campaign. This route NEVER falls back
+      to the live slot (storage.get_live_campaign_id()) or the caller's own
+      _active_campaign_id() the way chronicle_status()/chronicle_rollback()
+      do -- an unpublish that infers its target is exactly how a GM ends up
+      nuking the wrong campaign's Chronicle. A missing, unknown, or
+      malformed campaign_id is rejected with a 400 and nothing is touched
+      anywhere.
+    - Same authorization as publish: resolves the target the same way (a
+      real campaign or a clean rejection) and reuses
+      _chronicle_authorize_publish() UNCHANGED -- a GM of campaign A cannot
+      unpublish campaign B, and the X-Chronicle-Token headless path unlocks
+      this route exactly the way it unlocks publish (see that function's
+      docstring). GM-ness itself is already required to reach this route at
+      all, via the '/api/chronicle' GM_API_PREFIXES prefix
+      (check_gm_access).
+    - Confined blast radius: the actual removal only ever touches paths
+      inside the TARGET campaign's own chronicle root
+      (_chronicle_dir_for(cid)) -- see _chronicle_unpublish_dir's realpath
+      containment check, which mirrors _chronicle_swap's pattern. The
+      campaign directory itself, sibling campaigns, and anything outside
+      that chronicle root are never touched.
+    - Idempotent: a campaign with nothing published unpublishes successfully
+      as a no-op (`removed: false` in the response), not an error.
+    """
+    data = request.get_json(silent=True) or request.form or {}
+    cid_raw = data.get('campaign_id')
+    if not isinstance(cid_raw, str) or not cid_raw.strip():
+        return jsonify({'ok': False, 'error':
+                        'campaign_id is required (explicit target only -- unpublish never '
+                        'infers a campaign from the live slot or your own active campaign)'
+                        }), 400
+    cid = cid_raw.strip()
+    try:
+        camp = _campaigns.get_campaign(cid)
+    except ValueError:
+        camp = None   # malformed id -- fails storage's traversal check
+    if not camp:
+        return jsonify({'ok': False, 'error':
+                        'campaign_id (%r) does not name an existing campaign' % (cid,)}), 400
+
+    if not _chronicle_authorize_publish(cid, camp):
+        return jsonify({'ok': False,
+                        'error': 'not authorized to unpublish that campaign'}), 403
+
+    removed = _chronicle_unpublish_dir(_chronicle_dir_for(cid))
+    if removed:
+        sse_broadcast('chronicle_update', {'campaign_id': cid, 'unpublished': True})
+
+    return jsonify({'ok': True, 'campaign_id': cid, 'campaign_name': camp.get('name'),
+                    'removed': removed})
 
 
 def _parse_damage_type_value(entry_str):
