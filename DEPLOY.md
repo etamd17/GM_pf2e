@@ -38,6 +38,13 @@ Railway auto-deploys. Volume data persists across deploys.
 
 ---
 
+> **The two sections below are historical.** They document the one-time
+> accounts + campaigns cutover, which has already happened. Keep them for the
+> rollback notes; don't follow them as current instructions. In particular,
+> where they say the map is removed — it isn't. The tactical map is live in the
+> app again (see `CLAUDE.md` → Architecture → Tactical map), though it has not
+> shipped to Railway yet.
+
 ## Staging deploy — preview the new login + campaign/character select risk-free
 
 The branch `phase1-accounts-campaigns` is on GitHub. Stand up a **separate**
@@ -62,8 +69,9 @@ When staging looks right, do the production cutover.
 
 ## Production cutover — flip the live table to accounts + campaigns
 
-Merging this branch to `main` deploys the whole pivot (map removed, accounts,
-campaigns, Cosmere). The cutover has a **deliberate trigger**: deploying alone
+Merging this branch to `main` deploys the whole pivot (accounts, campaigns,
+Cosmere; the map was removed *at the time of this cutover* and has since been
+reinstated). The cutover has a **deliberate trigger**: deploying alone
 keeps the existing PF2e game working in *legacy mode*; running `/setup` is what
 flips it to accounts and migrates the data.
 
@@ -83,7 +91,7 @@ flips it to accounts and migrates the data.
 **After deploy — do this outside a session window**
 
 5. The app is live in legacy mode: your existing PF2e game still works, the map
-   is gone, Cosmere is available but no campaigns exist yet.
+   is gone (as of that cutover), Cosmere is available but no campaigns exist yet.
 6. Hit `/setup`, enter `SETUP_TOKEN`, create your **GM/admin** account. This
    auto-migrates the flat game into "Campaign #1" (your party + PCs) and turns on
    the login wall + campaign/character select.
@@ -93,6 +101,24 @@ flips it to accounts and migrates the data.
 **Rollback** — the migration leaves the original flat files untouched, so
 reverting `main` returns to the previous app reading those files. Keep the
 volume backup from step 1 until you've confirmed the new world is healthy.
+
+---
+
+## Tactical map — deploy constraints
+
+The map has not shipped yet. When it does, three things matter operationally:
+
+- **Scenes and map art live on the volume.** `core/storage.py` writes scene JSON
+  and uploaded backgrounds to `DATA_DIR/campaigns/<cid>/scenes/` (and
+  `DATA_DIR/scenes/` when there is no campaign). With `DATA_DIR=/data` that is
+  correct and survives deploys. Both paths are gitignored — never commit them.
+- **Volume growth is currently unbounded.** Backgrounds are capped at 25 MB
+  *each*, there is no cap on scene count, no recompression, and **no
+  delete-scene route exists**. Watch the volume, or fix that before heavy use.
+- **The one-worker rule is now load-bearing for correctness, not just SSE.**
+  Scene writes serialize through `app._path_lock`, which is an **in-process**
+  lock. Raising `--workers` above 1 would let two workers clobber whole scene
+  files — on top of breaking SSE. Do not raise it.
 
 ---
 

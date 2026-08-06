@@ -8,11 +8,23 @@ sheets, GM screen — server-rendered, real-time over SSE, run in person at the 
 
 ```bash
 # Local dev server (Flask). Legacy-open mode = no auth when GM_PASSWORD is empty.
-DATA_DIR=$(mktemp -d) GM_PASSWORD='' PORT=5057 FLASK_DEBUG=true python app.py
+DATA_DIR=$(mktemp -d) GM_PASSWORD='' PORT=5001 FLASK_DEBUG=true python app.py
 
 pytest -q                      # full test suite (CI runs this)
 python tools/check_templates.py   # Jinja parse check (CI runs this) — run after editing any .html
 ```
+
+- **Port 5001**, not 5057 — `app.py`'s `PORT` default, `.claude/launch.json`, and
+  `start.command` all agree on 5001.
+- **Set `DATA_DIR` when you run locally.** `.claude/launch.json` does not, so
+  `core/storage.py` falls back to `BASE_DIR` and the app writes runtime state
+  (including `scenes/` and uploaded map backgrounds) into the repo root. Those
+  paths are gitignored, but a stray `DATA_DIR` still mixes runtime data with
+  source.
+- **Legacy-open mode makes everyone a GM.** With no `GM_PASSWORD` and no
+  accounts, `_is_gm()` returns True for every request — so `/player/*` pages
+  render the *GM* payload. Any test of player-facing filtering or hidden-token
+  leakage must set `GM_PASSWORD` or run in account mode, or it proves nothing.
 
 - **Production runs on Railway and auto-deploys `main`.** Keep `main` green; a push to `main` ships to players. Persistent data lives on a Railway volume (`/data`); features must write to the volume, never the local FS or symlinks. See `DEPLOY.md`.
 - Prod uses **gunicorn with exactly one gevent worker** (`Procfile`). This is mandatory for SSE (see below) — do not raise `--workers`.
@@ -23,26 +35,38 @@ python tools/check_templates.py   # Jinja parse check (CI runs this) — run aft
 
 - **No emojis** in code, UI strings, comments, or commit messages unless explicitly asked.
 - **Commit/push only when the user asks.** Never commit directly on `main` — branch off it; the user decides when to merge/push. Co-author trailer on commits:
-  `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`
+  `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`
 - **Verify prod-facing fixes on Railway**, not just locally — local-green has missed prod-only failures before.
 - This is a **single-GM, in-person** tool (4 players + 1 GM). Snappiness with that table + tracker↔sheet sync is the priority.
-- **Removed, do not rebuild:** the VTT map (no battle maps) and the in-app notes/Obsidian vault (the GM authors in real Obsidian; the site only keeps a read-only story-thread view + a manual session recap).
+- **Removed, do not rebuild:** the in-app notes/Obsidian vault (the GM authors in real Obsidian; the site only keeps a read-only story-thread view + a manual session recap).
+- **The tactical map is BACK IN SCOPE for this repo** (reopened 2026-08-06). An
+  earlier line here said the VTT was removed and owned by a separate parallel
+  effort — that is no longer true; see *Tactical map* under Architecture. Anything
+  claiming the map is gone is stale.
 
 ## Architecture
 
-- **`app.py` is a ~17k-line monolith** — all Flask routes plus the `Character` (PF2e) and `Monster` classes. Live combat state is held in **process globals** (`ACTIVE_ENCOUNTER`, `ROUND_NUMBER`, `TURN_INDEX`, `PARTY_LIBRARY`, …), flushed to `server_state.json` (`_persist_encounter_state`) and re-hydrated on boot. There is **one live campaign slot** at a time; `load_campaign(cid)` rebinds the globals.
+- **`app.py` is a ~20k-line monolith** — all Flask routes plus the `Character` (PF2e) and `Monster` classes. Live combat state is held in **process globals** (`ACTIVE_ENCOUNTER`, `ROUND_NUMBER`, `TURN_INDEX`, `PARTY_LIBRARY`, …), flushed to `server_state.json` (`_persist_encounter_state`) and re-hydrated on boot. There is **one live campaign slot** at a time; `load_campaign(cid)` rebinds the globals.
 - **Server-rendered Jinja + vanilla JS.** No build step, no SPA framework.
 - **SSE** (`/api/events`): every page subscribes through the shared hub `window.appSSE(eventName, handler)` in `templates/_sse_hub.html` — **never** `new EventSource('/api/events')` directly (one socket per tab; the hub multiplexes + reconnects). Broadcast from the server with `sse_broadcast(event, data, player_filter=...)`: `data` goes to GMs, and `player_filter(copy)` returns the player-facing payload (or `None` to drop it for players entirely) — computed once and shared by all player subscribers.
   - **`?audience=table` is NOT a server-side feature.** Its only use is client-side in `_sse_hub.html`: a passive table screen has no operator, so it self-reloads on a new deploy instead of showing the "New version" toast. There is no audience concept in `app.py` (grep: 0 hits) and no shared-table frame yet — the Campaign Hub's Stage has to build one.
 - **Multi-system**: `systems/` registry; `_active_system()` / `_active_campaign_id()` are request/session-scoped. Templates branch on `body.system-pf2e` / `body.system-cosmere`. Cosmere actors are `systems/cosmere/actor.py::CosmereActor` (reads the Foundry `cosmere-rpg` schema); Cosmere combat is flat-integer, defenses are static (phy/cog/spi), conditions are mostly advantage/disadvantage + Exhausted (a flat test penalty).
-- **GM auth**: a `check_gm_access` before_request gates path-prefixes in `GM_API_PREFIXES` (don't re-flag prefix-gated routes as unauthenticated); `@gm_required` is a separate per-route gate. `_is_gm()` is true for the site admin, the active campaign's GM, or legacy-open mode (no `GM_PASSWORD`).
+- **Not everything is in `app.py`.** `core/` holds standalone modules app.py imports without a circular dependency: `storage.py` (campaign-scoped path resolution + atomic JSON I/O, and the `^[0-9a-f]{32}$` id validation that makes traversal impossible), `auth.py`, `campaigns.py`, `backups.py`, `scenes.py`. `services/` holds `active_effects.py` and `scene_sync.py`.
+- **GM auth — there are THREE patterns, not two.** (1) a `check_gm_access` before_request gates path-prefixes in `GM_API_PREFIXES` (don't re-flag prefix-gated routes as unauthenticated); (2) `@gm_required` is a per-route decorator; (3) **inline `if not _is_gm(): 403` inside a shared route** — used where one URL serves both roles, e.g. `GET/PATCH /api/scenes/<id>` reads for any member but writes for the GM only. No scene path appears in `GM_API_PREFIXES`, so pattern 3 is the only thing protecting several of them. When auditing, grep the handler body, not just the decorator. `_is_gm()` is true for the site admin, the active campaign's GM, or legacy-open mode (no `GM_PASSWORD`).
 - Atomic JSON writes via `_atomic_write_json`; a global `/api/*` JSON error handler.
+- **Tactical map (VTT).** Pages `/map`, `/map/<scene_id>` (GM) and `/player/map`; API under `/api/scenes/*`. Routes and helpers are one contiguous block, `app.py:6452-7261`. Supporting code: `core/scenes.py` (scene schema, token helpers), `services/scene_sync.py` (projection + player sanitization), `templates/map.html`, `static/js/map.js` (canvas renderer, tools, vision raycasting), `static/css/map.css`. Tests in `tests/test_scenes.py`.
+  - **Scene JSON stores presentation state ONLY** — background, grid, token placement, visibility, walls, lights, fog, templates. HP, conditions, initiative, resistances, dying and healing stay authoritative in `ACTIVE_ENCOUNTER` / the character sheets, and are projected onto tokens at read time by `_scene_live_indexes` + `project_scene`. Never persist combat state into a scene file.
+  - **Every player-facing byte goes through `services/scene_sync.py::project_scene(..., player=True)`.** That one function is the whole player/GM boundary: it drops hidden tokens, strips `controller_user_id`, filters GM-only lights and templates, and masks closed secret doors. If you add a field to a token, decide there whether players may see it.
+  - `core/scenes.py::sanitize_for_player` is **dead code** (zero callers) and has already drifted from `project_scene`. Don't call it; prefer deleting it over resurrecting it.
+  - Scenes live at `DATA_DIR/campaigns/<cid>/scenes/` (or `DATA_DIR/scenes/` with no campaign), gitignored.
 
 ## High-risk areas — be careful
 
 - **PB import + level-up correctness** is the highest-risk surface. `Character.__init__` parses Pathbuilder exports; `class_matrix.py` drives per-level proficiency timing. Guarded by ground-truth-vs-Pathbuilder + full-sheet snapshot tests (`tests/test_pc_snapshots.py`, `tests/snapshots/`, `tests/test_pb_import_correctness.py`). If you touch stat derivation, run these; regenerate snapshots by deleting `tests/snapshots/<dir>/` and running pytest twice.
 - **Inline event-handler escaping (recurring bug class).** A user-controlled string (PC/spell/feat/item/combatant/compendium name) interpolated into an `onclick="..."` JS string **must** be JS-escaped: `.replace(/'/g, "\\'")` (or `.replace(/\\/g,'\\\\').replace(/'/g,"\\'")`). An apostrophe ("Go'el", "Thieves' Tools") otherwise closes the string → `SyntaxError` → dead button. **HTML escaping (`esc()`, `&#39;`) does NOT help** — the browser decodes the entity back to `'` before JS runs. Guarded by `tests/test_inline_handler_escaping.py`.
 - The PC sheet repaints in place from the `pc_update` SSE `derived` block (saves/skills/strikes/conditions) — if you add a stat the sheet paints, make sure `_pc_state_payload` ships it, or the UI goes stale.
+- **Hidden-NPC information leaks are a repeat offender.** The tracker deliberately coarsens non-PC health for players — `hp_status` of `""` / `"Wounded"` / `"Dead"` and never a number (`app.py:14931`) — and masks a hidden combatant's whole identity to `"???"`. This was fixed once already (`ROADMAP.md`, session-critical item 1) and the tactical map reintroduced it: `_scene_live_indexes` puts raw `current_hp`/`max_hp` on every combatant and `project_scene` ships it to players untouched. **Any new player-facing payload must match the tracker's policy, not invent its own.** See *Known defects* below.
+- **`tests/test_inline_handler_escaping.py` only globs `templates/**/*.html`** (line 99). Files under `static/js/` are outside the guard entirely. `map.js` happens to be safe (canvas-driven; no `onclick`/`innerHTML` anywhere), but do not read a green suite as proof that a `.js` file is clean.
 
 ## Rules reference
 
@@ -52,8 +76,71 @@ Engine fidelity is audited and documented — check these before claiming a rule
 
 ## Current work
 
-**No feature work is currently in flight.** The app-wide UI/UX + minimal-design arc finished and
-shipped (see below); pick up whatever the user asks for next.
+**The tactical map is in flight** (reopened 2026-08-06). A complete VTT layer landed in this
+working copy — scenes, tokens, encounter sync, map-native combat, fog, walls/doors, lights,
+templates, ruler, and client-side vision. It is wired into the GM hub (`gm_hub.html:148`) and the
+player nav (`_player_nav.html:27`), and `tests/test_scenes.py` passes 19/19.
+
+It has **not shipped**, and it is **not ready to**. Before it can:
+
+1. **Fix the player-payload leaks** (see *Known defects*). Highest priority.
+2. **Full fog is the agreed target**: server-authoritative vision *plus* background tiling, so
+   unexplored map art never reaches the client. Today fog is cosmetic — the browser downloads the
+   whole unfogged image and paints darkness over it, and receives every wall and every fog
+   operation. This needs a design spec before code.
+3. Land regression tests that actually exercise auth (see *Known defects*, item 5).
+
+The app-wide UI/UX + minimal-design arc finished and shipped (see below).
+
+### Known defects in the tactical map (confirmed by reading code, 2026-08-06)
+
+Not yet fixed. Listed so they aren't rediscovered from scratch.
+
+1. **Players receive exact monster HP.** `_scene_live_indexes` (`app.py:6537`) builds
+   `{current_hp, max_hp, conditions}` for every combatant; `project_scene`
+   (`services/scene_sync.py:18`) attaches it verbatim as `token['live']`, and the `player=True`
+   branch only drops hidden tokens and pops `controller_user_id` — it never coarsens `live`.
+   Directly contradicts the tracker policy above. **Fix first.**
+2. **Secret doors are fingerprintable.** The sanitizer masks a closed secret door by setting
+   `kind='wall'` and *popping* `secret` (`scene_sync.py:33`), but every genuine wall is written with
+   `'secret': False` present (`app.py:6996`). In the player payload the walls *missing* that key are
+   exactly the secret doors. One-line fix: set `secret=False` instead of popping.
+3. **PF2e cones are rendered at 60°, not 90°.** `const spread = Math.PI / 6` (`map.js:398`, and the
+   hit test at `:439`) — should be `Math.PI / 4`. Affects both drawing and auto-targeting.
+4. **Visibility polygon sorts across two angle ranges.** Base rays span `[0, 2π)` (`map.js:257`);
+   wall-endpoint rays come from `Math.atan2`, range `(-π, π]` (`:260`). The single ascending sort at
+   `:264` puts upper-half endpoint vertices at the head of the array instead of interleaving them.
+   Normalize before pushing.
+5. **Auth is effectively untested.** `tests/test_scenes.py:95` monkeypatches `_is_gm` to always-True,
+   and `gm_required` is just `if _is_gm()` — so the decorator is neutered on every GM route the
+   suite touches, and `_scene_member_allowed` / `_scene_player_can_move` never execute a real
+   branch. Exactly one 403 is asserted, on one endpoint. `GET /api/scenes`, `POST .../activate` and
+   `GET/POST .../background` have zero coverage. There is no JS test harness at all, so every
+   geometry and coordinate-transform function is unverified.
+6. **Six full `party_data/` directory scans per token drag.** `_scene_payload` scans twice
+   (`_scene_live_indexes` + `_scene_character_records`); `_broadcast_scene` builds two payloads and
+   the PATCH response builds a third. Blocking disk I/O on the single gevent worker, contending with
+   every open SSE stream.
+7. **`core/storage.atomic_write_json` fsyncs unconditionally** with no opt-out, and every scene
+   mutation routes through it. `app.py:178` documents that `os.fsync` is exactly the blocking
+   syscall gevent cannot yield around, which is why `_atomic_write_json` exposes `fsync=False` for
+   high-frequency writes. Token drags and fog strokes are high-frequency writes.
+8. **A no-op token PATCH still writes to disk and broadcasts.** `save_scene` + `_broadcast_scene`
+   run unconditionally at `app.py:7211-7212`, outside any did-anything-change check, bumping
+   `revision` every call. Any campaign member can trigger it in a loop, unthrottled.
+9. **`revision` is advisory.** Bumped on every save, but there is no `If-Match`, no expected-revision
+   parameter and no client-side conflict detection. Concurrent edits are silently last-write-wins.
+10. **`core/scenes.py::create_scene` and `set_active_scene` are not lock-protected**, unlike every
+    mutating route. They check-then-write `scenes/index.json` with no `_path_lock`.
+11. **Four GM routes 500 instead of 404 on a malformed scene id** — `sync-encounter` (`app.py:6836`),
+    `combatants` (`:6913`), `elements` (`:6974`), `bulk-combat` (`:7078`) don't catch the `ValueError`
+    from `scene_file()`. The other routes do.
+12. **Background upload buffers before it checks size.** `request.files.get('image')` (`app.py:7236`)
+    parses the whole multipart body before the 25 MB `content_length` check at `:7239`, and
+    `MAX_CONTENT_LENGTH` is 64 MB. It also bypasses `_save_image_compressed` (`app.py:11050`). There
+    is no delete-scene route anywhere, so volume growth is unbounded.
+13. **`GET /api/load_stage/<name>` is unauthenticated** (`app.py:14260`) while its POST counterpart
+    `/api/save_stage` is prefix-gated. Pre-existing, outside the map, adjacent to the builder handoff.
 
 **Do NOT work on these — explicitly owned elsewhere or deferred by the user:**
 - **Campaign Hub / the Stage** (`docs/superpowers/specs/2026-07-21-campaign-hub-design.md`). The user
@@ -62,7 +149,6 @@ shipped (see below); pick up whatever the user asks for next.
   implement it, and do not start prep work for it, unless the user explicitly reopens it. (No Stage
   code was ever written here — `api_stage_encounter()` in app.py is an unrelated pre-existing route
   for staging an encounter.)
-- The **battle-map/VTT** — a separate parallel effort.
 - Player-sheet **inventory reorg** ("hold on inventory scope").
 - A **sticky HP/conditions chip** on the player sheet — considered and dropped by the user.
 - **Player-vault ingestion** (plan: `docs/superpowers/plans/2026-07-21-chronicle-player-vault-ingest.md`).

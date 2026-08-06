@@ -97,6 +97,13 @@ combat-only state (`current_hp`, `conditions`, `reaction_used`).
    so Orc PCs were silently rendered as if blind in dark ambient.
    Fixed by walking `build['specials']` for sense keywords during init.
 
+> **Note (2026-08-06):** every "map tool" reference above and below describes
+> the *original* map, which was removed. The senses/darkvision fix to
+> `Character` is real and still stands, but its map-side consumer is gone —
+> the current map has no `darkvision` token flag and never reads `pc.senses`.
+> Vision there is a single numeric `vision_radius` per token
+> (`core/scenes.py:101`). Low-light and darkvision are unimplemented.
+
 ## Known follow-ups (not blocking Week 1)
 
 - `self.senses` can hold both `"Low-Light-Vision"` and `"Low-Light Vision"`
