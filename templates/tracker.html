@@ -4663,7 +4663,9 @@ function computeDamagePreview(amount, damageType, combatant) {
     // Weaknesses
     for (const wStr of (combatant.weaknesses || [])) {
         const parsed = _parseDmgTypeVal(wStr);
-        if (parsed.type === dtype || (parsed.type === 'physical' && physicalTypes.has(dtype))) {
+        if (parsed.type === dtype
+                || (parsed.type === 'physical' && physicalTypes.has(dtype))
+                || parsed.type === 'all') {
             final = final + parsed.val;
             notes.push('weak ' + parsed.val);
             cls = 'weak';
