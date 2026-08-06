@@ -10943,7 +10943,9 @@ def _calculate_damage_with_wri(amount, damage_type, combatant):
     # Apply weaknesses (add to damage)
     for w_str in getattr(combatant, 'weaknesses', []):
         wtype, wval, _ = _parse_damage_type_value(w_str)
-        if wtype == dtype or (wtype == 'physical' and dtype in physical_types):
+        if (wtype == dtype
+                or (wtype == 'physical' and dtype in physical_types)
+                or wtype == 'all'):
             final = final + wval
             adjustments.append(f"Weak {damage_type} +{wval}")
             break  # Only one weakness applies per damage type

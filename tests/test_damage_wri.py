@@ -20,7 +20,12 @@ NB on the data model the function expects:
 
 from __future__ import annotations
 
+import pathlib
+
 import app
+
+
+_REPO = pathlib.Path(__file__).resolve().parent.parent
 
 
 # --------------------------------------------------------------------------
@@ -337,12 +342,15 @@ def test_weakness_physical_does_not_match_energy():
     assert notes == []
 
 
-def test_weakness_all_category_does_NOT_match():
-    # POSSIBLE BUG: resistances honor an 'all' category but weaknesses do not --
-    # the weakness loop only checks exact type or 'physical'. A creature with
-    # "weakness all 5" (PF2e: weakness to all damage, e.g. some constructs/swarms
-    # vs area) would take NO extra damage here. Locking current behavior.
-    eff, notes = calc(20, 'fire', weaknesses=['all 5'])
+def test_weakness_all_matches_any_typed_damage():
+    for dt in ('fire', 'slashing', 'mental', 'poison'):
+        eff, notes = calc(20, dt, weaknesses=['all 5'])
+        assert eff == 25, dt
+        assert notes == [f'Weak {dt} +5'], dt
+
+
+def test_weakness_all_does_not_apply_to_untyped_damage():
+    eff, notes = calc(20, 'untyped', weaknesses=['all 5'])
     assert eff == 20
     assert notes == []
 
@@ -452,6 +460,14 @@ def test_monster_constructor_weakness_feeds_function():
     assert notes == ['Weak fire +10']
 
 
+def test_monster_constructor_all_weakness_feeds_function():
+    m = _monster_with(weaknesses=[{'type': 'all', 'value': 5}])
+    assert m.weaknesses == ['all 5']
+    eff, notes = app._calculate_damage_with_wri(20, 'fire', m)
+    assert eff == 25
+    assert notes == ['Weak fire +5']
+
+
 def test_monster_constructor_immunity_feeds_function():
     m = _monster_with(immunities={'value': ['fire', 'poison']})
     assert 'fire' in m.immunities
@@ -485,3 +501,51 @@ def test_monster_full_wri_stack_end_to_end():
     # Void immunity zeroes void damage.
     eff, notes = app._calculate_damage_with_wri(99, 'void', m)
     assert eff == 0 and notes == ['IMMUNE to void']
+
+
+def test_adjust_hp_route_applies_all_weakness(monkeypatch):
+    """The tracker route must apply the universal weakness and report the
+    post-WRI amount that the website uses for its damage toast."""
+    m = _monster_with(weaknesses=[{'type': 'all', 'value': 5}])
+    m.instance_id = 'all-weakness-route'
+    m.hp = 50
+    m.current_hp = 50
+
+    prior_encounter = list(app.ACTIVE_ENCOUNTER)
+    prior_turn_index = app.TURN_INDEX
+    monkeypatch.setattr(app, '_persist_encounter_state', lambda *a, **k: None)
+    monkeypatch.setattr(app, '_broadcast_encounter_state', lambda *a, **k: None)
+    monkeypatch.setattr(app, '_bump_campaign_stat', lambda *a, **k: None)
+    monkeypatch.setattr(app, '_combat_log', lambda *a, **k: None)
+    try:
+        app.ACTIVE_ENCOUNTER[:] = [m]
+        app.TURN_INDEX = 0
+        app._invalidate_tracker_cache()
+        response = app.app.test_client().post(
+            '/api/adjust_hp/all-weakness-route',
+            data={'amount': '10', 'action': 'damage', 'damage_type': 'fire'},
+            headers={'X-Requested-With': 'XMLHttpRequest'},
+        )
+        assert response.status_code == 200, response.data
+        assert m.current_hp == 35
+        assert response.get_json()['applied'] == {
+            'instance_id': 'all-weakness-route',
+            'action': 'damage',
+            'net': 15,
+            'raw': 10,
+        }
+    finally:
+        app.ACTIVE_ENCOUNTER[:] = prior_encounter
+        app.TURN_INDEX = prior_turn_index
+        app._invalidate_tracker_cache()
+
+
+def test_tracker_damage_preview_matches_all_weakness():
+    """The pre-click tracker preview must agree with the server-side WRI
+    calculation instead of showing raw damage before the route applies more."""
+    tracker = (_REPO / 'templates' / 'tracker.html').read_text(encoding='utf-8')
+    preview_start = tracker.index('function computeDamagePreview')
+    weakness_start = tracker.index('// Weaknesses', preview_start)
+    weakness_end = tracker.index('if (notes.length === 0)', weakness_start)
+    weakness_block = tracker[weakness_start:weakness_end]
+    assert "parsed.type === 'all'" in weakness_block
