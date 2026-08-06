@@ -1,0 +1,119 @@
+{
+    "_id": "hozXQvKqp62DnawX",
+    "img": "icons/commodities/materials/feather-red.webp",
+    "name": "Effect: Jyoti's Feather - Armor",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Jyoti's Feather], @UUID[Compendium.pf2e.equipment-srd.Item.Jyoti's Feather (Greater)], @UUID[Compendium.pf2e.equipment-srd.Item.Jyoti's Feather (Major)]</p>\n<p>You gain an item bonus to saving throws against death effects and void effects.</p>"
+        },
+        "duration": {
+            "expiry": null,
+            "sustained": false,
+            "unit": "unlimited",
+            "value": -1
+        },
+        "level": {
+            "value": 10
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Treasure Vault (Remastered)"
+        },
+        "rules": [
+            {
+                "adjustName": false,
+                "choices": [
+                    {
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:origin:item:slug:jyotis-feather",
+                                    {
+                                        "not": "parent:origin:item"
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": "Compendium.pf2e.equipment-srd.Item.Jyoti's Feather"
+                    },
+                    {
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:origin:item:slug:jyotis-feather-greater",
+                                    {
+                                        "not": "parent:origin:item"
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": "Compendium.pf2e.equipment-srd.Item.Jyoti's Feather (Greater)"
+                    },
+                    {
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:origin:item:slug:jyotis-feather-major",
+                                    {
+                                        "not": "parent:origin:item"
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": "Compendium.pf2e.equipment-srd.Item.Jyoti's Feather (Major)"
+                    }
+                ],
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Prompt.EquipmentVariety",
+                "rollOption": "jyotis-feather"
+            },
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    {
+                        "or": [
+                            "item:trait:death",
+                            "item:trait:void"
+                        ]
+                    }
+                ],
+                "selector": "saving-throw",
+                "slug": "jyotis-feather-bonus",
+                "type": "item",
+                "value": 2
+            },
+            {
+                "key": "AdjustModifier",
+                "mode": "upgrade",
+                "predicate": [
+                    "jyotis-feather:jyotis-feather-greater"
+                ],
+                "selector": "saving-throw",
+                "slug": "jyotis-feather-bonus",
+                "value": 3
+            },
+            {
+                "key": "AdjustModifier",
+                "mode": "upgrade",
+                "predicate": [
+                    "jyotis-feather:jyotis-feather-major"
+                ],
+                "selector": "saving-throw",
+                "slug": "jyotis-feather-bonus",
+                "value": 4
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

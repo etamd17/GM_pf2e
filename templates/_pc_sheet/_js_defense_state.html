@@ -1,0 +1,62 @@
+        // ==========================================
+        // TEMP HP + SHIELD STATE — kept in sync via SSE so
+        // the Shield-Block prompt and the +TMP button always
+        // reflect server truth, not stale page render.
+        // ==========================================
+        let currentTempHp = parseInt("{{ pc.temp_hp or 0 }}") || 0;
+        let currentShield = {
+            raised:    {{ 'true' if pc.shield_raised else 'false' }},
+            hp:        parseInt("{{ pc.shield_hp or 0 }}") || 0,
+            max_hp:    parseInt("{{ pc.shield_max_hp or 0 }}") || 0,
+            hardness:  parseInt("{{ pc.shield_hardness or 0 }}") || 0,
+            bt:        parseInt("{{ pc.shield_bt or 0 }}") || 0,
+            broken:    {{ 'true' if pc.shield_broken else 'false' }},
+            destroyed: {{ 'true' if pc.shield_destroyed else 'false' }}
+        };
+
+        function _paintTempHpChip() {
+            const chip = document.getElementById('temp-hp-chip');
+            const val  = document.getElementById('temp-hp-val');
+            if (val) val.textContent = currentTempHp;
+            if (chip) chip.style.display = currentTempHp > 0 ? '' : 'none';
+        }
+        function _paintShieldGauge() {
+            const txt   = document.getElementById('shield-hp-text');
+            const wrap  = document.getElementById('shield-svg-wrap');
+            const lbl   = document.getElementById('shield-state-lbl');
+            if (!txt || !wrap || !lbl) return; // no shield configured
+            txt.textContent = `${currentShield.hp}/${currentShield.max_hp}`;
+            const pct = currentShield.max_hp > 0 ? Math.max(0, Math.min(100, Math.round(currentShield.hp / currentShield.max_hp * 100))) : 0;
+            // Single style-var write — triggers only one paint, no layout.
+            wrap.style.setProperty('--shield-fill', pct + '%');
+            wrap.classList.toggle('broken', !!currentShield.broken && !currentShield.destroyed);
+            wrap.classList.toggle('destroyed', !!currentShield.destroyed);
+            if (currentShield.destroyed) {
+                lbl.style.color = '#ef4444';
+                lbl.textContent = 'Destroyed';
+            } else if (currentShield.broken) {
+                lbl.style.color = '#eab308';
+                lbl.textContent = 'Broken';
+            } else if (currentShield.raised) {
+                lbl.style.color = '#93C5FD';
+                lbl.textContent = `Raised · H${currentShield.hardness}`;
+            } else {
+                lbl.style.color = 'var(--t3)';
+                lbl.textContent = `H${currentShield.hardness}`;
+            }
+            // Phase 11: enable Repair button only when shield actually has damage.
+            const rbtn = document.getElementById('shield-repair-btn');
+            if (rbtn) {
+                const atFull = currentShield.hp >= currentShield.max_hp;
+                rbtn.disabled = atFull;
+                rbtn.style.opacity = atFull ? '0.35' : '';
+                rbtn.style.cursor  = atFull ? 'not-allowed' : 'pointer';
+            }
+        }
+        function _shieldIsUsable() {
+            return currentShield.raised
+                && !currentShield.broken
+                && !currentShield.destroyed
+                && currentShield.hp > 0
+                && currentShield.max_hp > 0;
+        }

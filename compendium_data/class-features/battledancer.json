@@ -1,0 +1,75 @@
+{
+    "_id": "5HoEwzLDJGTCZtFa",
+    "img": "systems/pf2e/icons/features/classes/battledancer-style.webp",
+    "name": "Battledancer",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p>To you, a fight is a kind of performance art, and you command your foes' attention with mesmerizing motions. You are trained in Performance and gain the @UUID[Compendium.pf2e.feats-srd.Item.Fascinating Performance] skill feat. When you @UUID[Compendium.pf2e.actionspf2e.Item.Perform], the action gains the bravado trait.</p>"
+        },
+        "level": {
+            "value": 1
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "key": "ActiveEffectLike",
+                "mode": "upgrade",
+                "path": "system.skills.performance.rank",
+                "value": 1
+            },
+            {
+                "key": "GrantItem",
+                "predicate": [
+                    "class:swashbuckler"
+                ],
+                "uuid": "Compendium.pf2e.feats-srd.Item.Fascinating Performance"
+            },
+            {
+                "key": "Note",
+                "outcome": [
+                    "success",
+                    "criticalSuccess"
+                ],
+                "predicate": [
+                    "finisher",
+                    "feature:exemplary-finisher"
+                ],
+                "selector": "strike-attack-roll",
+                "text": "PF2E.SpecificRule.ExemplaryFinisher.Battledancer",
+                "title": "PF2E.SpecificRule.ExemplaryFinisher.Name"
+            },
+            {
+                "domain": "skill-check",
+                "key": "RollOption",
+                "option": "item:trait:bravado",
+                "predicate": [
+                    "action:perform"
+                ]
+            }
+        ],
+        "traits": {
+            "otherTags": [
+                "swashbuckler-style"
+            ],
+            "rarity": "common",
+            "value": [
+                "swashbuckler"
+            ]
+        }
+    },
+    "type": "feat"
+}

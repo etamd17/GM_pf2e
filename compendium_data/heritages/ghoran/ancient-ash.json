@@ -1,0 +1,42 @@
+{
+    "_id": "CMf0qluB0LXWReew",
+    "folder": "ZfviFHVOE4QCb5Ow",
+    "img": "icons/environment/wilderness/tree-ash.webp",
+    "name": "Ancient Ash",
+    "system": {
+        "ancestry": {
+            "name": "Ghoran",
+            "slug": "ghoran",
+            "uuid": "Compendium.pf2e.ancestries.Item.tSurOqRcfumadTfr"
+        },
+        "description": {
+            "value": "<p>Your memory is sharp and clear, and you remember so much. You remember the calm before the storm and the soil after the rain, the acrid tang of magic and the whisper of a song. You remember it all. You become trained in one skill of your choice. At 5th level, you become an expert in that skill.</p>"
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Lost Omens Impossible Lands"
+        },
+        "rules": [
+            {
+                "choices": {
+                    "config": "skills"
+                },
+                "flag": "skill",
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Prompt.Skill"
+            },
+            {
+                "key": "ActiveEffectLike",
+                "mode": "upgrade",
+                "path": "system.skills.{item|flags.pf2e.rulesSelections.skill}.rank",
+                "value": "ternary(gte(@actor.level,5),2,1)"
+            }
+        ],
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "heritage"
+}

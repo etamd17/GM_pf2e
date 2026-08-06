@@ -1,0 +1,928 @@
+{% extends "base.html" %}
+{% block title %}Encounter Builder - PF2E Dashboard{% endblock %}
+
+{% block content %}
+<style>
+/* Warm-ink remap: this page leans on Tailwind's default (cold blue-slate) gray
+   utilities, which the app's Tailwind config never warmed. Remap them to warm-ink
+   so the builder matches the tracker / party board / hub. Inline = page-scoped. */
+.bg-gray-950 { background-color: #0c0a07 !important; }
+.bg-gray-900 { background-color: #14110c !important; }
+.bg-gray-800 { background-color: #1c1813 !important; }
+.bg-gray-700 { background-color: #241d14 !important; }
+.bg-gray-600 { background-color: #2e2619 !important; }
+.border-gray-700 { border-color: rgba(201,163,78,0.14) !important; }
+.border-gray-600 { border-color: rgba(201,163,78,0.22) !important; }
+.text-gray-200 { color: #ede4cf !important; }
+.text-gray-300 { color: #d9cfb8 !important; }
+.text-gray-400 { color: #c8bd9e !important; }
+.text-gray-500 { color: #a79d88 !important; }
+.text-gray-600 { color: #8a7f68 !important; }
+.text-gray-700 { color: #6f6553 !important; }
+</style>
+<div class="flex justify-between items-end mb-6 border-b border-gray-700 pb-2">
+    <div>
+        <h1 class="text-3xl font-header text-accent-300">Encounter Builder</h1>
+        <p class="text-sm text-gray-400 mt-1">Stage monsters, balance XP, then load directly into the tracker.</p>
+    </div>
+    <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2 bg-gray-800 border border-gray-700 px-3 py-2 rounded">
+            <label class="text-xs text-gray-400 font-bold uppercase tracking-wider">Party Level:</label>
+            <input type="number" id="builder-party-level" value="{{ party_level }}" min="1" max="20" onchange="recalcXP()"
+                class="bg-gray-950 border border-gray-600 text-gray-200 rounded px-2 py-1 text-sm w-14 text-center focus:outline-none focus:border-accent-300">
+        </div>
+        <div class="flex items-center gap-2 bg-gray-800 border border-gray-700 px-3 py-2 rounded"
+             title="PF2e GM Core encounter thresholds are scaled per PC: ±10 / 15 / 20 / 30 / 40 from the 4-player baseline.">
+            <label class="text-xs text-gray-400 font-bold uppercase tracking-wider">Party Size:</label>
+            <input type="number" id="builder-party-size" value="{{ party_size }}" min="1" max="8" onchange="recalcXP()"
+                class="bg-gray-950 border border-gray-600 text-gray-200 rounded px-2 py-1 text-sm w-14 text-center focus:outline-none focus:border-accent-300">
+        </div>
+    </div>
+</div>
+
+<div class="flex gap-6 items-start">
+    <!-- Monster Search -->
+    <div class="w-1/3 space-y-4">
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
+            <input type="text" id="monster-search" placeholder="Search monsters by name..." autocomplete="off"
+                class="w-full bg-gray-950 border border-gray-700 text-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:border-accent-300/50 placeholder:text-gray-600 mb-2">
+            <!-- Level / trait filter strip. Filters alone (with empty name) still
+                 return results so you can browse "Lv 3–5 undead" without typing. -->
+            <div class="grid grid-cols-[1fr_auto_1fr_2fr] gap-2 items-center mb-3">
+                <input type="number" id="monster-min-lvl" placeholder="Min" min="-1" max="25" oninput="triggerMonsterSearch()"
+                    class="bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-xs text-center focus:outline-none focus:border-accent-300/50" title="Minimum level">
+                <span class="text-gray-500 text-xs">–</span>
+                <input type="number" id="monster-max-lvl" placeholder="Max" min="-1" max="25" oninput="triggerMonsterSearch()"
+                    class="bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-xs text-center focus:outline-none focus:border-accent-300/50" title="Maximum level">
+                <input type="text" id="monster-trait" placeholder="trait e.g. undead" oninput="triggerMonsterSearch()"
+                    class="bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-xs focus:outline-none focus:border-accent-300/50 placeholder:text-gray-600" title="Trait filter (substring match)">
+            </div>
+            <!-- Party-level quick-scope buttons: one click auto-fills min/max around
+                 the current party level (PL−4 .. PL+2) — the most useful encounter band. -->
+            <div class="flex items-center gap-1 mb-3 text-[10px]">
+                <span class="text-gray-500 uppercase tracking-wider mr-1">Scope:</span>
+                <button onclick="applyLevelScope('party')" class="bg-gray-900 hover:bg-accent-600/40 text-gray-400 hover:text-accent-300 border border-gray-700 px-2 py-0.5 rounded font-bold transition-colors" title="Filter to PL−4 .. PL+2 (the useful range)">Party ±</button>
+                <button onclick="applyLevelScope('below')" class="bg-gray-900 hover:bg-gray-700 text-gray-400 border border-gray-700 px-2 py-0.5 rounded font-bold transition-colors" title="PL−4 .. PL−1 (minions & mooks)">Mooks</button>
+                <button onclick="applyLevelScope('match')" class="bg-gray-900 hover:bg-gray-700 text-gray-400 border border-gray-700 px-2 py-0.5 rounded font-bold transition-colors" title="PL−1 .. PL+1 (bread & butter)">Peers</button>
+                <button onclick="applyLevelScope('boss')" class="bg-gray-900 hover:bg-danger-500/30 text-gray-400 hover:text-danger-200 border border-gray-700 px-2 py-0.5 rounded font-bold transition-colors" title="PL+1 .. PL+4 (bosses & elites)">Boss</button>
+                <button onclick="applyLevelScope('clear')" class="bg-gray-900 hover:bg-gray-700 text-gray-500 border border-gray-700 px-2 py-0.5 rounded transition-colors ml-auto" title="Clear filters">×</button>
+            </div>
+            <div id="monster-results" class="space-y-1 max-h-[40vh] overflow-y-auto custom-scrollbar">
+                <div class="text-center text-gray-600 text-xs italic py-6">Type a name, set a level range, or pick a scope above.</div>
+            </div>
+        </div>
+        
+        <!-- Custom Monster Builder -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4" id="custom-monster-card">
+            <details id="custom-monster-details">
+                <summary class="font-header text-sm text-accent-300 cursor-pointer mb-3">+ Create Custom Monster</summary>
+                <div class="space-y-3 mt-3">
+                    <div class="grid grid-cols-2 gap-2">
+                        <input type="text" id="cm-name" placeholder="Monster Name" class="col-span-2 bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm">
+                        <div class="flex gap-2">
+                            <input type="number" id="cm-level" placeholder="Lvl" value="1" min="-1" max="25" class="w-16 bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm text-center">
+                            <input type="number" id="cm-hp" placeholder="HP" value="20" min="1" class="flex-1 bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm text-center">
+                        </div>
+                        <div class="flex gap-2">
+                            <input type="number" id="cm-ac" placeholder="AC" value="15" min="0" class="flex-1 bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm text-center">
+                            <input type="number" id="cm-speed" placeholder="Spd" value="25" min="0" class="flex-1 bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm text-center">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2">
+                        <input type="number" id="cm-fort" placeholder="Fort" value="5" class="bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm text-center">
+                        <input type="number" id="cm-ref" placeholder="Ref" value="5" class="bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm text-center">
+                        <input type="number" id="cm-will" placeholder="Will" value="5" class="bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm text-center">
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <input type="number" id="cm-perc" placeholder="Perception" value="5" class="bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm text-center">
+                        <input type="text" id="cm-traits" placeholder="Traits (comma sep)" class="bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm">
+                    </div>
+                    
+                    <div class="border-t border-gray-700 pt-2">
+                        <span class="text-[10px] uppercase tracking-wider text-gray-500 font-bold">Strike 1</span>
+                        <div class="grid grid-cols-3 gap-2 mt-1">
+                            <input type="text" id="cm-s1-name" placeholder="Jaws" class="bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm">
+                            <input type="number" id="cm-s1-atk" placeholder="+10" value="10" class="bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm text-center">
+                            <input type="text" id="cm-s1-dmg" placeholder="2d8+4 P" value="1d8+4 piercing" class="bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm">
+                        </div>
+                    </div>
+                    <div class="border-t border-gray-700 pt-2">
+                        <span class="text-[10px] uppercase tracking-wider text-gray-500 font-bold">Strike 2 (optional)</span>
+                        <div class="grid grid-cols-3 gap-2 mt-1">
+                            <input type="text" id="cm-s2-name" placeholder="Claw" class="bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm">
+                            <input type="number" id="cm-s2-atk" placeholder="+10" class="bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm text-center">
+                            <input type="text" id="cm-s2-dmg" placeholder="1d6+4 S" class="bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm">
+                        </div>
+                    </div>
+                    
+                    <button onclick="createCustomMonster()" class="w-full bg-accent-600/30 hover:bg-accent-600/50 text-accent-300 border border-accent-600/50 rounded py-2 text-sm font-bold transition-colors">Create Monster</button>
+                </div>
+            </details>
+        </div>
+        
+        <!-- Import Monster JSON -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
+            <details>
+                <summary class="font-header text-sm text-teal-400 cursor-pointer mb-3">📥 Import Monster JSON</summary>
+                <textarea id="monster-json-paste" rows="4" placeholder="Paste Foundry PF2E monster JSON here..." class="w-full bg-gray-950 border border-gray-700 text-gray-200 rounded px-3 py-2 text-xs font-mono mt-2 mb-2"></textarea>
+                <button onclick="importMonsterJSON()" class="w-full bg-teal-900/30 hover:bg-teal-900/50 text-teal-400 border border-teal-900/50 rounded py-2 text-sm font-bold transition-colors">Import</button>
+                <div id="import-monster-status" class="text-xs mt-2 hidden"></div>
+            </details>
+        </div>
+        
+        <!-- Quick Add Hazard -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
+            <details>
+                <summary class="font-header text-sm text-danger-200 cursor-pointer mb-3"> Add Hazard / Trap</summary>
+                <div class="space-y-2 mt-3">
+                    <input type="text" id="hz-name" placeholder="Hazard Name" class="w-full bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm">
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="text-[9px] text-gray-500 uppercase">Level</label>
+                            <input type="number" id="hz-level" value="1" min="-1" max="25" class="w-full bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm text-center">
+                        </div>
+                        <div>
+                            <label class="text-[9px] text-gray-500 uppercase">Type</label>
+                            <select id="hz-type" class="w-full bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm">
+                                <option value="simple">Simple</option>
+                                <option value="complex">Complex</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="text-[9px] text-gray-500 uppercase">Stealth DC</label>
+                            <input type="number" id="hz-stealth-dc" placeholder="auto" min="0" max="60" class="w-full bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm text-center">
+                        </div>
+                        <div>
+                            <label class="text-[9px] text-gray-500 uppercase">Disable DC</label>
+                            <input type="number" id="hz-disable-dc" placeholder="auto" min="0" max="60" class="w-full bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm text-center">
+                        </div>
+                    </div>
+                    <input type="text" id="hz-trigger" placeholder="Trigger (e.g. weight on pressure plate)" class="w-full bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-xs">
+                    <textarea id="hz-routine" placeholder="Routine — what happens when triggered (e.g. 2d8 piercing damage Reflex DC 18)" class="w-full bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-xs" rows="2"></textarea>
+                    <button onclick="addHazard()" class="w-full bg-danger-500/20 hover:bg-danger-500/30 text-danger-200 border border-danger-400/40 rounded py-2 text-sm font-bold transition-colors">Add Hazard to Budget</button>
+                    <p class="text-[10px] text-gray-600 italic">Empty Stealth/Disable DCs auto-fill from the level-DC table. Simple hazards trigger once; complex hazards act in initiative.</p>
+                </div>
+            </details>
+        </div>
+    </div>
+
+    <!-- Staging Area -->
+    <div class="flex-1 space-y-4">
+        <!-- XP Budget Bar -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
+            <div class="flex justify-between items-center mb-3">
+                <h2 class="font-header text-accent-300 text-lg">Encounter Budget</h2>
+                <div class="flex items-center gap-3">
+                    <span id="xp-total" class="text-2xl font-header text-white">0</span>
+                    <span class="text-gray-500 text-sm">XP</span>
+                    <span id="xp-difficulty" class="text-sm font-bold uppercase px-2 py-1 rounded bg-gray-900 border border-gray-700 text-gray-400">Empty</span>
+                </div>
+            </div>
+            <div class="relative h-4 bg-gray-900 rounded-full overflow-hidden border border-gray-700">
+                <div id="xp-bar" class="absolute top-0 left-0 h-full transition-all duration-300 rounded-full" style="width: 0%; background: var(--ink-500);"></div>
+                <!-- Tier-boundary ticks — positioned at the REAL thresholds by recalcXP (they scale with party size). -->
+                <div id="xp-tick-1" class="absolute top-0 h-full border-r border-gray-600" title="Low begins"></div>
+                <div id="xp-tick-2" class="absolute top-0 h-full border-r border-accent-500/50" title="Moderate begins"></div>
+                <div id="xp-tick-3" class="absolute top-0 h-full border-r border-danger-200/50" title="Severe begins"></div>
+                <div id="xp-tick-4" class="absolute top-0 h-full border-r border-danger-300/50" title="Extreme begins"></div>
+                <div id="xp-tick-5" class="absolute top-0 h-full border-r border-danger-500/50" title="Impossible begins"></div>
+            </div>
+            <!-- Tier labels — centered on each tier's range-midpoint by recalcXP, so they track the real thresholds. -->
+            <div class="relative mt-1.5 text-[11px] font-bold uppercase tracking-wider" style="height:13px; color:var(--text-on-dark-3);">
+                <span id="xp-lbl-1" class="absolute whitespace-nowrap" style="transform:translateX(-50%);" title="0 XP — minimal threat">Trivial</span>
+                <span id="xp-lbl-2" class="absolute whitespace-nowrap text-success-400" style="transform:translateX(-50%);" title="Low: small skirmish">Low</span>
+                <span id="xp-lbl-3" class="absolute whitespace-nowrap text-accent-300" style="transform:translateX(-50%);" title="Moderate: standard fight">Moderate</span>
+                <span id="xp-lbl-4" class="absolute whitespace-nowrap text-danger-200" style="transform:translateX(-50%);" title="Severe: tough — expect resource burn">Severe</span>
+                <span id="xp-lbl-5" class="absolute whitespace-nowrap text-danger-300" style="transform:translateX(-50%);" title="Extreme: PCs may go down">Extreme</span>
+                <span id="xp-lbl-6" class="absolute whitespace-nowrap text-danger-400" style="transform:translateX(-50%);" title="Beyond Extreme — likely TPK">Impossible</span>
+            </div>
+            <!-- Difficulty-spike warnings strip — populated by recalcXP() -->
+            <div id="diff-warnings" class="hidden mt-3"></div>
+        </div>
+
+        <!-- Saved Encounter Library -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
+            <div class="flex justify-between items-center mb-3">
+                <h2 class="font-header text-accent-300 text-lg">Saved Encounters</h2>
+                <button onclick="refreshSavedEncounters()" class="text-[10px] bg-gray-700 hover:bg-gray-600 text-gray-300 px-3 py-1 rounded border border-gray-600 font-bold uppercase transition-colors" title="Re-scan saved_encounters/">Refresh</button>
+            </div>
+            <div class="flex gap-2 items-center mb-3">
+                <input type="text" id="encounter-save-name" placeholder="Encounter name (e.g. Crypt Goblins)" class="flex-1 bg-gray-950 border border-gray-700 text-gray-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-accent-300/50">
+                <button onclick="saveCurrentStage()" id="btn-save-stage" class="text-xs bg-accent-600/30 hover:bg-accent-600/50 text-accent-200 border border-accent-600/50 rounded px-3 py-1.5 font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled title="Save the staged creatures as a named encounter for next session">Save Stage</button>
+            </div>
+            <div id="saved-encounters-list" class="space-y-1 max-h-[20vh] overflow-y-auto custom-scrollbar">
+                <div class="text-center text-gray-600 text-xs italic py-3">Loading…</div>
+            </div>
+        </div>
+
+        <!-- Staged Monsters -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
+            <div class="flex justify-between items-center mb-2">
+                <h2 class="font-header text-accent-300 text-lg">Staged Creatures</h2>
+                <button onclick="clearStage()" class="text-[10px] bg-gray-700 hover:bg-gray-600 text-gray-300 px-3 py-1 rounded border border-gray-600 font-bold uppercase transition-colors">Clear All</button>
+            </div>
+            <!-- Live summary: count / XP / tier so the GM can scan an encounter
+                 at a glance without counting individual rows. Populated by renderStage(). -->
+            <div id="staged-summary" class="flex flex-wrap items-center gap-2 text-[11px] text-gray-400 mb-3 pb-2 border-b border-gray-700/50 hidden">
+                <span><span id="ss-count" class="text-gray-200 font-bold">0</span> <span id="ss-count-lbl">creatures</span></span>
+                <span class="text-gray-700">·</span>
+                <span><span id="ss-xp" class="text-accent-300 font-bold">0</span> XP</span>
+                <span class="text-gray-700">·</span>
+                <span id="ss-tier" class="font-bold uppercase tracking-wider">Empty</span>
+            </div>
+            <div id="staged-list" class="space-y-2">
+                <div class="text-center text-gray-600 text-sm italic py-8">Click monsters from the search to add them here, or use Quick Add below.</div>
+            </div>
+            <!-- Quick add: promoted from the collapsed custom-monster details -->
+            <div class="mt-3 pt-3 border-t border-gray-700/50">
+                <button onclick="toggleCustomMonsterForm()" id="btn-toggle-custom" class="w-full text-xs bg-gray-900 hover:bg-accent-600/20 text-gray-300 hover:text-accent-200 border border-gray-700 hover:border-accent-600/50 rounded px-3 py-2 font-bold uppercase tracking-wider transition-colors" title="Create a one-off monster without searching the compendium">
+                    + Create Custom Monster
+                </button>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex gap-3">
+            <label class="flex items-center gap-2 text-sm text-gray-400 cursor-pointer">
+                <input type="checkbox" id="chk-add-party" checked class="accent-gold-300"> Include full party
+            </label>
+            <div class="flex-1"></div>
+            <button onclick="loadToTracker()" id="btn-load" class="bg-accent-400 hover:bg-accent-300 text-white px-6 py-2.5 rounded font-bold transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                Load to Tracker →
+            </button>
+            <button onclick="loadToMap()" id="btn-load-map" class="bg-success-500 hover:bg-success-400 text-white px-6 py-2.5 rounded font-bold transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                Add Stage and Open Map →
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let staged = []; // [{path, name, level, count, elite_weak, hp, ac}]
+    let searchTimeout = null;
+    // Encounter math constants come from class_matrix.py via the template
+    // context so the same values drive both the encounter builder and the
+    // tracker's diff_label calculation.
+    const xpMap = (function() {
+        const raw = {{ xp_by_diff | tojson }};
+        const out = {};
+        for (const [k, v] of Object.entries(raw)) out[String(k)] = v;
+        return out;
+    })();
+    const DIFFICULTY_TIERS = {{ difficulty_tiers | tojson }};
+    function _thresholdFor(tierName, partySize) {
+        const t = DIFFICULTY_TIERS.find(t => t.name === tierName);
+        if (!t) return Infinity;
+        return t.base + t.per_extra * (Math.max(1, partySize) - 4);
+    }
+
+    // --- SEARCH ---
+    // Shared runner so level/trait inputs can call it without the keyboard event.
+    function triggerMonsterSearch() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(runMonsterSearch, 200);
+    }
+    document.getElementById('monster-search').addEventListener('input', triggerMonsterSearch);
+
+    async function runMonsterSearch() {
+        const q = document.getElementById('monster-search').value.trim();
+        const minL = document.getElementById('monster-min-lvl').value.trim();
+        const maxL = document.getElementById('monster-max-lvl').value.trim();
+        const trait = document.getElementById('monster-trait').value.trim();
+        const hasFilters = minL !== '' || maxL !== '' || trait !== '';
+
+        // Name alone still needs 2 chars; filter-only browsing is allowed.
+        if (!hasFilters && q.length < 2) {
+            document.getElementById('monster-results').innerHTML =
+                '<div class="text-center text-gray-600 text-xs italic py-6">Type a name (≥2 chars), set a level range, or pick a scope.</div>';
+            return;
+        }
+
+        const params = new URLSearchParams();
+        if (q) params.set('q', q);
+        if (minL) params.set('min_lvl', minL);
+        if (maxL) params.set('max_lvl', maxL);
+        if (trait) params.set('trait', trait);
+
+        const res = await fetch(`/api/monster_search?${params.toString()}`);
+        const data = await res.json();
+        const container = document.getElementById('monster-results');
+        if (!data.results.length) {
+            container.innerHTML = '<div class="text-center text-gray-600 text-xs italic py-4">No monsters matched those filters.</div>';
+            return;
+        }
+        container.innerHTML = data.results.map(m => {
+            let extras = [];
+            if (m.best_attack != null) {
+                const dmgPart = m.best_damage ? ` · ${esc(String(m.best_damage))}` : '';
+                extras.push(`<span class="text-accent-200">Atk ${esc(String(m.best_attack))}${dmgPart}</span>`);
+            }
+            if (m.perception != null) extras.push(`<span class="text-gray-500">Perc +${m.perception}</span>`);
+            let extraHtml = extras.length ? `<div class="text-[11px] mt-1">${extras.join(' · ')}</div>` : '';
+
+            // Defensive pills: immunities, resistances, weaknesses get their own
+            // colored chips so the GM can pick the right damage type at a glance.
+            let defPills = [];
+            const pillCls = 'inline-block text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border';
+            (m.immunities || []).forEach(v => defPills.push(`<span class="${pillCls} bg-purple-500/15 border-purple-500/40 text-purple-300" title="Immune to ${esc(v)}">Imm ${esc(v)}</span>`));
+            (m.resistances || []).forEach(v => defPills.push(`<span class="${pillCls} bg-sky-500/15 border-sky-500/40 text-sky-300" title="Resists ${esc(v)}">Res ${esc(v)}</span>`));
+            (m.weaknesses || []).forEach(v => defPills.push(`<span class="${pillCls} bg-danger-500/20 border-danger-500/50 text-danger-200" title="Weak to ${esc(v)} — bonus damage">Weak ${esc(v)}</span>`));
+            const defHtml = defPills.length ? `<div class="flex flex-wrap gap-1 mt-1">${defPills.join('')}</div>` : '';
+            let traitsHtml = (m.traits && m.traits.length)
+                ? `<div class="flex flex-wrap gap-1 mt-1">${m.traits.map(t => `<span class=\"text-[9px] bg-gray-800 text-gray-500 px-1 py-0.5 rounded border border-gray-700\">${esc(t)}</span>`).join('')}</div>`
+                : '';
+            const json = JSON.stringify(m).replace(/'/g, "&#39;");
+            // Per-result XP preview: what one of these contributes at the current party
+            // level, so the GM sees the budget impact before staging.
+            const _pl = parseInt((document.getElementById('builder-party-level') || {}).value) || 1;
+            const _diff = Math.max(-4, Math.min(4, m.level - _pl));
+            const _xp = (xpMap[String(_diff)] != null) ? xpMap[String(_diff)] : (m.level - _pl > 4 ? 160 : 10);
+            // Click the whole card = add 1. The ×N dropdown on the right adds in bulk
+            // (common case: "3 goblins"). event.stopPropagation keeps those from firing
+            // the card's click.
+            return `
+            <div class="relative bg-gray-900 hover:bg-gray-700 border border-gray-700 hover:border-accent-300/50 rounded p-2.5 transition-colors cursor-pointer"
+                 onclick='addToStage(${json}, 1)'>
+                <div class="flex justify-between items-center">
+                    <span class="font-bold text-gray-200 text-sm">${esc(m.name)}</span>
+                    <div class="flex gap-2 text-[10px] items-center">
+                        <span class="bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded border border-gray-700">Lv ${m.level}</span>
+                        <span class="bg-accent-600/20 text-accent-300 px-1.5 py-0.5 rounded border border-accent-600/40" title="Contributes this XP at party level ${_pl} (before any Elite/Weak)">${_xp} XP</span>
+                        <span class="text-gray-500">HP ${m.hp}</span>
+                        <span class="text-sky-400">AC ${m.ac}</span>
+                        <div class="flex items-center gap-0.5 ml-1" onclick="event.stopPropagation()">
+                            <button type="button" onclick='addToStage(${json}, 2)' class="bg-gray-800 hover:bg-accent-500/40 text-gray-400 hover:text-accent-200 px-1.5 py-0.5 rounded border border-gray-700 font-bold transition-colors" title="Add 2">×2</button>
+                            <button type="button" onclick='addToStage(${json}, 3)' class="bg-gray-800 hover:bg-accent-500/40 text-gray-400 hover:text-accent-200 px-1.5 py-0.5 rounded border border-gray-700 font-bold transition-colors" title="Add 3">×3</button>
+                            <button type="button" onclick='addToStage(${json}, 4)' class="bg-gray-800 hover:bg-accent-500/40 text-gray-400 hover:text-accent-200 px-1.5 py-0.5 rounded border border-gray-700 font-bold transition-colors" title="Add 4">×4</button>
+                        </div>
+                    </div>
+                </div>
+                ${defHtml}
+                ${extraHtml}
+                ${traitsHtml}
+            </div>`;
+        }).join('');
+    }
+
+    // Quick level-scope presets tied to the current party level input.
+    // Keeps GMs from rederiving "what's PL−4 for a level-6 party" in their head.
+    function applyLevelScope(mode) {
+        const minEl = document.getElementById('monster-min-lvl');
+        const maxEl = document.getElementById('monster-max-lvl');
+        if (mode === 'clear') { minEl.value = ''; maxEl.value = ''; triggerMonsterSearch(); return; }
+        const pl = parseInt(document.getElementById('builder-party-level').value) || 1;
+        const ranges = {
+            'party':  [pl - 4, pl + 2],
+            'below':  [pl - 4, pl - 1],
+            'match':  [pl - 1, pl + 1],
+            'boss':   [pl + 1, pl + 4],
+        };
+        const [lo, hi] = ranges[mode] || [pl - 4, pl + 2];
+        minEl.value = lo;
+        maxEl.value = hi;
+        triggerMonsterSearch();
+    }
+
+    // --- STAGING ---
+    // addQty lets the "4 goblins at once" case be a single click from the search
+    // results modal's quick-add menu instead of four sequential adds.
+    function addToStage(monster, addQty) {
+        const delta = Math.max(1, parseInt(addQty) || 1);
+        let existing = staged.find(s => s.path === monster.path && s.elite_weak === 0);
+        if (existing) {
+            existing.count += delta;
+        } else {
+            staged.push({path: monster.path, name: monster.name, level: monster.level, count: delta, elite_weak: 0, hp: monster.hp, ac: monster.ac,
+                immunities: monster.immunities || [], resistances: monster.resistances || [], weaknesses: monster.weaknesses || []});
+        }
+        renderStage();
+    }
+
+    function removeFromStage(idx) { staged.splice(idx, 1); renderStage(); }
+    function adjustCount(idx, delta) { staged[idx].count = Math.max(1, staged[idx].count + delta); renderStage(); }
+    function setEliteWeak(idx, val) { staged[idx].elite_weak = staged[idx].elite_weak === val ? 0 : val; renderStage(); }
+    function clearStage() { staged = []; renderStage(); }
+
+    // Promoted Quick-Add button: open + scroll to the custom-monster form so
+    // the GM doesn't have to hunt for the collapsed details element.
+    function toggleCustomMonsterForm() {
+        const det = document.getElementById('custom-monster-details');
+        const card = document.getElementById('custom-monster-card');
+        if (!det) return;
+        det.open = !det.open;
+        if (det.open) {
+            requestAnimationFrame(() => {
+                card?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                document.getElementById('cm-name')?.focus();
+            });
+        }
+    }
+    window.toggleCustomMonsterForm = toggleCustomMonsterForm;
+    function duplicateEntry(idx) {
+        // Create a copy of the staged monster as a new entry (resets count to 1, keeps elite/weak)
+        const original = staged[idx];
+        staged.push({
+            path: original.path,
+            name: original.name,
+            level: original.level,
+            count: 1,
+            elite_weak: 0,  // Reset to normal so you can make it different
+            immunities: [...original.immunities],
+            resistances: [...original.resistances],
+            weaknesses: [...original.weaknesses]
+        });
+        renderStage();
+    }
+
+    function renderStage() {
+        const container = document.getElementById('staged-list');
+        const saveBtn = document.getElementById('btn-save-stage');
+        if (saveBtn) saveBtn.disabled = staged.length === 0;
+        if (staged.length === 0) {
+            container.innerHTML = '<div class="text-center text-gray-600 text-sm italic py-8">Click monsters from the search to add them here.</div>';
+            document.getElementById('btn-load').disabled = true;
+            document.getElementById('btn-load-map').disabled = true;
+        } else {
+            document.getElementById('btn-load').disabled = false;
+            document.getElementById('btn-load-map').disabled = false;
+            container.innerHTML = staged.map((s, i) => {
+                let ewLabel = s.elite_weak === 1 ? '<span class="text-[10px] bg-success-500 text-white px-1 py-0.5 rounded font-bold ml-1">ELITE</span>' : s.elite_weak === -1 ? '<span class="text-[10px] bg-danger-300 text-white px-1 py-0.5 rounded font-bold ml-1">WEAK</span>' : '';
+                let hazardLabel = s.is_hazard ? `<span class="text-[10px] bg-danger-200 text-white px-1 py-0.5 rounded font-bold ml-1">${s.hazard_type === 'complex' ? 'COMPLEX' : 'SIMPLE'} HAZARD</span>` : '';
+                let effectiveLevel = s.level + s.elite_weak;
+                let defPills = [];
+                const pillCls = 'inline-block text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border';
+                (s.immunities || []).forEach(v => defPills.push(`<span class="${pillCls} bg-purple-500/15 border-purple-500/40 text-purple-300">Imm ${esc(v)}</span>`));
+                (s.resistances || []).forEach(v => defPills.push(`<span class="${pillCls} bg-sky-500/15 border-sky-500/40 text-sky-300">Res ${esc(v)}</span>`));
+                (s.weaknesses || []).forEach(v => defPills.push(`<span class="${pillCls} bg-danger-500/20 border-danger-500/50 text-danger-200">Weak ${esc(v)}</span>`));
+                let extraHtml = defPills.length ? `<div class="flex flex-wrap gap-1 mt-2">${defPills.join('')}</div>` : '';
+                return `
+                <div class="bg-gray-900 border border-gray-700 rounded-lg p-3 flex flex-col">
+                    <div class="flex justify-between items-center">
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-white">${esc(s.name)}</span>
+                            ${ewLabel}
+                            ${hazardLabel}
+                            <span class="text-[10px] text-gray-500">Lv ${effectiveLevel}</span>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <button onclick="setEliteWeak(${i}, 1)" class="text-[10px] ${s.elite_weak===1?'bg-success-500 text-white':'bg-gray-800 text-gray-400 hover:text-success-400'} px-2 py-1 rounded border border-gray-600 font-bold uppercase tracking-wider transition-colors" title="Elite — +2 attack/DC/HP">Elite</button>
+                            <button onclick="setEliteWeak(${i}, -1)" class="text-[10px] ${s.elite_weak===-1?'bg-danger-400 text-white':'bg-gray-800 text-gray-400 hover:text-danger-200'} px-2 py-1 rounded border border-gray-600 font-bold uppercase tracking-wider transition-colors" title="Weak — −2 attack/DC/HP">Weak</button>
+                            <span class="mx-1 border-r border-gray-700 h-5"></span>
+                            <button onclick="adjustCount(${i}, -1)" class="bg-gray-800 hover:bg-gray-700 text-gray-300 w-7 h-7 rounded border border-gray-600 font-bold transition-colors">-</button>
+                            <span class="text-white font-bold w-8 text-center">${s.count}</span>
+                            <button onclick="adjustCount(${i}, 1)" class="bg-gray-800 hover:bg-gray-700 text-gray-300 w-7 h-7 rounded border border-gray-600 font-bold transition-colors">+</button>
+                            <span class="mx-1 border-r border-gray-700 h-5"></span>
+                            <button onclick="duplicateEntry(${i})" class="text-[10px] bg-gray-800 hover:bg-accent-600/50 text-gray-400 hover:text-accent-300 px-2 py-1 rounded border border-gray-600 font-bold transition-colors" title="Duplicate as separate entry (for mixed Elite/Normal)">⧉</button>
+                            <button onclick="removeFromStage(${i})" class="text-danger-200 hover:text-danger-100 text-sm font-bold transition-colors" title="Remove">×</button>
+                        </div>
+                    </div>
+                    ${extraHtml}
+                </div>`;
+            }).join('');
+        }
+        recalcXP();
+    }
+
+    // Track last-seen tier so we can toast when it changes — Pathbuilder-style
+    // "you just crossed into Severe" nudge so a GM doesn't miss a difficulty shift.
+    let _lastTier = 'Empty';
+    function recalcXP() {
+        const partyLevel = parseInt(document.getElementById('builder-party-level').value) || 1;
+        const partySize = parseInt(document.getElementById('builder-party-size').value) || 4;
+        let totalXP = 0;
+        staged.forEach(s => {
+            let effectiveLevel = s.level + s.elite_weak;
+            let diff = Math.max(-4, Math.min(4, effectiveLevel - partyLevel));
+            let xpPer = xpMap[String(diff)] || (diff > 4 ? 160 : 10);
+            totalXP += xpPer * s.count;
+        });
+
+        document.getElementById('xp-total').innerText = totalXP;
+
+        // PF2E GM Core p.74 thresholds, scaled by party size via the
+        // shared DIFFICULTY_TIERS table (class_matrix.ENCOUNTER_DIFFICULTY).
+        // Bar fills proportionally up to "Extreme + 25%" so an Impossible
+        // encounter still shows beyond the bar's right edge.
+        const tT = _thresholdFor('Trivial',  partySize);
+        const tL = _thresholdFor('Low',      partySize);
+        const tM = _thresholdFor('Moderate', partySize);
+        const tS = _thresholdFor('Severe',   partySize);
+        const tE = _thresholdFor('Extreme',  partySize);
+        const barCap = tE * 1.25;
+
+        // Position the tier ticks at the REAL boundaries and the labels at each
+        // tier's range-midpoint, so both track the actual thresholds for this
+        // party size (they were hardcoded to the 4-player baseline before).
+        const _pos = xp => Math.max(0, Math.min(100, (xp / barCap) * 100));
+        const _left = (id, xp) => { const el = document.getElementById(id); if (el) el.style.left = _pos(xp) + '%'; };
+        _left('xp-tick-1', tT); _left('xp-tick-2', tL); _left('xp-tick-3', tM); _left('xp-tick-4', tS); _left('xp-tick-5', tE);
+        _left('xp-lbl-1', tT / 2);          _left('xp-lbl-2', (tT + tL) / 2);
+        _left('xp-lbl-3', (tL + tM) / 2);   _left('xp-lbl-4', (tM + tS) / 2);
+        _left('xp-lbl-5', (tS + tE) / 2);   _left('xp-lbl-6', (tE + barCap) / 2);
+
+        let label, color, barColor;
+        // XP-tier colors: muted ink → success → warn → rust → ruby gradient.
+        // Stays within the brand palette while preserving the green-to-red
+        // legibility readers expect from a danger meter.
+        if (totalXP === 0)        { label = 'Empty';      color = 'text-gray-400';                  barColor = '#6f6755'; }
+        else if (totalXP < tT)    { label = 'Trivial';    color = 'text-gray-400';                  barColor = '#6f6755'; }
+        else if (totalXP < tL)    { label = 'Low';        color = 'text-success-400';               barColor = '#6a9c44'; }
+        else if (totalXP < tM)    { label = 'Moderate';   color = 'text-accent-300';                barColor = '#a4842b'; }
+        else if (totalXP < tS)    { label = 'Severe';     color = 'text-danger-200';                barColor = '#c47133'; }
+        else if (totalXP < tE)    { label = 'Extreme';    color = 'text-danger-300 font-bold';      barColor = '#a83a3a'; }
+        else                       { label = 'Impossible'; color = 'text-danger-400 font-bold';     barColor = '#7c2222'; }
+        const pct = Math.min((totalXP / barCap) * 100, 100);
+
+        const diffEl = document.getElementById('xp-difficulty');
+        diffEl.innerText = label;
+        diffEl.className = `text-sm font-bold uppercase px-2 py-1 rounded bg-gray-900 border border-gray-700 ${color}`;
+        document.getElementById('xp-bar').style.width = pct + '%';
+        document.getElementById('xp-bar').style.background = barColor;
+
+        // Staged summary chip — count / XP / tier in a single scan line
+        const summary = document.getElementById('staged-summary');
+        if (summary) {
+            const totalCreatures = staged.reduce((acc, s) => acc + (s.count || 0), 0);
+            summary.classList.toggle('hidden', staged.length === 0);
+            const cEl = document.getElementById('ss-count');
+            const lEl = document.getElementById('ss-count-lbl');
+            const xEl = document.getElementById('ss-xp');
+            const tEl = document.getElementById('ss-tier');
+            if (cEl) cEl.textContent = totalCreatures;
+            if (lEl) lEl.textContent = totalCreatures === 1 ? 'creature' : 'creatures';
+            if (xEl) xEl.textContent = totalXP;
+            if (tEl) {
+                tEl.textContent = label;
+                tEl.className = `font-bold uppercase tracking-wider ${color}`;
+            }
+        }
+
+        if (label !== _lastTier && _lastTier !== 'Empty' && label !== 'Empty') {
+            showTierToast(_lastTier, label, barColor);
+        }
+        _lastTier = label;
+
+        renderDifficultyWarnings(label, partyLevel, partySize);
+    }
+
+    /* Difficulty-spike warnings strip. Shows under the XP bar whenever the
+       staged encounter has a non-trivial risk multiplier (no-healer at
+       Severe+, very-high-level boss, mook overload). Quietly hides when
+       no warning applies. */
+    const PARTY_HAS_HEALER = {{ 'true' if party_has_healer else 'false' }};
+    function renderDifficultyWarnings(label, partyLevel, partySize) {
+        const wrap = document.getElementById('diff-warnings');
+        const warnings = [];
+        if ((label === 'Severe' || label === 'Extreme' || label === 'Impossible') && !PARTY_HAS_HEALER) {
+            warnings.push({ tone: 'danger', text: `<b>No healer detected</b> in the party — a ${label} encounter without in-combat healing usually ends in dying-recovery rolls. Have a stash of potions or scrolls ready.` });
+        }
+        const bossThreshold = partyLevel + 3;
+        const bossLevels = staged
+            .filter(s => !s.is_hazard)
+            .map(s => (s.level || 0) + (s.elite_weak || 0))
+            .filter(eff => eff >= bossThreshold);
+        if (bossLevels.length) {
+            const top = Math.max(...bossLevels);
+            warnings.push({ tone: 'warn', text: `<b>Boss-tier creature</b> at L${top} (party L${partyLevel}). Crit-fail saves are common at PL+3 and up — telegraph the threat before round 1.` });
+        }
+        const totalCount = staged.filter(s => !s.is_hazard).reduce((acc, s) => acc + (s.count || 0), 0);
+        if (totalCount > partySize * 2 && (label === 'Severe' || label === 'Extreme' || label === 'Impossible')) {
+            warnings.push({ tone: 'warn', text: `<b>Mook overload</b> — ${totalCount} creatures vs ${partySize} PCs at ${label}. Action economy will dominate; consider AOE-friendly terrain or letting the players Stride around mooks.` });
+        }
+        if (!warnings.length) {
+            wrap.classList.add('hidden');
+            wrap.innerHTML = '';
+            return;
+        }
+        wrap.classList.remove('hidden');
+        wrap.innerHTML = warnings.map(w => {
+            const tones = {
+                danger: 'border-danger-300/50 bg-danger-500/10 text-danger-100',
+                warn:   'border-accent-300/50 bg-accent-600/10 text-accent-200',
+            };
+            const cls = tones[w.tone] || tones.warn;
+            return `<div class="flex items-start gap-2 border ${cls} rounded px-3 py-2 mb-2 text-xs leading-relaxed">
+                <span class="text-base font-bold mt-[-2px]">!</span>
+                <div class="flex-1">${w.text}</div>
+            </div>`;
+        }).join('');
+    }
+
+    // One-shot floating toast bar — no library, no dependency.
+    function showTierToast(from, to, color) {
+        let host = document.getElementById('xp-toast-host');
+        if (!host) {
+            host = document.createElement('div');
+            host.id = 'xp-toast-host';
+            host.style.cssText = 'position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none;';
+            document.body.appendChild(host);
+        }
+        const toast = document.createElement('div');
+        toast.style.cssText = `
+            background:rgba(17,17,24,0.96);
+            border:1px solid ${color};
+            border-left:4px solid ${color};
+            color:#e5e7eb;
+            padding:10px 14px;
+            border-radius:6px;
+            font-size:12px;
+            font-weight:600;
+            box-shadow:0 10px 30px rgba(0,0,0,0.5);
+            opacity:0;
+            transform:translateX(20px);
+            transition:all 0.2s ease-out;`;
+        toast.innerHTML = `<div style="font-family:'Cinzel',serif;letter-spacing:0.08em;text-transform:uppercase;font-size:10px;color:${color};">Difficulty Shift</div>
+            <div style="margin-top:2px;"><span style="opacity:0.6;">${from}</span> → <span style="color:${color};">${to}</span></div>`;
+        host.appendChild(toast);
+        requestAnimationFrame(() => { toast.style.opacity = '1'; toast.style.transform = 'translateX(0)'; });
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateX(20px)';
+            setTimeout(() => toast.remove(), 250);
+        }, 2500);
+    }
+
+    /* ──────────────── Saved encounter library ────────────────
+       Save the currently-staged monsters to a JSON file under
+       saved_encounters/ so the GM can prep an encounter, save it, and
+       reload next session. Reuses /api/save_stage + /api/load_stage. */
+    async function refreshSavedEncounters() {
+        const list = document.getElementById('saved-encounters-list');
+        try {
+            const res = await fetch('/api/list_encounters');
+            const j = await res.json();
+            const items = j.encounters || [];
+            if (!items.length) {
+                list.innerHTML = '<div class="text-center text-gray-600 text-xs italic py-3">No saved encounters yet. Stage monsters and click Save Stage.</div>';
+                return;
+            }
+            list.innerHTML = items.map(it => `
+                <div class="flex items-center justify-between gap-2 bg-gray-900 hover:bg-gray-700/60 border border-gray-700 rounded px-2 py-1.5 transition-colors">
+                    <div class="min-w-0 flex-1">
+                        <div class="text-xs font-bold text-gray-200 truncate">${esc(it.name)}</div>
+                        <div class="text-[10px] text-gray-500">${it.kind === 'stage' ? 'stage' : 'live'} · ${it.count} entries</div>
+                    </div>
+                    <button onclick="loadSavedStage('${esc(it.name).replace(/'/g, "\\'")}')" class="text-[10px] bg-accent-600/30 hover:bg-accent-600/50 text-accent-200 border border-accent-600/50 px-2 py-1 rounded font-bold transition-colors">Load</button>
+                    <button onclick="deleteSavedEncounter('${esc(it.name).replace(/'/g, "\\'")}')" class="text-[10px] bg-gray-800 hover:bg-danger-500/30 text-gray-400 hover:text-danger-200 border border-gray-700 px-2 py-1 rounded transition-colors" title="Delete">×</button>
+                </div>
+            `).join('');
+        } catch (e) {
+            list.innerHTML = `<div class="text-center text-danger-200 text-xs italic py-3">Failed to load: ${esc(String(e))}</div>`;
+        }
+    }
+    async function saveCurrentStage() {
+        const nameEl = document.getElementById('encounter-save-name');
+        const name = (nameEl.value || '').trim();
+        if (!name) { nameEl.focus(); return; }
+        if (!staged.length) return;
+        const monsters = staged.map(s => ({
+            path: s.path, count: s.count, elite_weak: s.elite_weak,
+            is_hazard: !!s.is_hazard,
+            name: s.name, level: s.level,
+            hazard_type: s.hazard_type,
+            stealth_dc: s.stealth_dc, disable_dc: s.disable_dc,
+            trigger: s.trigger, routine: s.routine,
+        }));
+        try {
+            const res = await fetch('/api/save_stage', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ name, monsters }),
+            });
+            const j = await res.json();
+            if (j.success) {
+                nameEl.value = '';
+                refreshSavedEncounters();
+            }
+        } catch (_) {}
+    }
+    async function loadSavedStage(name) {
+        try {
+            const res = await fetch('/api/load_stage/' + encodeURIComponent(name));
+            const j = await res.json();
+            if (!j.success) return;
+            // Populate the in-memory stage. We need the same shape renderStage
+            // expects (with name, level, hp, etc.) — fetch the full monster
+            // record from the search index for each path so the row renders
+            // cleanly. Hazards carry their own data.
+            const out = [];
+            for (const m of (j.monsters || [])) {
+                if (m.is_hazard) {
+                    out.push({
+                        path: m.path, count: m.count || 1, elite_weak: m.elite_weak || 0,
+                        is_hazard: true, name: m.name, level: m.level,
+                        hazard_type: m.hazard_type, stealth_dc: m.stealth_dc, disable_dc: m.disable_dc,
+                        trigger: m.trigger, routine: m.routine,
+                        immunities: [], resistances: [], weaknesses: [],
+                    });
+                    continue;
+                }
+                // Look up monster details
+                try {
+                    const r = await fetch('/api/monster_details?path=' + encodeURIComponent(m.path));
+                    const md = await r.json();
+                    out.push({
+                        path: m.path, count: m.count || 1, elite_weak: m.elite_weak || 0,
+                        is_hazard: false,
+                        name: md.name || m.path, level: md.level || 0,
+                        immunities: md.immunities || [], resistances: md.resistances || [], weaknesses: md.weaknesses || [],
+                    });
+                } catch(_) {
+                    out.push({
+                        path: m.path, count: m.count || 1, elite_weak: m.elite_weak || 0,
+                        is_hazard: false, name: m.path.split('/').pop().replace(/\.json$/, ''),
+                        level: 0, immunities: [], resistances: [], weaknesses: [],
+                    });
+                }
+            }
+            staged = out;
+            renderStage();
+            recalcXP();
+        } catch(_) {}
+    }
+    async function deleteSavedEncounter(name) {
+        if (!confirm(`Delete saved encounter "${name}"?`)) return;
+        try {
+            const fd = new FormData();
+            fd.append('encounter_name', name);
+            await fetch('/api/delete_encounter', {method: 'POST', body: fd});
+            refreshSavedEncounters();
+        } catch(_) {}
+    }
+    // Initial load when the page first renders.
+    document.addEventListener('DOMContentLoaded', function () {
+        refreshSavedEncounters();
+        renderStage();   // paints the empty stage + runs recalcXP so the budget-bar tier markers are positioned on load
+    });
+
+    async function loadToTracker() {
+        const btn = document.getElementById('btn-load');
+        btn.disabled = true; btn.innerText = 'Loading...';
+        try {
+            const res = await fetch('/api/stage_encounter', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    // Hazards (path starts with __hazard__) carry extra fields
+                    // the server uses to construct a Hazard combatant. Plain
+                    // monsters keep their lookup-by-path shape.
+                    monsters: staged.map(s => ({
+                        path: s.path, count: s.count, elite_weak: s.elite_weak,
+                        is_hazard: !!s.is_hazard,
+                        name: s.name, level: s.level,
+                        hazard_type: s.hazard_type,
+                        stealth_dc: s.stealth_dc,
+                        disable_dc: s.disable_dc,
+                        trigger: s.trigger,
+                        routine: s.routine,
+                    })),
+                    add_party: document.getElementById('chk-add-party').checked,
+                    clear_first: true
+                })
+            });
+            const data = await res.json();
+            if (data.success) window.location.href = '/tracker';
+        } catch (e) { btn.disabled = false; btn.innerText = 'Load to Tracker →'; }
+    }
+
+    async function loadToMap() {
+        const btn = document.getElementById('btn-load-map');
+        btn.disabled = true; btn.innerText = 'Preparing map...';
+        try {
+            const stagedResponse = await fetch('/api/stage_encounter', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    monsters: staged.map(s => ({
+                        path: s.path, count: s.count, elite_weak: s.elite_weak,
+                        is_hazard: !!s.is_hazard, name: s.name, level: s.level,
+                        hazard_type: s.hazard_type, stealth_dc: s.stealth_dc,
+                        disable_dc: s.disable_dc, trigger: s.trigger, routine: s.routine,
+                    })),
+                    add_party: document.getElementById('chk-add-party').checked,
+                    clear_first: false
+                })
+            });
+            const stagedData = await stagedResponse.json();
+            if (!stagedResponse.ok || !stagedData.success) throw new Error(stagedData.error || 'Could not stage encounter');
+
+            const scenesResponse = await fetch('/api/scenes', {headers: {'X-Requested-With': 'XMLHttpRequest'}});
+            const scenesData = await scenesResponse.json();
+            let sceneId = scenesData.active_scene_id;
+            if (!sceneId) {
+                const createdResponse = await fetch('/api/scenes', {
+                    method: 'POST', headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+                    body: JSON.stringify({name: 'Encounter Map', width: 1400, height: 900})
+                });
+                const createdData = await createdResponse.json();
+                if (!createdResponse.ok) throw new Error(createdData.error || 'Could not create a scene');
+                sceneId = createdData.scene.id;
+            }
+            const syncResponse = await fetch('/api/scenes/' + encodeURIComponent(sceneId) + '/sync-encounter', {
+                method: 'POST', headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'}, body: '{}'
+            });
+            const syncData = await syncResponse.json();
+            if (!syncResponse.ok) throw new Error(syncData.error || 'Could not place encounter tokens');
+            window.location.href = '/map/' + encodeURIComponent(sceneId);
+        } catch (error) {
+            btn.disabled = false; btn.innerText = 'Add Stage and Open Map →';
+            alert(error.message || 'Could not open the map.');
+        }
+    }
+
+    function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+    function addHazard() {
+        const name = document.getElementById('hz-name').value.trim();
+        if (!name) { alert('Hazard needs a name!'); return; }
+        const level = parseInt(document.getElementById('hz-level').value) || 1;
+        const type = document.getElementById('hz-type').value;
+        // PF2e GM Core p.74 standard DC by level — used as a fallback when
+        // the user leaves the DC inputs blank. Same formula the gmscreen
+        // table renders.
+        const _autoDC = lvl => Math.max(14, 14 + lvl + (lvl >= 5 ? 1 : 0) + (lvl >= 10 ? 1 : 0) + (lvl >= 15 ? 1 : 0) + (lvl >= 20 ? 1 : 0));
+        const stealthRaw = document.getElementById('hz-stealth-dc').value;
+        const disableRaw = document.getElementById('hz-disable-dc').value;
+        staged.push({
+            path: '__hazard__' + name,
+            name: name,
+            level: level,
+            count: 1,
+            elite_weak: 0,
+            hp: 0, ac: 0,
+            immunities: [], resistances: [], weaknesses: [],
+            is_hazard: true,
+            hazard_type: type,
+            stealth_dc: stealthRaw === '' ? _autoDC(level) : parseInt(stealthRaw, 10),
+            disable_dc: disableRaw === '' ? _autoDC(level) : parseInt(disableRaw, 10),
+            trigger: document.getElementById('hz-trigger').value.trim(),
+            routine: document.getElementById('hz-routine').value.trim(),
+        });
+        // Clear the inputs so adding multiple hazards in a row is fast.
+        ['hz-name', 'hz-stealth-dc', 'hz-disable-dc', 'hz-trigger', 'hz-routine'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+        renderStage();
+    }
+
+    async function createCustomMonster() {
+        const name = document.getElementById('cm-name').value.trim();
+        if (!name) { alert('Monster needs a name!'); return; }
+        
+        const strikes = [];
+        const s1Name = document.getElementById('cm-s1-name').value.trim();
+        if (s1Name) strikes.push({ name: s1Name, attack: document.getElementById('cm-s1-atk').value, damage: document.getElementById('cm-s1-dmg').value, type: 'slashing' });
+        const s2Name = document.getElementById('cm-s2-name').value.trim();
+        if (s2Name) strikes.push({ name: s2Name, attack: document.getElementById('cm-s2-atk').value, damage: document.getElementById('cm-s2-dmg').value, type: 'slashing' });
+        
+        const traitsRaw = document.getElementById('cm-traits').value.trim();
+        const traits = traitsRaw ? traitsRaw.split(',').map(t => t.trim()) : [];
+        
+        try {
+            const res = await fetch('/api/create_monster', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    name, level: document.getElementById('cm-level').value,
+                    hp: document.getElementById('cm-hp').value,
+                    ac: document.getElementById('cm-ac').value,
+                    speed: document.getElementById('cm-speed').value,
+                    fort: document.getElementById('cm-fort').value,
+                    ref: document.getElementById('cm-ref').value,
+                    will: document.getElementById('cm-will').value,
+                    perception: document.getElementById('cm-perc').value,
+                    traits, strikes
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                alert(`Created ${data.name} (Level ${data.level})`);
+                window.location.reload();
+            } else {
+                alert(data.error || 'Failed to create monster');
+            }
+        } catch(e) { alert('Error creating monster'); }
+    }
+
+    async function importMonsterJSON() {
+        const raw = document.getElementById('monster-json-paste').value.trim();
+        const status = document.getElementById('import-monster-status');
+        if (!raw) { status.textContent = 'Paste JSON first.'; status.className = 'text-xs mt-2 text-danger-200'; status.classList.remove('hidden'); return; }
+        let parsed;
+        try { parsed = JSON.parse(raw); } catch(e) { status.textContent = 'Invalid JSON.'; status.className = 'text-xs mt-2 text-danger-200'; status.classList.remove('hidden'); return; }
+        try {
+            const res = await fetch('/api/import_monster', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(parsed) });
+            const data = await res.json();
+            if (data.success) {
+                status.textContent = `Imported ${data.name}!`;
+                status.className = 'text-xs mt-2 text-success-400';
+                status.classList.remove('hidden');
+                setTimeout(() => window.location.reload(), 1500);
+            } else {
+                status.textContent = data.error || 'Import failed';
+                status.className = 'text-xs mt-2 text-danger-200';
+                status.classList.remove('hidden');
+            }
+        } catch(e) { status.textContent = 'Error.'; status.className = 'text-xs mt-2 text-danger-200'; status.classList.remove('hidden'); }
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,1570 @@
+{% extends "base.html" %}
+{% block title %}{{ a.name }} — Cosmere{% endblock %}
+
+{% block extra_head %}
+  .cs-wrap { --cs-accent:var(--accent); --cs-accent-2:var(--accent); --cs-glow:rgba(95,168,224,.18); color:var(--text-on-dark-1, #e8eef5); }
+  .cs-head { display:flex; align-items:flex-end; justify-content:space-between; gap:1rem; flex-wrap:wrap;
+             border-bottom:0; padding-bottom:.85rem; margin-bottom:1.1rem; position:relative; }
+  /* The name rule fades from the order accent — a banner edge, not a flat border. */
+  .cs-head::after { content:''; position:absolute; left:0; right:0; bottom:0; height:1px;
+             background:linear-gradient(90deg, var(--order-accent, var(--accent)), transparent); opacity:.5; }
+  .cs-name { font-family:var(--font-display, serif); font-size:2rem; font-weight:700; letter-spacing:.01em;
+             color:var(--cs-accent-2); text-shadow:0 0 18px var(--cs-glow); line-height:1.1; }
+  .cs-sub { margin-top:.3rem; display:flex; gap:.4rem; flex-wrap:wrap; }
+  .cs-tag { font-size:11px; text-transform:uppercase; letter-spacing:.06em; padding:2px 9px; border-radius:999px;
+            background:rgba(95,168,224,.10); border:1px solid rgba(95,168,224,.35); color:var(--cs-accent); }
+  .cs-back { font-size:12px; color:var(--text-on-dark-3); text-decoration:none; }
+  .cs-back:hover { color:var(--cs-accent); }
+  .cs-grid { display:grid; gap:.7rem; }
+  .cs-cards { grid-template-columns:repeat(auto-fit, minmax(118px,1fr)); margin-bottom:1.1rem; }
+  .cs-card { background:var(--bg-sunken, #131922); border:1px solid var(--border-card); border-radius:10px;
+             padding:.7rem .8rem; text-align:center; position:relative; overflow:hidden; }
+  /* A faint top sheen on every card — an engraved-plate feel, uniform + quiet. */
+  .cs-card::before { content:''; position:absolute; left:0; right:0; top:0; height:1px;
+             background:linear-gradient(90deg, transparent, rgba(255,255,255,.07), transparent); }
+  .cs-card .l { font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-on-dark-3); }
+  .cs-card .v { font-family:var(--font-ui); font-variant-numeric:tabular-nums; font-size:1.7rem; font-weight:700; color:var(--cs-accent-2); }
+  .cs-card .v.sm { font-size:1.15rem; }
+  .cs-card .x { font-size:11px; color:var(--text-on-dark-3); }
+  .cs-def { border-color:rgba(95,168,224,.35); box-shadow:0 0 0 1px rgba(95,168,224,.05) inset; }
+  /* Defenses carry the order accent on their sheen instead of a plain white line. */
+  .cs-def::before { background:linear-gradient(90deg, transparent, var(--order-accent, var(--accent)), transparent); opacity:.55; }
+  .cs-hpbar { height:7px; border-radius:4px; background:rgba(255,255,255,.08); margin-top:.35rem; overflow:hidden; }
+  .cs-hpfill { height:100%; background:linear-gradient(90deg,#34d399,var(--accent)); }
+  /* Section dividers: engraved serif label, a leading order-accent diamond, and
+     a hairline rule that fades out — a restrained heraldic motif (not a plain
+     underlined box). The diamond + rule pick up the character's order accent. */
+  .cs-section-h { font-family:var(--font-display, serif); font-size:15px; font-weight:600; text-transform:uppercase;
+                  letter-spacing:.13em; color:var(--text-on-dark-2); display:flex; align-items:center; gap:.55rem;
+                  margin:1.5rem 0 .7rem; border:0; padding:0; }
+  .cs-section-h::before { content:''; flex:0 0 auto; width:7px; height:7px; transform:rotate(45deg);
+                  background:var(--order-accent, var(--accent)); box-shadow:0 0 7px var(--cs-glow); }
+  .cs-section-h::after { content:''; flex:1 1 auto; height:1px; min-width:1.5rem;
+                  background:linear-gradient(90deg, var(--border-card), transparent); }
+  .cs-section-h > span { font-family:var(--font-body, inherit); font-weight:400; color:var(--text-on-dark-3); }
+  .cs-attrs { grid-template-columns:repeat(auto-fit, minmax(110px,1fr)); }
+  .cs-skills { grid-template-columns:repeat(auto-fill, minmax(165px,1fr)); }
+  /* Flattened: skills are clean cells (faint wash, no per-cell border) rather
+     than 28 boxes-in-a-box; the roll hover supplies the only outline. */
+  .cs-skill { display:flex; align-items:center; justify-content:space-between; gap:.4rem;
+              background:rgba(255,255,255,.022); border:1px solid transparent; border-radius:7px; padding:.4rem .6rem; }
+  .cs-skill.locked { opacity:.42; }
+  .cs-skill .nm { font-size:13px; }
+  .cs-skill .nm small { color:var(--text-on-dark-4,#7c8694); font-size:10px; text-transform:uppercase; }
+  .cs-skill .mod { font-family:var(--font-ui); font-variant-numeric:tabular-nums; font-weight:700; color:var(--cs-accent-2); }
+  .cs-skill .rk { font-size:9px; color:var(--cs-accent); }
+  .cs-surge-toggle { margin-left:auto; font-family:var(--font-ui); font-size:10px; text-transform:uppercase; letter-spacing:.06em;
+                     color:var(--text-on-dark-3); background:none; border:1px solid var(--border-card); border-radius:6px;
+                     padding:2px 9px; cursor:pointer; transition:color .15s, border-color .15s; white-space:nowrap; }
+  .cs-surge-toggle:hover { color:var(--accent); border-color:var(--accent); }
+  #cs-skills-grid.hide-locked .cs-skill.locked { display:none; }
+  .cs-chips { display:flex; gap:.35rem; flex-wrap:wrap; }
+  /* Folded conditions: show only ACTIVE chips; the full picker expands via
+     the edit toggle. Purely display -- chip DOM and cosCond() are unchanged,
+     so GM-pushed condition updates keep painting. */
+  .cs-chips.folded .cs-cond:not(.on) { display:none; }
+  #cond-none { display:none; }
+  .cs-chips.folded.none-active #cond-none { display:inline; }
+  /* WebKit renders the native disclosure triangle even with list-style:none,
+     doubling the summary's own arrow glyph -- suppress it (same treatment as
+     the workshop summary). */
+  .cs-buildnotes > summary::-webkit-details-marker { display:none; }
+  .cs-chip { font-size:11px; padding:2px 8px; border-radius:6px; background:rgba(255,255,255,.05);
+             border:1px solid var(--border-card); }
+  .cs-chip.df { color:var(--cs-accent); border-color:rgba(95,168,224,.4); }
+  .cs-ability { background:var(--bg-sunken,#131922); border:1px solid var(--border-card); border-radius:9px;
+                padding:.6rem .75rem; margin-bottom:.5rem; }
+  .cs-ability .an { font-weight:600; color:var(--cs-accent-2); font-size:14px; }
+  .cs-ability .ad { font-size:12.5px; color:var(--text-on-dark-2,#aeb8c4); margin-top:.2rem; line-height:1.45; }
+  .cs-2col { display:grid; grid-template-columns:1fr 1fr; gap:1.1rem; }
+  @media (max-width:720px){ .cs-2col{ grid-template-columns:1fr; } }
+  /* --- interactive (owner/GM) --- */
+  /* Resource controls: a typed amount + clearly-labelled action buttons
+     (Damage/Heal, Spend/Gain) instead of tiny +/- arrows. */
+  .cs-amt { margin-top:.5rem; display:flex; gap:.3rem; flex-wrap:wrap; justify-content:center; align-items:stretch; }
+  .cs-amt-in { width:44px; text-align:center; border-radius:7px; padding:.3rem 0; font-size:14px; font-weight:600;
+    background:var(--bg-page,#0d1117); border:1px solid var(--border-card); color:#e8eef5; -moz-appearance:textfield; }
+  .cs-amt-in::-webkit-outer-spin-button, .cs-amt-in::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+  .cs-amt-btn { flex:1 1 auto; min-width:52px; padding:.34rem .5rem; border-radius:7px; cursor:pointer; font-size:10px;
+    font-weight:700; text-transform:uppercase; letter-spacing:.04em; line-height:1.2;
+    background:var(--bg-page,#0d1117); border:1px solid var(--border-card); color:var(--text-on-dark-2); }
+  .cs-amt-btn:active { transform:translateY(1px); }
+  .cs-amt-btn.dmg:hover { border-color:#d36e6e; color:#f0a3a3; background:rgba(211,110,110,.10); }
+  .cs-amt-btn.heal:hover { border-color:#34d399; color:#34d399; background:rgba(52,211,153,.10); }
+  .cs-amt-btn.spend:hover { border-color:var(--accent); color:var(--accent); background:rgba(95,168,224,.10); }
+  .cs-amt-btn.gain:hover { border-color:#34d399; color:#34d399; background:rgba(52,211,153,.10); }
+  .cs-amt-btn.breathe:hover { border-color:var(--accent); color:var(--accent); background:rgba(95,168,224,.10); }
+  /* Injuries: a clean inline stepper (no tiny arrows). */
+  .cs-inj { display:inline-flex; gap:.3rem; align-items:center; }
+  .cs-inj button { width:22px; height:22px; border-radius:6px; cursor:pointer; font-size:13px; font-weight:700; line-height:1;
+    background:var(--bg-page,#0d1117); border:1px solid var(--border-card); color:#e8eef5; }
+  .cs-inj button:hover { border-color:#d36e6e; color:#f0a3a3; }
+  .cs-fab-btn { width:22px; height:22px; border-radius:6px; cursor:pointer; font-size:13px; font-weight:700; line-height:1;
+    background:var(--bg-page,#0d1117); border:1px solid var(--border-card); color:#e8eef5; margin:0 .15rem; vertical-align:middle; }
+  .cs-fab-btn:hover { border-color:var(--order-accent,var(--accent)); }
+  /* Fabrial Workshop (Inventing Unique Fabrials, Ch.7) */
+  .cs-workshop { margin-top:.7rem; border:1px solid var(--border-card); border-radius:10px; background:var(--bg-sunken,#131922); }
+  .cs-workshop > summary { cursor:pointer; padding:.6rem .8rem; font-family:var(--font-display,serif); font-size:14px; color:var(--order-accent,var(--accent)); list-style:none; }
+  .cs-workshop > summary::-webkit-details-marker { display:none; }
+  .cs-workshop > summary::before { content:'\25B8'; margin-right:.5rem; color:var(--text-on-dark-3); font-size:11px; }
+  .cs-workshop[open] > summary::before { content:'\25BE'; }
+  .ws-inner { padding:0 .8rem .8rem; }
+  .ws-l { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-on-dark-3); display:block; margin:.5rem 0 .3rem; }
+  .ws-body { margin-top:.4rem; font-size:12.5px; color:var(--text-on-dark-2); }
+  .ws-info { background:var(--bg-page,#0d1117); border:1px solid var(--border-card); border-radius:8px; padding:.5rem .65rem; margin-bottom:.5rem; line-height:1.5; }
+  .ws-info b { color:var(--text-on-dark); }
+  .ws-step { margin:.5rem 0; }
+  .ws-result { font-size:13px; margin:.35rem 0; } .ws-result.ok { color:#34d399; } .ws-result.no { color:#f0a9a9; }
+  .ws-pick { display:block; font-size:12px; margin:.18rem 0; color:var(--text-on-dark-2); }
+  .ws-pick input { width:auto; margin-right:.4rem; vertical-align:-1px; }
+  .cs-workshop select { width:100%; max-width:340px; background:var(--bg-page,#0d1117); border:1px solid var(--border-card); border-radius:7px; padding:.4rem .55rem; color:#e8eef5; font-size:13px; }
+  .ws-btn { background:rgba(95,168,224,.16); border:1px solid rgba(95,168,224,.5); color:var(--accent); border-radius:8px; padding:.4rem .85rem; font-size:12.5px; cursor:pointer; margin-top:.3rem; }
+  .ws-btn:hover { background:rgba(95,168,224,.26); }
+  .ws-btn.primary { background:var(--order-accent,var(--accent)); color:#06242b; font-weight:700; border-color:var(--order-accent,var(--accent)); }
+  .cs-crafted { border-color:color-mix(in srgb, var(--order-accent,var(--accent)) 45%, transparent) !important; }
+  .cs-crafted .ud { font-size:11px; margin-top:.25rem; } .cs-crafted .up { color:#7fd6a8; } .cs-crafted .dn { color:#f0a9a9; }
+  .cs-skill.roll { cursor:pointer; transition:border-color .12s, background .12s; }
+  .cs-skill.roll:hover { border-color:var(--accent); background:rgba(95,168,224,.08); }
+  .cs-skill.roll:active { transform:translateY(1px); }
+  .cs-ability.roll { cursor:pointer; }
+  .cs-ability.roll:hover { border-color:var(--accent); }
+  .cs-rolltools { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; margin:.2rem 0 .7rem;
+    background:var(--bg-sunken,#131922); border:1px solid var(--border-card); border-radius:9px; padding:.5rem .7rem; }
+  .cs-toggle { font-size:11px; padding:.3rem .6rem; border-radius:7px; cursor:pointer; user-select:none;
+    background:var(--bg-page,#0d1117); border:1px solid var(--border-card); color:var(--text-on-dark-2); }
+  .cs-toggle.on { border-color:var(--accent); color:var(--accent); background:rgba(95,168,224,.12); }
+  /* Roll visibility: who sees the result — the whole table, the GM only, or just you. */
+  .cs-vis { display:inline-flex; align-items:stretch; border:1px solid var(--border-card); border-radius:7px; overflow:hidden; }
+  .cs-vis .lbl { font-size:9px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-on-dark-3); padding:.3rem .45rem; display:flex; align-items:center; background:var(--bg-page,#0d1117); border-right:1px solid var(--border-card); }
+  .cs-vbtn { font-size:11px; padding:.3rem .55rem; cursor:pointer; user-select:none; background:var(--bg-page,#0d1117); color:var(--text-on-dark-2); border:0; border-right:1px solid var(--border-card); font-family:inherit; }
+  .cs-vbtn:last-child { border-right:0; }
+  .cs-vbtn.on { color:var(--accent); background:rgba(95,168,224,.14); font-weight:600; }
+  .cs-result { flex:1; min-width:140px; text-align:right; font-size:13px; color:var(--text-on-dark-2); }
+  .cs-result b { font-family:var(--font-ui); font-variant-numeric:tabular-nums; font-size:17px; color:var(--cs-accent-2); }
+  .cs-result .opp { color:#34d399; } .cs-result .comp { color:#f59e0b; }
+  .cs-hint { font-size:11px; color:var(--text-on-dark-3); margin:-.3rem 0 .6rem; }
+  .cs-rad-btn { font-size:12px; padding:.45rem .8rem; border-radius:8px; cursor:pointer;
+    background:rgba(95,168,224,.12); border:1px solid var(--accent); color:var(--accent); font-weight:600; }
+  .cs-rad-btn:hover { background:rgba(95,168,224,.22); }
+  .cs-rad-btn:active { transform:translateY(1px); }
+  .cs-rad-btn.on { background:var(--accent); color:#06242b; }
+  .cs-cond { font-size:11px; padding:3px 9px; border-radius:7px; cursor:pointer; opacity:.45;
+    background:rgba(255,255,255,.05); border:1px solid var(--border-card); color:#e8eef5; user-select:none; }
+  .cs-cond.on { opacity:1; background:rgba(245,158,11,.16); border-color:#f59e0b; color:#fbbf24; }
+  .cs-cond:hover { opacity:.85; }
+  /* Active-effects summary: what each live condition is doing right now. */
+  .cs-cond-fx { margin-top:.55rem; display:flex; flex-direction:column; gap:.25rem; }
+  .cs-cond-fx:empty { display:none; }
+  .cs-cond-fx .fx-h { font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--accent); margin-bottom:.1rem; }
+  .cs-cond-fx .fx-row { display:flex; gap:.55rem; font-size:11.5px; line-height:1.35; align-items:baseline; }
+  .cs-cond-fx .fx-name { flex:0 0 auto; min-width:92px; font-weight:700; color:var(--accent); }
+  .cs-cond-fx .fx-desc { color:var(--text-on-dark-2); }
+  /* Goals & Rewards (Ch.8) */
+  .goal-add { font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; cursor:pointer;
+    background:transparent; color:var(--order-accent,var(--accent)); border:1px solid var(--order-accent,var(--accent));
+    border-radius:6px; padding:2px 8px; opacity:.85; }
+  .goal-add:hover { opacity:1; }
+  .cs-goals { display:flex; flex-direction:column; gap:.4rem; }
+  .goal-empty { font-size:11.5px; color:var(--text-on-dark-3); font-style:italic; }
+  .cs-goals-wrap.empty { margin-bottom:.4rem; }
+  .goal-row { border:1px solid rgba(255,255,255,.10); border-radius:8px; padding:.5rem .65rem;
+    background:rgba(255,255,255,.025); }
+  .goal-row.done { border-color:var(--order-accent,var(--accent)); background:rgba(126,199,255,.06); }
+  .goal-top { display:flex; align-items:flex-start; gap:.5rem; }
+  .goal-text { flex:1; font-size:12.5px; line-height:1.35; color:var(--text-on-dark); font-weight:600; }
+  .goal-row.done .goal-text { text-decoration:line-through; opacity:.7; }
+  .goal-x { cursor:pointer; color:var(--text-on-dark-3); font-size:15px; line-height:1; opacity:.6; background:none; border:none; padding:0; font-family:inherit; }
+  .goal-x:hover { opacity:1; color:#f87171; }
+  .goal-bot { display:flex; align-items:center; gap:.6rem; margin-top:.45rem; flex-wrap:wrap; }
+  .goal-boxes { display:flex; gap:.3rem; }
+  .goal-ms { width:16px; height:16px; border-radius:4px; border:1.5px solid var(--text-on-dark-3);
+    cursor:pointer; flex:0 0 auto; padding:0; background:none; transition:background .12s, border-color .12s; }
+  .goal-ms:hover { border-color:var(--order-accent,var(--accent)); }
+  .goal-ms.on { background:var(--order-accent,var(--accent)); border-color:var(--order-accent,var(--accent));
+    box-shadow:0 0 6px var(--order-accent,rgba(126,199,255,.6)); }
+  .goal-hint { font-size:10.5px; color:var(--text-on-dark-3); font-style:italic; }
+  .goal-btn { font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; cursor:pointer;
+    background:var(--order-accent,var(--accent)); color:#06121f; border:0; border-radius:6px; padding:3px 9px; font-weight:700; }
+  .goal-btn.ghost { background:transparent; color:var(--text-on-dark-3); border:1px solid rgba(255,255,255,.18);
+    font-weight:600; padding:2px 7px; }
+  .goal-reward { font-size:11.5px; color:var(--order-accent,var(--accent)); font-weight:600; }
+  /* Per-character name crest (Radiant order / house-metal glyph) in the
+     character's secondary accent, layered on the world skin. */
+  .cs-id { display:flex; align-items:center; gap:.7rem; }
+  .cs-crest { width:38px; height:38px; flex:0 0 auto; color:var(--order-accent, var(--accent)); }
+  .cs-surge-gl { width:1.05em; height:1.05em; vertical-align:-0.18em; color:var(--order-accent, var(--accent)); margin-right:.15em; }
+  /* Self-service rest (short/long) — recovers Health/Focus + clears conditions. */
+  .cs-rest { display:flex; align-items:center; gap:.55rem; margin:.2rem 0 1rem; flex-wrap:wrap; }
+  .cs-rest-l { font-size:10px; text-transform:uppercase; letter-spacing:.1em; color:var(--text-on-dark-3); font-family:var(--font-display, serif); }
+  .cs-rest-btn { font-size:12px; padding:7px 14px; border-radius:8px; cursor:pointer; min-height:34px;
+    background:rgba(255,255,255,.04); border:1px solid var(--border-card); color:var(--text-on-dark); font-family:var(--font-ui); }
+  .cs-rest-btn:hover { background:rgba(255,255,255,.09); border-color:var(--accent); }
+  /* Attribute-derived values (move / senses / lift / recovery), auto-calculated. */
+  .cs-derived { display:flex; gap:1rem; flex-wrap:wrap; margin:0 0 1rem; padding:.5rem .8rem; border:1px solid var(--border-card); border-radius:9px; background:var(--bg-sunken,#131922); font-size:12.5px; color:var(--text-on-dark); }
+  .cs-derived span { white-space:nowrap; }
+  .cs-derived b { color:var(--order-accent,var(--accent)); font-weight:600; margin-right:.25rem; text-transform:uppercase; font-size:10px; letter-spacing:.05em; }
+  .cs-derived .dim { color:var(--text-on-dark-3); }
+  .cs-combat { margin-bottom:1rem; padding:.55rem .85rem; border-radius:10px; background:var(--bg-sunken,#131922); border:1px solid var(--accent); }
+  .cs-combat.myturn { border-color:#34d399; box-shadow:0 0 0 1px rgba(52,211,153,.4), 0 0 22px rgba(52,211,153,.18); }
+  .cs-cbtn { font-size:11px; padding:.35rem .7rem; border-radius:7px; cursor:pointer; background:var(--bg-page,#0d1117);
+    border:1px solid var(--accent); color:var(--accent); font-weight:600; }
+  .cs-cbtn.on { background:var(--accent); color:#06242b; }
+  /* Heads-up combat popup: a brief, attention-grabbing toast when it becomes
+     your turn (or you're up next) while you're looking at your own sheet. */
+  .cos-turn-pop { position:fixed; top:64px; left:50%; transform:translateX(-50%) translateY(-14px); z-index:1200;
+    min-width:230px; max-width:88vw; padding:.7rem 1.1rem; border-radius:12px; text-align:center; cursor:pointer;
+    background:var(--bg-card,#161d27); box-shadow:0 10px 34px rgba(0,0,0,.5);
+    opacity:0; pointer-events:none; transition:opacity .25s ease, transform .25s ease; }
+  .cos-turn-pop.show { opacity:1; transform:translateX(-50%) translateY(0); pointer-events:auto; }
+  .cos-turn-pop b { display:block; font-family:var(--font-display,serif); font-size:1.05rem; }
+  .cos-turn-pop span { display:block; font-size:11.5px; color:var(--text-on-dark-3); margin-top:.15rem; }
+  .cos-turn-pop.turn { border:1px solid rgba(52,211,153,.6); } .cos-turn-pop.turn b { color:#34d399; }
+  .cos-turn-pop.next { border:1px solid color-mix(in srgb, var(--accent) 55%, transparent); } .cos-turn-pop.next b { color:var(--accent); }
+  /* Read-only notice for a sheet you don't own (no roll/stat controls). */
+  .cs-readonly { margin:0 0 1rem; padding:.55rem .85rem; border-radius:9px; font-size:12.5px;
+    background:rgba(245,158,11,.10); border:1px solid rgba(245,158,11,.5); color:#fbbf24; }
+  /* Floating roll-result toast so a roll fired from anywhere on the page is
+     always visible (the inline cs-result line is easy to miss while scrolled). */
+  #cs-toast { position:fixed; left:50%; bottom:22px; transform:translateX(-50%) translateY(12px);
+    z-index:60; max-width:min(560px,92vw); padding:.7rem 1.1rem; border-radius:12px; pointer-events:none;
+    background:rgba(13,17,23,.97); border:1px solid var(--accent); box-shadow:0 8px 30px rgba(0,0,0,.5);
+    color:var(--text-on-dark,#e8eef5); font-size:14px; text-align:center; opacity:0; transition:opacity .18s, transform .18s; }
+  #cs-toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+  #cs-toast b { font-family:var(--font-ui); font-variant-numeric:tabular-nums; font-size:20px; color:var(--cs-accent-2); }
+  #cs-toast .opp { color:#34d399; } #cs-toast .comp { color:#f59e0b; }
+
+  /* ===== Sphere-gauge redesign: "Stormlight Gauges" + Shardplate order-glow ===== */
+  /* Defenses become quiet hex facets so the three glowing spheres are the hero. */
+  .cs-facets { display:flex; gap:.55rem; margin:0 0 1rem; flex-wrap:wrap; }
+  .cs-facet { flex:1 1 0; min-width:88px; text-align:center; background:#0c1825; border:1px solid var(--border-card);
+    padding:.6rem .3rem; clip-path:polygon(13% 0,87% 0,100% 50%,87% 100%,13% 100%,0 50%); }
+  .cs-facet .l { font-size:9px; text-transform:uppercase; letter-spacing:.1em; color:var(--text-on-dark-3); }
+  .cs-facet .n { font-family:var(--font-ui); font-variant-numeric:tabular-nums; font-size:1.4rem; font-weight:700; color:var(--text-on-dark); }
+  .cs-facet.deflect { clip-path:none; border-radius:9px; border-color:color-mix(in srgb,var(--order-accent,var(--accent)) 40%, var(--border-card)); }
+  .cs-facet.deflect .n { color:var(--order-accent,var(--accent)); }
+  .cs-facet.deflect .cs-chips { justify-content:center; margin-top:.3rem; }
+  .cs-orbs { display:flex; gap:1.4rem; justify-content:center; align-items:flex-start; flex-wrap:wrap; margin:0 0 1rem; }
+  .orb-w { display:flex; flex-direction:column; align-items:center; gap:.5rem; }
+  .orb { width:108px; height:108px; border-radius:50%; position:relative; overflow:hidden; cursor:pointer;
+    background:#0a121b; border:1px solid var(--orb-rim,#2a4259);
+    box-shadow:inset 0 0 0 3px rgba(0,0,0,.35), 0 0 16px -3px var(--orb-glow,transparent); }
+  .orb-fill { position:absolute; left:0; right:0; bottom:0; height:60%;
+    background:radial-gradient(125% 85% at 50% 135%, var(--orb-core,#fff), var(--orb-mid,#5fa8e0) 55%, transparent 100%);
+    transition:height .55s cubic-bezier(.2,.8,.2,1); }
+  .orb-spec { position:absolute; top:16px; left:26px; width:26px; height:13px; border-radius:50%; background:rgba(255,255,255,.16); pointer-events:none; }
+  .orb-arc { position:absolute; inset:0; transform:rotate(-90deg); pointer-events:none; }
+  .orb-arc .trk { fill:none; stroke:var(--orb-rim,#22303f); stroke-width:3; }
+  .orb-arc .prg { fill:none; stroke:var(--orb-mid,#5fa8e0); stroke-width:3; stroke-linecap:round; transition:stroke-dasharray .55s cubic-bezier(.2,.8,.2,1); }
+  .orb-val { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:2; pointer-events:none; }
+  .orb-num { font-family:var(--font-ui); font-variant-numeric:tabular-nums; font-size:1.7rem; font-weight:700; color:var(--orb-core,#fff); line-height:1; text-shadow:0 1px 6px rgba(0,0,0,.7); }
+  .orb-max { font-family:var(--font-ui); font-variant-numeric:tabular-nums; font-size:.78rem; color:#5e7790; }
+  .orb.dun .orb-fill { display:none; } .orb.dun { box-shadow:inset 0 0 0 3px rgba(0,0,0,.45); }
+  .orb.dun .orb-num { color:#5e7790; }
+  .orb.low .orb-fill { animation:orbpulse 1.6s ease-in-out infinite; }
+  @keyframes orbpulse { 0%,100%{ opacity:.6; } 50%{ opacity:1; } }
+  .orb-l { font-size:13px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-on-dark-2); font-family:var(--font-display,serif); }
+  .orb-ctrl { display:none; flex-direction:column; gap:.3rem; width:130px; }
+  .orb-w.open .orb-ctrl { display:flex; }
+  .orb-hint { font-size:9px; text-transform:uppercase; letter-spacing:.07em; color:var(--text-on-dark-4,#5e7790); }
+  /* Order-flooded Radiant plate (the Shardplate graft): the one deeply order-tinted panel. */
+  .cs-rad-plate { position:relative; text-align:left; border:1px solid rgba(95,168,224,.45);
+    border-color:color-mix(in srgb, var(--order-accent,var(--accent)) 55%, transparent);
+    border-radius:11px; padding:.85rem 1rem;
+    background:var(--bg-sunken,#131922);
+    background:linear-gradient(180deg, color-mix(in srgb, var(--order-accent,var(--accent)) 17%, transparent), transparent 62%), var(--bg-sunken,#131922);
+    box-shadow:inset 0 0 30px -8px color-mix(in srgb, var(--order-accent,var(--accent)) 45%, transparent); }
+  .cs-ideal-dots { display:inline-flex; gap:5px; vertical-align:middle; margin-left:.35rem; }
+  .cs-ideal-dots i { width:11px; height:11px; border-radius:50%; display:inline-block; border:1px solid var(--order-accent,var(--accent)); }
+  .cs-ideal-dots i.on { background:var(--order-accent,var(--accent)); box-shadow:0 0 7px color-mix(in srgb,var(--order-accent,var(--accent)) 70%, transparent); }
+  /* Forsaken oaths (GM-toggleable): the spren withdraws — Stormlight actions seal. */
+  .cs-rad-plate.forsaken { filter:grayscale(.7) brightness(.78); }
+  .cs-rad-plate.forsaken .cs-rad-btn, .cs-rad-plate.forsaken .cs-ability, .cs-rad-plate.forsaken input { pointer-events:none; opacity:.4; }
+  .cos-forsaken-banner { display:none; font-size:12px; color:#f0a9a9; background:rgba(168,58,58,.14); border:1px solid rgba(168,58,58,.5); border-radius:7px; padding:.45rem .65rem; margin-bottom:.6rem; }
+  .cs-rad-plate.forsaken .cos-forsaken-banner { display:block; }
+  #btn-forsake.on { border-color:#a83a3a; color:#f0a9a9; background:rgba(168,58,58,.16); }
+  /* Sticky quick-vitals bar — manage resources mid-combat without scrolling. */
+  .cs-vbar { position:sticky; top:6px; z-index:40; display:flex; align-items:center; gap:.85rem; flex-wrap:wrap;
+    margin:0 0 1rem; padding:.45rem .85rem; border-radius:12px;
+    background:rgba(9,14,21,.93); border:1px solid var(--border-card); box-shadow:0 6px 18px rgba(0,0,0,.45); }
+  /* Scroll-reveal: the bar duplicates the header + spheres at rest, so JS
+     gates it to appear only once the sphere bank leaves the viewport. With
+     no IntersectionObserver (or JS dead) it stays always-visible as before. */
+  .cs-vbar { transition:opacity .25s ease, transform .25s ease; }
+  .cs-vbar.gated { opacity:0; transform:translateY(-8px); pointer-events:none; }
+  .cs-vb { display:inline-flex; align-items:center; gap:.32rem; font-family:var(--font-ui); font-variant-numeric:tabular-nums; font-size:13px; color:var(--text-on-dark-2); }
+  .cs-vb .d { width:9px; height:9px; border-radius:50%; flex:0 0 auto; }
+  .cs-vb b { font-weight:700; color:var(--text-on-dark); }
+  .cs-vbar .vb-cond { font-size:11px; color:#fbbf24; }
+  .cs-vbar .vb-cond:empty { display:none; }
+  /* Themed roll feedback: an Opportunity (nat 20) flares the order color, a Complication (nat 1) dims. */
+  .cs-result.flare-opp, #cs-toast.flare-opp { animation:flareopp 1.1s ease-out; }
+  .cs-result.flare-comp, #cs-toast.flare-comp { animation:flarecomp 1.1s ease-out; }
+  @keyframes flareopp { 0%{ text-shadow:none; } 25%{ text-shadow:0 0 16px var(--order-accent,#5fa8e0); } 100%{ text-shadow:none; } }
+  @keyframes flarecomp { 0%,100%{ filter:none; } 30%{ filter:grayscale(.55) brightness(.72); } }
+
+  /* ===== Stormlight motion: sphere change-pulses + spend-motes ===== */
+  .orb-w { position:relative; }
+  .orb.pulse-up { animation:orbPulseUp .8s ease-out; }
+  .orb.pulse-down { animation:orbPulseDown .8s ease-out; }
+  #orb-health.pulse-down { animation:orbWound .8s ease-out; }
+  @keyframes orbPulseUp { 0%,100%{ } 25%{ box-shadow:0 0 26px var(--orb-glow), 0 0 60px var(--orb-glow); filter:brightness(1.28); } }
+  @keyframes orbPulseDown { 0%,100%{ } 30%{ filter:brightness(.68) saturate(.7); } }
+  @keyframes orbWound { 0%,100%{ } 25%{ box-shadow:0 0 22px rgba(220,60,60,.6); filter:brightness(.8) saturate(1.3) hue-rotate(-18deg); } }
+
+  .orb-mote { position:absolute; left:50%; top:42%; width:4px; height:4px; border-radius:50%;
+    opacity:0; pointer-events:none; z-index:5; }
+  .orb-mote.focus { background:#fff3d6; box-shadow:0 0 7px 2px rgba(242,200,121,.85); }
+  .orb-mote.inv { background:#f4fbff; box-shadow:0 0 7px 2px var(--order-accent,#7ec7ff); }
+  .orb-mote.rise { animation:orbMoteRise 1.2s ease-out forwards; }
+  .orb-mote.fall { animation:orbMoteFall 1.0s ease-in forwards; }
+  @keyframes orbMoteRise {
+    0%{ opacity:0; transform:translate(-50%,-50%); } 12%{ opacity:1; }
+    100%{ opacity:0; transform:translate(-50%,-50%) translate(var(--dx,0px),-64px) scale(.4); } }
+  @keyframes orbMoteFall {
+    0%{ opacity:0; transform:translate(-50%,-50%) translate(var(--dx,0px),-64px) scale(.5); } 15%{ opacity:1; }
+    100%{ opacity:0; transform:translate(-50%,-50%); } }
+
+  /* Order crest breathes on the highstorm cadence (Radiant header glyph). */
+  .cs-crest { animation:crestBreathe 10s ease-in-out infinite; }
+  @keyframes crestBreathe {
+    0%,100%{ filter:drop-shadow(0 0 2px transparent); opacity:.92; }
+    50%{ filter:drop-shadow(0 0 9px var(--order-accent,#5fa8e0)); opacity:1; } }
+
+  @media (prefers-reduced-motion: reduce){
+    .orb-fill, .orb-arc .prg { transition:none; }
+    .orb.low .orb-fill { animation:none; }
+    .orb.pulse-up, .orb.pulse-down, #orb-health.pulse-down { animation:none; }
+    .orb-mote { display:none; }
+    .cs-crest { animation:none; }
+    .cs-result.flare-opp, #cs-toast.flare-opp, .cs-result.flare-comp, #cs-toast.flare-comp { animation:none; }
+    .cs-vbar { transition:none; }
+  }
+  /* Ambient highstorm: a faint, slow-breathing light leaking in from the right
+     edge (the world's storm just out of frame). Very restrained; off when the
+     content is narrow enough to overlap, and under reduced-motion. */
+  body.system-cosmere::after {
+    content:''; position:fixed; top:0; right:0; bottom:0; width:140px; pointer-events:none; z-index:0;
+    background:linear-gradient(270deg, rgba(95,168,224,.5), transparent);
+    background:linear-gradient(270deg, color-mix(in srgb, var(--accent) 55%, transparent), transparent);
+    opacity:.05; animation:highstorm 11s ease-in-out infinite; }
+  @keyframes highstorm { 0%,100%{ opacity:.03; } 50%{ opacity:.085; } }
+  @media (max-width:900px){ body.system-cosmere::after { display:none; } }   /* don't wash narrow screens */
+  @media (prefers-reduced-motion: reduce){ body.system-cosmere::after { animation:none; opacity:.05; } }
+  /* Mobile scroll buffer: keep the last controls (Session Notes status, final
+     inventory / fabrial cards) scrollable clear of the fixed FAB cluster at the
+     bottom of player views, instead of sitting under it on phones. Mirrors the
+     PF2e sheet's bottom-padding fix. */
+  @media (max-width:768px){ body.system-cosmere{ padding-bottom:104px; } }
+  /* Collapsible reference sections (combat-first: fold away the non-combat stuff). */
+  .cs-section-h.cs-foldable { cursor:pointer; user-select:none; }
+  .cs-fold-chev { font-family:var(--font-ui); font-variant-numeric:tabular-nums; font-size:11px; color:var(--text-on-dark-3); flex:0 0 auto; margin-left:.2rem; }
+  .cs-fold-body.collapsed { display:none; }
+
+  /* ===== Print / PDF: a clean light paper sheet (hide all chrome, ink on white) ===== */
+  @media print {
+    @page { margin: 1.2cm; }
+    /* page chrome + interactivity off */
+    nav, #player-nav, .player-nav, .cs-vbar, .cs-rolltools, .cs-amt, .cs-rad-btn, .cs-rest,
+    .cs-inj, .stepper, #cs-toast, .cs-fold-chev, .cs-head-links, #cos-combat,
+    .cos-forsaken-banner, .no-print, #dice-widget, #audio-widget, #chat-widget,
+    #journal-widget, [data-no-print] { display: none !important; }
+    html, body { background: #fff !important; }
+    body.system-cosmere::after, body.system-cosmere::before { display: none !important; }
+    /* expand any folded reference sections so the printout is complete */
+    .cs-fold-body.collapsed { display: block !important; }
+    /* ink on white — override the dark theme */
+    body, body.system-cosmere, .cs-wrap { background: #fff !important; color: #111 !important; }
+    .cs-card, .cs-facet, .cs-rad-plate, .cs-ability, .cs-skill, .cs-chip, .cs-derived,
+    .orb, #pc-notes, .cs-cond, .cs-tag {
+      background: #fff !important; color: #111 !important; border-color: #999 !important; box-shadow: none !important; filter: none !important; }
+    .cs-name, .cs-section-h, .orb-num, .orb-max, .orb-l, .cs-card .v, .cs-card .l, .cs-facet .n,
+    .cs-facet .l, .cs-skill .mod, .cs-ability .an, .cs-section-h > span {
+      color: #111 !important; text-shadow: none !important; -webkit-text-fill-color: #111 !important; }
+    .cs-section-h::before { background: #111 !important; box-shadow: none !important; }
+    .cs-section-h::after, .cs-head::after { background: #ccc !important; }
+    /* spheres -> plain ringed circles with the value (gradients/arcs don't print well) */
+    .orb { border: 1.5px solid #333 !important; }
+    .orb-fill, .orb-spec, .orb-arc { display: none !important; }
+    .orb-mote { display:none; } .cs-crest { animation:none; filter:none; }
+    /* keep sections + cards from splitting across pages */
+    .cs-section-h, .orb-w, .cs-ability, .cs-card, .cs-facet, .cs-rad-plate { break-inside: avoid; }
+    a { color: #111 !important; text-decoration: none !important; }
+  }
+{% endblock %}
+
+{% block content %}
+{# Adversary sheets (bestiary) don't pass cur/interactive -> default to read-only. #}
+{% set cur = cur | default({'health': a.health.value, 'focus': a.focus_max, 'investiture': a.investiture_max, 'injuries': 0}) %}
+{% include '_cosmere_glyphs.html' %}
+<div class="cs-wrap"{% if crest_color %} style="--order-accent:{{ crest_color }};"{% endif %}>
+  {% if pc and not interactive %}
+  <div class="cs-readonly">Read-only view. You can roll skills, strikes, and abilities &mdash; and adjust Health/Focus &mdash; on a character you <b>own</b>. Open it from <a href="/cosmere/player" style="color:inherit; text-decoration:underline;">My Character</a>, or ask your GM to assign this one to you.</div>
+  {% endif %}
+  <div class="cs-head">
+    <div class="cs-id">
+      {% if crest_glyph %}<svg class="cs-crest" aria-hidden="true"><use href="#{{ crest_glyph }}"></use></svg>{% endif %}
+      <div>
+      <div class="cs-name">{{ a.name }}</div>
+      <div class="cs-sub">
+        {% if not pc %}
+        <span class="cs-tag">{{ a.type|capitalize }}</span>
+        {% if a.tier is not none %}<span class="cs-tag">Tier {{ a.tier }}</span>{% endif %}
+        {% if a.role %}<span class="cs-tag">{{ a.role|capitalize }}</span>{% endif %}
+        {% if a.size %}<span class="cs-tag">{{ a.size|capitalize }}</span>{% endif %}
+        {% else %}
+        {# PC tag diet: identity that matters at a glance. Type/role are implied
+           by the page; size only when rules-relevant (non-Medium); the system
+           tag is implied by the campaign. #}
+        {% if a.tier is not none %}<span class="cs-tag">Tier {{ a.tier }}</span>{% endif %}
+        {% if a.size and a.size|lower != 'medium' %}<span class="cs-tag">{{ a.size|capitalize }}</span>{% endif %}
+        {% if build %}
+          {% if build.path %}<span class="cs-tag">{{ build.path|capitalize }}</span>{% endif %}
+          {% if build.culture %}<span class="cs-tag">{{ build.culture }}</span>{% endif %}
+          {% if build.ancestry %}<span class="cs-tag">{{ build.ancestry }}</span>{% endif %}
+          {% if singer_form %}<span class="cs-tag" title="{{ singer_form.note }}">Form: {{ singer_form.name }}</span>{% endif %}
+          {% if build.is_radiant %}<span class="cs-tag">Radiant</span>{% endif %}
+        {% endif %}
+        {% endif %}
+        {% if pc and ready_to_level %}<a class="cs-tag" href="{{ edit_url }}" style="background:rgba(110,231,168,.16); border-color:rgba(110,231,168,.5); color:#6ee7a8; text-decoration:none;">&#9650; Ready to level up</a>{% endif %}
+      </div>
+      </div>
+    </div>
+    <div class="cs-head-links" style="display:flex; gap:.6rem; align-items:center;">
+      {% if pc %}
+        <a class="cs-back" href="{{ edit_url }}" style="color:var(--accent);">Edit / Level Up</a>
+        <button type="button" class="cs-back" style="background:none; cursor:pointer;" onclick="window.print()" title="Print or save this sheet as a PDF">Print</button>
+        <a class="cs-back" href="/cosmere/pcs">&larr; Characters</a>
+        {% if can_delete %}
+        <form method="POST" action="/cosmere/pc/{{ actor_id }}/delete" style="margin:0;"
+              onsubmit="return confirm('Delete {{ a.name }} permanently? This cannot be undone.');">
+          <button type="submit" class="cs-back" style="background:none; border:1px solid rgba(168,58,58,.45); color:#d36e6e; cursor:pointer;">Delete</button>
+        </form>
+        {% endif %}
+      {% else %}
+        <a class="cs-back" href="/cosmere/bestiary">&larr; Bestiary</a>
+      {% endif %}
+    </div>
+  </div>
+  {% if pc and warnings %}
+  <details class="cs-buildnotes" style="margin-bottom:1rem;">
+    <summary style="cursor:pointer; padding:.4rem .8rem; border-radius:8px; background:rgba(245,158,11,.10); border:1px solid rgba(245,158,11,.4); color:#fbbf24; font-size:12.5px; list-style:none;"><b>Build notes</b> ({{ warnings|length }}) <span style="opacity:.65;">&#9656; tap to review</span></summary>
+    {# Literal U+00B7 in the separator — an entity inside the auto-escaped join
+       expression would double-escape and render as visible "&middot;" text. #}
+    <div style="padding:.5rem .8rem; color:#fbbf24; font-size:12.5px; border:1px solid rgba(245,158,11,.25); border-top:none; border-radius:0 0 8px 8px;">{{ warnings|join(' · ') }}</div>
+  </details>
+  {% endif %}
+  {% if interactive %}
+  {# Sticky quick-vitals: manage the three resources mid-combat without scrolling. #}
+  <div class="cs-vbar" id="cs-vbar">
+    <span class="cs-vb" title="Health"><span class="d" style="background:#5fe6b0;"></span>HP&nbsp;<b id="vb-health">{{ cur.health }}</b><span style="color:#5e7790;">/{{ a.health.max }}</span></span>
+    {% if a.investiture_max %}<span class="cs-vb" title="Investiture"><span class="d" style="background:var(--order-accent,#7ec7ff);"></span>Inv&nbsp;<b id="vb-investiture">{{ cur.investiture }}</b><span style="color:#5e7790;">/{{ a.investiture_max }}</span></span>{% endif %}
+    <span class="cs-vb" title="Focus"><span class="d" style="background:#f2c879;"></span>Foc&nbsp;<b id="vb-focus">{{ cur.focus }}</b><span style="color:#5e7790;">/{{ a.focus_max }}</span></span>
+    <span class="vb-cond" id="vb-cond"></span>
+  </div>
+  {% endif %}
+
+  {% if interactive %}
+  {# --- Live combat strip (shown when this character is in the active encounter) --- #}
+  <div id="cos-combat" class="cs-combat" style="display:none;">
+    <div style="display:flex; align-items:center; gap:.7rem; flex-wrap:wrap;">
+      <span id="cc-round" style="font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-on-dark-3);"></span>
+      <span id="cc-turn" style="font-size:14px; font-weight:700;"></span>
+      <span style="flex:1;"></span>
+      <span id="cc-controls" style="display:flex; gap:.4rem; align-items:center; flex-wrap:wrap;"></span>
+    </div>
+  </div>
+
+  {# --- Conditions (self-manage) --- #}
+  <div style="margin-bottom:1rem;">
+    <div style="font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-on-dark-3); margin-bottom:.35rem;">Conditions
+      <button type="button" id="cond-fold-btn" onclick="condFoldToggle()" style="background:none; border:none; color:var(--accent); cursor:pointer; font-size:11px; letter-spacing:.05em; text-transform:none; padding:0 .2rem;">edit</button>
+    </div>
+    <div class="cs-chips folded" id="cos-conditions">
+      <span id="cond-none" style="font-size:12px; color:var(--text-on-dark-3); font-style:italic;">No conditions</span>
+      {% for code, info in conditions.items() %}
+      <span class="cs-cond {{ 'on' if cur.conditions.get(code) }}" data-cond="{{ code }}" role="button" tabindex="0" aria-pressed="{{ 'true' if cur.conditions.get(code) else 'false' }}" aria-label="{{ code|capitalize }} condition" onclick='cosCond({{ code|tojson }})' onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" title="{{ info }}">{{ code|capitalize }}</span>
+      {% endfor %}
+    </div>
+    {# Plain-language summary of what every ACTIVE condition is doing right now —
+       so it's obvious which stats/abilities each one affects. JS-rendered. #}
+    <div id="cos-cond-fx" class="cs-cond-fx"></div>
+  </div>
+  {% endif %}
+
+  {% if interactive %}
+  {# --- Goals & Rewards (Ch.8): work a goal across three milestones, then conclude
+        it for a reward (a possession, relationship, status, …). --- #}
+  <div class="cs-goals-wrap" style="margin-bottom:1rem;">
+    <div style="display:flex; align-items:center; gap:.6rem; margin-bottom:.4rem;">
+      <span style="font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-on-dark-3);">Goals &amp; Rewards</span>
+      <button type="button" class="goal-add" onclick="cosGoalAdd()">+ Add goal</button>
+    </div>
+    <div id="cos-goals" class="cs-goals"></div>
+  </div>
+  {% endif %}
+
+  {# --- Defenses (quiet hex facets) + the sphere bank (the hero region) --- #}
+  <div class="cs-facets">
+    {# Defense = 10 + a pair of attributes (Ch.3). Show the breakdown on hover so
+       the number is legible, not magic. #}
+    {% set _def_attrs = {'phy':['str','spd'], 'cog':['int','wil'], 'spi':['awa','pre']} %}
+    {% for key in ['phy','cog','spi'] %}
+    {% set _p = _def_attrs[key] %}
+    <div class="cs-facet" title="{{ defense_names[key] }} = 10 + {{ attr_names[_p[0]] }} {{ a.attributes[_p[0]] }} + {{ attr_names[_p[1]] }} {{ a.attributes[_p[1]] }}"><div class="l">{{ defense_names[key] }}</div><div class="n">{{ a.defenses[key] }}</div></div>
+    {% endfor %}
+    <div class="cs-facet deflect" id="cs-deflect" data-base="{{ a.deflect.value }}" data-base-types="{{ a.deflect.types.items()|selectattr('1')|map(attribute='0')|join(',') }}">
+      <div class="l">Deflect <span id="cs-deflect-plate" style="display:{{ '' if cur.shardplate else 'none' }}; color:var(--order-accent,var(--accent)); font-size:9px;">&middot; Plate</span></div><div class="n" id="cs-deflect-n">{{ 5 if cur.shardplate else a.deflect.value }}</div>
+      {% set deflect_info = {'impact':'Crushing / bludgeoning (hammers, falls) — reduced by Deflect.','keen':'Slicing / piercing (blades, spikes) — reduced by Deflect.','energy':'Heat & electricity (fire, lightning) — reduced by Deflect.','spirit':'Soul-deep (Shardblades) — bypasses Deflect.','vital':'Life force (poison, cold, suffocation) — bypasses Deflect.','heal':'Healing.'} %}
+      <div class="cs-chips" id="cs-deflect-types">{% if cur.shardplate %}{% for t in ['impact','keen','energy','spirit','vital'] %}<span class="cs-chip df">{{ t }}</span>{% endfor %}{% else %}{% for t, on in a.deflect.types.items() if on %}<span class="cs-chip df" title="{{ deflect_info.get(t, t) }}">{{ t }}</span>{% endfor %}{% endif %}</div>
+    </div>
+  </div>
+  <div class="cs-orbs">
+    {% set hpct = (cur.health / a.health.max) if a.health.max else 0 %}
+    <div class="orb-w">
+      <div class="orb{{ ' dun' if cur.health <= 0 }}" id="orb-health" style="--orb-core:#eafff4;--orb-mid:#5fe6b0;--orb-rim:#0c5f43;--orb-glow:rgba(95,230,176,.45);"{% if interactive %} onclick="orbToggle(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();orbToggle(this)}" role="button" tabindex="0" aria-expanded="false" aria-label="Health &mdash; open Damage and Heal controls" title="Tap for Damage / Heal controls"{% endif %}>
+        <div class="orb-fill" id="fill-health" style="height:{{ (hpct*100)|round|int }}%;"></div>
+        <div class="orb-spec"></div>
+        <svg class="orb-arc" viewBox="0 0 108 108" aria-hidden="true"><circle class="trk" cx="54" cy="54" r="46"/><circle class="prg" id="arc-health" cx="54" cy="54" r="46" stroke-dasharray="{{ (hpct*289.0)|round(1) }} 289"/></svg>
+        <div class="orb-val"><div class="orb-num" id="rv-health">{{ cur.health }}</div><div class="orb-max">/{{ a.health.max }}</div></div>
+      </div>
+      <div class="orb-l">Health</div>
+      {% if interactive %}<div class="orb-ctrl">
+        <div class="cs-amt"><input type="number" class="cs-amt-in" value="1" min="1" aria-label="Health amount"><button class="cs-amt-btn dmg" onclick="cosApply('health',-1,this)" title="Take this much damage">Damage</button><button class="cs-amt-btn heal" onclick="cosApply('health',1,this)" title="Recover this much health">Heal</button></div>
+        <div class="orb-hint" style="text-align:center;">Injuries <span id="rv-injuries">{{ cur.injuries }}</span> <span class="cs-inj"><button type="button" onclick="cosAdjust('injuries',-1)" aria-label="Remove an injury" title="Remove an injury">&minus;</button><button type="button" onclick="cosAdjust('injuries',1)" aria-label="Take an injury" title="Take an injury">+</button></span></div>
+      </div>{% endif %}
+    </div>
+
+    {% set fpct = (cur.focus / a.focus_max) if a.focus_max else 0 %}
+    <div class="orb-w">
+      <div class="orb{{ ' dun' if cur.focus <= 0 }}" id="orb-focus" style="--orb-core:#fff3d6;--orb-mid:#f2c879;--orb-rim:#6e4a12;--orb-glow:rgba(242,200,121,.4);"{% if interactive %} onclick="orbToggle(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();orbToggle(this)}" role="button" tabindex="0" aria-expanded="false" aria-label="Focus &mdash; open Spend and Gain controls" title="Tap for Spend / Gain controls"{% endif %}>
+        <div class="orb-fill" id="fill-focus" style="height:{{ (fpct*100)|round|int }}%;"></div>
+        <div class="orb-spec"></div>
+        <svg class="orb-arc" viewBox="0 0 108 108" aria-hidden="true"><circle class="trk" cx="54" cy="54" r="46"/><circle class="prg" id="arc-focus" cx="54" cy="54" r="46" stroke-dasharray="{{ (fpct*289.0)|round(1) }} 289"/></svg>
+        <div class="orb-val"><div class="orb-num" id="rv-focus">{{ cur.focus }}</div><div class="orb-max">/{{ a.focus_max }}</div></div>
+      </div>
+      <div class="orb-l">Focus</div>
+      {% if interactive %}<div class="orb-ctrl">
+        <div class="cs-amt"><input type="number" class="cs-amt-in" value="1" min="1" aria-label="Focus amount"><button class="cs-amt-btn spend" onclick="cosApply('focus',-1,this)" title="Spend focus (react / graze / off-hand)">Spend</button><button class="cs-amt-btn gain" onclick="cosApply('focus',1,this)" title="Collect Yourself">Gain</button></div>
+      </div>{% endif %}
+    </div>
+
+    {% if a.investiture_max %}
+    {% set ipct = (cur.investiture / a.investiture_max) if a.investiture_max else 0 %}
+    <div class="orb-w">
+      <div class="orb{{ ' dun' if cur.investiture <= 0 }}" id="orb-investiture" style="--orb-core:#f4fbff;--orb-mid:var(--order-accent,#7ec7ff);--orb-rim:#13456f;--orb-glow:color-mix(in srgb,var(--order-accent,#7ec7ff) 45%, transparent);"{% if interactive %} onclick="orbToggle(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();orbToggle(this)}" role="button" tabindex="0" aria-expanded="false" aria-label="Investiture &mdash; open Spend, Gain and Breathe controls" title="Tap for Spend / Gain / Breathe controls"{% endif %}>
+        <div class="orb-fill" id="fill-investiture" style="height:{{ (ipct*100)|round|int }}%;"></div>
+        <div class="orb-spec"></div>
+        <svg class="orb-arc" viewBox="0 0 108 108" aria-hidden="true"><circle class="trk" cx="54" cy="54" r="46"/><circle class="prg" id="arc-investiture" cx="54" cy="54" r="46" stroke-dasharray="{{ (ipct*289.0)|round(1) }} 289"/></svg>
+        <div class="orb-val"><div class="orb-num" id="rv-investiture">{{ cur.investiture }}</div><div class="orb-max">/{{ a.investiture_max }}</div></div>
+      </div>
+      <div class="orb-l">Investiture</div>
+      {% if interactive %}<div class="orb-ctrl">
+        <div class="cs-amt"><input type="number" class="cs-amt-in" value="1" min="1" aria-label="Investiture amount"><button class="cs-amt-btn spend" onclick="cosApply('investiture',-1,this)" title="Spend Investiture (power a surge)">Spend</button><button class="cs-amt-btn gain" onclick="cosApply('investiture',1,this)" title="Gain Investiture">Gain</button></div>
+        <button class="cs-amt-btn breathe" onclick="cosBreathe()" title="Breathe Stormlight: refill Investiture to max">Breathe Stormlight</button>
+      </div>{% endif %}
+    </div>
+    {% else %}
+    <div class="orb-w">
+      <div class="orb dun" title="Not a Radiant">
+        <svg class="orb-arc" viewBox="0 0 108 108" aria-hidden="true"><circle class="trk" cx="54" cy="54" r="46"/></svg>
+        <div class="orb-val"><div class="orb-num">&mdash;</div></div>
+      </div>
+      <div class="orb-l">Investiture</div>
+      <div class="orb-hint" style="max-width:130px; text-align:center;">Swear a First Ideal to gain Stormlight.</div>
+    </div>
+    {% endif %}
+  </div>
+  {% if interactive %}
+  <div class="cs-rest">
+    <span class="cs-rest-l">Rest &amp; recover</span>
+    <button class="cs-rest-btn" onclick="cosRest('short')" title="Short rest: heal a recovery-die roll (d-by-Willpower) and refill Focus.">Short rest</button>
+    <button class="cs-rest-btn" onclick="cosRest('long')" title="Long rest: Health &amp; Focus to full, Exhausted reduced by 1, short-lived conditions cleared.">Long rest</button>
+  </div>
+  {% endif %}
+  {# Attribute-derived sheet values (Ch.3) — auto-calculated. #}
+  {% if derived %}
+  <div class="cs-derived">
+    <span title="Movement rate is derived from your Speed (Ch.3)."><b>Move</b> {{ derived.movement }} ft</span>
+    <span title="Senses range is derived from your Awareness (Ch.3)."><b>Senses</b> {{ derived.senses }}{% if derived.senses != 'Unaffected' %} ft{% endif %}</span>
+    <span title="Lifting &amp; carrying capacity are derived from your Strength (Ch.3)."><b>Lift</b> {{ derived.lifting }} lb <span class="dim">/ carry {{ derived.carrying }}</span></span>
+    <span title="Recovery die is derived from your Willpower (Ch.3)."><b>Recovery</b> {{ derived.recovery_die }}</span>
+  </div>
+  {% endif %}
+  {% if pc and build and build.connections %}
+  <div class="cs-derived" style="border-style:dashed;"><span><b>Connections</b> {{ build.connections }}</span></div>
+  {% endif %}
+
+  {# --- Radiant (Surgebinding) --- #}
+  {% if pc and radiant %}
+  <div class="cs-section-h">Radiant &mdash; {{ radiant.name }}{% if radiant_variant %} <span style="text-transform:none; letter-spacing:0; color:var(--order-accent,var(--accent)); font-size:12px;">&middot; {{ radiant_variant.name }}</span>{% endif %}</div>
+  <div class="cs-rad-plate">
+    <div style="display:flex; gap:1.4rem; flex-wrap:wrap; align-items:baseline;">
+      <div><span style="font-size:10px; text-transform:uppercase; color:var(--text-on-dark-3);">Spren</span> <b style="color:var(--order-accent,var(--accent));">{{ build.spren_name or radiant.spren }}</b></div>
+      <div><span style="font-size:10px; text-transform:uppercase; color:var(--text-on-dark-3);">Surges</span> <b>{% for s in radiant.surges %}<svg class="cs-surge-gl" aria-hidden="true"><use href="#cg-surge-{{ s }}"></use></svg>{{ surge_names[s].name }}{% if not loop.last %} &nbsp;+ {% endif %}{% endfor %}</b></div>
+      <div><span style="font-size:10px; text-transform:uppercase; color:var(--text-on-dark-3);">Ideals</span> <b>{{ build.ideals_sworn }} / 5</b><span class="cs-ideal-dots" aria-hidden="true">{% for n in range(1,6) %}<i class="{{ 'on' if n <= build.ideals_sworn }}"></i>{% endfor %}</span>{% if build.ideals_sworn == 0 %} <span style="color:var(--text-on-dark-3);">(surges locked until First Ideal)</span>{% endif %}</div>
+    </div>
+    <div style="margin-top:.4rem; font-size:12.5px; color:#aeb8c4; font-style:italic;">{{ radiant.philosophy }}</div>
+    {% if ideal_states and build.ideals_sworn >= 1 %}<div style="margin-top:.45rem; display:flex; flex-direction:column; gap:.25rem;">
+      {% for id in ideal_states if id.sworn %}
+      <div style="font-size:12px; line-height:1.4;"><b style="color:var(--order-accent,var(--accent));">{{ ['','First','Second','Third','Fourth'][id.n] }} Ideal</b> &mdash; <i>{{ id.words or id.suggested or 'spoken' }}</i></div>
+      {% endfor %}
+    </div>{% elif build.ideals_sworn >= 1 %}<div style="margin-top:.35rem; font-size:12px;"><b>First Ideal:</b> <i>{{ first_ideal }}</i></div>{% endif %}
+    {% if interactive and build.ideals_sworn >= 1 %}
+    <div style="margin-top:.6rem;">
+      <button class="cs-rad-btn{{ ' on' if cur.forsaken }}" id="btn-forsake" onclick="cosForsake()" title="Mark your oaths forsaken — your spren withdraws and your Stormlight powers seal until your bond is renewed. GM-toggleable; the rules leave the in-fiction consequences to your table.">{{ 'Renew oaths' if cur.forsaken else 'Oaths forsaken' }}</button>
+    </div>
+    {% endif %}
+  </div>
+
+  {% if interactive and a.investiture_max %}
+  <div class="cs-rad-plate{{ ' forsaken' if cur.forsaken }}" id="cos-sl-actions" style="margin-top:.6rem;">
+    <div class="cos-forsaken-banner">Oaths forsaken &mdash; your spren has withdrawn. Surges, Shardblade &amp; Plate are sealed until your bond is renewed.</div>
+    <div style="font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--order-accent,var(--accent)); margin-bottom:.5rem;">Stormlight Actions</div>
+    <div style="display:flex; gap:.5rem; flex-wrap:wrap; align-items:center;">
+      <button class="cs-rad-btn" onclick="cosBreathe()" title="Recover Investiture to your maximum from infused spheres within 5 ft.">Breathe Stormlight</button>
+      <button class="cs-rad-btn" id="btn-enhance" onclick="cosEnhance()" title="Spend 1 Investiture: Enhanced [Strength +1] and [Speed +1] until the end of your next turn. Tap again to drop it.">Enhance <span style="opacity:.7;">(1 Inv)</span></button>
+      <button class="cs-rad-btn" onclick="cosRegenerate()" title="Spend 1 Investiture: recover health equal to 1d6 + your tier ({{ tier }}).">Regenerate <span style="opacity:.7;">(1 Inv)</span></button>
+      {% if has_wound_regen %}<button class="cs-rad-btn" onclick="cosMendInjury()" title="Wound Regeneration: while Regenerating, spend 1 Investiture to instantly recover from an injury of your choice.">Mend Injury <span style="opacity:.7;">(1 Inv)</span></button>{% endif %}
+      {% if shardblade %}<button class="cs-rad-btn" id="btn-shardblade" onclick="cosShardblade()" title="Third Ideal: summon your spren as a Shardblade (2d8 spirit, deadly — bypasses Deflect). Tap again to dismiss.">Summon Shardblade</button>{% endif %}
+      {% if shardplate %}<button class="cs-rad-btn{{ ' on' if cur.shardplate }}" id="btn-shardplate" onclick="cosShardplate()" title="Fourth Ideal: don living Shardplate — Deflect 5 against EVERY damage type (even spirit &amp; vital). Tap again to doff.">{{ 'Doff' if cur.shardplate else 'Don' }} Shardplate</button>{% endif %}
+      <span id="enh-chip" class="cs-chip df" style="display:{{ '' if cur.enhanced else 'none' }};">Enhanced &middot; STR +1 / SPD +1</span>
+    </div>
+    {% if has_take_squire %}
+    <div style="font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--order-accent,var(--accent)); margin:.85rem 0 .35rem;">Squire <span style="text-transform:none; letter-spacing:0; color:var(--text-on-dark-3);">(breathes Stormlight &amp; uses your surges; choose after a long rest)</span></div>
+    <input id="cos-squire" value="{{ cur.squire }}" placeholder="Name your squire&hellip;" oninput="cosSquire(this.value)"
+           style="width:100%; max-width:320px; background:var(--bg-page,#0d1117); border:1px solid var(--border-card); border-radius:7px; padding:.4rem .55rem; color:#e8eef5; font-size:13px;">
+    {% endif %}
+    {% if radiant_powers and build.ideals_sworn >= 1 %}
+    <div style="font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--accent); margin:.85rem 0 .4rem;">Surge Powers <span style="text-transform:none; letter-spacing:0; color:var(--text-on-dark-3);">(tap to spend Investiture &amp; log)</span></div>
+    <div class="cs-grid" style="grid-template-columns:1fr 1fr; gap:.5rem;">
+      {% for p in radiant_powers %}
+      <div class="cs-ability roll" style="margin-bottom:0;"
+           onclick='cosSurge({{ p.name|tojson }}, {{ p.investiture or 0 }}, {{ p.effect|tojson }})'>
+        <div class="an">{{ p.name }} <span style="font-size:11px; color:var(--text-on-dark-3); font-weight:400;">{{ p.cost }} action{{ '' if p.cost == 1 else 's' }}{% if p.investiture %} &middot; {{ p.investiture }} Investiture{% endif %}</span></div>
+        <div class="ad">{{ p.effect }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+  {% endif %}
+
+  {# --- Attributes --- #}
+  <div class="cs-section-h">Attributes</div>
+  <div class="cs-grid cs-attrs">
+    {% for key in ['str','spd','int','wil','awa','pre'] %}
+    <div class="cs-card">
+      <div class="l">{{ attr_names[key] }}</div>
+      <div class="v">{{ a.attributes[key] }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {# --- Skills --- #}
+  {% set _sk_ns = namespace(locked=false) %}
+  {% for _c, _s in a.skills.items() %}{% if not _s.unlocked %}{% set _sk_ns.locked = true %}{% endif %}{% endfor %}
+  <div class="cs-section-h">Skills <span style="text-transform:none;letter-spacing:0;">(the small label is the governing attribute; R# is your rank)</span>
+    {% if _sk_ns.locked %}<button type="button" id="cs-surge-toggle" class="cs-surge-toggle" onclick="toggleLockedSurges(this)" aria-pressed="false">Hide locked Surges</button>{% endif %}
+  </div>
+  <div style="font-size:11px; color:var(--text-on-dark-3); margin:-.3rem 0 .65rem; line-height:1.4;">A skill&rsquo;s modifier is its <b>ranks</b> plus its governing attribute (the small label below each). <b>R#</b> shows your rank.</div>
+  {% if interactive %}
+  <div class="cs-rolltools">
+    <span class="cs-toggle" id="t-adv" role="button" tabindex="0" aria-pressed="false" onclick="cosTog('adv')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" title="Roll an extra d20, keep the best">Advantage</span>
+    <span class="cs-toggle" id="t-dis" role="button" tabindex="0" aria-pressed="false" onclick="cosTog('dis')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" title="Roll an extra d20, keep the worst">Disadvantage</span>
+    <span class="cs-toggle" id="t-plot" role="button" tabindex="0" aria-pressed="false" onclick="cosTog('plot')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" title="Roll the Plot Die with this test">Raise the stakes</span>
+    <span class="cs-vis" role="group" aria-label="Who sees this roll">
+      <span class="lbl">Seen by</span>
+      <button type="button" class="cs-vbtn on" data-vis="group" onclick="cosVis('group')" title="The whole table sees this roll">Table</button>
+      <button type="button" class="cs-vbtn" data-vis="gm" onclick="cosVis('gm')" title="Only the GM sees this roll">GM</button>
+      <button type="button" class="cs-vbtn" data-vis="private" onclick="cosVis('private')" title="Only you see this — nothing is sent to the table">Private</button>
+    </span>
+    <span class="cs-result" id="cs-result">Tap a skill or strike to roll <b>d20+mod</b></span>
+  </div>
+  <div class="cs-hint">Meet-or-beat: <b>d20 + modifier</b> vs the GM&rsquo;s difficulty (Easy 10 / Standard 15 / Hard 20 / Very Hard 25). <b>Seen by</b> sets who gets the result &mdash; the whole table, the GM only, or just you.</div>
+  {% endif %}
+  <div class="cs-grid cs-skills" id="cs-skills-grid">
+    {% for code, label in skill_names.items() if code in a.skills %}
+    {% set sk = a.skills[code] %}
+    <div class="cs-skill {{ '' if sk.unlocked else 'locked' }}{% if interactive and sk.unlocked %} roll{% endif %}"
+         title="{{ label }} modifier = ranks {{ sk.rank or 0 }} + {{ sk.attribute|upper }} {{ a.attributes[sk.attribute] }} = {{ '+' if sk.mod >= 0 else '' }}{{ sk.mod }}"
+         {% if interactive and sk.unlocked %}onclick='cosRoll({{ label|tojson }}, {{ sk.mod }}, {{ sk.attribute|tojson }})'{% endif %}>
+      <div class="nm">{{ label }} <small>{{ sk.attribute }}</small>{% if sk.rank %} <span class="rk">R{{ sk.rank }}</span>{% endif %}</div>
+      <div class="mod">{{ '+' if sk.mod >= 0 else '' }}{{ sk.mod }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {# --- Abilities --- #}
+  <div class="cs-2col">
+    <div>
+      {% if strikes or shardblade %}
+      <div class="cs-section-h">Strikes</div>
+      {% for s in strikes %}
+      <div class="cs-ability{% if interactive %} roll{% endif %}"
+           {% if interactive %}onclick='cosStrike({{ s.name|tojson }}, {{ s.mod|default(0) }}, {{ s.damage|tojson }}, {{ (s.type or '')|tojson }})'{% endif %}>
+        <div class="an">{{ s.name }}{% if interactive %} <span style="font-size:11px; color:var(--text-on-dark-3); font-weight:400;">attack {{ '+' if s.mod|default(0) >= 0 else '' }}{{ s.mod|default(0) }}</span>{% endif %}</div>
+        <div class="ad">{{ s.damage }}{% if s.type %} <span class="cs-chip">{{ s.type }}</span>{% endif %}{% if interactive %} &middot; <span style="color:var(--accent);">tap to roll</span>{% endif %}</div></div>
+      {% endfor %}
+      {% if shardblade %}
+      {# Summoned spren-Blade (3rd Ideal). Hidden until summoned via the Stormlight action. #}
+      <div id="cos-shardblade-strike" class="cs-ability{% if interactive %} roll{% endif %}"
+           style="display:{{ '' if cur.shardblade else 'none' }}; border-color:color-mix(in srgb, var(--order-accent,var(--accent)) 55%, transparent);"
+           {% if interactive %}onclick='cosStrike({{ shardblade.name|tojson }}, {{ shardblade.mod }}, {{ shardblade.damage|tojson }}, {{ shardblade.type|tojson }})'{% endif %}>
+        <div class="an" style="color:var(--order-accent,var(--accent));">{{ shardblade.name }} <span style="font-size:11px; color:var(--text-on-dark-3); font-weight:400;">attack {{ '+' if shardblade.mod >= 0 else '' }}{{ shardblade.mod }} &middot; deadly</span></div>
+        <div class="ad">{{ shardblade.damage }} <span class="cs-chip">{{ shardblade.type }}</span> <span class="cs-chip" title="Spirit damage bypasses physical Deflect">bypasses Deflect</span>{% if interactive %} &middot; <span style="color:var(--accent);">tap to roll</span>{% endif %}</div></div>
+      {% endif %}
+      {% endif %}
+      {% if traits %}
+      <div class="cs-section-h">Traits</div>
+      <div class="cs-chips">{% for t in traits %}<span class="cs-chip">{{ t }}</span>{% endfor %}</div>
+      {% endif %}
+    </div>
+    <div>
+      {% if actions %}
+      <div class="cs-section-h">Actions &amp; Abilities</div>
+      {% for ab in actions %}
+      <div class="cs-ability{% if interactive %} roll{% endif %}"{% if interactive %} onclick='cosAbility({{ ab.name|tojson }}, {{ (ab.description or '')|tojson }})'{% endif %}>
+        <div class="an">{{ ab.name }}{% if interactive %} <span style="font-size:11px; color:var(--accent); font-weight:400;">tap to roll</span>{% endif %}</div>
+        {% if ab.description %}<div class="ad">{{ ab.description }}</div>{% endif %}</div>
+      {% endfor %}
+      {% endif %}
+    </div>
+  </div>
+
+  {% if pc %}
+  <div class="cs-section-h cs-foldable">Expertises</div>
+  <div class="cs-chips">
+    {% for e in build.expertises %}<span class="cs-chip">{{ e }}</span>{% else %}<span style="color:var(--text-on-dark-3); font-size:12px;">None</span>{% endfor %}
+  </div>
+
+  <div class="cs-section-h cs-foldable">Talents</div>
+  {% if build.talents %}
+  <div class="cs-chips">{% for t in build.talents %}<span class="cs-chip df">{{ t.name if t.name is defined else t }}</span>{% endfor %}</div>
+  {% else %}<div style="color:var(--text-on-dark-3); font-size:12px;">None selected</div>{% endif %}
+
+  {% if infected %}
+  <div class="cs-section-h cs-foldable">Infected Arts</div>
+  {% for art in infected %}
+  <div class="cs-ability" style="border-color:rgba(205,81,191,.5);">
+    <div class="an" style="color:#cd51bf;">{{ art.disease }} &rarr; {{ art.art }}</div>
+    <div class="ad"><b style="color:#f0a9a9;">Disease cost:</b> {{ art.cost }}</div>
+    {% if art.abilities %}<ul style="margin:.45rem 0 0 1.1rem; line-height:1.5;">
+      {% for ab in art.abilities %}<li style="margin-bottom:.25rem;{% if interactive %} cursor:pointer;{% endif %}"{% if interactive %} class="inf-roll" onclick='cosAbility({{ ab.name|tojson }}, {{ ab.desc|tojson }})' title="Tap to roll this ability's dice / log its use"{% endif %}><b style="color:#e8eef5;">{{ ab.name }}</b>{% if ab.cost %} <span class="cs-chip">{{ ab.cost }}</span>{% endif %}{% if interactive %} <span style="font-size:10px; color:var(--accent);">tap to roll</span>{% endif %} &mdash; {{ ab.desc }}</li>{% endfor %}
+    </ul>{% endif %}
+  </div>
+  {% endfor %}
+  {% endif %}
+
+  {% if pc %}
+  <div class="cs-section-h cs-foldable">Spheres &amp; Goods <span style="text-transform:none; letter-spacing:0;">(awarded by the GM)</span></div>
+  <div id="cos-wallet">
+    {% set w = wallet or {} %}
+    {% set sp = w.spheres or {} %}
+    <div class="cs-chips" id="cos-wallet-spheres">
+      <span class="cs-chip" data-sphere="broam">Broam <b data-sphere-v="broam">{{ sp.broam or 0 }}</b></span>
+      <span class="cs-chip" data-sphere="mark">Mark <b data-sphere-v="mark">{{ sp.mark or 0 }}</b></span>
+      <span class="cs-chip" data-sphere="chip">Chip <b data-sphere-v="chip">{{ sp.chip or 0 }}</b></span>
+    </div>
+    <div class="cs-chips" id="cos-wallet-goods" style="margin-top:.35rem;">
+      {% for it in (w['items'] if w.get('items') else []) %}
+      <span class="cs-chip">{{ it.name }}{% if it.qty and it.qty > 1 %} &times;{{ it.qty }}{% endif %}</span>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if fabrials or crafted or interactive %}
+  <div class="cs-section-h cs-foldable">Fabrials <span style="text-transform:none; letter-spacing:0;">(tap &minus;/+ to spend &amp; recharge)</span></div>
+  {% for f in fabrials %}
+  <div class="cs-ability" style="margin-bottom:.5rem;">
+    <div class="an">{{ f.name }}{% if f.tier %} <span class="cs-chip">Tier {{ f.tier }}</span>{% endif %}
+      <span style="float:right; font-size:12px; color:var(--text-on-dark-2); white-space:nowrap;">
+        {% if interactive %}<button type="button" class="cs-fab-btn" onclick='cosFabrial({{ f.id|tojson }},-1)' aria-label="Spend a charge">&minus;</button>{% endif %}
+        <b data-fab-cur="{{ f.id }}" style="font-family:var(--font-ui); font-variant-numeric:tabular-nums; color:var(--order-accent,var(--accent));">{{ f.current }}</b><span style="color:var(--text-on-dark-3);">/{{ f.charges }} charges</span>
+        {% if interactive %}<button type="button" class="cs-fab-btn" onclick='cosFabrial({{ f.id|tojson }},1)' aria-label="Recharge">+</button>{% endif %}
+      </span></div>
+    <div class="ad">{{ f.effect }}</div>
+  </div>
+  {% endfor %}
+  {# Workshop-crafted unique fabrials (with their chosen upgrades/drawbacks) — JS-rendered so the workshop can update them live. #}
+  <div id="cos-crafted-list"></div>
+  {% if interactive %}
+  <details class="cs-workshop" id="cos-workshop">
+    <summary>Fabrial Workshop <span class="muted" style="text-transform:none;">&mdash; invent a unique fabrial (Ch.7)</span></summary>
+    <div class="ws-inner">
+      <label class="ws-l">Choose an effect</label>
+      <select id="ws-effect" onchange="wsPick()">
+        <option value="">&mdash; choose an effect &mdash;</option>
+        {% for e in crafting.effects %}<option value="{{ e.key }}">Tier {{ e.tier }} &middot; {{ e.name }} ({{ e.charges }} charges)</option>{% endfor %}
+      </select>
+      <div id="ws-body" class="ws-body"></div>
+    </div>
+  </details>
+  {% endif %}
+  {% endif %}
+
+  <div class="cs-section-h cs-foldable">Inventory <span style="text-transform:none; letter-spacing:0;">(equipped in cyan)</span></div>
+  {% if inventory %}
+  <div class="cs-grid" style="grid-template-columns:repeat(auto-fill,minmax(210px,1fr));">
+    {% for it in inventory %}
+    <div class="cs-ability" style="margin-bottom:0;{% if it.equipped %} border-color:rgba(95,168,224,.5);{% endif %}">
+      <div class="an" style="{% if not it.equipped %}color:#e8eef5;{% endif %}">{{ it.name }}{% if it.qty and it.qty > 1 %} &times;{{ it.qty }}{% endif %}</div>
+      <div class="ad">
+        {{ it.kind|capitalize }}{% if it.damage %} &middot; {{ it.damage.formula }} {{ it.damage.type }}{% endif %}{% if it.deflect %} &middot; Deflect {{ it.deflect }}{% endif %}
+        {% if it.traits %}<div class="cs-chips" style="margin-top:.3rem;">{% for tr in it.traits %}<span class="cs-chip">{{ tr }}</span>{% endfor %}</div>{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}<div style="color:var(--text-on-dark-3); font-size:12px;">Empty</div>{% endif %}
+
+  <div class="cs-section-h cs-foldable">Session Notes</div>
+  <textarea id="pc-notes" placeholder="Jot down anything during the session — saves automatically."
+            style="width:100%; min-height:140px; background:var(--bg-sunken,#131922); color:#e8eef5; border:1px solid var(--border-card); border-radius:9px; padding:.75rem; font-size:13px; line-height:1.6; resize:vertical;">{{ build.notes }}</textarea>
+  <div id="pc-notes-status" style="font-size:11px; color:var(--text-on-dark-3); margin-top:.25rem;">Saved</div>
+  <script>
+  (function(){
+    const a=document.getElementById('pc-notes'), s=document.getElementById('pc-notes-status');
+    let t=null, last=a.value;
+    function save(){ if(a.value===last){ s.textContent='Saved'; return; } s.textContent='Saving…';
+      fetch('/cosmere/pc/{{ actor_id }}/notes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:a.value})})
+        .then(r=>r.json()).then(()=>{ last=a.value; s.textContent='Saved'; }).catch(()=>s.textContent='Save failed'); }
+    a.addEventListener('input',()=>{ s.textContent='Editing…'; clearTimeout(t); t=setTimeout(save,800); });
+    window.addEventListener('beforeunload',()=>{ if(a.value!==last && navigator.sendBeacon) navigator.sendBeacon('/cosmere/pc/{{ actor_id }}/notes', new Blob([JSON.stringify({text:a.value})],{type:'application/json'})); });
+  })();
+  </script>
+
+  {# Collapsible reference sections (combat-first): fold the non-combat sections
+     away; the choice persists per character in localStorage. #}
+  <script>
+  (function(){
+    var PID = {{ actor_id|tojson }};
+    document.querySelectorAll('.cs-section-h.cs-foldable').forEach(function(h){
+      var body=document.createElement('div'); body.className='cs-fold-body';
+      var n=h.nextElementSibling;
+      while(n && !(n.classList && n.classList.contains('cs-section-h')) && n.tagName!=='SCRIPT'){ var nx=n.nextElementSibling; body.appendChild(n); n=nx; }
+      h.after(body);
+      var chev=document.createElement('span'); chev.className='cs-fold-chev'; chev.setAttribute('aria-hidden','true'); h.appendChild(chev);
+      var key='cosfold:'+PID+':'+h.textContent.trim().slice(0,24);
+      function apply(f){ body.classList.toggle('collapsed',f); chev.textContent=f?'▸':'▾'; h.setAttribute('aria-expanded', f?'false':'true'); }
+      var folded=false; try{ folded=localStorage.getItem(key)==='1'; }catch(e){}
+      apply(folded);
+      h.setAttribute('role','button'); h.setAttribute('tabindex','0');
+      h.addEventListener('click',function(){ folded=!folded; apply(folded); try{ localStorage.setItem(key, folded?'1':'0'); }catch(e){} });
+      h.addEventListener('keydown',function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); h.click(); } });
+    });
+  })();
+  </script>
+
+  {% if interactive %}
+  <script>
+  (function(){
+    const PID = {{ actor_id|tojson }};
+    const MAX = {health:{{ a.health.max }}, focus:{{ a.focus_max }}, investiture:{{ a.investiture_max }}};
+    const TIER = {{ tier|default(1) }};
+    let cur = {health:{{ cur.health }}, focus:{{ cur.focus }}, investiture:{{ cur.investiture }}, injuries:{{ cur.injuries }}, enhanced:{{ 'true' if cur.enhanced else 'false' }}, conditions:{{ cur.conditions|tojson }}, shardblade:{{ 'true' if cur.shardblade else 'false' }}, shardplate:{{ 'true' if cur.shardplate else 'false' }}, squire:{{ cur.squire|tojson }}, forsaken:{{ 'true' if cur.forsaken else 'false' }}, goals:{{ cur.goals|tojson }}};
+    let mods = {adv:false, dis:false, plot:false, vis:'group'};
+
+    /* ── Condition automation (Stormlight Ch.3 "Advantages & Disadvantages",
+       Ch.9 "Conditions"). Active conditions auto-modify your tests; you can
+       still override per roll with the Adv/Dis toggles — a manual advantage
+       cancels a condition's disadvantage 1:1 exactly like the rulebook, and
+       vice versa. Numeric penalties (Exhausted) always apply.  ───────────── */
+    const COND_VAL = c => { const v=(cur.conditions||{})[c]; return (typeof v==='number') ? v : (v?1:0); };
+    // `senseBased` = this roll is a Perception / sense-based test. Disoriented's
+    // disadvantage is RAW-scoped to those ONLY (Ch.9: "Perception and other
+    // sense-based tests have disadvantage") -- it must NOT drag down Athletics,
+    // Deception, attacks, etc. Restrained's disadvantage IS blanket (all tests
+    // except escape), so it always applies.
+    function condRollFx(senseBased){
+      const c = cur.conditions || {};
+      return {
+        flat: -COND_VAL('exhausted'),                  // Exhausted [-X]: -X to EVERY test result
+        adv:  c.empowered ? 1 : 0,                      // Empowered: advantage on all tests
+        dis:  ((c.disoriented && senseBased)?1:0) + (c.restrained?1:0),
+      };
+    }
+    // Net the manual Adv/Dis toggles with the condition-driven ones (cancel 1:1).
+    function netAdvDis(senseBased){
+      const fx = condRollFx(senseBased);
+      const net = ((mods.adv?1:0) + fx.adv) - ((mods.dis?1:0) + fx.dis);
+      return { adv: net > 0, dis: net < 0 };
+    }
+    // Plain-language, rulebook-accurate effect of each active condition — drives
+    // the "Active effects" panel so it's obvious what every condition changes.
+    const COND_FX = {
+      afflicted:   v => 'Takes ' + (v||'?') + ' damage at the end of each of your turns (the GM applies it).',
+      determined:  () => 'On a failed test you may add an Opportunity to the result, then remove Determined.',
+      disoriented: () => 'Disadvantage on Perception &amp; sense-based tests; no reactions; your senses count as obscured.',
+      empowered:   () => 'Advantage on all tests; your Investiture refills to maximum at the start of each turn.',
+      exhausted:   v => '−' + (v||1) + ' to every test result. Reduce by 1 per long rest.',
+      focused:     () => 'Abilities that cost focus cost 1 less.',
+      immobilized: () => 'Your movement rate is 0 — you cannot move or be moved.',
+      prone:       () => 'Also Slowed; melee attacks against you gain advantage. Stand (1 action) to end it.',
+      restrained:  () => 'Movement 0; disadvantage on all tests except those to escape.',
+      slowed:      () => 'Your movement rate is halved.',
+      stunned:     () => 'Lose your reactions; you gain two fewer actions on your turn.',
+      surprised:   () => 'Lose reactions; you cannot take a fast turn and gain one fewer action. Ends after your next turn.',
+      unconscious: () => 'Movement 0; you fall Prone and drop held items; you can act only via Breathe Stormlight / Regenerate.',
+    };
+    function _cap(s){ return s ? s.charAt(0).toUpperCase()+s.slice(1) : s; }
+    function paintCondFx(){
+      const box = document.getElementById('cos-cond-fx'); if(!box) return;
+      const c = cur.conditions || {}, rows = [];
+      if(cur.enhanced) rows.push('<div class="fx-row"><span class="fx-name">Enhanced</span><span class="fx-desc">STR +1 / SPD +1 to tests, talents &amp; movement.</span></div>');
+      Object.keys(COND_FX).forEach(code => {
+        const v = c[code]; if(!v) return;
+        const val = (typeof v === 'number') ? v : 0;
+        rows.push('<div class="fx-row"><span class="fx-name">' + _cap(code) + (val ? ' ['+val+']' : '') +
+                  '</span><span class="fx-desc">' + COND_FX[code](val) + '</span></div>');
+      });
+      // Merged into the single Conditions block: the effect rows sit directly
+      // under the active chips (no separate "Active effects" sub-header), so a
+      // condition + what it does read as one thing, not two stacked sections.
+      box.innerHTML = rows.join('');
+      if(typeof syncVbar === 'function') syncVbar();   // keep the sticky bar's condition count fresh
+    }
+    // Annotate a roll with the conditions that touched it (shown after the total).
+    function condTags(enh, roll, senseBased){
+      const c = cur.conditions || {}, t = [];
+      if(enh) t.push('Enhanced +' + enh);
+      const ex = COND_VAL('exhausted'); if(ex) t.push('Exhausted −' + ex);
+      if(roll.adv) t.push('advantage' + (c.empowered ? ' (Empowered)' : ''));
+      // Name the real source: Disoriented only contributed if this was a
+      // sense-based test; otherwise blanket Restrained is the cause.
+      if(roll.dis){ const src = (c.disoriented && senseBased) ? 'Disoriented' : (c.restrained ? 'Restrained' : ''); t.push('disadvantage' + (src ? ' ('+src+')' : '')); }
+      return t.length ? ' <span class="opp">' + t.join(' · ') + '</span>' : '';
+    }
+    const d = n => 1 + Math.floor(Math.random()*n);
+    let _toastT=null;
+    // Re-trigger a CSS flare class (order-glow on an Opportunity / dim on a
+    // Complication) by removing then re-adding it on the next frame.
+    function _flare(el, flare){
+      if(!el) return;
+      el.classList.remove('flare-opp','flare-comp');
+      if(flare){ void el.offsetWidth; el.classList.add('flare-' + flare); }
+    }
+    function csToast(html, flare){
+      let t=document.getElementById('cs-toast');
+      if(!t){ t=document.createElement('div'); t.id='cs-toast'; document.body.appendChild(t); }
+      t.innerHTML=html; t.classList.add('show'); _flare(t, flare);
+      clearTimeout(_toastT); _toastT=setTimeout(()=>t.classList.remove('show'), 4200);
+    }
+    // Update the inline result line AND pop a floating toast so the roll is
+    // always visible no matter where on the sheet it was triggered. `flare` is
+    // 'opp' (nat-20 Opportunity) or 'comp' (nat-1 Complication) — themed feedback.
+    const res = (h, flare) => { const el=document.getElementById('cs-result'); if(el){ el.innerHTML=h; _flare(el, flare); } csToast(h, flare); };
+
+    function rollD20(senseBased){
+      const ad=netAdvDis(senseBased);
+      let a=d(20), nat=a, note='d20('+a+')';
+      if(ad.adv||ad.dis){ const b=d(20); nat=ad.adv?Math.max(a,b):Math.min(a,b); note='d20('+a+','+b+'→'+nat+')'; }
+      return {v:nat, note, nat, adv:ad.adv, dis:ad.dis};
+    }
+    function plot(){ const p=d(6); if(p<=2) return {l:'',b:0}; if(p<=4) return {l:'Opportunity',b:0,c:'opp'};
+      return p===5 ? {l:'Complication +2',b:2,c:'comp'} : {l:'Complication +4',b:4,c:'comp'}; }
+    function flair(roll){ let extra='', label='', bonus=0;
+      if(mods.plot){ const pd=plot(); bonus+=pd.b; if(pd.l){ extra+=' <span class="'+(pd.c||'')+'">'+pd.l+'</span>'; label=pd.l; } }
+      if(roll.nat===20){ extra+=' <span class="opp">Opportunity! (nat 20)</span>'; label=(label?label+' · ':'')+'Opportunity (20)'; }
+      if(roll.nat===1){ extra+=' <span class="comp">Complication (nat 1)</span>'; label=(label?label+' · ':'')+'Complication (1)'; }
+      return {extra, label, bonus};
+    }
+    // Roll visibility: Table broadcasts to everyone, GM whispers to the GM only,
+    // Private never leaves this device (the inline result + toast still show here).
+    window.cosVis = function(k){
+      mods.vis = k;
+      document.querySelectorAll('.cs-vbtn').forEach(b=>b.classList.toggle('on', b.dataset.vis===k));
+    };
+    function post(action, result, detail){
+      if(mods.vis==='private') return;   // private — nothing is sent off this screen
+      fetch('/api/cosmere/roll',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({pid:PID, action, result:String(result), detail, visibility:mods.vis})}).catch(()=>{});
+    }
+    function rollFormula(f){ let total=0; (String(f||'').match(/\d+d\d+/g)||[]).forEach(t=>{
+        const p=t.split('d'); const n=+p[0], s=+p[1]; for(let i=0;i<n;i++) total+=d(s); });
+      const flat=String(f||'').match(/d\d+\s*\+\s*(\d+)/); if(flat) total+=+flat[1]; return total; }
+
+    window.cosTog = function(k){
+      if(k==='adv'){ mods.adv=!mods.adv; if(mods.adv) mods.dis=false; }
+      else if(k==='dis'){ mods.dis=!mods.dis; if(mods.dis) mods.adv=false; }
+      else mods.plot=!mods.plot;
+      const _sync=(id,on)=>{ const e=document.getElementById(id); if(e){ e.classList.toggle('on',on); e.setAttribute('aria-pressed', on?'true':'false'); } };
+      _sync('t-adv',mods.adv); _sync('t-dis',mods.dis); _sync('t-plot',mods.plot);
+    };
+    const enhBonus = attr => (cur.enhanced && (attr==='str'||attr==='spd')) ? 1 : 0;  // Enhance: +1 to physical
+    window.cosRoll = function(name, mod, attr){
+      // Perception is the sense-based test Disoriented penalizes (Ch.9). The
+      // GM can still hand-toggle Dis for any other test they rule sense-based.
+      const senseBased = /^\s*perception\s*$/i.test(name || '');
+      const e=enhBonus(attr), fx=condRollFx(senseBased);
+      const m=mod+e+fx.flat, roll=rollD20(senseBased), f=flair(roll), sign=m>=0?'+':'';
+      const total=roll.v+m+f.bonus, tags=condTags(e, roll, senseBased), plain=tags.replace(/<[^>]+>/g,'').trim();
+      const flare = roll.nat===20?'opp':(roll.nat===1?'comp':'');
+      const postDetail = roll.note+' '+sign+m+(f.bonus?' (+'+f.bonus+')':'')+(f.label?' · '+f.label:'')+(plain?' · '+plain:'');
+      // The roll readout + SSE broadcast (res/post) are unchanged from
+      // before — just deferred into this closure so 3D dice (below) can
+      // settle first without ever risking losing them (roll() never rejects
+      // or hangs; finish() always runs, from .finally() or the else branch).
+      const finish = () => {
+        res(name+': <b>'+total+'</b> <span style="font-size:11px;color:var(--text-on-dark-3)">'+roll.note+' '+sign+m+(f.bonus?' +'+f.bonus:'')+'</span>'+f.extra+tags, flare);
+        post(name+' test', total, postDetail);
+      };
+      // 3D dice (dice-batch-b, Task 2): a Cosmere test is always exactly one
+      // physical d20 — even with Advantage/Disadvantage, roll.v is already
+      // the KEPT face (rollD20 discards the other roll), so animating a
+      // single die never misrepresents the roll. The Plot Die's flat bonus
+      // (f.bonus) folds into `modifier` so the overlay's own total (die +
+      // modifier) still lands on `total`. markLocalRoll registers this roll's
+      // fingerprint so base.html's showToast (this page extends base.html)
+      // doesn't re-animate the SAME roll when it echoes back over the
+      // player_roll SSE event from /api/cosmere/roll's broadcast.
+      if(window.diceRoller && window.diceRoller.enabled && window.DiceRoller && window.DiceRoller.isSupported()){
+        window.diceRoller.markLocalRoll((name+' test')+'|'+String(total)+'|'+postDetail);
+        window.diceRoller.roll({
+          dice:[{sides:20, value:roll.v}], modifier:m+f.bonus, total:total,
+          label:name, detail:postDetail, isCrit:roll.nat===20, isFumble:roll.nat===1
+        }).finally(finish);
+      } else {
+        finish();
+      }
+    };
+    window.cosStrike = function(name, mod, dmgFormula, dtype){
+      // Exhausted + Adv/Dis hit the attack TEST; they don't modify damage (not a test).
+      // An attack is not a sense-based test, so Disoriented never applies here.
+      const e=cur.enhanced?1:0, fx=condRollFx(false);
+      const atkMod=mod+e+fx.flat, dmgMod=mod+e, roll=rollD20(false), f=flair(roll), sign=atkMod>=0?'+':'';
+      const atk=roll.v+atkMod+f.bonus, dmg=rollFormula(dmgFormula)+dmgMod, tags=condTags(e, roll, false), plain=tags.replace(/<[^>]+>/g,'').trim();
+      res(name+' — attack <b>'+atk+'</b>, damage <b>'+dmg+'</b> '+(dtype||'')+f.extra+tags, roll.nat===20?'opp':(roll.nat===1?'comp':''));
+      post(name+' strike', 'atk '+atk+' / dmg '+dmg,
+        roll.note+' '+sign+atkMod+' → hit '+atk+'; '+dmgFormula+(dmgMod>=0?'+':'')+dmgMod+' → '+dmg+' '+(dtype||'')+(f.label?' · '+f.label:'')+(plain?' · '+plain:''));
+    };
+    // Roll an ability/action: rolls any dice in its text (damage/heal/effect dice)
+    // and logs the use. Abilities with no dice are simply announced to the feed.
+    window.cosAbility = function(name, text){
+      const dice=(String(text||'').match(/\d+\s*d\s*\d+(\s*\+\s*\d+)?/gi)||[]);
+      if(!dice.length){
+        res('<span class="opp">'+name+'</span> &mdash; activated <span style="font-size:11px;color:var(--text-on-dark-3)">(resolve per its description)</span>');
+        post('uses '+name, 'ability', String(text||'').replace(/<[^>]+>/g,'').slice(0,140));
+        return;
+      }
+      let parts=[], total=0;
+      dice.forEach(dx=>{ const v=rollFormula(dx); total+=v; parts.push(dx.replace(/\s+/g,'')+'→'+v); });
+      res('<span class="opp">'+name+'</span> &mdash; rolled <b>'+total+'</b> <span style="font-size:11px;color:var(--text-on-dark-3)">'+parts.join(' · ')+' &middot; add modifiers</span>');
+      post('uses '+name, total, parts.join(' · ')+' (dice only; add modifiers)');
+    };
+
+    const _RM_SHEET = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)');
+    const _prevOrb = {};
+    function _orbMotes(key, kind){
+      if(_RM_SHEET && _RM_SHEET.matches) return;
+      const o = document.getElementById('orb-' + key); if(!o) return;
+      const w = o.closest('.orb-w'); if(!w) return;
+      const cls = key === 'focus' ? 'focus' : 'inv';
+      for(let i = 0; i < 5; i++){
+        const m = document.createElement('div');
+        m.className = 'orb-mote ' + cls;
+        m.style.setProperty('--dx', (Math.random() * 36 - 18).toFixed(1) + 'px');
+        w.appendChild(m);
+        setTimeout(() => m.classList.add(kind), i * 60);
+        m.addEventListener('animationend', () => m.remove());
+        setTimeout(() => m.remove(), 2200 + i * 60);
+      }
+    }
+    function _orbFlourish(key, prev, val){
+      if(_RM_SHEET && _RM_SHEET.matches) return;
+      const o = document.getElementById('orb-' + key); if(!o) return;
+      const cls = val > prev ? 'pulse-up' : 'pulse-down';
+      o.classList.remove('pulse-up', 'pulse-down'); void o.offsetWidth;
+      o.classList.add(cls);
+      o.addEventListener('animationend', () => o.classList.remove(cls), { once:true });
+      if(val < prev && (key === 'focus' || key === 'investiture')) _orbMotes(key, 'rise');
+    }
+
+    // Drive one sphere gauge: fill height (light from the bottom), rim arc,
+    // value, and the dun (empty) / low (ember-pulse) states.
+    const _ORBC = 2 * Math.PI * 46;   // arc circumference (r=46)
+    function _orb(key, val, max){
+      const o = document.getElementById('orb-' + key); if(!o) return;
+      const pct = max > 0 ? Math.max(0, Math.min(1, val / max)) : 0;
+      const fill = document.getElementById('fill-' + key); if(fill) fill.style.height = (pct * 100) + '%';
+      const arc = document.getElementById('arc-' + key); if(arc) arc.setAttribute('stroke-dasharray', (pct * _ORBC).toFixed(1) + ' ' + _ORBC.toFixed(1));
+      const num = document.getElementById('rv-' + key); if(num) num.textContent = val;
+      o.classList.toggle('dun', val <= 0);
+      o.classList.toggle('low', max > 0 && val > 0 && pct <= 0.25);
+      if(_prevOrb[key] !== undefined && _prevOrb[key] !== val) _orbFlourish(key, _prevOrb[key], val);
+      _prevOrb[key] = val;
+    }
+    window.condFoldToggle = function(){
+      var box = document.getElementById('cos-conditions'),
+          btn = document.getElementById('cond-fold-btn');
+      if(!box) return;
+      var folded = box.classList.toggle('folded');
+      if(btn) btn.textContent = folded ? 'edit' : 'done';
+      syncCondFold();
+    };
+    function syncCondFold(){
+      var box = document.getElementById('cos-conditions');
+      if(!box) return;
+      var any = !!box.querySelector('.cs-cond.on');
+      box.classList.toggle('none-active', !any);
+    }
+    // Skill grid: hide/show the dimmed locked (Surge) skills for a tighter,
+    // less-cluttered grid before a Radiant unlocks them. Persists per browser.
+    window.toggleLockedSurges = function(btn){
+      var g = document.getElementById('cs-skills-grid');
+      if(!g) return;
+      var hide = g.classList.toggle('hide-locked');
+      if(btn){ btn.textContent = hide ? 'Show Surges' : 'Hide locked Surges'; btn.setAttribute('aria-pressed', hide ? 'true' : 'false'); }
+      try { localStorage.setItem('cos_hide_locked_surges', hide ? '1' : '0'); } catch(_){}
+    };
+    (function(){
+      try {
+        if(localStorage.getItem('cos_hide_locked_surges') === '1'){
+          var g = document.getElementById('cs-skills-grid'), b = document.getElementById('cs-surge-toggle');
+          if(g){ g.classList.add('hide-locked'); }
+          if(b){ b.textContent = 'Show Surges'; b.setAttribute('aria-pressed','true'); }
+        }
+      } catch(_){}
+    })();
+    function syncVbar(){
+      const set = (id, v) => { const e = document.getElementById(id); if(e) e.textContent = v; };
+      set('vb-health', cur.health); set('vb-focus', cur.focus); set('vb-investiture', cur.investiture);
+      const c = cur.conditions || {}, act = Object.keys(c).filter(k => c[k]);
+      const vc = document.getElementById('vb-cond');
+      if(vc) vc.textContent = act.length ? (act.length + ' condition' + (act.length > 1 ? 's' : '')) : '';
+      syncCondFold();
+    }
+    function paint(){
+      _orb('health', cur.health, MAX.health);
+      _orb('focus', cur.focus, MAX.focus);
+      _orb('investiture', cur.investiture, MAX.investiture);
+      const ij = document.getElementById('rv-injuries'); if(ij) ij.textContent = cur.injuries;
+      syncVbar();
+    }
+    // Scroll-reveal for the vitals bar: hidden while the sphere bank is on
+    // screen (it would duplicate the spheres), revealed once scrolled past.
+    (function(){
+      var vbar = document.getElementById('cs-vbar'),
+          orbs = document.querySelector('.cs-orbs');
+      if(!vbar || !orbs || !('IntersectionObserver' in window)) return;
+      new IntersectionObserver(function(entries){
+        vbar.classList.toggle('gated', entries[0].isIntersecting);
+      }, { rootMargin: '-40px 0px 0px 0px' }).observe(orbs);
+    })();
+    let saveT=null, pending={}, _savedToastT=null;
+    // Debounced persistence confirmation: one quiet "Saved" toast per burst of
+    // the silent play_state writes (condition toggles, goals, injuries, fabrial /
+    // crafted charges), so a player can trust their choices carry to next session.
+    function _savedToast(){ if(!window.pf2eToast) return;
+      clearTimeout(_savedToastT); _savedToastT=setTimeout(function(){ window.pf2eToast('Saved','success'); }, 600); }
+    function flush(){ const body=Object.assign({}, pending); pending={};
+      fetch('/cosmere/pc/'+PID+'/state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+        .then(function(r){ if(r && r.ok) _savedToast(); }).catch(()=>{}); }
+    // Sphere orbs double as the disclosure control for their Damage/Heal /
+    // Spend/Gain panel — keep them keyboard-operable (Enter/Space) with a synced
+    // aria-expanded so the hidden controls are reachable without a mouse/tap.
+    window.orbToggle = function(el){
+      const w = el.closest('.orb-w'); if(!w) return;
+      const open = w.classList.toggle('open');
+      el.setAttribute('aria-expanded', open ? 'true' : 'false');
+    };
+    window.cosAdjust = function(key, delta){
+      const max = key==='injuries' ? 99 : (MAX[key]||0);
+      cur[key]=Math.max(0, Math.min(max, (cur[key]||0)+delta));
+      paint(); pending[key]=cur[key]; clearTimeout(saveT); saveT=setTimeout(flush, 250);
+    };
+    // Apply the typed amount in this control's input (sign -1 = Damage/Spend, +1 = Heal/Gain).
+    window.cosApply = function(key, sign, btn){
+      const wrap = btn && btn.closest('.cs-amt');
+      const inp = wrap && wrap.querySelector('.cs-amt-in');
+      let amt = inp ? parseInt(inp.value, 10) : 1;
+      if(!Number.isFinite(amt) || amt < 1) amt = 1;
+      cosAdjust(key, sign * amt);
+    };
+    window.cosBreathe = function(){ cur.investiture=MAX.investiture; _orbMotes('investiture', 'fall'); paint(); pending.investiture=cur.investiture; flush();
+      res('<span class="opp">Breathe Stormlight</span> — Investiture restored to '+MAX.investiture); };
+
+    // --- Stormlight actions (Radiant) ---
+    function paintEnhance(){ const c=document.getElementById('enh-chip'); if(c) c.style.display=cur.enhanced?'':'none';
+      const b=document.getElementById('btn-enhance'); if(b) b.classList.toggle('on', cur.enhanced); }
+    window.cosEnhance = function(){
+      if(!cur.enhanced){
+        if(cur.investiture < 1){ res('<span class="comp">Not enough Investiture</span> to Enhance.'); return; }
+        cur.investiture -= 1; cur.enhanced = true; pending.investiture=cur.investiture; pending.enhanced=true;
+        res('<span class="opp">Enhance</span> — Enhanced [STR +1 / SPD +1] until end of your next turn. (−1 Investiture)');
+      } else { cur.enhanced = false; pending.enhanced=false; res('Enhance dropped.'); }
+      paint(); paintEnhance(); flush();
+    };
+    window.cosRegenerate = function(){
+      if(cur.investiture < 1){ res('<span class="comp">Not enough Investiture</span> to Regenerate.'); return; }
+      cur.investiture -= 1; const heal = d(6) + TIER;
+      cur.health = Math.min(MAX.health, cur.health + heal);
+      res('<span class="opp">Regenerate</span> — healed <b>'+heal+'</b> (1d6 + tier '+TIER+'). (−1 Investiture)');
+      post('Regenerate', '+'+heal+' health', '1d6 + tier '+TIER+' = '+heal);
+      paint(); pending.investiture=cur.investiture; pending.health=cur.health; flush();
+    };
+    window.cosSurge = function(name, invCost, effect){
+      if(invCost && cur.investiture < invCost){ res('<span class="comp">Not enough Investiture</span> for '+name+'.'); return; }
+      if(invCost){ cur.investiture -= invCost; pending.investiture=cur.investiture; }
+      res('<span class="opp">'+name+'</span>'+(invCost?' (−'+invCost+' Investiture)':'')+' — '+(effect||'').slice(0,80));
+      post('uses '+name, invCost?('−'+invCost+' Inv'):'surge', effect);
+      paint(); if(invCost) flush();
+    };
+    // --- Ideal payoffs (RAW) ---
+    // Third Ideal: summon / dismiss your spren as a Shardblade (adds its Strike).
+    window.cosShardblade = function(){
+      cur.shardblade = !cur.shardblade;
+      const card=document.getElementById('cos-shardblade-strike'); if(card) card.style.display = cur.shardblade ? '' : 'none';
+      const btn=document.getElementById('btn-shardblade'); if(btn){ btn.textContent = cur.shardblade ? 'Dismiss Shardblade' : 'Summon Shardblade'; btn.classList.toggle('on', cur.shardblade); }
+      res('<span class="opp">'+(cur.shardblade?'Shardblade summoned':'Shardblade dismissed')+'</span>'+(cur.shardblade?' — 2d8 spirit, deadly (bypasses Deflect).':'.'));
+      post(cur.shardblade?'summons their Shardblade':'dismisses their Shardblade', cur.shardblade?'manifest':'dismissed', '');
+      pending.shardblade=cur.shardblade; flush();
+    };
+    // Fourth Ideal: don / doff living Shardplate. Donned -> Deflect 5 vs EVERY
+    // damage type (even spirit & vital, which normally bypass Deflect).
+    function _paintShardplate(){
+      const f=document.getElementById('cs-deflect'); if(!f) return;
+      const n=document.getElementById('cs-deflect-n'), badge=document.getElementById('cs-deflect-plate'), types=document.getElementById('cs-deflect-types');
+      if(cur.shardplate){
+        n.textContent='5';
+        types.innerHTML=['impact','keen','energy','spirit','vital'].map(t=>'<span class="cs-chip df">'+t+'</span>').join('');
+        if(badge) badge.style.display='';
+        f.style.borderColor='var(--order-accent,var(--accent))';
+      } else {
+        n.textContent=f.getAttribute('data-base')||'0';
+        const bt=(f.getAttribute('data-base-types')||'').split(',').filter(Boolean);
+        types.innerHTML=bt.map(t=>'<span class="cs-chip df">'+t+'</span>').join('');
+        if(badge) badge.style.display='none';
+        f.style.borderColor='';
+      }
+    }
+    window.cosShardplate = function(){
+      cur.shardplate = !cur.shardplate;
+      const b=document.getElementById('btn-shardplate'); if(b){ b.textContent=(cur.shardplate?'Doff':'Don')+' Shardplate'; b.classList.toggle('on', cur.shardplate); }
+      _paintShardplate();
+      res('<span class="opp">'+(cur.shardplate?'Shardplate donned':'Shardplate doffed')+'</span>'+(cur.shardplate?' — Deflect 5 against every damage type.':'.'));
+      post(cur.shardplate?'dons Shardplate':'doffs Shardplate', cur.shardplate?'Deflect 5 (all types)':'doffed', '');
+      pending.shardplate=cur.shardplate; flush();
+    };
+    // Fabrials (Ch.7): spend / recharge a device's charges; persisted per id.
+    const FAB_MAX = { {% for f in fabrials %}{{ f.id|tojson }}:{{ f.charges }}{{ ',' if not loop.last }}{% endfor %} };
+    let _fabCur = {};
+    document.querySelectorAll('[data-fab-cur]').forEach(function(el){ _fabCur[el.getAttribute('data-fab-cur')] = +el.textContent || 0; });
+    window.cosFabrial = function(id, delta){
+      const max = FAB_MAX[id] || 0;
+      _fabCur[id] = Math.max(0, Math.min(max, (_fabCur[id] || 0) + delta));
+      const el = document.querySelector('[data-fab-cur="' + id + '"]'); if(el) el.textContent = _fabCur[id];
+      pending.fabrials = Object.assign({}, _fabCur); flush();
+    };
+    // ── Fabrial Workshop (Ch.7: Inventing Unique Fabrials) ──
+    const CRAFT = {{ crafting|tojson }};
+    let CRAFTED = ({{ crafted|tojson }} || []).slice();
+    function _esc2(s){ const d=document.createElement('div'); d.textContent=(s==null?'':String(s)); return d.innerHTML; }
+    function _craftBand(total){ for(const b of (CRAFT.bands||[])){ if(total>=b[0]) return {label:b[1], up:b[2], dn:b[3], failed:b[4]}; } return {label:'Utter Failure', up:0, dn:0, failed:true}; }
+    function _persistCrafted(){ pending.crafted_fabrials = CRAFTED.map(c=>({key:c.key,name:c.name,tier:c.tier,charges:c.charges,current:c.current,effect:c.effect,upgrades:c.upgrades,drawbacks:c.drawbacks})); flush(); }
+    function renderCrafted(){
+      const box=document.getElementById('cos-crafted-list'); if(!box) return;
+      box.innerHTML = CRAFTED.map((c,i)=>{
+        const ud=(c.upgrades||[]).map(u=>`<div class="ud up">&#9650; ${_esc2(u)}</div>`).join('')+(c.drawbacks||[]).map(x=>`<div class="ud dn">&#9660; ${_esc2(x)}</div>`).join('');
+        return `<div class="cs-ability cs-crafted" style="margin-bottom:.5rem;"><div class="an">${_esc2(c.name)} <span class="cs-chip">Tier ${c.tier}</span> <span class="cs-chip">crafted</span>`
+          +`<span style="float:right; font-size:12px; white-space:nowrap;"><button type="button" class="cs-fab-btn" onclick="cosCrafted(${i},-1)" aria-label="Spend">&minus;</button>`
+          +`<b style="font-family:var(--font-ui); font-variant-numeric:tabular-nums; color:var(--order-accent,var(--accent));">${c.current}</b><span style="color:var(--text-on-dark-3);">/${c.charges}</span>`
+          +`<button type="button" class="cs-fab-btn" onclick="cosCrafted(${i},1)" aria-label="Recharge">+</button>`
+          +`<button type="button" class="x" style="cursor:pointer; color:#f87171; margin-left:.45rem; font-weight:700; background:none; border:none; padding:0; font:inherit;" onclick="cosCraftedRemove(${i})" aria-label="Discard crafted fabrial" title="Discard">&times;</button></span></div>`
+          +`<div class="ad">${_esc2(c.effect)}${ud}</div></div>`;
+      }).join('');
+    }
+    window.cosCrafted = function(i,delta){ const c=CRAFTED[i]; if(!c) return; c.current=Math.max(0,Math.min(c.charges,(c.current||0)+delta)); renderCrafted(); _persistCrafted(); };
+    window.cosCraftedRemove = function(i){ if(!CRAFTED[i]) return; CRAFTED.splice(i,1); renderCrafted(); _persistCrafted(); };
+    let _ws = {effect:null, trapped:false, result:null, trapResult:null};
+    function wsRender(){
+      const body=document.getElementById('ws-body'); if(!body) return;
+      const e=_ws.effect; if(!e){ body.innerHTML=''; return; }
+      const cost=CRAFT.tier_cost[e.tier], dc=CRAFT.trap_dc[e.tier];
+      let h=`<div class="ws-info"><b>${_esc2(e.name)}</b> &middot; Tier ${e.tier} &middot; ${e.charges} charges<br>${_esc2(e.effect)}<br><span class="muted">Materials <b>${cost} mk</b> + a Tier-${e.tier}+ gem &middot; trap-spren <b>Lore DC ${dc}</b></span></div>`;
+      if(!_ws.trapped){
+        h+=`<div class="ws-step"><button class="ws-btn" onclick="wsTrap()">Trap the spren (Lore vs DC ${dc})</button></div>`;
+        if(_ws.trapResult) h+=`<div class="ws-result ${_ws.trapResult.ok?'ok':'no'}">${_esc2(_ws.trapResult.text)}</div>`;
+      } else {
+        h+=`<div class="ws-result ok">&#10003; Spren trapped.</div>`;
+        if(!_ws.result){
+          h+=`<div class="ws-step"><button class="ws-btn" onclick="wsCraft()">Make the Crafting test (raise the stakes)</button></div>`;
+        } else {
+          const r=_ws.result;
+          h+=`<div class="ws-result ${r.failed?'no':'ok'}">Crafting test <b>${r.total}</b> &mdash; ${_esc2(r.label)} (${r.up} upgrade${r.up==1?'':'s'}, ${r.dn} drawback${r.dn==1?'':'s'})</div>`;
+          if(r.failed){ h+=`<div class="ws-step"><button class="ws-btn" onclick="wsReset()">Start over</button></div>`; }
+          else {
+            const ups=[e.upgrade].concat(CRAFT.general_up||[]), dns=[e.drawback].concat(CRAFT.general_dn||[]);
+            if(r.up>0){ h+=`<label class="ws-l">Choose ${r.up} upgrade${r.up==1?'':'s'}</label>`+ups.map(u=>`<label class="ws-pick"><input type="checkbox" class="ws-up" value="${_esc2(u)}"> ${_esc2(u)}</label>`).join(''); }
+            if(r.up>=2){ h+=`<div class="muted" style="margin:.3rem 0 .1rem;">&hellip;or spend 2 upgrades on one Advanced Feature:</div>`+(CRAFT.advanced||[]).map(a=>`<label class="ws-pick"><input type="checkbox" class="ws-adv" value="${_esc2(a)}"> ${_esc2(a)}</label>`).join(''); }
+            if(r.dn>0){ h+=`<label class="ws-l">Choose ${r.dn} drawback${r.dn==1?'':'s'}</label>`+dns.map(x=>`<label class="ws-pick"><input type="checkbox" class="ws-dn" value="${_esc2(x)}"> ${_esc2(x)}</label>`).join(''); }
+            h+=`<div class="ws-step"><button class="ws-btn primary" onclick="wsForge()">Forge fabrial</button> <button class="ws-btn" onclick="wsReset()">Reset</button></div>`;
+          }
+        }
+      }
+      body.innerHTML=h;
+    }
+    window.wsPick = function(){ const key=document.getElementById('ws-effect').value; _ws={effect:(CRAFT.effects||[]).find(e=>e.key===key)||null, trapped:false, result:null, trapResult:null}; wsRender(); };
+    window.wsTrap = function(){ const e=_ws.effect; if(!e) return; const dc=CRAFT.trap_dc[e.tier], roll=rollD20(), total=roll.v+CRAFT.lore_mod, ok=total>=dc;
+      _ws.trapResult={ok, text:`Lore ${roll.note} +${CRAFT.lore_mod} = ${total} vs DC ${dc} — ${ok?'success!':'failed; try again another day.'}`}; if(ok) _ws.trapped=true;
+      res((ok?'<span class="opp">Spren trapped</span>':'<span class="comp">Spren slips away</span>')+` — Lore ${total} vs DC ${dc}`);
+      post('traps a spren for '+e.name, total+' vs DC'+dc, roll.note+' +'+CRAFT.lore_mod); wsRender(); };
+    window.wsCraft = function(){ const e=_ws.effect; if(!e) return; const roll=rollD20(), pd=plot(), total=roll.v+CRAFT.crafting_mod+pd.b, band=_craftBand(total);
+      _ws.result={total, label:band.label, up:band.up, dn:band.dn, failed:band.failed};
+      res(`<span class="opp">Crafting ${_esc2(e.name)}</span> — ${total} (${_esc2(band.label)})`);
+      post('crafts '+e.name, total+' '+band.label, roll.note+' +'+CRAFT.crafting_mod+(pd.l?' · '+pd.l:'')); wsRender(); };
+    window.wsForge = function(){ const e=_ws.effect, r=_ws.result; if(!e||!r||r.failed) return;
+      const allUp=[...document.querySelectorAll('.ws-up:checked'),...document.querySelectorAll('.ws-adv:checked')].map(x=>x.value);
+      const dns=[...document.querySelectorAll('.ws-dn:checked')].map(x=>x.value);
+      let charges=e.charges; allUp.forEach(u=>{ if(/Higher Capacity/.test(u)) charges+=1; if(/Expanded Capacity/.test(u)) charges+=3; }); dns.forEach(x=>{ if(/Lower Capacity/.test(x)) charges=Math.max(1,charges-1); });
+      CRAFTED.push({key:e.key, name:e.name, tier:e.tier, charges, current:charges, effect:e.effect, upgrades:allUp, drawbacks:dns});
+      renderCrafted(); _persistCrafted(); res('<span class="opp">'+_esc2(e.name)+' forged!</span>'); wsReset(); };
+    window.wsReset = function(){ _ws={effect:null, trapped:false, result:null, trapResult:null}; const s=document.getElementById('ws-effect'); if(s) s.value=''; wsRender(); };
+    // Take Squire: persist who they've taken under their wing.
+    let _sqT=null;
+    window.cosSquire = function(name){ cur.squire=String(name||''); pending.squire=cur.squire; clearTimeout(_sqT); _sqT=setTimeout(flush, 400); };
+    // Forsaking the oaths (GM-toggleable): the spren withdraws — Stormlight
+    // actions seal and a summoned Shardblade is dismissed, until the bond renews.
+    window.cosForsake = function(){
+      cur.forsaken = !cur.forsaken;
+      const plate=document.getElementById('cos-sl-actions'); if(plate) plate.classList.toggle('forsaken', cur.forsaken);
+      const b=document.getElementById('btn-forsake'); if(b){ b.classList.toggle('on', cur.forsaken); b.textContent = cur.forsaken ? 'Renew oaths' : 'Oaths forsaken'; }
+      if(cur.forsaken && cur.shardblade){   // the withdrawing spren reclaims the Blade
+        cur.shardblade=false; const card=document.getElementById('cos-shardblade-strike'); if(card) card.style.display='none';
+        const sb=document.getElementById('btn-shardblade'); if(sb){ sb.textContent='Summon Shardblade'; sb.classList.remove('on'); }
+        pending.shardblade=false;
+      }
+      if(cur.forsaken && cur.shardplate){   // ...and the Plate, too
+        cur.shardplate=false; const pb=document.getElementById('btn-shardplate'); if(pb){ pb.textContent='Don Shardplate'; pb.classList.remove('on'); }
+        if(typeof _paintShardplate==='function') _paintShardplate(); pending.shardplate=false;
+      }
+      res(cur.forsaken
+        ? '<span class="comp">Oaths forsaken</span> &mdash; your spren withdraws; surges, Shardblade &amp; Plate are sealed.'
+        : '<span class="opp">Oaths renewed</span> &mdash; your bond is restored.');
+      post(cur.forsaken?'forsakes their oaths':'renews their oaths', cur.forsaken?'spren withdrawn':'bond restored', '');
+      pending.forsaken=cur.forsaken; flush();
+    };
+    // Wound Regeneration: while Regenerating, spend 1 Investiture to clear an injury.
+    window.cosMendInjury = function(){
+      if(cur.injuries < 1){ res('No injuries to mend.'); return; }
+      if(cur.investiture < 1){ res('<span class="comp">Not enough Investiture</span> to Mend Injury.'); return; }
+      cur.investiture -= 1; cur.injuries -= 1;
+      res('<span class="opp">Wound Regeneration</span> — mended an injury. (−1 Investiture)');
+      post('Wound Regeneration', '−1 injury', '−1 Investiture; injuries now '+cur.injuries);
+      paint(); pending.investiture=cur.investiture; pending.injuries=cur.injuries; flush();
+    };
+
+    // Self-service rest (Stormlight Ch.9). The server applies the recovery and
+    // returns the new play_state; we adopt it and repaint Health/Focus + conditions.
+    window.cosRest = function(mode){
+      fetch('/cosmere/pc/'+encodeURIComponent(PID)+'/rest',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({mode:mode})})
+        .then(function(r){return r.json();}).then(function(d){
+          if(!d || !d.ok){ res('<span class="comp">Rest failed</span>'); return; }
+          var ps=d.play_state||{};
+          ['health','focus','investiture','injuries'].forEach(function(k){ if(k in ps) cur[k]=ps[k]; });
+          if('enhanced' in ps) cur.enhanced=!!ps.enhanced;
+          cur.conditions = (ps.conditions && typeof ps.conditions==='object') ? ps.conditions : {};
+          paint(); paintEnhance(); paintConds(cur.conditions);
+          res('<span class="opp">'+(mode==='long'?'Long':'Short')+' rest</span> — recovered. Health <b>'+cur.health+'</b>/'+MAX.health+' &middot; Focus <b>'+cur.focus+'</b>/'+MAX.focus+'.');
+        }).catch(function(){ res('<span class="comp">Rest failed</span>'); });
+    };
+
+    // --- Conditions (self-managed): toggle a chip, persist the whole set ---
+    window.cosCond = function(code){
+      const el=document.querySelector('#cos-conditions .cs-cond[data-cond="'+code+'"]'); if(!el) return;
+      el.classList.toggle('on');
+      el.setAttribute('aria-pressed', el.classList.contains('on') ? 'true' : 'false');
+      const conds={};
+      document.querySelectorAll('#cos-conditions .cs-cond.on').forEach(x=>{
+        const k=x.getAttribute('data-cond'), prev=(cur.conditions||{})[k];
+        conds[k] = (typeof prev==='number' && prev) ? prev : true;   // keep valued magnitude (Exhausted/Afflicted)
+      });
+      cur.conditions = conds; paintCondFx();
+      pending.conditions=conds; clearTimeout(saveT); saveT=setTimeout(flush, 250);
+    };
+
+    // --- Live combat strip: drive your own turn from the sheet ---
+    function renderControls(st){
+      const c=document.getElementById('cc-controls'); if(!c) return;
+      if(st.mode==='traditional'){
+        const has = st.initiative>0;
+        c.innerHTML = '<span style="font-size:12px;color:var(--text-on-dark-3)">Initiative '
+          + (has ? ('<b style="color:#e8eef5">'+st.initiative+'</b>') : '<i>unrolled</i>') + '</span>'
+          + '<button class="cs-cbtn" onclick="cosInit()" title="Roll d20 + Speed for turn order">Roll d20+Speed</button>';
+      } else {
+        const f=st.speed_choice==='fast', s=!f;
+        c.innerHTML = '<span style="font-size:11px;color:var(--text-on-dark-3)">Turn:</span>'
+          + '<button class="cs-cbtn'+(f?' on':'')+'" onclick="cosSpeed(\'fast\')" title="2 actions, act earlier">Fast</button>'
+          + '<button class="cs-cbtn'+(s?' on':'')+'" onclick="cosSpeed(\'slow\')" title="3 actions, act later">Slow</button>'
+          + '<span style="font-size:11px;color:var(--text-on-dark-3)">'+(st.max_actions||3)+' actions</span>';
+      }
+    }
+    // Heads-up popup: fires once on the transition INTO your turn / up-next, so a
+    // player watching their own sheet gets an attention-grab instead of only the
+    // passive strip. Click to dismiss; auto-hides after a few seconds.
+    let _prevTurn=false, _prevNext=false;
+    function combatPopup(kind){
+      let el=document.getElementById('cos-turn-pop');
+      if(!el){ el=document.createElement('div'); el.id='cos-turn-pop'; el.className='cos-turn-pop';
+        el.setAttribute('role','status'); document.body.appendChild(el);
+        el.addEventListener('click', ()=>el.classList.remove('show')); }
+      const turn = kind==='turn';
+      el.classList.toggle('turn', turn); el.classList.toggle('next', !turn);
+      el.setAttribute('aria-live', turn ? 'assertive' : 'polite');
+      el.innerHTML = turn
+        ? '<b>Your turn</b><span>You&rsquo;re up in the fight &mdash; take your actions</span>'
+        : '<b>You&rsquo;re up next</b><span>Get ready &mdash; your turn is coming</span>';
+      el.classList.add('show');
+      clearTimeout(el._t); el._t = setTimeout(()=>el.classList.remove('show'), turn ? 6000 : 4500);
+    }
+    function refreshCombat(){
+      fetch('/api/cosmere/my_combat?pid='+encodeURIComponent(PID)).then(r=>r.json()).then(st=>{
+        const box=document.getElementById('cos-combat'); if(!box) return;
+        if(!st || !st.ok || !st.in_encounter){ box.style.display='none'; _prevTurn=false; _prevNext=false; return; }
+        box.style.display='';
+        box.classList.toggle('myturn', !!st.is_my_turn);
+        document.getElementById('cc-round').textContent='Round '+st.round;
+        const turn=document.getElementById('cc-turn');
+        turn.textContent = st.is_my_turn ? 'YOUR TURN' : ('Acting: '+(st.active_name||'—'));
+        turn.style.color = st.is_my_turn ? '#34d399' : '#e8eef5';
+        if(st.is_my_turn){ if(!_prevTurn) combatPopup('turn'); }
+        else if(st.up_next && !_prevNext){ combatPopup('next'); }
+        _prevTurn = !!st.is_my_turn; _prevNext = !!st.up_next;
+        renderControls(st);
+      }).catch(()=>{});
+    }
+    window.cosSpeed = function(choice){
+      fetch('/api/cosmere/my_speed',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({pid:PID, choice})}).then(r=>r.json()).then(()=>refreshCombat()).catch(()=>{});
+    };
+    window.cosInit = function(){
+      fetch('/api/cosmere/my_initiative',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({pid:PID})}).then(r=>r.json()).then(dt=>{
+          if(dt && dt.ok) res('<span class="opp">Initiative</span> '+dt.detail+' = <b>'+dt.initiative+'</b>');
+          refreshCombat();
+        }).catch(()=>{});
+    };
+    // --- GM -> player: apply state the GM pushed (e.g. a condition) live ---
+    function paintConds(conds){
+      conds = conds || {};
+      cur.conditions = conds;
+      document.querySelectorAll('#cos-conditions .cs-cond').forEach(x=>{
+        const on = !!conds[x.getAttribute('data-cond')];
+        x.classList.toggle('on', on);
+        x.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+      paintCondFx();
+    }
+    function applyRemoteState(ps){
+      if(!ps) return;
+      if(Object.keys(pending).length) return;   // a local edit is in flight -- ours wins
+      ['health','focus','investiture','injuries'].forEach(k=>{ if(k in ps) cur[k]=ps[k]; });
+      if('enhanced' in ps){ cur.enhanced=!!ps.enhanced; paintEnhance(); }
+      paint();
+      if('conditions' in ps) paintConds(ps.conditions);
+      if('goals' in ps){ cur.goals = Array.isArray(ps.goals) ? ps.goals : []; paintGoals(); }
+    }
+
+    // --- Goals & Rewards (Ch.8) ---------------------------------------------
+    const _gEsc = s => { const t=document.createElement('span'); t.textContent=String(s==null?'':s); return t.innerHTML; };
+    const _goalById = id => (cur.goals||[]).find(g => g.id === id);
+    function saveGoals(){ paintGoals(); pending.goals = cur.goals; clearTimeout(saveT); saveT = setTimeout(flush, 250); }
+    window.cosGoalAdd = function(){
+      const txt = (prompt('New goal — what are you working toward?') || '').trim();
+      if(!txt) return;
+      cur.goals = cur.goals || [];
+      cur.goals.push({ id: 'g' + Date.now() + Math.floor(Math.random()*1000),
+                       text: txt, milestones: [false,false,false], concluded: false,
+                       reward: { category:'', text:'' } });
+      saveGoals();
+    };
+    window.cosGoalMilestone = function(id, i){
+      const g = _goalById(id); if(!g || g.concluded) return;
+      g.milestones[i] = !g.milestones[i]; saveGoals();
+    };
+    window.cosGoalConclude = function(id){
+      const g = _goalById(id); if(!g) return;
+      if(!(g.milestones||[]).every(Boolean)){ res('Mark all three milestones before concluding this goal.'); return; }
+      const cat = (prompt('Reward category — Possession, Relationship, Status, or Other:', 'Possession') || '').trim();
+      if(!cat) return;
+      const rwd = (prompt('Reward — what do you gain? (e.g. a fabrial or Shardplate, a companion or patron, a noble title)') || '').trim();
+      g.concluded = true; g.reward = { category: cat, text: rwd };
+      saveGoals();
+      res('<span class="opp">Goal concluded</span> — ' + _gEsc(g.text) + (rwd ? (' &rarr; ' + _gEsc(rwd)) : ''), 'opp');
+    };
+    window.cosGoalReopen = function(id){
+      const g = _goalById(id); if(!g) return;
+      g.concluded = false; saveGoals();
+    };
+    window.cosGoalRemove = function(id){
+      if(!confirm('Remove this goal?')) return;
+      cur.goals = (cur.goals||[]).filter(g => g.id !== id); saveGoals();
+    };
+    function paintGoals(){
+      const box = document.getElementById('cos-goals'); if(!box) return;
+      const gs = cur.goals || [];
+      const wrap = box.closest('.cs-goals-wrap');
+      if (wrap) wrap.classList.toggle('empty', !gs.length);
+      if(!gs.length){ box.innerHTML = ''; return; }
+      box.innerHTML = gs.map(g => {
+        const ms = g.milestones || [false,false,false];
+        const boxes = ms.map((m,i) => '<button type="button" class="goal-ms' + (m?' on':'') + '" onclick="cosGoalMilestone(\'' + g.id + '\',' + i + ')" aria-pressed="' + (m?'true':'false') + '" aria-label="Milestone ' + (i+1) + '" title="Milestone ' + (i+1) + '"></button>').join('');
+        const done = ms.every(Boolean);
+        let tail;
+        if(g.concluded){
+          const rw = g.reward || {};
+          tail = '<span class="goal-reward">Reward: ' + _gEsc(rw.category||'?') + (rw.text ? (' &middot; ' + _gEsc(rw.text)) : '') +
+                 '</span><button class="goal-btn ghost" onclick="cosGoalReopen(\'' + g.id + '\')" title="Reopen this goal">reopen</button>';
+        } else if(done){
+          tail = '<button class="goal-btn" onclick="cosGoalConclude(\'' + g.id + '\')">Conclude &rarr; reward</button>';
+        } else {
+          tail = '<span class="goal-hint">Mark a box for each milestone reached</span>';
+        }
+        return '<div class="goal-row' + (g.concluded?' done':'') + '">' +
+                 '<div class="goal-top"><span class="goal-text">' + _gEsc(g.text) + '</span>' +
+                 '<button type="button" class="goal-x" onclick="cosGoalRemove(\'' + g.id + '\')" aria-label="Remove goal" title="Remove goal">&times;</button></div>' +
+                 '<div class="goal-bot"><span class="goal-boxes">' + boxes + '</span>' + tail + '</div>' +
+               '</div>';
+      }).join('');
+    }
+    try {
+      // Shared SSE hub (base.html <head>) — one socket per tab.
+      const _csbSse = { addEventListener: function(n, h) { window.appSSE(n, h); } };
+      _csbSse.addEventListener('encounter_update', function(){ refreshCombat(); });
+      // On (re)connect (incl. the hub's wake/online recovery) re-pull the combat
+      // strip so a backgrounded phone resyncs its turn/round on wake.
+      _csbSse.addEventListener('connected', function(){ refreshCombat(); });
+      _csbSse.addEventListener('cosmere_player_state', function(e){
+        try { const d=JSON.parse(e.data); if(d && d.pid===PID) applyRemoteState(d.play_state); } catch(ex){}
+      });
+      // GM awarded loot to this PC -> repaint the Spheres & Goods panel live + toast.
+      _csbSse.addEventListener('cosmere_loot', function(e){
+        try {
+          const d=JSON.parse(e.data); if(!d || d.pid!==PID) return;
+          const w=d.wallet||{}; const sp=w.spheres||{};
+          ['broam','mark','chip'].forEach(function(k){
+            const el=document.querySelector('[data-sphere-v="'+k+'"]'); if(el) el.textContent=(sp[k]||0);
+          });
+          const goods=document.getElementById('cos-wallet-goods');
+          const _esc=function(s){ const t=document.createElement('span'); t.textContent=String(s==null?'':s); return t.innerHTML; };
+          if(goods){ goods.innerHTML=(w.items||[]).map(function(it){
+            return '<span class="cs-chip">'+_esc(it.name)+(it.qty>1?(' &times;'+it.qty):'')+'</span>'; }).join(''); }
+          if(window.pf2eToast) window.pf2eToast('Loot received', 'success');
+        } catch(ex){}
+      });
+    } catch(e) {}
+    refreshCombat();
+
+    paint();          // sync spheres (fill/arc/dun/low) + sticky vitals on load
+    paintEnhance();
+    paintCondFx();
+    paintGoals();
+    if(typeof renderCrafted==='function') renderCrafted();   // workshop-crafted fabrials
+  })();
+  </script>
+  {% endif %}
+  {% endif %}
+</div>
+{% endblock %}

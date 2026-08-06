@@ -1,0 +1,42 @@
+{
+    "_id": "4xtHFRGI05SNe9rA",
+    "img": "icons/creatures/abilities/mouth-teeth-sharp.webp",
+    "name": "Effect: Hungry Goblin",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.feats-srd.Item.Hungry Goblin]</p>\n<p>You gain temporary Hit Points equal to half your level.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 9
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Lost Omens Character Guide"
+        },
+        "rules": [
+            {
+                "key": "TempHP",
+                "value": "ceil(@actor.level/2)"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

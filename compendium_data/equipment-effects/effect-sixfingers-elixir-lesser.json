@@ -1,0 +1,52 @@
+{
+    "_id": "XrlChFETfe8avLsX",
+    "img": "systems/pf2e/icons/equipment/alchemical-items/alchemical-elixirs/sixfingers-elixir.webp",
+    "name": "Effect: Sixfingers Elixir (Lesser)",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Sixfingers Elixir (Lesser)]</p>\n<p>You gain a +2 item bonus to your Reflex DC to keep from being Disarmed and a Climb Speed of 20 feet.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 10
+        },
+        "level": {
+            "value": 5
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Adventure: The Slithering"
+        },
+        "rules": [
+            {
+                "key": "BaseSpeed",
+                "selector": "climb",
+                "value": 20
+            },
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "action:disarm"
+                ],
+                "selector": "reflex-dc",
+                "type": "item",
+                "value": 2
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

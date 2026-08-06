@@ -1,0 +1,45 @@
+{
+    "_id": "1tweTwYQuQUV45wJ",
+    "img": "systems/pf2e/icons/equipment/weapons/specific-magic-weapons/rowan-rifle-cold.webp",
+    "name": "Effect: Rowan Rifle (Cold)",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Rowan Rifle]</p>\n<p>The <em>Rowan Rifle's</em> damage type changes from its current damage type to cold.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "days",
+            "value": 1
+        },
+        "level": {
+            "value": 16
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Guns & Gears"
+        },
+        "rules": [
+            {
+                "key": "DamageDice",
+                "override": {
+                    "damageType": "cold"
+                },
+                "selector": "rowan-rifle-damage"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

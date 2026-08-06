@@ -1,0 +1,54 @@
+{
+    "_id": "er5tvDNvpbcnlbHQ",
+    "img": "systems/pf2e/icons/features/feats/inspiring-marshal-stance.webp",
+    "name": "Stance: Inspiring Marshal Stance",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.feats-srd.Item.Inspiring Marshal Stance].</p>\n<p>Your marshal's aura grants you and allies a +1 status bonus to attack rolls and saves against mental effects.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "encounter",
+            "value": -1
+        },
+        "level": {
+            "value": 4
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "effects": [
+                    {
+                        "affects": "allies",
+                        "uuid": "Compendium.pf2e.feat-effects.Item.Effect: Inspiring Marshal Stance"
+                    }
+                ],
+                "key": "Aura",
+                "radius": 15,
+                "slug": "marshals-aura",
+                "traits": [
+                    "emotion",
+                    "mental",
+                    "visual"
+                ]
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

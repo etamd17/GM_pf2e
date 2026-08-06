@@ -1,0 +1,1551 @@
+{% extends "base.html" %}
+
+{% block title %}Party View - PF2E Dashboard{% endblock %}
+
+{% block extra_head %}
+    /* -------- Card shell -------- */
+    .pc-card {
+        background: #1c1813;
+        border: 1px solid rgba(255,255,255,0.05);
+        border-radius: 0.75rem;
+        overflow: hidden;
+        transition: border-color 0.2s;
+    }
+    .pc-card:hover { border-color: rgba(201,163,78,0.18); }
+    /* Whole-card danger emphasis so a hurt/downed PC reads across the table:
+       bloodied (<=50% HP) gets an amber rail, dying gets a ruby rail + soft pulse. */
+    .pc-card.is-bloodied { border-color: rgba(196,113,51,0.38); box-shadow: inset 3px 0 0 rgba(196,113,51,0.6); }
+    .pc-card.is-dying { border-color: rgba(168,58,58,0.55); box-shadow: inset 3px 0 0 var(--ruby-300), 0 0 16px rgba(168,58,58,0.14); animation: pcDyingPulse 2.4s ease-in-out infinite; }
+    @keyframes pcDyingPulse {
+        0%, 100% { box-shadow: inset 3px 0 0 var(--ruby-300), 0 0 12px rgba(168,58,58,0.12); }
+        50%      { box-shadow: inset 3px 0 0 var(--ruby-300), 0 0 22px rgba(168,58,58,0.30); }
+    }
+    @media (prefers-reduced-motion: reduce) { .pc-card.is-dying { animation: none; } }
+
+    .pc-head {
+        padding: 0.9rem 1.1rem;
+        background: linear-gradient(180deg, #1c1813 0%, #17130d 100%);
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .portrait-ring {
+        width: 52px; height: 52px;
+        border-radius: 50%;
+        border: 1px solid rgba(201,163,78,0.25);
+        overflow: hidden;
+        display: flex; align-items: center; justify-content: center;
+        background: #28221a;
+        flex-shrink: 0;
+    }
+    .portrait-ring img { width: 100%; height: 100%; object-fit: cover; }
+
+    .lvl-badge {
+        text-align: center;
+        padding: 4px 10px;
+        border-radius: 6px;
+        background: rgba(224,176,80,0.08);
+        border: 1px solid rgba(224,176,80,0.25);
+        line-height: 1;
+    }
+    .lvl-badge .lvl-lbl {
+        font-size: 8px; letter-spacing: 0.14em; text-transform: uppercase;
+        color: #b89860; font-weight: 600;
+    }
+    .lvl-badge .lvl-val {
+        font-family: 'Cinzel', serif; font-size: 1.25rem; font-weight: 700;
+        color: #e0b050; line-height: 1;
+    }
+
+    /* -------- Body rows -------- */
+    .pc-body { padding: 0.9rem 1.1rem; display: flex; flex-direction: column; gap: 0.75rem; }
+
+    .hp-row { }
+    .hp-bar-track {
+        height: 8px;
+        border-radius: 4px;
+        background: rgba(255,255,255,0.05);
+        overflow: hidden;
+        border: 1px solid rgba(255,255,255,0.04);
+    }
+    .hp-bar-fill {
+        height: 100%;
+        border-radius: 4px;
+        transition: width 0.4s ease, background-color 0.4s ease;
+    }
+
+    .stat-strip {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 4px;
+    }
+    .stat-chip {
+        background: #14110c;
+        border: 1px solid rgba(255,255,255,0.05);
+        border-radius: 6px;
+        padding: 6px 4px 5px;
+        text-align: center;
+    }
+    .stat-chip .stat-lbl {
+        font-size: 8px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
+        color: #a79d88;
+    }
+    .stat-chip .stat-val {
+        font-size: 13px; font-weight: 700; color: #e8e8f0; line-height: 1.2;
+        font-family: 'Inter', sans-serif;
+    }
+
+    .ability-grid {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 3px;
+    }
+    .ability-chip {
+        background: #14110c;
+        border: 1px solid rgba(255,255,255,0.05);
+        border-radius: 5px;
+        padding: 5px 0 4px;
+        text-align: center;
+    }
+    .ability-chip .ab-lbl {
+        font-size: 7px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
+        color: #a79d88;
+    }
+    .ability-chip .ab-val {
+        font-size: 12px; font-weight: 700; color: #d8d8e0; line-height: 1.2;
+    }
+
+    /* -------- Hero pts / slot pips -------- */
+    .hero-pip {
+        display: inline-block;
+        width: 11px; height: 11px;
+        border-radius: 50%;
+    }
+    .hero-pip.active   { background: var(--gilt-300); border: 1.5px solid var(--gilt-300); }
+    .hero-pip.inactive { background: transparent; border: 1.5px solid rgba(201,163,78,0.3); }
+
+    .hero-adjust-btn {
+        width: 18px; height: 18px;
+        border: 1px solid rgba(201,163,78,0.35);
+        background: transparent;
+        color: var(--gilt-200);
+        border-radius: var(--r-sm);
+        font-size: 11px; font-weight: 700; line-height: 1;
+        display: inline-flex; align-items: center; justify-content: center;
+        cursor: pointer;
+        transition: background var(--t-fast), border-color var(--t-fast), color var(--t-fast);
+    }
+    .hero-adjust-btn:hover {
+        background: rgba(201,163,78,0.12);
+        border-color: var(--gilt-200);
+        color: var(--gilt-100);
+    }
+    .hero-adjust-btn:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+    }
+    .hero-adjust-btn:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+    }
+
+    .slot-pip {
+        display: inline-block;
+        width: 10px; height: 10px;
+        border-radius: 50%;
+        border: 1.5px solid;
+        transition: background-color 0.3s, border-color 0.3s;
+    }
+    .slot-pip.available      { background: #e0b050; border-color: #e0b050; }
+    .slot-pip.used           { background: transparent; border-color: rgba(224,176,80,0.3); }
+    .slot-pip.focus-available{ background: var(--ruby-200); border-color: var(--ruby-200); }
+    .slot-pip.focus-used     { background: transparent; border-color: rgba(211,110,110,0.3); }
+
+    /* -------- Conditions -------- */
+    .condition-pill {
+        font-size: 10px; font-weight: 600; letter-spacing: 0.04em;
+        padding: 2px 8px;
+        border-radius: 9999px;
+        text-transform: capitalize;
+        flex-shrink: 0;
+    }
+    /* Severity read (matches the tracker): debilitating conditions are ruby, minor/
+       detection ones (off-guard, concealed, prone…) are gold, so danger stands out.
+       Scoped + !important to beat system.css's global .condition-pill reset. */
+    .conditions-row .condition-pill {
+        background: rgba(201,163,78,0.12) !important;
+        border: 1px solid rgba(201,163,78,0.35) !important;
+        color: var(--gilt-200) !important;
+    }
+    .conditions-row .condition-pill.sev-red {
+        background: rgba(168,58,58,0.16) !important;
+        border-color: rgba(168,58,58,0.42) !important;
+        color: var(--ruby-100) !important;
+    }
+    /* When a PC has many active conditions, the strip stays on a single row
+       and scrolls horizontally instead of ballooning the whole card vertically. */
+    .conditions-row {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        scrollbar-width: thin;
+        max-width: 60%;
+        padding-bottom: 2px;
+    }
+    .conditions-row::-webkit-scrollbar { height: 4px; }
+    .conditions-row::-webkit-scrollbar-thumb { background: rgba(201,163,78,0.25); border-radius: 2px; }
+    .conditions-row::-webkit-scrollbar-track { background: transparent; }
+    .conditions-overflow {
+        font-size: 10px; font-weight: 700; letter-spacing: 0.04em;
+        padding: 2px 6px;
+        border-radius: 9999px;
+        background: rgba(201,163,78,0.10);
+        border: 1px solid rgba(201,163,78,0.35);
+        color: var(--gilt-200);
+        flex-shrink: 0;
+    }
+
+    /* -------- HP controls -------- */
+    .hp-adjust-btn {
+        width: 34px; height: 34px;
+        border-radius: 6px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 17px; font-weight: 700;
+        cursor: pointer;
+        transition: opacity 0.15s, transform 0.08s;
+        border: none;
+        line-height: 1;
+    }
+    .hp-adjust-btn:hover { opacity: 0.85; }
+    .hp-adjust-btn:active { transform: scale(0.95); }
+    .hp-input {
+        width: 48px; height: 34px;
+        text-align: center;
+        font-size: 14px; font-weight: 600;
+        font-family: 'Inter', sans-serif;
+        border-radius: 6px;
+        background: #0d0d12;
+        border: 1px solid rgba(255,255,255,0.08);
+        color: #e8e8f0;
+        outline: none;
+        -moz-appearance: textfield;
+    }
+    .hp-input::-webkit-outer-spin-button,
+    .hp-input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+    .hp-input:focus { border-color: rgba(201,163,78,0.4); }
+
+    /* -------- Collapsible sections -------- */
+    .pc-tabs {
+        display: flex;
+        gap: 4px;
+        flex-wrap: wrap;
+        padding-top: 6px;
+        border-top: 1px solid rgba(255,255,255,0.04);
+    }
+    .pc-tab {
+        flex: 1;
+        min-width: 80px;
+        padding: 7px 10px;
+        border-radius: 5px;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        text-align: center;
+        background: #14110c;
+        border: 1px solid rgba(255,255,255,0.05);
+        color: #b0b0c0;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+    .pc-tab:hover { color: #e8e8f0; border-color: rgba(201,163,78,0.2); }
+    .pc-tab.active {
+        background: rgba(201,163,78,0.1);
+        border-color: rgba(201,163,78,0.35);
+        color: var(--gilt-200);
+    }
+    .pc-tab .tab-count {
+        display: inline-block;
+        margin-left: 3px;
+        font-size: 9px;
+        opacity: 0.7;
+        font-weight: 500;
+    }
+
+    .pc-tab-panel {
+        display: none;
+        background: #14110c;
+        border: 1px solid rgba(255,255,255,0.04);
+        border-radius: 6px;
+        padding: 8px 10px;
+        font-size: 12px;
+        max-height: 240px;
+        overflow-y: auto;
+    }
+    .pc-tab-panel.active { display: block; }
+    .pc-tab-panel::-webkit-scrollbar { width: 6px; }
+    .pc-tab-panel::-webkit-scrollbar-thumb { background: rgba(201,163,78,0.2); border-radius: 3px; }
+    .pc-tab-panel::-webkit-scrollbar-track { background: transparent; }
+
+    /* -------- Skill rows -------- */
+    .skill-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2px 12px;
+    }
+    .skill-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 3px 4px;
+        border-radius: 3px;
+        transition: background 0.12s;
+    }
+    .skill-row:hover { background: rgba(201,163,78,0.06); }
+    .skill-name {
+        font-size: 11px;
+        color: #c8c8d8;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        min-width: 0;
+    }
+    .skill-right { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+    .skill-prof {
+        font-size: 9px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        width: 14px;
+        text-align: center;
+        border-radius: 2px;
+        padding: 1px 0;
+        line-height: 1;
+    }
+    .skill-prof.U { color: #666; }
+    .skill-prof.T { color: #e0b050; }
+    .skill-prof.E { color: #7dc4c4; }
+    .skill-prof.M { color: #c47dbc; }
+    .skill-prof.L { color: #ef6b6b; }
+    .skill-total {
+        font-size: 12px;
+        font-weight: 700;
+        color: #e8e8f0;
+        min-width: 24px;
+        text-align: right;
+        font-family: 'Inter', sans-serif;
+    }
+
+    /* -------- Inventory rows -------- */
+    .inv-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 3px 4px;
+        border-radius: 3px;
+        transition: background 0.12s;
+    }
+    .inv-row:hover { background: rgba(201,163,78,0.06); }
+    .inv-row:not(:last-child) {
+        border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+    .inv-name {
+        font-size: 11px;
+        color: #c8c8d8;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .inv-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
+        font-size: 10px;
+        color: #a79d88;
+    }
+    .inv-qty { color: #b0b0c0; }
+    .inv-bulk { color: #a79d88; font-style: italic; }
+    .bulk-summary {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 6px;
+        margin-bottom: 4px;
+        background: rgba(255,255,255,0.02);
+        border-radius: 4px;
+        font-size: 10px;
+        color: #a79d88;
+    }
+    .bulk-summary .bulk-val { color: #c8c8d8; font-weight: 600; }
+    .bulk-summary .bulk-warn { color: #ef6b6b; }
+
+    /* -------- Clickable entries -------- */
+    .detail-link {
+        cursor: pointer;
+        transition: background-color 0.12s, color 0.12s;
+        border-radius: 4px;
+        padding: 3px 6px;
+        margin: 0 -6px;
+        display: block;
+    }
+    .detail-link:hover {
+        background: rgba(201,163,78,0.08);
+        color: var(--gilt-200);
+    }
+    .detail-link .meta {
+        font-size: 10px; color: #a79d88;
+        margin-left: 6px;
+    }
+    .spell-line {
+        display: flex; flex-wrap: wrap; gap: 4px 8px;
+        align-items: center;
+    }
+    .spell-line-tag {
+        font-size: 9px; font-weight: 700; letter-spacing: 0.06em;
+        color: #b89860;
+        text-transform: uppercase;
+        flex-shrink: 0;
+    }
+    .spell-line .detail-link {
+        display: inline;
+        padding: 2px 6px; margin: 0;
+        font-size: 11px;
+        color: #c8c8d4;
+    }
+    .attack-row {
+        display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    }
+    .attack-row .attack-bonus {
+        font-weight: 700; color: var(--gilt-200); font-size: 11px;
+    }
+    .attack-row .attack-dmg {
+        font-size: 10px; color: #8a8aa0; font-family: 'Inter', sans-serif;
+    }
+
+    /* -------- Detail drawer ----
+       Right-side slide-in drawer (no backdrop, no focus steal) so the GM
+       can keep scanning the party grid while reading a spell or feat. */
+    .detail-overlay {
+        position: fixed;
+        top: 64px; right: 0; bottom: 0;
+        z-index: 9999;
+        display: flex; align-items: stretch; justify-content: flex-end;
+        padding: 0;
+        background: transparent;
+        backdrop-filter: none;
+        pointer-events: none;
+    }
+    .detail-card {
+        background: #1c1813;
+        border: 1px solid rgba(201,163,78,0.25);
+        border-right: none;
+        border-radius: 12px 0 0 12px;
+        max-width: 480px;
+        width: 480px;
+        max-height: none;
+        height: 100%;
+        display: flex; flex-direction: column;
+        overflow: hidden;
+        box-shadow: -12px 0 36px rgba(0,0,0,0.55);
+        pointer-events: auto;
+        transform: translateX(20px);
+        opacity: 0;
+        transition: transform 0.18s ease, opacity 0.18s ease;
+    }
+    .detail-overlay.open .detail-card {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    @media (max-width: 900px) {
+        .detail-card { width: 92vw; max-width: 92vw; }
+    }
+    .detail-card-head {
+        padding: 14px 18px;
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+        background: #17130d;
+        display: flex; align-items: flex-start; justify-content: space-between;
+        gap: 12px;
+    }
+    .detail-card-head h3 {
+        font-family: 'Cinzel', serif;
+        font-size: 1.1rem; font-weight: 700;
+        color: #e8e8f0;
+        margin: 0;
+    }
+    .detail-card-head .meta-row {
+        display: flex; flex-wrap: wrap; gap: 5px;
+        margin-top: 5px;
+    }
+    .detail-meta-tag {
+        font-size: 9px; font-weight: 700;
+        padding: 2px 7px;
+        border-radius: 9999px;
+        letter-spacing: 0.04em; text-transform: uppercase;
+    }
+    .detail-meta-tag.type {
+        background: rgba(201,163,78,0.1);
+        border: 1px solid rgba(201,163,78,0.25);
+        color: var(--gilt-200);
+    }
+    .detail-meta-tag.rank {
+        background: rgba(224,176,80,0.1);
+        border: 1px solid rgba(224,176,80,0.25);
+        color: #e0b050;
+    }
+    .detail-close {
+        background: transparent; border: none;
+        font-size: 20px; line-height: 1;
+        color: #8a8aa0; cursor: pointer;
+        padding: 2px 6px; border-radius: 4px;
+        transition: color 0.15s, background 0.15s;
+    }
+    .detail-close:hover { color: #e8e8f0; background: rgba(255,255,255,0.06); }
+    .detail-card-body {
+        padding: 16px 18px;
+        overflow-y: auto;
+        font-size: 13px;
+        color: #c8c8d4;
+        line-height: 1.55;
+    }
+    .detail-card-body p { margin: 0 0 8px; }
+    .detail-card-body strong { color: #e8e8f0; }
+    .detail-card-body em { color: #b0b0c0; }
+    .detail-card-body hr { border: none; border-top: 1px solid rgba(255,255,255,0.06); margin: 10px 0; }
+    .detail-card-body ul, .detail-card-body ol { margin: 0 0 8px 20px; }
+    .detail-card-body::-webkit-scrollbar { width: 8px; }
+    .detail-card-body::-webkit-scrollbar-thumb { background: rgba(201,163,78,0.22); border-radius: 4px; }
+    .detail-card-body::-webkit-scrollbar-track { background: transparent; }
+
+    /* ── Card-flash animations ──
+       Brief border + glow pulse so the GM can confirm a damage / heal /
+       condition action landed on this specific PC card. Especially useful
+       for party-wide damage where 4 cards update simultaneously. */
+    @keyframes pcFlashDmg {
+        0%   { box-shadow: 0 0 0 0 rgba(196,60,60,0.55); border-color: rgba(196,60,60,0.7); }
+        100% { box-shadow: 0 0 0 14px rgba(196,60,60,0);  border-color: rgba(255,255,255,0.06); }
+    }
+    @keyframes pcFlashHeal {
+        0%   { box-shadow: 0 0 0 0 rgba(62,186,104,0.55); border-color: rgba(62,186,104,0.7); }
+        100% { box-shadow: 0 0 0 14px rgba(62,186,104,0); border-color: rgba(255,255,255,0.06); }
+    }
+    @keyframes pcFlashCond {
+        0%   { box-shadow: 0 0 0 0 rgba(201,163,78,0.55); border-color: rgba(201,163,78,0.7); }
+        100% { box-shadow: 0 0 0 14px rgba(201,163,78,0); border-color: rgba(255,255,255,0.06); }
+    }
+    .pc-card.card-flash-dmg  { animation: pcFlashDmg 0.7s ease-out; }
+    .pc-card.card-flash-heal { animation: pcFlashHeal 0.7s ease-out; }
+    .pc-card.card-flash-cond { animation: pcFlashCond 0.7s ease-out; }
+
+    /* -------- Skill comparison matrix -------- */
+    .sm-overlay { position: fixed; inset: 0; z-index: 200; display: none; align-items: center; justify-content: center; padding: 24px; background: rgba(6,5,3,0.72); }
+    .sm-overlay.open { display: flex; }
+    .sm-panel { max-width: 780px; width: 100%; max-height: 84vh; display: flex; flex-direction: column; background: var(--bg-card); border: 1px solid var(--gilt-300); border-radius: 10px; box-shadow: 0 20px 60px rgba(0,0,0,0.6); }
+    .sm-head { display: flex; align-items: center; justify-content: space-between; padding: 13px 18px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .sm-head h3 { font-family: 'Cinzel', serif; font-size: 15px; letter-spacing: 0.06em; color: var(--gilt-100); margin: 0; }
+    .sm-x { background: none; border: none; color: var(--text-on-dark-3); font-size: 22px; line-height: 1; cursor: pointer; padding: 0 4px; }
+    .sm-x:hover { color: var(--text-on-dark); }
+    .sm-scroll { overflow: auto; padding: 2px; }
+    .sm-table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
+    .sm-table th, .sm-table td { padding: 5px 8px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sm-table .sm-skcol { width: 150px; }
+    .sm-table thead th { position: sticky; top: 0; background: var(--bg-sunken); color: var(--gilt-200); font-family: 'Cinzel', serif; font-size: 11px; letter-spacing: 0.04em; border-bottom: 1px solid rgba(201,163,78,0.25); z-index: 1; }
+    .sm-lvl { font-size: 9px; color: var(--text-on-dark-3); margin-left: 4px; font-family:var(--font-ui); font-variant-numeric:tabular-nums; }
+    .sm-skcol { text-align: left !important; font-weight: 600; color: var(--text-on-dark-2); position: sticky; left: 0; background: var(--bg-card); }
+    .sm-table thead .sm-skcol { background: var(--bg-sunken); z-index: 2; }
+    .sm-table tbody tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
+    .sm-table tbody tr:nth-child(even) .sm-skcol { background: #201a12; }
+    .sm-cell { font-family:var(--font-ui); font-variant-numeric:tabular-nums; font-weight: 600; color: var(--text-on-dark-2); }
+    .sm-cell .sm-prof { font-size: 8px; margin-left: 3px; opacity: 0.7; }
+    .sm-cell.sm-empty { color: var(--text-on-dark-3); opacity: 0.4; }
+    .sm-cell.sm-best { color: var(--gilt-100); background: rgba(201,163,78,0.16) !important; font-weight: 700; }
+    .sm-cell.smp-T .sm-prof { color: var(--gilt-300); }
+    .sm-cell.smp-E .sm-prof { color: #7dc4c4; }
+    .sm-cell.smp-M .sm-prof { color: #c47dbc; }
+    .sm-cell.smp-L .sm-prof { color: #ef6b6b; }
+    .sm-cell.smp-U { opacity: 0.5; }
+    .sm-foot { padding: 8px 18px; border-top: 1px solid rgba(255,255,255,0.06); font-size: 10px; color: var(--text-on-dark-3); }
+{% endblock %}
+
+{% block content %}
+
+{% if not is_gm %}
+<style>
+    /* Player mode: hide GM-only controls */
+    .hp-adjust-btn, .hero-adjust-btn,
+    #party-damage-toggle, #party-rest-btn { display: none !important; }
+</style>
+{% endif %}
+
+<!-- Header -->
+<div class="flex items-center justify-between mb-6">
+    <div>
+        <h1 class="font-display text-xl text-accent-300 tracking-wide">Party Overview</h1>
+        <p class="text-xs text-base-500 mt-0.5">Real-time character status &mdash; click a spell, feat, attack, or feature for details</p>
+    </div>
+    <div class="flex gap-2 items-center" style="position:relative;">
+        {% if skill_matrix and skill_matrix.rows %}
+        <button type="button" id="skill-compare-toggle" class="text-xs font-medium text-base-400 hover:text-accent-300 px-3 py-1.5 rounded border border-white/[0.06] hover:border-accent-400/20 transition-colors" style="background:var(--bg-card); cursor:pointer;" onclick="openSkillMatrix()" title="Compare every PC's skills side by side — see who to call for a given check">
+            Compare Skills
+        </button>
+        {% endif %}
+        <button type="button" id="party-damage-toggle" class="text-xs font-medium text-base-400 hover:text-accent-300 px-3 py-1.5 rounded border border-white/[0.06] hover:border-accent-400/20 transition-colors" style="background:var(--bg-card); cursor:pointer;" onclick="toggleAllPartyDamage()" title="Apply damage or healing to every PC at once (trap, environmental, mass effect)">
+            Party-Wide
+        </button>
+        <button type="button" id="loot-distribute-toggle" class="text-xs font-medium text-base-400 hover:text-accent-300 px-3 py-1.5 rounded border border-white/[0.06] hover:border-accent-400/20 transition-colors" style="background:var(--bg-card); cursor:pointer;" onclick="toggleLootDistribute()" title="Distribute coins (and optional items) to the whole party at once">
+            Distribute Loot
+        </button>
+        <a href="/tracker" class="text-xs font-medium text-base-400 hover:text-accent-300 px-3 py-1.5 rounded border border-white/[0.06] hover:border-accent-400/20 transition-colors" style="background:var(--bg-card);">
+            Encounter Tracker
+        </a>
+        <div id="loot-distribute-flyout" class="hidden" style="position:absolute; top:100%; right:0; margin-top:6px; z-index:100; background:var(--bg-card); border:1px solid var(--accent); border-radius:var(--r-md); box-shadow:var(--shadow-2); padding:var(--sp-3); min-width:380px;">
+            <div style="font-family:var(--font-display); font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--gilt-200); margin-bottom:var(--sp-2);">Distribute Treasure Hoard</div>
+            <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:var(--sp-1); margin-bottom:var(--sp-2);">
+                <div>
+                    <div style="font-size:9px; color:var(--text-on-dark-3); text-transform:uppercase; letter-spacing:.06em;">PP</div>
+                    <input type="number" id="loot-pp" min="0" placeholder="0" style="width:100%; background:var(--bg-input); border:1px solid var(--border-strong); color:var(--text-on-dark); padding:4px 8px; border-radius:var(--r-sm); font-size:12px;">
+                </div>
+                <div>
+                    <div style="font-size:9px; color:var(--text-on-dark-3); text-transform:uppercase; letter-spacing:.06em;">GP</div>
+                    <input type="number" id="loot-gp" min="0" placeholder="0" style="width:100%; background:var(--bg-input); border:1px solid var(--border-strong); color:var(--text-on-dark); padding:4px 8px; border-radius:var(--r-sm); font-size:12px;">
+                </div>
+                <div>
+                    <div style="font-size:9px; color:var(--text-on-dark-3); text-transform:uppercase; letter-spacing:.06em;">SP</div>
+                    <input type="number" id="loot-sp" min="0" placeholder="0" style="width:100%; background:var(--bg-input); border:1px solid var(--border-strong); color:var(--text-on-dark); padding:4px 8px; border-radius:var(--r-sm); font-size:12px;">
+                </div>
+                <div>
+                    <div style="font-size:9px; color:var(--text-on-dark-3); text-transform:uppercase; letter-spacing:.06em;">CP</div>
+                    <input type="number" id="loot-cp" min="0" placeholder="0" style="width:100%; background:var(--bg-input); border:1px solid var(--border-strong); color:var(--text-on-dark); padding:4px 8px; border-radius:var(--r-sm); font-size:12px;">
+                </div>
+            </div>
+            <div style="margin-bottom:var(--sp-2);">
+                <div style="font-size:9px; color:var(--text-on-dark-3); text-transform:uppercase; letter-spacing:.06em; margin-bottom:2px;">Items (one per line — "Healing Potion x2" or just a name)</div>
+                <textarea id="loot-items" rows="3" placeholder="Healing Potion (Lesser) x4&#10;Cold Iron Dagger&#10;Scroll of Heal" style="width:100%; background:var(--bg-input); border:1px solid var(--border-strong); color:var(--text-on-dark); padding:4px 8px; border-radius:var(--r-sm); font-size:11px; font-family:var(--font-mono); resize:vertical;"></textarea>
+            </div>
+            <div style="display:flex; align-items:center; gap:var(--sp-2); margin-bottom:var(--sp-2); font-size:11px; color:var(--text-on-dark-2);">
+                <label style="display:inline-flex; align-items:center; gap:4px; cursor:pointer;">
+                    <input type="radio" name="loot-mode" value="split" checked> Split coins evenly
+                </label>
+                <label style="display:inline-flex; align-items:center; gap:4px; cursor:pointer;">
+                    <input type="radio" name="loot-mode" value="party"> All coins to one PC
+                </label>
+            </div>
+            <div id="loot-target-row" class="hidden" style="margin-bottom:var(--sp-2);">
+                <select id="loot-target" style="width:100%; background:var(--bg-input); border:1px solid var(--border-strong); color:var(--text-on-dark); padding:4px 8px; border-radius:var(--r-sm); font-size:12px;"></select>
+            </div>
+            <div id="loot-preview" style="font-size:10px; color:var(--text-on-dark-3); margin-bottom:var(--sp-2); font-style:italic; min-height:16px;"></div>
+            <div style="display:flex; gap:var(--sp-1); justify-content:flex-end;">
+                <button type="button" class="text-xs px-3 py-1.5 rounded border border-white/[0.06] text-base-400 hover:text-accent-300 transition-colors" style="background:var(--bg-card-2);" onclick="document.getElementById('loot-distribute-flyout').classList.add('hidden')">Cancel</button>
+                <button type="button" class="action-pill" style="background:rgba(201,163,78,0.18); border-color:var(--gilt-300); color:var(--gilt-100);" onclick="applyLootDistribution()" title="Send coins (and items) to PCs">Distribute</button>
+            </div>
+        </div>
+        <div id="party-damage-flyout" class="hidden" style="position:absolute; top:100%; right:0; margin-top:6px; z-index:100; background:var(--bg-card); border:1px solid var(--accent); border-radius:var(--r-md); box-shadow:var(--shadow-2); padding:var(--sp-3); min-width:300px;">
+            <div style="font-family:var(--font-display); font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--gilt-200); margin-bottom:var(--sp-2);">Apply to Whole Party</div>
+            <div style="display:flex; gap:var(--sp-1); align-items:center; flex-wrap:wrap;">
+                <input type="number" id="pwd-amount" placeholder="amount" min="1" style="width:80px; background:var(--bg-input); border:1px solid var(--border-strong); color:var(--text-on-dark); padding:4px 8px; border-radius:var(--r-sm); font-size:12px;">
+                <select id="pwd-type" style="background:var(--bg-input); border:1px solid var(--border-strong); color:var(--text-on-dark); padding:4px 8px; border-radius:var(--r-sm); font-size:12px;">
+                    <option value="untyped">untyped</option>
+                    <option value="bludgeoning">bludgeoning</option>
+                    <option value="piercing">piercing</option>
+                    <option value="slashing">slashing</option>
+                    <option value="fire">fire</option>
+                    <option value="cold">cold</option>
+                    <option value="electricity">electricity</option>
+                    <option value="acid">acid</option>
+                    <option value="sonic">sonic</option>
+                    <option value="vitality">vitality</option>
+                    <option value="void">void</option>
+                    <option value="force">force</option>
+                    <option value="spirit">spirit</option>
+                    <option value="mental">mental</option>
+                    <option value="poison">poison</option>
+                    <option value="bleed">bleed</option>
+                </select>
+                <button type="button" class="action-pill dmg" onclick="applyAllPartyDamage('damage')" title="Apply damage to all PCs">Damage</button>
+                <button type="button" class="action-pill heal" onclick="applyAllPartyDamage('heal')" title="Heal all PCs">Heal</button>
+            </div>
+            <div style="font-size:10px; color:var(--text-on-dark-3); margin-top:var(--sp-2); font-style:italic;">
+                Players still take their saves — apply post-save HP. Halve / nullify on the GM's call.
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if not party %}
+<div class="pc-card p-10 text-center">
+    <h2 class="font-display text-lg text-base-300 mb-2">No Characters Found</h2>
+    <p class="text-sm text-base-500">Export from Pathbuilder 2e and place JSON files in <code class="text-accent-300 px-1.5 py-0.5 rounded text-xs" style="background:var(--bg-page);">party_data/</code></p>
+</div>
+{% endif %}
+
+<!-- Skill comparison matrix (GM tool) -->
+{% if skill_matrix and skill_matrix.rows %}
+<div id="skill-matrix-overlay" class="sm-overlay" role="dialog" aria-modal="true" aria-labelledby="sm-title" onclick="if(event.target===this)closeSkillMatrix()">
+    <div class="sm-panel">
+        <div class="sm-head">
+            <h3 id="sm-title">Party Skills &mdash; who to call</h3>
+            <button type="button" class="sm-x" onclick="closeSkillMatrix()" aria-label="Close">&times;</button>
+        </div>
+        <div class="sm-scroll">
+            <table class="sm-table">
+                <thead>
+                    <tr>
+                        <th class="sm-skcol">Skill</th>
+                        {% for pc in skill_matrix.pcs %}
+                        <th>{{ pc.name }}{% if pc.level %}<span class="sm-lvl">L{{ pc.level }}</span>{% endif %}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in skill_matrix.rows %}
+                    <tr>
+                        <td class="sm-skcol">{{ row.skill }}</td>
+                        {% for cell in row.cells %}
+                        {% if cell %}
+                        <td class="sm-cell smp-{{ cell.prof }}{% if cell.best %} sm-best{% endif %}">{{ cell.total }}<span class="sm-prof">{{ cell.prof }}</span></td>
+                        {% else %}
+                        <td class="sm-cell sm-empty">&mdash;</td>
+                        {% endif %}
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="sm-foot">Best bonus in each row is highlighted &middot; U/T/E/M/L = untrained / trained / expert / master / legendary</div>
+    </div>
+</div>
+<script>
+    function openSkillMatrix(){ var o = document.getElementById('skill-matrix-overlay'); if (o) o.classList.add('open'); }
+    function closeSkillMatrix(){ var o = document.getElementById('skill-matrix-overlay'); if (o) o.classList.remove('open'); }
+    document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closeSkillMatrix(); });
+</script>
+{% endif %}
+
+<!-- Party Grid -->
+<div class="grid grid-cols-1 xl:grid-cols-2 gap-5" id="party-grid">
+    {% for pc in party %}
+    {% set hp_pct = (pc.current_hp / pc.hp * 100) if pc.hp > 0 else 0 %}
+    {% set attacks_count = pc.attacks|length if pc.attacks else 0 %}
+    {% set feats_count = pc.feats|length if pc.feats else 0 %}
+    {% set skills_count = pc.skills|length if pc.skills else 0 %}
+    {% set inv_count = pc.equipment|length if pc.equipment else 0 %}
+    {% set spells_count = namespace(n=0) %}
+    {% if pc.spell_casters %}
+        {% for caster in pc.spell_casters %}
+            {% for lvl in caster.levels %}{% set spells_count.n = spells_count.n + (lvl.spells|length) %}{% endfor %}
+        {% endfor %}
+    {% endif %}
+
+    <div class="pc-card{% if pc.conditions and pc.conditions.dying %} is-dying{% elif hp_pct <= 50 %} is-bloodied{% endif %}" data-pc-name="{{ pc.name }}">
+        <!-- Header -->
+        <div class="pc-head flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="portrait-ring">
+                    {% if pc.portrait %}
+                        <img src="/portraits/{{ pc.portrait }}" alt="{{ pc.name }}"
+                             loading="lazy"
+                             style="object-position: {{ pc.portrait_focus_x | default(50) }}% {{ pc.portrait_focus_y | default(50) }}%;">
+                    {% else %}
+                        <span class="font-display text-lg text-accent-300">{{ pc.name[0] }}</span>
+                    {% endif %}
+                </div>
+                <div class="min-w-0">
+                    <a href="/player/sheet/{{ pc.name | urlencode }}" target="_blank"
+                       class="font-display text-base text-base-100 hover:text-accent-300 transition-colors leading-tight truncate block">
+                        {{ pc.name }} <span class="text-[10px] text-base-500">&#8599;</span>
+                    </a>
+                    <p class="text-xs text-base-400 mt-0.5 truncate">
+                        {{ pc.ancestry }} {{ pc.class_name }}{% if pc.subclass %} &middot; {{ pc.subclass }}{% endif %}
+                    </p>
+                </div>
+            </div>
+            <div class="lvl-badge">
+                <div class="lvl-lbl">Lvl</div>
+                <div class="lvl-val">{{ pc.level }}</div>
+            </div>
+        </div>
+
+        <!-- Body -->
+        <div class="pc-body">
+            <!-- HP -->
+            <div class="hp-row" data-max-hp="{{ pc.hp }}">
+                <div class="flex items-center justify-between mb-1.5">
+                    <div class="flex items-center gap-2">
+                        <span class="text-[10px] font-semibold uppercase tracking-wider text-base-500">HP</span>
+                        <span class="hp-display text-sm font-bold {% if hp_pct > 50 %}text-base-100{% elif hp_pct > 25 %}text-gold-300{% else %}text-danger-400{% endif %}">
+                            {{ pc.current_hp }}<span class="text-base-500 font-normal text-xs"> / {{ pc.hp }}</span>
+                        </span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <input type="number" class="hp-input hp-amount" value="1" min="1" aria-label="Adjust amount">
+                        <button class="hp-adjust-btn hp-damage-btn action-pill dmg" title="Damage" aria-label="Apply damage">&minus;</button>
+                        <button class="hp-adjust-btn hp-heal-btn action-pill heal" title="Heal" aria-label="Apply healing">+</button>
+                    </div>
+                </div>
+                <div class="hp-bar-track">
+                    <div class="hp-bar-fill" style="width:{{ hp_pct }}%; background:{% if hp_pct > 50 %}var(--success){% elif hp_pct > 25 %}var(--warn){% else %}var(--ruby-300){% endif %};"></div>
+                </div>
+            </div>
+
+            <!-- Hero pts + conditions in a compact row -->
+            <div class="flex items-center gap-3 flex-wrap">
+                <div class="flex items-center gap-2 hero-row" data-pc="{{ pc.name|e }}">
+                    <span class="text-[10px] font-semibold uppercase tracking-wider text-base-500">Hero</span>
+                    <span class="hero-pips flex gap-1">
+                        {% for i in range(3) %}
+                        <span class="hero-pip {% if i < pc.hero_points %}active{% else %}inactive{% endif %}"></span>
+                        {% endfor %}
+                    </span>
+                    <button type="button" class="hero-adjust-btn hero-decrease" title="Spend / revoke hero point" aria-label="Decrease hero points" {% if pc.hero_points <= 0 %}disabled{% endif %}>&minus;</button>
+                    <button type="button" class="hero-adjust-btn hero-increase" title="Award hero point" aria-label="Award hero point" {% if pc.hero_points >= 3 %}disabled{% endif %}>+</button>
+                </div>
+                <div class="conditions-row flex flex-wrap gap-1 ml-auto" {% if not pc.conditions %}style="display:none;"{% endif %}>
+                    {% for cond, val in pc.conditions.items() %}
+                        {% if val and val != 0 and val is not false %}
+                        <span class="condition-pill{% if cond in ['dying','wounded','doomed','frightened','sickened','stunned','slowed','paralyzed','unconscious','drained','enfeebled','clumsy','stupefied','confused','fleeing','grabbed','restrained','immobilized'] %} sev-red{% endif %}" data-cond-name="{{ cond|replace('_','-') }}">{{ cond }}{% if val is number and val > 0 %} {{ val }}{% endif %}</span>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Exploration activity (GM visibility) -->
+            <div class="exploration-row" data-pc="{{ pc.name|e }}" {% if not pc.exploration_activity %}style="display:none;"{% endif %} style="margin-top:4px;">
+                <span class="text-[10px] font-semibold uppercase tracking-wider text-base-500">Exploration:</span>
+                <span class="exploration-pill pill" style="margin-left:var(--sp-2);">{{ pc.exploration_activity or '' }}</span>
+            </div>
+
+            <!-- Defenses -->
+            <div class="stat-strip">
+                <div class="stat-chip"><div class="stat-lbl">AC</div><div class="stat-val">{{ pc.ac }}</div></div>
+                <div class="stat-chip"><div class="stat-lbl">Fort</div><div class="stat-val">+{{ pc.fort }}</div></div>
+                <div class="stat-chip"><div class="stat-lbl">Ref</div><div class="stat-val">+{{ pc.ref }}</div></div>
+                <div class="stat-chip"><div class="stat-lbl">Will</div><div class="stat-val">+{{ pc.will }}</div></div>
+                <div class="stat-chip"><div class="stat-lbl">Perc</div><div class="stat-val">+{{ pc.perception }}</div></div>
+            </div>
+
+            <!-- Abilities -->
+            <div class="ability-grid">
+                {% for stat in pc.ability_display %}
+                <div class="ability-chip">
+                    <div class="ab-lbl">{{ stat.label }}</div>
+                    <div class="ab-val">{{ stat.mod }}</div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Section tabs -->
+            {% if attacks_count or spells_count.n or feats_count or skills_count or inv_count %}
+            <div class="pc-tabs" role="tablist">
+                {% if attacks_count %}
+                <button type="button" class="pc-tab active" data-tab="attacks">
+                    Attacks<span class="tab-count">{{ attacks_count }}</span>
+                </button>
+                {% endif %}
+                {% if spells_count.n %}
+                <button type="button" class="pc-tab {% if not attacks_count %}active{% endif %}" data-tab="spells">
+                    Spells<span class="tab-count">{{ spells_count.n }}</span>
+                </button>
+                {% endif %}
+                {% if skills_count %}
+                <button type="button" class="pc-tab {% if not attacks_count and not spells_count.n %}active{% endif %}" data-tab="skills">
+                    Skills<span class="tab-count">{{ skills_count }}</span>
+                </button>
+                {% endif %}
+                {% if feats_count %}
+                <button type="button" class="pc-tab {% if not attacks_count and not spells_count.n and not skills_count %}active{% endif %}" data-tab="feats">
+                    Feats<span class="tab-count">{{ feats_count }}</span>
+                </button>
+                {% endif %}
+                {% if inv_count %}
+                <button type="button" class="pc-tab {% if not attacks_count and not spells_count.n and not skills_count and not feats_count %}active{% endif %}" data-tab="inventory">
+                    Inventory<span class="tab-count">{{ inv_count }}</span>
+                </button>
+                {% endif %}
+            </div>
+
+            <!-- Attacks panel -->
+            {% if attacks_count %}
+            <div class="pc-tab-panel active" data-panel="attacks">
+                {% for attack in pc.attacks %}
+                <div class="attack-row {% if not loop.last %}mb-1.5 pb-1.5{% endif %}" {% if not loop.last %}style="border-bottom:1px solid rgba(255,255,255,0.04);"{% endif %}>
+                    <span class="detail-link flex-1 min-w-0 truncate text-base-200"
+                          data-detail-type="item"
+                          data-detail-name="{{ attack.name|e }}"
+                          data-detail-desc="{{ ('<p><strong>Strike bonuses:</strong> ' ~ (attack.strikes | map(attribute='label') | join(' / ')) ~ '</p><p><strong>Damage:</strong> ' ~ attack.damage ~ '</p>' ~ ('<p><strong>Traits:</strong> ' ~ (attack.traits | join(', ')) ~ '</p>' if attack.traits else '') ~ ('<p><strong>Crit:</strong> ' ~ attack.crit_effects ~ '</p>' if attack.crit_effects else '')) | e }}"
+                          data-detail-subtitle="Strike">
+                        {{ attack.name }}
+                    </span>
+                    <span class="flex items-center gap-2 shrink-0">
+                        <span class="attack-bonus">{{ attack.strikes[0].label }}</span>
+                        <span class="attack-dmg">{{ attack.damage }}</span>
+                    </span>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Spells panel -->
+            {% if spells_count.n %}
+            <div class="pc-tab-panel {% if not attacks_count %}active{% endif %}" data-panel="spells">
+                {% for caster in pc.spell_casters %}
+                {% set caster_idx = loop.index0 %}
+                <div class="{% if not loop.first %}mt-2 pt-2{% endif %}" {% if not loop.first %}style="border-top:1px solid rgba(255,255,255,0.04);"{% endif %} data-caster-idx="{{ caster_idx }}">
+                    <div class="flex items-center justify-between mb-1.5">
+                        <span class="text-[10px] font-semibold uppercase tracking-wider text-gold-300">{{ caster.name }}</span>
+                        <span class="text-[10px] text-base-500">{{ caster.tradition }}</span>
+                    </div>
+                    {% for level in caster.levels %}
+                    {% if level.slots > 0 or level.spells %}
+                    <div class="spell-level-row mb-1.5" data-spell-level="{{ level.level }}">
+                        <div class="spell-line">
+                            <span class="spell-line-tag">{{ 'Cant' if level.level == 0 else level.label[:3] }}</span>
+                            {% if level.slots > 0 %}
+                            <span class="slot-pips flex gap-1">
+                                {% for i in range(level.slots) %}
+                                <span class="slot-pip available" data-slot-key="{{ caster_idx }}-{{ level.level }}-{{ i }}"></span>
+                                {% endfor %}
+                            </span>
+                            {% elif level.spells %}
+                            <span class="text-[9px] text-base-500 italic">at will</span>
+                            {% endif %}
+                        </div>
+                        <div class="spell-line mt-1" style="padding-left: 6px;">
+                            {% for sp in level.spells %}
+                            <span class="detail-link"
+                                  data-detail-type="spell"
+                                  data-detail-name="{{ sp.name|e }}"
+                                  data-detail-rank="{{ level.level }}"
+                                  data-detail-tradition="{{ caster.tradition }}"
+                                  data-detail-desc="{{ sp.desc|e }}">{{ sp.name }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                    {% if pc.focus_max > 0 and loop.first %}
+                    <div class="flex items-center gap-2 mt-1.5 pt-1.5" style="border-top:1px solid rgba(255,255,255,0.04);">
+                        <span class="spell-line-tag" style="color:var(--gilt-200);">Focus</span>
+                        <div class="focus-pips flex gap-1">
+                            {% for i in range(pc.focus_max) %}
+                            <span class="slot-pip {% if i < pc.focus_points %}focus-available{% else %}focus-used{% endif %}"></span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Skills panel -->
+            {% if skills_count %}
+            <div class="pc-tab-panel {% if not attacks_count and not spells_count.n %}active{% endif %}" data-panel="skills">
+                <div class="skill-grid">
+                    {% for sk in pc.skills %}
+                    <div class="skill-row" {% if sk.breakdown %}title="{{ sk.breakdown }}"{% endif %}>
+                        <span class="skill-name">{{ sk.name }}</span>
+                        <span class="skill-right">
+                            <span class="skill-prof {{ sk.prof_letter }}">{{ sk.prof_letter }}</span>
+                            <span class="skill-total">{{ sk.total }}</span>
+                        </span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Feats panel -->
+            {% if feats_count %}
+            <div class="pc-tab-panel {% if not attacks_count and not spells_count.n and not skills_count %}active{% endif %}" data-panel="feats">
+                {% for feat in pc.feats|sort(attribute='level') %}
+                <span class="detail-link"
+                      data-detail-type="feat"
+                      data-detail-name="{{ feat.name|e }}"
+                      data-detail-desc="{{ feat.desc|e }}"
+                      data-detail-subtitle="{{ feat.type }}">
+                    {{ feat.name }}<span class="meta">L{{ feat.level }}{% if feat.type %} &middot; {{ feat.type }}{% endif %}</span>
+                </span>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Inventory panel -->
+            {% if inv_count %}
+            <div class="pc-tab-panel {% if not attacks_count and not spells_count.n and not skills_count and not feats_count %}active{% endif %}" data-panel="inventory">
+                <div class="bulk-summary">
+                    Bulk: <span class="bulk-val {% if pc.total_bulk >= pc.encumbered_limit %}bulk-warn{% endif %}">{{ pc.total_bulk }}{% if pc.light_bulk_remainder %}.{{ pc.light_bulk_remainder }}{% endif %}</span>
+                    / {{ pc.encumbered_limit }} encumbered / {{ pc.max_bulk_limit }} max
+                </div>
+                {% for item in pc.equipment|sort(attribute='name') %}
+                <div class="inv-row">
+                    <span class="inv-name">{{ item.name }}</span>
+                    <span class="inv-meta">
+                        {% if item.qty > 1 %}<span class="inv-qty">&times;{{ item.qty }}</span>{% endif %}
+                        {% if item.bulk and item.bulk not in ('0', '') and item.bulk|length <= 2 %}<span class="inv-bulk">{{ item.bulk }}B</span>{% endif %}
+                    </span>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Shared detail modal -->
+<div id="detail-modal" class="detail-overlay" style="display:none;">
+    <div class="detail-card" onclick="event.stopPropagation()">
+        <div class="detail-card-head">
+            <div class="min-w-0 flex-1">
+                <h3 id="detail-title">&nbsp;</h3>
+                <div id="detail-meta" class="meta-row"></div>
+            </div>
+            <button class="detail-close" id="detail-close" title="Close">&times;</button>
+        </div>
+        <div id="detail-body" class="detail-card-body">&nbsp;</div>
+    </div>
+</div>
+
+<script>
+(function() {
+    // ---------- Detail modal ----------
+    const modal = document.getElementById('detail-modal');
+    const modalTitle = document.getElementById('detail-title');
+    const modalMeta = document.getElementById('detail-meta');
+    const modalBody = document.getElementById('detail-body');
+    const modalClose = document.getElementById('detail-close');
+
+    function escHTML(s) {
+        const d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    function closeModal() {
+        modal.classList.remove('open');
+        // Wait for the slide-out transition before fully hiding so it can
+        // animate back in on next open.
+        setTimeout(() => {
+            if (!modal.classList.contains('open')) modal.style.display = 'none';
+        }, 200);
+    }
+    modalClose.addEventListener('click', closeModal);
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modal.classList.contains('open')) closeModal();
+    });
+
+    async function openDetail(el) {
+        const type = el.dataset.detailType || '';
+        const name = el.dataset.detailName || '';
+        const desc = el.dataset.detailDesc || '';
+        const rank = el.dataset.detailRank;
+        const tradition = el.dataset.detailTradition;
+        const subtitle = el.dataset.detailSubtitle;
+
+        modalTitle.textContent = name;
+        let metaHTML = '';
+        if (type) metaHTML += `<span class="detail-meta-tag type">${escHTML(type)}</span>`;
+        if (rank !== undefined && rank !== '') {
+            metaHTML += `<span class="detail-meta-tag rank">${rank === '0' ? 'Cantrip' : 'Rank ' + rank}</span>`;
+        }
+        if (tradition) metaHTML += `<span class="detail-meta-tag">${escHTML(tradition)}</span>`;
+        if (subtitle) metaHTML += `<span class="detail-meta-tag">${escHTML(subtitle)}</span>`;
+        modalMeta.innerHTML = metaHTML;
+
+        // Prefer inline desc; otherwise fetch compendium.
+        const looksMissing = !desc
+            || desc.includes('Description not found')
+            || desc.includes('No description')
+            || desc.length < 40;
+        if (!looksMissing) {
+            modalBody.innerHTML = desc;
+        } else {
+            modalBody.innerHTML = '<em>Loading...</em>';
+            if (type === 'spell' || type === 'feat' || type === 'item') {
+                try {
+                    const r = await fetch('/api/compendium_detail?name=' + encodeURIComponent(name) + '&type=' + encodeURIComponent(type));
+                    if (r.ok) {
+                        const data = await r.json();
+                        // Most compendium rows expose a `description` field.
+                        let html = data.description || data.desc || desc || '';
+                        if (!html && data.text) html = data.text;
+                        if (!html) html = '<em>No description available.</em>';
+                        modalBody.innerHTML = html;
+                        // Fill in missing tags from compendium row
+                        if (data.traits && !modalMeta.querySelector('[data-from=compendium]')) {
+                            const extra = (Array.isArray(data.traits) ? data.traits : String(data.traits).split(',')).slice(0, 6);
+                            extra.forEach(t => {
+                                const s = document.createElement('span');
+                                s.className = 'detail-meta-tag';
+                                s.dataset.from = 'compendium';
+                                s.textContent = String(t).trim();
+                                modalMeta.appendChild(s);
+                            });
+                        }
+                    } else {
+                        modalBody.innerHTML = desc || '<em>No description available.</em>';
+                    }
+                } catch (_) {
+                    modalBody.innerHTML = desc || '<em>No description available.</em>';
+                }
+            } else {
+                modalBody.innerHTML = desc || '<em>No description available.</em>';
+            }
+        }
+
+        modal.style.display = 'flex';
+        // Next frame so the transition can pick up the class change.
+        requestAnimationFrame(() => modal.classList.add('open'));
+        modalBody.scrollTop = 0;
+    }
+
+    document.addEventListener('click', (e) => {
+        const link = e.target.closest('.detail-link');
+        if (link) {
+            e.preventDefault();
+            openDetail(link);
+        }
+    });
+
+    // ---------- Card tab switching ----------
+    document.addEventListener('click', (e) => {
+        const tab = e.target.closest('.pc-tab');
+        if (!tab) return;
+        const card = tab.closest('.pc-card');
+        if (!card) return;
+        const target = tab.dataset.tab;
+        card.querySelectorAll('.pc-tab').forEach(t => t.classList.toggle('active', t === tab));
+        card.querySelectorAll('.pc-tab-panel').forEach(p => {
+            p.classList.toggle('active', p.dataset.panel === target);
+        });
+    });
+
+    // ---------- HP Adjustment via AJAX ----------
+    document.querySelectorAll('.pc-card').forEach(card => {
+        const pcName = card.dataset.pcName;
+        const damageBtn = card.querySelector('.hp-damage-btn');
+        const healBtn = card.querySelector('.hp-heal-btn');
+        const amountInput = card.querySelector('.hp-amount');
+
+        function adjustHP(action) {
+            const amount = parseInt(amountInput.value) || 1;
+            const formData = new FormData();
+            formData.append('amount', amount);
+            formData.append('action', action);
+            fetch(`/api/adjust_party_hp/${encodeURIComponent(pcName)}`, {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                body: formData
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    const maxHP = parseInt(card.querySelector('.hp-row').dataset.maxHp);
+                    updateCardHP(card, data.current_hp, maxHP, data.conditions);
+                }
+            })
+            .catch(() => {});
+        }
+
+        if (damageBtn) damageBtn.addEventListener('click', () => adjustHP('damage'));
+        if (healBtn)   healBtn.addEventListener('click',   () => adjustHP('heal'));
+    });
+
+    // ---------- Live-update helpers ----------
+    function getHPColor(pct) {
+        const cs = getComputedStyle(document.documentElement);
+        if (pct > 50) return cs.getPropertyValue('--success').trim() || '#4a7c2a';
+        if (pct > 25) return cs.getPropertyValue('--warn').trim()    || '#8a6a14';
+        return cs.getPropertyValue('--ruby-300').trim() || '#a83a3a';
+    }
+    function getHPClass(pct) {
+        if (pct > 50) return 'text-base-100';
+        if (pct > 25) return 'text-gold-300';
+        return 'text-danger-400';
+    }
+
+    // Brief flash so the GM gets visual confirmation that a damage / heal /
+    // condition action landed on this specific card. Variant is 'dmg' | 'heal' | 'cond'.
+    function flashCard(card, variant) {
+        if (!card) return;
+        card.classList.remove('card-flash-dmg', 'card-flash-heal', 'card-flash-cond');
+        // Force reflow so re-adding the class restarts the animation.
+        void card.offsetWidth;
+        card.classList.add('card-flash-' + variant);
+        setTimeout(() => card.classList.remove('card-flash-' + variant), 700);
+    }
+
+    function updateCardHP(card, currentHP, maxHP, conditions, opts) {
+        opts = opts || {};
+        const hpDisplay = card.querySelector('.hp-display');
+        let prevHP = null;
+        if (hpDisplay) {
+            // Read the previous displayed HP for flash direction inference
+            const m = (hpDisplay.textContent || '').match(/(-?\d+)/);
+            if (m) prevHP = parseInt(m[1], 10);
+        }
+        const pct = maxHP > 0 ? (currentHP / maxHP * 100) : 0;
+        if (hpDisplay) {
+            hpDisplay.className = 'hp-display text-sm font-bold ' + getHPClass(pct);
+            hpDisplay.innerHTML = currentHP + '<span class="text-base-500 font-normal text-xs"> / ' + maxHP + '</span>';
+        }
+        const bar = card.querySelector('.hp-bar-fill');
+        if (bar) {
+            bar.style.width = pct + '%';
+            bar.style.background = getHPColor(pct);
+        }
+        const prevConds = card._prevConds || null;
+        if (conditions !== undefined) {
+            updateConditions(card, conditions);
+            card._prevConds = JSON.stringify(conditions);
+            card.classList.toggle('is-dying', !!conditions.dying);
+        }
+        // Whole-card danger rail: dying wins; else bloodied at <=50% HP.
+        const _dying = card.classList.contains('is-dying');
+        card.classList.toggle('is-bloodied', !_dying && pct > 0 && pct <= 50);
+        // Flash unless caller explicitly suppresses (e.g. initial paint)
+        if (!opts.noFlash) {
+            if (prevHP !== null && currentHP < prevHP) flashCard(card, 'dmg');
+            else if (prevHP !== null && currentHP > prevHP) flashCard(card, 'heal');
+            else if (conditions !== undefined && prevConds && prevConds !== JSON.stringify(conditions)) {
+                flashCard(card, 'cond');
+            }
+        }
+    }
+
+    const PV_SEV_RED = new Set(['dying','wounded','doomed','frightened','sickened','stunned','slowed','paralyzed','unconscious','drained','enfeebled','clumsy','stupefied','confused','fleeing','grabbed','restrained','immobilized']);
+    function updateConditions(card, conditions) {
+        const row = card.querySelector('.conditions-row');
+        if (!row) return;
+        let html = '';
+        for (const [cond, val] of Object.entries(conditions)) {
+            if (val && val !== 0 && val !== false) {
+                let label = cond;
+                if (typeof val === 'number' && val > 0) label += ' ' + val;
+                html += '<span class="condition-pill' + (PV_SEV_RED.has(cond) ? ' sev-red' : '') + '" data-cond-name="' + cond.replace(/_/g, '-') + '">' + escHTML(label) + '</span>';
+            }
+        }
+        row.innerHTML = html;
+        row.style.display = html ? '' : 'none';
+    }
+
+    function updateFocus(card, focusCurrent) {
+        const pips = card.querySelectorAll('.focus-pips .slot-pip');
+        pips.forEach((pip, i) => {
+            pip.className = 'slot-pip ' + (i < focusCurrent ? 'focus-available' : 'focus-used');
+        });
+    }
+
+    function updateHeroPoints(card, heroPoints) {
+        const pips = card.querySelectorAll('.hero-pips .hero-pip');
+        pips.forEach((pip, i) => {
+            pip.className = 'hero-pip ' + (i < heroPoints ? 'active' : 'inactive');
+        });
+        const inc = card.querySelector('.hero-increase');
+        const dec = card.querySelector('.hero-decrease');
+        if (inc) inc.disabled = heroPoints >= 3;
+        if (dec) dec.disabled = heroPoints <= 0;
+    }
+
+    /* ──────────────── Party-wide damage / heal ────────────────
+       Iterates /api/adjust_party_hp/<pc_name> for every PC card on the page.
+       The endpoint already handles temp HP, dying logic, and rebroadcast,
+       so this is a pure client-side fan-out. Exposed on window so the
+       onclick attributes in the header HTML can find them. */
+    window.toggleAllPartyDamage = function() {
+        const fly = document.getElementById('party-damage-flyout');
+        if (!fly) return;
+        fly.classList.toggle('hidden');
+        if (!fly.classList.contains('hidden')) {
+            const a = document.getElementById('pwd-amount');
+            if (a) a.focus();
+        }
+    };
+    window.applyAllPartyDamage = async function(action) {
+        const amt = parseInt(document.getElementById('pwd-amount').value || '0', 10);
+        if (!amt || amt < 1) return;
+        const cards = document.querySelectorAll('.pc-card[data-pc-name]');
+        const names = Array.from(cards).map(c => c.dataset.pcName).filter(Boolean);
+        if (!names.length) return;
+        for (const name of names) {
+            const fd = new FormData();
+            fd.append('amount', String(amt));
+            fd.append('action', action);
+            try {
+                await fetch('/api/adjust_party_hp/' + encodeURIComponent(name), {
+                    method: 'POST', body: fd,
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                });
+            } catch(_) {}
+        }
+        document.getElementById('pwd-amount').value = '';
+        document.getElementById('party-damage-flyout').classList.add('hidden');
+    };
+    document.addEventListener('click', (e) => {
+        const fly = document.getElementById('party-damage-flyout');
+        const btn = document.getElementById('party-damage-toggle');
+        if (!fly || !btn) return;
+        if (fly.classList.contains('hidden')) return;
+        if (fly.contains(e.target) || btn.contains(e.target)) return;
+        fly.classList.add('hidden');
+    });
+
+    /* ──────────────── Loot distribution ────────────────
+       Split a hoard across the party (or hand it all to one PC) by
+       fan-ing out /api/send_loot. The endpoint already deposits coins
+       in the wallet and appends items to inventory, so this is again
+       client-side iteration. */
+    function _partyNames() {
+        return Array.from(document.querySelectorAll('.pc-card[data-pc-name]'))
+            .map(c => c.dataset.pcName).filter(Boolean);
+    }
+
+    // Per-PC vault-note links removed with the in-site Obsidian vault.
+    window.toggleLootDistribute = function() {
+        const fly = document.getElementById('loot-distribute-flyout');
+        if (!fly) return;
+        // Make sure target dropdown is populated
+        const sel = document.getElementById('loot-target');
+        if (sel && !sel.options.length) {
+            _partyNames().forEach(n => {
+                const o = document.createElement('option');
+                o.value = n; o.textContent = n;
+                sel.appendChild(o);
+            });
+        }
+        fly.classList.toggle('hidden');
+        if (!fly.classList.contains('hidden')) {
+            _updateLootPreview();
+            // Hide the other flyout if open
+            document.getElementById('party-damage-flyout')?.classList.add('hidden');
+        }
+    };
+    function _parseLootItems(raw) {
+        return (raw || '').split('\n').map(line => {
+            const m = line.trim().match(/^(.+?)(?:\s*[xX×]\s*(\d+))?$/);
+            if (!m) return null;
+            const nm = (m[1] || '').trim();
+            if (!nm) return null;
+            return { name: nm, qty: m[2] ? parseInt(m[2], 10) : 1 };
+        }).filter(Boolean);
+    }
+    function _splitCoin(total, n) {
+        // Even split with remainder going to the FIRST PC.
+        const each = Math.floor(total / n);
+        const rem = total - each * n;
+        const out = Array(n).fill(each);
+        out[0] += rem;
+        return out;
+    }
+    function _readLootInputs() {
+        return {
+            pp: parseInt(document.getElementById('loot-pp').value || '0', 10),
+            gp: parseInt(document.getElementById('loot-gp').value || '0', 10),
+            sp: parseInt(document.getElementById('loot-sp').value || '0', 10),
+            cp: parseInt(document.getElementById('loot-cp').value || '0', 10),
+            mode: document.querySelector('input[name="loot-mode"]:checked')?.value || 'split',
+            items: _parseLootItems(document.getElementById('loot-items').value),
+            target: document.getElementById('loot-target')?.value || '',
+        };
+    }
+    function _updateLootPreview() {
+        const data = _readLootInputs();
+        const names = _partyNames();
+        const preview = document.getElementById('loot-preview');
+        const targetRow = document.getElementById('loot-target-row');
+        if (data.mode === 'party') {
+            targetRow?.classList.remove('hidden');
+            const t = data.target || (names[0] || '?');
+            const coinSummary = ['pp','gp','sp','cp'].filter(c => data[c] > 0).map(c => `${data[c]} ${c}`).join(' · ') || '(no coins)';
+            const itemSummary = data.items.length ? `${data.items.length} item${data.items.length === 1 ? '' : 's'}` : '';
+            preview.textContent = `→ ${t}: ${coinSummary}${itemSummary ? ' · ' + itemSummary : ''}`;
+        } else {
+            targetRow?.classList.add('hidden');
+            const n = names.length || 1;
+            const splits = ['pp','gp','sp','cp'].map(c => ({c, vals: _splitCoin(data[c], n)}));
+            const remNote = splits.some(s => s.vals[0] !== s.vals[s.vals.length - 1])
+                ? ' (remainder → first PC)' : '';
+            const summary = splits.filter(s => s.vals[0] > 0).map(s => `${s.vals[0]}-${s.vals[s.vals.length-1]} ${s.c}`).join(' · ') || '(no coins)';
+            preview.textContent = `Each PC: ${summary}${remNote}` + (data.items.length ? ` · ${data.items.length} item${data.items.length === 1 ? '' : 's'} → first PC` : '');
+        }
+    }
+    document.addEventListener('input', (e) => {
+        if (!e.target || !e.target.id) return;
+        if (['loot-pp','loot-gp','loot-sp','loot-cp','loot-items'].includes(e.target.id)) _updateLootPreview();
+    });
+    document.addEventListener('change', (e) => {
+        if (e.target && e.target.name === 'loot-mode') _updateLootPreview();
+    });
+    window.applyLootDistribution = async function() {
+        const data = _readLootInputs();
+        const names = _partyNames();
+        if (!names.length) return;
+        if (data.mode === 'party') {
+            const target = data.target || names[0];
+            await fetch('/api/send_loot', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ target, coins: { pp: data.pp, gp: data.gp, sp: data.sp, cp: data.cp }, items: data.items }),
+            });
+        } else {
+            const splits = {
+                pp: _splitCoin(data.pp, names.length),
+                gp: _splitCoin(data.gp, names.length),
+                sp: _splitCoin(data.sp, names.length),
+                cp: _splitCoin(data.cp, names.length),
+            };
+            for (let i = 0; i < names.length; i++) {
+                const items = i === 0 ? data.items : []; // items go to first PC; GM can re-deal manually if needed
+                await fetch('/api/send_loot', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        target: names[i],
+                        coins: { pp: splits.pp[i], gp: splits.gp[i], sp: splits.sp[i], cp: splits.cp[i] },
+                        items,
+                    }),
+                });
+            }
+        }
+        // Reset and close
+        if (typeof window.pf2eToast === 'function') window.pf2eToast('Loot distributed to party', 'success');
+        ['loot-pp','loot-gp','loot-sp','loot-cp','loot-items'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+        document.getElementById('loot-distribute-flyout').classList.add('hidden');
+    };
+    document.addEventListener('click', (e) => {
+        const fly = document.getElementById('loot-distribute-flyout');
+        const btn = document.getElementById('loot-distribute-toggle');
+        if (!fly || !btn) return;
+        if (fly.classList.contains('hidden')) return;
+        if (fly.contains(e.target) || btn.contains(e.target)) return;
+        fly.classList.add('hidden');
+    });
+
+    document.addEventListener('click', async (e) => {
+        const btn = e.target.closest('.hero-adjust-btn');
+        if (!btn) return;
+        const row = btn.closest('.hero-row');
+        const pcName = row && row.dataset.pc;
+        if (!pcName) return;
+        const action = btn.classList.contains('hero-increase') ? 'increase' : 'decrease';
+        btn.disabled = true;
+        try {
+            const fd = new FormData();
+            fd.append('action', action);
+            const r = await fetch('/api/adjust_hero/' + encodeURIComponent(pcName), { method: 'POST', body: fd });
+            const j = await r.json();
+            if (j && j.success) {
+                const card = row.closest('.pc-card');
+                if (card) updateHeroPoints(card, j.current_hero);
+            }
+        } catch(_) {}
+        finally { btn.disabled = false; }
+    });
+
+    function updateSpellSlots(card, expended) {
+        if (!expended) return;
+        card.querySelectorAll('.slot-pip[data-slot-key]').forEach(pip => {
+            const key = pip.dataset.slotKey;
+            if (expended[key]) pip.className = 'slot-pip used';
+            else               pip.className = 'slot-pip available';
+        });
+    }
+
+    function updateSpellCastersFromAPI(card, spellCasters) {
+        if (!spellCasters) return;
+        spellCasters.forEach((caster, ci) => {
+            const casterEl = card.querySelector('[data-caster-idx="' + ci + '"]');
+            if (!casterEl) return;
+            caster.levels.forEach(lvl => {
+                const levelRow = casterEl.querySelector('[data-spell-level="' + lvl.level + '"]');
+                if (!levelRow) return;
+                const pips = levelRow.querySelectorAll('.slot-pip');
+                const expended = lvl.expended || 0;
+                pips.forEach((pip, i) => {
+                    pip.className = 'slot-pip ' + (i < expended ? 'used' : 'available');
+                });
+            });
+        });
+    }
+
+    function updateExploration(card, activity) {
+        const row = card.querySelector('.exploration-row');
+        if (!row) return;
+        const pill = row.querySelector('.exploration-pill');
+        const label = (activity || '').toString();
+        if (label) {
+            if (pill) pill.textContent = label;
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    }
+
+    function findCard(name) {
+        return document.querySelector('.pc-card[data-pc-name="' + CSS.escape(name) + '"]');
+    }
+
+    // ---------- SSE ----------
+    // Track the last time we heard from the stream. If it's been >30s, the
+    // fallback poller wakes up; otherwise polling stays silent so we don't
+    // burn a GET every 15s for no reason.
+    let evtSource = null;
+    let _sseLastMsg = 0;
+    function _sseAlive() { _sseLastMsg = Date.now(); }
+    function connectSSE() {
+        // Shared SSE hub (base.html <head>) — one socket per tab, hub owns
+        // reconnect. The evtSource alias keeps the pc_update handler unchanged;
+        // liveness rides 'connected' + each pc_update for the poll fallback.
+        evtSource = { addEventListener: function(name, fn) { window.appSSE(name, fn); } };
+        window.appSSE('connected', _sseAlive);
+
+        evtSource.addEventListener('pc_update', function(e) {
+            _sseAlive();
+            try {
+                const data = JSON.parse(e.data);
+                const card = findCard(data.name);
+                if (!card) return;
+
+                if (data.current_hp !== undefined && data.max_hp !== undefined) {
+                    updateCardHP(card, data.current_hp, data.max_hp, data.conditions);
+                }
+                if (data.conditions !== undefined)  updateConditions(card, data.conditions);
+                if (data.focus !== undefined)       updateFocus(card, data.focus);
+                if (data.hero_points !== undefined) updateHeroPoints(card, data.hero_points);
+                if (data.expended_slots)            updateSpellSlots(card, data.expended_slots);
+                if (data.spell_casters)             updateSpellCastersFromAPI(card, data.spell_casters);
+                if (data.exploration_activity !== undefined) updateExploration(card, data.exploration_activity);
+            } catch(err) {}
+        });
+
+        // No onerror — the shared hub owns reconnect; the 30s-stale poll
+        // fallback below stays as the safety net.
+    }
+    connectSSE();
+
+    // ---------- Polling fallback (only if SSE is silent) ----------
+    function pollPartyState() {
+        // SSE healthy? Skip the poll. 30s allows for natural quiet stretches.
+        if (Date.now() - _sseLastMsg < 30000) return;
+        fetch('/api/gm_party_state')
+        .then(r => r.json())
+        .then(data => {
+            if (!data.party) return;
+            data.party.forEach(pc => {
+                const card = findCard(pc.name);
+                if (!card) return;
+                updateCardHP(card, pc.current_hp, pc.max_hp, pc.conditions);
+                updateFocus(card, pc.focus || 0);
+                updateHeroPoints(card, pc.hero_points || 0);
+                updateSpellCastersFromAPI(card, pc.spell_casters);
+            });
+        })
+        .catch(() => {});
+    }
+    setInterval(pollPartyState, 15000);
+})();
+</script>
+{% endblock %}

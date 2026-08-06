@@ -1,0 +1,133 @@
+{
+    "_id": "1RsScTvNdGD9zGWe",
+    "img": "icons/magic/fire/barrier-shield-explosion-yellow.webp",
+    "name": "Spell Effect: Fire Shield",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Fire Shield]</p>\n<p>You gain resistance to cold damage. You can Raise a Shield with the fire shield as a normal shield to gain a +1 circumstance bonus to AC.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 4
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core"
+        },
+        "rules": [
+            {
+                "key": "ActiveEffectLike",
+                "mode": "override",
+                "path": "flags.pf2e.fireShield.resistance",
+                "value": "cold"
+            },
+            {
+                "key": "Resistance",
+                "type": "{actor|flags.pf2e.fireShield.resistance}",
+                "value": "5 + 5*floor((@item.level -4)/2)"
+            },
+            {
+                "key": "ActiveEffectLike",
+                "mode": "override",
+                "path": "system.attributes.shield",
+                "predicate": [
+                    {
+                        "or": [
+                            "self:type:character",
+                            "self:type:npc"
+                        ]
+                    }
+                ],
+                "value": {
+                    "ac": 1,
+                    "broken": false,
+                    "brokenThreshold": 0,
+                    "destroyed": false,
+                    "hardness": 10,
+                    "hp": {
+                        "max": 40,
+                        "value": 40
+                    },
+                    "icon": "icons/magic/fire/barrier-shield-explosion-yellow.webp",
+                    "itemId": "{item|_id}",
+                    "name": "PF2E.ShieldLabel",
+                    "raised": true
+                }
+            },
+            {
+                "key": "ActiveEffectLike",
+                "mode": "override",
+                "path": "system.attributes.shield.max",
+                "predicate": [
+                    {
+                        "or": [
+                            "self:type:character",
+                            "self:type:npc"
+                        ]
+                    }
+                ],
+                "value": "match(when(eq(@item.level, 10), 70), when(gte(@item.level, 8), 60), when(gte(@item.level, 6), 50), 40)"
+            },
+            {
+                "key": "ActiveEffectLike",
+                "mode": "override",
+                "path": "system.attributes.shield.value",
+                "predicate": [
+                    {
+                        "or": [
+                            "self:type:character",
+                            "self:type:npc"
+                        ]
+                    }
+                ],
+                "value": "match(when(eq(@item.level, 10), 70), when(gte(@item.level, 8), 60), when(gte(@item.level, 6), 50), 40)"
+            },
+            {
+                "key": "RollOption",
+                "label": "PF2E.SpecificRule.FireShield.DefendingAgainstWaterLabel",
+                "option": "fire-shield-against-water",
+                "toggleable": true
+            },
+            {
+                "key": "ActiveEffectLike",
+                "mode": "multiply",
+                "path": "system.attributes.shield.hardness",
+                "predicate": [
+                    "fire-shield-against-water"
+                ],
+                "priority": 60,
+                "value": 0.5
+            },
+            {
+                "key": "RollOption",
+                "option": "self:shield:equipped",
+                "predicate": [
+                    {
+                        "or": [
+                            "self:type:character",
+                            "self:type:npc"
+                        ]
+                    }
+                ]
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

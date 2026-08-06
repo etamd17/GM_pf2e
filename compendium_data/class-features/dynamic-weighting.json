@@ -1,0 +1,102 @@
+{
+    "_id": "O9wpXEKtKYJOMIlK",
+    "img": "systems/pf2e/icons/features/classes/dynamic-weighting.webp",
+    "name": "Dynamic Weighting",
+    "system": {
+        "actionCategory": {
+            "value": ""
+        },
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p>Your weapon is modified to be heavier and easier to manipulate or retrieve. Your innovation gains the two-hand trait, with a damage die one size higher than the weapon's normal weapon damage die size (for instance, a longsword would gain the two-hand d10 trait). Your innovation also gains the versatile B trait. If it was a thrown weapon, it gains the tethered trait.</p>"
+        },
+        "level": {
+            "value": 1
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Guns & Gears"
+        },
+        "rules": [
+            {
+                "itemId": "{actor|flags.pf2e.trackedItems.weaponInnovation}",
+                "key": "ItemAlteration",
+                "mode": "add",
+                "property": "traits",
+                "value": "versatile-b"
+            },
+            {
+                "itemId": "{actor|flags.pf2e.trackedItems.weaponInnovation}",
+                "key": "ItemAlteration",
+                "mode": "add",
+                "predicate": [
+                    "item:damage:die:faces:4"
+                ],
+                "property": "traits",
+                "value": "two-hand-d6"
+            },
+            {
+                "itemId": "{actor|flags.pf2e.trackedItems.weaponInnovation}",
+                "key": "ItemAlteration",
+                "mode": "add",
+                "predicate": [
+                    "item:damage:die:faces:6"
+                ],
+                "property": "traits",
+                "value": "two-hand-d8"
+            },
+            {
+                "itemId": "{actor|flags.pf2e.trackedItems.weaponInnovation}",
+                "key": "ItemAlteration",
+                "mode": "add",
+                "predicate": [
+                    "item:damage:die:faces:8"
+                ],
+                "property": "traits",
+                "value": "two-hand-d10"
+            },
+            {
+                "itemId": "{actor|flags.pf2e.trackedItems.weaponInnovation}",
+                "key": "ItemAlteration",
+                "mode": "add",
+                "predicate": [
+                    "item:damage:die:faces:10"
+                ],
+                "property": "traits",
+                "value": "two-hand-d12"
+            },
+            {
+                "itemId": "{actor|flags.pf2e.trackedItems.weaponInnovation}",
+                "key": "ItemAlteration",
+                "mode": "add",
+                "property": "traits",
+                "value": "versatile-b"
+            }
+        ],
+        "traits": {
+            "otherTags": [
+                "melee",
+                "not-agile-trait",
+                "not-attached-trait",
+                "not-free-hand-trait",
+                "one-handed",
+                "weapon-innovation-modification"
+            ],
+            "rarity": "common",
+            "value": [
+                "inventor"
+            ]
+        }
+    },
+    "type": "feat"
+}

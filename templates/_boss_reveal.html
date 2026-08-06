@@ -1,0 +1,152 @@
+{# ════════════════════════════════════════════════════════════════════
+   BOSS REVEAL card  (flavor Chunk 4d)
+   Self-contained drop-in: include on any page, then call
+   window.pf2eBossReveal({name, epithet, level}) to bloom a cinematic
+   name card. Like the initiative flourish, it holds NO EventSource of
+   its own — each page's existing /api/events socket calls the trigger
+   (gunicorn --workers 1 --threads 16 pins a thread per stream, so we
+   never open a connection just for flavor). The GM device answers with a
+   drum hit from its own boss_reveal handler (pf2eAudio is GM-only).
+   ════════════════════════════════════════════════════════════════════ #}
+<div id="boss-reveal" class="boss-reveal no-print" aria-hidden="true">
+    <div class="br-backdrop"></div>
+    <div class="br-content" role="dialog" aria-label="A foe is revealed">
+        <div class="br-rule br-rule-top"><span></span></div>
+        <div id="br-epithet" class="br-epithet"></div>
+        <div id="br-name" class="br-name">Unknown</div>
+        <div id="br-level" class="br-level"></div>
+        <div class="br-rule br-rule-bot"><span></span></div>
+    </div>
+</div>
+
+<style>
+    .boss-reveal {
+        position: fixed; inset: 0; z-index: 99991;
+        display: flex; align-items: center; justify-content: center;
+        pointer-events: none;
+        opacity: 0; visibility: hidden;
+        font-family: 'Cinzel', 'Cormorant Garamond', serif;
+    }
+    .boss-reveal.show { opacity: 1; visibility: visible; transition: opacity 0.22s ease; }
+    .boss-reveal.hide { opacity: 0; visibility: visible; transition: opacity 0.6s ease; }
+
+    .boss-reveal .br-backdrop {
+        position: absolute; inset: 0;
+        background:
+            radial-gradient(ellipse 70% 55% at 50% 50%, rgba(120,14,14,0.5) 0%, rgba(8,6,5,0.82) 58%, rgba(5,4,3,0.95) 100%);
+    }
+    .boss-reveal.show .br-backdrop { animation: brBackdrop 4.0s ease-out both; }
+    @keyframes brBackdrop { 0% { opacity: 0; } 10% { opacity: 1; } 86% { opacity: 1; } 100% { opacity: 1; } }
+
+    .boss-reveal .br-content {
+        position: relative; z-index: 2; text-align: center;
+        padding: 28px; max-width: min(92vw, 960px);
+    }
+
+    /* Gold rule with a center diamond — expands outward on reveal. */
+    .boss-reveal .br-rule {
+        height: 1px; margin: 0 auto;
+        width: min(560px, 78vw);
+        background: linear-gradient(90deg, transparent, rgba(201,163,78,0.7), transparent);
+        position: relative;
+        transform-origin: center;
+    }
+    .boss-reveal .br-rule span {
+        position: absolute; left: 50%; top: 50%;
+        transform: translate(-50%, -50%) rotate(45deg);
+        width: 7px; height: 7px; background: #d8b45e;
+        box-shadow: 0 0 10px rgba(216,180,94,0.8);
+    }
+    .boss-reveal .br-rule-top { margin-bottom: clamp(10px, 1.8vh, 20px); }
+    .boss-reveal .br-rule-bot { margin-top: clamp(10px, 1.8vh, 20px); }
+    .boss-reveal.show .br-rule { animation: brRule 3.95s cubic-bezier(0.16,1,0.3,1) both; }
+    @keyframes brRule {
+        0%   { transform: scaleX(0); opacity: 0; }
+        18%  { transform: scaleX(1); opacity: 1; }
+        86%  { opacity: 1; }
+        100% { opacity: 0; }
+    }
+
+    .boss-reveal .br-epithet {
+        font-size: clamp(13px, 2vw, 22px);
+        font-weight: 600; font-style: italic;
+        letter-spacing: 0.18em;
+        color: #e0bf78;
+        text-shadow: 0 2px 14px rgba(0,0,0,0.8);
+        min-height: 0;
+    }
+    .boss-reveal .br-epithet:empty { display: none; }
+    .boss-reveal.show .br-epithet { animation: brFadeUp 3.95s ease-out 0.12s both; }
+
+    .boss-reveal .br-name {
+        font-family: 'Cinzel', 'Cormorant Garamond', serif;
+        font-weight: 700; line-height: 1.0;
+        font-size: clamp(40px, 8.5vw, 110px);
+        letter-spacing: 0.04em; text-transform: uppercase;
+        color: #f4e6b0;
+        margin: clamp(4px, 0.8vh, 10px) 0;
+        text-shadow:
+            0 0 36px rgba(190,40,40,0.6),
+            0 0 90px rgba(110,12,12,0.55),
+            0 6px 30px rgba(0,0,0,0.8);
+    }
+    .boss-reveal.show .br-name { animation: brName 3.95s cubic-bezier(0.16,1,0.3,1) both; }
+    @keyframes brName {
+        0%   { opacity: 0; transform: scale(1.14) translateY(10px); filter: blur(9px); }
+        16%  { opacity: 1; transform: scale(1) translateY(0);       filter: blur(0); }
+        84%  { opacity: 1; transform: scale(1); }
+        100% { opacity: 0; transform: scale(1.03); }
+    }
+
+    .boss-reveal .br-level {
+        font-size: clamp(10px, 1.3vw, 14px);
+        font-weight: 600; letter-spacing: 0.34em; text-transform: uppercase;
+        color: rgba(214,180,94,0.72);
+        text-shadow: 0 2px 10px rgba(0,0,0,0.8);
+    }
+    .boss-reveal .br-level:empty { display: none; }
+    .boss-reveal.show .br-level { animation: brFadeUp 3.95s ease-out 0.2s both; }
+
+    @keyframes brFadeUp {
+        0%   { opacity: 0; transform: translateY(12px); }
+        24%  { opacity: 1; transform: translateY(0); }
+        84%  { opacity: 1; }
+        100% { opacity: 0; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .boss-reveal.show .br-backdrop,
+        .boss-reveal.show .br-rule,
+        .boss-reveal.show .br-epithet,
+        .boss-reveal.show .br-name,
+        .boss-reveal.show .br-level { animation: none; opacity: 1; transform: none; filter: none; }
+        .boss-reveal.show { transition: opacity 0.35s ease; }
+    }
+</style>
+
+<script>
+window.pf2eBossReveal = function(data) {
+    data = data || {};
+    var el = document.getElementById('boss-reveal');
+    if (!el) return;
+    var nameEl = document.getElementById('br-name');
+    var epEl   = document.getElementById('br-epithet');
+    var lvlEl  = document.getElementById('br-level');
+    nameEl.textContent = (data.name || '???');
+    epEl.textContent   = (data.epithet || '');
+    lvlEl.textContent  = (data.level !== undefined && data.level !== null && data.level !== '')
+                         ? ('Level ' + data.level) : '';
+    // Restart cleanly even if a card is already on screen (a new foe wins).
+    el.classList.remove('show', 'hide');
+    void el.offsetWidth;                 // reflow so animations replay
+    el.classList.add('show');
+    el.setAttribute('aria-hidden', 'false');
+    clearTimeout(el._brTimer);
+    el._brTimer = setTimeout(function() {
+        el.classList.remove('show');
+        el.classList.add('hide');
+        el.setAttribute('aria-hidden', 'true');
+        setTimeout(function() { el.classList.remove('hide'); }, 620);
+    }, 3950);
+};
+</script>

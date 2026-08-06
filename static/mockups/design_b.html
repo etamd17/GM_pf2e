@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PF2e Sheet — Design B (Modern Card)</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Cinzel:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg-base: #0f1117;
+            --bg-surface: #171a22;
+            --bg-raised: #1e2230;
+            --bg-overlay: #262b3a;
+            --bg-hover: #2d3348;
+            --border-default: rgba(255,255,255,0.06);
+            --border-strong: rgba(255,255,255,0.1);
+            --accent: #c43c3c;
+            --accent-bright: #e85555;
+            --accent-dim: #7c2222;
+            --accent-glow: rgba(196,60,60,0.15);
+            --gold: #c8a84e;
+            --gold-dim: rgba(200,168,78,0.15);
+            --teal: #4a9696;
+            --purple: #9b7ede;
+            --text-primary: #eaebf0;
+            --text-secondary: #9ca0b4;
+            --text-muted: #5e6378;
+            --text-faint: #3d4158;
+            --green: #3eba68;
+            --green-dim: rgba(62,186,104,0.12);
+            --blue: #5a8ee8;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: var(--bg-base);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+        .font-display { font-family: 'Cinzel', serif; }
+
+        /* ─── HEADER BAR ─── */
+        .topbar {
+            display: flex; align-items: center;
+            padding: 12px 20px;
+            background: var(--bg-surface);
+            border-bottom: 1px solid var(--border-default);
+            position: sticky; top: 0; z-index: 100;
+        }
+        .portrait {
+            width: 48px; height: 48px; border-radius: 50%;
+            border: 2px solid var(--accent);
+            background: var(--bg-raised);
+            display: flex; align-items: center; justify-content: center;
+            font-family: 'Cinzel', serif; font-size: 22px; font-weight: 700;
+            color: var(--accent-bright); flex-shrink: 0;
+        }
+        .char-info { margin-left: 14px; flex: 1; }
+        .char-name {
+            font-family: 'Cinzel', serif; font-size: 18px; font-weight: 700;
+            color: #fff; display: flex; align-items: center; gap: 10px;
+        }
+        .level-badge {
+            font-family: 'Inter', sans-serif;
+            font-size: 10px; font-weight: 700;
+            padding: 3px 10px; border-radius: 99px;
+            background: var(--accent-glow); color: var(--accent-bright);
+            border: 1px solid rgba(196,60,60,0.25);
+            text-transform: uppercase; letter-spacing: 0.06em;
+        }
+        .char-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+        .topbar-actions { display: flex; gap: 6px; }
+        .tb-btn {
+            padding: 7px 14px; border-radius: 6px; font-size: 11px; font-weight: 600;
+            border: 1px solid var(--border-strong); background: var(--bg-raised);
+            color: var(--text-secondary); cursor: pointer; transition: all 0.15s;
+        }
+        .tb-btn:hover { background: var(--bg-overlay); color: var(--text-primary); }
+        .tb-btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .tb-btn.primary:hover { background: var(--accent-bright); }
+
+        /* ─── HERO STRIP ─── */
+        .hero-strip {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr) 2fr;
+            gap: 0;
+            background: var(--bg-surface);
+            border-bottom: 1px solid var(--border-default);
+        }
+        .hero-stat {
+            text-align: center; padding: 14px 8px;
+            border-right: 1px solid var(--border-default);
+            position: relative;
+        }
+        .hero-stat:last-child { border-right: none; }
+        .hero-stat::after {
+            content: '';
+            position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
+            width: 20px; height: 2px; border-radius: 1px;
+        }
+        .hero-stat.str::after { background: var(--accent); }
+        .hero-stat.dex::after { background: var(--blue); }
+        .hero-stat.con::after { background: var(--green); }
+        .hero-stat.int::after { background: var(--purple); }
+        .hero-stat.wis::after { background: var(--gold); }
+        .hero-stat.cha::after { background: var(--accent-bright); }
+        .hero-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 4px; }
+        .hero-mod { font-size: 26px; font-weight: 800; color: #fff; line-height: 1; }
+        .hero-score { font-size: 10px; color: var(--text-faint); font-weight: 600; margin-top: 4px; }
+
+        /* HP Area (in hero strip) */
+        .hp-area {
+            display: flex; align-items: center; justify-content: center; gap: 16px;
+            padding: 8px 20px;
+        }
+        .hp-ring {
+            width: 64px; height: 64px; position: relative;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .hp-ring svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+        .hp-ring-text { position: relative; z-index: 1; text-align: center; }
+        .hp-ring-current { font-size: 20px; font-weight: 800; color: var(--green); display: block; line-height: 1; }
+        .hp-ring-max { font-size: 9px; color: var(--text-muted); font-weight: 600; }
+        .hp-controls { display: flex; flex-direction: column; gap: 4px; }
+        .hp-ctrl-btn {
+            width: 32px; height: 24px; border-radius: 4px; font-size: 14px; font-weight: 700;
+            display: flex; align-items: center; justify-content: center;
+            border: 1px solid; cursor: pointer; transition: all 0.12s;
+        }
+        .hp-ctrl-btn.heal { background: var(--green-dim); color: var(--green); border-color: rgba(62,186,104,0.2); }
+        .hp-ctrl-btn.dmg { background: var(--accent-glow); color: var(--accent-bright); border-color: rgba(196,60,60,0.2); }
+
+        .hp-side { text-align: center; }
+        .hp-side-label { font-size: 8px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.06em; margin-bottom: 2px; }
+        .hp-side-val { font-size: 16px; font-weight: 700; }
+
+        /* ─── MAIN GRID ─── */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 260px 1fr;
+            min-height: calc(100vh - 160px);
+        }
+
+        /* LEFT COLUMN */
+        .left-col {
+            background: var(--bg-surface);
+            border-right: 1px solid var(--border-default);
+            padding: 12px;
+            overflow-y: auto;
+        }
+        .card {
+            background: var(--bg-raised);
+            border: 1px solid var(--border-default);
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+        .card-head {
+            padding: 8px 14px;
+            font-size: 10px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.06em; color: var(--text-muted);
+            background: var(--bg-base);
+            border-bottom: 1px solid var(--border-default);
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .card-head .icon { font-size: 12px; }
+
+        /* Saves */
+        .save-item {
+            display: flex; align-items: center; padding: 8px 14px;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+        }
+        .save-item:last-child { border-bottom: none; }
+        .save-rank {
+            font-size: 8px; font-weight: 800; text-transform: uppercase;
+            letter-spacing: 0.08em; width: 14px; margin-right: 10px;
+            text-align: center;
+        }
+        .save-rank.T { color: var(--teal); }
+        .save-rank.E { color: var(--green); }
+        .save-rank.M { color: var(--purple); }
+        .save-rank.L { color: var(--gold); }
+        .save-name { flex: 1; font-size: 13px; font-weight: 500; color: var(--text-secondary); }
+        .save-val { font-size: 15px; font-weight: 700; }
+        .save-val.green { color: var(--green); }
+        .save-val.blue { color: var(--blue); }
+        .save-val.purple { color: var(--purple); }
+
+        /* Combat stats mini row */
+        .combat-row {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 0;
+        }
+        .combat-cell {
+            text-align: center; padding: 10px 8px;
+            border-right: 1px solid var(--border-default);
+            border-bottom: 1px solid var(--border-default);
+        }
+        .combat-cell:nth-child(2n) { border-right: none; }
+        .combat-cell:nth-last-child(-n+2) { border-bottom: none; }
+        .combat-label { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 2px; }
+        .combat-val { font-size: 20px; font-weight: 800; }
+
+        /* Skills */
+        .skill-item {
+            display: flex; align-items: center; padding: 4px 14px;
+            font-size: 12px;
+            transition: background 0.1s;
+        }
+        .skill-item:hover { background: var(--bg-hover); }
+        .skill-dot {
+            width: 6px; height: 6px; border-radius: 50%; margin-right: 8px;
+            border: 1.5px solid var(--text-faint);
+        }
+        .skill-dot.T { background: var(--teal); border-color: var(--teal); }
+        .skill-dot.E { background: var(--green); border-color: var(--green); }
+        .skill-dot.M { background: var(--purple); border-color: var(--purple); }
+        .skill-dot.L { background: var(--gold); border-color: var(--gold); }
+        .skill-attr { font-size: 8px; color: var(--text-faint); font-weight: 700; width: 24px; text-transform: uppercase; }
+        .skill-nm { flex: 1; color: var(--text-secondary); font-weight: 500; }
+        .skill-val { font-weight: 700; font-size: 13px; min-width: 24px; text-align: right; }
+
+        /* ─── RIGHT COLUMN ─── */
+        .right-col {
+            padding: 16px 20px;
+            overflow-y: auto;
+        }
+
+        /* Defense / Condition cards */
+        .twin-cards {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+            margin-bottom: 14px;
+        }
+        .twin-card {
+            background: var(--bg-raised);
+            border: 1px solid var(--border-default);
+            border-radius: 10px;
+            padding: 12px 16px;
+        }
+        .twin-card-title {
+            font-size: 9px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 8px;
+        }
+        .tag {
+            display: inline-block; padding: 3px 10px; border-radius: 4px;
+            font-size: 10px; font-weight: 600; margin: 2px;
+        }
+        .tag.immune { background: rgba(196,60,60,0.12); color: var(--accent-bright); border: 1px solid rgba(196,60,60,0.2); }
+        .tag.resist { background: rgba(90,142,232,0.08); color: #93c5fd; border: 1px solid rgba(90,142,232,0.15); }
+        .tag.weak { background: var(--gold-dim); color: #fde68a; border: 1px solid rgba(200,168,78,0.2); }
+        .tag.cond { background: rgba(239,68,68,0.08); color: #fca5a5; border: 1px solid rgba(239,68,68,0.15); }
+        .tag.add {
+            background: transparent; border: 1px dashed var(--text-faint);
+            color: var(--text-faint); cursor: pointer;
+        }
+        .tag.add:hover { border-color: var(--text-muted); color: var(--text-muted); }
+
+        /* Tabs */
+        .tabs {
+            display: flex; gap: 0;
+            border-bottom: 2px solid var(--border-default);
+            margin-bottom: 14px;
+            overflow-x: auto;
+        }
+        .tab {
+            padding: 10px 18px; font-size: 11px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.05em;
+            color: var(--text-muted); cursor: pointer; white-space: nowrap;
+            border-bottom: 2px solid transparent; margin-bottom: -2px;
+            transition: all 0.15s; background: none; border-top: none; border-left: none; border-right: none;
+        }
+        .tab:hover { color: var(--text-secondary); }
+        .tab.active { color: var(--accent-bright); border-bottom-color: var(--accent-bright); }
+
+        /* Sub-filter pills */
+        .filters {
+            display: flex; gap: 5px; margin-bottom: 14px; flex-wrap: wrap;
+        }
+        .filter-pill {
+            padding: 5px 12px; border-radius: 99px; font-size: 10px; font-weight: 600;
+            background: var(--bg-raised); color: var(--text-muted);
+            border: 1px solid var(--border-default); cursor: pointer; transition: all 0.12s;
+        }
+        .filter-pill:hover { background: var(--bg-overlay); color: var(--text-secondary); }
+        .filter-pill.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+        /* Strike cards */
+        .strike-card {
+            background: var(--bg-raised);
+            border: 1px solid var(--border-default);
+            border-radius: 10px;
+            padding: 14px 16px;
+            margin-bottom: 8px;
+            display: flex; align-items: center; gap: 14px;
+            transition: border-color 0.15s;
+            cursor: pointer;
+        }
+        .strike-card:hover { border-color: var(--accent-dim); }
+        .strike-icon {
+            width: 40px; height: 40px; border-radius: 8px;
+            background: var(--accent-glow); border: 1px solid rgba(196,60,60,0.2);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 18px; flex-shrink: 0;
+        }
+        .strike-info { flex: 1; min-width: 0; }
+        .strike-name { font-weight: 700; font-size: 14px; color: #fff; }
+        .strike-type { font-size: 10px; color: var(--text-muted); margin-top: 1px; }
+        .strike-traits { display: flex; gap: 4px; margin-top: 4px; flex-wrap: wrap; }
+        .strike-traits .t {
+            font-size: 8px; padding: 2px 6px; border-radius: 3px;
+            font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em;
+            background: rgba(200,168,78,0.08); color: var(--gold); border: 1px solid rgba(200,168,78,0.15);
+        }
+        .strike-stats { display: flex; gap: 12px; align-items: center; flex-shrink: 0; }
+        .strike-hit {
+            text-align: center;
+        }
+        .strike-hit-label { font-size: 8px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+        .strike-hit-val { font-size: 18px; font-weight: 800; color: var(--gold); }
+        .strike-dmg-box {
+            background: var(--bg-base); border: 1px solid var(--border-strong);
+            padding: 6px 12px; border-radius: 6px; text-align: center;
+        }
+        .strike-dmg-label { font-size: 8px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+        .strike-dmg-val { font-size: 14px; font-weight: 700; color: var(--text-primary); }
+
+        /* Ability / feat card */
+        .feat-card {
+            background: var(--bg-raised);
+            border: 1px solid var(--border-default);
+            border-radius: 10px;
+            padding: 14px 16px;
+            margin-bottom: 8px;
+        }
+        .feat-header {
+            display: flex; align-items: center; gap: 8px;
+            margin-bottom: 6px;
+        }
+        .feat-name { font-weight: 700; font-size: 14px; color: #fff; }
+        .feat-cost {
+            font-size: 10px; font-weight: 700;
+            padding: 2px 8px; border-radius: 4px;
+            background: var(--accent-glow); color: var(--accent-bright);
+            border: 1px solid rgba(196,60,60,0.2);
+        }
+        .feat-cost.teal { background: rgba(74,150,150,0.12); color: var(--teal); border-color: rgba(74,150,150,0.2); }
+        .feat-desc {
+            font-size: 12px; color: var(--text-secondary); line-height: 1.65;
+        }
+        .feat-desc strong { color: var(--text-primary); }
+
+        /* Spells panel */
+        .spell-rank {
+            margin-top: 16px;
+        }
+        .spell-rank-bar {
+            display: flex; align-items: center; justify-content: space-between;
+            padding-bottom: 6px; margin-bottom: 8px;
+            border-bottom: 1px solid var(--accent-dim);
+        }
+        .spell-rank-name { font-size: 13px; font-weight: 700; color: var(--accent-bright); }
+        .spell-rank-slots { display: flex; gap: 4px; }
+        .slot-dot {
+            width: 10px; height: 10px; border-radius: 50%;
+            border: 2px solid var(--accent-dim);
+        }
+        .slot-dot.used { background: var(--accent-dim); }
+        .slot-dot.avail { background: var(--accent-bright); border-color: var(--accent-bright); }
+        .spell-entry {
+            display: flex; align-items: center; padding: 5px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+        }
+        .spell-entry-name { flex: 1; font-size: 13px; font-weight: 500; color: var(--text-primary); }
+        .spell-entry-actions { font-size: 10px; font-weight: 700; color: var(--accent-bright); }
+
+        @media (max-width: 1024px) {
+            .main-grid { grid-template-columns: 1fr; }
+            .left-col { border-right: none; border-bottom: 1px solid var(--border-default); }
+            .hero-strip { grid-template-columns: repeat(3, 1fr); }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ═══════════════ TOP BAR ═══════════════ -->
+<div class="topbar">
+    <div class="portrait">K</div>
+    <div class="char-info">
+        <div class="char-name">
+            Kyle Katarn
+            <span class="level-badge">Level 5</span>
+        </div>
+        <div class="char-sub">Human Fighter <span style="color:var(--text-faint);">•</span> Two-Handed</div>
+    </div>
+    <div class="topbar-actions">
+        <button class="tb-btn">☀ Daily Prep</button>
+        <button class="tb-btn">🛏 Rest</button>
+        <button class="tb-btn primary">🎲 Roll</button>
+    </div>
+</div>
+
+<!-- ═══════════════ HERO STRIP ═══════════════ -->
+<div class="hero-strip">
+    <div class="hero-stat str">
+        <div class="hero-label">STR</div>
+        <div class="hero-mod">+4</div>
+        <div class="hero-score">18</div>
+    </div>
+    <div class="hero-stat dex">
+        <div class="hero-label">DEX</div>
+        <div class="hero-mod">+2</div>
+        <div class="hero-score">14</div>
+    </div>
+    <div class="hero-stat con">
+        <div class="hero-label">CON</div>
+        <div class="hero-mod">+3</div>
+        <div class="hero-score">16</div>
+    </div>
+    <div class="hero-stat int">
+        <div class="hero-label">INT</div>
+        <div class="hero-mod">+0</div>
+        <div class="hero-score">10</div>
+    </div>
+    <div class="hero-stat wis">
+        <div class="hero-label">WIS</div>
+        <div class="hero-mod">+1</div>
+        <div class="hero-score">12</div>
+    </div>
+    <div class="hero-stat cha">
+        <div class="hero-label">CHA</div>
+        <div class="hero-mod">+1</div>
+        <div class="hero-score">12</div>
+    </div>
+
+    <!-- HP Area -->
+    <div class="hp-area">
+        <div class="hp-side">
+            <div class="hp-side-label">AC</div>
+            <div class="hp-side-val" style="color:var(--blue);">21</div>
+        </div>
+        <div class="hp-controls">
+            <button class="hp-ctrl-btn heal">+</button>
+            <button class="hp-ctrl-btn dmg">−</button>
+        </div>
+        <div class="hp-ring">
+            <svg viewBox="0 0 68 68">
+                <circle cx="34" cy="34" r="30" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="4"/>
+                <circle cx="34" cy="34" r="30" fill="none" stroke="#3eba68" stroke-width="4" stroke-linecap="round"
+                        stroke-dasharray="175.9" stroke-dashoffset="12.3"/>
+            </svg>
+            <div class="hp-ring-text">
+                <span class="hp-ring-current">68</span>
+                <span class="hp-ring-max">/73</span>
+            </div>
+        </div>
+        <div class="hp-side">
+            <div class="hp-side-label">Spd</div>
+            <div class="hp-side-val" style="color:var(--teal);">25</div>
+        </div>
+        <div class="hp-side">
+            <div class="hp-side-label">Perc</div>
+            <div class="hp-side-val" style="color:var(--gold);">+11</div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════ MAIN GRID ═══════════════ -->
+<div class="main-grid">
+
+    <!-- LEFT COLUMN -->
+    <div class="left-col">
+        <!-- Combat Stats -->
+        <div class="card">
+            <div class="card-head"><span>⚔ Combat</span></div>
+            <div class="combat-row">
+                <div class="combat-cell">
+                    <div class="combat-label">AC</div>
+                    <div class="combat-val" style="color:var(--blue);">21</div>
+                </div>
+                <div class="combat-cell">
+                    <div class="combat-label">Class DC</div>
+                    <div class="combat-val">22</div>
+                </div>
+                <div class="combat-cell">
+                    <div class="combat-label">Speed</div>
+                    <div class="combat-val" style="color:var(--teal);">25</div>
+                </div>
+                <div class="combat-cell">
+                    <div class="combat-label">Hero Pts</div>
+                    <div class="combat-val" style="color:var(--gold);">1</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Saves -->
+        <div class="card">
+            <div class="card-head"><span>🛡 Saving Throws</span></div>
+            <div class="save-item">
+                <span class="save-rank E">E</span>
+                <span class="save-name">Fortitude</span>
+                <span class="save-val green">+14</span>
+            </div>
+            <div class="save-item">
+                <span class="save-rank T">T</span>
+                <span class="save-name">Reflex</span>
+                <span class="save-val blue">+10</span>
+            </div>
+            <div class="save-item">
+                <span class="save-rank E">E</span>
+                <span class="save-name">Will</span>
+                <span class="save-val purple">+11</span>
+            </div>
+        </div>
+
+        <!-- Skills -->
+        <div class="card">
+            <div class="card-head"><span>📋 Skills</span></div>
+            <div style="padding:4px 0;">
+                <div class="skill-item">
+                    <div class="skill-dot T"></div>
+                    <span class="skill-attr">DEX</span>
+                    <span class="skill-nm">Acrobatics</span>
+                    <span class="skill-val" style="color:var(--teal);">+8</span>
+                </div>
+                <div class="skill-item">
+                    <div class="skill-dot"></div>
+                    <span class="skill-attr">INT</span>
+                    <span class="skill-nm">Arcana</span>
+                    <span class="skill-val">+0</span>
+                </div>
+                <div class="skill-item">
+                    <div class="skill-dot E"></div>
+                    <span class="skill-attr">STR</span>
+                    <span class="skill-nm">Athletics</span>
+                    <span class="skill-val" style="color:var(--green);">+12</span>
+                </div>
+                <div class="skill-item">
+                    <div class="skill-dot"></div>
+                    <span class="skill-attr">INT</span>
+                    <span class="skill-nm">Crafting</span>
+                    <span class="skill-val">+0</span>
+                </div>
+                <div class="skill-item">
+                    <div class="skill-dot"></div>
+                    <span class="skill-attr">CHA</span>
+                    <span class="skill-nm">Deception</span>
+                    <span class="skill-val">+1</span>
+                </div>
+                <div class="skill-item">
+                    <div class="skill-dot"></div>
+                    <span class="skill-attr">CHA</span>
+                    <span class="skill-nm">Diplomacy</span>
+                    <span class="skill-val">+1</span>
+                </div>
+                <div class="skill-item">
+                    <div class="skill-dot T"></div>
+                    <span class="skill-attr">CHA</span>
+                    <span class="skill-nm">Intimidation</span>
+                    <span class="skill-val" style="color:var(--teal);">+7</span>
+                </div>
+                <div class="skill-item">
+                    <div class="skill-dot T"></div>
+                    <span class="skill-attr">WIS</span>
+                    <span class="skill-nm">Medicine</span>
+                    <span class="skill-val" style="color:var(--teal);">+7</span>
+                </div>
+                <div class="skill-item">
+                    <div class="skill-dot"></div>
+                    <span class="skill-attr">WIS</span>
+                    <span class="skill-nm">Nature</span>
+                    <span class="skill-val">+1</span>
+                </div>
+                <div class="skill-item">
+                    <div class="skill-dot"></div>
+                    <span class="skill-attr">INT</span>
+                    <span class="skill-nm">Occultism</span>
+                    <span class="skill-val">+0</span>
+                </div>
+                <div class="skill-item">
+                    <div class="skill-dot"></div>
+                    <span class="skill-attr">CHA</span>
+                    <span class="skill-nm">Performance</span>
+                    <span class="skill-val">+1</span>
+                </div>
+                <div class="skill-item">
+                    <div class="skill-dot"></div>
+                    <span class="skill-attr">WIS</span>
+                    <span class="skill-nm">Religion</span>
+                    <span class="skill-val">+1</span>
+                </div>
+                <div class="skill-item">
+                    <div class="skill-dot"></div>
+                    <span class="skill-attr">INT</span>
+                    <span class="skill-nm">Society</span>
+                    <span class="skill-val">+0</span>
+                </div>
+                <div class="skill-item">
+                    <div class="skill-dot"></div>
+                    <span class="skill-attr">DEX</span>
+                    <span class="skill-nm">Stealth</span>
+                    <span class="skill-val">+2</span>
+                </div>
+                <div class="skill-item">
+                    <div class="skill-dot T"></div>
+                    <span class="skill-attr">WIS</span>
+                    <span class="skill-nm">Survival</span>
+                    <span class="skill-val" style="color:var(--teal);">+7</span>
+                </div>
+                <div class="skill-item">
+                    <div class="skill-dot"></div>
+                    <span class="skill-attr">DEX</span>
+                    <span class="skill-nm">Thievery</span>
+                    <span class="skill-val">+2</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Info -->
+        <div class="card">
+            <div class="card-head"><span>📖 Details</span></div>
+            <div style="padding:8px 14px;font-size:12px;">
+                <div style="margin-bottom:6px;"><span style="font-size:9px;font-weight:700;text-transform:uppercase;color:var(--text-muted);">Senses</span><br><span style="color:var(--text-secondary);">Darkvision</span></div>
+                <div style="margin-bottom:6px;"><span style="font-size:9px;font-weight:700;text-transform:uppercase;color:var(--text-muted);">Languages</span><br><span style="color:var(--text-secondary);">Common, Dwarven</span></div>
+                <div><span style="font-size:9px;font-weight:700;text-transform:uppercase;color:var(--text-muted);">Armor</span><br><span style="color:var(--text-secondary);">Half Plate + Steel Shield</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- RIGHT COLUMN -->
+    <div class="right-col">
+        <!-- Defense / Conditions -->
+        <div class="twin-cards">
+            <div class="twin-card">
+                <div class="twin-card-title">Defenses</div>
+                <span class="tag add">+ Add Resistance/Immunity</span>
+            </div>
+            <div class="twin-card">
+                <div class="twin-card-title">Conditions</div>
+                <span class="tag add">+ Add Condition</span>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab active">Actions</button>
+            <button class="tab">Spells</button>
+            <button class="tab">Inventory</button>
+            <button class="tab">Features & Feats</button>
+            <button class="tab">Background</button>
+            <button class="tab">Notes</button>
+        </div>
+
+        <!-- Filters -->
+        <div class="filters">
+            <span class="filter-pill active">All</span>
+            <span class="filter-pill">⚔ Attack</span>
+            <span class="filter-pill">◆ Action</span>
+            <span class="filter-pill">◆◆ 2-Action</span>
+            <span class="filter-pill">↺ Reaction</span>
+            <span class="filter-pill">Free</span>
+        </div>
+
+        <!-- Strikes -->
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:8px;">
+            Strikes <span style="color:var(--text-faint);font-weight:500;">• MAP: -5/-10</span>
+        </div>
+
+        <div class="strike-card">
+            <div class="strike-icon">⚔</div>
+            <div class="strike-info">
+                <div class="strike-name">Longsword +1</div>
+                <div class="strike-type">Melee Weapon • 5 ft.</div>
+                <div class="strike-traits">
+                    <span class="t">Versatile P</span>
+                </div>
+            </div>
+            <div class="strike-stats">
+                <div class="strike-hit">
+                    <div class="strike-hit-label">Hit</div>
+                    <div class="strike-hit-val">+13</div>
+                </div>
+                <div class="strike-dmg-box">
+                    <div class="strike-dmg-label">Damage</div>
+                    <div class="strike-dmg-val">2d8+4 S</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="strike-card">
+            <div class="strike-icon">🏹</div>
+            <div class="strike-info">
+                <div class="strike-name">Composite Shortbow</div>
+                <div class="strike-type">Ranged Weapon • 60 ft.</div>
+                <div class="strike-traits">
+                    <span class="t">Deadly d10</span>
+                    <span class="t">Propulsive</span>
+                </div>
+            </div>
+            <div class="strike-stats">
+                <div class="strike-hit">
+                    <div class="strike-hit-label">Hit</div>
+                    <div class="strike-hit-val">+10</div>
+                </div>
+                <div class="strike-dmg-box">
+                    <div class="strike-dmg-label">Damage</div>
+                    <div class="strike-dmg-val">1d6+2 P</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin:20px 0 10px;">
+            Actions & Abilities
+        </div>
+
+        <div class="feat-card">
+            <div class="feat-header">
+                <span class="feat-name">Power Attack</span>
+                <span class="feat-cost">◆◆ 2 Actions</span>
+            </div>
+            <div class="feat-desc">
+                You unleash a particularly powerful attack. Make a melee Strike. This counts as two attacks when calculating your MAP. If this Strike hits, you deal an extra die of weapon damage.
+            </div>
+        </div>
+
+        <div class="feat-card">
+            <div class="feat-header">
+                <span class="feat-name">Attack of Opportunity</span>
+                <span class="feat-cost">↺ Reaction</span>
+            </div>
+            <div class="feat-desc">
+                <strong>Trigger:</strong> A creature within your reach uses a manipulate action or a move action, makes a ranged attack, or leaves a square during a move action.<br>
+                You lash out at a foe that leaves an opening. Make a melee Strike against the triggering creature.
+            </div>
+        </div>
+
+        <div class="feat-card">
+            <div class="feat-header">
+                <span class="feat-name">Shield Block</span>
+                <span class="feat-cost">↺ Reaction</span>
+            </div>
+            <div class="feat-desc">
+                <strong>Trigger:</strong> While you have your shield raised, you would take damage from a physical attack.<br>
+                Your shield prevents you from taking an amount of damage up to the shield's Hardness (5). Both you and the shield take any remaining damage.
+            </div>
+        </div>
+
+        <div class="feat-card">
+            <div class="feat-header">
+                <span class="feat-name">Raise a Shield</span>
+                <span class="feat-cost teal">◆ 1 Action</span>
+            </div>
+            <div class="feat-desc">
+                You position your shield to protect yourself. When you have Raised a Shield, you gain its circumstance bonus to AC (+2). The shield remains raised until the start of your next turn.
+            </div>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

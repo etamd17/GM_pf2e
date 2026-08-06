@@ -1,0 +1,367 @@
+from __future__ import annotations
+
+import json
+import queue
+from types import SimpleNamespace
+
+import pytest
+
+import app
+from core import scenes, storage
+from services import scene_sync
+
+
+CID = 'a' * 32
+
+
+@pytest.fixture
+def scene_store(tmp_path, monkeypatch):
+    campaigns = tmp_path / 'campaigns'
+    monkeypatch.setattr(storage, 'CAMPAIGNS_DIR', str(campaigns))
+    storage.ensure_campaign_dirs(CID)
+    return campaigns
+
+
+def test_scene_create_is_campaign_scoped_and_active(scene_store):
+    scene = scenes.create_scene(CID, 'Vault of Ash', width=1200, height=800, grid_size=60)
+    assert scene['campaign_id'] == CID
+    assert scenes.load_scene(CID, scene['id'])['name'] == 'Vault of Ash'
+    assert scenes.active_scene_id(CID) == scene['id']
+    assert storage.scene_file(CID, scene['id']).startswith(str(scene_store))
+
+
+def test_legacy_scene_store_works_without_campaign_id(tmp_path, monkeypatch):
+    monkeypatch.setattr(storage, 'DATA_DIR', str(tmp_path))
+    scene = scenes.create_scene(None, 'Legacy Table')
+    assert scene['campaign_id'] is None
+    assert scenes.active_scene_id(None) == scene['id']
+    assert scenes.load_scene(None, scene['id'])['name'] == 'Legacy Table'
+    assert storage.scene_file(None, scene['id']).startswith(str(tmp_path))
+
+
+def test_scene_revision_increments_on_durable_change(scene_store):
+    scene = scenes.create_scene(CID, 'Revision Test')
+    prior = scene['revision']
+    scenes.add_token(scene, name='Hero', x=70, y=70)
+    scenes.save_scene(CID, scene)
+    assert scenes.load_scene(CID, scene['id'])['revision'] == prior + 1
+
+
+def test_old_scene_tokens_receive_new_map_defaults(scene_store):
+    scene = scenes.create_scene(CID, 'Old Scene')
+    scene['schema_version'] = 1
+    scene['tokens'] = [{'id': 'old-token', 'name': 'Legacy', 'x': 10, 'y': 20}]
+    storage.atomic_write_json(storage.scene_file(CID, scene['id']), scene, indent=2)
+    loaded = scenes.load_scene(CID, scene['id'])
+    token = loaded['tokens'][0]
+    assert token['locked'] is False
+    assert token['show_nameplate'] is True
+    assert token['image_focus'] == {'x': 50, 'y': 50}
+    assert loaded['fog'] == {'enabled': False, 'operations': []}
+    assert loaded['walls'] == []
+    assert loaded['lights'] == []
+    assert loaded['templates'] == []
+    assert loaded['settings']['dynamic_lighting'] is False
+
+
+def test_live_state_is_projected_not_persisted(scene_store):
+    scene = scenes.create_scene(CID, 'Projection')
+    token = scenes.add_token(scene, name='Hero', character_id='char-1')
+    scenes.save_scene(CID, scene)
+    projected = scene_sync.project_scene(scene, {}, {
+        'char-1': {'name': 'Hero', 'current_hp': 19, 'max_hp': 30,
+                   'conditions': {'frightened': 1}}
+    })
+    assert projected['tokens'][0]['live']['current_hp'] == 19
+    stored = scenes.load_scene(CID, scene['id'])
+    assert 'live' not in stored['tokens'][0]
+    assert 'current_hp' not in stored['tokens'][0]
+    assert stored['tokens'][0]['id'] == token['id']
+
+
+def test_player_projection_removes_hidden_tokens_and_account_ids(scene_store):
+    scene = scenes.create_scene(CID, 'Visibility')
+    scenes.add_token(scene, name='Hero', controller_user_id='user-secret')
+    scenes.add_token(scene, name='Hidden Foe', visible_to_players=False)
+    projected = scene_sync.project_scene(scene, {}, {}, player=True)
+    assert [token['name'] for token in projected['tokens']] == ['Hero']
+    assert 'controller_user_id' not in projected['tokens'][0]
+
+
+@pytest.fixture
+def scene_client(scene_store, monkeypatch):
+    monkeypatch.setattr(app, '_active_campaign_id', lambda: CID)
+    monkeypatch.setattr(app, '_scene_member_allowed', lambda: True)
+    monkeypatch.setattr(app, '_is_gm', lambda: True)
+    monkeypatch.setattr(app, 'ACTIVE_CAMPAIGN_ID', CID)
+    monkeypatch.setattr(app, '_scene_character_records', lambda _cid: {})
+    monkeypatch.setattr(app, 'ACTIVE_ENCOUNTER', [])
+    with app.app.test_client() as client:
+        yield client
+
+
+def test_scene_api_create_add_move_and_read(scene_client):
+    created = scene_client.post('/api/scenes', json={
+        'name': 'API Scene', 'width': 1000, 'height': 700, 'grid_size': 50,
+    })
+    assert created.status_code == 201
+    scene = created.get_json()['scene']
+    sid = scene['id']
+
+    added = scene_client.post(f'/api/scenes/{sid}/tokens', json={
+        'name': 'Goblin', 'x': 100, 'y': 150,
+    })
+    assert added.status_code == 201
+    token = added.get_json()['token']
+
+    moved = scene_client.patch(f'/api/scenes/{sid}/tokens/{token["id"]}', json={
+        'x': 250, 'y': 300,
+    })
+    assert moved.status_code == 200
+    moved_token = moved.get_json()['scene']['tokens'][0]
+    assert (moved_token['x'], moved_token['y']) == (250, 300)
+
+    fetched = scene_client.get(f'/api/scenes/{sid}')
+    assert fetched.status_code == 200
+    assert fetched.get_json()['scene']['tokens'][0]['name'] == 'Goblin'
+
+
+def test_scene_api_updates_grid_and_token_inspector_fields(scene_client):
+    scene = scenes.create_scene(CID, 'Inspector')
+    token = scenes.add_token(scene, name='Goblin')
+    scenes.save_scene(CID, scene)
+
+    grid_response = scene_client.patch(f'/api/scenes/{scene["id"]}', json={
+        'grid': {'size': 64, 'offset_x': 81, 'offset_y': -7},
+    })
+    assert grid_response.status_code == 200
+    grid = grid_response.get_json()['scene']['grid']
+    assert grid['offset_x'] == 17
+    assert grid['offset_y'] == 57
+
+    token_response = scene_client.patch(
+        f'/api/scenes/{scene["id"]}/tokens/{token["id"]}', json={
+            'name': 'Scout', 'size': 2, 'color': '#123abc',
+            'visible_to_players': False, 'locked': True,
+            'show_nameplate': False, 'controller_character_id': '',
+        })
+    assert token_response.status_code == 200
+    updated = token_response.get_json()['scene']['tokens'][0]
+    assert updated['name'] == 'Scout'
+    assert updated['size'] == 2
+    assert updated['locked'] is True
+    assert updated['show_nameplate'] is False
+
+    blocked_move = scene_client.patch(
+        f'/api/scenes/{scene["id"]}/tokens/{token["id"]}', json={'x': 400, 'y': 400})
+    assert blocked_move.status_code == 403
+
+
+def test_sync_encounter_is_idempotent(scene_client, monkeypatch):
+    scene = scenes.create_scene(CID, 'Encounter Sync')
+    combatant = SimpleNamespace(
+        instance_id='goblin-1', name='Goblin Warrior', is_pc=False,
+        size='small', visible_to_players=True, system='pf2e',
+        current_hp=20, hp=20, conditions={}, image=None, portrait=None,
+    )
+    monkeypatch.setattr(app, 'ACTIVE_ENCOUNTER', [combatant])
+    monkeypatch.setattr(app, 'TURN_INDEX', 0)
+
+    first = scene_client.post(f'/api/scenes/{scene["id"]}/sync-encounter', json={})
+    assert first.status_code == 200
+    assert first.get_json()['added'] == 1
+    assert first.get_json()['encounter_count'] == 1
+
+    second = scene_client.post(f'/api/scenes/{scene["id"]}/sync-encounter', json={})
+    assert second.status_code == 200
+    assert second.get_json()['added'] == 0
+    assert second.get_json()['linked'] == 0
+    assert len(second.get_json()['scene']['tokens']) == 1
+    assert second.get_json()['scene']['tokens'][0]['combatant_id'] == 'goblin-1'
+
+
+def test_map_combat_action_uses_authoritative_combatant_helpers(scene_client, monkeypatch):
+    scene = scenes.create_scene(CID, 'Combat Controls')
+    token = scenes.add_token(scene, name='Ogre', combatant_id='ogre-1')
+    scenes.save_scene(CID, scene)
+    combatant = SimpleNamespace(
+        instance_id='ogre-1', name='Ogre', is_pc=False, system='pf2e',
+        current_hp=40, hp=40, conditions={}, visible_to_players=True,
+    )
+    monkeypatch.setattr(app, 'ACTIVE_ENCOUNTER', [combatant])
+    monkeypatch.setattr(app, 'TURN_INDEX', 0)
+    monkeypatch.setattr(app, '_maybe_auto_remove_defeated', lambda *_args: None)
+
+    calls = []
+    def apply_hp(instance_id, amount, action, damage_type):
+        calls.append((instance_id, amount, action, damage_type))
+        old = combatant.current_hp
+        combatant.current_hp -= amount
+        return old
+    monkeypatch.setattr(app, '_apply_hp_delta', apply_hp)
+
+    response = scene_client.post(
+        f'/api/scenes/{scene["id"]}/combatants/{token["combatant_id"]}',
+        json={'action': 'damage', 'amount': 7, 'damage_type': 'fire'},
+    )
+    assert response.status_code == 200
+    assert calls == [('ogre-1', 7, 'damage', 'fire')]
+    assert response.get_json()['result']['net'] == 7
+
+    monkeypatch.setattr(app, '_is_gm', lambda: False)
+    forbidden = scene_client.post(
+        f'/api/scenes/{scene["id"]}/combatants/{token["combatant_id"]}',
+        json={'action': 'damage', 'amount': 1},
+    )
+    assert forbidden.status_code == 403
+
+
+def test_scene_vector_elements_persist_and_filter_for_players(scene_client, monkeypatch):
+    scene = scenes.create_scene(CID, 'Vision Tools')
+    sid = scene['id']
+    fog = scene_client.post(f'/api/scenes/{sid}/elements', json={
+        'action': 'fog_ops',
+        'operations': [{'mode': 'reveal', 'x': 120, 'y': 130, 'radius': 80}],
+    })
+    assert fog.status_code == 200
+    door = scene_client.post(f'/api/scenes/{sid}/elements', json={
+        'action': 'add_wall', 'kind': 'door', 'secret': True,
+        'x1': 100, 'y1': 100, 'x2': 200, 'y2': 100,
+    })
+    assert door.status_code == 200
+    light = scene_client.post(f'/api/scenes/{sid}/elements', json={
+        'action': 'add_light', 'x': 150, 'y': 150, 'radius': 300,
+        'visible_to_players': False,
+    })
+    assert light.status_code == 200
+    template = scene_client.post(f'/api/scenes/{sid}/elements', json={
+        'action': 'add_template', 'kind': 'burst', 'x1': 200, 'y1': 200,
+        'radius': 140,
+    })
+    assert template.status_code == 200
+
+    monkeypatch.setattr(app, '_is_gm', lambda: False)
+    player = scene_client.get(f'/api/scenes/{sid}').get_json()['scene']
+    assert player['walls'][0]['kind'] == 'wall'
+    assert 'secret' not in player['walls'][0]
+    assert player['lights'] == []
+    assert player['fog']['operations'][0]['mode'] == 'reveal'
+    assert player['templates'][0]['kind'] == 'burst'
+
+
+def test_bulk_map_damage_uses_linked_targets_only(scene_client, monkeypatch):
+    scene = scenes.create_scene(CID, 'Bulk Targets')
+    scenes.add_token(scene, name='One', combatant_id='one')
+    scenes.add_token(scene, name='Two', combatant_id='two')
+    scenes.save_scene(CID, scene)
+    one = SimpleNamespace(instance_id='one', name='One', is_pc=False, system='pf2e',
+                          current_hp=20, hp=20, conditions={}, visible_to_players=True)
+    two = SimpleNamespace(instance_id='two', name='Two', is_pc=False, system='pf2e',
+                          current_hp=20, hp=20, conditions={}, visible_to_players=True)
+    monkeypatch.setattr(app, 'ACTIVE_ENCOUNTER', [one, two])
+    monkeypatch.setattr(app, 'TURN_INDEX', 0)
+    monkeypatch.setattr(app, '_maybe_auto_remove_defeated', lambda *_args: None)
+
+    def apply_hp(instance_id, amount, action, _damage_type):
+        combatant = one if instance_id == 'one' else two
+        old = combatant.current_hp
+        combatant.current_hp -= amount
+        return old
+    monkeypatch.setattr(app, '_apply_hp_delta', apply_hp)
+    response = scene_client.post(f'/api/scenes/{scene["id"]}/bulk-combat', json={
+        'combatant_ids': ['one', 'two', 'not-linked'],
+        'action': 'damage', 'amount': 4, 'damage_type': 'slashing',
+    })
+    assert response.status_code == 200
+    assert [row['net'] for row in response.get_json()['results']] == [4, 4]
+
+
+def test_gm_and_player_map_pages_render(scene_client, monkeypatch):
+    scene = scenes.create_scene(CID, 'Rendered Scene')
+    gm_page = scene_client.get(f'/map/{scene["id"]}')
+    assert gm_page.status_code == 200
+    assert b'id="map-canvas"' in gm_page.data
+    monkeypatch.setattr(app, '_is_gm', lambda: False)
+    monkeypatch.setattr(app, '_scene_current_character', lambda _cid: None)
+    player_page = scene_client.get('/player/map')
+    assert player_page.status_code == 200
+    assert b'data-map-role="player"' in player_page.data
+
+
+def test_legacy_map_home_does_not_redirect_to_gm(tmp_path, monkeypatch):
+    monkeypatch.setattr(storage, 'DATA_DIR', str(tmp_path))
+    monkeypatch.setattr(app, '_active_campaign_id', lambda: None)
+    monkeypatch.setattr(app, '_account_mode', lambda: False)
+    monkeypatch.setattr(app, '_is_gm', lambda: True)
+    with app.app.test_client() as client:
+        response = client.get('/map')
+    assert response.status_code == 200
+    assert b'Create or open a scene' in response.data
+
+
+def test_player_scene_api_filters_hidden_token(scene_client, monkeypatch):
+    scene = scenes.create_scene(CID, 'Player Filter')
+    scenes.add_token(scene, name='Visible Hero')
+    scenes.add_token(scene, name='Secret Enemy', visible_to_players=False)
+    scenes.save_scene(CID, scene)
+    monkeypatch.setattr(app, '_is_gm', lambda: False)
+    response = scene_client.get(f'/api/scenes/{scene["id"]}')
+    assert response.status_code == 200
+    assert [t['name'] for t in response.get_json()['scene']['tokens']] == ['Visible Hero']
+
+
+def test_player_cannot_move_uncontrolled_token(scene_client, monkeypatch):
+    scene = scenes.create_scene(CID, 'Movement Guard')
+    token = scenes.add_token(scene, name='Someone Else', controller_user_id='owner')
+    scenes.save_scene(CID, scene)
+    monkeypatch.setattr(app, '_is_gm', lambda: False)
+    monkeypatch.setattr(app, '_scene_player_can_move', lambda _token, _scene: False)
+    response = scene_client.patch(
+        f'/api/scenes/{scene["id"]}/tokens/{token["id"]}', json={'x': 999, 'y': 999})
+    assert response.status_code == 403
+    stored = scenes.load_scene(CID, scene['id'])
+    assert stored['tokens'][0]['x'] != 999
+
+
+def test_campaign_scoped_sse_only_reaches_matching_subscribers(monkeypatch):
+    q_a, q_b = queue.Queue(), queue.Queue()
+    monkeypatch.setattr(app, '_sse_subscribers', [(q_a, True, CID), (q_b, True, 'b' * 32)])
+    monkeypatch.setattr(app, '_sse_buffer', [])
+    monkeypatch.setattr(app, '_sse_event_seq', 0)
+    monkeypatch.setattr(app, '_sse_event_campaigns', {})
+    app.sse_broadcast('scene_update', {'campaign_id': CID}, campaign_id=CID)
+    assert 'scene_update' in q_a.get_nowait()
+    assert q_b.empty()
+
+
+def test_map_template_and_client_subscribe_to_scene_and_combat_updates():
+    template = (app.Path(app.BASE_DIR) / 'templates' / 'map.html').read_text(encoding='utf-8')
+    client = (app.Path(app.BASE_DIR) / 'static' / 'js' / 'map.js').read_text(encoding='utf-8')
+    assert 'id="map-canvas"' in template
+    assert "window.appSSE('scene_update'" in client
+    assert "window.appSSE('scene_activated'" in client
+    assert "window.appSSE('encounter_update'" in client
+    assert "window.appSSE('pc_update'" in client
+    assert 'id="map-calibrate-grid"' in template
+    assert 'id="map-token-owner"' in template
+    assert 'id="map-undo"' in template
+    assert 'id="map-sync-encounter"' in template
+    assert 'id="map-combat-actions"' in template
+    assert 'id="map-follow-turn"' in template
+    assert 'data-map-tool="measure"' in template
+    assert 'data-map-tool="fog-reveal"' in template
+    assert 'data-map-tool="wall"' in template
+    assert 'data-map-tool="door"' in template
+    assert 'data-map-tool="light"' in template
+    assert "interaction.type === 'pan'" in client
+    assert "focusActiveTurn" in client
+    assert 'visibilityPolygon' in client
+    assert 'templateContainsToken' in client
+
+
+def test_encounter_builder_has_safe_additive_map_handoff():
+    template = (app.Path(app.BASE_DIR) / 'templates' / 'encounter_builder.html').read_text(encoding='utf-8')
+    assert 'id="btn-load-map"' in template
+    assert 'async function loadToMap()' in template
+    assert 'clear_first: false' in template
+    assert '/sync-encounter' in template

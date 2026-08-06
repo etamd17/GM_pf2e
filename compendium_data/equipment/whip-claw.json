@@ -1,0 +1,81 @@
+{
+    "_id": "QAEVaSQ3SCT8AuBX",
+    "img": "systems/pf2e/icons/equipment/weapons/whip-claw.webp",
+    "name": "Whip Claw",
+    "system": {
+        "ammo": null,
+        "baseItem": "whip-claw",
+        "bonus": {
+            "value": 0
+        },
+        "bonusDamage": {
+            "value": 0
+        },
+        "bulk": {
+            "value": 1
+        },
+        "category": "advanced",
+        "containerId": null,
+        "damage": {
+            "damageType": "slashing",
+            "dice": 1,
+            "die": "d6"
+        },
+        "description": {
+            "value": "<p>The whip claw is a long tether affixed to claw-like daggers, allowing the wielder to fling and retract them with deadly precision. Catfolk first developed this weapon to provide extended reach when hunting dangerous animals, and they wield them with unmatched expertise.</p>"
+        },
+        "expend": null,
+        "grade": null,
+        "group": "flail",
+        "hardness": 0,
+        "hp": {
+            "max": 0,
+            "value": 0
+        },
+        "level": {
+            "value": 0
+        },
+        "material": {
+            "grade": null,
+            "type": null
+        },
+        "price": {
+            "value": {
+                "gp": 5
+            }
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "quantity": 1,
+        "range": null,
+        "reload": {
+            "value": null
+        },
+        "rules": [],
+        "runes": {
+            "potency": 0,
+            "property": [],
+            "striking": 0
+        },
+        "size": "med",
+        "splashDamage": {
+            "value": 0
+        },
+        "traits": {
+            "rarity": "uncommon",
+            "value": [
+                "catfolk",
+                "finesse",
+                "hampering",
+                "reach"
+            ]
+        },
+        "usage": {
+            "value": "held-in-two-hands"
+        }
+    },
+    "type": "weapon"
+}

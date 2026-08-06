@@ -1,0 +1,88 @@
+{
+    "_id": "mKw9WvqnhaUsPvvy",
+    "img": "systems/pf2e/icons/spells/tempest-form.webp",
+    "name": "Spell Effect: Tempest Form",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Tempest Form]</p>\n<p>Choose whether to become air, water, or mist. The spell gains the air trait if you choose air or mist, and the water trait if you choose water or mist. You gain resistance to physical damage and become immune to precision damage. You also gain the following effects based on your form.</p><ul><li><strong>Air</strong> You gain a fly Speed of 20 feet.</li><li><strong>Mist</strong> You gain a fly Speed of 20 feet.</li><li><strong>Water</strong> You gain a swim Speed of 20.</li></ul>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": true,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 6
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Advanced Player's Guide"
+        },
+        "rules": [
+            {
+                "choices": [
+                    {
+                        "label": "PF2E.SpecificRule.TempestForm.Air",
+                        "value": "air"
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.TempestForm.Mist",
+                        "value": "mist"
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.TempestForm.Water",
+                        "value": "water"
+                    }
+                ],
+                "flag": "tempestForm",
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Prompt.Form",
+                "rollOption": "tempest-form"
+            },
+            {
+                "key": "Resistance",
+                "type": "physical",
+                "value": "max(10,5*floor(@item.level/2) -5)"
+            },
+            {
+                "key": "Immunity",
+                "type": "precision"
+            },
+            {
+                "key": "BaseSpeed",
+                "predicate": [
+                    {
+                        "or": [
+                            "tempest-form:air",
+                            "tempest-form:mist"
+                        ]
+                    }
+                ],
+                "selector": "fly",
+                "value": 20
+            },
+            {
+                "key": "BaseSpeed",
+                "predicate": [
+                    "tempest-form:water"
+                ],
+                "selector": "swim",
+                "value": 20
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

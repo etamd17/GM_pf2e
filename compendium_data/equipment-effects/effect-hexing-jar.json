@@ -1,0 +1,57 @@
+{
+    "_id": "LjaEu7gAGO77uVs2",
+    "img": "icons/consumables/potions/flask-corked-red-glow.webp",
+    "name": "Effect: Hexing Jar",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Hexing Jar]</p>\n<p>You and your familiar gain a +1 status bonus to AC and saving throws and a +2 status bonus against mental effects.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "rounds",
+            "value": 1
+        },
+        "level": {
+            "value": 11
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Treasure Vault (Remastered)"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "selector": [
+                    "ac",
+                    "saving-throw"
+                ],
+                "slug": "hexing-jar",
+                "type": "status",
+                "value": 1
+            },
+            {
+                "key": "AdjustModifier",
+                "mode": "override",
+                "predicate": [
+                    "mental"
+                ],
+                "selector": "saving-throw",
+                "slug": "hexing-jar",
+                "value": 2
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

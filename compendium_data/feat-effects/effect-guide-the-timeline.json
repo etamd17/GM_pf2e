@@ -1,0 +1,75 @@
+{
+    "_id": "bxxek5BP4zqP5GzM",
+    "img": "icons/magic/time/clock-spinning-gold-pink.webp",
+    "name": "Effect: Guide the Timeline",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.feats-srd.Item.Guide the Timeline]</p>\n<p>If you are an ally, the next time you make an attack roll or skill check, roll it twice and take the higher result. If you are a foe, the next time you make an attack roll or skill check, you must roll twice and take the lower result.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "rounds",
+            "value": 1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Dark Archive"
+        },
+        "rules": [
+            {
+                "choices": [
+                    {
+                        "label": "PF2E.TraitFortune",
+                        "value": "fortune"
+                    },
+                    {
+                        "label": "PF2E.TraitMisfortune",
+                        "value": "misfortune"
+                    }
+                ],
+                "key": "ChoiceSet",
+                "rollOption": "guide-the-timeline"
+            },
+            {
+                "keep": "higher",
+                "key": "RollTwice",
+                "predicate": [
+                    "guide-the-timeline:fortune"
+                ],
+                "removeAfterRoll": true,
+                "selector": [
+                    "attack-roll",
+                    "skill-check"
+                ]
+            },
+            {
+                "keep": "lower",
+                "key": "RollTwice",
+                "predicate": [
+                    "guide-the-timeline:misfortune"
+                ],
+                "removeAfterRoll": true,
+                "selector": [
+                    "attack-roll",
+                    "skill-check"
+                ]
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

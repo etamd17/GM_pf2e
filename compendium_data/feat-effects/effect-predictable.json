@@ -1,0 +1,75 @@
+{
+    "_id": "5v0ndPPMfZwhiVZF",
+    "img": "systems/pf2e/icons/equipment/shields/precious-material-shields/orichalcum-buckler.webp",
+    "name": "Effect: Predictable!",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.feats-srd.Item.Predictable!]</p>\n<p>You gain a circumstance bonus to AC and your next saving throw against the target. On a critical failure, you take a –1 circumstance penalty instead.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "rounds",
+            "value": 1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core"
+        },
+        "rules": [
+            {
+                "actorFlag": true,
+                "choices": [
+                    {
+                        "label": "PF2E.Check.Result.Degree.Check.criticalSuccess",
+                        "value": 2
+                    },
+                    {
+                        "label": "PF2E.Check.Result.Degree.Check.success",
+                        "value": 1
+                    },
+                    {
+                        "label": "PF2E.Check.Result.Degree.Check.criticalFailure",
+                        "value": -1
+                    }
+                ],
+                "flag": "predictable",
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Prompt.DegreeOfSuccess"
+            },
+            {
+                "key": "TokenMark",
+                "slug": "predictable"
+            },
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "origin:mark:predictable"
+                ],
+                "selector": "ac",
+                "type": "circumstance",
+                "value": "@item.flags.pf2e.rulesSelections.predictable"
+            },
+            {
+                "key": "GrantItem",
+                "uuid": "Compendium.pf2e.feat-effects.Item.Effect: Predictable! (Saving Throw)"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

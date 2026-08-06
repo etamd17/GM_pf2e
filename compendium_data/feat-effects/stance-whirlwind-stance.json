@@ -1,0 +1,43 @@
+{
+    "_id": "q6UokHWSEcEYWmvh",
+    "img": "systems/pf2e/icons/spells/whirlwind.webp",
+    "name": "Stance: Whirlwind Stance",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.feats-srd.Item.Whirlwind Stance]</p>\n<p>You gain a +2 circumstance bonus to AC.</p>"
+        },
+        "duration": {
+            "expiry": null,
+            "sustained": false,
+            "unit": "unlimited",
+            "value": -1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder #151: The Show Must Go On"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "selector": "ac",
+                "type": "circumstance",
+                "value": 2
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

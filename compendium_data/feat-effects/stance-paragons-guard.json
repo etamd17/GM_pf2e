@@ -1,0 +1,47 @@
+{
+    "_id": "6EDoy3OSFZ4L3Vs7",
+    "img": "icons/magic/holy/barrier-shield-winged-blue.webp",
+    "name": "Stance: Paragon's Guard",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.feats-srd.Item.Paragon's Guard].</p>\n<p>You constantly have your shield raised as if you'd used the @UUID[Compendium.pf2e.actionspf2e.Item.Raise a Shield] action, as long as you meet that action's requirements.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "encounter",
+            "value": -1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Core Rulebook"
+        },
+        "rules": [
+            {
+                "key": "ActiveEffectLike",
+                "mode": "override",
+                "path": "system.attributes.shield.raised",
+                "predicate": [
+                    "self:shield:equipped"
+                ],
+                "value": true
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

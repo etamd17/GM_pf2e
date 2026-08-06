@@ -1,0 +1,4 @@
+# Dev-only dependencies. Production runs from requirements.txt;
+# this file is for running the test suite locally.
+-r requirements.txt
+pytest>=8.0.0

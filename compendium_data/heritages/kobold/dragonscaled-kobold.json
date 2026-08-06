@@ -1,0 +1,54 @@
+{
+    "_id": "P8BP1un5BTrwXoBy",
+    "folder": "U6XqIM7a4BC1W4QM",
+    "img": "systems/pf2e/icons/features/ancestry/dragonscaled-kobold.webp",
+    "name": "Dragonscaled Kobold",
+    "system": {
+        "ancestry": {
+            "name": "Kobold",
+            "slug": "kobold",
+            "uuid": "Compendium.pf2e.ancestries.Item.7oQxL6wgsokD3QXG"
+        },
+        "description": {
+            "value": "<p>Thanks to your warren's association with a dragon, your scales are sturdier than other kobolds'. You gain 10 Hit Points from your ancestry instead of 6. You gain a +1 circumstance bonus to saves against dragon breath, effects with the sleep trait, and effects that would make you @UUID[Compendium.pf2e.conditionitems.Item.Paralyzed].</p>"
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "key": "ActiveEffectLike",
+                "mode": "override",
+                "path": "system.attributes.ancestryhp",
+                "value": 10
+            },
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    {
+                        "or": [
+                            "item:trait:sleep",
+                            "inflicts:paralyzed",
+                            {
+                                "and": [
+                                    "action:breath-weapon",
+                                    "origin:trait:dragon"
+                                ]
+                            }
+                        ]
+                    }
+                ],
+                "selector": "saving-throw",
+                "type": "circumstance",
+                "value": 1
+            }
+        ],
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "heritage"
+}

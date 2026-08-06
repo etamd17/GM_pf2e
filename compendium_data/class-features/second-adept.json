@@ -1,0 +1,47 @@
+{
+    "_id": "ZEUxZ4Ta1kDPHiq5",
+    "img": "systems/pf2e/icons/features/classes/second-adept.webp",
+    "name": "Second Adept",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p>You've improved your link to your second implement. You gain the adept benefit of your second implement.</p>"
+        },
+        "level": {
+            "value": 11
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Dark Archive"
+        },
+        "rules": [
+            {
+                "adjustName": false,
+                "choices": "flags.pf2e.thaumaturge.adeptChoices",
+                "flag": "secondAdept",
+                "key": "ChoiceSet"
+            },
+            {
+                "key": "GrantItem",
+                "uuid": "{item|flags.pf2e.rulesSelections.secondAdept}"
+            }
+        ],
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "thaumaturge"
+            ]
+        }
+    },
+    "type": "feat"
+}

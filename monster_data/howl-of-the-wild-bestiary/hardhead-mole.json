@@ -1,0 +1,262 @@
+{
+    "_id": "4Eu8d39hem9NAoXg",
+    "img": "systems/pf2e/icons/default-icons/npc.svg",
+    "items": [
+        {
+            "_id": "DYemcdnqg7020lFU",
+            "img": "systems/pf2e/icons/default-icons/melee.svg",
+            "name": "Jaws",
+            "sort": 100000,
+            "system": {
+                "attack": {
+                    "value": ""
+                },
+                "attackEffects": {
+                    "value": []
+                },
+                "bonus": {
+                    "value": 4
+                },
+                "damageRolls": {
+                    "3Xwqi30SzsXbTlV3": {
+                        "damage": "1d6+2",
+                        "damageType": "piercing"
+                    }
+                },
+                "description": {
+                    "value": ""
+                },
+                "publication": {
+                    "license": "OGL",
+                    "remaster": false,
+                    "title": ""
+                },
+                "range": null,
+                "rules": [],
+                "slug": null,
+                "traits": {
+                    "value": [
+                        "unarmed"
+                    ]
+                }
+            },
+            "type": "melee"
+        },
+        {
+            "_id": "VnbrHdn59w08ioYl",
+            "img": "systems/pf2e/icons/default-icons/action.svg",
+            "name": "Burrowing Retreat",
+            "sort": 200000,
+            "system": {
+                "actionType": {
+                    "value": "reaction"
+                },
+                "actions": {
+                    "value": null
+                },
+                "category": "defensive",
+                "description": {
+                    "value": "<p><strong>Trigger</strong> The hardhead mole is hit by a Strike</p>\n<hr />\n<p><strong>Effect</strong> The hardhead mole immediately Burrows to a burrow hole if there is one within 20 feet. This movement doesn't trigger reactions.</p>"
+                },
+                "publication": {
+                    "license": "OGL",
+                    "remaster": false,
+                    "title": ""
+                },
+                "rules": [],
+                "slug": null,
+                "traits": {
+                    "value": []
+                }
+            },
+            "type": "action"
+        },
+        {
+            "_id": "ldi5ToHOl7d3DIEZ",
+            "img": "systems/pf2e/icons/default-icons/action.svg",
+            "name": "Shovel Earth",
+            "sort": 300000,
+            "system": {
+                "actionType": {
+                    "value": "action"
+                },
+                "actions": {
+                    "value": 1
+                },
+                "category": "offensive",
+                "description": {
+                    "value": "<p>The hardhead mole leaves a burrow hole in its square or an adjacent square. The square becomes difficult terrain but can be flattened back into normal terrain with an Interact action.</p>"
+                },
+                "publication": {
+                    "license": "OGL",
+                    "remaster": false,
+                    "title": ""
+                },
+                "rules": [],
+                "slug": null,
+                "traits": {
+                    "value": [
+                        "manipulate"
+                    ]
+                }
+            },
+            "type": "action"
+        },
+        {
+            "_id": "lwcZ0Yi0pF8c0wnM",
+            "img": "systems/pf2e/icons/default-icons/action.svg",
+            "name": "Unbalancing Burrow",
+            "sort": 400000,
+            "system": {
+                "actionType": {
+                    "value": "action"
+                },
+                "actions": {
+                    "value": 2
+                },
+                "category": "offensive",
+                "description": {
+                    "value": "<p>The hardhead mole Burrows up to 20 feet in a straight line, displacing the earth on the surface. Any creature it passes through takes @Damage[1d6[bludgeoning]] damage (@Check[reflex|dc:14|basic] save). On a failed save, a creature is knocked @UUID[Compendium.pf2e.conditionitems.Item.Prone]. This creates a burrow hole at the beginning and end of the line.</p>"
+                },
+                "publication": {
+                    "license": "OGL",
+                    "remaster": false,
+                    "title": ""
+                },
+                "rules": [],
+                "slug": null,
+                "traits": {
+                    "value": [
+                        "move"
+                    ]
+                }
+            },
+            "type": "action"
+        }
+    ],
+    "name": "Hardhead Mole",
+    "system": {
+        "abilities": {
+            "cha": {
+                "mod": 0
+            },
+            "con": {
+                "mod": 3
+            },
+            "dex": {
+                "mod": 3
+            },
+            "int": {
+                "mod": -4
+            },
+            "str": {
+                "mod": 2
+            },
+            "wis": {
+                "mod": 2
+            }
+        },
+        "attributes": {
+            "ac": {
+                "details": "",
+                "value": 15
+            },
+            "allSaves": {
+                "value": ""
+            },
+            "hp": {
+                "details": "",
+                "max": 20,
+                "temp": 0,
+                "value": 20
+            },
+            "resistances": [
+                {
+                    "doubleVs": [],
+                    "exceptions": [],
+                    "type": "bludgeoning",
+                    "value": 3
+                }
+            ],
+            "speed": {
+                "otherSpeeds": [
+                    {
+                        "type": "burrow",
+                        "value": 20
+                    }
+                ],
+                "value": 20
+            }
+        },
+        "details": {
+            "blurb": "",
+            "languages": {
+                "details": "",
+                "value": []
+            },
+            "level": {
+                "value": 0
+            },
+            "privateNotes": "",
+            "publicNotes": "<p>Mischievous, burrowing hardhead moles reside mainly in the grasslands and plains. One can often spot their burrowing by following the upended ground they leave behind, which can span for hundreds of feet. Their signature physiological feature is a shiny, gem-like cranium that's thick enough to endure repeated hits and emits a flash of colorful light with each impact.</p>\n<p>Agrarian gnome communities have a close relationship with hardhead moles. Gnome children especially hold a great fondness for the creatures, and indeed, gave them their name. When they wander into the fields to play with these moles—typically by hitting them with small sticks, mallets, or any semi-blunt object—the moles are more than happy to oblige, darting from burrow to burrow with every sparkling blow in friendly games of hide-and-seek or tag.</p>\n<p>Perhaps the most famous hardhead mole is the gnome goddess Nivi Rhombodazzle's planar servitor Rummbrrlar, a hardhead mole imbued by Nivi with the powers of an earth elemental. Long ago, the mighty mole was slain while rescuing children from a Nivian orphanage. As a reward for his selfless actions, Rummbrrlar was transformed into a planar servitor with diamond skin and the ability to grow as large as a mighty dragon. When communities shared by gnomes and hardhead moles are threatened, Rummbrrlar often appears to whisk bystanders to safety in the face of natural hazards or stand guard against monstrous threats. For this reason, hardhead moles are seen as a good omen and a symbol of protection in gnome communities.</p>\n<p>The average hardhead mole grows up to about 3 feet in length, but some become shorter as they age, their hard skulls flattening slightly after years of entertaining young gnomes. As they play, their heads (and the flashes of light they emit) darken in color, spanning shades of pink, red, crimson, and mauve; at seeing these darker hues, gnomes often give the moles some time to recover, as this indicates that a mole's cranium isn't getting enough blood flow. Though mischievous, hardhead moles are otherwise docile and friendly creatures. If placed in a fight-or-flight situation, they escape by creating deep networks of tunnels, which can span up to hundreds of feet in any direction.</p>",
+            "publication": {
+                "license": "ORC",
+                "remaster": true,
+                "title": "Pathfinder Howl of the Wild"
+            }
+        },
+        "initiative": {
+            "statistic": "perception"
+        },
+        "perception": {
+            "details": "",
+            "mod": 6,
+            "senses": [
+                {
+                    "type": "low-light-vision"
+                },
+                {
+                    "acuity": "imprecise",
+                    "range": 30,
+                    "type": "tremorsense"
+                }
+            ]
+        },
+        "resources": {},
+        "saves": {
+            "fortitude": {
+                "saveDetail": "",
+                "value": 5
+            },
+            "reflex": {
+                "saveDetail": "",
+                "value": 8
+            },
+            "will": {
+                "saveDetail": "",
+                "value": 4
+            }
+        },
+        "skills": {
+            "athletics": {
+                "base": 5
+            },
+            "stealth": {
+                "base": 5
+            },
+            "survival": {
+                "base": 6
+            }
+        },
+        "traits": {
+            "rarity": "common",
+            "size": {
+                "value": "sm"
+            },
+            "value": [
+                "animal"
+            ]
+        }
+    },
+    "type": "npc"
+}

@@ -1,0 +1,125 @@
+{
+    "_id": "4BL5wf1VF9feC2rY",
+    "img": "systems/pf2e/icons/ancestries/kitsune.webp",
+    "name": "Kitsune",
+    "system": {
+        "additionalLanguages": {
+            "count": 0,
+            "custom": "",
+            "value": [
+                "dwarven",
+                "elven",
+                "fey",
+                "gnomish",
+                "goblin",
+                "halfling"
+            ]
+        },
+        "boosts": {
+            "0": {
+                "value": [
+                    "cha"
+                ]
+            },
+            "1": {
+                "value": []
+            },
+            "2": {
+                "value": [
+                    "str",
+                    "dex",
+                    "con",
+                    "int",
+                    "wis",
+                    "cha"
+                ]
+            }
+        },
+        "description": {
+            "value": "<p><em>Kitsune are a charismatic and witty people with a connection to the spiritual that grants them many magical abilities, chiefly the power to shapechange into other forms. Whether they pass unseen among other peoples or hold their tails high, kitsune are clever observers of the societies around them.</em></p>\n<p>@UUID[Compendium.pf2e.journals.JournalEntry.45SK8rdbbxvEHfMn.JournalEntryPage.26YL1jOPQQS6k7A9]{Kitsune}</p>"
+        },
+        "flaws": {
+            "0": {
+                "value": []
+            }
+        },
+        "hands": 2,
+        "hp": 8,
+        "items": {
+            "lzwB0": {
+                "img": "icons/creatures/mammals/humanoid-fox-cat-archer.webp",
+                "level": 1,
+                "name": "Change Shape",
+                "uuid": "Compendium.pf2e.ancestryfeatures.Item.Change Shape"
+            }
+        },
+        "languages": {
+            "custom": "",
+            "value": [
+                "common"
+            ]
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Lost Omens Ancestry Guide"
+        },
+        "reach": 5,
+        "rules": [
+            {
+                "itemType": "action",
+                "key": "ItemAlteration",
+                "mode": "override",
+                "predicate": [
+                    "item:slug:change-shape"
+                ],
+                "property": "description",
+                "value": [
+                    {
+                        "text": "PF2E.SpecificRule.ChangeShape.Kitsune"
+                    }
+                ]
+            },
+            {
+                "itemType": "action",
+                "key": "ItemAlteration",
+                "mode": "add",
+                "predicate": [
+                    "item:slug:change-shape"
+                ],
+                "property": "traits",
+                "value": "divine"
+            },
+            {
+                "alwaysActive": true,
+                "key": "RollOption",
+                "label": "PF2E.NPCAbility.ChangeShape.Label",
+                "mergeable": true,
+                "option": "change-shape",
+                "predicate": [
+                    {
+                        "not": "non-tailless-form"
+                    }
+                ],
+                "suboptions": [
+                    {
+                        "label": "PF2E.NPCAbility.ChangeShape.Form.Tailless",
+                        "value": "tailless"
+                    }
+                ],
+                "toggleable": true
+            }
+        ],
+        "size": "med",
+        "speed": 25,
+        "traits": {
+            "rarity": "uncommon",
+            "value": [
+                "humanoid",
+                "kitsune"
+            ]
+        },
+        "vision": "low-light-vision"
+    },
+    "type": "ancestry"
+}

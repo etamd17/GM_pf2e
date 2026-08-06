@@ -1,0 +1,46 @@
+{
+    "_id": "IlNjAwsIZShlVsCT",
+    "img": "icons/sundries/books/book-tooled-silver-blue.webp",
+    "name": "Effect: Architect's Pattern Book",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Architect's Pattern Book]</p>\n<p>You gain a +1 circumstance bonus to Athletics checks and Will saves.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "hours",
+            "value": 12
+        },
+        "level": {
+            "value": 6
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Treasure Vault (Remastered)"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "selector": [
+                    "will",
+                    "athletics"
+                ],
+                "type": "circumstance",
+                "value": 1
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

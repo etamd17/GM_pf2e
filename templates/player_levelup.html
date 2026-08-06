@@ -1,0 +1,2700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>Level Up Forge</title>
+    {# Precompiled Tailwind utilities — replaces the runtime Tailwind Play CDN
+       (full engine + in-browser JIT). Regenerate: cd tools/tailwind &&
+       npm install && node build.mjs (see docs/tailwind-build.md). #}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tw-player_levelup.css') }}">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Cinzel:wght@400;600;700;900&display=swap');
+        body { margin: 0; overflow: hidden; font-family: var(--font-ui); }
+        body::before { content:''; position:fixed; inset:0; z-index:-1; background:radial-gradient(ellipse at 25% 15%,rgba(90,142,232,0.04) 0%,transparent 55%),#0f1117; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 10px; }
+        .foundry-content p { margin-bottom: 0.75rem; }
+        
+        .nav-item { display: none; font-family: var(--font-ui); font-size: 12px; letter-spacing: 0.06em; } 
+        .nav-item.active { background: linear-gradient(90deg, rgba(196,60,60,0.12), transparent); border-left: 3px solid #c43c3c; color: #e85555; }
+        /* Wizard-step routing: only the .active panel renders. The
+           !important defends against Tailwind utility classes that show
+           up later in the cascade and might re-flip display. */
+        .step-panel { display: none !important; animation: fadeIn 0.25s ease-out; }
+        .step-panel.active { display: block !important; }
+        /* Minimal pass (matches the builder): flatten the step form boxing --
+           `bg-gray-800 + border-gray-700 + shadow-xl` boxes wrapping darker
+           `shadow-inner` wells read as box-in-box. Soften to a faint wash +
+           hairline, no shadow. Scoped to .step-panel; markup untouched. */
+        .step-panel .bg-gray-800 { background: rgba(255,255,255,0.02) !important; border-color: rgba(255,255,255,0.07) !important; box-shadow: none !important; }
+        .step-panel .bg-gray-900, .step-panel .bg-gray-950 { background: rgba(0,0,0,0.16) !important; border-color: rgba(255,255,255,0.05) !important; box-shadow: none !important; }
+        .step-panel.lvl-hidden { display: none !important; }
+        /* Per-step nav footer — Continue / Back. Renders inside each panel
+           via the buildStepNav() helper after the panel content. */
+        .step-nav { display:flex; justify-content:space-between; align-items:center; margin-top:32px; padding-top:24px; border-top:1px solid rgba(255,255,255,0.08); gap:12px; flex-wrap:wrap; }
+        .step-nav-btn { font-family:var(--font-ui); font-size:11px; letter-spacing:0.1em; text-transform:uppercase; padding:8px 18px; border-radius:4px; cursor:pointer; transition:all 0.2s; border:1px solid rgba(255,255,255,0.15); background:transparent; color:#b8b8cc; }
+        .step-nav-btn:hover { border-color:rgba(196,60,60,0.4); color:#e85555; background:rgba(196,60,60,0.08); }
+        .step-nav-btn.primary { background:rgba(196,60,60,0.18); border-color:rgba(196,60,60,0.5); color:#e85555; }
+        .step-nav-btn.primary:hover { background:rgba(196,60,60,0.3); border-color:#c43c3c; }
+        .step-nav-btn[disabled] { opacity:0.35; cursor:not-allowed; }
+        /* "current" pip — the section-pip the user is actively on. */
+        .section-pip.current { box-shadow: 0 0 0 2px rgba(196,60,60,0.6); transform: scale(1.4); }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* Minimal pass (matches the builder): calm solid surface + faint hairline
+           instead of a diagonal gradient, and a quiet hover -- no lift, no heavy
+           drop shadow. The ember/ruby accent identity is kept, just dialed down. */
+        .choice-card { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.07); border-radius: 0.5rem; padding: 1rem; cursor: pointer; transition: background .15s, border-color .15s; display: flex; flex-direction: column; justify-content: center; min-height: 80px; }
+        .choice-card:hover { border-color: rgba(196,60,60,0.32); background: rgba(196,60,60,0.05); }
+        .choice-card .title { font-family: var(--font-display); font-weight: 700; color: #e85555; font-size: 1.05rem; margin-bottom: 0.2rem; letter-spacing: 0.02em; }
+        .choice-card .subtitle { font-family: var(--font-ui); font-size: 0.65rem; color: #5e6378; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600; }
+        
+        .stat-pill { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 0.5rem; background: #0d0d12; border: 1px solid rgba(255,255,255,0.10); color: #b8b8cc; font-family: var(--font-ui); font-variant-numeric: tabular-nums; font-weight: 700; cursor: pointer; transition: all 0.2s; user-select: none; }
+        .stat-pill:hover:not(.locked) { border-color: rgba(255,255,255,0.25); }
+        .stat-pill.selected { background: rgba(90,142,232,0.2); border-color: #5a8ee8; color: #93C5FD; }
+        .stat-pill.locked { background: rgba(62,186,104,0.2); border-color: #22C55E; color: #A7F3D0; cursor: not-allowed; opacity: 0.8; }
+        
+        .rank-box { width: 12px; height: 12px; border: 1px solid rgba(255,255,255,0.10); display: inline-block; margin-right: 2px; border-radius: 2px; }
+        /* Filled = a rank you already have (warm gilt, on-theme with the
+           ember-forge accent); fill-new = a rank you gain THIS level (green
+           pulse). One consistent language across class-features, skills, and
+           the monk save picker. */
+        .rank-box.fill { background-color: #c9a34e; border-color: #c9a34e; }
+        .rank-box.fill-new { background-color: #4ADE80; border-color: #4ADE80; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+
+        .mod-tab-btn { flex: 1; transition: all 0.2s; border: 1px solid transparent; font-family: var(--font-ui); font-size: 10px; letter-spacing: 0.08em; }
+        .mod-tab-btn.active { color: #e85555; background: rgba(196,60,60,0.12); border-color: rgba(196,60,60,0.25); }
+        
+        h2, h3, h4 { font-family: var(--font-display); }
+        label { font-family: var(--font-ui); }
+        input, select, textarea { font-family: var(--font-ui); }
+
+        /* === DRAWER MODE (compact stepper replaces sidebar) === */
+        .drawer-mode #sidebar-nav { display: none !important; }
+        .drawer-mode .main-content { margin-left: 0 !important; }
+        .drawer-mode { overflow: auto !important; }
+        .drawer-mode > .flex.h-screen { flex-direction: column; height: auto; min-height: 100vh; }
+        .drawer-mode .flex-1.bg-gray-900 { overflow: visible; }
+        .drawer-mode .step-panel { padding: 24px 20px !important; }
+        .drawer-mode .step-panel h2 { font-size: 1.5rem; }
+
+        .compact-stepper {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 0;
+            padding: 12px 16px;
+            background: #161921;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            flex-wrap: wrap;
+        }
+        .drawer-mode .compact-stepper { display: flex; }
+
+        .step-dot {
+            width: 28px; height: 28px;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-family: 'Inter', sans-serif;
+            font-size: 11px; font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 2px solid rgba(255,255,255,0.10);
+            background: transparent;
+            color: #6b6b8a;
+            flex-shrink: 0;
+        }
+        .step-dot.active {
+            border-color: #c43c3c;
+            background: rgba(196,60,60,0.15);
+            color: #e85555;
+            animation: stepPulse 2s ease-in-out infinite;
+        }
+        .step-dot.done {
+            border-color: #22C55E;
+            background: rgba(62,186,104,0.15);
+            color: #4ADE80;
+        }
+        .step-dot:hover:not(.active) { border-color: rgba(255,255,255,0.25); color: #9494b0; }
+        @keyframes stepPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(196,60,60,0.3); } 50% { box-shadow: 0 0 0 4px rgba(196,60,60,0); } }
+
+        .step-line {
+            width: 20px; height: 2px;
+            background: rgba(255,255,255,0.08);
+            flex-shrink: 0;
+        }
+        .step-line.done { background: rgba(62,186,104,0.4); }
+
+        .drawer-submit-bar {
+            position: fixed; bottom: 0; left: 0; right: 0;
+            padding: 12px 20px;
+            background: #161921;
+            border-top: 1px solid rgba(255,255,255,0.06);
+            z-index: 30;
+        }
+        .drawer-mode .drawer-submit-bar { display: block !important; }
+
+        /* ── Gains checklist rail (T3) ──────────────────────────────
+           One entry per requirement slot in `reqs` (Class Feat, Skill
+           Increase, ...). Horizontal strip above the steps by default;
+           becomes a left sidebar at >=900px so it stays visible while
+           the player works through the card. Tick pop-in reuses the
+           tracker's trkCondIn keyframe (static/css/system.css) rather
+           than redefining it. */
+        .gains-item {
+            display: flex; align-items: center; gap: 7px;
+            font-family: var(--font-ui); font-size: 12px; color: var(--text-on-dark-2);
+            background: var(--bg-card-2); border: 1px solid var(--border-strong);
+            border-radius: 999px; padding: 5px 12px 5px 8px; cursor: pointer;
+            transition: border-color .2s, background .2s;
+        }
+        .gains-item:hover { border-color: var(--accent); }
+        .gains-item .gains-ring {
+            width: 15px; height: 15px; border-radius: 50%; flex-shrink: 0;
+            border: 2px solid var(--text-on-dark-3); box-sizing: border-box;
+            display: flex; align-items: center; justify-content: center;
+            transition: border-color .2s, background .2s;
+        }
+        .gains-item.gains-done { border-color: rgba(201,163,78,0.4); color: var(--text-on-dark); }
+        .gains-item.gains-done .gains-ring {
+            border-color: var(--gilt-200); background: var(--gilt-300);
+            color: #1c1813; font-size: 10px; font-weight: 800; line-height: 1;
+        }
+        .gains-item.gains-done .gains-ring.trk-cond-in { animation: trkCondIn .5s cubic-bezier(.2,1.4,.4,1); }
+        /* Responsive rail layout lives entirely in stylesheet rules (not
+           inline styles) so the media query below can actually win the
+           cascade — an inline style="" attribute always beats a stylesheet
+           rule regardless of media query, so #lvl-layout/#gains-rail/etc.
+           carry NO conflicting layout properties in their inline style. */
+        #lvl-layout { display: flex; flex-direction: column; }
+        /* position+z-index here (not just on #gains-rail-header) — a
+           z-index on a static-flow descendant can't win against a later,
+           positioned sibling of an ancestor (#uni-modal is z-index:50,
+           fixed, and a body-level sibling of #lvl-layout); #lvl-layout
+           and its #gains-rail child were `position:static` so the whole
+           subtree painted as one layer beneath the modal regardless of
+           any descendant's own z-index. Promoting #gains-rail itself
+           into the stacking arena fixes it without touching #lvl-layout
+           (which must stay in normal flow for the sidebar/strip switch). */
+        #gains-rail { width: 100%; flex-shrink: 0; position: relative; z-index: 55; }
+        #gains-rail-body { display: flex; flex-wrap: wrap; }
+        /* While a picker modal is open (body.picker-open, set by the shared
+           partial's visibility observer) the rail sits ABOVE the overlay, so
+           its step-jump rows would intercept clicks meant for the modal
+           header. Gate the BODY only -- the GM-override switch lives in
+           #gains-rail-header and must stay reachable mid-pick. */
+        body.picker-open #gains-rail-body { pointer-events: none; opacity: .45; transition: opacity .2s ease; }
+        @media (prefers-reduced-motion: reduce) { body.picker-open #gains-rail-body { transition: none; } }
+        #lvl-page-main { width: 100%; }
+        @media (min-width: 900px) {
+            #lvl-layout { flex-direction: row; align-items: flex-start; }
+            #gains-rail { width: 240px; position: sticky; top: calc(var(--sp-5) + 64px); }
+            #gains-rail-body { flex-direction: column; align-items: stretch; flex-wrap: nowrap; }
+            #lvl-page-main { flex: 1; }
+        }
+
+        /* GM override toggle — amber warning styling once armed, matching
+           the app's established amber-warning convention (e.g. Cosmere
+           builder's .gm-override, build-notes banners: #fbbf24 / rgba(245,158,11,*)). */
+        #gm-override-switch.armed {
+            background: rgba(245,158,11,0.14); border-color: rgba(245,158,11,0.55); color: #fbbf24;
+        }
+
+        /* ── Confirm ceremony overlay (T3) ── */
+        .lvl-ceremony-hidden { display: none !important; }
+        #lvl-ceremony-card { animation: trkCondIn .5s cubic-bezier(.2,1.4,.4,1); }
+        #lvl-ceremony-card .lvl-cer-spark {
+            position: absolute; left: 50%; top: 50%; width: 3px; height: 3px; border-radius: 50%;
+            pointer-events: none; opacity: 0; background: #ffd79a; box-shadow: 0 0 6px 1px rgba(255,180,90,.9);
+        }
+        #lvl-ceremony-card .lvl-cer-spark.rise { animation: trkSparkRise 1.1s ease-out forwards; }
+        @media (prefers-reduced-motion: reduce) {
+            .gains-item.gains-done .gains-ring.trk-cond-in { animation: none; }
+            #lvl-ceremony-card { animation: none; }
+            #lvl-ceremony-card .lvl-cer-spark { display: none; }
+        }
+    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/system.css') }}">
+</head>
+<body class="font-body levelup-page" style="overflow-x:hidden;">
+
+    {# ── Sticky top bar ─────────────────────────────────────────────
+       Replaces the cramped sidebar nav. All seven sections are now
+       rendered in a single stacked column below; the player simply
+       scrolls. This bar carries the back link, identity/level label,
+       a tiny scroll-spy progress bar, and the Submit button (which
+       moves with the player as they scroll). #}
+    <header id="lvl-topbar" style="position:sticky; top:0; z-index:40; background:var(--bg-page); border-bottom:1px solid var(--border-strong);">
+        <div style="max-width: 980px; margin: 0 auto; display:flex; align-items:center; gap:var(--sp-4); padding: var(--sp-3) var(--sp-5);">
+            <a id="btn-back-sheet" href="/player" style="font-family:var(--font-ui); font-size:11px; letter-spacing:0.12em; text-transform:uppercase; color:var(--text-on-dark-3); text-decoration:none;">&larr; Sheet</a>
+            <div style="flex:1; min-width:0;">
+                <h1 style="font-family:var(--font-display); font-size:18px; color:var(--accent); margin:0; line-height:1; letter-spacing:0.04em;">Level Up</h1>
+                <p style="font-size:11px; color:var(--text-on-dark-2); margin:0; margin-top:2px;">{{ pc.name }} &middot; advancing to Level <span id="lbl-target-level" style="color:var(--text-on-dark); font-weight:600;"></span></p>
+            </div>
+            {# When disabled, clicking jumps to the first incomplete section
+               so the badge becomes a locator instead of a dead-end. #}
+            <button id="btn-finish" onclick="onFinishClick()"
+                    style="background: var(--bg-card); color: var(--text-on-dark-3); border: 1px solid var(--border-strong); border-radius: var(--r-sm); padding: var(--sp-2) var(--sp-5); font-family: var(--font-display); font-size:11px; letter-spacing:0.14em; text-transform:uppercase; cursor:pointer;">
+                <span id="btn-finish-lbl">Incomplete</span>
+            </button>
+        </div>
+        {# Tiny progress strip — gilt for completed sections, ruby tint for incomplete. Built by buildSectionProgress() #}
+        <div id="lvl-section-progress" style="display:flex; gap:2px; max-width:980px; margin: 0 auto; padding: 0 var(--sp-5) 3px;"></div>
+        <div id="lvl-section-labels" style="max-width:980px; margin: 0 auto; padding: 0 var(--sp-5) var(--sp-2);"></div>
+        {# Hidden anchors retained so the legacy runValidation() writes
+           to chk-X spans don't error. The visible signal is the
+           progress strip above; these are display:none. #}
+        <div style="display:none;" aria-hidden="true">
+            <span id="chk-classfeatures"></span>
+            <span id="chk-abilities"></span>
+            <span id="chk-skills"></span>
+            <span id="chk-feats"></span>
+            <span id="chk-magic"></span>
+            <span id="chk-review"></span>
+            <span id="nav-classfeatures"></span>
+            <span id="nav-abilities"></span>
+            <span id="nav-skills"></span>
+            <span id="nav-feats"></span>
+            <span id="nav-magic"></span>
+            <span id="nav-retrain"></span>
+            <span id="nav-review"></span>
+            <button id="btn-finish-drawer" onclick="submitLevelUp()"></button>
+        </div>
+    </header>
+
+    <div id="lvl-layout" style="max-width: 980px; margin: 0 auto; padding: var(--sp-5) var(--sp-5) 0; gap:var(--sp-4); align-items:flex-start;">
+        {# Gains checklist rail — this level's requirement slots (from the
+           route's `reqs`), each ticking off as its step is completed.
+           Sidebar at >=900px (CSS below), horizontal strip above the
+           steps at narrower widths. Same markup either way; buildGainsRail()
+           fills #gains-rail-body, paintGainsRail() re-paints tick state from
+           the SAME per-step completion signals runValidation() already
+           computes (see paintGainsRail below) — one completion source. #}
+        <aside id="gains-rail" style="background: var(--bg-card); border: 1px solid var(--border-card); border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4);">
+            {# The whole rail (see #gains-rail's position/z-index above) is
+               deliberately raised ABOVE the choice-picker modal's z-50
+               overlay — the GM-override switch in this header must stay
+               reachable while a picker is open (that's the whole point:
+               flip it to unlock a greyed option without closing the modal
+               first). #}
+            <div id="gains-rail-header" style="display:flex; align-items:center; justify-content:space-between; gap:var(--sp-3); flex-wrap:wrap; margin-bottom:var(--sp-2);">
+                <h3 style="margin:0; font-family:var(--font-display); font-size:12px; letter-spacing:0.12em; text-transform:uppercase; color:var(--text-on-dark-2);">This Level's Gains <span id="gains-count" style="font-size:11px; letter-spacing:0.04em; color:var(--text-on-dark-3);"></span></h3>
+                <label id="gm-override-switch" for="chk-gm-override" style="display:flex; align-items:center; gap:6px; cursor:pointer; user-select:none; font-family:var(--font-ui); font-size:10.5px; letter-spacing:0.04em; color:var(--text-on-dark-3); padding:3px 8px; border-radius:999px; border:1px solid var(--border-strong); transition: background .2s, border-color .2s, color .2s;">
+                    <input type="checkbox" id="chk-gm-override" onchange="toggleGmOverride(this.checked)" style="accent-color:#f59e0b; margin:0;">
+                    GM override: ignore prerequisites
+                </label>
+            </div>
+            <div id="gains-rail-body" style="gap:var(--sp-2);"></div>
+        </aside>
+    <main id="lvl-page-main" class="custom-scrollbar" style="max-width: 720px; margin: 0 auto; padding: 0 var(--sp-5) var(--sp-8);">
+        {# Pathbuilder-style "Level N" banner header — small red label
+           centered above the unified pick card. #}
+        <div id="lvl-banner" style="text-align:center; margin: var(--sp-2) 0 var(--sp-3);">
+            <span style="display:inline-block; font-family: var(--font-display); font-size: 14px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ruby-200); font-weight: 600;">
+                Level <span id="lvl-banner-num"></span>
+            </span>
+        </div>
+        {# All picks for this level live inside a single dark card so
+           the page reads as one grouping (per Pathbuilder's layout). #}
+        <div id="lvl-card" style="background: var(--bg-card); border: 1px solid var(--border-card); border-radius: var(--r-md); padding: var(--sp-4) var(--sp-5);">
+        
+        {# Class-specific level features (Pathfinder Player Core 1+2) —
+           rendered as either an info pill or a required choice card,
+           depending on the entry's `type`. Populated client-side from
+           classLevelFeatures[pcClass][targetLevel]. #}
+        <div id="step-classpicks" class="step-panel w-full max-w-4xl mx-auto p-8 lg:p-12">
+            <h2 class="text-3xl font-bold text-white mb-2">Class Features (Level <span data-target-level></span>)</h2>
+            <div id="ui-class-picks" class="space-y-3"></div>
+        </div>
+
+        <div id="step-classfeatures" class="step-panel w-full max-w-4xl mx-auto p-8 lg:p-12">
+            <h2 class="text-3xl font-bold text-white mb-2">Automatic Class Features</h2>
+            <p class="text-gray-400 mb-8">These proficiency increases are applied automatically by your class at this level. No choices needed.</p>
+            <!-- HP preview — always visible so the player knows the
+                 per-level gain upfront, like Pathbuilder's stat sidebar -->
+            <div id="hp-preview-banner" class="mb-6 bg-red-950/20 border border-red-900/40 rounded-lg px-5 py-3 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div>
+                        <span class="text-sm font-bold text-gray-300">Hit Points</span>
+                        <span id="hp-preview-detail" class="text-xs text-gray-500 ml-2"></span>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span id="hp-preview-old" class="text-lg font-bold text-gray-400"></span>
+                    <span class="text-gray-500">→</span>
+                    <span id="hp-preview-new" class="text-lg font-bold text-green-400"></span>
+                </div>
+            </div>
+            <div id="ui-classfeatures" class="space-y-3"></div>
+            <div id="ui-classfeatures-none" class="hidden bg-gray-800 p-8 rounded-lg border border-gray-700 text-center">
+                <p class="text-gray-500 italic">No automatic proficiency changes at this level. Your class may still grant feats, skill increases, or other features.</p>
+            </div>
+        </div>
+
+        <div id="step-abilities" class="step-panel w-full max-w-4xl mx-auto p-8 lg:p-12">
+            <h2 class="text-3xl font-bold text-white mb-2">Ability Boosts</h2>
+            <p class="text-gray-400 mb-8">Select your 4 Free Boosts. Increasing Intelligence grants retroactive skills.</p>
+            <div class="bg-gray-800 p-6 rounded-lg border border-gray-700 shadow-xl mb-6">
+                <div class="flex justify-between items-center border-b border-gray-700 pb-3 mb-4">
+                    <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider">The 4 Free Boosts</h3>
+                    <span class="text-xs text-amber-500 font-bold hidden" id="msg-abilities-done"> 4/4 Allocated</span>
+                </div>
+                <div id="ui-abilities" class="flex flex-wrap gap-4"></div>
+                <!-- Quick allocation summary so the player can confirm at a glance
+                     before clicking Continue. Populated by buildAbilitiesUI() →
+                     renderBoostSummary(). -->
+                <div id="abilities-summary" class="mt-4 pt-3 border-t border-gray-700/60 flex flex-wrap items-center justify-between gap-2 text-[12px]">
+                    <span style="color:#94a3b8;">Boosts allocated: <strong id="abilities-allocated" style="color:#fbbf24;">0</strong>/4</span>
+                    <span style="color:#94a3b8;">Remaining: <strong id="abilities-remaining" style="color:#fbbf24;">4</strong></span>
+                    <span id="abilities-selected-list" style="color:#cbd5e1; flex-basis:100%;"></span>
+                </div>
+            </div>
+            <div class="bg-gray-900 p-6 rounded-lg border border-gray-700 shadow-inner">
+                <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 text-center">New Modifiers</h3>
+                <div class="grid grid-cols-3 md:grid-cols-6 gap-4" id="ui-abilities-math"></div>
+            </div>
+        </div>
+
+        <div id="step-skills" class="step-panel w-full max-w-4xl mx-auto p-8 lg:p-12">
+            <h2 class="text-3xl font-bold text-white mb-2">Skill Increases</h2>
+            <p class="text-gray-400 mb-6">Spend your skill increases. You cannot exceed Master before Lvl 7, or Legendary before Lvl 15.</p>
+            <div class="bg-gray-800 p-6 rounded-lg border border-gray-700 shadow-xl">
+                <div class="flex justify-between items-end mb-4 border-b border-gray-700 pb-2">
+                    <div>
+                        <h3 class="text-lg font-bold text-amber-500">Skill Upgrades</h3>
+                        <p class="text-xs text-gray-400" id="lbl-skill-math">Calculating...</p>
+                    </div>
+                    <div class="text-2xl font-bold text-white" id="lbl-skill-remaining">0 left</div>
+                </div>
+                <div id="ui-skills" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+                
+                <div class="mt-6 pt-4 border-t border-gray-700">
+                    <h4 class="text-sm font-bold text-gray-400 mb-2">Custom Lore Increases</h4>
+                    <div id="ui-lore-skills" class="space-y-2 mb-4"></div>
+                    <button onclick="addLore()" class="text-xs font-bold text-amber-500 hover:text-amber-400">+ Train a New Lore Skill</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="step-feats" class="step-panel w-full max-w-4xl mx-auto p-8 lg:p-12">
+            <div class="flex justify-between items-end mb-8">
+                <div>
+                    <h2 class="text-3xl font-bold text-white mb-2">Feat Selection</h2>
+                    <p class="text-gray-400">Select the feats granted to you at this level.</p>
+                </div>
+                <div class="flex gap-2">
+                    <label class="flex items-center gap-2 text-xs text-gray-400 cursor-pointer select-none px-2" title="Free Archetype variant rule (GM Core p.187): adds an extra archetype feat slot at every even level. Toggle on if your campaign uses this optional rule.">
+                        <input type="checkbox" id="chk-free-archetype" onchange="toggleFreeArchetype(this.checked)" class="accent-amber-500">
+                        Free Archetype
+                    </label>
+                    <button onclick="addArchetypeFeatLevelUp()" class="bg-gray-800 hover:bg-gray-700 text-xs font-bold text-gray-300 border border-gray-600 px-4 py-2 rounded transition-colors shadow">
+                        + Archetype Feat
+                    </button>
+                    <button onclick="addBonusFeatLevelUp()" class="bg-gray-800 hover:bg-gray-700 text-xs font-bold text-gray-300 border border-gray-600 px-4 py-2 rounded transition-colors shadow">
+                        + Add Bonus Feat
+                    </button>
+                </div>
+            </div>
+            <div id="ui-feats" class="space-y-4"></div>
+        </div>
+
+        <div id="step-magic" class="step-panel w-full max-w-4xl mx-auto p-8 lg:p-12">
+            <div class="flex justify-between items-end mb-8">
+                <div>
+                    <h2 class="text-3xl font-bold text-blue-400 mb-2">Magical Advancement</h2>
+                    <p class="text-gray-400">Expand your spellbook or repertoire based on your new spell slots.</p>
+                </div>
+                <button onclick="unlockArchetypeMagic()" id="btn-unlock-archetype" class="bg-gray-800 hover:bg-gray-700 text-xs font-bold text-gray-300 border border-gray-600 px-4 py-2 rounded hidden shadow">
+                    + Initialize Archetype Spellcasting
+                </button>
+            </div>
+            <div id="ui-magic-containers" class="space-y-8"></div>
+        </div>
+
+        <div id="step-retrain" class="step-panel w-full max-w-4xl mx-auto p-8 lg:p-12">
+            <h2 class="text-3xl font-bold text-white mb-2">Downtime Retraining</h2>
+            <p class="text-gray-400 mb-8">You can permanently delete an old feat and replace it with a new one. <span class="text-amber-500 font-bold">(Optional)</span></p>
+            <div class="bg-gray-800 p-6 rounded-lg border border-gray-700 shadow-xl">
+                <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 border-b border-gray-700 pb-2">Your Current Feats</h3>
+                <div id="ui-retrain-list" class="grid grid-cols-1 gap-2"></div>
+            </div>
+        </div>
+
+        <div id="step-review" class="step-panel w-full max-w-4xl mx-auto p-8 lg:p-12">
+            <h2 class="text-3xl font-bold text-white mb-2">Review Changes</h2>
+            <p class="text-gray-400 mb-8">Here's everything you gained this level. Review it before locking it in.</p>
+            <div class="bg-gray-800 p-8 rounded-lg border border-gray-700 shadow-xl" id="ui-review-content"></div>
+            {# Optional retrain (downtime activity, not a level-up choice
+               proper) — hidden by default so the page only shows what
+               actually changes at this level. Click to expand. #}
+            <div style="margin-top: var(--sp-5); display:flex; justify-content:flex-end;">
+                <button onclick="openRetrainStep()" type="button"
+                        style="background: transparent; border: 1px solid var(--border-strong); color: var(--text-on-dark-2); padding: var(--sp-2) var(--sp-3); border-radius: var(--r-sm); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer;">
+                    Retrain a feat?
+                </button>
+            </div>
+        </div>
+        </div> {# /lvl-card #}
+    </main>
+    </div> {# /lvl-layout #}
+
+    {# Confirm ceremony overlay — built by showLevelUpCeremony() in the
+       submit success handler, before the redirect. Empty until then. #}
+    <div id="lvl-ceremony-overlay" class="lvl-ceremony-hidden" style="position:fixed; inset:0; z-index:60; display:flex; align-items:center; justify-content:center; background:rgba(8,9,13,0.78); backdrop-filter: blur(2px);">
+        <div id="lvl-ceremony-card" style="position:relative; max-width:420px; width:calc(100% - 48px); background: var(--bg-card); border:1px solid var(--border-card); border-radius: var(--r-md); padding: var(--sp-6) var(--sp-5); box-shadow: 0 24px 64px rgba(0,0,0,0.55); cursor:pointer;" onclick="dismissLevelUpCeremony()">
+            <div id="lvl-ceremony-body"></div>
+        </div>
+    </div>
+
+    {% include "_choice_picker.html" %}
+
+    <script>
+        const pc = {{ pc.as_dict | tojson | safe }};
+        const currentLevel = parseInt(pc.level);
+        const targetLevel = currentLevel + 1;
+        const pcClass = pc.class_name.toLowerCase();
+
+        // Drawer mode detection
+        const isDrawerMode = new URLSearchParams(window.location.search).has('drawer') || window.parent !== window;
+        if (isDrawerMode) {
+            document.body.classList.add('drawer-mode');
+            const backBtn = document.getElementById('btn-back-sheet');
+            if (backBtn) backBtn.style.display = 'none';
+        }
+
+        document.getElementById('btn-back-sheet').href = `/player/sheet/${encodeURIComponent(pc.name)}`;
+        
+        const dbFeats = {{ feats | tojson | safe }};
+        const dbSpells = {{ spells | tojson | safe }};
+        const classMatrix = {{ class_matrix | tojson | safe }};
+        const bData = {{ builder_data | tojson | safe }};
+        // Free Archetype is a PER-CAMPAIGN variant (GM toggles it on the GM
+        // Hub). When on, every PC's even-level level-up gets the archetype
+        // slot automatically -- the checkbox below just reflects/overrides it.
+        const CAMPAIGN_FREE_ARCHETYPE = {{ (free_archetype | default(false)) | tojson }};
+        const classProgression = {{ class_progression | tojson | safe }};
+        const subclassProgression = {{ subclass_progression | tojson | safe }};
+        const monkPathConfig = {{ monk_path_config | tojson | safe }};
+        const skillFeatPrereqs = {{ skill_feat_prereqs | tojson | safe }};
+        const charProfs = {{ char_proficiencies | tojson | safe }};
+        // Class-specific level-up features and choices, keyed by
+        // class_lower → level → [{name, type, desc, choices?}]
+        const classLevelFeatures = {{ class_level_features | tojson | safe }};
+        
+        // Enrich skill feats with prerequisite data
+        const RANK_MAP = {'untrained': 0, 'trained': 2, 'expert': 4, 'master': 6, 'legendary': 8};
+        ['skill', 'general'].forEach(cat => {
+            (dbFeats[cat] || []).forEach(f => {
+                const prereq = skillFeatPrereqs[f.name];
+                if (prereq && prereq.skill !== '*') {
+                    f.prerequisites_raw = `${prereq.rank.charAt(0).toUpperCase() + prereq.rank.slice(1)} in ${prereq.skill.charAt(0).toUpperCase() + prereq.skill.slice(1)}`;
+                    f.prereqs_parsed = { skills: { [prereq.skill]: RANK_MAP[prereq.rank] || 2 } };
+                }
+            });
+        });
+        
+        const RANK_NAMES = {0: "Untrained", 2: "Trained", 4: "Expert", 6: "Master", 8: "Legendary"};
+
+        const SPELL_SLOTS = {
+            "prepared": { 1: [2,0,0,0,0,0,0,0,0,0], 2: [3,0,0,0,0,0,0,0,0,0], 3: [3,2,0,0,0,0,0,0,0,0], 4: [3,3,0,0,0,0,0,0,0,0], 5: [3,3,2,0,0,0,0,0,0,0], 6: [3,3,3,0,0,0,0,0,0,0], 7: [3,3,3,2,0,0,0,0,0,0], 8: [3,3,3,3,0,0,0,0,0,0], 9: [3,3,3,3,2,0,0,0,0,0], 10: [3,3,3,3,3,0,0,0,0,0], 11: [3,3,3,3,3,2,0,0,0,0], 12: [3,3,3,3,3,3,0,0,0,0], 13: [3,3,3,3,3,3,2,0,0,0], 14: [3,3,3,3,3,3,3,0,0,0], 15: [3,3,3,3,3,3,3,2,0,0], 16: [3,3,3,3,3,3,3,3,0,0], 17: [3,3,3,3,3,3,3,3,2,0], 18: [3,3,3,3,3,3,3,3,3,0], 19: [3,3,3,3,3,3,3,3,3,1], 20: [3,3,3,3,3,3,3,3,3,1] },
+            "spontaneous": { 1: [2,0,0,0,0,0,0,0,0,0], 2: [3,0,0,0,0,0,0,0,0,0], 3: [3,2,0,0,0,0,0,0,0,0], 4: [3,3,0,0,0,0,0,0,0,0], 5: [3,3,2,0,0,0,0,0,0,0], 6: [3,3,3,0,0,0,0,0,0,0], 7: [3,3,3,2,0,0,0,0,0,0], 8: [3,3,3,3,0,0,0,0,0,0], 9: [3,3,3,3,2,0,0,0,0,0], 10: [3,3,3,3,3,0,0,0,0,0], 11: [3,3,3,3,3,2,0,0,0,0], 12: [3,3,3,3,3,3,0,0,0,0], 13: [3,3,3,3,3,3,2,0,0,0], 14: [3,3,3,3,3,3,3,0,0,0], 15: [3,3,3,3,3,3,3,2,0,0], 16: [3,3,3,3,3,3,3,3,0,0], 17: [3,3,3,3,3,3,3,3,2,0], 18: [3,3,3,3,3,3,3,3,3,0], 19: [3,3,3,3,3,3,3,3,3,1], 20: [3,3,3,3,3,3,3,3,3,1] },
+            "sorcerer": { 1: [4,0,0,0,0,0,0,0,0,0], 2: [4,0,0,0,0,0,0,0,0,0], 3: [4,4,0,0,0,0,0,0,0,0], 4: [4,4,0,0,0,0,0,0,0,0], 5: [4,4,4,0,0,0,0,0,0,0], 6: [4,4,4,0,0,0,0,0,0,0], 7: [4,4,4,4,0,0,0,0,0,0], 8: [4,4,4,4,0,0,0,0,0,0], 9: [4,4,4,4,4,0,0,0,0,0], 10: [4,4,4,4,4,0,0,0,0,0], 11: [4,4,4,4,4,4,0,0,0,0], 12: [4,4,4,4,4,4,0,0,0,0], 13: [4,4,4,4,4,4,4,0,0,0], 14: [4,4,4,4,4,4,4,0,0,0], 15: [4,4,4,4,4,4,4,4,0,0], 16: [4,4,4,4,4,4,4,4,0,0], 17: [4,4,4,4,4,4,4,4,4,0], 18: [4,4,4,4,4,4,4,4,4,0], 19: [4,4,4,4,4,4,4,4,4,1], 20: [4,4,4,4,4,4,4,4,4,1] },
+            "bounded_prepared": { 1: [1,0,0,0,0,0,0,0,0,0], 2: [2,0,0,0,0,0,0,0,0,0], 3: [1,2,0,0,0,0,0,0,0,0], 4: [0,2,0,0,0,0,0,0,0,0], 5: [0,2,2,0,0,0,0,0,0,0], 6: [0,0,2,0,0,0,0,0,0,0], 7: [0,0,2,2,0,0,0,0,0,0], 8: [0,0,0,2,0,0,0,0,0,0], 9: [0,0,0,2,2,0,0,0,0,0], 10: [0,0,0,0,2,0,0,0,0,0], 11: [0,0,0,0,2,2,0,0,0,0], 12: [0,0,0,0,0,2,0,0,0,0], 13: [0,0,0,0,0,2,2,0,0,0], 14: [0,0,0,0,0,0,2,0,0,0], 15: [0,0,0,0,0,0,2,2,0,0], 16: [0,0,0,0,0,0,0,2,0,0], 17: [0,0,0,0,0,0,0,2,2,0], 18: [0,0,0,0,0,0,0,0,2,0], 19: [0,0,0,0,0,0,0,0,2,0], 20: [0,0,0,0,0,0,0,0,2,0] },
+            "bounded_spontaneous": { 1: [1,0,0,0,0,0,0,0,0,0], 2: [2,0,0,0,0,0,0,0,0,0], 3: [1,2,0,0,0,0,0,0,0,0], 4: [0,2,0,0,0,0,0,0,0,0], 5: [0,2,2,0,0,0,0,0,0,0], 6: [0,0,2,0,0,0,0,0,0,0], 7: [0,0,2,2,0,0,0,0,0,0], 8: [0,0,0,2,0,0,0,0,0,0], 9: [0,0,0,2,2,0,0,0,0,0], 10: [0,0,0,0,2,0,0,0,0,0], 11: [0,0,0,0,2,2,0,0,0,0], 12: [0,0,0,0,0,2,0,0,0,0], 13: [0,0,0,0,0,2,2,0,0,0], 14: [0,0,0,0,0,0,2,0,0,0], 15: [0,0,0,0,0,0,2,2,0,0], 16: [0,0,0,0,0,0,0,2,0,0], 17: [0,0,0,0,0,0,0,2,2,0], 18: [0,0,0,0,0,0,0,0,2,0], 19: [0,0,0,0,0,0,0,0,2,0], 20: [0,0,0,0,0,0,0,0,2,0] }
+        };
+
+        // Spells known (repertoire) for spontaneous casters — cumulative totals per rank
+        // [cantrips, 1st, 2nd, 3rd, 4th, 5th, 6th, 7th, 8th, 9th]
+        const SPELLS_KNOWN = {
+            "spontaneous": { 1:[5,2,0,0,0,0,0,0,0,0], 2:[5,3,0,0,0,0,0,0,0,0], 3:[5,3,2,0,0,0,0,0,0,0], 4:[5,3,3,0,0,0,0,0,0,0], 5:[5,3,3,2,0,0,0,0,0,0], 6:[5,3,3,3,0,0,0,0,0,0], 7:[5,3,3,3,2,0,0,0,0,0], 8:[5,3,3,3,3,0,0,0,0,0], 9:[5,3,3,3,3,2,0,0,0,0], 10:[5,3,3,3,3,3,0,0,0,0], 11:[5,3,3,3,3,3,2,0,0,0], 12:[5,3,3,3,3,3,3,0,0,0], 13:[5,3,3,3,3,3,3,2,0,0], 14:[5,3,3,3,3,3,3,3,0,0], 15:[5,3,3,3,3,3,3,3,2,0], 16:[5,3,3,3,3,3,3,3,3,0], 17:[5,3,3,3,3,3,3,3,3,2], 18:[5,3,3,3,3,3,3,3,3,3], 19:[5,3,3,3,3,3,3,3,3,3], 20:[5,3,3,3,3,3,3,3,3,3] },
+            "sorcerer": { 1:[5,2,0,0,0,0,0,0,0,0], 2:[5,4,0,0,0,0,0,0,0,0], 3:[5,4,2,0,0,0,0,0,0,0], 4:[5,4,4,0,0,0,0,0,0,0], 5:[5,4,4,2,0,0,0,0,0,0], 6:[5,4,4,4,0,0,0,0,0,0], 7:[5,4,4,4,2,0,0,0,0,0], 8:[5,4,4,4,4,0,0,0,0,0], 9:[5,4,4,4,4,2,0,0,0,0], 10:[5,4,4,4,4,4,0,0,0,0], 11:[5,4,4,4,4,4,2,0,0,0], 12:[5,4,4,4,4,4,4,0,0,0], 13:[5,4,4,4,4,4,4,2,0,0], 14:[5,4,4,4,4,4,4,4,0,0], 15:[5,4,4,4,4,4,4,4,2,0], 16:[5,4,4,4,4,4,4,4,4,0], 17:[5,4,4,4,4,4,4,4,4,2], 18:[5,4,4,4,4,4,4,4,4,4], 19:[5,4,4,4,4,4,4,4,4,4], 20:[5,4,4,4,4,4,4,4,4,4] }
+        };
+
+        const stdSkills = ['acrobatics', 'arcana', 'athletics', 'crafting', 'deception', 'diplomacy', 'intimidation', 'medicine', 'nature', 'occultism', 'performance', 'religion', 'society', 'stealth', 'survival', 'thievery'];
+
+        let reqs = null;
+        let state = {
+            abilities: {...pc.abilities},
+            half_boosts: [...(pc.half_boosts || [])],
+            free_boosts_selected: [],
+            base_profs: {...pc.proficiencies},
+            skill_increases_selected: [],
+            retro_int_skills: 0,
+            feats_selected: {},
+            retrained_feats: [], 
+            spellCasters: JSON.parse(JSON.stringify(pc.raw_spellCasters || [])),
+            bonus_feats_added: 0,
+            archetype_feats_added: 0,    // "+ Archetype Feat" button counter
+            free_archetype: false,       // Free Archetype variant toggle
+            free_archetype_slot: 0,      // 1 if FA toggle ON and target level even
+            auto_bumps: {},              // Populated from CLASS_PROGRESSION
+            new_spells: [],
+            monk_path_choice: null,      // For Monk Path to Perfection saves
+            target_level: targetLevel
+        };
+        let mCtx = { type: null, data: [], active: null, meta: {}, tab: 'all', activeTabs: false };
+
+        function esc(str) { return String(str == null ? '' : str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+        document.getElementById('lbl-target-level').innerText = targetLevel;
+        const _lvlBannerEl = document.getElementById('lvl-banner-num');
+        if (_lvlBannerEl) _lvlBannerEl.innerText = targetLevel;
+
+        function init() {
+            reqs = classMatrix[pcClass]?.progression?.[targetLevel] || classMatrix[pcClass]?.progression?.[String(targetLevel)];
+            if(!reqs) { 
+                console.error("No progression found for", pcClass, "level", targetLevel, "classMatrix keys:", Object.keys(classMatrix[pcClass]?.progression || {}));
+                alert(`Matrix Error: No progression found for ${pcClass} level ${targetLevel}. Check class_matrix.py.`); 
+                return; 
+            }
+
+            // --- COMPUTE AUTO BUMPS FROM CLASS_PROGRESSION ---
+            // Check subclass-specific progression first, then fall back to class
+            let progressionForClass = null;
+            let pcSubclass = pc.subclass || '';
+            if (pcSubclass && subclassProgression[pcSubclass]) {
+                progressionForClass = subclassProgression[pcSubclass];
+            } else {
+                progressionForClass = classProgression[pcClass] || {};
+            }
+            let bumpsAtThisLevel = progressionForClass[targetLevel] || {};
+            state.auto_bumps = bumpsAtThisLevel;
+            
+            // Apply auto bumps to base_profs immediately so all downstream UI sees them
+            for (let key in bumpsAtThisLevel) {
+                let newVal = bumpsAtThisLevel[key];
+                let oldVal = state.base_profs[key] || 0;
+                if (newVal > oldVal) {
+                    state.base_profs[key] = newVal;
+                }
+            }
+            
+            // Build the class features display
+            buildClassFeaturesUI(bumpsAtThisLevel);
+            updateHpPreview();
+
+            // Decide which sections actually have something to do at this
+            // level. Pathbuilder-style: only show what the player has to
+            // touch. Saved into state so buildSectionProgress can skip the
+            // hidden sections too.
+            const hasAutoBumps = Object.keys(bumpsAtThisLevel || {}).length > 0;
+            const hasFeatThisLevel = !!(reqs.class_feat || reqs.general_feat || reqs.skill_feat || reqs.ancestry_feat);
+            // Magic step is only relevant when:
+            //   - player has casters AND a new spell rank unlocks here, OR
+            //   - player is spontaneous (must pick a new known spell), OR
+            //   - player is Wizard/Witch/Magus (must learn into spellbook)
+            const _newRankUnlocks = (function() {
+                if (!state.spellCasters || !state.spellCasters.length) return false;
+                // A new rank is "unlocked" when this level's slot table has
+                // a non-zero rank that wasn't available at the previous level.
+                try {
+                    for (const sc of state.spellCasters) {
+                        const ct = (sc.castingType || sc.spellcastingType || sc.type || '').toLowerCase();
+                        if (ct.includes('focus') || ct.includes('innate') || ct.includes('alchemical')) continue;
+                        let tableKey = 'spontaneous';
+                        if (ct.includes('bounded') && ct.includes('prepared')) tableKey = 'bounded_prepared';
+                        else if (ct.includes('bounded')) tableKey = 'bounded_spontaneous';
+                        else if (ct.includes('prepared')) tableKey = 'prepared';
+                        if (pcClass === 'sorcerer' && ct.includes('spontaneous')) tableKey = 'sorcerer';
+                        const cur = (SPELL_SLOTS[tableKey] && SPELL_SLOTS[tableKey][targetLevel]) || [];
+                        const prev = (SPELL_SLOTS[tableKey] && SPELL_SLOTS[tableKey][targetLevel - 1]) || [];
+                        for (let i = 0; i < cur.length; i++) {
+                            if ((cur[i] || 0) > 0 && (prev[i] || 0) === 0) return true;
+                        }
+                    }
+                } catch(_) {}
+                return false;
+            })();
+            const _isSpontaneous = state.spellCasters.some(sc => {
+                const ct = (sc.castingType || sc.spellcastingType || sc.type || '').toLowerCase();
+                return ct.includes('spontaneous');
+            });
+            const _isSpellbook = ['wizard','witch','magus'].includes(pcClass);
+            const hasMagicThisLevel = state.spellCasters.length > 0 && (_newRankUnlocks || _isSpontaneous || _isSpellbook);
+
+            // Class-level features available at this level (PC1 + PC2 RAW).
+            // List drives the new "Class Features (Level N)" picks step.
+            const classLvlEntries = ((classLevelFeatures || {})[pcClass] || {})[targetLevel] || [];
+            state.class_level_features = classLvlEntries;
+            state.class_picks_selected = state.class_picks_selected || {};
+
+            // Stash the visibility map so other helpers can read it.
+            state.sections_visible = {
+                classpicks:    classLvlEntries.length > 0,
+                classfeatures: hasAutoBumps,    // Class Features step shows only when something auto-bumps
+                abilities:     !!reqs.ability_boosts,
+                skills:        !!reqs.skill_increase,
+                feats:         hasFeatThisLevel,
+                magic:         hasMagicThisLevel,
+                retrain:       false,           // optional, surfaced via a "Retrain a feat" button
+                review:        true,
+            };
+            // Hide the step panels that aren't relevant — Pathbuilder-style.
+            // Class-based hide so we don't fight the .step-panel CSS specificity.
+            Object.entries(state.sections_visible).forEach(([sid, on]) => {
+                const el = document.getElementById(`step-${sid}`);
+                if (!el) return;
+                el.classList.toggle('lvl-hidden', !on);
+            });
+
+            // Legacy nav anchors (now hidden in the topbar). Kept alive so
+            // runValidation's chk-X writes don't error.
+            if (state.sections_visible.abilities) document.getElementById('nav-abilities').style.display = 'flex';
+            if (state.sections_visible.skills)    document.getElementById('nav-skills').style.display = 'flex';
+            if (state.sections_visible.feats)     document.getElementById('nav-feats').style.display = 'flex';
+            if (state.sections_visible.magic)     document.getElementById('nav-magic').style.display = 'flex';
+
+            if (reqs.ability_boosts) buildAbilitiesUI();
+            buildSkillsUI();
+            buildClassPicksUI();
+            // Free Archetype: the CAMPAIGN toggle (GM Hub) is the source of
+            // truth -- when the campaign runs FA, force it on for every PC.
+            // Otherwise fall back to a per-PC localStorage override so a table
+            // NOT using campaign-wide FA can still opt a single PC in.
+            try {
+                let faOn = !!CAMPAIGN_FREE_ARCHETYPE;
+                if (!faOn && localStorage.getItem(`pf2e_free_archetype_${pc.name}`) === '1') {
+                    faOn = true;
+                }
+                if (faOn) {
+                    state.free_archetype = true;
+                    state.free_archetype_slot = (targetLevel % 2 === 0) ? 1 : 0;
+                    const cb = document.getElementById('chk-free-archetype');
+                    if (cb) cb.checked = true;
+                }
+            } catch(_) {}
+            // Hide "+ Archetype Feat" if PC has no dedications yet AND
+            // is below L2 (no archetype path possible at L1 RAW).
+            try {
+                const dedCount = (typeof _knownDedications === 'function') ? _knownDedications().length : 0;
+                if (targetLevel < 2 && dedCount === 0) {
+                    const btn = document.querySelector('button[onclick*="addArchetypeFeatLevelUp"]');
+                    if (btn) btn.style.display = 'none';
+                }
+            } catch(_) {}
+            buildFeatsUI();
+            buildMagicUI();
+            buildRetrainUI();
+
+            // Build per-step Back/Continue navigation footers, then land
+            // on class features so the player sees what's automatic. If
+            // classfeatures isn't relevant at this level (it's lvl-hidden),
+            // fall back to the first visible step — otherwise navTo() bails
+            // on the hidden target and the page renders empty.
+            buildStepNav();
+            const _firstStep = (typeof _visibleStepIds === 'function' && _visibleStepIds()[0]) || 'classfeatures';
+            const _landing = document.getElementById('step-classfeatures') && !document.getElementById('step-classfeatures').classList.contains('lvl-hidden')
+                ? 'classfeatures' : _firstStep;
+            navTo(_landing);
+        }
+        
+        function updateHpPreview() {
+            // Compute HP gain for the level-up, mirroring the Review step logic.
+            // Recalculated whenever CON boost state changes.
+            let classHp = (pc.attributes || {}).classhp || 8;
+            let conMod = (pc.mods || {}).con || 0;
+            if (state.free_boosts_selected.includes('con')) {
+                let tempStats = typeof getTempFinalStats === 'function' ? getTempFinalStats() : {};
+                conMod = tempStats.con !== undefined ? tempStats.con : conMod;
+            }
+            let bonusPerLevel = (pc.attributes || {}).bonushpPerLevel || 0;
+            let hpPerLevel = classHp + conMod + bonusPerLevel;
+            if (hpPerLevel < 1) hpPerLevel = 1;
+            let oldHp = pc.hp || 0;
+            let newHp = oldHp + hpPerLevel;
+            document.getElementById('hp-preview-old').textContent = oldHp;
+            document.getElementById('hp-preview-new').textContent = newHp;
+            let detail = `+${hpPerLevel} = ${classHp} class + ${conMod} CON`;
+            if (bonusPerLevel) detail += ` + ${bonusPerLevel} bonus`;
+            document.getElementById('hp-preview-detail').textContent = `(${detail})`;
+        }
+
+        function buildClassFeaturesUI(bumps) {
+            const ui = document.getElementById('ui-classfeatures');
+            const noneMsg = document.getElementById('ui-classfeatures-none');
+            
+            // Check if this level has a Monk Path to Perfection choice
+            const isMonk = pcClass === 'monk';
+            const pathConfig = isMonk ? monkPathConfig[targetLevel] : null;
+            const previousPaths = pc.monk_paths || {};
+            
+            let bumpKeys = Object.keys(bumps);
+            if (bumpKeys.length === 0 && !pathConfig) {
+                noneMsg.classList.remove('hidden');
+                ui.innerHTML = '';
+                return;
+            }
+            noneMsg.classList.add('hidden');
+            
+            const friendlyNames = {
+                'perception': 'Perception', 'fortitude': 'Fortitude Save', 'reflex': 'Reflex Save', 'will': 'Will Save',
+                'simple': 'Simple Weapons', 'martial': 'Martial Weapons', 'advanced': 'Advanced Weapons', 'unarmed': 'Unarmed Attacks',
+                'unarmored': 'Unarmored Defense', 'light': 'Light Armor', 'medium': 'Medium Armor', 'heavy': 'Heavy Armor',
+                'class_dc': 'Class DC', 'spell_attack': 'Spell Attack', 'spell_dc': 'Spell DC', 'ac': 'Armor Class'
+            };
+            
+            
+            let html = '';
+            bumpKeys.forEach(key => {
+                let newRank = bumps[key];
+                let oldRank = pc.proficiencies[key] || 0;
+                let rankName = RANK_NAMES[newRank] || `Rank ${newRank}`;
+                let oldRankName = RANK_NAMES[oldRank] || `Rank ${oldRank}`;
+                let name = friendlyNames[key] || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                
+                let isUpgrade = newRank > oldRank;
+                let borderColor = isUpgrade ? 'border-green-600' : 'border-gray-700';
+                let bgColor = isUpgrade ? 'bg-green-900/20' : 'bg-gray-800';
+                
+                // Rank boxes visualization
+                let boxes = '';
+                for (let i = 2; i <= 8; i += 2) {
+                    if (i <= oldRank) boxes += `<div class="rank-box fill"></div>`;
+                    else if (i <= newRank) boxes += `<div class="rank-box fill-new"></div>`;
+                    else boxes += `<div class="rank-box"></div>`;
+                }
+                
+                let arrowText = isUpgrade 
+                    ? `<span class="text-gray-500">${oldRankName}</span> <span class="text-green-400 mx-2">→</span> <span class="text-green-400 font-bold">${rankName}</span>`
+                    : `<span class="text-gray-400">Already ${rankName} or higher</span>`;
+                
+                html += `
+                <div class="${bgColor} ${borderColor} border rounded-lg p-4 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div>
+                            <div class="font-bold text-white text-sm">${name}</div>
+                            <div class="text-xs mt-1">${arrowText}</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-1">${boxes}</div>
+                </div>`;
+            });
+            
+            // --- MONK PATH TO PERFECTION PICKER ---
+            if (pathConfig) {
+                let targetRank = pathConfig.target_rank;
+                let targetRankName = RANK_NAMES[targetRank] || `Rank ${targetRank}`;
+                let restriction = pathConfig.restriction;
+                
+                // Determine which saves are available based on restrictions
+                let availableSaves = ['fortitude', 'reflex', 'will'];
+                let restrictionNote = '';
+                
+                if (restriction === 'exclude_previous') {
+                    // L11: Must be different from L7 choice
+                    let l7choice = previousPaths['7'] || null;
+                    if (l7choice) {
+                        availableSaves = availableSaves.filter(s => s !== l7choice);
+                        let l7name = friendlyNames[l7choice] || l7choice;
+                        restrictionNote = `<span class="text-amber-400 text-[10px]">(Must differ from L7 choice: ${l7name})</span>`;
+                    }
+                } else if (restriction === 'only_previous') {
+                    // L15: Must be one of L7 or L11 choices
+                    let prev = [];
+                    if (previousPaths['7']) prev.push(previousPaths['7']);
+                    if (previousPaths['11']) prev.push(previousPaths['11']);
+                    if (prev.length > 0) {
+                        availableSaves = prev;
+                        let prevNames = prev.map(s => friendlyNames[s] || s).join(' or ');
+                        restrictionNote = `<span class="text-amber-400 text-[10px]">(Must be one of your previous choices: ${prevNames})</span>`;
+                    }
+                }
+                
+                let saveButtons = availableSaves.map(save => {
+                    let saveName = save.charAt(0).toUpperCase() + save.slice(1);
+                    let currentRank = state.base_profs[save] || 0;
+                    let currentRankName = RANK_NAMES[currentRank] || 'Untrained';
+                    let isSelected = state.monk_path_choice === save;
+                    
+                    let btnBorder = isSelected ? 'border-amber-500 bg-amber-900/30' : 'border-gray-600 bg-gray-900 hover:border-amber-500/50 hover:bg-gray-800';
+                    let btnText = isSelected ? 'text-amber-400' : 'text-gray-300';
+                    let checkMark = isSelected ? '<span class="text-amber-500 text-lg ml-2"></span>' : '';
+                    
+                    // Rank boxes for this save showing the upgrade
+                    let boxes = '';
+                    for (let i = 2; i <= 8; i += 2) {
+                        if (i <= currentRank) boxes += `<div class="rank-box fill"></div>`;
+                        else if (i <= targetRank && isSelected) boxes += `<div class="rank-box fill-new"></div>`;
+                        else boxes += `<div class="rank-box"></div>`;
+                    }
+                    
+                    return `
+                    <button onclick="selectMonkPath('${save}')" class="flex items-center justify-between p-4 rounded-lg border ${btnBorder} transition-all cursor-pointer w-full">
+                        <div class="flex items-center gap-3">
+                            <div class="text-left">
+                                <div class="font-bold ${btnText} text-sm">${saveName}</div>
+                                <div class="text-xs text-gray-500">${currentRankName} → <span class="${isSelected ? 'text-green-400 font-bold' : 'text-gray-400'}">${targetRankName}</span></div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <div class="flex items-center gap-1">${boxes}</div>
+                            ${checkMark}
+                        </div>
+                    </button>`;
+                }).join('');
+                
+                html += `
+                <div class="mt-6 bg-purple-900/20 border border-purple-700 rounded-lg p-6">
+                    <div class="flex items-center gap-3 mb-2">
+                        <div>
+                            <h3 class="font-bold text-purple-300 text-lg">${pathConfig.feature_name}</h3>
+                            <p class="text-xs text-gray-400 mt-1">${pathConfig.description}</p>
+                        </div>
+                    </div>
+                    ${restrictionNote ? `<div class="mb-3 mt-2">${restrictionNote}</div>` : ''}
+                    <div class="text-xs text-gray-500 uppercase tracking-wider font-bold mb-3 mt-4">Choose a saving throw to upgrade to ${targetRankName}:</div>
+                    <div class="space-y-2" id="monk-path-buttons">
+                        ${saveButtons}
+                    </div>
+                </div>`;
+            }
+            
+            ui.innerHTML = html;
+        }
+        
+        function selectMonkPath(save) {
+            state.monk_path_choice = save;
+            
+            // Apply the proficiency bump to base_profs
+            let pathConfig = monkPathConfig[targetLevel];
+            if (pathConfig) {
+                // First, undo any previous monk path choice at this level
+                ['fortitude', 'reflex', 'will'].forEach(s => {
+                    // Reset to the value from auto_bumps + original profs
+                    let originalVal = pc.proficiencies[s] || 0;
+                    let autoBumpVal = state.auto_bumps[s] || 0;
+                    state.base_profs[s] = Math.max(originalVal, autoBumpVal);
+                });
+                // Re-apply skill increases that may have been on saves (unlikely but safe)
+                
+                // Apply the chosen path
+                let targetRank = pathConfig.target_rank;
+                state.base_profs[save] = Math.max(state.base_profs[save] || 0, targetRank);
+            }
+            
+            // Re-render the class features UI to update button states
+            let bumpsAtThisLevel = state.auto_bumps;
+            buildClassFeaturesUI(bumpsAtThisLevel);
+            
+            runValidation();
+        }
+
+        // navTo() — wizard-step routing. Hide all .step-panel siblings, show
+        // only the requested one. The CSS in the head already declares
+        // `.step-panel { display: none } .step-panel.active { display: block }`
+        // so the active swap drives visibility. Replaces the broken
+        // "all visible at once with huge gaps" single-page scroll model.
+        let _currentStep = null;
+        function navTo(stepId) {
+            const target = document.getElementById(`step-${stepId}`);
+            if (!target) return;
+            // Skip steps marked irrelevant for this level (e.g., abilities at L3).
+            if (target.classList.contains('lvl-hidden')) return;
+            // Swap active class.
+            document.querySelectorAll('.step-panel').forEach(p => p.classList.remove('active'));
+            target.classList.add('active');
+            _currentStep = stepId;
+            // Reset scroll so the user starts at the top of the new step.
+            window.scrollTo({ top: 0, behavior: 'auto' });
+            // Reflect active step in the section-pip strip.
+            const strip = document.getElementById('lvl-section-progress');
+            if (strip) {
+                strip.querySelectorAll('.section-pip').forEach(p => {
+                    p.classList.toggle('current', p.dataset.step === stepId);
+                });
+            }
+            document.querySelectorAll('#lvl-section-labels > .section-label').forEach(l => {
+                l.classList.toggle('current', l.dataset.step === stepId);
+            });
+            if (stepId === 'review') renderReview();
+            runValidation();
+        }
+        // Next / previous helpers — wired by the per-step Continue / Back
+        // buttons rendered into each panel below.
+        function _visibleStepIds() {
+            const v = state.sections_visible || {};
+            return ['classpicks','classfeatures','abilities','skills','feats','magic','retrain','review']
+                .filter(s => v[s] && !document.getElementById(`step-${s}`)?.classList.contains('lvl-hidden'));
+        }
+        window.navNext = function() {
+            const list = _visibleStepIds();
+            const i = list.indexOf(_currentStep);
+            if (i >= 0 && i < list.length - 1) navTo(list[i + 1]);
+        };
+        window.navPrev = function() {
+            const list = _visibleStepIds();
+            const i = list.indexOf(_currentStep);
+            if (i > 0) navTo(list[i - 1]);
+        };
+        // Top-bar Finish button. When the form is complete, it submits.
+        // When incomplete, it jumps to the first section flagged red — so
+        // the user always knows where to go next instead of staring at a
+        // disabled button.
+        window.onFinishClick = function() {
+            const btn = document.getElementById('btn-finish');
+            if (btn && !btn.dataset.disabled) {
+                submitLevelUp();
+                return;
+            }
+            // Find first incomplete pip and navTo it.
+            const strip = document.getElementById('lvl-section-progress');
+            const firstBad = strip ? strip.querySelector('.section-pip.incomplete') : null;
+            if (firstBad) navTo(firstBad.dataset.step);
+            else navTo('review');
+        };
+        // Append a per-step nav footer (Back / Continue) to every visible
+        // panel. Idempotent — call after each panel build/refresh.
+        function buildStepNav() {
+            const list = _visibleStepIds();
+            list.forEach((id, idx) => {
+                const panel = document.getElementById(`step-${id}`);
+                if (!panel) return;
+                let nav = panel.querySelector(':scope > .step-nav');
+                if (!nav) {
+                    nav = document.createElement('div');
+                    nav.className = 'step-nav';
+                    panel.appendChild(nav);
+                }
+                const isFirst = idx === 0;
+                const isLast = idx === list.length - 1;
+                const dirtyTag = window._lvlupDirty
+                    ? ' · <span style="color:#fbbf24;" title="You have unsaved choices in this level-up. Closing the tab will lose them.">Unsaved</span>'
+                    : '';
+                nav.innerHTML = `
+                    <button class="step-nav-btn" onclick="navPrev()" ${isFirst ? 'disabled' : ''}>← Back</button>
+                    <span style="font-size:10px; letter-spacing:0.1em; color:#5e6378; text-transform:uppercase;">Step ${idx + 1} of ${list.length}${dirtyTag}</span>
+                    ${isLast
+                        ? `<button class="step-nav-btn primary" onclick="onFinishClick()">Finalize</button>`
+                        : `<button class="step-nav-btn primary" onclick="navNext()">Continue →</button>`}
+                `;
+            });
+        }
+
+        /* ── Unsaved-changes guard ──
+           Any click inside an active step panel marks the levelup dirty.
+           Refreshes the step-nav so the "Unsaved" tag appears once, and
+           installs a beforeunload guard so closing the tab / navigating
+           away prompts a confirmation. submitLevelUp() clears the flag. */
+        window._lvlupDirty = false;
+        function _markLvlupDirty() {
+            if (window._lvlupDirty) return;
+            window._lvlupDirty = true;
+            try { buildStepNav(); } catch(_) {}
+        }
+        document.addEventListener('change', (e) => {
+            if (e.target.closest('.step-panel.active')) _markLvlupDirty();
+        }, true);
+        document.addEventListener('click', (e) => {
+            const t = e.target;
+            // Ignore the nav footer / finalize buttons themselves.
+            if (t.closest('.step-nav-btn')) return;
+            if (t.closest('.step-panel.active')) _markLvlupDirty();
+        }, true);
+        window.addEventListener('beforeunload', (e) => {
+            if (!window._lvlupDirty) return;
+            e.preventDefault();
+            e.returnValue = 'You have unsaved level-up choices. Leave anyway?';
+            return e.returnValue;
+        });
+
+        // Build a tiny gilt-or-ruby progress strip in the sticky top bar
+        // that maps to each visible step on the page. Click a pip to
+        // smooth-scroll to that section. Pips are only created for
+        // sections that actually have something to do at this level
+        // (Pathbuilder-style: don't render abilities pip at L3 etc.).
+        function buildSectionProgress() {
+            const strip = document.getElementById('lvl-section-progress');
+            if (!strip) return;
+            const v = state.sections_visible || {};
+            const sections = [
+                { id: 'classpicks',    label: 'Class Picks',    show: v.classpicks    },
+                { id: 'classfeatures', label: 'Class Features', show: v.classfeatures },
+                { id: 'abilities',     label: 'Abilities',      show: v.abilities     },
+                { id: 'skills',        label: 'Skills',         show: v.skills        },
+                { id: 'feats',         label: 'Feats',          show: v.feats         },
+                { id: 'magic',         label: 'Magic',          show: v.magic         },
+                { id: 'retrain',       label: 'Retrain',        show: v.retrain       },
+                { id: 'review',        label: 'Review',         show: v.review        },
+            ].filter(s => s.show);
+            strip.innerHTML = sections.map(s =>
+                `<span class="section-pip" data-step="${s.id}" data-required="1" title="${s.label}"></span>`
+            ).join('');
+            strip.querySelectorAll('.section-pip').forEach(p => {
+                p.addEventListener('click', () => navTo(p.dataset.step));
+            });
+            // Labels row under the strip — mirrors the pips 1:1 so each
+            // section is readable/clickable by name, not just on hover.
+            const labels = document.getElementById('lvl-section-labels');
+            if (labels) {
+                labels.innerHTML = sections.map(s =>
+                    `<span class="section-label" data-step="${s.id}" title="${s.label}">${s.label}</span>`
+                ).join('');
+                labels.querySelectorAll('.section-label').forEach(l => {
+                    l.addEventListener('click', () => navTo(l.dataset.step));
+                });
+            }
+        }
+        // "Retrain a feat?" surfaced as a button near the Review section
+        // so the optional step is reachable without rendering a whole
+        // empty panel by default.
+        window.openRetrainStep = function() {
+            const el = document.getElementById('step-retrain');
+            if (!el) return;
+            el.classList.remove('lvl-hidden');
+            state.sections_visible.retrain = true;
+            buildSectionProgress();
+            paintSectionProgress();
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        };
+        function paintSectionProgress() {
+            const strip = document.getElementById('lvl-section-progress');
+            if (!strip) return;
+            strip.querySelectorAll('.section-pip').forEach(p => {
+                const step = p.dataset.step;
+                const required = p.dataset.required === '1';
+                let isError = false;
+                if (step === 'classpicks') {
+                    // Class Picks: any choice-typed entry without a selection → incomplete.
+                    const entries = state.class_level_features || [];
+                    isError = entries.some(f => f.type === 'choice' && !state.class_picks_selected[f.name]);
+                } else {
+                    const chk = document.getElementById('chk-' + step);
+                    isError = chk && (chk.innerText || '').trim() === '!';
+                }
+                const cls = !required ? 'optional' : (isError ? 'incomplete' : 'complete');
+                p.classList.remove('complete', 'incomplete', 'optional');
+                p.classList.add(cls);
+                // Mirror the same state onto the text label under the strip.
+                const lbl = document.querySelector(`#lvl-section-labels > .section-label[data-step="${step}"]`);
+                if (lbl) {
+                    lbl.classList.remove('complete', 'incomplete', 'optional');
+                    lbl.classList.add(cls);
+                }
+            });
+        }
+
+        // ── Gains checklist rail (T3) ──────────────────────────────────
+        // One entry per requirement slot in `reqs` (the exact
+        // {class_feat:1, skill_feat:1, ...} object class_matrix's
+        // base_prog produces for this level — see levelup-builder-audit.md
+        // G1). Loops the keys generically so any class's reqs shape
+        // renders correctly with no hardcoded class list. Each entry's
+        // done-state is read from the SAME signals runValidation() already
+        // writes (chk-abilities/chk-skills text, and _featTypeSlotKeys()
+        // for per-feat-slot state) — no second completion algorithm.
+        const GAINS_LABELS = {
+            ability_boosts: 'Ability Boosts',
+            skill_increase: 'Skill Increase',
+            class_feat: 'Class Feat',
+            general_feat: 'General Feat',
+            skill_feat: 'Skill Feat',
+            ancestry_feat: 'Ancestry Feat',
+        };
+        // Keys rendered as ONE rail entry each, in this display order, with
+        // the step they jump to. Any reqs key not listed here still renders
+        // (label-cased from its key) so a future class_matrix addition
+        // doesn't silently vanish from the rail.
+        const GAINS_STEP_FOR_KEY = {
+            ability_boosts: 'abilities',
+            skill_increase: 'skills',
+            class_feat: 'feats',
+            general_feat: 'feats',
+            skill_feat: 'feats',
+            ancestry_feat: 'feats',
+        };
+        function _gainsEntries() {
+            if (!reqs) return [];
+            const order = ['class_feat', 'ancestry_feat', 'general_feat', 'skill_feat', 'skill_increase', 'ability_boosts'];
+            const keys = Object.keys(reqs).filter(k => reqs[k]);
+            keys.sort((a, b) => {
+                const ia = order.indexOf(a), ib = order.indexOf(b);
+                return (ia === -1 ? order.length : ia) - (ib === -1 ? order.length : ib);
+            });
+            const entries = keys.map(key => ({
+                key,
+                label: GAINS_LABELS[key] || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+                step: GAINS_STEP_FOR_KEY[key] || 'review',
+            }));
+            // Caster levels also gain spells -- driven by SPELL_SLOTS deltas,
+            // not class_matrix reqs, so it must be appended here or the rail
+            // shows all-ticks while chk-magic still gates the wizard.
+            if (_newSpellsRequiredTotal() > 0) {
+                entries.push({ key: 'new_spells', label: 'New Spells', step: 'magic' });
+            }
+            return entries;
+        }
+        // Single-source completion predicates: BOTH runValidation() (the
+        // step-nav gate) and _gainsEntryDone() (the rail ticks) call these,
+        // so the two surfaces can never drift. Bodies are runValidation()'s
+        // original logic verbatim -- do not "improve" one without the other
+        // seeing it.
+        function _abilityBoostsDone() {
+            return (state.free_boosts_selected || []).length === 4;
+        }
+        function _skillIncreasesDone() {
+            const max = (reqs.skill_increase || 0) + (state.retro_int_skills || 0);
+            return (state.skill_increases_selected || []).length === max;
+        }
+        // New-spell requirements come from caster progression (SPELL_SLOTS
+        // deltas), NOT class_matrix reqs -- so without these the gains rail
+        // showed all ticks while the wizard still said INCOMPLETE for
+        // casters. Bodies are runValidation()'s original mValid logic
+        // verbatim, per-caster.
+        function _newSpellsRequired() {
+            const out = [];   // [{cIdx, lvl, req, added}]
+            (state.spellCasters || []).forEach((c, idx) => {
+                let tLower = (c.castingType || c.spellcastingType || c.type || "unknown").toLowerCase();
+                let cType = null;
+                if(tLower.includes("spontaneous")) cType = tLower.includes("bounded") ? "bounded_spontaneous" : "spontaneous";
+                else if(tLower.includes("prepared")) cType = tLower.includes("bounded") ? "bounded_prepared" : "prepared";
+                if (pcClass === 'sorcerer' && cType === 'spontaneous') cType = 'sorcerer';
+                if(cType && SPELL_SLOTS[cType]) {
+                    let oldS = SPELL_SLOTS[cType][currentLevel] || [0,0,0,0,0,0,0,0,0,0];
+                    let newS = SPELL_SLOTS[cType][targetLevel] || [0,0,0,0,0,0,0,0,0,0];
+                    for(let lvl=0; lvl<=10; lvl++) {
+                        let oldAmt = lvl===0 ? 5 : (oldS[lvl-1] || 0);
+                        let newAmt = lvl===0 ? 5 : (newS[lvl-1] || 0);
+                        let req = Math.max(0, newAmt - oldAmt);
+                        let added = state.new_spells.filter(s => s.cIdx === idx && s.lvl === lvl).length;
+                        if (req > 0 || added > 0) out.push({cIdx: idx, lvl: lvl, req: req, added: added});
+                    }
+                }
+            });
+            return out;
+        }
+        function _newSpellsDone() {
+            return _newSpellsRequired().every(e => e.added >= e.req);
+        }
+        function _newSpellsRequiredTotal() {
+            return _newSpellsRequired().reduce((n, e) => n + e.req, 0);
+        }
+
+        function _gainsEntryDone(key) {
+            // Feat-type slots: every expanded slot key must have a pick —
+            // identical predicate to runValidation()'s fValid loop via the
+            // shared _featTypeSlotKeys() helper. Boost/skill completion
+            // shares _abilityBoostsDone()/_skillIncreasesDone() with
+            // runValidation() the same way.
+            if (['class_feat', 'ancestry_feat', 'general_feat', 'skill_feat'].includes(key)) {
+                return _featTypeSlotKeys(key).every(k => !!state.feats_selected[k]);
+            }
+            if (key === 'ability_boosts') {
+                return _abilityBoostsDone();
+            }
+            if (key === 'skill_increase') {
+                return _skillIncreasesDone();
+            }
+            if (key === 'new_spells') {
+                return _newSpellsDone();
+            }
+            return false;
+        }
+        function buildGainsRail() {
+            const body = document.getElementById('gains-rail-body');
+            const rail = document.getElementById('gains-rail');
+            if (!body || !rail) return;
+            const entries = _gainsEntries();
+            if (!entries.length) { rail.style.display = 'none'; return; }
+            rail.style.display = '';
+            body.innerHTML = entries.map(e =>
+                `<div class="gains-item" data-gains-key="${e.key}" data-gains-step="${e.step}" title="Jump to ${esc(e.label)}">` +
+                    `<span class="gains-ring"></span><span>${esc(e.label)}</span>` +
+                `</div>`
+            ).join('');
+            body.querySelectorAll('.gains-item').forEach(el => {
+                el.addEventListener('click', () => navTo(el.dataset.gainsStep));
+            });
+        }
+        function paintGainsRail() {
+            const body = document.getElementById('gains-rail-body');
+            if (!body) return;
+            let total = 0, doneCount = 0;
+            body.querySelectorAll('.gains-item').forEach(el => {
+                total++;
+                const done = _gainsEntryDone(el.dataset.gainsKey);
+                if (done) doneCount++;
+                const ring = el.querySelector('.gains-ring');
+                const wasDone = el.classList.contains('gains-done');
+                el.classList.toggle('gains-done', done);
+                if (done) {
+                    ring.textContent = '✓';
+                    if (!wasDone) {
+                        // Pop the tick in via the shared trkCondIn keyframe,
+                        // same treatment as the tracker's condition chips.
+                        ring.classList.remove('trk-cond-in');
+                        void ring.offsetWidth;
+                        ring.classList.add('trk-cond-in');
+                    }
+                } else {
+                    ring.textContent = '';
+                    ring.classList.remove('trk-cond-in');
+                }
+            });
+            // Explicit progress read-out — turns the rail from a set of pills
+            // into a checklist you can see filling up. Gilt once everything's
+            // chosen so "done" is unmistakable.
+            const counter = document.getElementById('gains-count');
+            if (counter) {
+                counter.textContent = total ? `${doneCount} / ${total}` : '';
+                counter.style.color = (total && doneCount === total)
+                    ? 'var(--gilt-200)' : 'var(--text-on-dark-3)';
+            }
+        }
+
+        // GM override — one visible wizard-level switch, replacing the old
+        // per-modal "Ignore Pre-Reqs" checkbox (removed in T2). Sets the
+        // shared window.ignorePrereqs global the choice picker already
+        // reads, re-renders any open picker in place, and (per submitLevelUp,
+        // T3 contract) implies force_save on the final submit so the
+        // reactive force_save-retry path and this toggle are one mechanism.
+        window.toggleGmOverride = function(on) {
+            window.ignorePrereqs = !!on;
+            const sw = document.getElementById('gm-override-switch');
+            if (sw) sw.classList.toggle('armed', !!on);
+            if (typeof window.refreshChoicePicker === 'function') window.refreshChoicePicker();
+        };
+        // The actual run-validation hook is at the BOTTOM of the file
+        // (after runValidation is defined), via a microtask wrapper.
+
+        function buildCompactStepper() {
+            if (!isDrawerMode) return;
+            const stepper = document.getElementById('compact-stepper');
+            const navItems = document.querySelectorAll('.nav-item');
+            const steps = [];
+            navItems.forEach((item, i) => {
+                if (item.style.display !== 'none' && item.style.display !== '') {
+                    const stepId = item.id.replace('nav-', '');
+                    const checkEl = document.getElementById(`chk-${stepId}`);
+                    const isDone = checkEl && checkEl.textContent.includes('\u2713');
+                    const isActive = item.classList.contains('active');
+                    const label = item.querySelector('span:first-child').textContent.replace(/^\d+\.\s*/, '');
+                    steps.push({ id: stepId, label, isDone, isActive, num: steps.length + 1 });
+                }
+            });
+
+            let html = '';
+            steps.forEach((s, i) => {
+                if (i > 0) html += `<div class="step-line ${s.isDone ? 'done' : ''}"></div>`;
+                html += `<div class="step-dot ${s.isActive ? 'active' : ''} ${s.isDone ? 'done' : ''}"
+                              onclick="navTo('${s.id}')" title="${s.label}">
+                             ${s.isDone ? '\u2713' : s.num}
+                         </div>`;
+            });
+            stepper.innerHTML = html;
+        }
+
+        function getTempFinalStats() {
+            // Detect format: modifiers (0-7) vs scores (8-24)
+            // Only check the 6 ability score keys, ignoring 'breakdown' and other metadata
+            const ABILITY_KEYS = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
+            let rawVals = ABILITY_KEYS.map(k => {
+                let v = pc.abilities[k];
+                return typeof v === 'object' ? (v.value || 0) : (v || 0);
+            });
+            // Score format: most values are 10+. Modifier format: most are 0-7.
+            // Use median check: if the majority of values are >= 8, it's score format.
+            let isScoreFormat = rawVals.filter(v => v >= 8).length >= 4;
+            
+            // Work in score format for correct boost math
+            let temp = {};
+            for (let s of ABILITY_KEYS) {
+                if (!(s in pc.abilities)) continue;
+                let raw = typeof pc.abilities[s] === 'object' ? (pc.abilities[s].value || 0) : (pc.abilities[s] || 0);
+                temp[s] = isScoreFormat ? raw : (raw * 2 + 10); // Convert mods to scores
+            }
+            
+            let halfs = [...(pc.half_boosts || [])];
+            state.free_boosts_selected.forEach(s => {
+                let score = temp[s] || 10;
+                if(score >= 18) {
+                    // Half boost: +1 to score (but tracked as pending half)
+                    if(halfs.includes(s)) { temp[s] += 2; halfs = halfs.filter(h=>h!==s); }
+                    else halfs.push(s);
+                } else {
+                    temp[s] += 2;
+                }
+            });
+            
+            // Return as modifiers for prereq checks etc
+            let mods = {};
+            for(let s in temp) { mods[s] = Math.floor((temp[s]-10)/2); }
+            return mods;
+        }
+
+        function getTempFinalSkills() {
+            let profs = {...state.base_profs};
+            state.skill_increases_selected.forEach(sk => {
+                profs[sk] = (profs[sk] || 0) + 2;
+            });
+            return profs;
+        }
+
+        function buildAbilitiesUI() {
+            const ui = document.getElementById('ui-abilities');
+            ui.innerHTML = ['str','dex','con','int','wis','cha'].map(s => {
+                let mod = pc.mods[s];
+                let isHalf = state.half_boosts.includes(s);
+                let display = mod >= 0 ? `+${mod}` : mod;
+                if(isHalf) display += `<span class="text-amber-500 ml-1 text-sm font-normal">(½)</span>`;
+                
+                return `
+                <div role="button" tabindex="0" aria-pressed="false" onclick="toggleAbility(this.dataset.stat)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleAbility(this.dataset.stat);}" data-stat="${s}" id="fin-btn-${s}" class="flex-1 min-w-[80px] bg-gray-950 border border-gray-700 rounded p-4 flex flex-col items-center cursor-pointer hover:border-amber-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-500 transition-colors user-select-none">
+                    <span class="text-xs text-gray-500 font-bold uppercase mb-1">${s}</span>
+                    <span class="text-xl text-white font-bold mb-2 flex items-center">${display}</span>
+                    <div class="w-4 h-4 rounded-full border-2 border-gray-600 flex items-center justify-center text-xs font-bold text-black" id="fin-chk-${s}"></div>
+                </div>`;
+            }).join('');
+            renderAbilityMath();
+            renderBoostSummary();
+        }
+
+        // Footer summary on the Abilities step — shows allocated / remaining
+        // plus the selected stats so the player can confirm before Continue.
+        function renderBoostSummary() {
+            const sel = state.free_boosts_selected || [];
+            const allocatedEl = document.getElementById('abilities-allocated');
+            const remainingEl = document.getElementById('abilities-remaining');
+            const listEl = document.getElementById('abilities-selected-list');
+            if (allocatedEl) allocatedEl.textContent = sel.length;
+            if (remainingEl) remainingEl.textContent = Math.max(0, 4 - sel.length);
+            if (listEl) {
+                listEl.innerHTML = sel.length
+                    ? `Selected: ${sel.map(s => `<span style="color:#fbbf24;font-weight:700;">${s.toUpperCase()}</span>`).join(', ')}`
+                    : '<span style="color:#64748b;font-style:italic;">No boosts selected yet — pick four.</span>';
+            }
+        }
+        window.renderBoostSummary = renderBoostSummary;
+
+        function toggleAbility(stat) {
+            const idx = state.free_boosts_selected.indexOf(stat);
+            if (idx > -1) {
+                state.free_boosts_selected.splice(idx, 1);
+                document.getElementById(`fin-btn-${stat}`).classList.remove('bg-amber-900/20', 'border-amber-500');
+                document.getElementById(`fin-chk-${stat}`).classList.replace('bg-amber-500', 'border-gray-600');
+                document.getElementById(`fin-chk-${stat}`).classList.replace('border-amber-500', 'border-gray-600');
+                document.getElementById(`fin-chk-${stat}`).innerText = "";
+            } else {
+                if(state.free_boosts_selected.length >= 4) return;
+                state.free_boosts_selected.push(stat);
+                document.getElementById(`fin-btn-${stat}`).classList.add('bg-amber-900/20', 'border-amber-500');
+                document.getElementById(`fin-chk-${stat}`).classList.replace('border-gray-600', 'bg-amber-500');
+                document.getElementById(`fin-chk-${stat}`).classList.replace('border-gray-600', 'border-amber-500');
+                document.getElementById(`fin-chk-${stat}`).innerText = "";
+            }
+            if(state.free_boosts_selected.length === 4) document.getElementById('msg-abilities-done').classList.remove('hidden');
+            else document.getElementById('msg-abilities-done').classList.add('hidden');
+            renderAbilityMath();
+            renderBoostSummary();
+            buildSkillsUI();
+            updateHpPreview();  // CON boost changes HP per level
+            runValidation();
+        }
+
+        function renderAbilityMath() {
+            let mods = {...pc.mods};
+            let newHalfs = [...(pc.half_boosts || [])];
+            
+            state.free_boosts_selected.forEach(s => {
+                if(mods[s] >= 4) {
+                    if(newHalfs.includes(s)) { mods[s]++; newHalfs = newHalfs.filter(h=>h!==s); }
+                    else newHalfs.push(s);
+                } else {
+                    mods[s]++;
+                }
+            });
+
+            document.getElementById('ui-abilities-math').innerHTML = Object.keys(mods).map(k => {
+                let disp = mods[k] >= 0 ? `+${mods[k]}` : mods[k];
+                if(newHalfs.includes(k)) disp += `<span class="text-amber-500 ml-1 text-sm font-normal">(½)</span>`;
+                let colorClass = state.free_boosts_selected.includes(k) ? 'text-green-400' : 'text-white';
+                return `
+                <div class="bg-gray-950 p-3 rounded border border-gray-800 text-center shadow-inner relative group cursor-help">
+                    <span class="text-[10px] text-gray-500 uppercase block font-bold tracking-widest">${k}</span>
+                    <span class="text-2xl font-bold ${colorClass} leading-none inline-flex items-center mt-2">${disp}</span>
+                    <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-32 bg-gray-900 border border-gray-700 rounded p-2 text-[10px] text-left text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl whitespace-pre-line leading-relaxed">Current Base: ${pc.mods[k]}\nLevel Up Free: ${state.free_boosts_selected.includes(k) ? "+1" : "0"}</div>
+                </div>`;
+            }).join('');
+        }
+
+        function getSkillCap() {
+            if(targetLevel >= 15) return {val: 8, name: "Legendary (4 Boxes)"};
+            if(targetLevel >= 7) return {val: 6, name: "Master (3 Boxes)"};
+            return {val: 4, name: "Expert (2 Boxes)"};
+        }
+
+        function buildSkillsUI() {
+            if(!reqs.skill_increase) return;
+
+            let oldIntMod = pc.mods['int'] || 0;
+            let newIntMod = oldIntMod;
+            if (state.free_boosts_selected.includes('int') && oldIntMod < 4) newIntMod++;
+            else if (state.free_boosts_selected.includes('int') && oldIntMod >= 4 && pc.half_boosts.includes('int')) newIntMod++;
+            state.retro_int_skills = Math.max(0, newIntMod - oldIntMod);
+            
+            let totalIncreases = reqs.skill_increase + state.retro_int_skills;
+            let mathStr = `Matrix Base (${reqs.skill_increase})`;
+            if(state.retro_int_skills > 0) mathStr += ` + Retro INT (${state.retro_int_skills})`;
+            document.getElementById('lbl-skill-math').innerText = mathStr;
+
+            const ui = document.getElementById('ui-skills');
+            const cap = getSkillCap();
+            
+            const RANK_LABELS = {0: 'Untrained', 2: 'Trained', 4: 'Expert', 6: 'Master', 8: 'Legendary'};
+            const RANK_COLORS = {0: 'text-gray-500', 2: 'text-gray-300', 4: 'text-blue-400', 6: 'text-amber-400', 8: 'text-red-400'};
+
+            ui.innerHTML = stdSkills.map(sk => {
+                let baseProf = state.base_profs[sk] || 0;
+                let added = state.skill_increases_selected.filter(x => x === sk).length * 2;
+                let totalProf = baseProf + added;
+
+                let boxes = "";
+                for(let i=2; i<=8; i+=2) {
+                    if(i <= baseProf) boxes += `<div class="rank-box fill"></div>`;
+                    else if(i <= totalProf) boxes += `<div class="rank-box fill-new"></div>`;
+                    else boxes += `<div class="rank-box"></div>`;
+                }
+
+                let rankLabel = RANK_LABELS[totalProf] || 'Untrained';
+                let rankColor = RANK_COLORS[totalProf] || 'text-gray-500';
+                let arrow = added > 0 ? ` <span class="text-green-400 text-xs">← ${RANK_LABELS[baseProf] || 'U'}</span>` : '';
+
+                let btnClass = "bg-gray-950 border-gray-700 text-gray-300";
+                if(added > 0) btnClass = "bg-amber-900/20 border-amber-500 text-white";
+
+                let isCapped = totalProf >= cap.val || totalProf >= 8;
+                let disabledAttr = isCapped ? `opacity-50 cursor-not-allowed` : `cursor-pointer hover:border-amber-500`;
+
+                return `
+                <div role="button" tabindex="${isCapped ? -1 : 0}" aria-disabled="${isCapped}" class="flex items-center justify-between p-3 border rounded transition-colors ${btnClass} ${disabledAttr} focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-500" onclick="${isCapped ? '' : `incrementSkill('${sk}', ${totalIncreases})`}" onkeydown="${isCapped ? '' : `if(event.key==='Enter'||event.key===' '){event.preventDefault();incrementSkill('${sk}', ${totalIncreases});}`}">
+                    <div class="flex flex-col">
+                        <span class="text-sm font-bold capitalize">${sk}</span>
+                        <span class="text-xs ${rankColor}">${rankLabel}${arrow}</span>
+                    </div>
+                    <div class="flex items-center space-x-1">${boxes}</div>
+                </div>`;
+            }).join('');
+
+            const loresUI = document.getElementById('ui-lore-skills');
+            let lores = Object.keys(state.base_profs).filter(k => k.startsWith('lore:'));
+            state.skill_increases_selected.forEach(sk => { if(sk.startsWith('lore:') && !lores.includes(sk)) lores.push(sk); });
+
+            loresUI.innerHTML = lores.map(sk => {
+                let baseProf = state.base_profs[sk] || 0;
+                let added = state.skill_increases_selected.filter(x => x === sk).length * 2;
+                let totalProf = baseProf + added;
+
+                let boxes = "";
+                for(let i=2; i<=8; i+=2) {
+                    if(i <= baseProf) boxes += `<div class="rank-box fill"></div>`;
+                    else if(i <= totalProf) boxes += `<div class="rank-box fill-new"></div>`;
+                    else boxes += `<div class="rank-box"></div>`;
+                }
+
+                let btnClass = added > 0 ? "bg-amber-900/20 border-amber-500 text-white" : "bg-gray-950 border-gray-700 text-gray-300";
+                let isCapped = totalProf >= cap.val || totalProf >= 8;
+                let disabledAttr = isCapped ? `opacity-50 cursor-not-allowed` : `cursor-pointer hover:border-amber-500`;
+                let niceName = sk.replace('lore:', '').trim().replace(/\b\w/g, l => l.toUpperCase()) + " Lore";
+                let rankLabel = RANK_LABELS[totalProf] || 'Untrained';
+                let rankColor = RANK_COLORS[totalProf] || 'text-gray-500';
+
+                return `
+                <div role="button" tabindex="${isCapped ? -1 : 0}" aria-disabled="${isCapped}" class="flex items-center justify-between p-2 border rounded text-xs transition-colors ${btnClass} ${disabledAttr} focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-500" onclick="${isCapped ? '' : `incrementSkill('${sk}', ${totalIncreases})`}" onkeydown="${isCapped ? '' : `if(event.key==='Enter'||event.key===' '){event.preventDefault();incrementSkill('${sk}', ${totalIncreases});}`}">
+                    <div class="flex flex-col">
+                        <span class="font-bold">${niceName}</span>
+                        <span class="${rankColor}" style="font-size:0.65rem">${rankLabel}</span>
+                    </div>
+                    <div class="flex items-center space-x-1">${boxes}</div>
+                </div>`;
+            }).join('');
+
+            let spent = state.skill_increases_selected.length;
+            document.getElementById('lbl-skill-remaining').innerText = `${totalIncreases - spent} left`;
+            if (spent === totalIncreases) document.getElementById('lbl-skill-remaining').className = "text-2xl font-bold text-green-400";
+            else document.getElementById('lbl-skill-remaining').className = "text-2xl font-bold text-white";
+            
+            runValidation();
+        }
+
+        function incrementSkill(sk, max) {
+            let spent = state.skill_increases_selected.length;
+            if(state.skill_increases_selected.includes(sk)) {
+                let idx = state.skill_increases_selected.lastIndexOf(sk);
+                state.skill_increases_selected.splice(idx, 1);
+                buildSkillsUI(); return;
+            }
+            if(spent >= max) return; 
+            state.skill_increases_selected.push(sk);
+            buildSkillsUI();
+        }
+
+        function addLore() {
+            let max = reqs.skill_increase + state.retro_int_skills;
+            if(state.skill_increases_selected.length >= max) return alert("No skill increases left to spend.");
+            let name = prompt("Enter the specific Lore subject (e.g., Sailing, Undead):");
+            if(!name) return;
+            let key = "lore:" + name.toLowerCase();
+            state.skill_increases_selected.push(key);
+            buildSkillsUI();
+        }
+
+        // Build the Class Picks section — class-specific features from
+        // PC1 + PC2 + GMC. Each entry is either an info pill (you gain X)
+        // or a required choice card. Choices register on
+        // state.class_picks_selected[name] = chosen-option name.
+        function buildClassPicksUI() {
+            const ui = document.getElementById('ui-class-picks');
+            if (!ui) return;
+            const entries = state.class_level_features || [];
+            // Stamp the target-level number into any visible header
+            document.querySelectorAll('[data-target-level]').forEach(el => el.textContent = targetLevel);
+            if (!entries.length) { ui.innerHTML = ''; return; }
+            ui.innerHTML = entries.map((f, idx) => {
+                const safe = (f.name || '').replace(/"/g, '&quot;');
+                if (f.type === 'choice' && Array.isArray(f.choices)) {
+                    const picked = state.class_picks_selected[f.name];
+                    return `
+                    <div class="choice-card ${picked ? 'selected' : ''}" data-class-pick="${safe}">
+                        <div class="flex justify-between items-center w-full">
+                            <div style="flex:1; min-width:0;">
+                                <div class="subtitle ${picked ? 'text-green-400' : ''}">${picked ? 'Locked In' : 'Pick One *'}</div>
+                                <div class="title">${f.name}${picked ? ' — ' + picked : ''}</div>
+                                <div style="font-size:11px; color:var(--text-on-dark-3); margin-top:4px; line-height:1.4;">${(f.desc || '').replace(/</g,'&lt;')}</div>
+                            </div>
+                        </div>
+                        <div class="class-pick-options" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;">
+                            ${f.choices.map(c => `
+                                <button type="button" class="class-pick-opt ${picked === c.name ? 'active' : ''}"
+                                        data-pick-name="${(c.name||'').replace(/"/g,'&quot;')}"
+                                        title="${(c.desc || '').replace(/"/g,'&quot;')}"
+                                        style="padding:6px 12px; border-radius:var(--r-sm); background:${picked === c.name ? 'var(--accent)' : 'transparent'}; color:${picked === c.name ? 'var(--ink-950)' : 'var(--text-on-dark-2)'}; border:1px solid ${picked === c.name ? 'var(--accent)' : 'var(--border-strong)'}; font-size:11px; font-weight:600; cursor:pointer;">
+                                    ${c.name}
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>`;
+                }
+                // info-only entry — just render a small "you gained X" pill
+                return `
+                <div class="choice-card" style="cursor:default;" data-class-pick-info="${safe}">
+                    <div class="flex justify-between items-center w-full">
+                        <div style="flex:1; min-width:0;">
+                            <div class="subtitle" style="color: var(--text-on-dark-3);">Class Feature</div>
+                            <div class="title">${f.name}</div>
+                            <div style="font-size:11px; color:var(--text-on-dark-3); margin-top:4px; line-height:1.4;">${(f.desc || '').replace(/</g,'&lt;')}</div>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+            // Wire choice buttons
+            ui.querySelectorAll('.class-pick-opt').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const card = btn.closest('[data-class-pick]');
+                    const pickName = card?.getAttribute('data-class-pick');
+                    const choiceName = btn.getAttribute('data-pick-name');
+                    if (!pickName || !choiceName) return;
+                    state.class_picks_selected[pickName] = choiceName;
+                    buildClassPicksUI();
+                    runValidation();
+                });
+            });
+        }
+
+        function buildFeatsUI() {
+            const ui = document.getElementById('ui-feats');
+            let html = "";
+
+            ['ancestry_feat', 'class_feat', 'general_feat', 'skill_feat', 'archetype_feat'].forEach(ft => {
+                let count = reqs[ft] || 0;
+
+                if (ft === 'class_feat') count += state.bonus_feats_added;
+                if (ft === 'archetype_feat') {
+                    // Combine: extra archetype slots from "+ Archetype Feat" button
+                    // plus free-archetype variant (one per even level when ON).
+                    count += (state.archetype_feats_added || 0);
+                    count += (state.free_archetype_slot || 0);
+                }
+
+                for(let i=0; i<count; i++) {
+                    let key = count > 1 ? `${ft}_${i}` : ft;
+
+                    let label = ft.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                    if (pcClass === 'kineticist' && ft === 'class_feat') label = "Class / Impulse Feat";
+                    if (ft === 'archetype_feat' && (state.free_archetype_slot || 0) > 0 && i === count - 1 && (state.archetype_feats_added || 0) === 0) {
+                        label = "Free Archetype Feat";
+                    }
+                    if (count > 1) label += ` ${i + 1}`;
+
+                    // Flag a selected feat whose prerequisites are no longer
+                    // met — covers the "Ignore Pre-Reqs" override and the case
+                    // where a skill increase backing the feat was un-picked.
+                    let sel = state.feats_selected[key];
+                    let illegal = sel && typeof meetsPrereqs === 'function' && !meetsPrereqs(sel);
+                    let val = sel ? sel.name : "Select Feat...";
+                    let subtitle = sel ? (illegal ? "Prerequisite not met" : "Locked In") : `${label} *`;
+                    let subColor = illegal ? 'text-red-400' : (sel ? 'text-green-400' : '');
+                    let cardBorder = illegal ? 'border border-red-700/70' : '';
+                    let reqLine = illegal
+                        ? `<div class="text-[11px] text-red-400 mt-1">Requires ${esc(sel.prerequisites_raw || 'an unmet prerequisite')}</div>`
+                        : '';
+
+                    html += `
+                    <div class="choice-card bg-gray-900 hover:bg-gray-800 ${cardBorder}" data-feat-slot-type="${ft}" onclick="openModal('${ft}', {key: '${key}'})">
+                        <div class="flex justify-between items-center w-full">
+                            <div>
+                                <div class="subtitle ${subColor}">${subtitle}</div>
+                                <div class="title">${val}</div>
+                                ${reqLine}
+                            </div>
+                            <span class="text-gray-500 font-bold text-xl">&rarr;</span>
+                        </div>
+                    </div>`;
+                }
+            });
+
+            if(html === "") html = "<div class='text-gray-500 italic'>No feats granted at this level.</div>";
+            ui.innerHTML = html;
+        }
+
+        function addBonusFeatLevelUp() {
+            state.bonus_feats_added++;
+            buildFeatsUI();
+            runValidation();
+        }
+
+        // ─── Archetype + Free Archetype support ────────────────────────
+        // The class feat picker EXCLUDES archetype/dedication feats so
+        // a player can't accidentally take an archetype feat as a class
+        // feat. The Archetype-Feat picker is the path for them.
+        // _knownDedications() walks the PC's existing feats (pc.feats,
+        // normalized server-side into {name, desc, level, type} dicts —
+        // see Character.__init__ in app.py) plus any archetype/class feats
+        // picked so far THIS level-up session (state.feats_selected, a
+        // dict of slot-key -> feat object), and returns the archetypes the
+        // PC has dedicated to, plus the count of feats they have from each.
+        function _knownDedications() {
+            const feats = (pc && pc.feats) || [];
+            const seen = {};
+            const scan = (name) => {
+                if (!name) return;
+                const lname = name.toString().toLowerCase();
+                if (lname.endsWith(' dedication')) {
+                    const arch = lname.replace(/ dedication$/,'').trim();
+                    if (!seen[arch]) seen[arch] = { archetype: arch, feat_count: 0 };
+                    seen[arch].feat_count++;  // dedication itself counts
+                } else {
+                    // Match this feat against known archetypes — by checking
+                    // name-token overlap. We don't have structural archetype
+                    // data on the feat object itself, so count any non-
+                    // dedication feat that's also tagged with an archetype
+                    // trait we've already seen.
+                    for (const arch of Object.keys(seen)) {
+                        if (lname.includes(arch)) seen[arch].feat_count++;
+                    }
+                }
+            };
+            feats.forEach(f => scan(f && f.name));
+            // Also scan state.feats_selected for in-progress level-up picks
+            // (e.g. picking a dedication and then an archetype feat in the
+            // same level-up session before saving).
+            Object.values(state.feats_selected || {}).forEach(f => scan(f && f.name));
+            return Object.values(seen);
+        }
+
+        function addArchetypeFeatLevelUp() {
+            state.archetype_feats_added = (state.archetype_feats_added || 0) + 1;
+            buildFeatsUI();
+            runValidation();
+            // Auto-open the picker for the slot we just added — saves a click.
+            // (buildFeatsUI rendered a slot at the end with type 'archetype_feat'.)
+            const slots = document.querySelectorAll('[data-feat-slot-type="archetype_feat"]');
+            if (slots.length) {
+                const last = slots[slots.length - 1];
+                const btn = last.querySelector('button[onclick*="openMod"]');
+                if (btn) btn.click();
+            }
+        }
+
+        function toggleFreeArchetype(on) {
+            state.free_archetype = !!on;
+            // Free Archetype RAW (GM Core p.187): adds a free archetype feat
+            // slot at every even level, in addition to the normal class feat.
+            // We surface this by injecting one extra archetype-feat slot
+            // when the toggle is ON and the new level is even.
+            if (state.free_archetype && (state.target_level % 2 === 0)) {
+                state.free_archetype_slot = 1;
+            } else {
+                state.free_archetype_slot = 0;
+            }
+            buildFeatsUI();
+            runValidation();
+            // Persist so the toggle survives reload of the same level-up page
+            try { localStorage.setItem(`pf2e_free_archetype_${pc.name}`, on ? '1' : '0'); } catch(_) {}
+        }
+
+        function buildMagicUI() {
+            const container = document.getElementById('ui-magic-containers');
+            container.innerHTML = "";
+            document.getElementById('btn-unlock-archetype').classList.remove('hidden');
+
+            if(state.spellCasters.length === 0) {
+                container.innerHTML = "<div class='text-gray-500 italic'>You do not have any spellcasting classes.</div>";
+                return;
+            }
+
+            state.spellCasters.forEach((caster, idx) => {
+                let html = `<div class="bg-gray-800 p-6 rounded-lg border border-blue-900/50 shadow-xl mb-6 relative">
+                    <div class="absolute top-0 right-0 bg-blue-900/40 text-blue-400 px-3 py-1 rounded-bl-lg text-[10px] font-bold uppercase tracking-widest border-b border-l border-blue-900/50">${caster.magicTradition || 'Unknown'}</div>
+                    <h3 class="text-xl font-bold text-blue-400 mb-1">${caster.name}</h3>
+                    <p class="text-xs text-gray-400 uppercase tracking-wider font-bold mb-4 border-b border-gray-700 pb-2">${caster.castingType || caster.spellcastingType || caster.type || 'Focus'} Casting</p>
+                `;
+
+                let oldSlots = [0,0,0,0,0,0,0,0,0,0]; let newSlots = [0,0,0,0,0,0,0,0,0,0];
+                let tLower = (caster.castingType || caster.spellcastingType || caster.type || "unknown").toLowerCase();
+                let cType = null;
+                
+                if(tLower.includes("spontaneous")) cType = tLower.includes("bounded") ? "bounded_spontaneous" : "spontaneous";
+                else if(tLower.includes("prepared")) cType = tLower.includes("bounded") ? "bounded_prepared" : "prepared";
+                
+                if (pcClass === 'sorcerer' && cType === 'spontaneous') cType = 'sorcerer';
+
+                let slotDiff = []; 
+                if(cType && SPELL_SLOTS[cType]) {
+                    oldSlots = SPELL_SLOTS[cType][currentLevel] || oldSlots;
+                    newSlots = SPELL_SLOTS[cType][targetLevel] || newSlots;
+                    
+                    for(let lvl=0; lvl<=10; lvl++) {
+                        let oldAmt = lvl===0 ? 5 : (oldSlots[lvl-1] || 0); 
+                        let newAmt = lvl===0 ? 5 : (newSlots[lvl-1] || 0);
+                        if (newAmt > oldAmt) slotDiff.push({lvl: lvl, req: newAmt - oldAmt});
+                    }
+                }
+
+                let canSwap = cType && cType.includes("spontaneous") && currentLevel >= 1;
+
+                if(slotDiff.length === 0 && !canSwap) {
+                    html += `<div class="text-gray-500 italic text-sm">No standard spell slots gained for this matrix at Level ${targetLevel}.</div></div>`;
+                    container.innerHTML += html;
+                    return;
+                }
+
+                // Repertoire capacity for spontaneous casters
+                let knownTable = SPELLS_KNOWN[cType];
+                if (canSwap && knownTable) {
+                    let knownAtLevel = knownTable[targetLevel] || [5,0,0,0,0,0,0,0,0,0];
+                    html += `<div class="bg-gray-950 p-3 rounded border border-purple-900/30 mb-4">
+                        <div class="text-[10px] text-purple-400 font-bold uppercase tracking-wider mb-2">Repertoire Capacity at Level ${targetLevel}</div>
+                        <div class="flex flex-wrap gap-2">`;
+                    for (let r = 0; r <= 9; r++) {
+                        if (knownAtLevel[r] > 0) {
+                            let label = r === 0 ? 'Cantrips' : `Rank ${r}`;
+                            html += `<span class="text-[10px] px-2 py-1 rounded border border-purple-900/40 text-gray-300" style="background:rgba(147,51,234,0.08);">${label}: <strong class="text-purple-300">${knownAtLevel[r]}</strong></span>`;
+                        }
+                    }
+                    html += `</div></div>`;
+                }
+
+                if (slotDiff.length > 0) {
+                    html += `<div class="grid grid-cols-1 gap-4 mb-6">`;
+                    slotDiff.forEach(diff => {
+                        let label = diff.lvl === 0 ? "Cantrips" : `Level ${diff.lvl} Spells`;
+                        let addedCount = (state.new_spells || []).filter(s => s.cIdx === idx && s.lvl === diff.lvl).length;
+
+                        html += `
+                        <div class="bg-gray-950 p-4 rounded border border-gray-800">
+                            <div class="flex justify-between items-center mb-3">
+                                <div><h4 class="text-sm font-bold text-gray-300">Learn ${label}</h4><span class="text-[10px] text-amber-500 font-bold">${addedCount} / ${diff.req} Picked</span></div>
+                                <button onclick="openModal('spell', {cIdx: ${idx}, lvl: ${diff.lvl}, req: ${diff.req}})" class="bg-blue-900/40 hover:bg-blue-800 border border-blue-800 text-blue-200 px-3 py-1 rounded text-xs font-bold transition-colors">Browse</button>
+                            </div>
+                            <div class="flex flex-wrap gap-2" id="ui-new-spells-${idx}-${diff.lvl}">
+                                ${(state.new_spells || []).filter(s => s.cIdx === idx && s.lvl === diff.lvl).map(s =>
+                                    `<div class="bg-gray-900 border border-gray-700 px-2 py-1 rounded text-xs text-gray-300 group">${s.name} <button onclick="removeNewSpell(${idx}, ${diff.lvl}, '${String(s.name==null?'':s.name).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')" class="text-red-500 ml-1 hidden group-hover:inline">×</button></div>`
+                                ).join('')}
+                            </div>
+                        </div>`;
+                    });
+                    html += `</div>`;
+                }
+
+                // Spontaneous spell swap (PF2e: swap one known spell per level-up)
+                if (canSwap) {
+                    let existingSpells = [];
+                    (caster.spells || []).forEach(s => {
+                        if (s && s.name) existingSpells.push({name: s.name, lvl: s.level || 0});
+                    });
+                    // Also gather from levels array
+                    (caster.levels || []).forEach(l => {
+                        (l.spells || []).forEach(s => {
+                            if (s && s.name && !existingSpells.find(e => e.name === s.name)) {
+                                existingSpells.push({name: s.name, lvl: l.level || 0});
+                            }
+                        });
+                    });
+
+                    let swapOut = state.spell_swap_out ? state.spell_swap_out[idx] : null;
+                    let swapIn = state.spell_swap_in ? state.spell_swap_in[idx] : null;
+
+                    html += `<div class="bg-gray-950 p-4 rounded border border-amber-900/30 mb-4">
+                        <div class="flex justify-between items-center mb-2">
+                            <div>
+                                <h4 class="text-sm font-bold text-amber-400">Spell Swap <span class="text-gray-500 font-normal">(Optional)</span></h4>
+                                <p class="text-[10px] text-gray-500">Spontaneous casters may swap one known spell for another of the same rank each level.</p>
+                            </div>
+                        </div>`;
+
+                    if (existingSpells.length > 0) {
+                        html += `<div class="flex items-center gap-3 mt-2">
+                            <div class="flex-1">
+                                <label class="text-[10px] text-gray-500 uppercase font-semibold block mb-1">Remove</label>
+                                <select id="spell-swap-out-${idx}" onchange="setSpellSwap(${idx})" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-xs text-gray-300">
+                                    <option value="">— None —</option>
+                                    ${existingSpells.map(s => `<option value="${esc(s.name)}" data-lvl="${s.lvl}" ${swapOut && swapOut.name === s.name ? 'selected' : ''}>${s.name} (Rank ${s.lvl})</option>`).join('')}
+                                </select>
+                            </div>
+                            <span class="text-gray-600 text-lg mt-4">→</span>
+                            <div class="flex-1">
+                                <label class="text-[10px] text-gray-500 uppercase font-semibold block mb-1">Add</label>
+                                ${swapOut
+                                    ? `<button onclick="openModal('spell', {cIdx: ${idx}, lvl: ${swapOut.lvl}, req: 1, swapMode: true})" class="bg-amber-900/30 hover:bg-amber-800/40 border border-amber-800/50 text-amber-300 px-3 py-1.5 rounded text-xs font-bold w-full transition-colors">${swapIn ? swapIn.name : 'Pick Replacement...'}</button>`
+                                    : `<div class="text-gray-600 text-xs italic py-1.5">Select a spell to remove first</div>`
+                                }
+                            </div>
+                        </div>`;
+                    } else {
+                        html += `<div class="text-gray-500 text-xs italic">No existing spells to swap.</div>`;
+                    }
+                    html += `</div>`;
+                }
+
+                html += `</div>`;
+                container.innerHTML += html;
+            });
+        }
+        
+        function unlockArchetypeMagic() {
+            let trad = prompt("Enter the Magic Tradition for your new Archetype (Arcane, Divine, Occult, Primal):");
+            if(!trad) return;
+            state.spellCasters.push({
+                "name": `${trad} Archetype`,
+                "magicTradition": trad,
+                "castingType": "Spontaneous",
+                "spells": [],
+                "perDay": [0,0,0,0,0,0,0,0,0,0]
+            });
+            buildMagicUI();
+        }
+
+        if(!state.new_spells) state.new_spells = [];
+        if(!state.spell_swap_out) state.spell_swap_out = {};
+        if(!state.spell_swap_in) state.spell_swap_in = {};
+
+        function setSpellSwap(cIdx) {
+            const sel = document.getElementById(`spell-swap-out-${cIdx}`);
+            if (!sel || !sel.value) {
+                delete state.spell_swap_out[cIdx];
+                delete state.spell_swap_in[cIdx];
+            } else {
+                const opt = sel.options[sel.selectedIndex];
+                state.spell_swap_out[cIdx] = {name: sel.value, lvl: parseInt(opt.getAttribute('data-lvl') || 0)};
+                delete state.spell_swap_in[cIdx];
+            }
+            buildMagicUI(); runValidation();
+        }
+
+        function removeNewSpell(cIdx, lvl, name) {
+            state.new_spells = state.new_spells.filter(s => !(s.cIdx === cIdx && s.lvl === lvl && s.name === name));
+            buildMagicUI(); runValidation();
+        }
+
+        function buildRetrainUI() {
+            const ui = document.getElementById('ui-retrain-list');
+            ui.innerHTML = pc.feats.map((f, i) => `
+                <div class="flex justify-between items-center bg-gray-950 border border-gray-700 p-3 rounded group hover:border-amber-500 transition-colors">
+                    <div>
+                        <div class="text-sm font-bold text-gray-200">${f.name}</div>
+                        <div class="text-[10px] text-gray-500 uppercase">${f.desc && f.desc.substring(0,30)}...</div>
+                    </div>
+                    <button onclick="initRetrainFeat(${i}, '${String(f.name==null?'':f.name).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')" class="bg-red-900/40 text-red-400 hover:bg-red-800 hover:text-white px-3 py-1 rounded text-xs font-bold border border-red-900 transition-colors opacity-0 group-hover:opacity-100">Retrain</button>
+                </div>
+            `).join('');
+
+            if(state.retrained_feats.length > 0) {
+                ui.innerHTML += `<h4 class="text-sm font-bold text-amber-500 mt-4 border-b border-gray-700 pb-1">Active Retrains:</h4>` + 
+                state.retrained_feats.map((rf, i) => `
+                    <div class="flex justify-between items-center bg-gray-900 border border-amber-500 p-3 rounded">
+                        <div class="text-xs text-gray-300">Dropped <span class="text-red-400 font-bold line-through">${rf.old}</span> → Learned <span class="text-green-400 font-bold">${rf.new.name}</span></div>
+                        <button onclick="cancelRetrain(${i})" class="text-gray-500 hover:text-white">×</button>
+                    </div>
+                `).join('');
+            }
+        }
+
+        function initRetrainFeat(idx, oldName) {
+            mCtx.type = "retrain_feat";
+            mCtx.meta = { oldName: oldName };
+            document.getElementById('mod-search').value = "";
+            document.getElementById('mod-preview').innerHTML = `<div class="flex h-full items-center justify-center text-gray-600 italic">Select a replacement feat.</div>`;
+            document.getElementById('btn-lock').classList.add('hidden');
+            
+            let title = `Retrain: ${oldName}`;
+            let raw = [...(dbFeats['general']||[]), ...(dbFeats['skill']||[]), ...(dbFeats['class']||[]), ...(dbFeats['ancestry']||[])];
+            mCtx.data = raw.filter(f => f.level <= currentLevel);
+            
+            const tabsContainer = document.getElementById('mod-tabs');
+            if(tabsContainer) { tabsContainer.innerHTML = ''; tabsContainer.classList.add('hidden'); }
+            mCtx.activeTabs = false;
+            mCtx.tab = 'all';
+
+            document.getElementById('mod-title').innerText = title;
+            renderModalList();
+            
+            const m = document.getElementById('uni-modal'); m.classList.remove('hidden');
+            setTimeout(() => { m.classList.remove('opacity-0'); document.getElementById('uni-window').classList.remove('scale-95'); document.getElementById('mod-search').focus(); }, 10);
+        }
+
+        function cancelRetrain(idx) { state.retrained_feats.splice(idx, 1); buildRetrainUI(); }
+
+        // ── Level-up recap helpers (Review step) ───────────────────────
+        // Mirror the backend heuristic: a feat that raises the focus pool
+        // mentions "focus point" + "maximum" in its description. Used to
+        // surface "+N Focus Point" in the recap.
+        function _focusPointsGainedThisLevel() {
+            let n = 0;
+            Object.values(state.feats_selected || {}).forEach(f => {
+                if (!f) return;
+                // Feats ship description-less now; the server precomputes
+                // grants_focus. Fall back to text scan for any feat that still
+                // carries an inline description (class features, older data).
+                if (f.grants_focus) { n++; return; }
+                const d = ((f.desc || f.description) || '').toLowerCase();
+                if (d.includes('focus point') && d.includes('maximum')) n++;
+            });
+            return n;
+        }
+
+        // For each non-focus caster, the spell ranks whose slot count grew
+        // this level (mirrors the Magic step's slotDiff logic) so the recap
+        // can show "Rank 2 spell slots unlocked".
+        function _newSpellSlotsThisLevel() {
+            const out = [];
+            (state.spellCasters || []).forEach((caster) => {
+                let tLower = (caster.castingType || caster.spellcastingType || caster.type || 'unknown').toLowerCase();
+                if (tLower.includes('focus') || tLower.includes('innate') || tLower.includes('alchemical')) return;
+                let cType = null;
+                if (tLower.includes('spontaneous')) cType = tLower.includes('bounded') ? 'bounded_spontaneous' : 'spontaneous';
+                else if (tLower.includes('prepared')) cType = tLower.includes('bounded') ? 'bounded_prepared' : 'prepared';
+                if (pcClass === 'sorcerer' && cType === 'spontaneous') cType = 'sorcerer';
+                if (!cType || !SPELL_SLOTS[cType]) return;
+                const oldS = SPELL_SLOTS[cType][currentLevel] || [];
+                const newS = SPELL_SLOTS[cType][targetLevel] || [];
+                const ranks = [];
+                for (let r = 1; r <= 10; r++) {
+                    const o = oldS[r - 1] || 0, nw = newS[r - 1] || 0;
+                    if (nw > o) ranks.push({ rank: r, count: nw, brandNew: o === 0 });
+                }
+                if (ranks.length) out.push({ name: caster.name || caster.magicTradition || 'Spellcasting', ranks });
+            });
+            return out;
+        }
+
+        function renderReview() {
+            const ui = document.getElementById('ui-review-content');
+            const SECTION_H = 'text-sm font-bold text-gray-400 border-b border-gray-700 pb-1 mb-2 uppercase';
+            let html = "";
+
+            // "Here's what you gained" framing at the top of the recap.
+            html += `<div class="mb-6 text-center">
+                <div class="text-[11px] uppercase tracking-[0.18em] text-amber-500 font-bold mb-1">Here's what you gained</div>
+                <div class="text-lg font-bold text-white">Advancing to Level ${targetLevel}</div>
+            </div>`;
+
+            // Show HP gain for this level
+            let classHp = (pc.attributes || {}).classhp || 8;
+            let conMod = (pc.mods || {}).con || 0;
+            // If abilities were boosted this level and con was boosted, recalculate
+            if (state.free_boosts_selected.includes('con')) {
+                let tempStats = getTempFinalStats();
+                conMod = tempStats.con || conMod;
+            }
+            let hpPerLevel = classHp + conMod + ((pc.attributes || {}).bonushpPerLevel || 0);
+            if (hpPerLevel < 1) hpPerLevel = 1;
+            let oldHp = pc.hp || 0;
+            let newHp = oldHp + hpPerLevel;
+            html += `<div class="mb-6 bg-red-950/20 border border-red-900/50 rounded-lg p-4">
+                <h4 class="${SECTION_H}">Hit Points</h4>
+                <div class="flex items-center gap-4">
+                    <span class="text-2xl font-bold text-gray-400">${oldHp}</span>
+                    <span class="text-gray-500">→</span>
+                    <span class="text-2xl font-bold text-green-400">${newHp}</span>
+                    <span class="text-xs text-gray-500 ml-2">(+${hpPerLevel} = ${classHp} class + ${conMod} CON${(pc.attributes || {}).bonushpPerLevel ? ' + ' + (pc.attributes || {}).bonushpPerLevel + ' bonus' : ''})</span>
+                </div>
+            </div>`;
+
+            const friendlyNames = {
+                'perception': 'Perception', 'fortitude': 'Fortitude', 'reflex': 'Reflex', 'will': 'Will',
+                'simple': 'Simple Weapons', 'martial': 'Martial Weapons', 'advanced': 'Advanced Weapons', 'unarmed': 'Unarmed',
+                'unarmored': 'Unarmored', 'light': 'Light Armor', 'medium': 'Medium Armor', 'heavy': 'Heavy Armor',
+                'class_dc': 'Class DC', 'spell_attack': 'Spell Attack', 'spell_dc': 'Spell DC', 'ac': 'Armor Class'
+            };
+
+            // Class & subclass features unlocked — named features and the
+            // choices made on the Class Picks step (Divine Ally, Domain,
+            // junctions, doctrines surfaced as picks, etc.).
+            const _clf = state.class_level_features || [];
+            const _picks = state.class_picks_selected || {};
+            if (_clf.length > 0) {
+                html += `<div class="mb-6"><h4 class="${SECTION_H}">Class Features</h4><ul class="text-sm text-gray-300 space-y-1">` +
+                _clf.map(f => {
+                    if (f.type === 'choice') {
+                        const pick = _picks[f.name];
+                        const picked = pick
+                            ? `<span class="font-bold text-white">${esc(f.name)}</span> <span class="text-gray-500">—</span> <span class="font-bold text-amber-400">${esc(pick)}</span>`
+                            : `<span class="font-bold text-white">${esc(f.name)}</span> <span class="text-red-400 text-xs">(no choice yet)</span>`;
+                        return `<li class="flex items-start gap-2"><span class="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 mt-1.5 shrink-0"></span><span>${picked}</span></li>`;
+                    }
+                    return `<li class="flex items-start gap-2"><span class="inline-block w-1.5 h-1.5 rounded-full bg-green-500 mt-1.5 shrink-0"></span><span class="font-bold text-white">${esc(f.name)}</span></li>`;
+                }).join('') + `</ul></div>`;
+            }
+
+            // Show automatic class feature bumps (proficiency increases)
+            let bumpKeys = Object.keys(state.auto_bumps || {});
+            if (bumpKeys.length > 0) {
+                html += `<div class="mb-6"><h4 class="${SECTION_H}">Proficiency Increases</h4><div class="flex flex-wrap gap-2">` +
+                bumpKeys.map(k => {
+                    let name = friendlyNames[k] || k;
+                    let rank = RANK_NAMES[state.auto_bumps[k]] || state.auto_bumps[k];
+                    return `<span class="bg-green-900/30 border border-green-800 px-2 py-1 rounded text-xs font-bold text-green-400">${name} → ${rank}</span>`;
+                }).join('') + `</div></div>`;
+            }
+
+            // Show Monk Path to Perfection choice
+            if (state.monk_path_choice && pcClass === 'monk' && monkPathConfig[targetLevel]) {
+                let pathConf = monkPathConfig[targetLevel];
+                let saveName = state.monk_path_choice.charAt(0).toUpperCase() + state.monk_path_choice.slice(1);
+                let rankName = RANK_NAMES[pathConf.target_rank] || `Rank ${pathConf.target_rank}`;
+                html += `<div class="mb-6"><h4 class="${SECTION_H}">${pathConf.feature_name}</h4>
+                    <span class="bg-purple-900/30 border border-purple-800 px-3 py-1.5 rounded text-sm font-bold text-purple-300">${saveName} → ${rankName}</span>
+                </div>`;
+            }
+
+            if(reqs.ability_boosts) {
+                const boosts = state.free_boosts_selected;
+                html += `<div class="mb-6"><h4 class="${SECTION_H}">Ability Boosts</h4>` +
+                (boosts.length
+                    ? `<div class="flex gap-2">` + boosts.map(s => `<span class="bg-gray-950 border border-gray-700 px-2 py-1 rounded text-xs font-bold text-green-400 uppercase">+${esc(s)}</span>`).join('') + `</div>`
+                    : `<div class="text-xs text-red-400 italic">No boosts selected yet — pick four.</div>`) + `</div>`;
+            }
+            if(reqs.skill_increase) {
+                const incs = state.skill_increases_selected;
+                html += `<div class="mb-6"><h4 class="${SECTION_H}">Skill Increases</h4>` +
+                (incs.length
+                    ? `<div class="flex flex-wrap gap-2">` + incs.map(s => `<span class="bg-gray-950 border border-gray-700 px-2 py-1 rounded text-xs font-bold text-amber-500 capitalize">${esc(s.replace('lore:', 'Lore: '))}</span>`).join('') + `</div>`
+                    : `<div class="text-xs text-red-400 italic">No skill increases selected yet.</div>`) + `</div>`;
+            }
+
+            // New feats, grouped by type so the player reads "Ancestry /
+            // Class / General / Skill / Archetype" at a glance.
+            let fKeys = Object.keys(state.feats_selected);
+            if(fKeys.length > 0) {
+                const TYPE_ORDER = ['ancestry_feat','class_feat','general_feat','skill_feat','archetype_feat'];
+                const TYPE_LABELS = {ancestry_feat:'Ancestry', class_feat:'Class', general_feat:'General', skill_feat:'Skill', archetype_feat:'Archetype'};
+                const byType = {};
+                fKeys.forEach(k => {
+                    const base = k.replace(/_\d+$/, '');
+                    (byType[base] = byType[base] || []).push(state.feats_selected[k]);
+                });
+                const orderedTypes = TYPE_ORDER.filter(t => byType[t]).concat(Object.keys(byType).filter(t => !TYPE_ORDER.includes(t)));
+                const rows = orderedTypes.map(t => byType[t].map(f => {
+                    const bad = (typeof meetsPrereqs === 'function') && !meetsPrereqs(f);
+                    return `<li class="flex items-center gap-2"><span class="text-[10px] font-bold bg-gray-800 border border-gray-700 text-gray-400 px-2 py-0.5 rounded uppercase tracking-wider shrink-0">${TYPE_LABELS[t] || esc(t.replace('_',' '))}</span><span class="font-bold ${bad ? 'text-red-400' : 'text-white'}">${esc(f.name)}</span>${bad ? ` <span class="text-[10px] text-red-400">(prereq not met)</span>` : ''}</li>`;
+                }).join('')).join('');
+                html += `<div class="mb-6"><h4 class="${SECTION_H}">New Feats</h4><ul class="text-sm text-gray-300 space-y-1">${rows}</ul></div>`;
+            }
+
+            // Spells, slots & focus. New spell ranks/slots are computed from
+            // the slot tables; learned spells come from the Magic step; a
+            // focus-pool gain is inferred from the selected feats.
+            const newSlots = _newSpellSlotsThisLevel();
+            const focusGained = _focusPointsGainedThisLevel();
+            if (newSlots.length || state.new_spells.length || focusGained > 0) {
+                let inner = '';
+                if (newSlots.length) {
+                    inner += `<div class="mb-2"><div class="text-[10px] text-gray-500 uppercase font-bold mb-1">Spell Slots</div><div class="flex flex-wrap gap-2">` +
+                    newSlots.map(c => c.ranks.map(r =>
+                        `<span class="bg-gray-950 border border-purple-900/40 px-2 py-1 rounded text-xs font-bold text-purple-300">${r.brandNew ? 'New ' : ''}Rank ${r.rank} <span class="text-gray-500 font-normal">×${r.count}</span></span>`
+                    ).join('')).join('') + `</div></div>`;
+                }
+                if (focusGained > 0) {
+                    inner += `<div class="mb-2"><div class="text-[10px] text-gray-500 uppercase font-bold mb-1">Focus</div><span class="bg-gray-950 border border-pink-900/40 px-2 py-1 rounded text-xs font-bold text-pink-300">+${focusGained} Focus Point${focusGained > 1 ? 's' : ''}</span></div>`;
+                }
+                if (state.new_spells.length) {
+                    inner += `<div><div class="text-[10px] text-gray-500 uppercase font-bold mb-1">Learned</div><div class="flex flex-wrap gap-2">` +
+                    state.new_spells.map(s => `<span class="bg-gray-950 border border-blue-900/50 px-2 py-1 rounded text-xs font-bold text-blue-300">${esc(s.name)} [${s.lvl === 0 ? 'C' : 'R' + s.lvl}]</span>`).join('') + `</div></div>`;
+                }
+                html += `<div class="mb-6"><h4 class="${SECTION_H}">Spells, Slots &amp; Focus</h4>${inner}</div>`;
+            }
+
+            ui.innerHTML = html || "<div class='text-gray-500 italic text-center'>No changes recorded yet.</div>";
+        }
+
+        // ── Confirm ceremony (T3) ───────────────────────────────────────
+        // Fires from submitLevelUp()'s success handler, BEFORE the
+        // redirect. Every field below is already assembled client-side
+        // from `state`/`pc`/`reqs` — the exact same values renderReview()
+        // already displays on the Review step — so this adds no new
+        // backend response fields; the POST to /api/submit_levelup is
+        // unchanged (it's fired first; this only decorates what happens
+        // after `data.success` is already true).
+        const _RM_LVL = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)');
+        function _ceremonyPicksList() {
+            const lines = [];
+            if (reqs.ability_boosts) {
+                const boosts = state.free_boosts_selected || [];
+                if (boosts.length) lines.push(`Ability Boosts: ${boosts.map(s => s.toUpperCase()).join(', ')}`);
+            }
+            if (reqs.skill_increase) {
+                const incs = state.skill_increases_selected || [];
+                if (incs.length) lines.push(`Skill Increase: ${incs.map(s => s.replace('lore:', 'Lore: ')).join(', ')}`);
+            }
+            const fKeys = Object.keys(state.feats_selected || {});
+            fKeys.forEach(k => {
+                const f = state.feats_selected[k];
+                if (f && f.name) lines.push(f.name);
+            });
+            if (state.monk_path_choice) {
+                lines.push(`${state.monk_path_choice.charAt(0).toUpperCase() + state.monk_path_choice.slice(1)} save upgraded`);
+            }
+            Object.entries(state.class_picks_selected || {}).forEach(([slot, pick]) => {
+                if (pick) lines.push(`${slot}: ${pick}`);
+            });
+            if (state.new_spells && state.new_spells.length) {
+                lines.push(`Learned: ${state.new_spells.map(s => s.name).join(', ')}`);
+            }
+            return lines;
+        }
+        function _ceremonyHpDelta() {
+            let classHp = (pc.attributes || {}).classhp || 8;
+            let conMod = (pc.mods || {}).con || 0;
+            if (state.free_boosts_selected.includes('con')) {
+                const tempStats = getTempFinalStats();
+                conMod = tempStats.con !== undefined ? tempStats.con : conMod;
+            }
+            let hpPerLevel = classHp + conMod + ((pc.attributes || {}).bonushpPerLevel || 0);
+            if (hpPerLevel < 1) hpPerLevel = 1;
+            const oldHp = pc.hp || 0;
+            return { oldHp, newHp: oldHp + hpPerLevel, gain: hpPerLevel };
+        }
+        // Ember spark burst — mirrors the sheet's _orbMotes spawner pattern
+        // (cosmere_sheet.html): spawn N absolutely-positioned nodes off a
+        // shared anchor, stagger the .rise class, remove on animationend.
+        // Capped at 6 particles per the T3 contract; skipped entirely under
+        // reduced motion.
+        function _ceremonySparkBurst(anchorEl) {
+            if (_RM_LVL && _RM_LVL.matches) return;
+            if (!anchorEl) return;
+            const COUNT = 6;
+            for (let i = 0; i < COUNT; i++) {
+                const s = document.createElement('div');
+                s.className = 'lvl-cer-spark';
+                s.style.setProperty('--dx', (Math.random() * 44 - 22).toFixed(1) + 'px');
+                anchorEl.appendChild(s);
+                setTimeout(() => s.classList.add('rise'), i * 55);
+                s.addEventListener('animationend', () => s.remove());
+                setTimeout(() => s.remove(), 2000 + i * 55);
+            }
+        }
+        let _ceremonyDismissTimer = null;
+        window.dismissLevelUpCeremony = function() {
+            if (_ceremonyDismissTimer) { clearTimeout(_ceremonyDismissTimer); _ceremonyDismissTimer = null; }
+            const overlay = document.getElementById('lvl-ceremony-overlay');
+            if (overlay) overlay.classList.add('lvl-ceremony-hidden');
+            if (typeof window._lvlCeremonyOnDone === 'function') {
+                const fn = window._lvlCeremonyOnDone;
+                window._lvlCeremonyOnDone = null;
+                fn();
+            }
+        };
+        window.showLevelUpCeremony = function(onDone) {
+            const overlay = document.getElementById('lvl-ceremony-overlay');
+            const card = document.getElementById('lvl-ceremony-card');
+            const body = document.getElementById('lvl-ceremony-body');
+            if (!overlay || !card || !body) { onDone(); return; }
+            window._lvlCeremonyOnDone = onDone;
+
+            const hp = _ceremonyHpDelta();
+            const picks = _ceremonyPicksList();
+            const reduced = _RM_LVL && _RM_LVL.matches;
+
+            body.innerHTML = `
+                <div style="text-align:center; margin-bottom:var(--sp-4);">
+                    <div style="font-family:var(--font-display); font-size:11px; letter-spacing:0.18em; text-transform:uppercase; color:var(--text-on-dark-3); margin-bottom:4px;">${esc(pc.name)}</div>
+                    <div style="font-family:var(--font-display); font-size:22px; color:var(--accent); letter-spacing:0.05em;">Level ${targetLevel}</div>
+                </div>
+                <div style="display:flex; align-items:center; justify-content:center; gap:10px; margin-bottom:var(--sp-4); font-family:var(--font-ui);">
+                    <span style="font-size:18px; font-weight:700; color:var(--text-on-dark-3);">${hp.oldHp} HP</span>
+                    <span style="color:var(--text-on-dark-3);">&rarr;</span>
+                    <span style="font-size:18px; font-weight:700; color:var(--gilt-200);">${hp.newHp} HP</span>
+                    <span style="font-size:11px; color:var(--text-on-dark-3);">(+${hp.gain})</span>
+                </div>
+                ${picks.length ? `<ul style="list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px;">` +
+                    picks.map(p => `<li style="display:flex; align-items:baseline; gap:8px; font-size:13px; color:var(--text-on-dark-2);"><span style="color:var(--gilt-200);">&#10003;</span><span>${esc(p)}</span></li>`).join('') +
+                    `</ul>` : `<div style="text-align:center; font-size:12px; color:var(--text-on-dark-3); font-style:italic;">No picks recorded.</div>`}
+                <div style="text-align:center; margin-top:var(--sp-4); font-size:10px; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-on-dark-3);">Click to continue</div>
+            `;
+
+            overlay.classList.remove('lvl-ceremony-hidden');
+            // Force reflow so the pop-in animation restarts on repeat opens.
+            card.classList.remove('lvl-ceremony-hidden');
+            void card.offsetWidth;
+            if (!reduced) _ceremonySparkBurst(card);
+
+            if (_ceremonyDismissTimer) clearTimeout(_ceremonyDismissTimer);
+            _ceremonyDismissTimer = setTimeout(() => { window.dismissLevelUpCeremony(); }, 2500);
+        };
+
+        function setModalTab(tabName) {
+            mCtx.tab = tabName;
+            document.querySelectorAll('.mod-tab-btn').forEach(b => {
+                if(b.dataset.tab === tabName) {
+                    b.classList.add('text-amber-500', 'bg-gray-700', 'border-amber-500/50');
+                    b.classList.remove('text-gray-300', 'bg-gray-800', 'border-transparent');
+                } else {
+                    b.classList.remove('text-amber-500', 'bg-gray-700', 'border-amber-500/50');
+                    b.classList.add('text-gray-300', 'bg-gray-800', 'border-transparent');
+                }
+            });
+            renderModalList();
+        }
+
+        function openModal(type, meta={}) {
+            try {
+                mCtx.type = type; mCtx.active = null; mCtx.meta = meta;
+                document.getElementById('mod-search').value = "";
+                document.getElementById('mod-preview').innerHTML = `<div class="flex h-full items-center justify-center text-gray-600 italic">Select an option to preview.</div>`;
+                document.getElementById('btn-lock').classList.add('hidden');
+                
+                let title = "Select"; mCtx.data = [];
+                const tabsContainer = document.getElementById('mod-tabs');
+                if(tabsContainer) { tabsContainer.innerHTML = ''; tabsContainer.classList.add('hidden'); }
+                mCtx.activeTabs = false; mCtx.tab = 'all';
+                
+                if (type === 'class_feat') {
+                    title = "Class Feat";
+                    mCtx.data = (dbFeats['class'] || []).filter(f => f.level <= targetLevel && f.traits.some(t => typeof t==='string' && t.toLowerCase() === pcClass) && !f.traits.some(t => typeof t==='string' && (t.toLowerCase() === 'archetype' || t.toLowerCase() === 'dedication')));
+                }
+                else if (type === 'archetype_feat') {
+                    // Archetype feats — for PCs with multiclass / archetype dedications.
+                    // Show:
+                    //  - All dedications at L2+ if PC has none yet (entry path).
+                    //  - Feats tagged with the archetype name of any dedication
+                    //    the PC already has.
+                    //  - New dedications, but only if PC has 2+ feats from each
+                    //    existing archetype (PF2e: cannot take new dedication
+                    //    until current archetype has at least 2 feats from it).
+                    title = "Archetype Feat";
+                    const dedications = _knownDedications();
+                    const archetypeNames = dedications.map(d => d.archetype);
+                    const all = (dbFeats['class'] || []).concat(dbFeats['archetype'] || []);
+                    const isArchetype = (f) => f.traits && f.traits.some(t => typeof t==='string' && t.toLowerCase() === 'archetype');
+                    const isDedication = (f) => f.traits && f.traits.some(t => typeof t==='string' && t.toLowerCase() === 'dedication');
+                    const featArchetype = (f) => {
+                        // The archetype-name trait is whichever non-system trait the
+                        // feat carries. We pull the first non-action / non-rarity
+                        // trait — e.g. "sanguimancer", "barbarian" (for multiclass).
+                        const sys = new Set(['archetype','dedication','rare','uncommon','unique','common','manipulate','concentrate','flourish','reaction','free','open','rest','exploration','downtime','focus','bardic','composition','litany','virtuous','hex','curse','divine','primal','arcane','occult','metamagic','mental','auditory','linguistic','visual','auditory','prediction','revelation','aura','poison','disease','mindshifting','attack','death','disarm','disrupt','escape','fortune','misfortune','magical','spellshape','vitality','void','plant','negative','positive','radiation']);
+                        for (const t of (f.traits || [])) {
+                            const lt = (typeof t === 'string') ? t.toLowerCase() : '';
+                            if (lt && !sys.has(lt) && !lt.includes('skill')) return lt;
+                        }
+                        return '';
+                    };
+                    let pool = all.filter(f => f.level <= targetLevel && (isArchetype(f) || isDedication(f)));
+                    pool = pool.filter(f => {
+                        const arch = featArchetype(f);
+                        if (isDedication(f)) {
+                            // Block re-taking a dedication you already have.
+                            if (archetypeNames.includes(arch)) return false;
+                            // PF2e: cannot take new dedication until you have 2+
+                            // feats from each existing archetype.
+                            for (const known of dedications) {
+                                if (known.feat_count < 2) return false;
+                            }
+                            return true;
+                        }
+                        // Non-dedication archetype feat — only show feats from
+                        // an archetype the PC has dedicated to.
+                        return archetypeNames.includes(arch);
+                    });
+                    // De-dup by name (some compendiums double-list)
+                    const seen = new Set();
+                    mCtx.data = pool.filter(f => {
+                        const key = (f.name || '').toLowerCase();
+                        if (seen.has(key)) return false;
+                        seen.add(key); return true;
+                    });
+                }
+                else if (type === 'general_feat') {
+                    title = "General / Skill Feat";
+                    let raw = [...(dbFeats['general']||[]), ...(dbFeats['skill']||[])];
+                    mCtx.data = raw.filter(f => f.level <= targetLevel);
+                }
+                else if (type === 'skill_feat') {
+                    title = "Skill Feat";
+                    mCtx.data = (dbFeats['skill'] || []).filter(f => f.level <= targetLevel);
+                }
+                else if (type === 'ancestry_feat') {
+                    title = "Ancestry Feat";
+                    let raw = dbFeats['ancestry'] || [];
+                    mCtx.data = raw.filter(f => f.level <= targetLevel && f.traits.some(t => typeof t==='string' && t.toLowerCase().includes(pc.ancestry.toLowerCase())));
+                    if(mCtx.data.length === 0) mCtx.data = raw.filter(f => f.level <= targetLevel); 
+                }
+                else if (type === 'spell') {
+                    title = `Select Level ${meta.lvl} Spell (lower ranks shown too — prepared casters can heighten)`;
+                    let trad = (state.spellCasters[meta.cIdx].magicTradition || "unknown").toLowerCase();
+                    // Prepared casters may prepare any spell they know at a slot of
+                    // rank >= the spell's base rank (heightening). Before this was
+                    // `s.level === meta.lvl`, which blocked a druid from picking
+                    // Heal (rank 1) into a rank-2 slot even though the rules allow it.
+                    mCtx.data = (dbSpells || []).filter(s => s.level <= meta.lvl && s.traditions.some(t => t.toLowerCase() === trad));
+                    // Sort so exact-rank matches appear first, lower ranks after —
+                    // that keeps the most common selection at the top of the list.
+                    mCtx.data.sort((a, b) => (b.level - a.level) || a.name.localeCompare(b.name));
+                }
+
+                document.getElementById('mod-title').innerText = title;
+                renderModalList();
+
+                const m = document.getElementById('uni-modal'); m.classList.remove('hidden');
+                setTimeout(() => { m.classList.remove('opacity-0'); document.getElementById('uni-window').classList.remove('scale-95'); document.getElementById('mod-search').focus(); }, 10);
+            } catch (err) {
+                console.error("Open Modal Error:", err);
+            }
+        }
+
+        function lockModal() {
+            try {
+                if(!mCtx.active) return;
+                const a = mCtx.active;
+                
+                if (mCtx.type.includes('feat') && mCtx.type !== 'retrain_feat') {
+                    let keyToSave = mCtx.meta.key || mCtx.type;
+                    state.feats_selected[keyToSave] = a;
+                    buildFeatsUI();
+                } else if (mCtx.type === 'spell') {
+                    if (mCtx.meta.swapMode) {
+                        // Spell swap: set the swap-in spell
+                        state.spell_swap_in[mCtx.meta.cIdx] = {name: a.name, lvl: mCtx.meta.lvl};
+                        buildMagicUI();
+                    } else {
+                        let currentAdded = state.new_spells.filter(s => s.cIdx === mCtx.meta.cIdx && s.lvl === mCtx.meta.lvl).length;
+                        if(currentAdded >= mCtx.meta.req) { alert(`Maximum limit reached for Level ${mCtx.meta.lvl} spells.`); return; }
+                        state.new_spells.push({cIdx: mCtx.meta.cIdx, lvl: mCtx.meta.lvl, name: a.name});
+                        buildMagicUI();
+                    }
+                } else if (mCtx.type === 'retrain_feat') {
+                    state.retrained_feats.push({ old: mCtx.meta.oldName, new: a });
+                    buildRetrainUI();
+                }
+                closeModal(); runValidation();
+            } catch (err) {
+                console.error("Lock Modal Error:", err);
+            }
+        }
+
+        // Shared by runValidation() and the gains rail (buildGainsRail/
+        // paintGainsRail) — the ONLY place that knows how a feat-type req
+        // ("class_feat": 2, say) expands into per-slot state keys
+        // ("class_feat", "class_feat_0", "class_feat_1", ...). Extracted
+        // so the rail's per-slot tick state can never drift from the
+        // Finish-button gate's own count (single completion source, per
+        // the T3 contract).
+        function _featTypeSlotKeys(ft) {
+            let count = reqs[ft] || 0;
+            if (ft === 'class_feat') count += state.bonus_feats_added;
+            const keys = [];
+            for (let i = 0; i < count; i++) keys.push(count > 1 ? `${ft}_${i}` : ft);
+            return keys;
+        }
+
+        function runValidation() {
+            // --- Monk Path to Perfection validation ---
+            let monkPathNeeded = pcClass === 'monk' && monkPathConfig[targetLevel];
+            let monkPathValid = !monkPathNeeded || state.monk_path_choice !== null;
+            if (monkPathNeeded) {
+                if (monkPathValid) { document.getElementById('chk-classfeatures').innerText = ""; document.getElementById('chk-classfeatures').className = "text-xs text-green-400 text-lg font-bold leading-none"; }
+                else { document.getElementById('chk-classfeatures').innerText = "!"; document.getElementById('chk-classfeatures').className = "text-red-500 font-bold"; }
+            }
+            
+            if(reqs.ability_boosts) {
+                if(_abilityBoostsDone()) { document.getElementById('chk-abilities').innerText = ""; document.getElementById('chk-abilities').className = "text-green-400 text-lg font-bold leading-none"; }
+                else { document.getElementById('chk-abilities').innerText = "!"; document.getElementById('chk-abilities').className = "text-red-500 font-bold"; }
+            }
+            if(reqs.skill_increase) {
+                if(_skillIncreasesDone()) { document.getElementById('chk-skills').innerText = ""; document.getElementById('chk-skills').className = "text-green-400 text-lg font-bold leading-none"; }
+                else { document.getElementById('chk-skills').innerText = "!"; document.getElementById('chk-skills').className = "text-red-500 font-bold"; }
+            }
+
+            let fValid = true;
+            ['ancestry_feat', 'class_feat', 'general_feat', 'skill_feat'].forEach(ft => {
+                _featTypeSlotKeys(ft).forEach(key => {
+                    if(!state.feats_selected[key]) fValid = false;
+                });
+            });
+            if(fValid && (reqs.ancestry_feat || reqs.class_feat || reqs.general_feat || reqs.skill_feat)) { 
+                document.getElementById('chk-feats').innerText = ""; document.getElementById('chk-feats').className = "text-green-400 text-lg font-bold leading-none"; 
+            } else if (!fValid) { document.getElementById('chk-feats').innerText = "!"; document.getElementById('chk-feats').className = "text-red-500 font-bold"; }
+
+            let mValid = _newSpellsDone();
+
+            if(state.spellCasters.length > 0) {
+                if(mValid) { document.getElementById('chk-magic').innerText = ""; document.getElementById('chk-magic').className = "text-green-400 text-lg font-bold leading-none"; }
+                else { document.getElementById('chk-magic').innerText = "!"; document.getElementById('chk-magic').className = "text-red-500 font-bold"; }
+            }
+
+            let globalValid = true;
+            if(reqs.ability_boosts && state.free_boosts_selected.length < 4) globalValid = false;
+            if(reqs.skill_increase && state.skill_increases_selected.length < (reqs.skill_increase + state.retro_int_skills)) globalValid = false;
+            if(!fValid) globalValid = false;
+            if(state.spellCasters.length > 0 && !mValid) globalValid = false;
+            if(!monkPathValid) globalValid = false;
+            // Class-level picks (PC1+PC2 features) — every choice-typed
+            // entry must have a selection.
+            const _cpEntries = state.class_level_features || [];
+            const cpValid = !_cpEntries.some(f => f.type === 'choice' && !state.class_picks_selected[f.name]);
+            if (!cpValid) globalValid = false;
+
+            const btnF = document.getElementById('btn-finish');
+            const btnFLbl = document.getElementById('btn-finish-lbl');
+            if(globalValid) {
+                btnF.dataset.disabled = '';
+                if (btnFLbl) btnFLbl.textContent = 'Lock In Level';
+                btnF.style.background = 'rgba(196,60,60,0.2)';
+                btnF.style.borderColor = 'rgba(196,60,60,0.5)';
+                btnF.style.color = '#e85555';
+                btnF.title = '';
+                document.getElementById('chk-review').innerText = ""; document.getElementById('chk-review').className = "text-green-400 text-lg font-bold leading-none";
+            } else {
+                btnF.dataset.disabled = '1';
+                if (btnFLbl) btnFLbl.textContent = 'Incomplete · click to jump';
+                btnF.style.background = 'var(--bg-card)';
+                btnF.style.borderColor = 'var(--border-strong)';
+                btnF.style.color = 'var(--text-on-dark-3)';
+                btnF.title = 'Form is incomplete — click to jump to the first unfinished section';
+                document.getElementById('chk-review').innerText = "";
+            }
+
+            // Refresh per-step nav footers (totals/labels may have changed
+            // as sections become valid/invalid — buildStepNav is idempotent).
+            try { if (typeof buildStepNav === 'function') buildStepNav(); } catch(_) {}
+        }
+
+        async function submitLevelUp() {
+            // Confirmation dialog — prevent accidental one-click submit
+            if (!confirm(`Level up ${pc.name} to Level ${targetLevel}? This cannot be easily undone.`)) return;
+            // Submitting clears the dirty flag so the beforeunload guard doesn't
+            // prompt during the redirect.
+            window._lvlupDirty = false;
+            const btn = document.getElementById('btn-finish'); btn.innerText = "Processing Matrix..."; btn.disabled = true;
+
+            let finalFeats = [...(pc.raw_feats || [])];
+            const FEAT_TYPE_LABELS = {
+                'class_feat': 'Class Feat', 'skill_feat': 'Skill Feat',
+                'general_feat': 'General Feat', 'ancestry_feat': 'Ancestry Feat'
+            };
+            state.retrained_feats.forEach(rf => {
+                // Determine the type of the old feat being replaced
+                let oldFeat = finalFeats.find(f => Array.isArray(f) ? f[0] === rf.old : (f.name || '') === rf.old);
+                let oldType = oldFeat && Array.isArray(oldFeat) ? (oldFeat[2] || 'Feat') : 'Feat';
+                finalFeats = finalFeats.filter(f => Array.isArray(f) ? f[0] !== rf.old : f.name !== rf.old);
+                finalFeats.push([rf.new.name, null, oldType, targetLevel]);
+            });
+            Object.entries(state.feats_selected).forEach(([key, f]) => {
+                // Strip numeric suffix (e.g. class_feat_0 → class_feat) for type lookup
+                let baseKey = key.replace(/_\d+$/, '');
+                let featType = FEAT_TYPE_LABELS[baseKey] || 'Feat';
+                // Use Pathbuilder-compatible format: [name, subselection, type, level]
+                finalFeats.push([f.name, null, featType, targetLevel]);
+            });
+
+            let finalSkills = {...state.base_profs};
+            state.skill_increases_selected.forEach(sk => {
+                finalSkills[sk] = (finalSkills[sk] || 0) + 2;
+                if(finalSkills[sk] > 8) finalSkills[sk] = 8;
+            });
+
+            // Detect format and work in scores for correct boost math
+            const ABIL_KEYS = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
+            let rawAbilVals = ABIL_KEYS.map(k => {
+                let v = pc.abilities[k];
+                return typeof v === 'object' ? (v.value || 0) : (v || 0);
+            });
+            let isScoreFmt = rawAbilVals.filter(v => v >= 8).length >= 4;
+            
+            let finalAbilities = {};
+            for (let s of ABIL_KEYS) {
+                if (!(s in pc.abilities)) continue;
+                let raw = typeof pc.abilities[s] === 'object' ? (pc.abilities[s].value || 0) : (pc.abilities[s] || 0);
+                finalAbilities[s] = isScoreFmt ? raw : (raw * 2 + 10); // Convert to scores
+            }
+            
+            let finalHalfs = [...(pc.half_boosts || [])];
+            state.free_boosts_selected.forEach(s => {
+                let currentScore = finalAbilities[s] || 10;
+                if (currentScore >= 18) {
+                    // Half boost at 18+
+                    if (finalHalfs.includes(s)) { finalAbilities[s] += 2; finalHalfs = finalHalfs.filter(h=>h!==s); }
+                    else finalHalfs.push(s);
+                } else {
+                    finalAbilities[s] += 2;
+                }
+            });
+
+            let finalCasters = JSON.parse(JSON.stringify(state.spellCasters));
+            finalCasters.forEach((c, idx) => {
+                let tLower = (c.castingType || c.spellcastingType || c.type || "unknown").toLowerCase();
+                let cType = null;
+                if(tLower.includes("spontaneous")) cType = tLower.includes("bounded") ? "bounded_spontaneous" : "spontaneous";
+                else if(tLower.includes("prepared")) cType = tLower.includes("bounded") ? "bounded_prepared" : "prepared";
+                
+                if (pcClass === 'sorcerer' && cType === 'spontaneous') cType = 'sorcerer';
+                
+                if(cType && SPELL_SLOTS[cType]) {
+                    let newS = SPELL_SLOTS[cType][targetLevel] || [0,0,0,0,0,0,0,0,0,0];
+                    c.perDay = [5, ...newS.slice(0, 9)]; 
+                }
+                
+                state.new_spells.forEach(ns => {
+                    if (ns.cIdx === idx) {
+                        let lvlObj = c.spells.find(sp => sp.spellLevel === ns.lvl);
+                        if(!lvlObj) { lvlObj = {spellLevel: ns.lvl, list: []}; c.spells.push(lvlObj); }
+                        if(!lvlObj.list.includes(ns.name)) lvlObj.list.push(ns.name);
+                    }
+                });
+
+                // Apply spell swap (remove old, add new at same rank)
+                let swapOut = state.spell_swap_out[idx];
+                let swapIn = state.spell_swap_in[idx];
+                if (swapOut && swapIn) {
+                    c.spells.forEach(spObj => {
+                        if (spObj.list) {
+                            spObj.list = spObj.list.filter(n => n !== swapOut.name);
+                        }
+                    });
+                    let swapLvlObj = c.spells.find(sp => sp.spellLevel === swapIn.lvl);
+                    if (!swapLvlObj) { swapLvlObj = {spellLevel: swapIn.lvl, list: []}; c.spells.push(swapLvlObj); }
+                    if (!swapLvlObj.list.includes(swapIn.name)) swapLvlObj.list.push(swapIn.name);
+                }
+            });
+
+            // Class-level picks (Divine Ally / Junction / Path-to-Perfection
+            // when surfaced via the new Class Picks step). Stored as feats
+            // tagged with type 'class_feature' so they show on the sheet's
+            // Feats tab and contribute to RECENT-PICKS history.
+            const cpFeats = [];
+            (state.class_level_features || []).forEach(f => {
+                if (f.type !== 'choice') return;
+                const choice = state.class_picks_selected[f.name];
+                if (!choice) return;
+                const composedName = f.name + ' — ' + choice;
+                const desc = (f.choices || []).find(c => c.name === choice)?.desc || '';
+                cpFeats.push([composedName, 'class_feature', targetLevel, desc]);
+            });
+
+            // Forward Champion Divine Ally + Cleric/Champion Domain choice
+            // as top-level fields so the backend persists them on the build.
+            const divineAllyChoice = state.class_picks_selected['Divine Ally'] || '';
+            const domainChoice = state.class_picks_selected['Domain Initiate'] ||
+                                 state.class_picks_selected['Domain'] || '';
+
+            const payload = {
+                new_level: targetLevel,
+                abilities: finalAbilities,
+                half_boosts: finalHalfs,
+                skills: finalSkills,
+                feats: finalFeats.concat(cpFeats),
+                spellCasters: finalCasters,
+                auto_bumps: state.auto_bumps || {},
+                monk_path_choice: state.monk_path_choice || null,
+                class_picks: state.class_picks_selected || {},
+                divine_ally: divineAllyChoice,
+                chosen_domain: domainChoice
+            };
+            // The GM-override rail toggle IS the wizard-level force_save
+            // switch (T3 contract) — when armed, send force_save on the
+            // FIRST attempt too, so the reactive retry-on-rejection flow
+            // below and the visible toggle collapse into one mechanism.
+            // Server-side behavior (submit_levelup's force_save branch) is
+            // unchanged; this only changes when the flag is set.
+            if (window.ignorePrereqs) payload.force_save = true;
+
+            try {
+                const res = await fetch(`/api/submit_levelup/${encodeURIComponent(pc.name)}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+                const data = await res.json();
+                if (data.success) {
+                    if (isDrawerMode && window.parent !== window) {
+                        // Drawer mode intentionally skips the ceremony: the
+                        // parent page owns the post-levelup flow (there is no
+                        // redirect here for the ceremony to gate).
+                        window.parent.postMessage({ type: 'levelup_complete', name: pc.name }, '*');
+                        return;
+                    }
+                    showLevelUpCeremony(() => {
+                        window.location.href = `/player/sheet/${encodeURIComponent(pc.name)}`;
+                    });
+                    return;
+                }
+                // Validator rejected the save: either required slots are
+                // unfilled (`missing`) or a pick is illegal (`illegal`, e.g.
+                // a feat whose prerequisites aren't met). Show the combined
+                // list and offer a force-save so homebrew/variant rules and
+                // explicit "Ignore Pre-Reqs" overrides aren't blocked.
+                btn.disabled = false;
+                btn.innerText = 'Submit Level Up';
+                const blockers = [].concat(data.missing || [], data.illegal || []);
+                if (blockers.length) {
+                    const lines = blockers.map(m => '  • ' + m).join('\n');
+                    const heading = (data.illegal && data.illegal.length)
+                        ? 'Cannot finalize — some picks are illegal or incomplete:'
+                        : 'Cannot finalize — missing required choices:';
+                    if (confirm(heading + '\n\n' + lines + '\n\nSave anyway? (homebrew / variant rules)')) {
+                        const r2 = await fetch(`/api/submit_levelup/${encodeURIComponent(pc.name)}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(Object.assign({}, payload, {force_save: true})) });
+                        const d2 = await r2.json();
+                        if (d2.success) {
+                            showLevelUpCeremony(() => {
+                                window.location.href = `/player/sheet/${encodeURIComponent(pc.name)}`;
+                            });
+                            return;
+                        }
+                        alert(d2.error || 'Save failed.');
+                    }
+                } else if (data.error) {
+                    alert(data.error);
+                }
+            } catch(e) { btn.innerText = "Error"; btn.disabled = false; }
+        }
+
+        // Wrap runValidation to also paint the section-progress strip in
+        // the sticky top bar, and the gains rail (same completion signals,
+        // see paintGainsRail). Done AFTER all functions are defined.
+        (function wrapRunValidation() {
+            const orig = runValidation;
+            runValidation = function() {
+                const r = orig.apply(this, arguments);
+                try { paintSectionProgress(); } catch(_) {}
+                try { paintGainsRail(); } catch(_) {}
+                return r;
+            };
+        })();
+
+        init();
+        try { buildSectionProgress(); paintSectionProgress(); } catch(_) {}
+        try { buildGainsRail(); paintGainsRail(); } catch(_) {}
+    </script>
+</body>
+</html>

@@ -1,0 +1,56 @@
+{
+    "_id": "wob6DB1FFdWs0mbp",
+    "img": "icons/tools/navigation/compass-worn-copper.webp",
+    "name": "Compass",
+    "system": {
+        "baseItem": null,
+        "bulk": {
+            "value": 0
+        },
+        "containerId": null,
+        "description": {
+            "value": "<p>A compass helps you @UUID[Compendium.pf2e.actionspf2e.Item.Sense Direction] or navigate, provided you're in a location with uniform magnetic fields. Without a compass, you take a -2 item penalty to these checks (similar to using a shoddy item).</p>"
+        },
+        "hardness": 0,
+        "hp": {
+            "max": 0,
+            "value": 0
+        },
+        "level": {
+            "value": 0
+        },
+        "material": {
+            "grade": null,
+            "type": null
+        },
+        "price": {
+            "value": {
+                "gp": 1
+            }
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core"
+        },
+        "quantity": 1,
+        "rules": [
+            {
+                "key": "AdjustModifier",
+                "requiresEquipped": false,
+                "selector": "survival",
+                "slug": "no-compass",
+                "suppress": true
+            }
+        ],
+        "size": "med",
+        "traits": {
+            "rarity": "common",
+            "value": []
+        },
+        "usage": {
+            "value": "held-in-one-hand"
+        }
+    },
+    "type": "equipment"
+}

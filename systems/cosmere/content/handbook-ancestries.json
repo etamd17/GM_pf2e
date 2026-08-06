@@ -1,0 +1,2501 @@
+[
+ {
+  "_id": "31ZjSDXE4AHA51WL",
+  "color": null,
+  "description": "",
+  "flags": {},
+  "folder": "jJYZfwmGYOopcEGe",
+  "name": "Actions",
+  "sorting": "a",
+  "type": "Item"
+ },
+ {
+  "_id": "jJYZfwmGYOopcEGe",
+  "color": null,
+  "description": "",
+  "flags": {},
+  "folder": "DcsP30Zf5xmMI5ps",
+  "name": "Forms",
+  "sorting": "a",
+  "type": "Item"
+ },
+ {
+  "_id": "DcsP30Zf5xmMI5ps",
+  "color": null,
+  "description": "",
+  "flags": {},
+  "folder": null,
+  "name": "Singer",
+  "sorting": "a",
+  "type": "Item"
+ },
+ {
+  "_id": "TzhWTMM24f4BtuWQ",
+  "effects": [
+   {
+    "_id": "MqObXKL9zc7uDND4",
+    "changes": [
+     {
+      "key": "system.attributes.awa.value",
+      "mode": 2,
+      "priority": null,
+      "value": "1"
+     }
+    ],
+    "description": "",
+    "disabled": true,
+    "duration": {
+     "combat": null,
+     "rounds": null,
+     "seconds": null,
+     "startRound": null,
+     "startTime": null,
+     "startTurn": null,
+     "turns": null
+    },
+    "flags": {},
+    "img": "icons/skills/trades/music-notes-sound-blue.webp",
+    "name": "Artform",
+    "origin": null,
+    "statuses": [],
+    "system": {},
+    "tint": "#ffffff",
+    "transfer": true,
+    "type": "base"
+   }
+  ],
+  "flags": {},
+  "folder": "jJYZfwmGYOopcEGe",
+  "img": "icons/skills/trades/music-notes-sound-blue.webp",
+  "name": "Artform",
+  "system": {
+   "activation": {
+    "complication": null,
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 3
+    },
+    "flavor": "",
+    "opportunity": null,
+    "plotDie": false,
+    "type": "utility",
+    "uses": null
+   },
+   "ancestry": "singer",
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "short": "<p><span>You’ve bonded with a creationspren. While in this form, you increase your <strong>Awareness</strong> by 1, and you gain utility expertises in Painting and Music.</span></p><p><span>Additionally, you gain an advantage on <strong>Crafting</strong> tests and on tests related to entertaining, such as singing and dancing.</span></p>",
+    "value": "<p><span><em>Artform specializes in creative expression. You gain a heightened awareness of the rhythms, colors, and other aspects of the world around you. If you have carapace, it’s purely cosmetic, representing radical self-expression.</em></span></p><p><span>You’ve bonded with a creationspren. While in this form, you increase your <strong>Awareness</strong> by 1, and you gain utility expertises in Painting and Music.</span></p><p><span>Additionally, you gain an advantage on <strong>Crafting</strong> tests and on tests related to entertaining, such as singing and dancing.</span></p>"
+   },
+   "id": "artform",
+   "modality": "singer-form",
+   "type": "ancestry"
+  },
+  "type": "action"
+ },
+ {
+  "_id": "Qknhb3bMsgzFJGBq",
+  "effects": [
+   {
+    "_id": "LEq9GzgVdv5NGfmZ",
+    "changes": [
+     {
+      "key": "system.attributes.wil.value",
+      "mode": 2,
+      "priority": null,
+      "value": "2"
+     }
+    ],
+    "description": "",
+    "disabled": true,
+    "duration": {
+     "combat": null,
+     "rounds": null,
+     "seconds": null,
+     "startRound": null,
+     "startTime": null,
+     "startTurn": null,
+     "turns": null
+    },
+    "flags": {},
+    "img": "icons/magic/death/skeleton-eye-skull-glow-orange.webp",
+    "name": "Decayform",
+    "origin": null,
+    "statuses": [],
+    "system": {},
+    "tint": "#ffffff",
+    "transfer": true,
+    "type": "base"
+   }
+  ],
+  "flags": {},
+  "folder": "jJYZfwmGYOopcEGe",
+  "img": "icons/magic/death/skeleton-eye-skull-glow-orange.webp",
+  "name": "Decayform",
+  "system": {
+   "activation": {
+    "complication": null,
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 3
+    },
+    "flavor": "",
+    "opportunity": null,
+    "plotDie": false,
+    "type": "utility",
+    "uses": null
+   },
+   "ancestry": "singer",
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "short": "<p>You’ve bonded with a blightspren, a type of Voidspren. While in this form, your <strong>Willpower</strong> increases by 2 and you can use @UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.T51hHrJeonT76Qyn]{Decaying Touch (Focus)}/@UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.7gf3vDhd5pgnXn3s]{Decaying Touch (Investiture)}.</p>",
+    "value": "<p><em>The enigmatic decayform grants an insidious ability to sap the vitality of other beings. Your thin carapace is jagged, brittle, and asymmetrical. People you touch find themselves less resilient while you remain in contact with them. This spiritual decay affects not just their bodies, but their minds, leaving them with nightmares long after the fact.</em></p><p>You’ve bonded with a blightspren, a type of Voidspren. While in this form, your <strong>Willpower</strong> increases by 2 and you can use @UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.T51hHrJeonT76Qyn]{Decaying Touch}.</p>"
+   },
+   "events": {
+    "8vMSXEXrLEhoRhWF": {
+     "description": "Grant Form Actions",
+     "event": "mode-activate",
+     "handler": {
+      "allowDuplicates": false,
+      "increaseQuantity": false,
+      "items": [
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.T51hHrJeonT76Qyn"
+       }
+      ],
+      "type": "grant-items"
+     },
+     "id": "8vMSXEXrLEhoRhWF"
+    },
+    "yGmfvUC8wtGnqFdW": {
+     "description": "Remove Form Actions",
+     "event": "mode-deactivate",
+     "handler": {
+      "items": [
+       "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.T51hHrJeonT76Qyn"
+      ],
+      "reduceQuantity": false,
+      "type": "remove-items"
+     },
+     "id": "yGmfvUC8wtGnqFdW"
+    }
+   },
+   "id": "decayform",
+   "modality": "singer-form",
+   "type": "ancestry"
+  },
+  "type": "action"
+ },
+ {
+  "_id": "T51hHrJeonT76Qyn",
+  "effects": [],
+  "flags": {},
+  "folder": "31ZjSDXE4AHA51WL",
+  "img": "icons/magic/unholy/hand-light-pink.webp",
+  "name": "Decaying Touch",
+  "system": {
+   "activation": {
+    "attribute": null,
+    "complication": null,
+    "consume": [
+     {
+      "resource": "foc",
+      "type": "resource",
+      "value": {
+       "actual": 0,
+       "max": 1,
+       "min": 1
+      }
+     },
+     {
+      "resource": "inv",
+      "type": "resource",
+      "value": {
+       "actual": 0,
+       "max": 1,
+       "min": 1
+      }
+     }
+    ],
+    "cost": {
+     "type": "spe",
+     "value": 3
+    },
+    "flavor": "",
+    "modifierFormula": "",
+    "opportunity": null,
+    "plotDie": false,
+    "skill": "dis",
+    "type": "utility",
+    "uses": null
+   },
+   "ancestry": "singer",
+   "damage": {
+    "attribute": null,
+    "formula": null,
+    "skill": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": "<p>Before a character within your reach recovers health or focus, you can spend 1 focus or 1 Investiture to prevent them from doing so. The character does not regain that health or focus, but any actions, Investiture, or other resources they spent still remain spent.</p>"
+   },
+   "id": "decaying-touch",
+   "modality": "form",
+   "type": "ancestry"
+  },
+  "type": "action"
+ },
+ {
+  "_id": "hMNhBG4gh4dJlCWh",
+  "effects": [
+   {
+    "_id": "vKoyRj9YQ3yGYgHd",
+    "changes": [
+     {
+      "key": "system.attributes.str.value",
+      "mode": 2,
+      "priority": null,
+      "value": "2"
+     },
+     {
+      "key": "system.deflect.natural",
+      "mode": 2,
+      "priority": null,
+      "value": "2"
+     }
+    ],
+    "description": "",
+    "disabled": true,
+    "duration": {
+     "combat": null,
+     "rounds": null,
+     "seconds": null,
+     "startRound": null,
+     "startTime": null,
+     "startTurn": null,
+     "turns": null
+    },
+    "flags": {},
+    "img": "icons/magic/control/silhouette-aura-energy.webp",
+    "name": "Direform",
+    "origin": null,
+    "statuses": [],
+    "system": {},
+    "tint": "#ffffff",
+    "transfer": true,
+    "type": "base"
+   }
+  ],
+  "flags": {},
+  "folder": "jJYZfwmGYOopcEGe",
+  "img": "icons/magic/control/silhouette-aura-energy.webp",
+  "name": "Direform",
+  "system": {
+   "activation": {
+    "complication": null,
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 3
+    },
+    "flavor": "",
+    "opportunity": null,
+    "plotDie": false,
+    "type": "utility",
+    "uses": null
+   },
+   "ancestry": "singer",
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "short": "<p>You’ve bonded with a callousspren, a type of Void- spren. While in this form, your <strong>Strength</strong> increases by 2 and your deflect value increases by 2. This deflect doesn’t stack with armor, so if you wear armor over your carapace, choose which value to use.</p><p>Additionally, when a character triggers a <span>@UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.QpFIxaoCBezzt6yw]{Reactive Strike}</span> from you, you can use that reaction to attempt to <span>@UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.EVPgpHL6Y4jrumwI]{Grapple} </span>them instead of attacking; when you do, you must spend 1 focus as usual for Reactive Strike.</p>",
+    "value": "<p><em>Direform specializes in unyielding strength and persistence, and this form is commonly used to guard objects or prisoners. You have substantial carapace with a jagged crest of spikes running along your head and shoulders. You’re inclined toward obedience to your superiors but obstinacy with others.</em></p><p>You’ve bonded with a callousspren, a type of Void- spren. While in this form, your <strong>Strength</strong> increases by 2 and your deflect value increases by 2. This deflect doesn’t stack with armor, so if you wear armor over your carapace, choose which value to use.</p><p>Additionally, when a character triggers a <span>@UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.QpFIxaoCBezzt6yw]{Reactive Strike}</span> from you, you can use that reaction to attempt to <span>@UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.EVPgpHL6Y4jrumwI]{Grapple} </span>them instead of attacking; when you do, you must spend 1 focus as usual for Reactive Strike.</p>"
+   },
+   "id": "direform",
+   "modality": "singer-form",
+   "type": "ancestry"
+  },
+  "type": "action"
+ },
+ {
+  "_id": "fAyxRptwwTnXWOQL",
+  "effects": [
+   {
+    "_id": "gLuutVWbLQoRZcFd",
+    "changes": [
+     {
+      "key": "",
+      "mode": 2,
+      "priority": null,
+      "value": ""
+     }
+    ],
+    "description": "",
+    "disabled": true,
+    "duration": {
+     "combat": null,
+     "rounds": null,
+     "seconds": null,
+     "startRound": null,
+     "startTime": null,
+     "startTurn": null,
+     "turns": null
+    },
+    "flags": {},
+    "img": "icons/magic/symbols/question-stone-yellow.webp",
+    "name": "Dullform",
+    "origin": null,
+    "statuses": [],
+    "system": {
+     "isStackable": false,
+     "stacks": null
+    },
+    "tint": "#ffffff",
+    "transfer": true,
+    "type": "base"
+   }
+  ],
+  "flags": {},
+  "folder": "jJYZfwmGYOopcEGe",
+  "img": "icons/magic/symbols/question-stone-yellow.webp",
+  "name": "Dullform",
+  "system": {
+   "activation": {
+    "complication": null,
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 3
+    },
+    "flavor": "",
+    "opportunity": null,
+    "plotDie": false,
+    "type": "utility",
+    "uses": null
+   },
+   "ancestry": "singer",
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": "<p>Your form isn’t specialized, as your bonded spren grants no form. You can pass unnoticed as a “parshman” in most human societies, but you don’t gain other benefits from your form.</p>"
+   },
+   "id": "dullform",
+   "modality": "singer-form",
+   "type": "ancestry"
+  },
+  "type": "action"
+ },
+ {
+  "_id": "ZvVDzqtqdOknBjGn",
+  "effects": [
+   {
+    "_id": "lIfdtzBlBysoSUD2",
+    "changes": [
+     {
+      "key": "system.attributes.int.value",
+      "mode": 2,
+      "priority": null,
+      "value": "1"
+     },
+     {
+      "key": "system.attributes.pre.value",
+      "mode": 2,
+      "priority": null,
+      "value": "1"
+     }
+    ],
+    "description": "",
+    "disabled": true,
+    "duration": {
+     "combat": null,
+     "rounds": null,
+     "seconds": null,
+     "startRound": null,
+     "startTime": null,
+     "startTurn": null,
+     "turns": null
+    },
+    "flags": {},
+    "img": "icons/magic/control/mouth-smile-deception-purple.webp",
+    "name": "Envoyform",
+    "origin": null,
+    "statuses": [],
+    "system": {},
+    "tint": "#ffffff",
+    "transfer": true,
+    "type": "base"
+   }
+  ],
+  "flags": {},
+  "folder": "jJYZfwmGYOopcEGe",
+  "img": "icons/magic/control/mouth-smile-deception-purple.webp",
+  "name": "Envoyform",
+  "system": {
+   "activation": {
+    "complication": null,
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 3
+    },
+    "flavor": "",
+    "opportunity": null,
+    "plotDie": false,
+    "type": "utility",
+    "uses": null
+   },
+   "ancestry": "singer",
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "short": "<p>You’ve bonded with a zealspren, a type of Voidspren. While in this form, your <strong>Intellect</strong> increases by 1, your <strong>Presence</strong> increases by 1, and you can speak, read, write, and understand any language.</p><p>Additionally, you gain an advantage on <strong>Insight</strong> tests made to interpret the desires or intentions of others.</p>",
+    "value": "<p><em>Envoyform is an embellished form often used to serve the administrative needs of the Fused. Your tall form towers over others, and your ornate carapace is uniquely alluring. You comprehend any language after brief exposure and can grasp hidden context with the subtlest of cues.</em></p><p>You’ve bonded with a zealspren, a type of Voidspren. While in this form, your <strong>Intellect</strong> increases by 1, your <strong>Presence</strong> increases by 1, and you can speak, read, write, and understand any language.</p><p>Additionally, you gain an advantage on <strong>Insight</strong> tests made to interpret the desires or intentions of others.</p>"
+   },
+   "id": "envoyform",
+   "modality": "singer-form",
+   "type": "ancestry"
+  },
+  "type": "action"
+ },
+ {
+  "_id": "ybiCFQIjpeJtL3rm",
+  "effects": [],
+  "flags": {},
+  "folder": "31ZjSDXE4AHA51WL",
+  "img": "icons/magic/perception/hand-eye-black.webp",
+  "name": "Intervening Premonitions",
+  "system": {
+   "activation": {
+    "complication": null,
+    "consume": [],
+    "cost": {
+     "type": "rea",
+     "value": null
+    },
+    "flavor": "",
+    "opportunity": null,
+    "plotDie": false,
+    "type": "utility",
+    "uses": null
+   },
+   "ancestry": "singer",
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": "<p>At the start of each session, roll two d20s and record both results. When an enemy or willing ally you can sense makes a test, you can use this reaction to replace the test’s d20 roll with one of your recorded numbers. You can replace that number after you see their die roll and after they apply any advantages, but you must do so before the effects of the test are resolved. You lose a recorded number when you use it to replace a d20 roll or when the session ends, whichever comes first.</p>"
+   },
+   "id": "intervening-premonitions",
+   "modality": null,
+   "type": "ancestry"
+  },
+  "type": "action"
+ },
+ {
+  "_id": "Ef1ZJzAZpjBTXcdq",
+  "effects": [
+   {
+    "_id": "6KsOkUmQmeW1vH34",
+    "changes": [
+     {
+      "key": "",
+      "mode": 2,
+      "priority": null,
+      "value": ""
+     }
+    ],
+    "description": "",
+    "disabled": true,
+    "duration": {
+     "combat": null,
+     "rounds": null,
+     "seconds": null,
+     "startRound": null,
+     "startTime": null,
+     "startTurn": null,
+     "turns": null
+    },
+    "flags": {},
+    "img": "icons/magic/life/heart-shadow-red.webp",
+    "name": "Mateform",
+    "origin": null,
+    "statuses": [],
+    "system": {
+     "isStackable": false,
+     "stacks": null
+    },
+    "tint": "#ffffff",
+    "transfer": true,
+    "type": "base"
+   }
+  ],
+  "flags": {},
+  "folder": "jJYZfwmGYOopcEGe",
+  "img": "icons/magic/life/heart-shadow-red.webp",
+  "name": "Mateform",
+  "system": {
+   "activation": {
+    "complication": null,
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 3
+    },
+    "flavor": "",
+    "opportunity": null,
+    "plotDie": false,
+    "type": "utility",
+    "uses": null
+   },
+   "ancestry": "singer",
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": "<p>You have bonded with a lifespren, and your form is specialized for reproduction.</p>"
+   },
+   "id": "mateform",
+   "modality": "singer-form",
+   "type": "ancestry"
+  },
+  "type": "action"
+ },
+ {
+  "_id": "l2IdMa4K05kSHQMy",
+  "effects": [
+   {
+    "_id": "lIH7fmA3Cxb70qzK",
+    "changes": [
+     {
+      "key": "system.attributes.pre.value",
+      "mode": 2,
+      "priority": null,
+      "value": "1"
+     }
+    ],
+    "description": "",
+    "disabled": true,
+    "duration": {
+     "combat": null,
+     "rounds": null,
+     "seconds": null,
+     "startRound": null,
+     "startTime": null,
+     "startTurn": null,
+     "turns": null
+    },
+    "flags": {},
+    "img": "icons/magic/holy/meditation-chi-focus-blue.webp",
+    "name": "Mediationform",
+    "origin": null,
+    "statuses": [],
+    "system": {},
+    "tint": "#ffffff",
+    "transfer": true,
+    "type": "base"
+   }
+  ],
+  "flags": {},
+  "folder": "jJYZfwmGYOopcEGe",
+  "img": "icons/magic/holy/meditation-chi-focus-blue.webp",
+  "name": "Mediationform",
+  "system": {
+   "activation": {
+    "complication": null,
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 3
+    },
+    "flavor": "",
+    "opportunity": null,
+    "plotDie": false,
+    "type": "utility",
+    "uses": null
+   },
+   "ancestry": "singer",
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "short": "<p>You’ve bonded with a bindspren. While in this form, your <strong>Presence</strong> increases by 1.</p><p>Additionally, you don’t have to spend focus to use the @UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.K2QgKOSezyeYnnxl]{Aid} reaction.</p>",
+    "value": "<p><em>Mediationform specializes in communication, whether you’re connecting with new people or teaching those you know well. Your carapace is smooth, and your facial features are well-defined and expressive.</em></p><p>You’ve bonded with a bindspren. While in this form, your <strong>Presence</strong> increases by 1.</p><p>Additionally, you don’t have to spend focus to use the @UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.K2QgKOSezyeYnnxl]{Aid} reaction.</p>"
+   },
+   "id": "mediationform",
+   "modality": "singer-form",
+   "type": "ancestry"
+  },
+  "type": "action"
+ },
+ {
+  "_id": "H2IuAiMN5ZekdwQa",
+  "effects": [
+   {
+    "_id": "NV0xYhTfjGT1V6GO",
+    "changes": [
+     {
+      "key": "system.attributes.int.value",
+      "mode": 2,
+      "priority": null,
+      "value": "1"
+     },
+     {
+      "key": "system.attributes.awa.value",
+      "mode": 2,
+      "priority": null,
+      "value": "1"
+     },
+     {
+      "key": "system.resources.foc.max.bonus",
+      "mode": 2,
+      "priority": null,
+      "value": "2"
+     }
+    ],
+    "description": "",
+    "disabled": true,
+    "duration": {
+     "combat": null,
+     "rounds": null,
+     "seconds": null,
+     "startRound": null,
+     "startTime": null,
+     "startTurn": null,
+     "turns": null
+    },
+    "flags": {},
+    "img": "icons/magic/unholy/silhouette-robe-evil-glow.webp",
+    "name": "Nightform",
+    "origin": null,
+    "statuses": [],
+    "system": {},
+    "tint": "#ffffff",
+    "transfer": true,
+    "type": "base"
+   }
+  ],
+  "flags": {},
+  "folder": "jJYZfwmGYOopcEGe",
+  "img": "icons/magic/unholy/silhouette-robe-evil-glow.webp",
+  "name": "Nightform",
+  "system": {
+   "activation": {
+    "complication": null,
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 3
+    },
+    "flavor": "",
+    "opportunity": null,
+    "plotDie": false,
+    "type": "utility",
+    "uses": null
+   },
+   "ancestry": "singer",
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "short": "<p>You’ve bonded with a nightspren, a type of Voidspren. While in this form, your <strong>Awareness</strong> increases by 1 and your <strong>Intellect</strong> increases by 1. When you change into this form, your maximum focus and current focus both increase by 2, and when you assume a different form, both decrease by 2.</p><p>Additionally, your bond with a nightspren has granted you precognitive abilities—whether you wish them or not. While in this form, you gain the @UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.ybiCFQIjpeJtL3rm]{Intervening Premonitions} and @UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.mh5EgZ2dYBoBpzyb]{Sporadic Premonitions} abilities.</p>",
+    "value": "<p><em>Nightform grants unpredictable visions of the future, and your senses become more acute, especially at night. Petal-like carapace grows from your skull, framing your ears and enhancing your ability to perceive rhythms. In various lights, your carapace reflects different iridescent patterns.</em></p><p>You’ve bonded with a nightspren, a type of Voidspren. While in this form, your <strong>Awareness</strong> increases by 1 and your <strong>Intellect</strong> increases by 1. When you change into this form, your maximum focus and current focus both increase by 2, and when you assume a different form, both decrease by 2.</p><p>Additionally, your bond with a nightspren has granted you precognitive abilities—whether you wish them or not. While in this form, you gain the @UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.ybiCFQIjpeJtL3rm]{Intervening Premonitions} and @UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.mh5EgZ2dYBoBpzyb]{Sporadic Premonitions} abilities.</p>"
+   },
+   "events": {
+    "QHXXQANIasgS0XjY": {
+     "description": "Remove Form Actions",
+     "event": "mode-deactivate",
+     "handler": {
+      "items": [
+       "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.ybiCFQIjpeJtL3rm",
+       "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.mh5EgZ2dYBoBpzyb"
+      ],
+      "reduceQuantity": false,
+      "type": "remove-items"
+     },
+     "id": "QHXXQANIasgS0XjY"
+    },
+    "b5Dz5D02WSoHvV9X": {
+     "description": "Grant Form Actions",
+     "event": "mode-activate",
+     "handler": {
+      "allowDuplicates": false,
+      "increaseQuantity": false,
+      "items": [
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.ybiCFQIjpeJtL3rm"
+       },
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.mh5EgZ2dYBoBpzyb"
+       }
+      ],
+      "type": "grant-items"
+     },
+     "id": "b5Dz5D02WSoHvV9X"
+    }
+   },
+   "id": "nightform",
+   "modality": "singer-form",
+   "type": "ancestry"
+  },
+  "type": "action"
+ },
+ {
+  "_id": "l191bxVgAs93HiGE",
+  "effects": [
+   {
+    "_id": "ybAxY0DlB279mR9j",
+    "changes": [
+     {
+      "key": "system.attributes.spd.value",
+      "mode": 2,
+      "priority": null,
+      "value": "1"
+     },
+     {
+      "key": "system.resources.foc.max.bonus",
+      "mode": 2,
+      "priority": null,
+      "value": "2"
+     }
+    ],
+    "description": "",
+    "disabled": true,
+    "duration": {
+     "combat": null,
+     "rounds": null,
+     "seconds": null,
+     "startRound": null,
+     "startTime": null,
+     "startTurn": null,
+     "turns": null
+    },
+    "flags": {},
+    "img": "icons/skills/movement/feet-winged-boots-glowing-yellow.webp",
+    "name": "Nimbleform",
+    "origin": null,
+    "statuses": [],
+    "system": {},
+    "tint": "#ffffff",
+    "transfer": true,
+    "type": "base"
+   }
+  ],
+  "flags": {},
+  "folder": "jJYZfwmGYOopcEGe",
+  "img": "icons/skills/movement/feet-winged-boots-glowing-yellow.webp",
+  "name": "Nimbleform",
+  "system": {
+   "activation": {
+    "complication": null,
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 3
+    },
+    "flavor": "",
+    "opportunity": null,
+    "plotDie": false,
+    "type": "utility",
+    "uses": null
+   },
+   "ancestry": "singer",
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "short": "<p>You’ve bonded with a windspren. While in this form, your <strong>Speed</strong> increases by 1. When you change into this form, your maximum focus and current focus both increase by 2, and when you assume a different form, both decrease by 2.</p>",
+    "value": "<p><em>Nimbleform specializes in physical and mental flexibility. Your protective carapace is minimal; instead, you have an increased range of motion and mental focus.</em></p><p>You’ve bonded with a windspren. While in this form, your <strong>Speed</strong> increases by 1. When you change into this form, your maximum focus and current focus both increase by 2, and when you assume a different form, both decrease by 2.</p>"
+   },
+   "id": "nimbleform",
+   "modality": "singer-form",
+   "type": "ancestry"
+  },
+  "type": "action"
+ },
+ {
+  "_id": "H2hVsZn4TbR46DFj",
+  "effects": [
+   {
+    "_id": "swLnvhOguJePDuza",
+    "changes": [
+     {
+      "key": "system.attributes.spd.value",
+      "mode": 2,
+      "priority": null,
+      "value": "2"
+     }
+    ],
+    "description": "",
+    "disabled": true,
+    "duration": {
+     "combat": null,
+     "rounds": null,
+     "seconds": null,
+     "startRound": null,
+     "startTime": null,
+     "startTurn": null,
+     "turns": null
+    },
+    "flags": {},
+    "img": "icons/skills/movement/feet-winged-boots-brown.webp",
+    "name": "Relayform",
+    "origin": null,
+    "statuses": [],
+    "system": {},
+    "tint": "#ffffff",
+    "transfer": true,
+    "type": "base"
+   }
+  ],
+  "flags": {},
+  "folder": "jJYZfwmGYOopcEGe",
+  "img": "icons/skills/movement/feet-winged-boots-brown.webp",
+  "name": "Relayform",
+  "system": {
+   "activation": {
+    "complication": null,
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 3
+    },
+    "flavor": "",
+    "opportunity": null,
+    "plotDie": false,
+    "type": "utility",
+    "uses": null
+   },
+   "ancestry": "singer",
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "short": "<p>You’ve bonded with a hastespren, a type of Voidspren. While in this form, your <strong>Speed</strong> increases by 2 and you ignore the <strong>Slowed</strong> condition.</p><p>Additionally, when you make an <strong>Agility</strong>, <strong>Stealth</strong>, or <strong>Thievery</strong> test, you can spend 1 focus to gain an advantage on that test.</p>",
+    "value": "<p><em>Relayform boasts speed and stamina ideal for scouts. Your agile and muscular body is protected in the front by light carapace with smooth edges, and aerodynamic spikes run along the backs of your forearms and calves. You can run great distances and avoid detection.</em></p><p>You’ve bonded with a hastespren, a type of Voidspren. While in this form, your <strong>Speed</strong> increases by 2 and you ignore the <strong>Slowed</strong> condition.</p><p>Additionally, when you make an <strong>Agility</strong>, <strong>Stealth</strong>, or <strong>Thievery</strong> test, you can spend 1 focus to gain an advantage on that test.</p>"
+   },
+   "id": "relayform",
+   "modality": "singer-form",
+   "type": "ancestry"
+  },
+  "type": "action"
+ },
+ {
+  "_id": "HdbPsv2Q2RKAGhPb",
+  "effects": [
+   {
+    "_id": "ufQundEUxoei08N5",
+    "changes": [
+     {
+      "key": "system.attributes.int.value",
+      "mode": 2,
+      "priority": null,
+      "value": "1"
+     }
+    ],
+    "description": "",
+    "disabled": true,
+    "duration": {
+     "combat": null,
+     "rounds": null,
+     "seconds": null,
+     "startRound": null,
+     "startTime": null,
+     "startTurn": null,
+     "turns": null
+    },
+    "flags": {},
+    "img": "icons/skills/trades/academics-book-study-purple.webp",
+    "name": "Scholarform",
+    "origin": null,
+    "statuses": [],
+    "system": {},
+    "tint": "#ffffff",
+    "transfer": true,
+    "type": "base"
+   }
+  ],
+  "flags": {},
+  "folder": "jJYZfwmGYOopcEGe",
+  "img": "icons/skills/trades/academics-book-study-purple.webp",
+  "name": "Scholarform",
+  "system": {
+   "activation": {
+    "complication": null,
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 3
+    },
+    "flavor": "",
+    "opportunity": null,
+    "plotDie": false,
+    "type": "utility",
+    "uses": null
+   },
+   "ancestry": "singer",
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "short": "<p>You’ve bonded with a logicspren. While in this form, your <strong>Intellect</strong> increases by 1.</p><p>Additionally, when you adopt this form, choose one cultural or utility expertise you don’t already have, and choose one cognitive skill that isn’t a surge skill. You temporarily gain that expertise, and you temporarily gain an additional rank in that skill.</p><p>If you gain the @UUID[Compendium.cosmere-rpg-stormlight-handbook.heroic-paths.Item.8FYBJZC8PBjneOim]{Erudition} talent from the @UUID[Compendium.cosmere-rpg-stormlight-handbook.heroic-paths.Item.oFA1jJZQMhTUjyem]{Scholar} path, the expertise and skill rank you gain from your scholarform count as being granted by Erudition; when Erudition allows you to reassign expertises and skills, your scholarform expertise and skill are also eligible for reassignment. You can’t choose the same skill for both scholarform and Erudition.</p>",
+    "value": "<p><em>Scholarform specializes in scholarship, enhancing your mental processes and memory. You become more patient and analytical, but you may also find yourself more inclined toward ambition. You have long hairstrands, and a cushioned lower body suited to sedentary work.</em></p><p>You’ve bonded with a logicspren. While in this form, your <strong>Intellect</strong> increases by 1.</p><p>Additionally, when you adopt this form, choose one cultural or utility expertise you don’t already have, and choose one cognitive skill that isn’t a surge skill. You temporarily gain that expertise, and you temporarily gain an additional rank in that skill.</p><p>If you gain the @UUID[Compendium.cosmere-rpg-stormlight-handbook.heroic-paths.Item.8FYBJZC8PBjneOim]{Erudition} talent from the @UUID[Compendium.cosmere-rpg-stormlight-handbook.heroic-paths.Item.oFA1jJZQMhTUjyem]{Scholar} path, the expertise and skill rank you gain from your scholarform count as being granted by Erudition; when Erudition allows you to reassign expertises and skills, your scholarform expertise and skill are also eligible for reassignment. You can’t choose the same skill for both scholarform and Erudition.</p>"
+   },
+   "id": "scholarform",
+   "modality": "singer-form",
+   "type": "ancestry"
+  },
+  "type": "action"
+ },
+ {
+  "_id": "mh5EgZ2dYBoBpzyb",
+  "effects": [],
+  "flags": {},
+  "folder": "31ZjSDXE4AHA51WL",
+  "img": "icons/magic/perception/third-eye-blue-red.webp",
+  "name": "Sporadic Premonitions",
+  "system": {
+   "activation": {
+    "complication": null,
+    "consume": [],
+    "cost": {
+     "type": "spe",
+     "value": null
+    },
+    "flavor": "",
+    "opportunity": null,
+    "plotDie": false,
+    "type": "utility",
+    "uses": null
+   },
+   "ancestry": "singer",
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": "<p>At the GM’s discretion, you might occasionally receive glimpses of the future at unpredictable times during gameplay. When this happens, the GM might describe vague flashes of imagery, sounds, and impressions in your mind, hinting at what may come.</p>"
+   },
+   "id": "sporadic-premonitions",
+   "modality": null,
+   "type": "ancestry"
+  },
+  "type": "action"
+ },
+ {
+  "_id": "mUaTPSRIeasMX1kG",
+  "effects": [
+   {
+    "_id": "9Chd1q3hiHh6v9gy",
+    "changes": [
+     {
+      "key": "system.attributes.str.value",
+      "mode": 2,
+      "priority": null,
+      "value": "1"
+     },
+     {
+      "key": "system.attributes.spd.value",
+      "mode": 2,
+      "priority": null,
+      "value": "1"
+     },
+     {
+      "key": "system.deflect.natural",
+      "mode": 2,
+      "priority": null,
+      "value": "1"
+     }
+    ],
+    "description": "",
+    "disabled": true,
+    "duration": {
+     "combat": null,
+     "rounds": null,
+     "seconds": null,
+     "startRound": null,
+     "startTime": null,
+     "startTurn": null,
+     "turns": null
+    },
+    "flags": {},
+    "img": "icons/magic/lightning/bolt-forked-large-red.webp",
+    "name": "Stormform",
+    "origin": null,
+    "statuses": [],
+    "system": {},
+    "tint": "#ffffff",
+    "transfer": true,
+    "type": "base"
+   }
+  ],
+  "flags": {},
+  "folder": "jJYZfwmGYOopcEGe",
+  "img": "icons/magic/lightning/bolt-forked-large-red.webp",
+  "name": "Stormform",
+  "system": {
+   "activation": {
+    "complication": null,
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 3
+    },
+    "flavor": "",
+    "opportunity": null,
+    "plotDie": false,
+    "type": "utility",
+    "uses": null
+   },
+   "ancestry": "singer",
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "short": "<p>You’ve bonded with a stormspren, a type of Voidspren. While in this form, your <strong>Strength</strong> increases by 1, your <strong>Speed</strong> increases by 1, and your deflect value increases by 1. This deflect does not stack with armor. If you wear armor over your carapace, you can choose which deflect value to use.</p><p>Additionally, you can use @UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.afUP79u76gVtN4N2]{Unleash Lightning (Focus)}/@UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.zA3h0nJcYs4PMmhi]{Unleash Lightning (Investiture)}.</p>",
+    "value": "<p><em>Stormform is an elite battle form optimized for physical prowess and honed attacks. You’re covered in finesse-enhancing armored carapace that grows under your skin, poking through in ridges and spikes. You can manipulate and unleash powerful red lighting on your foes.</em></p><p>You’ve bonded with a stormspren, a type of Voidspren. While in this form, your <strong>Strength</strong> increases by 1, your <strong>Speed</strong> increases by 1, and your deflect value increases by 1. This deflect does not stack with armor. If you wear armor over your carapace, you can choose which deflect value to use.</p><p>Additionally, you can use @UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.TdhkW1QXyp3TAaz4]{Unleash Lightning}.</p>"
+   },
+   "events": {
+    "MleViqHh1pMH8Uqy": {
+     "description": "Remove Form Actions",
+     "event": "mode-deactivate",
+     "handler": {
+      "items": [
+       "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.TdhkW1QXyp3TAaz4"
+      ],
+      "reduceQuantity": false,
+      "type": "remove-items"
+     },
+     "id": "MleViqHh1pMH8Uqy"
+    },
+    "lwkr4u7NNulZCKKM": {
+     "description": "Grant Form Actions",
+     "event": "mode-activate",
+     "handler": {
+      "allowDuplicates": false,
+      "increaseQuantity": false,
+      "items": [
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.TdhkW1QXyp3TAaz4"
+       }
+      ],
+      "type": "grant-items"
+     },
+     "id": "lwkr4u7NNulZCKKM"
+    }
+   },
+   "id": "stormform",
+   "modality": "singer-form",
+   "type": "ancestry"
+  },
+  "type": "action"
+ },
+ {
+  "_id": "TdhkW1QXyp3TAaz4",
+  "effects": [],
+  "flags": {},
+  "folder": "31ZjSDXE4AHA51WL",
+  "img": "icons/magic/lightning/bolt-strike-sparks-purple.webp",
+  "name": "Unleash Lightning",
+  "system": {
+   "activation": {
+    "attribute": null,
+    "complication": null,
+    "consume": [
+     {
+      "resource": "foc",
+      "type": "resource",
+      "value": {
+       "actual": 0,
+       "max": 1,
+       "min": 1
+      }
+     },
+     {
+      "resource": "inv",
+      "type": "resource",
+      "value": {
+       "actual": 0,
+       "max": 1,
+       "min": 1
+      }
+     }
+    ],
+    "cost": {
+     "type": "act",
+     "value": 2
+    },
+    "flavor": "",
+    "modifierFormula": "",
+    "opportunity": null,
+    "plotDie": false,
+    "skill": "dis",
+    "type": "skill_test",
+    "uses": null
+   },
+   "ancestry": "singer",
+   "damage": {
+    "attribute": null,
+    "formula": "2d8",
+    "grazeOverrideFormula": "",
+    "skill": null,
+    "type": "energy"
+   },
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": "<p>Your body crackles with the Everstorm’s unnatural red lightning, which you can unleash in a violent arc. Spend 1 focus or 1 Investiture to make a ranged Discipline attack against the Physical defense of a target within 60 feet of you. Roll [[/r 2d8]] energy damage. On a hit, the target is also <strong>Disoriented</strong> until the end of their next turn. If you have recently taken on stormform, the GM might raise the stakes on this attack due to the unpredictability of the arcing lightning.</p><p>As you gain ranks in <strong>Discipline</strong>, the size of this attack’s damage dice increases: at 4 ranks, you roll [[/r 2d10]] (instead of 2d8 damage), and at 5 ranks or more, you roll [[/r 2d12]] damage.</p>"
+   },
+   "events": {},
+   "id": "unleash-lightning",
+   "modality": null,
+   "type": "ancestry"
+  },
+  "type": "action"
+ },
+ {
+  "_id": "mb9cRGvyqEstU0Ov",
+  "effects": [
+   {
+    "_id": "YvvGl7UqfKWmIU2w",
+    "changes": [
+     {
+      "key": "system.attributes.str.value",
+      "mode": 2,
+      "priority": null,
+      "value": "1"
+     },
+     {
+      "key": "system.deflect.natural",
+      "mode": 2,
+      "priority": null,
+      "value": "1"
+     }
+    ],
+    "description": "",
+    "disabled": true,
+    "duration": {
+     "combat": null,
+     "rounds": null,
+     "seconds": null,
+     "startRound": null,
+     "startTime": null,
+     "startTurn": null,
+     "turns": null
+    },
+    "flags": {},
+    "img": "icons/magic/control/control-influence-rally-purple.webp",
+    "name": "Warform",
+    "origin": null,
+    "statuses": [],
+    "system": {},
+    "tint": "#ffffff",
+    "transfer": true,
+    "type": "base"
+   }
+  ],
+  "flags": {},
+  "folder": "jJYZfwmGYOopcEGe",
+  "img": "icons/magic/control/control-influence-rally-purple.webp",
+  "name": "Warform",
+  "system": {
+   "activation": {
+    "complication": null,
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 3
+    },
+    "flavor": "",
+    "opportunity": null,
+    "plotDie": false,
+    "type": "utility",
+    "uses": null
+   },
+   "ancestry": "singer",
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "short": "<p>You’ve bonded with a painspren. While in this form, your <strong>Strength</strong> increases by 1 and your deflect value increases by 1. This deflect doesn’t stack with armor, so if you wear armor over your carapace, choose which value to use.</p><p>Additionally, when you move, you can jump a horizontal distance up to your movement rate, or a vertical distance up to half your movement rate, without succeeding on an <strong>Athletics</strong> test.</p>",
+    "value": "<p><em>Warform specializes in combat, increasing your strength and stamina. Your body is large and covered with fierce carapace, which protects you like armor. Any aversions you might usually have to violence, pain, and death become slightly less pronounced in warform.</em></p><p>You’ve bonded with a painspren. While in this form, your <strong>Strength</strong> increases by 1 and your deflect value increases by 1. This deflect doesn’t stack with armor, so if you wear armor over your carapace, choose which value to use.</p><p>Additionally, when you move, you can jump a horizontal distance up to your movement rate, or a vertical distance up to half your movement rate, without succeeding on an <strong>Athletics</strong> test.</p>"
+   },
+   "id": "warform",
+   "modality": "singer-form",
+   "type": "ancestry"
+  },
+  "type": "action"
+ },
+ {
+  "_id": "6qI3czwVnQAnvb0m",
+  "effects": [
+   {
+    "_id": "ojFKUdCn6Mp9l5ZX",
+    "changes": [
+     {
+      "key": "system.attributes.wil.value",
+      "mode": 2,
+      "priority": null,
+      "value": "1"
+     }
+    ],
+    "description": "",
+    "disabled": true,
+    "duration": {
+     "combat": null,
+     "rounds": null,
+     "seconds": null,
+     "startRound": null,
+     "startTime": null,
+     "startTurn": null,
+     "turns": null
+    },
+    "flags": {},
+    "img": "icons/magic/control/buff-strength-muscle-damage.webp",
+    "name": "Workform",
+    "origin": null,
+    "statuses": [],
+    "system": {},
+    "tint": "#ffffff",
+    "transfer": true,
+    "type": "base"
+   }
+  ],
+  "flags": {},
+  "folder": "jJYZfwmGYOopcEGe",
+  "img": "icons/magic/control/buff-strength-muscle-damage.webp",
+  "name": "Workform",
+  "system": {
+   "activation": {
+    "complication": null,
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 3
+    },
+    "flavor": "",
+    "opportunity": null,
+    "plotDie": false,
+    "type": "utility",
+    "uses": null
+   },
+   "ancestry": "singer",
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "short": "<p>You’ve bonded with a gravitationspren. While in this form, your <strong>Willpower</strong> increases by 1, and you ignore the effects of the <strong>Exhausted</strong> condition.</p><p>Additionally, you can easily disguise yourself to pass unnoticed as a “parshman” in most human societies, though people might begin noticing the differences in your form if you’re caught doing anything suspicious.</p>",
+    "value": "<p><em>Workform specializes in labor. This form helps you see tasks through to completion, granting you determination and stamina. You have a rugged body with modest carapace ridges.</em></p><p>You’ve bonded with a gravitationspren. While in this form, your <strong>Willpower</strong> increases by 1, and you ignore the effects of the <strong>Exhausted</strong> condition.</p><p>Additionally, you can easily disguise yourself to pass unnoticed as a “parshman” in most human societies, though people might begin noticing the differences in your form if you’re caught doing anything suspicious.</p>"
+   },
+   "id": "workform",
+   "modality": "singer-form",
+   "type": "ancestry"
+  },
+  "type": "action"
+ },
+ {
+  "_id": "q7t6vnxXBXDvsfhc",
+  "effects": [],
+  "flags": {},
+  "folder": null,
+  "img": "modules/cosmere-rpg-stormlight-handbook/assets/icons/ancestries/human-ancestry-card.webp",
+  "name": "Human",
+  "system": {
+   "description": {
+    "chat": "<p>Most of Roshar is divided into human-ruled nations with majority-human populations.</p><p>Many ethnic groups are represented within the human species, some of which include distant singer ancestry. Although each ethnic group shares common physical characteristics among many of its people, these characteristics can express themselves very differently across individuals. Due to the Vorin “right of travel,” international relations, and diasporas born of conflict, most nations have some degree of ethnic diversity among citizens.</p>",
+    "short": "<p>Most of Roshar is divided into human-ruled nations with majority-human populations.</p><p>Many ethnic groups are represented within the human species, some of which include distant singer ancestry. Although each ethnic group shares common physical characteristics among many of its people, these characteristics can express themselves very differently across individuals. Due to the Vorin “right of travel,” international relations, and diasporas born of conflict, most nations have some degree of ethnic diversity among citizens.</p>",
+    "value": "<p>Most of Roshar is divided into human-ruled nations with majority-human populations.</p><p>Many ethnic groups are represented within the human species, some of which include distant singer ancestry. Although each ethnic group shares common physical characteristics among many of its people, these characteristics can express themselves very differently across individuals. Due to the Vorin “right of travel,” international relations, and diasporas born of conflict, most nations have some degree of ethnic diversity among citizens.</p><p>The “Culture” section of this chapter discusses the nations of Roshar and the most common ethnicities of the people who live there.</p><h4>Choosing Human Ancestry</h4><p>If you choose the <strong>human ancestry</strong>, your size is Medium, and you gain the following benefits at the specified levels:</p><p><strong>Ancestry Bonus Talents (Level 1, 6, 11, 16, and 21)</strong>. During step 5 of character creation, you gain one bonus talent. As a human, you must choose this talent from a heroic path (such as those in chapter 4). Whenever you reach a new tier (as indicated on the Character Advancement table in chapter 1), you again gain a bonus talent from a heroic path.</p><p>As usual, you must meet the prerequisites for these talents (see the “Advancing Through a Path” section of chapter 4).</p>"
+   },
+   "id": "human"
+  },
+  "type": "ancestry"
+ },
+ {
+  "_id": "3odmxYSXtqMmvyPE",
+  "effects": [],
+  "flags": {},
+  "folder": null,
+  "img": "modules/cosmere-rpg-stormlight-handbook/assets/icons/ancestries/singer-ancestry-card.webp",
+  "name": "Singer",
+  "system": {
+   "advancement": {
+    "bonusTalents": [],
+    "extraTalents": []
+   },
+   "description": {
+    "short": "<p>Singers are the indigenous population of Roshar, though this knowledge was suppressed by the humans and lost for many Desolations. Singers can change forms by bonding spren during highstorms, altering the singer’s appearance and abilities. Their intellectual and emotional capacities are equal to those of humans— but unlike humans, whose abilities generally remain constant, singer forms have the remarkable ability to temporarily amplify some abilities while others lie dormant.</p><p>Singers have skin marbled with black, white, or red. Singer hairstrands range in hue, including orange, red, and black. Protective carapace covers parts of their bodies, though certain forms have more substantial carapace, acting as biological armor. When a singer takes on a new form, it can influence their physicality, aspects of their personality, and their access (or lack thereof) to certain rhythms</p><p>Singers use these rhythms—which suffuse all of Roshar—to add emotional context and depth to their words. Though most humans can’t comprehend the rhythms, singers associate rhythms with specific emotions. Each singer imbues their words with a cadence representing their mood. With concentration, they can even attune a false rhythm; sometimes singers do this to correct themselves, and other times, to mislead their audience. For example, a singer might attune the Rhythm of Peace to lessen their own anxiety—or hum to the Rhythm of Consideration to pretend they’re paying close attention to an argument they find boring. Other examples of common rhythms include the Rhythm of Determination, the Rhythm of the Terrors, the Rhythm of Joy, and the Rhythm of the Lost.</p>",
+    "value": "<p>Singers are the indigenous population of Roshar, though this knowledge was suppressed by the humans and lost for many Desolations. Singers can change forms by bonding spren during highstorms, altering the singer’s appearance and abilities. Their intellectual and emotional capacities are equal to those of humans— but unlike humans, whose abilities generally remain constant, singer forms have the remarkable ability to temporarily amplify some abilities while others lie dormant.</p><p>Singers have skin marbled with black, white, or red. Singer hairstrands range in hue, including orange, red, and black. Protective carapace covers parts of their bodies, though certain forms have more substantial carapace, acting as biological armor. When a singer takes on a new form, it can influence their physicality, aspects of their personality, and their access (or lack thereof) to certain rhythms</p><p>Singers use these rhythms—which suffuse all of Roshar—to add emotional context and depth to their words. Though most humans can’t comprehend the rhythms, singers associate rhythms with specific emotions. Each singer imbues their words with a cadence representing their mood. With concentration, they can even attune a false rhythm; sometimes singers do this to correct themselves, and other times, to mislead their audience. For example, a singer might attune the Rhythm of Peace to lessen their own anxiety—or hum to the Rhythm of Consideration to pretend they’re paying close attention to an argument they find boring. Other examples of common rhythms include the Rhythm of Determination, the Rhythm of the Terrors, the Rhythm of Joy, and the Rhythm of the Lost.</p><p>The “Culture” section of this chapter describes the listeners—a culture of singers—and also summarizes the experiences of other singers who live in humanruled lands. You can learn even more about singers in chapter 2 of the Stormlight World Guide.</p><h4>Choosing Singer Ancestry</h4><p>If you choose the singer ancestry, your size is Medium, and you gain the following benefits at the specified levels:</p><p><strong>Unique Talent Tree (Level 1)</strong>. Whenever you choose a new talent, you can choose it from the Singer talent tree in this chapter (in addition to the other trees you have access to).</p><p><strong>Change Form (Level 1)</strong>. You gain the Change Form (Singer Key) talent from the Singer tree, along with one bonus talent that’s connected to it. Decide which form to begin the game in, choosing from the forms in these two talents. As you gain levels, you can learn new forms from talents in the Singer tree.</p><p><strong>Ancestry Bonus Talents (Level 6, 11, 16, and 21)</strong>. Each time you reach a new tier (as indicated on the Character Advancement table in chapter 1), you again gain a bonus talent. You must choose it from the Singer tree or from any heroic path (see chapter 4).</p><p>As usual, you must meet the prerequisites for these talents (see the “Advancing Through a Path” section of chapter 4).</p>"
+   },
+   "events": {
+    "0XZ72mYTIkb0TRam": {
+     "description": "Remove Change Form Talent",
+     "event": "remove-from-actor",
+     "handler": {
+      "items": [
+       "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.P8H9Vgg6hN5lRxCB"
+      ],
+      "reduceQuantity": false,
+      "type": "remove-items"
+     },
+     "id": "0XZ72mYTIkb0TRam"
+    },
+    "AUlBhnsXLqH4Cm44": {
+     "description": "Grant Change Form Talent",
+     "event": "add-to-actor",
+     "handler": {
+      "allowDuplicates": false,
+      "increaseQuantity": false,
+      "items": [
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.P8H9Vgg6hN5lRxCB"
+       }
+      ],
+      "type": "grant-items"
+     },
+     "id": "AUlBhnsXLqH4Cm44"
+    }
+   },
+   "id": "singer",
+   "talentTree": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.ZcQJT5DKqF1XAN1h"
+  },
+  "type": "ancestry"
+ },
+ {
+  "_id": "n9wlQNiHQ6135jtR",
+  "effects": [
+   {
+    "_id": "ISs4kA7gT2ty1Jcg",
+    "changes": [
+     {
+      "key": "system.defenses.cog.bonus",
+      "mode": 2,
+      "priority": null,
+      "value": "2"
+     }
+    ],
+    "description": "",
+    "disabled": true,
+    "duration": {
+     "combat": null,
+     "rounds": null,
+     "seconds": null,
+     "startRound": null,
+     "startTime": null,
+     "startTurn": null,
+     "turns": null
+    },
+    "flags": {},
+    "img": "icons/magic/perception/eye-ringed-glow-angry-small-red.webp",
+    "name": "Ambitious Mind",
+    "origin": null,
+    "statuses": [],
+    "system": {},
+    "tint": "#ffffff",
+    "transfer": true,
+    "type": "base"
+   }
+  ],
+  "flags": {},
+  "folder": "DcsP30Zf5xmMI5ps",
+  "img": "icons/magic/perception/eye-ringed-glow-angry-small-red.webp",
+  "name": "Ambitious Mind",
+  "system": {
+   "activation": {
+    "complication": null,
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "opportunity": null,
+    "plotDie": false,
+    "type": "none",
+    "uses": null
+   },
+   "ancestry": "singer",
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": "<p><strong>Activation:</strong> <span class=\"cosmere-icon\" data-tooltip=\"Always Active\" aria-label=\"Always Active\">8</span></p><p><em>Your growing thirst for power opens you to the influence of Odium.</em></p><p>Though you haven’t yet bonded a Voidspren, Odium’s influence seeps into your mind, and your Cognitive defense increases by 2.</p><p>If you later acquire a talent that grants you forms of power, you can then use your @UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.P8H9Vgg6hN5lRxCB]{Change Form} to attract a Voidspren. Bonding with this Voidspren follows the same rules as taking other forms.</p><p>While bonded with a Voidspren, you become vulnerable to its influence; once per day when you gain a Complication on a test, you must succeed on a DC 15<span> Discipline</span> test or become <strong>Stunned</strong> until the end of your next turn as you struggle against the Voidspren’s influence. However, if you’ve sworn the First Ideal of a Radiant order, you automatically succeed on this test.</p>"
+   },
+   "hasAncestry": false,
+   "hasPath": false,
+   "hasSpecialty": false,
+   "id": "ambitious-mind",
+   "modality": null,
+   "path": null,
+   "prerequisites": {
+    "L5qLA4zkZFUd7y7e": {
+     "attribute": "str",
+     "mode": "any-of",
+     "rank": 1,
+     "talents": [
+      {
+       "id": "forms-of-finesse",
+       "label": "Forms of Finesse",
+       "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.YKj0auphZL1h3oDf"
+      },
+      {
+       "id": "forms-of-resolve",
+       "label": "Forms of Resolve",
+       "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.bzXuedqKyGYQd9G7"
+      },
+      {
+       "id": "forms-of-wisdom",
+       "label": "Forms of Wisdom",
+       "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.X8y1Qg3sj5IiRjDd"
+      }
+     ],
+     "type": "talent",
+     "value": 1
+    },
+    "nGCh1HqlUD0jMlOG": {
+     "attribute": "str",
+     "mode": "any-of",
+     "rank": 3,
+     "skill": "dis",
+     "talents": [],
+     "type": "skill",
+     "value": 1
+    }
+   },
+   "prerequisitesMet": false,
+   "specialty": "",
+   "type": "ancestry"
+  },
+  "type": "talent"
+ },
+ {
+  "_id": "P8H9Vgg6hN5lRxCB",
+  "effects": [],
+  "flags": {},
+  "folder": "DcsP30Zf5xmMI5ps",
+  "img": "icons/magic/control/silhouette-hold-beam-blue.webp",
+  "name": "Change Form",
+  "system": {
+   "activation": {
+    "complication": null,
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 3
+    },
+    "flavor": "",
+    "opportunity": null,
+    "plotDie": false,
+    "type": "utility",
+    "uses": null
+   },
+   "ancestry": "singer",
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "short": "<p><strong>Activation:</strong> <span class=\"cosmere-icon\" data-tooltip=\"Three Actions\" aria-label=\"Three Actions\">3</span></p><p>While outdoors during a highstorm, you can activate this talent either to change into dullform, or to take a spren into your gemheart and change into mateform or any form you’ve unlocked on the Singer talent tree. The type of spren bonded determines your new form. In most circumstances, you can automatically find and bond the type of spren required for that form. However, if the GM determines that current circumstances make the spren difficult to locate, you might need to roleplay or succeed on a test to do so.</p><p>While in a form, you temporarily gain its actions, statistic increases, and other effects (even if this temporarily increases your statistics above the maximum); these effects only last until you assume a different form by using this talent again. You can only be in one form at a time.</p>",
+    "value": "<p><strong>Activation:</strong> <span class=\"cosmere-icon\" data-tooltip=\"Three Actions\" aria-label=\"Three Actions\">3</span></p><p><em>You learn to bond a spren during highstorms and change your form. This transformation alters not only your appearance, but your physical, cognitive, and spiritual strengths, and even your personality.</em></p><p>When you gain this talent, you begin with two singer forms, @UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.fAyxRptwwTnXWOQL]{Dullform} and @UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.Ef1ZJzAZpjBTXcdq]{Mateform}.</p><p>While outdoors during a highstorm, you can activate this talent either to change into dullform, or to take a spren into your gemheart and change into mateform or any form you’ve unlocked on the Singer talent tree. The type of spren bonded determines your new form. In most circumstances, you can automatically find and bond the type of spren required for that form. However, if the GM determines that current circumstances make the spren difficult to locate, you might need to roleplay or succeed on a test to do so.</p><p>While in a form, you temporarily gain its actions, statistic increases, and other effects (even if this temporarily increases your statistics above the maximum); these effects only last until you assume a different form by using this talent again. You can only be in one form at a time.</p>"
+   },
+   "events": {
+    "b0GboyYLQTjyiNdU": {
+     "description": "Grant forms",
+     "event": "add-to-actor",
+     "handler": {
+      "allowDuplicates": false,
+      "increaseQuantity": false,
+      "items": [
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.fAyxRptwwTnXWOQL"
+       },
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.Ef1ZJzAZpjBTXcdq"
+       }
+      ],
+      "type": "grant-items"
+     },
+     "id": "b0GboyYLQTjyiNdU"
+    },
+    "bLyAUzw4aiu1w3Ss": {
+     "description": "Remove Forms",
+     "event": "remove-from-actor",
+     "handler": {
+      "items": [
+       "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.fAyxRptwwTnXWOQL",
+       "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.Ef1ZJzAZpjBTXcdq"
+      ],
+      "reduceQuantity": false,
+      "type": "remove-items"
+     },
+     "id": "bLyAUzw4aiu1w3Ss"
+    }
+   },
+   "hasAncestry": false,
+   "hasPath": false,
+   "hasSpecialty": false,
+   "id": "change-form",
+   "modality": null,
+   "path": null,
+   "prerequisites": {},
+   "prerequisitesMet": false,
+   "specialty": "",
+   "type": "ancestry"
+  },
+  "type": "talent"
+ },
+ {
+  "_id": "HO2L9uUTgsl9oIzk",
+  "effects": [],
+  "flags": {},
+  "folder": "DcsP30Zf5xmMI5ps",
+  "img": "icons/magic/fire/orb-vortex.webp",
+  "name": "Forms of Destruction",
+  "system": {
+   "activation": {
+    "complication": null,
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "opportunity": null,
+    "plotDie": false,
+    "type": "none",
+    "uses": null
+   },
+   "ancestry": "singer",
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "short": "<p><strong>Activation:</strong> <span class=\"cosmere-icon\" data-tooltip=\"Always Active\" aria-label=\"Always Active\">8</span></p><p>You gain two new forms of power—@UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.hMNhBG4gh4dJlCWh]{Direform} and @UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.mUaTPSRIeasMX1kG]{Stormform}—which you can transform into using your @UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.P8H9Vgg6hN5lRxCB]{Change Form}.</p>",
+    "value": "<p><strong>Activation:</strong> <span class=\"cosmere-icon\" data-tooltip=\"Always Active\" aria-label=\"Always Active\">8</span></p><p>You gain two new forms of power—@UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.hMNhBG4gh4dJlCWh]{Direform} and @UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.mUaTPSRIeasMX1kG]{Stormform}—which you can transform into using your @UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.P8H9Vgg6hN5lRxCB]{Change Form}.</p><p></p><div class=\"sl-journal\"><p><span class=\"fontstyle4\"><strong>Direform</strong></span></p><p><span class=\"fontstyle5\"><em>Direform specializes in unyielding strength and persistence, and this form is commonly used to guard objects or prisoners. You have substantial carapace with a jagged crest of spikes running along your head and shoulders. You’re inclined toward obedience to your superiors but obstinacy with others.</em></span></p><p>You’ve bonded with a callousspren, a type of Voidspren. While in this form, your Strength increases by 2 and your deflect value increases by 2. This deflect doesn’t stack with armor, so if you wear armor over your carapace, choose which value to use.</p><p>Additionally, when a character triggers a @UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.QpFIxaoCBezzt6yw]{Reactive Strike} from you, you can use that reaction to attempt to @UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.EVPgpHL6Y4jrumwI]{Grapple} them instead of attacking; when you do, you must spend 1 focus as usual for Reactive Strike.</p><p></p></div><div class=\"sl-journal\"><p><span class=\"fontstyle4\"><strong>Stormform</strong></span></p><p><span class=\"fontstyle5\"><em>Stormform is an elite battle form optimized for physical prowess and honed attacks. You’re covered in finesse enhancing armored carapace that grows under your skin, poking through in ridges and spikes. You can manipulate and unleash powerful red lighting on your foes.</em></span><em> </em><span class=\"fontstyle0\">You’ve bonded with a stormspren, a type of Voidspren. While in this form, your Strength increases by 1, your Speed increases by 1, and your deflect value increases by 1. This deflect doesn’t stack with armor, so if you wear armor over your carapace, choose which value to use.</span></p><p><span class=\"fontstyle0\">Additionally, you can use @UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.TdhkW1QXyp3TAaz4]{Unleash Lightning}:</span></p><p><span class=\"cosmere-icon\"><strong>2</strong></span><span class=\"fontstyle3\"><strong> Unleash Lightning. </strong></span><span class=\"fontstyle4\">Your body crackles with the Everstorm’s unnatural red lightning, which you can unleash in a violent arc. Spend 1 focus or 1 Investiture to make a ranged Discipline attack against the Physical defense of a target within 60 feet of you. Roll 2d8 energy damage. On a hit, the target is also @UUID[Compendium.cosmere-rpg-stormlight-handbook.handbook.JournalEntry.MfPDUyrCWc3mXm5N.JournalEntryPage.jQvh7ULoKmh49sYA#disoriented]{Disoriented} until the end of their next turn. If you have recently taken on stormform, the GM might raise the stakes on this attack due to the unpredictability of the arcing lightning.</span></p><p><span class=\"fontstyle4\">As you gain ranks in Discipline, the size of this attack’s damage dice increases: at 4 ranks, you roll 2d10 damage (instead of 2d8), and at 5 ranks or more, you roll 2d12 damage.</span></p></div>"
+   },
+   "events": {
+    "7XtK8HsD4q52WsRf": {
+     "description": "Grant Forms",
+     "event": "add-to-actor",
+     "handler": {
+      "allowDuplicates": false,
+      "increaseQuantity": false,
+      "items": [
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.hMNhBG4gh4dJlCWh"
+       },
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.mUaTPSRIeasMX1kG"
+       }
+      ],
+      "type": "grant-items"
+     },
+     "id": "7XtK8HsD4q52WsRf"
+    },
+    "XGPnRX6BzdPjzSZ9": {
+     "description": "Remove Forms",
+     "event": "remove-from-actor",
+     "handler": {
+      "items": [
+       "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.hMNhBG4gh4dJlCWh",
+       "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.mUaTPSRIeasMX1kG"
+      ],
+      "reduceQuantity": false,
+      "type": "remove-items"
+     },
+     "id": "XGPnRX6BzdPjzSZ9"
+    }
+   },
+   "hasAncestry": false,
+   "hasPath": false,
+   "hasSpecialty": false,
+   "id": "forms-of-destruction",
+   "modality": null,
+   "path": null,
+   "prerequisites": {
+    "TFI4HpWkIvjGpA5k": {
+     "attribute": "str",
+     "mode": "any-of",
+     "rank": 1,
+     "talents": [
+      {
+       "id": "ambitious-mind",
+       "label": "Ambitious Mind",
+       "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.n9wlQNiHQ6135jtR"
+      }
+     ],
+     "type": "talent",
+     "value": 1
+    }
+   },
+   "prerequisitesMet": false,
+   "specialty": "",
+   "type": "ancestry"
+  },
+  "type": "talent"
+ },
+ {
+  "_id": "NHw7mxZgPOdW8ZQM",
+  "effects": [],
+  "flags": {},
+  "folder": "DcsP30Zf5xmMI5ps",
+  "img": "icons/magic/movement/abstract-ribbons-red-orange.webp",
+  "name": "Forms of Expansion",
+  "system": {
+   "activation": {
+    "complication": null,
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "opportunity": null,
+    "plotDie": false,
+    "type": "none",
+    "uses": null
+   },
+   "ancestry": "singer",
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "short": "<p><strong>Activation:</strong> <span class=\"cosmere-icon\" data-tooltip=\"Always Active\" aria-label=\"Always Active\">8</span></p><p>You gain two new forms of power—@UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.ZvVDzqtqdOknBjGn]{Envoyform} and @UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.H2hVsZn4TbR46DFj]{Relayform}—which you can transform into using your <span>@UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.P8H9Vgg6hN5lRxCB]{Change Form}</span>.</p>",
+    "value": "<p><strong>Activation:</strong> <span class=\"cosmere-icon\" data-tooltip=\"Always Active\" aria-label=\"Always Active\">8</span></p><p>You gain two new forms of power—@UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.ZvVDzqtqdOknBjGn]{Envoyform} and @UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.H2hVsZn4TbR46DFj]{Relayform}—which you can transform into using your <span>@UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.P8H9Vgg6hN5lRxCB]{Change Form}</span>.</p><div class=\"sl-journal\"><p></p><p><span class=\"fontstyle4\"><strong>Envoyform</strong></span></p><p><span class=\"fontstyle5\"><em>Envoyform is an embellished form often used to serve the administrative needs of the Fused. Your tall form towers over others, and your ornate carapace is uniquely alluring. You comprehend any language after brief exposure and can grasp hidden context with the subtlest of cues.</em></span></p><p>You’ve bonded with a zealspren, a type of Voidspren. While in this form, your Intellect increases by 1, your Presence increases by 1, and you can speak, read, write, and understand all languages.</p><p>Additionally, you gain an advantage on Insight tests made to interpret the desires or intentions of others.</p><p></p><p><span class=\"fontstyle0\"><strong>Relayform</strong></span></p><p><span class=\"fontstyle1\"><em>Relayform boasts speed and stamina ideal for scouts. Your agile and muscular body is protected in the front by light carapace with smooth edges, and aerodynamic spikes run along the backs of your forearms and calves. You can run great distances and avoid detection.</em></span></p><p><span class=\"fontstyle3\">You’ve bonded with a hastespren, a type of Voidspren. While in this form, your Speed increases by 2 and you ignore the effects of the @UUID[Compendium.cosmere-rpg-stormlight-handbook.handbook.JournalEntry.MfPDUyrCWc3mXm5N.JournalEntryPage.jQvh7ULoKmh49sYA#slowed]{Slowed} condition.</span></p><p><span class=\"fontstyle3\">Additionally, when you make an Agility, Stealth, or Thievery test, you can spend 1 focus to gain an advantage on that test.</span></p></div>"
+   },
+   "events": {
+    "7IzxDT2R51qojCTU": {
+     "description": "Grant Forms",
+     "event": "add-to-actor",
+     "handler": {
+      "allowDuplicates": false,
+      "increaseQuantity": false,
+      "items": [
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.ZvVDzqtqdOknBjGn"
+       },
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.H2hVsZn4TbR46DFj"
+       }
+      ],
+      "type": "grant-items"
+     },
+     "id": "7IzxDT2R51qojCTU"
+    },
+    "qVBUi9Mc3Upe7K3y": {
+     "description": "Remove Forms",
+     "event": "remove-from-actor",
+     "handler": {
+      "items": [
+       "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.ZvVDzqtqdOknBjGn",
+       "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.H2hVsZn4TbR46DFj"
+      ],
+      "reduceQuantity": false,
+      "type": "remove-items"
+     },
+     "id": "qVBUi9Mc3Upe7K3y"
+    }
+   },
+   "hasAncestry": false,
+   "hasPath": false,
+   "hasSpecialty": false,
+   "id": "forms-of-expansion",
+   "modality": null,
+   "path": null,
+   "prerequisites": {
+    "IrmIOKlvyvqlfd6w": {
+     "attribute": "str",
+     "mode": "any-of",
+     "rank": 1,
+     "talents": [
+      {
+       "id": "ambitious-mind",
+       "label": "Ambitious Mind",
+       "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.n9wlQNiHQ6135jtR"
+      }
+     ],
+     "type": "talent",
+     "value": 1
+    }
+   },
+   "prerequisitesMet": false,
+   "specialty": "",
+   "type": "ancestry"
+  },
+  "type": "talent"
+ },
+ {
+  "_id": "YKj0auphZL1h3oDf",
+  "effects": [],
+  "flags": {},
+  "folder": "DcsP30Zf5xmMI5ps",
+  "img": "icons/magic/air/air-wave-gust-blue.webp",
+  "name": "Forms of Finesse",
+  "system": {
+   "activation": {
+    "complication": null,
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "opportunity": null,
+    "plotDie": false,
+    "type": "none",
+    "uses": null
+   },
+   "ancestry": "singer",
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "short": "<p><strong>Activation:</strong> <span class=\"cosmere-icon\" data-tooltip=\"Always Active\" aria-label=\"Always Active\">8</span></p><p>You gain two new singer forms—@UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.TzhWTMM24f4BtuWQ]{Artform} and @UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.l191bxVgAs93HiGE]{Nimbleform}—which you can transform into using your Change Form.</p>",
+    "value": "<p><strong>Activation:</strong> <span class=\"cosmere-icon\" data-tooltip=\"Always Active\" aria-label=\"Always Active\">8</span></p><p>You gain two new singer forms—@UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.TzhWTMM24f4BtuWQ]{Artform} and @UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.l191bxVgAs93HiGE]{Nimbleform}—which you can transform into using your Change Form.</p><p></p><div class=\"sl-journal\"><p><span class=\"fontstyle4\"><strong>Artform</strong></span></p><p><span class=\"fontstyle5\"><em>Artform specializes in creative expression. You gain a heightened awareness of the rhythms, colors, and other aspects of the world around you. If you have carapace, it’s purely cosmetic, representing radical self-expression.</em></span></p><p>You’ve bonded with a creationspren. While in this form, you increase your Awareness by 1, and you gain utility expertises in Painting and Music.</p><p>Additionally, you gain an advantage on Crafting tests and on tests related to entertaining, such as singing and dancing<span class=\"fontstyle0\" style=\"color:rgb(36,32,33);font-size:10pt\">.</span></p><p></p><p><span class=\"fontstyle4\"><strong>Nimbleform</strong></span></p><p><span class=\"fontstyle5\"><em>Nimbleform specializes in physical and mental flexibility. Your protective carapace is minimal; instead, you have an increased range of motion and mental focus.</em></span></p><p>You’ve bonded with a windspren. While in this form, your Speed increases by 1. When you change into this form, your maximum focus and current focus both increase by 2, and when you assume a different form, both decrease by 2.</p></div>"
+   },
+   "events": {
+    "OXvpfDRjOectTRKj": {
+     "description": "Remove Forms",
+     "event": "remove-from-actor",
+     "handler": {
+      "items": [
+       "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.TzhWTMM24f4BtuWQ",
+       "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.l191bxVgAs93HiGE"
+      ],
+      "reduceQuantity": false,
+      "type": "remove-items"
+     },
+     "id": "OXvpfDRjOectTRKj"
+    },
+    "qu5kCLTwaaydsD4l": {
+     "description": "Grant forms",
+     "event": "add-to-actor",
+     "handler": {
+      "allowDuplicates": false,
+      "increaseQuantity": false,
+      "items": [
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.TzhWTMM24f4BtuWQ"
+       },
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.l191bxVgAs93HiGE"
+       }
+      ],
+      "type": "grant-items"
+     },
+     "id": "qu5kCLTwaaydsD4l"
+    }
+   },
+   "hasAncestry": false,
+   "hasPath": false,
+   "hasSpecialty": false,
+   "id": "forms-of-finesse",
+   "modality": null,
+   "path": null,
+   "prerequisites": {
+    "hn72CeEslWHETOQW": {
+     "attribute": "str",
+     "mode": "any-of",
+     "rank": 1,
+     "talents": [
+      {
+       "id": "change-form",
+       "label": "Change Form",
+       "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.P8H9Vgg6hN5lRxCB"
+      }
+     ],
+     "type": "talent",
+     "value": 1
+    }
+   },
+   "prerequisitesMet": false,
+   "specialty": "",
+   "type": "ancestry"
+  },
+  "type": "talent"
+ },
+ {
+  "_id": "5TI0tfFBw7V3gElL",
+  "effects": [],
+  "flags": {},
+  "folder": "DcsP30Zf5xmMI5ps",
+  "img": "icons/magic/unholy/barrier-fire-pink.webp",
+  "name": "Forms of Mystery",
+  "system": {
+   "activation": {
+    "complication": null,
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "opportunity": null,
+    "plotDie": false,
+    "type": "none",
+    "uses": null
+   },
+   "ancestry": "singer",
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "short": "<p><strong>Activation:</strong> <span class=\"cosmere-icon\" data-tooltip=\"Always Active\" aria-label=\"Always Active\">8</span></p><p>You gain two new forms of power—@UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.Qknhb3bMsgzFJGBq]{Decayform} and @UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.H2IuAiMN5ZekdwQa]{Nightform}—which you can transform into using your <span>@UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.P8H9Vgg6hN5lRxCB]{Change Form}</span>.</p>",
+    "value": "<p><strong>Activation:</strong> <span class=\"cosmere-icon\" data-tooltip=\"Always Active\" aria-label=\"Always Active\">8</span></p><p>You gain two new forms of power—@UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.Qknhb3bMsgzFJGBq]{Decayform} and @UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.H2IuAiMN5ZekdwQa]{Nightform}—which you can transform into using your <span>@UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.P8H9Vgg6hN5lRxCB]{Change Form}</span>.</p><p></p><p><span class=\"fontstyle4\"><strong>Decayform</strong></span></p><p><span class=\"fontstyle5\"><em>The enigmatic decayform grants an insidious ability to sap the vitality of other beings. Your thin carapace is jagged, brittle, and asymmetrical. People you touch find themselves less resilient while you remain in contact with them. This spiritual decay affects not just their bodies, but their minds, leaving them with nightmares long after the fact.</em></span></p><p>You’ve bonded with a blightspren, a type of Voidspren. While in this form, your Willpower increases by 2 and you can use @UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.T51hHrJeonT76Qyn]{Decaying Touch}:</p><p><span class=\"cosmere-icon\"><strong>*</strong></span><span class=\"fontstyle4\" style=\"font-size:10pt\"> </span><strong>Decaying Touch.</strong><span class=\"fontstyle4\" style=\"font-size:10pt\"> </span><span class=\"fontstyle6\">Before a character within your reach recovers health or focus, you can spend 1 focus or 1 Investiture to prevent them from doing so. The character does not regain that health or focus, but any actions, Investiture, or other resources they spent still remain spent</span>.</p><p></p><p><span class=\"fontstyle0\"><strong>Nightform</strong></span></p><p><span class=\"fontstyle1\"><em>Nightform grants unpredictable visions of the future, and your senses become more acute, especially at night. Petal-like carapace grows from your skull, framing your ears and enhancing your ability to perceive rhythms. In various lights, your carapace reflects different iridescent patterns.</em></span></p><p><span class=\"fontstyle3\">You’ve bonded with a nightspren, a type of Voidspren. While in this form, your Awareness increases by 1 and your Intellect increases by 1. When you change into this form, your maximum focus and current focus both increase by 2, and when you assume a different form, both decrease by 2.</span></p><p><span class=\"fontstyle3\">Additionally, your bond with a nightspren has granted you precognitive abilities—whether you wish them or not. While in this form, you gain the @UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.ybiCFQIjpeJtL3rm]{Intervening Premonitions} and @UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.mh5EgZ2dYBoBpzyb]{Sporadic Premonitions} abilities:</span></p><p><span class=\"cosmere-icon\">r</span> <strong>Intervening Premonitions.</strong><span class=\"fontstyle0\" style=\"font-size:10pt\"> </span><span class=\"fontstyle5\">At the start of each session, roll two d20s and record both results. When an enemy or willing ally you can sense makes a test, you can use this reaction to replace the test’s d20 roll with one of your recorded numbers. You can replace that number after you see their die roll and after they apply any advantages, but you must do so before the effects of the test are resolved. You lose a recorded number when you use it to replace a d20 roll or when the session ends, whichever comes first.</span></p><p><span class=\"cosmere-icon\">*</span><span class=\"fontstyle0\" style=\"font-size:10pt\"><strong> </strong></span><strong>Sporadic Premonitions.</strong> <span class=\"fontstyle5\">At the GM’s discretion, you might occasionally receive glimpses of the future at unpredictable times during gameplay. When this happens, the GM might describe vague flashes of imagery, sounds, and impressions in your mind, hinting at what may come</span>.</p>"
+   },
+   "events": {
+    "5PjRqRV6vrLgvWEb": {
+     "description": "Grant Forms",
+     "event": "add-to-actor",
+     "handler": {
+      "allowDuplicates": false,
+      "increaseQuantity": false,
+      "items": [
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.Qknhb3bMsgzFJGBq"
+       },
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.H2IuAiMN5ZekdwQa"
+       }
+      ],
+      "type": "grant-items"
+     },
+     "id": "5PjRqRV6vrLgvWEb"
+    },
+    "OeBZcblHFutONofp": {
+     "description": "Remove Forms",
+     "event": "remove-from-actor",
+     "handler": {
+      "items": [
+       "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.Qknhb3bMsgzFJGBq",
+       "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.H2IuAiMN5ZekdwQa"
+      ],
+      "reduceQuantity": false,
+      "type": "remove-items"
+     },
+     "id": "OeBZcblHFutONofp"
+    }
+   },
+   "hasAncestry": false,
+   "hasPath": false,
+   "hasSpecialty": false,
+   "id": "forms-of-mystery",
+   "modality": null,
+   "path": null,
+   "prerequisites": {
+    "hiC4gBPysPYQCHQf": {
+     "attribute": "str",
+     "mode": "any-of",
+     "rank": 1,
+     "talents": [
+      {
+       "id": "ambitious-mind",
+       "label": "Ambitious Mind",
+       "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.n9wlQNiHQ6135jtR"
+      }
+     ],
+     "type": "talent",
+     "value": 1
+    }
+   },
+   "prerequisitesMet": false,
+   "specialty": "",
+   "type": "ancestry"
+  },
+  "type": "talent"
+ },
+ {
+  "_id": "bzXuedqKyGYQd9G7",
+  "effects": [],
+  "flags": {},
+  "folder": "DcsP30Zf5xmMI5ps",
+  "img": "icons/magic/defensive/illusion-evasion-echo-purple.webp",
+  "name": "Forms of Resolve",
+  "system": {
+   "activation": {
+    "complication": null,
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": null
+    },
+    "flavor": "",
+    "opportunity": null,
+    "plotDie": false,
+    "type": "none",
+    "uses": null
+   },
+   "ancestry": "singer",
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "short": "<p><strong>Activation:</strong> <span class=\"cosmere-icon\" data-tooltip=\"Always Active\" aria-label=\"Always Active\">8</span></p><p>You gain two new singer forms—@UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.mb9cRGvyqEstU0Ov]{Warform} and @UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.6qI3czwVnQAnvb0m]{Workform}—which you can transform into using your Change Form.</p>",
+    "value": "<p><strong>Activation:</strong> <span class=\"cosmere-icon\" data-tooltip=\"Always Active\" aria-label=\"Always Active\">8</span></p><p>You gain two new singer forms—@UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.mb9cRGvyqEstU0Ov]{Warform} and @UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.6qI3czwVnQAnvb0m]{Workform}—which you can transform into using your Change Form.</p><p></p><div class=\"sl-journal\"><p><span class=\"fontstyle4\"><strong>Warform</strong></span></p><p><span class=\"fontstyle5\"><em>Warform specializes in combat, increasing your strength and stamina. Your body is large and covered with fierce carapace, which protects you like armor. Any aversions you might usually have to violence, pain, and death become slightly less pronounced in warform.</em></span></p><p>You’ve bonded with a painspren. While in this form, your Strength increases by 1 and your deflect value increases by 1. This deflect doesn’t stack with armor, so if you wear armor over your carapace, choose which value to use.</p><p>Additionally, when you move, you can jump a horizontal distance up to your movement rate, or a vertical distance up to half your movement rate, without succeeding on an Athletics test</p><p></p></div><div class=\"sl-journal\"><p><span class=\"fontstyle0\"><strong>Workform</strong></span></p><p><span class=\"fontstyle1\"><em>Workform specializes in labor. This form helps you see tasks through to completion, granting you determination and stamina. You have a rugged body with modest carapace ridges.</em></span></p><p><span class=\"fontstyle3\">You’ve bonded with a gravitationspren. While in this form, your Willpower increases by 1, and you ignore the effects of the @UUID[Compendium.cosmere-rpg-stormlight-handbook.handbook.JournalEntry.MfPDUyrCWc3mXm5N.JournalEntryPage.jQvh7ULoKmh49sYA#exhausted]{Exhausted} condition.</span></p><p><span class=\"fontstyle3\">Additionally, you can easily disguise yourself to pass unnoticed as a “parshman” in most human societies, though people might begin noticing the differences in your form if you’re caught doing anything suspicious.</span></p></div>"
+   },
+   "events": {
+    "X9LmqfWFqlZURdn6": {
+     "description": "Remove Forms",
+     "event": "remove-from-actor",
+     "handler": {
+      "items": [
+       "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.mb9cRGvyqEstU0Ov",
+       "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.6qI3czwVnQAnvb0m"
+      ],
+      "reduceQuantity": false,
+      "type": "remove-items"
+     },
+     "id": "X9LmqfWFqlZURdn6"
+    },
+    "ez93xb71WrkrGFVd": {
+     "description": "Grant Forms",
+     "event": "add-to-actor",
+     "handler": {
+      "allowDuplicates": false,
+      "increaseQuantity": false,
+      "items": [
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.mb9cRGvyqEstU0Ov"
+       },
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.6qI3czwVnQAnvb0m"
+       }
+      ],
+      "type": "grant-items"
+     },
+     "id": "ez93xb71WrkrGFVd"
+    }
+   },
+   "hasAncestry": false,
+   "hasPath": false,
+   "hasSpecialty": false,
+   "id": "forms-of-resolve",
+   "modality": null,
+   "path": null,
+   "prerequisites": {
+    "yzSU7nGjxE3EK8at": {
+     "attribute": "str",
+     "mode": "any-of",
+     "rank": 1,
+     "talents": [
+      {
+       "id": "change-form",
+       "label": "Change Form",
+       "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.P8H9Vgg6hN5lRxCB"
+      }
+     ],
+     "type": "talent",
+     "value": 1
+    }
+   },
+   "prerequisitesMet": false,
+   "specialty": "",
+   "type": "ancestry"
+  },
+  "type": "talent"
+ },
+ {
+  "_id": "X8y1Qg3sj5IiRjDd",
+  "effects": [],
+  "flags": {},
+  "folder": "DcsP30Zf5xmMI5ps",
+  "img": "icons/skills/trades/academics-book-study-runes.webp",
+  "name": "Forms of Wisdom",
+  "system": {
+   "activation": {
+    "complication": null,
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "opportunity": null,
+    "plotDie": false,
+    "type": "none",
+    "uses": null
+   },
+   "ancestry": "singer",
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "short": "<p><strong>Activation:</strong> <span class=\"cosmere-icon\" data-tooltip=\"Always Active\" aria-label=\"Always Active\">8</span></p><p>You gain two new singer forms—@UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.l2IdMa4K05kSHQMy]{Mediationform} and @UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.HdbPsv2Q2RKAGhPb]{Scholarform}—which you can transform into using your Change Form.</p>",
+    "value": "<p><strong>Activation:</strong> <span class=\"cosmere-icon\" data-tooltip=\"Always Active\" aria-label=\"Always Active\">8</span></p><p>You gain two new singer forms—@UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.l2IdMa4K05kSHQMy]{Mediationform} and @UUID[Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.HdbPsv2Q2RKAGhPb]{Scholarform}—which you can transform into using your Change Form.</p><p></p><div class=\"sl-journal\"><p><span class=\"fontstyle4\"><strong>Mediationform</strong></span></p><p><span class=\"fontstyle5\"><em>Mediationform specializes in communication, whether you’re connecting with new people or teaching those you know well. Your carapace is smooth, and your facial features are well-defined and expressive.</em></span></p><p>You’ve bonded with a bindspren. While in this form, your Presence increases by 1.</p><p>Additionally, you don’t have to spend focus to use the @UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.K2QgKOSezyeYnnxl]{Aid} reaction.</p><p></p><p><span class=\"fontstyle4\"><strong>Scholarform</strong></span></p><p><span class=\"fontstyle5\"><em>Scholarform specializes in scholarship, enhancing your mental processes and memory. You become more patient and analytical, but you may also find yourself more inclined toward ambition. You have long hairstrands, and a cushioned lower body suited to sedentary work.</em></span></p><p>You’ve bonded with a logicspren. While in this form, your Intellect increases by 1.</p><p>Additionally, when you adopt this form, choose one cultural or utility expertise you don’t already have, and choose one cognitive skill that isn’t a surge skill. You temporarily gain that expertise, and you temporarily gain an additional rank in that skill.</p><p>If you gain the @UUID[Compendium.cosmere-rpg-stormlight-handbook.heroic-paths.Item.8FYBJZC8PBjneOim]{Erudition} talent from the Scholar path, the expertise and skill rank you gain from your scholarform count as being granted by Erudition; when Erudition allows you to reassign expertises and skills, your scholarform expertise and skill are also eligible for reassignment. You can’t choose the same skill for both scholarform and Erudition.</p></div>"
+   },
+   "events": {
+    "k1VCG7LDeCOR3dxl": {
+     "description": "Remove Forms",
+     "event": "remove-from-actor",
+     "handler": {
+      "items": [
+       "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.l2IdMa4K05kSHQMy",
+       "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.HdbPsv2Q2RKAGhPb"
+      ],
+      "reduceQuantity": false,
+      "type": "remove-items"
+     },
+     "id": "k1VCG7LDeCOR3dxl"
+    },
+    "rmFAprhZbtaMHDjV": {
+     "description": "Grant Forms",
+     "event": "add-to-actor",
+     "handler": {
+      "allowDuplicates": false,
+      "increaseQuantity": false,
+      "items": [
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.l2IdMa4K05kSHQMy"
+       },
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.HdbPsv2Q2RKAGhPb"
+       }
+      ],
+      "type": "grant-items"
+     },
+     "id": "rmFAprhZbtaMHDjV"
+    }
+   },
+   "hasAncestry": false,
+   "hasPath": false,
+   "hasSpecialty": false,
+   "id": "forms-of-wisdom",
+   "modality": null,
+   "path": null,
+   "prerequisites": {
+    "ZwbuJkUKQE8yXJD9": {
+     "attribute": "str",
+     "mode": "any-of",
+     "rank": 1,
+     "talents": [
+      {
+       "id": "change-form",
+       "label": "Change Form",
+       "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.P8H9Vgg6hN5lRxCB"
+      }
+     ],
+     "type": "talent",
+     "value": 1
+    }
+   },
+   "prerequisitesMet": false,
+   "specialty": "",
+   "type": "ancestry"
+  },
+  "type": "talent"
+ },
+ {
+  "_id": "ZcQJT5DKqF1XAN1h",
+  "effects": [],
+  "flags": {
+   "cosmere-rpg": {
+    "sheet": {
+     "mode": "view"
+    }
+   }
+  },
+  "folder": "DcsP30Zf5xmMI5ps",
+  "img": "modules/cosmere-rpg-stormlight-handbook/assets/icons/ancestries/singer-ancestry-card.webp",
+  "name": "Singer Talents",
+  "system": {
+   "background": {
+    "height": 660,
+    "img": "modules/cosmere-rpg-stormlight-handbook/assets/art/backgrounds/background_Shattered%20Plains_by_Anthony_Avon.webp",
+    "position": {
+     "x": -275,
+     "y": -375
+    },
+    "width": 510
+   },
+   "display": {
+    "height": 738,
+    "width": 544
+   },
+   "nodes": {
+    "17bDq8M1YKaNQ9TK": {
+     "connections": {
+      "fLzaiHsXBChkPxAb": {
+       "_id": "fLzaiHsXBChkPxAb",
+       "id": "fLzaiHsXBChkPxAb",
+       "prerequisiteId": "3WuIw9dHYRijbeEX"
+      }
+     },
+     "id": "17bDq8M1YKaNQ9TK",
+     "position": {
+      "x": -200,
+      "y": -150
+     },
+     "prerequisites": {
+      "3WuIw9dHYRijbeEX": {
+       "_id": "3WuIw9dHYRijbeEX",
+       "id": "3WuIw9dHYRijbeEX",
+       "managed": true,
+       "talents": {
+        "change-form": {
+         "_id": "change-form",
+         "id": "change-form",
+         "label": "Change Form",
+         "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.P8H9Vgg6hN5lRxCB"
+        }
+       },
+       "type": "talent"
+      }
+     },
+     "showName": false,
+     "size": {
+      "height": 50,
+      "width": 50
+     },
+     "talentId": "forms-of-finesse",
+     "type": "talent",
+     "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.YKj0auphZL1h3oDf"
+    },
+    "6ftBICp56SEYxkhE": {
+     "connections": {
+      "f61luAzbdqBxqjpm": {
+       "_id": "f61luAzbdqBxqjpm",
+       "id": "f61luAzbdqBxqjpm",
+       "prerequisiteId": "akFSK5CFxXTVGOdT"
+      }
+     },
+     "id": "6ftBICp56SEYxkhE",
+     "position": {
+      "x": -200,
+      "y": 150
+     },
+     "prerequisites": {
+      "akFSK5CFxXTVGOdT": {
+       "_id": "akFSK5CFxXTVGOdT",
+       "id": "akFSK5CFxXTVGOdT",
+       "managed": true,
+       "talents": {
+        "ambitious-mind": {
+         "_id": "ambitious-mind",
+         "id": "ambitious-mind",
+         "label": "Ambitious Mind",
+         "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.n9wlQNiHQ6135jtR"
+        }
+       },
+       "type": "talent"
+      }
+     },
+     "showName": false,
+     "size": {
+      "height": 50,
+      "width": 50
+     },
+     "talentId": "forms-of-destruction",
+     "type": "talent",
+     "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.HO2L9uUTgsl9oIzk"
+    },
+    "EVinPHwKm1T9Ty4S": {
+     "connections": {
+      "f61luAzbdqBxqjpm": {
+       "_id": "f61luAzbdqBxqjpm",
+       "id": "f61luAzbdqBxqjpm",
+       "prerequisiteId": "oEufwjg7YHjWRcyG"
+      }
+     },
+     "id": "EVinPHwKm1T9Ty4S",
+     "position": {
+      "x": 100,
+      "y": 150
+     },
+     "prerequisites": {
+      "oEufwjg7YHjWRcyG": {
+       "_id": "oEufwjg7YHjWRcyG",
+       "id": "oEufwjg7YHjWRcyG",
+       "managed": true,
+       "talents": {
+        "ambitious-mind": {
+         "_id": "ambitious-mind",
+         "id": "ambitious-mind",
+         "label": "Ambitious Mind",
+         "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.n9wlQNiHQ6135jtR"
+        }
+       },
+       "type": "talent"
+      }
+     },
+     "showName": false,
+     "size": {
+      "height": 50,
+      "width": 50
+     },
+     "talentId": "forms-of-mystery",
+     "type": "talent",
+     "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.5TI0tfFBw7V3gElL"
+    },
+    "NscZBjJwcvdlHzDU": {
+     "connections": {
+      "fLzaiHsXBChkPxAb": {
+       "_id": "fLzaiHsXBChkPxAb",
+       "id": "fLzaiHsXBChkPxAb",
+       "prerequisiteId": "LxtQhpMQPgpnIsRf"
+      }
+     },
+     "id": "NscZBjJwcvdlHzDU",
+     "position": {
+      "x": -50,
+      "y": -150
+     },
+     "prerequisites": {
+      "LxtQhpMQPgpnIsRf": {
+       "_id": "LxtQhpMQPgpnIsRf",
+       "id": "LxtQhpMQPgpnIsRf",
+       "managed": true,
+       "talents": {
+        "change-form": {
+         "_id": "change-form",
+         "id": "change-form",
+         "label": "Change Form",
+         "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.P8H9Vgg6hN5lRxCB"
+        }
+       },
+       "type": "talent"
+      }
+     },
+     "showName": false,
+     "size": {
+      "height": 50,
+      "width": 50
+     },
+     "talentId": "forms-of-wisdom",
+     "type": "talent",
+     "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.X8y1Qg3sj5IiRjDd"
+    },
+    "a3mOvyysQPqsUrhM": {
+     "connections": {
+      "f61luAzbdqBxqjpm": {
+       "_id": "f61luAzbdqBxqjpm",
+       "id": "f61luAzbdqBxqjpm",
+       "prerequisiteId": "WS0xyU7IdosTQ4E9"
+      }
+     },
+     "id": "a3mOvyysQPqsUrhM",
+     "position": {
+      "x": -50,
+      "y": 150
+     },
+     "prerequisites": {
+      "WS0xyU7IdosTQ4E9": {
+       "_id": "WS0xyU7IdosTQ4E9",
+       "id": "WS0xyU7IdosTQ4E9",
+       "managed": true,
+       "talents": {
+        "ambitious-mind": {
+         "_id": "ambitious-mind",
+         "id": "ambitious-mind",
+         "label": "Ambitious Mind",
+         "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.n9wlQNiHQ6135jtR"
+        }
+       },
+       "type": "talent"
+      }
+     },
+     "showName": false,
+     "size": {
+      "height": 50,
+      "width": 50
+     },
+     "talentId": "forms-of-expansion",
+     "type": "talent",
+     "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.NHw7mxZgPOdW8ZQM"
+    },
+    "db550idikbffDP7r": {
+     "connections": {
+      "fLzaiHsXBChkPxAb": {
+       "_id": "fLzaiHsXBChkPxAb",
+       "id": "fLzaiHsXBChkPxAb",
+       "prerequisiteId": "qwPDAoOEe6iohZU0"
+      }
+     },
+     "id": "db550idikbffDP7r",
+     "position": {
+      "x": 100,
+      "y": -150
+     },
+     "prerequisites": {
+      "qwPDAoOEe6iohZU0": {
+       "_id": "qwPDAoOEe6iohZU0",
+       "id": "qwPDAoOEe6iohZU0",
+       "managed": true,
+       "talents": {
+        "change-form": {
+         "_id": "change-form",
+         "id": "change-form",
+         "label": "Change Form",
+         "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.P8H9Vgg6hN5lRxCB"
+        }
+       },
+       "type": "talent"
+      }
+     },
+     "showName": false,
+     "size": {
+      "height": 50,
+      "width": 50
+     },
+     "talentId": "forms-of-resolve",
+     "type": "talent",
+     "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.bzXuedqKyGYQd9G7"
+    },
+    "f61luAzbdqBxqjpm": {
+     "connections": {
+      "17bDq8M1YKaNQ9TK": {
+       "_id": "17bDq8M1YKaNQ9TK",
+       "id": "17bDq8M1YKaNQ9TK",
+       "prerequisiteId": "S64eNbBulXutq16s"
+      },
+      "NscZBjJwcvdlHzDU": {
+       "id": "NscZBjJwcvdlHzDU",
+       "prerequisiteId": "S64eNbBulXutq16s"
+      },
+      "db550idikbffDP7r": {
+       "id": "db550idikbffDP7r",
+       "prerequisiteId": "S64eNbBulXutq16s"
+      }
+     },
+     "id": "f61luAzbdqBxqjpm",
+     "position": {
+      "x": -50,
+      "y": 0
+     },
+     "prerequisites": {
+      "K3YzuT9xZLAGT10x": {
+       "_id": "K3YzuT9xZLAGT10x",
+       "attribute": "str",
+       "id": "K3YzuT9xZLAGT10x",
+       "managed": false,
+       "rank": 3,
+       "skill": "dis",
+       "type": "skill",
+       "value": 1
+      },
+      "S64eNbBulXutq16s": {
+       "id": "S64eNbBulXutq16s",
+       "managed": true,
+       "talents": {
+        "forms-of-finesse": {
+         "_id": "forms-of-finesse",
+         "id": "forms-of-finesse",
+         "label": "Forms of Finesse",
+         "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.YKj0auphZL1h3oDf"
+        },
+        "forms-of-resolve": {
+         "id": "forms-of-resolve",
+         "label": "Forms of Resolve",
+         "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.bzXuedqKyGYQd9G7"
+        },
+        "forms-of-wisdom": {
+         "id": "forms-of-wisdom",
+         "label": "Forms of Wisdom",
+         "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.X8y1Qg3sj5IiRjDd"
+        }
+       },
+       "type": "talent"
+      }
+     },
+     "showName": false,
+     "size": {
+      "height": 50,
+      "width": 50
+     },
+     "talentId": "ambitious-mind",
+     "type": "talent",
+     "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.n9wlQNiHQ6135jtR"
+    },
+    "fLzaiHsXBChkPxAb": {
+     "id": "fLzaiHsXBChkPxAb",
+     "position": {
+      "x": -50,
+      "y": -300
+     },
+     "prerequisites": {
+      "kQ2WXr68dYgUM3sF": {
+       "ancestry": {
+        "id": "singer",
+        "label": "Singer",
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.3odmxYSXtqMmvyPE"
+       },
+       "attribute": "str",
+       "id": "kQ2WXr68dYgUM3sF",
+       "managed": false,
+       "type": "ancestry",
+       "value": 1
+      }
+     },
+     "showName": false,
+     "size": {
+      "height": 50,
+      "width": 50
+     },
+     "talentId": "change-form",
+     "type": "talent",
+     "uuid": "Compendium.cosmere-rpg-stormlight-handbook.ancestries.Item.P8H9Vgg6hN5lRxCB"
+    }
+   },
+   "viewBounds": {
+    "height": 653,
+    "width": 501,
+    "x": -23,
+    "y": -44
+   }
+  },
+  "type": "talent_tree"
+ }
+]

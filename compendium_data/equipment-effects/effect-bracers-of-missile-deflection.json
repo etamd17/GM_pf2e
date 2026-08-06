@@ -1,0 +1,44 @@
+{
+    "_id": "PeiuJ951kkBPTCSM",
+    "img": "icons/equipment/wrist/bracer-segmented-leather.webp",
+    "name": "Effect: Bracers of Missile Deflection",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Bracers of Missile Deflection]</p>\n<p>You gain a +2 circumstance bonus to AC against the triggering attack.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "unlimited",
+            "value": -1
+        },
+        "level": {
+            "value": 3
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Core Rulebook"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "selector": "ac",
+                "type": "circumstance",
+                "value": 2
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

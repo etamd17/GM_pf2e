@@ -1,0 +1,51 @@
+{
+    "_id": "yykiQBIGqwxIDRZq",
+    "img": "systems/pf2e/icons/equipment/weapons/rapier.webp",
+    "name": "Effect: Viper Rapier",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Viper Rapier]</p>\n<p>You are concealed and gain a +2 circumstance bonus to Reflex saving throws while concealed.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 20
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Treasure Vault (Remastered)"
+        },
+        "rules": [
+            {
+                "inMemoryOnly": true,
+                "key": "GrantItem",
+                "uuid": "Compendium.pf2e.conditionitems.Item.Concealed"
+            },
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "self:condition:concealed"
+                ],
+                "selector": "reflex",
+                "type": "circumstance",
+                "value": 2
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

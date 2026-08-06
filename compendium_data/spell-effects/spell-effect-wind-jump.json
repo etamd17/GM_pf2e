@@ -1,0 +1,43 @@
+{
+    "_id": "5MI2c9IgxfSeGZQo",
+    "img": "systems/pf2e/icons/spells/wind-jump.webp",
+    "name": "Spell Effect: Wind Jump",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Wind Jump]</p>\n<p>You gain a fly Speed equal to your Speed.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 5
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "key": "BaseSpeed",
+                "selector": "fly",
+                "value": "@actor.system.movement.speeds.land.value"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

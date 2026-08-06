@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ campaign.name }} - PF2E Dashboard</title>
+    {# Precompiled Tailwind utilities — replaces the runtime Tailwind Play CDN
+       (full engine + in-browser JIT). Regenerate: cd tools/tailwind &&
+       npm install && node build.mjs (see docs/tailwind-build.md). #}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tw-campaign_intro.css') }}">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;600;700&display=swap');
+        body { font-family:var(--font-ui); background:#0c0a07; color:#f0ead7; min-height:100vh; }
+        .font-display { font-family:var(--font-display); }
+        ::-webkit-scrollbar { width:6px; }
+        ::-webkit-scrollbar-track { background:transparent; }
+        ::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.08); border-radius:10px; }
+    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/system.css') }}">
+    <style>
+        .stage {
+            position:relative;
+            min-height:100vh;
+            background:
+                radial-gradient(circle at 20% 0%, rgba(168,58,58,0.10), transparent 55%),
+                radial-gradient(circle at 80% 100%, rgba(201,163,78,0.06), transparent 55%),
+                #0c0a07;
+        }
+        /* Optional hero image — when campaign.hero_image is set, becomes a
+           cinematic full-bleed backdrop behind the title. The image is
+           layered behind a dark gradient mask so the typography stays
+           readable regardless of brightness. */
+        .stage.has-hero::before {
+            content:""; position:fixed; inset:0; pointer-events:none; z-index:-1;
+            background-image:
+                linear-gradient(to bottom, rgba(12,10,7,0.55) 0%, rgba(12,10,7,0.85) 65%, rgba(12,10,7,0.96) 100%),
+                var(--hero-image);
+            background-size: cover, cover;
+            background-position: center 30%, center 30%;
+            background-repeat: no-repeat;
+        }
+        /* Hero typography — make the campaign name BIG and atmospheric.
+           The glow uses ruby-tinted shadow for "blood-and-shadows" feel; if
+           you want a calmer tone for a different campaign, drop the
+           text-shadow. */
+        .campaign-title {
+            font-family:var(--font-display);
+            font-weight: 700;
+            color: #f0d88a;
+            letter-spacing: 0.06em;
+            line-height: 1.05;
+            text-shadow:
+                0 0 28px rgba(168,58,58,0.32),
+                0 0 60px rgba(0,0,0,0.6),
+                0 4px 24px rgba(0,0,0,0.7);
+        }
+        .campaign-rune {
+            font-family:var(--font-display);
+            font-size: 11px;
+            letter-spacing: 0.4em;
+            text-transform: uppercase;
+            color: rgba(201,163,78,0.65);
+            margin-bottom: 10px;
+        }
+        /* Cinematic tagline anchored at the bottom of the hero band.
+           Tuned to read on any splash — text-shadow gives it weight on
+           a bright image, the warm parchment color keeps it from feeling
+           like ordinary body copy. Italic / Cormorant Garamond stack for
+           a "movie poster pullquote" register. */
+        .campaign-hero-tagline {
+            font-family: var(--font-display);
+            font-style: italic;
+            font-weight: 500;
+            font-size: clamp(14px, 2vw, 22px);
+            line-height: 1.3;
+            color: #f0e6c8;
+            letter-spacing: 0.02em;
+            max-width: min(720px, 90vw);
+            margin: 0 auto;
+            padding: 8px 18px;
+            text-shadow:
+                0 0 28px rgba(0,0,0,0.85),
+                0 0 12px rgba(0,0,0,0.95),
+                0 2px 6px rgba(0,0,0,1);
+        }
+        /* "Where the party stands" strip — frontmatter-driven row */
+        .party-stands {
+            display: flex; flex-wrap: wrap; justify-content: center;
+            gap: 8px 14px;
+            margin-top: 14px;
+        }
+        .party-stand-pill {
+            display: inline-flex; align-items: baseline; gap: 6px;
+            font-size: 11px;
+            background: rgba(201,163,78,0.06);
+            border: 1px solid rgba(201,163,78,0.20);
+            border-radius: 6px;
+            padding: 5px 12px;
+        }
+        .party-stand-pill .lbl {
+            font-family:var(--font-display);
+            text-transform: uppercase;
+            letter-spacing: 0.10em;
+            font-size: 9px;
+            color: #c8bd9e;
+        }
+        .party-stand-pill .val {
+            color: #ede4cf;
+            font-family:var(--font-ui);
+            font-weight: 500;
+        }
+        .party-stand-pill .val a, .party-stand-pill .val .wikilink {
+            color: #e0b65a; text-decoration: none;
+        }
+        /* Minimal pass: the lobby panels + character tiles sit on the page as a
+           faint wash + hairline rather than solid boxes, matching the flatten
+           used on the GM screen / builder. */
+        .panel { background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); border-radius:14px; }
+        .pc-tile {
+            background:rgba(255,255,255,0.02);
+            border:1px solid rgba(255,255,255,0.07);
+            border-radius:12px;
+            padding:12px 10px 10px;
+            cursor:pointer;
+            transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+            position:relative;
+            text-align:center;
+        }
+        /* Quiet hover/selected: tint + border, no lift, no heavy drop shadow. */
+        .pc-tile:hover { border-color:rgba(201,163,78,0.35); background:rgba(201,163,78,0.05); }
+        .pc-tile.is-current { border-color:rgba(224,176,80,0.55); box-shadow:0 0 0 1px rgba(224,176,80,0.22); }
+        .pc-tile .portrait-frame {
+            width:68px; height:68px; border-radius:50%;
+            margin:0 auto 8px;
+            background:#24242e;
+            border:2px solid rgba(255,255,255,0.08);
+            display:flex; align-items:center; justify-content:center;
+            overflow:hidden;
+            position:relative;
+        }
+        .pc-tile.is-current .portrait-frame { border-color:rgba(224,176,80,0.6); }
+        .pc-tile .portrait-frame img { width:100%; height:100%; object-fit:cover; }
+        .pc-tile .pc-initial { font-family:var(--font-display); font-size:24px; font-weight:700; color:#e0b65a; }
+        .pc-tile .lvl-badge {
+            position:absolute; top:8px; right:10px;
+            font-family:var(--font-display); font-size:10px; font-weight:700;
+            background:rgba(15,15,20,0.85); color:#e0b65a;
+            padding:3px 7px; border-radius:4px;
+            border:1px solid rgba(201,163,78,0.25);
+        }
+        .pc-tile .pc-name { font-family:var(--font-display); font-size:13px; color:#ededf4; font-weight:600; }
+        .pc-tile .pc-meta { font-size:11px; color:#9494b0; margin-top:2px; }
+        .pc-tile .pc-cta {
+            margin-top:6px; font-size:10px; font-weight:600;
+            color:#e0b65a; text-transform:uppercase; letter-spacing:0.08em;
+            opacity:0.65; transition:opacity 0.15s;
+        }
+        .pc-tile:hover .pc-cta { opacity:1; }
+        .pc-tile.is-current .pc-cta { color:#e0b050; opacity:1; }
+
+        .btn-primary {
+            font-family:var(--font-display); font-weight:600; letter-spacing:0.06em;
+            background:#a4842b; color:#0c0a07;
+            padding:10px 22px; border-radius:6px; font-size:12px;
+            text-transform:uppercase; border:1px solid rgba(201,163,78,0.3);
+            transition:background 0.15s, transform 0.1s;
+            cursor:pointer;
+        }
+        .btn-primary:hover { background:#c9a34e; }
+        .btn-primary:active { transform:scale(0.98); }
+        .btn-ghost {
+            font-size:11px; font-weight:500;
+            background:transparent; border:1px solid rgba(255,255,255,0.10);
+            color:#b8b8cc; padding:8px 14px; border-radius:6px;
+            transition:border-color 0.15s, color 0.15s;
+            cursor:pointer;
+        }
+        .btn-ghost:hover { border-color:rgba(201,163,78,0.35); color:#ededf4; }
+        .btn-gold {
+            font-family:var(--font-display); font-weight:600; letter-spacing:0.06em;
+            background:rgba(224,176,80,0.12); color:#e0b050;
+            padding:10px 22px; border-radius:6px; font-size:12px;
+            text-transform:uppercase; border:1px solid rgba(224,176,80,0.35);
+            transition:background 0.15s;
+            cursor:pointer;
+        }
+        .btn-gold:hover { background:rgba(224,176,80,0.22); }
+
+        .field-label { font-size:10px; text-transform:uppercase; letter-spacing:0.08em; color:#6b6b8a; font-weight:600; margin-bottom:4px; display:block; }
+        .field-input {
+            width:100%; padding:8px 10px; border-radius:6px;
+            background:#0d0d12; color:#ededf4;
+            border:1px solid rgba(255,255,255,0.10);
+            font-size:13px; font-family:var(--font-ui);
+        }
+        .field-input:focus { outline:none; border-color:rgba(201,163,78,0.4); }
+        textarea.field-input { resize:vertical; min-height:64px; font-family:var(--font-ui); }
+
+        .toast {
+            position:fixed; top:18px; right:18px;
+            background:#24242e; border:1px solid rgba(255,255,255,0.10);
+            border-radius:8px; padding:10px 14px;
+            font-size:12px; color:#ededf4;
+            box-shadow:0 8px 24px rgba(0,0,0,0.5);
+            z-index:200;
+            transform:translateX(110%); opacity:0;
+            transition:transform 0.25s, opacity 0.25s;
+        }
+        .toast.show { transform:translateX(0); opacity:1; }
+        .toast.error { border-color:rgba(239,68,68,0.45); color:#fca5a5; }
+        .toast.ok { border-color:rgba(168,58,58,0.4); color:#e0b65a; }
+    </style>
+</head>
+<body class="stage{% if campaign.hero_image %} has-hero{% endif %}"
+      {% if campaign.hero_image %}style="--hero-image: url('{{ campaign.hero_image }}');"{% endif %}>
+
+    {# The wrapper carries the body content above the fixed splash ::before.
+       Without an explicit stacking context here, certain browser/CSS
+       combinations let the splash's negative z-index sit on the same plane
+       and intercept clicks on the PC tiles — which is why "I can't click the
+       player to join" was happening. position:relative + z-index promotes
+       this wrapper into its own stacking context above the splash. #}
+    <div class="max-w-5xl mx-auto px-4 py-4 md:py-8" style="position:relative; z-index:1;">
+
+        {# ── Hero ─────────────────────────────────────────────────────────
+           Stripped down to the minimum so the splash image carries the
+           visual weight: just the small "session N" rune at the very top,
+           and the tagline floated low into the dark gutter at the bottom
+           of the hero band where the cathedral fades to black. Big title
+           is gone — the splash already has "SHADES OF BLOOD" baked in;
+           layering my Cinzel on top was duplicating it. The vault state
+           pills + "where we left off" line are also gone per request —
+           the GM updates the tagline each session with the flavor / quip
+           they want players to see when they log in. #}
+        <header class="text-center" style="min-height: 20vh; display: flex; flex-direction: column; padding-top: 1vh;">
+            <div class="campaign-rune">A Pathfinder Tale · Session {{ campaign.session_number }}</div>
+            <h1 class="hidden" id="campaign-name">{{ campaign.name }}</h1>
+
+            <div style="flex: 1;"></div>
+
+            {# Tagline anchored at the bottom of the hero band. Tuned to sit
+               in the darker zone of the splash (cathedral base / shadow
+               line) so it reads regardless of the image's brightness. #}
+            <p class="campaign-hero-tagline" id="campaign-tagline"
+               {% if not campaign.tagline %}style="display:none;"{% endif %}>{{ campaign.tagline }}</p>
+        </header>
+
+        {# ── The tale ── #}
+        {% if campaign.intro %}
+        <div class="mb-6">
+            <section class="panel p-3">
+                <h2 class="font-display text-accent-300 text-xs tracking-wider uppercase mb-1">The Tale</h2>
+                <p class="text-base-300 text-xs leading-relaxed whitespace-pre-line" id="intro-text">{{ campaign.intro }}</p>
+            </section>
+        </div>
+        {% endif %}
+
+        {# ── Already-joined banner ── #}
+        {% if current_player %}
+        <div class="panel p-3 mb-4 flex items-center justify-between" style="border-color:rgba(224,176,80,0.35);">
+            <div>
+                <div class="text-[10px] text-gold-300 uppercase tracking-widest font-semibold mb-0.5">Currently joined</div>
+                <div class="text-base-100 text-sm font-medium">Playing as <strong style="color:#e0b050;">{{ current_player }}</strong></div>
+            </div>
+            <div class="flex items-center gap-2">
+                <a href="/player/sheet/{{ current_player|urlencode }}" class="btn-gold">Open Sheet</a>
+                <a href="/player" class="btn-ghost">Player Hub</a>
+                <button onclick="leaveCampaign()" class="btn-ghost">Switch Character</button>
+            </div>
+        </div>
+        {% endif %}
+
+        {# ── Party tiles ── #}
+        <section class="mb-6">
+            <div class="flex items-end justify-between mb-2">
+                <div>
+                    <h2 class="font-display text-accent-300 text-sm tracking-wider uppercase">{% if current_player %}The Party{% else %}Choose Your Character{% endif %}</h2>
+                    <p class="text-base-500 text-xs mt-1">{% if current_player %}Tap a different tile to switch.{% else %}Pick the hero you'll play this session.{% endif %}</p>
+                </div>
+                <a href="/player/builder" class="btn-ghost">+ New Character</a>
+            </div>
+
+            {% if party %}
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-2" id="party-grid">
+                {% for pc in party %}
+                <button class="pc-tile {% if current_player == pc.name %}is-current{% endif %}"
+                        data-pc-name="{{ pc.name }}"
+                        onclick='joinAs({{ pc.name|tojson }})'
+                        title="Join as {{ pc.name }}">
+                    <span class="lvl-badge">L{{ pc.level }}</span>
+                    <div class="portrait-frame">
+                        {% if pc.portrait %}
+                            <img src="/portraits/{{ pc.portrait }}" alt="{{ pc.name }}"
+                                 style="object-position: {{ pc.portrait_focus_x | default(50) }}% {{ pc.portrait_focus_y | default(50) }}%;">
+                        {% else %}
+                            <span class="pc-initial">{{ pc.name[0] }}</span>
+                        {% endif %}
+                    </div>
+                    <div class="pc-name">{{ pc.name }}</div>
+                    <div class="pc-meta">{{ pc.ancestry }} {{ pc.class_name }}</div>
+                    <div class="pc-cta">{% if current_player == pc.name %}Continue{% else %}Join as {{ pc.name }}{% endif %}</div>
+                </button>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="panel p-8 text-center">
+                <p class="text-base-400 text-sm mb-3">No characters yet.</p>
+                <a href="/player/builder" class="btn-primary">Create the First</a>
+            </div>
+            {% endif %}
+        </section>
+
+        {# ── GM strip ── #}
+        <section class="panel p-3 md:p-4 flex flex-col md:flex-row md:items-center justify-between gap-2">
+            <div class="flex items-center gap-3">
+                <span class="text-[10px] uppercase tracking-widest font-semibold" style="color:#9494b0;">Game Master</span>
+                {% if is_gm %}
+                <span class="text-[10px] uppercase tracking-widest font-semibold" style="color:#e0b050;">authenticated</span>
+                {% endif %}
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+                {% if is_gm %}
+                    <button onclick="toggleEdit()" class="btn-ghost" id="edit-toggle-btn">Edit Intro</button>
+                    <a href="/gm" class="btn-primary">Enter Campaign</a>
+                    <a href="/gm/logout" class="btn-ghost">Sign Out</a>
+                {% else %}
+                    <a href="/gm/login?next=/gm" class="btn-ghost">GM Sign In</a>
+                {% endif %}
+            </div>
+        </section>
+
+        {# ── GM-only edit form (collapsed by default) ── #}
+        {% if is_gm %}
+        <section id="edit-panel" class="panel p-5 mt-4 hidden">
+            <h3 class="font-display text-accent-300 text-sm uppercase tracking-wider mb-4">Edit Campaign Intro</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="field-label" for="edit-name">Campaign Name</label>
+                    <input type="text" id="edit-name" class="field-input" value="{{ campaign.name }}">
+                </div>
+                <div>
+                    <label class="field-label" for="edit-session">Session #</label>
+                    <input type="number" id="edit-session" class="field-input" value="{{ campaign.session_number }}" min="1" max="999">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="field-label" for="edit-tagline">Tagline</label>
+                    <input type="text" id="edit-tagline" class="field-input" value="{{ campaign.tagline }}" placeholder="A one-line hook for the campaign...">
+                </div>
+                <div>
+                    <label class="field-label" for="edit-next">Next Session</label>
+                    <input type="text" id="edit-next" class="field-input" value="{{ campaign.next_session_at }}" placeholder="e.g. Sat 5/16, 7pm">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="field-label">Splash / Hero Image <span style="opacity:0.6; font-weight:400;">— full-bleed background behind the title</span></label>
+                    {# Live preview of the current hero image. Hidden when not set. #}
+                    <div id="hero-preview-row" style="display:{% if campaign.hero_image %}flex{% else %}none{% endif %}; gap:12px; align-items:center; margin-bottom:8px;">
+                        <img id="hero-preview-img"
+                             src="{{ campaign.hero_image }}"
+                             alt="Splash preview"
+                             style="width:120px; height:80px; object-fit:cover; border-radius:6px; border:1px solid rgba(255,255,255,0.10); background:#0c0a07;">
+                        <div style="font-size:11px; color:#9494b0; flex:1; word-break:break-all;" id="hero-current-url">{{ campaign.hero_image }}</div>
+                        <button type="button" onclick="removeHeroImage()" class="btn-ghost" style="font-size:10px; padding:6px 10px;">Remove</button>
+                    </div>
+                    {# Upload picker — accepts png/jpg/webp/gif, posts to /api/campaign/hero_image. #}
+                    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                        <input type="file" id="hero-upload-file" accept="image/png,image/jpeg,image/webp,image/gif"
+                               style="font-size:12px; color:#b8b8cc;">
+                        <button type="button" onclick="uploadHeroImage()" id="hero-upload-btn" class="btn-gold" style="font-size:11px; padding:8px 14px;">Upload</button>
+                        <span id="hero-upload-status" style="font-size:11px; color:#9494b0;"></span>
+                    </div>
+                    <div style="font-size:10px; color:#6b6b8a; margin-top:6px;">
+                        Or paste a URL (CDN, public link):
+                    </div>
+                    <input type="text" id="edit-hero" class="field-input" value="{{ campaign.hero_image }}" placeholder="/campaign_assets/... or https://..."
+                           style="font-size:11px;">
+                </div>
+                <div>
+                    <label class="field-label" for="edit-intro">Setting / The Tale</label>
+                    <textarea id="edit-intro" class="field-input" rows="5" placeholder="The world, the stakes, the prologue...">{{ campaign.intro }}</textarea>
+                </div>
+            </div>
+            <div class="flex justify-end gap-2 mt-4">
+                <button onclick="toggleEdit()" class="btn-ghost">Cancel</button>
+                <button onclick="saveCampaign()" class="btn-primary">Save</button>
+            </div>
+        </section>
+        {% endif %}
+
+        <div class="text-center mt-4">
+            <a href="/player" class="text-[11px] text-base-500 hover:text-base-300 transition-colors">Skip to player hub &rarr;</a>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+<script>
+    function showToast(msg, kind) {
+        const t = document.getElementById('toast');
+        t.textContent = msg;
+        t.className = 'toast ' + (kind || 'ok') + ' show';
+        clearTimeout(t._timer);
+        t._timer = setTimeout(() => { t.className = 'toast'; }, 2400);
+    }
+
+    async function joinAs(name) {
+        try {
+            const res = await fetch('/api/join_campaign', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({name})
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) {
+                showToast(data.error || 'Could not join', 'error');
+                return;
+            }
+            // Mirror the legacy "my character" pointer used by the player
+            // hub so the welcome bar/star resolve to the freshly joined PC
+            // without a second click.
+            try { localStorage.setItem('pf2e_my_char', name); } catch(_) {}
+            // Also let the map's player view skip its name-prompt.
+            try { localStorage.setItem('pf2e_player_name', name); } catch(_) {}
+            location.href = '/player/sheet/' + encodeURIComponent(name);
+        } catch (e) {
+            showToast('Network error', 'error');
+        }
+    }
+
+    async function leaveCampaign() {
+        try {
+            await fetch('/api/leave_campaign', {method: 'POST'});
+            try { localStorage.removeItem('pf2e_my_char'); } catch(_) {}
+            location.reload();
+        } catch (e) {
+            showToast('Network error', 'error');
+        }
+    }
+
+    function toggleEdit() {
+        const panel = document.getElementById('edit-panel');
+        if (!panel) return;
+        panel.classList.toggle('hidden');
+    }
+
+    /* ──────────────── Hero / splash image upload ────────────────
+       Posts the chosen file to /api/campaign/hero_image which writes it
+       to the Railway volume and returns the public URL. On success, the
+       text input is auto-filled, the preview row updates, and the
+       homepage background swaps in immediately on the next refresh. */
+    async function uploadHeroImage() {
+        const fileEl = document.getElementById('hero-upload-file');
+        const statusEl = document.getElementById('hero-upload-status');
+        const btn = document.getElementById('hero-upload-btn');
+        if (!fileEl || !fileEl.files || !fileEl.files[0]) {
+            statusEl.textContent = 'Pick a file first.'; statusEl.style.color = '#fca5a5';
+            return;
+        }
+        const file = fileEl.files[0];
+        const fd = new FormData();
+        fd.append('image', file);
+        btn.disabled = true; const oldLabel = btn.textContent; btn.textContent = 'Uploading…';
+        statusEl.style.color = '#9494b0'; statusEl.textContent = 'Sending ' + Math.round(file.size / 1024) + ' KB…';
+        try {
+            const res = await fetch('/api/campaign/hero_image', { method: 'POST', body: fd });
+            const j = await res.json();
+            if (!res.ok || !j.success) {
+                statusEl.textContent = j.error || ('Upload failed (' + res.status + ')');
+                statusEl.style.color = '#fca5a5';
+                return;
+            }
+            const url = j.hero_image;
+            document.getElementById('edit-hero').value = url;
+            const previewRow = document.getElementById('hero-preview-row');
+            previewRow.style.display = 'flex';
+            document.getElementById('hero-preview-img').src = url;
+            document.getElementById('hero-current-url').textContent = url;
+            fileEl.value = '';
+            statusEl.textContent = 'Uploaded · ' + Math.round((j.byte_count || file.size) / 1024) + ' KB';
+            statusEl.style.color = '#86efac';
+            showToast('Splash image uploaded — save to apply', 'ok');
+        } catch (e) {
+            statusEl.textContent = 'Upload error: ' + e;
+            statusEl.style.color = '#fca5a5';
+        } finally {
+            btn.disabled = false; btn.textContent = oldLabel;
+        }
+    }
+
+    async function removeHeroImage() {
+        if (!confirm('Remove the splash image? The campaign config will be cleared and the file deleted from the volume.')) return;
+        const fd = new FormData(); fd.append('action', 'remove');
+        try {
+            const res = await fetch('/api/campaign/hero_image', { method: 'POST', body: fd });
+            const j = await res.json();
+            if (!res.ok || !j.success) {
+                showToast(j.error || 'Remove failed', 'error');
+                return;
+            }
+            document.getElementById('edit-hero').value = '';
+            document.getElementById('hero-preview-row').style.display = 'none';
+            showToast('Splash image removed', 'ok');
+        } catch (e) {
+            showToast('Remove error: ' + e, 'error');
+        }
+    }
+
+    async function saveCampaign() {
+        const payload = {
+            name: document.getElementById('edit-name').value.trim() || 'Untitled Campaign',
+            session_number: parseInt(document.getElementById('edit-session').value, 10) || 1,
+            tagline: document.getElementById('edit-tagline').value.trim(),
+            next_session_at: document.getElementById('edit-next').value.trim(),
+            intro: document.getElementById('edit-intro').value,
+            hero_image: (document.getElementById('edit-hero')?.value || '').trim(),
+        };
+        let res, data;
+        try {
+            res = await fetch('/api/campaign', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+        } catch (e) {
+            showToast('Network error contacting server: ' + e.message, 'error');
+            console.error('[saveCampaign] fetch failed', e);
+            return;
+        }
+        // Surface HTTP-level failures (502, 504, etc.) with status code so the
+        // GM knows whether to retry (mid-deploy on Railway) or fix something.
+        if (!res.ok) {
+            let detail = '';
+            try { detail = (await res.text()).slice(0, 200); } catch(_) {}
+            showToast(`Save failed: HTTP ${res.status} — ${detail || 'no body'}`, 'error');
+            console.error('[saveCampaign] non-ok response', res.status, detail);
+            return;
+        }
+        try { data = await res.json(); }
+        catch (e) {
+            showToast('Save returned non-JSON response (server may be deploying — retry in a minute)', 'error');
+            console.error('[saveCampaign] JSON parse failed', e);
+            return;
+        }
+        try {
+            if (!data.success) {
+                showToast(data.error || 'Save failed', 'error');
+                return;
+            }
+            showToast('Saved', 'ok');
+            // Re-render the visible bits inline so the GM sees their edit
+            // without a full reload (which would re-collapse this panel).
+            // Every getElementById is null-guarded — the post-homepage-glowup
+            // redesign dropped some of these IDs in favor of the party-stand
+            // pills which are rendered from server state. Missing elements
+            // are no longer fatal.
+            const c = data.campaign;
+            const nameEl = document.getElementById('campaign-name');
+            if (nameEl) nameEl.textContent = c.name;
+            const tg = document.getElementById('campaign-tagline');
+            if (tg) {
+                if (c.tagline) { tg.textContent = c.tagline; tg.classList.remove('hidden'); }
+                else { tg.classList.add('hidden'); }
+            }
+            const sp = document.getElementById('session-pill');
+            if (sp) sp.textContent = 'Session ' + c.session_number;
+            const nx = document.getElementById('next-session-text');
+            if (nx) nx.textContent = c.next_session_at || '';
+            const introEl = document.getElementById('intro-text');
+            if (introEl) introEl.textContent = c.intro;
+            // First-session edge case: when both panels started empty,
+            // their <section> wrappers don't exist in the DOM (the
+            // server-side Jinja conditional skipped them at render).
+            // A fresh recap/intro then has nothing to update inline —
+            // the GM would see "Saved" but their text wouldn't appear
+            // until reload. Detect that, and reload so the panels
+            // render correctly.
+            const wantsIntro = !!(c.intro && !introEl);
+            if (wantsIntro) {
+                showToast('Saved — refreshing to render new panel…', 'success');
+                setTimeout(() => location.reload(), 400);
+                return;
+            }
+            // Splash background refresh — swap the CSS variable + has-hero
+            // class on <body> live, so a freshly-uploaded splash appears
+            // immediately without a full reload.
+            if (c.hero_image) {
+                document.body.style.setProperty('--hero-image', "url('" + c.hero_image + "')");
+                document.body.classList.add('has-hero');
+            } else {
+                document.body.style.removeProperty('--hero-image');
+                document.body.classList.remove('has-hero');
+            }
+        } catch (e) {
+            // Save succeeded server-side but the inline re-render threw —
+            // surface the real reason so the GM doesn't think the save failed.
+            showToast('Saved, but UI refresh failed: ' + e.message + ' (reload to see changes)', 'error');
+            console.error('[saveCampaign] post-save render failed', e);
+        }
+    }
+</script>
+</body>
+</html>

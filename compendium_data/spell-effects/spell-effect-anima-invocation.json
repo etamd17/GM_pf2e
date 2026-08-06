@@ -1,0 +1,124 @@
+{
+    "_id": "0koqUuC1YW4F1l5z",
+    "img": "systems/pf2e/icons/spells/anima-invocation.webp",
+    "name": "Spell Effect: Anima Invocation",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Anima Invocation (Modified)]</p>\n<p>You gain resistance to all damage and a status bonus to saves against effects created by evil creatures. Your Strikes gain the holy trait, the effects of the <em>ghost touch</em> rune, and deal additional spirit damage.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "days",
+            "value": 1
+        },
+        "level": {
+            "value": 10
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder #150: Broken Promises"
+        },
+        "rules": [
+            {
+                "adjustName": false,
+                "choices": [
+                    {
+                        "label": "PF2E.Check.Result.Degree.Check.criticalSuccess",
+                        "value": "critical-success"
+                    },
+                    {
+                        "label": "PF2E.Check.Result.Degree.Check.success",
+                        "value": "success"
+                    }
+                ],
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Prompt.DegreeOfSuccess",
+                "rollOption": "anima-invocation"
+            },
+            {
+                "key": "Resistance",
+                "predicate": [
+                    "anima-invocation:success"
+                ],
+                "type": "all-damage",
+                "value": 5
+            },
+            {
+                "key": "Resistance",
+                "predicate": [
+                    "anima-invocation:critical-success"
+                ],
+                "type": "all-damage",
+                "value": 10
+            },
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "origin:trait:evil"
+                ],
+                "selector": "saving-throw",
+                "slug": "anima-invocation-saves",
+                "type": "status",
+                "value": 2
+            },
+            {
+                "key": "AdjustModifier",
+                "mode": "upgrade",
+                "predicate": [
+                    "anima-invocation:critical-success"
+                ],
+                "selector": "saving-throw",
+                "slug": "anima-invocation-saves",
+                "value": 4
+            },
+            {
+                "key": "AdjustStrike",
+                "mode": "add",
+                "property": "property-runes",
+                "value": "ghost-touch"
+            },
+            {
+                "damageType": "spirit",
+                "hideIfDisabled": true,
+                "key": "FlatModifier",
+                "predicate": [
+                    "anima-invocation:success"
+                ],
+                "selector": "strike-damage",
+                "value": 1
+            },
+            {
+                "damageType": "spirit",
+                "diceNumber": 1,
+                "dieSize": "d10",
+                "hideIfDisabled": true,
+                "key": "DamageDice",
+                "predicate": [
+                    "anima-invocation:critical-success"
+                ],
+                "selector": "strike-damage"
+            },
+            {
+                "key": "AdjustStrike",
+                "mode": "add",
+                "property": "traits",
+                "value": [
+                    "holy"
+                ]
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

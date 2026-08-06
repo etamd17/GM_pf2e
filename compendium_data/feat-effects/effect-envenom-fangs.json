@@ -1,0 +1,45 @@
+{
+    "_id": "yqCzUxrdLlk6Q9VW",
+    "img": "icons/creatures/abilities/fang-tooth-poison-green.webp",
+    "name": "Effect: Envenom Fangs",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.feats-srd.Item.Envenom Fangs]</p>\n<p>The next fangs Strike deals an additional 1d6 persistent poison damage.</p>"
+        },
+        "duration": {
+            "expiry": "turn-end",
+            "sustained": false,
+            "unit": "rounds",
+            "value": 1
+        },
+        "level": {
+            "value": 5
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "category": "persistent",
+                "damageType": "poison",
+                "diceNumber": 1,
+                "dieSize": "d6",
+                "key": "DamageDice",
+                "selector": "fangs-damage"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

@@ -1,0 +1,54 @@
+{% extends "chronicle_base.html" %}
+{% block chronicle %}
+<h1 class="chron-title">My journal</h1>
+<p class="chron-card__meta" style="margin-bottom:var(--sp-4);">Private to you. Only you can read these notes. Saves automatically.</p>
+
+<div class="chron-doc-frame" style="max-width:65ch;">
+  <textarea id="chron-journal-text"
+            style="width:100%;min-height:40vh;background:var(--bg-sunken);border:1px solid var(--border-card);border-radius:var(--r-sm);color:var(--text-on-cream);font-family:var(--font-flavor);font-size:16px;line-height:1.6;padding:var(--sp-4);resize:vertical;"
+            placeholder="Write your thoughts on the campaign…">{{ notes }}</textarea>
+  <div style="display:flex;align-items:center;gap:var(--sp-3);margin-top:var(--sp-3);">
+    <span id="chron-journal-status" class="chron-card__meta" role="status" aria-live="polite">Saved</span>
+  </div>
+</div>
+
+<script>
+(function () {
+  var ta = document.getElementById('chron-journal-text');
+  var st = document.getElementById('chron-journal-status');
+  if (!ta || !st) return;
+  var timer = null;
+  var last = ta.value;
+
+  function save() {
+    if (ta.value === last) { st.textContent = 'Saved'; return; }
+    st.textContent = 'Saving…';
+    fetch('/api/notes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: ta.value })
+    }).then(function (r) {
+      if (!r.ok) throw new Error('save failed');
+      last = ta.value;
+      st.textContent = 'Saved';
+    }).catch(function () {
+      st.textContent = 'Save failed — retrying';
+      clearTimeout(timer);
+      timer = setTimeout(save, 2000);
+    });
+  }
+
+  ta.addEventListener('input', function () {
+    st.textContent = 'Editing…';
+    clearTimeout(timer);
+    timer = setTimeout(save, 800);
+  });
+
+  window.addEventListener('beforeunload', function () {
+    if (ta.value !== last && navigator.sendBeacon) {
+      navigator.sendBeacon('/api/notes', new Blob([JSON.stringify({ text: ta.value })], { type: 'application/json' }));
+    }
+  });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,79 @@
+{
+    "_id": "LT5AV9vSN3T9x3J9",
+    "img": "icons/magic/control/sihouette-hold-beam-green.webp",
+    "name": "Spell Effect: Corrosive Body",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Corrosive Body]</p>\n<p>You gain acid immunity. Your unarmed attacks deal additional acid damage. The first time each round that you deal acid damage to a creature in this way, you gain temporary Hit Points. Your acid spells deal one additional die of acid damage.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 7
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Secrets of Magic"
+        },
+        "rules": [
+            {
+                "damageType": "acid",
+                "diceNumber": "ternary(gte(@item.level,9),2,1)",
+                "dieSize": "d4",
+                "key": "DamageDice",
+                "predicate": [
+                    "item:category:unarmed"
+                ],
+                "selector": "strike-damage"
+            },
+            {
+                "key": "Note",
+                "outcome": [
+                    "success"
+                ],
+                "predicate": [
+                    "item:category:unarmed"
+                ],
+                "selector": "strike-damage",
+                "text": "PF2E.SpecificRule.CorrosiveBody.Note",
+                "title": "{item|name}"
+            },
+            {
+                "key": "Immunity",
+                "type": "acid"
+            },
+            {
+                "damageType": "acid",
+                "diceNumber": 1,
+                "key": "DamageDice",
+                "predicate": [
+                    "item:damage:type:acid"
+                ],
+                "selector": "spell-damage"
+            },
+            {
+                "key": "ActiveEffectLike",
+                "mode": "override",
+                "path": "flags.pf2e.corrosiveBody.rank",
+                "value": "@item.level"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

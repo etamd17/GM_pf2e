@@ -1,0 +1,13 @@
+{
+  "name": "gm-pf2e-tailwind-build",
+  "private": true,
+  "type": "module",
+  "description": "Dev-only: precompile standalone pages' Tailwind utilities to static CSS (replaces the runtime Play CDN). Not part of the app runtime or deploy.",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "postcss": "^8.4.35",
+    "tailwindcss": "^3.4.1"
+  }
+}

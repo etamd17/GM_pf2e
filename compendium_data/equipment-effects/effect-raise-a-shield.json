@@ -1,0 +1,53 @@
+{
+    "_id": "2YgXoHvJfrDHucMr",
+    "img": "systems/pf2e/icons/actions/raise-a-shield.webp",
+    "name": "Effect: Raise a Shield",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.actionspf2e.Item.Raise a Shield]</p>\n<p>When you have Raised a Shield, you gain its listed circumstance bonus to AC.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "rounds",
+            "value": 1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core"
+        },
+        "rules": [
+            {
+                "key": "ActiveEffectLike",
+                "mode": "override",
+                "path": "system.attributes.shield.raised",
+                "predicate": [
+                    "self:shield:equipped",
+                    {
+                        "nor": [
+                            "self:shield:broken",
+                            "self:shield:destroyed"
+                        ]
+                    }
+                ],
+                "value": true
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

@@ -1,0 +1,89 @@
+{
+    "_id": "zcJii1XyOne9EvMr",
+    "img": "icons/skills/melee/spear-tips-double-purple.webp",
+    "name": "Effect: Assisting Shot",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.feats-srd.Item.Assisting Shot]</p>\n<p>You gain a circumstance bonus to your attack roll.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "rounds",
+            "value": 1
+        },
+        "level": {
+            "value": 2
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core"
+        },
+        "rules": [
+            {
+                "choices": [
+                    {
+                        "label": "PF2E.Check.Result.Degree.Attack.success",
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:context:check:outcome:2",
+                                    {
+                                        "not": {
+                                            "gte": [
+                                                "parent:context:check:outcome",
+                                                0
+                                            ]
+                                        }
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": 1
+                    },
+                    {
+                        "label": "PF2E.Check.Result.Degree.Attack.criticalSuccess",
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:context:check:outcome:3",
+                                    {
+                                        "not": {
+                                            "gte": [
+                                                "parent:context:check:outcome",
+                                                0
+                                            ]
+                                        }
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": 2
+                    }
+                ],
+                "flag": "bonus",
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Prompt.DegreeOfSuccess"
+            },
+            {
+                "key": "FlatModifier",
+                "selector": "attack",
+                "type": "circumstance",
+                "value": "@item.flags.pf2e.rulesSelections.bonus"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

@@ -1,0 +1,41 @@
+{
+    "_id": "nWrUYrSFScwURSTs",
+    "img": "icons/commodities/biological/pustules-red.webp",
+    "name": "Effect: Strain Mind",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.feats-srd.Item.Strain Mind]</p>\n<p>You lose Hit Points equal to four times the spell rank of the amped psi cantrip.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "rounds",
+            "value": 1
+        },
+        "level": {
+            "value": 6
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Dark Archive"
+        },
+        "rules": [
+            {
+                "key": "LoseHitPoints",
+                "value": "4*(@item.level)"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

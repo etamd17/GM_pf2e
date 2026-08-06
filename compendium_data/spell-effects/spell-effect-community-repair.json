@@ -1,0 +1,78 @@
+{
+    "_id": "dU4viL9kh554TKeB",
+    "img": "icons/commodities/tech/cog-brass.webp",
+    "name": "Spell Effect: Community Repair",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Community Repair]</p>\n<p>On a critical success, you receive a +1 status bonus to Will saves against emotion effects and a +10-foot status bonus to your Speeds.</p>\n<p>On a critical failure, you take a –10-foot status penalty to your Speeds.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "days",
+            "value": 7
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder #170: Spoken on the Song Wind"
+        },
+        "rules": [
+            {
+                "choices": [
+                    {
+                        "label": "PF2E.Check.Result.Degree.Check.criticalSuccess",
+                        "value": 10
+                    },
+                    {
+                        "label": "PF2E.Check.Result.Degree.Check.criticalFailure",
+                        "value": -10
+                    }
+                ],
+                "flag": "outcome",
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Prompt.DegreeOfSuccess",
+                "rollOption": "community-repair-speed"
+            },
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "terrain:community-repair"
+                ],
+                "selector": "speed",
+                "type": "status",
+                "value": "@item.flags.pf2e.rulesSelections.outcome"
+            },
+            {
+                "key": "RollOption",
+                "option": "terrain:community-repair",
+                "toggleable": true
+            },
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "item:trait:emotion",
+                    "terrain:community-repair",
+                    "community-repair-speed:10"
+                ],
+                "selector": "will",
+                "type": "status",
+                "value": 1
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

@@ -1,0 +1,47 @@
+{
+    "_id": "E4B02mJmNexQLa8F",
+    "img": "icons/equipment/neck/pendant-bronze-gem-blue.webp",
+    "name": "Effect: Inspiring Spotlight",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Inspiring Spotlight]</p>\n<p>You gain a +1 item bonus to saving throws and Charisma-based skill checks.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 9
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder #152: Legacy of the Lost God"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "selector": [
+                    "cha-based",
+                    "saving-throw"
+                ],
+                "type": "item",
+                "value": 1
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

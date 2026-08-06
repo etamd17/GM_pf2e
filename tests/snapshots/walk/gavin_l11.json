@@ -1,0 +1,179 @@
+{
+  "ac": 24,
+  "ac_item": 0,
+  "active_armor_penalty": 0,
+  "active_speed_penalty": 0,
+  "ancestry": "Human",
+  "armor_name": "",
+  "armor_str_req": 0,
+  "attacks": [
+    {
+      "damage": "1d4 + 2B",
+      "first_strike": 15,
+      "name": "Fist",
+      "traits": [
+        "agile",
+        "finesse",
+        "nonlethal",
+        "unarmed"
+      ]
+    }
+  ],
+  "background": "Barkeep",
+  "class": "Kineticist",
+  "class_dc": 27,
+  "current_hp": 118,
+  "deity": "Not set",
+  "feats": [
+    {
+      "level": 1,
+      "name": "Hobnobber",
+      "type": "Awarded Feat"
+    }
+  ],
+  "focus_max": 0,
+  "fort": 19,
+  "heritage": "",
+  "hero_points": 1,
+  "hp": 118,
+  "immunities": [],
+  "initiative_mod": 15,
+  "languages": [
+    "None selected"
+  ],
+  "level": 11,
+  "mods": {
+    "cha": 0,
+    "con": 2,
+    "dex": 1,
+    "int": 0,
+    "str": 2,
+    "wis": 0
+  },
+  "name": "Unknown Adventurer",
+  "perception": 15,
+  "proficiencies": {
+    "ac": 2,
+    "class_dc": 4,
+    "fortitude": 6,
+    "light": 2,
+    "perception": 4,
+    "reflex": 6,
+    "simple": 4,
+    "unarmed": 4,
+    "unarmored": 2,
+    "will": 4
+  },
+  "ref": 18,
+  "rule_modifiers": {},
+  "senses": [],
+  "shield_ac_bonus": 2,
+  "shield_bt": 10,
+  "shield_hardness": 5,
+  "shield_max_hp": 20,
+  "size": "Medium",
+  "skills": [
+    {
+      "name": "Acrobatics",
+      "penalty": 0,
+      "stat": "DEX",
+      "total": "+1"
+    },
+    {
+      "name": "Arcana",
+      "penalty": 0,
+      "stat": "INT",
+      "total": "+0"
+    },
+    {
+      "name": "Athletics",
+      "penalty": 0,
+      "stat": "STR",
+      "total": "+2"
+    },
+    {
+      "name": "Crafting",
+      "penalty": 0,
+      "stat": "INT",
+      "total": "+0"
+    },
+    {
+      "name": "Deception",
+      "penalty": 0,
+      "stat": "CHA",
+      "total": "+0"
+    },
+    {
+      "name": "Diplomacy",
+      "penalty": 0,
+      "stat": "CHA",
+      "total": "+0"
+    },
+    {
+      "name": "Intimidation",
+      "penalty": 0,
+      "stat": "CHA",
+      "total": "+0"
+    },
+    {
+      "name": "Medicine",
+      "penalty": 0,
+      "stat": "WIS",
+      "total": "+0"
+    },
+    {
+      "name": "Nature",
+      "penalty": 0,
+      "stat": "WIS",
+      "total": "+0"
+    },
+    {
+      "name": "Occultism",
+      "penalty": 0,
+      "stat": "INT",
+      "total": "+0"
+    },
+    {
+      "name": "Performance",
+      "penalty": 0,
+      "stat": "CHA",
+      "total": "+0"
+    },
+    {
+      "name": "Religion",
+      "penalty": 0,
+      "stat": "WIS",
+      "total": "+0"
+    },
+    {
+      "name": "Society",
+      "penalty": 0,
+      "stat": "INT",
+      "total": "+0"
+    },
+    {
+      "name": "Stealth",
+      "penalty": 0,
+      "stat": "DEX",
+      "total": "+1"
+    },
+    {
+      "name": "Survival",
+      "penalty": 0,
+      "stat": "WIS",
+      "total": "+0"
+    },
+    {
+      "name": "Thievery",
+      "penalty": 0,
+      "stat": "DEX",
+      "total": "+1"
+    }
+  ],
+  "speed": 25,
+  "spell_attack": 17,
+  "spell_dc": 27,
+  "stealth_penalty": 0,
+  "subclass": "Single Gate",
+  "will": 15
+}

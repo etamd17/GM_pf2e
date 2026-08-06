@@ -1,0 +1,41 @@
+{
+    "_id": "MeXyXqWY9qN42bSQ",
+    "img": "icons/creatures/eyes/humanoid-single-red-brown.webp",
+    "name": "Effect: Hunt Prey",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.actionspf2e.Item.Hunt Prey]</p>\n<p>You mark a creature as your prey.</p>"
+        },
+        "duration": {
+            "expiry": null,
+            "sustained": false,
+            "unit": "unlimited",
+            "value": -1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core"
+        },
+        "rules": [
+            {
+                "key": "TokenMark",
+                "slug": "hunted-prey"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

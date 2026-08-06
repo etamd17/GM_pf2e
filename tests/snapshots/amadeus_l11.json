@@ -1,0 +1,242 @@
+{
+  "ac": 26,
+  "ac_item": 0,
+  "active_armor_penalty": 0,
+  "active_speed_penalty": 0,
+  "ancestry": "Human",
+  "armor_name": "",
+  "armor_str_req": 0,
+  "attacks": [
+    {
+      "damage": "1d4 + 3B",
+      "first_strike": 16,
+      "name": "Fist",
+      "traits": [
+        "agile",
+        "finesse",
+        "nonlethal",
+        "unarmed"
+      ]
+    },
+    {
+      "damage": "1d8 + 3S",
+      "first_strike": 18,
+      "name": "Longsword",
+      "traits": [
+        "versatile-p"
+      ]
+    }
+  ],
+  "background": "Barkeep",
+  "class": "Champion",
+  "class_dc": 28,
+  "current_hp": 129,
+  "deity": "Not set",
+  "feats": [
+    {
+      "level": 1,
+      "name": "Cooperative Nature",
+      "type": "Ancestry Feat"
+    },
+    {
+      "level": 1,
+      "name": "Hobnobber",
+      "type": "Awarded Feat"
+    },
+    {
+      "level": 1,
+      "name": "Shield Block",
+      "type": "Awarded Feat"
+    }
+  ],
+  "focus_max": 1,
+  "fort": 18,
+  "heritage": "",
+  "hero_points": 1,
+  "hp": 129,
+  "immunities": [],
+  "initiative_mod": 15,
+  "languages": [
+    "None selected"
+  ],
+  "level": 11,
+  "mods": {
+    "cha": 0,
+    "con": 1,
+    "dex": 1,
+    "int": 0,
+    "str": 3,
+    "wis": 0
+  },
+  "name": "Unknown Adventurer",
+  "perception": 15,
+  "proficiencies": {
+    "ac": 4,
+    "acrobatics": 0,
+    "advanced": 0,
+    "arcana": 0,
+    "athletics": 0,
+    "castingArcane": 0,
+    "castingDivine": 4,
+    "castingOccult": 0,
+    "castingPrimal": 0,
+    "classDC": 4,
+    "class_dc": 4,
+    "computers": 0,
+    "crafting": 0,
+    "deception": 0,
+    "diplomacy": 2,
+    "fortitude": 6,
+    "heavy": 4,
+    "intimidation": 0,
+    "light": 4,
+    "lore:alcohol": 2,
+    "martial": 4,
+    "medicine": 0,
+    "medium": 4,
+    "nature": 0,
+    "occultism": 0,
+    "perception": 4,
+    "performance": 0,
+    "piloting": 0,
+    "reflex": 4,
+    "religion": 2,
+    "simple": 4,
+    "society": 0,
+    "spell_attack": 4,
+    "spell_dc": 4,
+    "stealth": 0,
+    "survival": 0,
+    "thievery": 0,
+    "unarmed": 4,
+    "unarmored": 4,
+    "will": 6
+  },
+  "ref": 16,
+  "rule_modifiers": {
+    "check": {
+      "circumstance": [
+        4
+      ],
+      "item": [],
+      "status": [],
+      "untyped": []
+    }
+  },
+  "senses": [],
+  "shield_ac_bonus": 2,
+  "shield_bt": 10,
+  "shield_hardness": 5,
+  "shield_max_hp": 20,
+  "size": "Medium",
+  "skills": [
+    {
+      "name": "Acrobatics",
+      "penalty": 0,
+      "stat": "DEX",
+      "total": "+1"
+    },
+    {
+      "name": "Arcana",
+      "penalty": 0,
+      "stat": "INT",
+      "total": "+0"
+    },
+    {
+      "name": "Athletics",
+      "penalty": 0,
+      "stat": "STR",
+      "total": "+3"
+    },
+    {
+      "name": "Crafting",
+      "penalty": 0,
+      "stat": "INT",
+      "total": "+0"
+    },
+    {
+      "name": "Deception",
+      "penalty": 0,
+      "stat": "CHA",
+      "total": "+0"
+    },
+    {
+      "name": "Diplomacy",
+      "penalty": 0,
+      "stat": "CHA",
+      "total": "+13"
+    },
+    {
+      "name": "Intimidation",
+      "penalty": 0,
+      "stat": "CHA",
+      "total": "+0"
+    },
+    {
+      "name": "Lore: Alcohol",
+      "penalty": 0,
+      "stat": "INT",
+      "total": "+13"
+    },
+    {
+      "name": "Medicine",
+      "penalty": 0,
+      "stat": "WIS",
+      "total": "+0"
+    },
+    {
+      "name": "Nature",
+      "penalty": 0,
+      "stat": "WIS",
+      "total": "+0"
+    },
+    {
+      "name": "Occultism",
+      "penalty": 0,
+      "stat": "INT",
+      "total": "+0"
+    },
+    {
+      "name": "Performance",
+      "penalty": 0,
+      "stat": "CHA",
+      "total": "+0"
+    },
+    {
+      "name": "Religion",
+      "penalty": 0,
+      "stat": "WIS",
+      "total": "+13"
+    },
+    {
+      "name": "Society",
+      "penalty": 0,
+      "stat": "INT",
+      "total": "+0"
+    },
+    {
+      "name": "Stealth",
+      "penalty": 0,
+      "stat": "DEX",
+      "total": "+1"
+    },
+    {
+      "name": "Survival",
+      "penalty": 0,
+      "stat": "WIS",
+      "total": "+0"
+    },
+    {
+      "name": "Thievery",
+      "penalty": 0,
+      "stat": "DEX",
+      "total": "+1"
+    }
+  ],
+  "speed": 25,
+  "spell_attack": 15,
+  "spell_dc": 25,
+  "stealth_penalty": 0,
+  "subclass": "",
+  "will": 17
+}

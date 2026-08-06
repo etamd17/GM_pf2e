@@ -1,0 +1,43 @@
+{
+    "_id": "oKtMGJa0qbxuZD7w",
+    "img": "icons/weapons/wands/wand-carved-pink.webp",
+    "name": "Effect: Guardian Staff",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Guardian Staff], @UUID[Compendium.pf2e.equipment-srd.Item.Guardian Staff (Greater)], @UUID[Compendium.pf2e.equipment-srd.Item.Guardian Staff (Major)]</p>\n<p>A ruby-colored plane of force appears like a shield near the ally, granting them a +1 circumstance bonus to AC until the start of your next turn.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "rounds",
+            "value": 1
+        },
+        "level": {
+            "value": 6
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Treasure Vault (Remastered)"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "selector": "ac",
+                "type": "circumstance",
+                "value": 1
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

@@ -1,0 +1,47 @@
+{
+    "_id": "N2CSGvtPXloOEPrK",
+    "img": "systems/pf2e/icons/spells/divine-vessel.webp",
+    "name": "Effect: Giant's Lunge",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.feats-srd.Item.Giant's Lunge]</p>\n<p>All your melee weapons and unarmed attacks gain reach 10.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "itemType": "weapon",
+                "key": "ItemAlteration",
+                "mode": "add",
+                "predicate": [
+                    "item:melee"
+                ],
+                "property": "traits",
+                "value": "reach"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

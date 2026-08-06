@@ -1,0 +1,17 @@
+{% extends "_account_base.html" %}
+{% block title %}Create account{% endblock %}
+{% block content %}
+<h1>Create account</h1>
+<p class="sub">Sign up to create and run your own campaigns.</p>
+{% if error %}<div class="err">{{ error }}</div>{% endif %}
+<form method="POST">
+  <label>Display name</label>
+  <input name="display_name" autofocus placeholder="What your table sees">
+  <label>Username</label>
+  <input name="username" required>
+  <label>Password</label>
+  <input name="password" type="password" required placeholder="at least 6 characters">
+  <button type="submit">Create account</button>
+</form>
+<p class="foot muted">Already have an account? <a href="/login">Sign in</a> &middot; Have an invite code? <a href="/join">Join a campaign</a></p>
+{% endblock %}

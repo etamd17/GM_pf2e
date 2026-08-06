@@ -1,0 +1,82 @@
+{
+    "_id": "LzYi0OuOoypNb6jd",
+    "img": "icons/commodities/treasure/crown-gold-laurel-wreath.webp",
+    "name": "Panache",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p>You care as much about the way you accomplish something as whether you actually accomplish it in the first place. When you perform an action with particular style, you can leverage this moment of verve to perform spectacular, deadly maneuvers. This heightened state of flair is called panache.</p>\n<p>@UUID[Compendium.pf2e.feat-effects.Item.Effect: Panache]</p>\n<p>You gain panache by performing actions that have the bravado trait. @UUID[Compendium.pf2e.actionspf2e.Item.Tumble Through] and additional actions determined by your swashbuckler's style gain the bravado trait when you use them. The GM might determine that a check to perform a particularly daring action, such as swinging on a chandelier or sliding down a drapery, can gain the bravado trait. These checks typically involve at least a single action and a non-trivial DC. Normally, you gain and use panache only in combat encounters; when an encounter ends, you lose panache.</p>\n<p>Powerful finisher actions, including @UUID[Compendium.pf2e.actionspf2e.Item.Confident Finisher], can be used only while you have panache and cause you to lose your panache.</p>"
+        },
+        "level": {
+            "value": 1
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "key": "Note",
+                "outcome": [
+                    "success",
+                    "criticalSuccess"
+                ],
+                "predicate": [
+                    "item:trait:bravado",
+                    {
+                        "not": "self:effect:panache"
+                    }
+                ],
+                "selector": [
+                    "skill-check",
+                    "strike-attack-roll"
+                ],
+                "text": "PF2E.SpecificRule.Swashbuckler.Panache",
+                "title": "PF2E.Check.Result.Degree.Check.success"
+            },
+            {
+                "key": "Note",
+                "outcome": [
+                    "failure"
+                ],
+                "predicate": [
+                    "item:trait:bravado",
+                    {
+                        "not": "self:effect:panache"
+                    }
+                ],
+                "selector": [
+                    "skill-check",
+                    "strike-attack-roll"
+                ],
+                "text": "PF2E.SpecificRule.Swashbuckler.PanacheFailure",
+                "title": "PF2E.Check.Result.Degree.Check.failure"
+            },
+            {
+                "key": "RollOption",
+                "option": "item:trait:bravado",
+                "predicate": [
+                    "action:tumble-through"
+                ],
+                "selector": "skill-check"
+            }
+        ],
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "swashbuckler"
+            ]
+        }
+    },
+    "type": "feat"
+}

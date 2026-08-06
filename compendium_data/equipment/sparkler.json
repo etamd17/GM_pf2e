@@ -1,0 +1,63 @@
+{
+    "_id": "hd8D1Dm6aVhMYpEL",
+    "img": "icons/magic/fire/projectile-embers-orange.webp",
+    "name": "Sparkler",
+    "system": {
+        "baseItem": null,
+        "bulk": {
+            "value": 0
+        },
+        "category": "other",
+        "containerId": null,
+        "damage": null,
+        "description": {
+            "value": "<p><strong>Access</strong> Sparklers are common in Tian Xia and Vudra and can be Crafted by those who can specifically Craft fireworks.</p>\n<p><strong>Activate</strong> <span class=\"action-glyph\">1</span> (manipulate)</p><hr /><p>A sparkler gives off colorful sparks, burning for 1 minute. It provides bright light in a 10-foot radius (and dim light for the next 10 feet). While the <em>sparkler</em> burns, you can use it as an improvised weapon, dealing @Damage[1[fire]] on a hit. On a critical hit, you cause the target to become @UUID[Compendium.pf2e.conditionitems.Item.Dazzled] for 1 round.</p>\n<p>You can touch a <em>sparkler</em> to a flammable object as part of the action you spend Activating it or as a separate Interact action while the sparkler is already activated. If you do so, the sparkler can ignite flammable objects the way a @UUID[Compendium.pf2e.equipment-srd.Item.Matchstick] does.</p>\n<p>@UUID[Compendium.pf2e.equipment-effects.Item.Effect: Sparkler]</p>"
+        },
+        "hardness": 0,
+        "hp": {
+            "max": 0,
+            "value": 0
+        },
+        "level": {
+            "value": 1
+        },
+        "material": {
+            "grade": null,
+            "type": null
+        },
+        "price": {
+            "per": 1,
+            "value": {
+                "sp": 4
+            }
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Treasure Vault (Remastered)"
+        },
+        "quantity": 1,
+        "rules": [],
+        "size": "med",
+        "traits": {
+            "otherTags": [
+                "alchemical-tool"
+            ],
+            "rarity": "uncommon",
+            "value": [
+                "alchemical",
+                "consumable",
+                "fire"
+            ]
+        },
+        "usage": {
+            "value": "held-in-one-hand"
+        },
+        "uses": {
+            "autoDestroy": true,
+            "max": 1,
+            "value": 1
+        }
+    },
+    "type": "consumable"
+}

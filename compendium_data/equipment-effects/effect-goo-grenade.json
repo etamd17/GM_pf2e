@@ -1,0 +1,120 @@
+{
+    "_id": "5JYchreCttBg7RcD",
+    "img": "icons/consumables/potions/bottle-round-ring-teal.webp",
+    "name": "Effect: Goo Grenade",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Goo Grenade (Lesser)], @UUID[Compendium.pf2e.equipment-srd.Item.Goo Grenade (Moderate)], @UUID[Compendium.pf2e.equipment-srd.Item.Goo Grenade (Greater)], @UUID[Compendium.pf2e.equipment-srd.Item.Goo Grenade (Major)]</p>\n<p>You take a circumstance penalty to your Speeds.</p>"
+        },
+        "duration": {
+            "expiry": null,
+            "sustained": false,
+            "unit": "unlimited",
+            "value": -1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Lost Omens Impossible Lands"
+        },
+        "rules": [
+            {
+                "adjustName": false,
+                "choices": [
+                    {
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:origin:item:slug:goo-grenade-lesser",
+                                    {
+                                        "not": "parent:origin:item"
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": "Compendium.pf2e.equipment-srd.Item.Goo Grenade (Lesser)"
+                    },
+                    {
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:origin:item:slug:goo-grenade-moderate",
+                                    {
+                                        "not": "parent:origin:item"
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": "Compendium.pf2e.equipment-srd.Item.Goo Grenade (Moderate)"
+                    },
+                    {
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:origin:item:slug:goo-grenade-greater",
+                                    {
+                                        "not": "parent:origin:item"
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": "Compendium.pf2e.equipment-srd.Item.Goo Grenade (Greater)"
+                    },
+                    {
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:origin:item:slug:goo-grenade-major",
+                                    {
+                                        "not": "parent:origin:item"
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": "Compendium.pf2e.equipment-srd.Item.Goo Grenade (Major)"
+                    }
+                ],
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Prompt.EquipmentVariety",
+                "rollOption": "goo-grenade"
+            },
+            {
+                "key": "FlatModifier",
+                "selector": "speed",
+                "slug": "goo-grenade-penalty",
+                "type": "circumstance",
+                "value": -5
+            },
+            {
+                "key": "AdjustModifier",
+                "mode": "downgrade",
+                "predicate": [
+                    {
+                        "or": [
+                            "goo-grenade:goo-grenade-greater",
+                            "goo-grenade:goo-grenade-major"
+                        ]
+                    }
+                ],
+                "selector": "speed",
+                "slug": "goo-grenade-penalty",
+                "value": -10
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

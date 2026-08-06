@@ -1,0 +1,36 @@
+{
+    "_id": "tnqyQrhrZeDtDvcO",
+    "img": "icons/commodities/bones/skull-hollow-white.webp",
+    "name": "Greater Field Discovery (Toxicologist)",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p>When a creature fails its initial saving throw against an infused injury poison you created, the wound sprays poison onto another creature adjacent to it.</p>\n<p>The attacker who caused the injury chooses which creature, if there's more than one, and can choose to forgo this effect.</p>\n<p>That creature is exposed to the poison. The second creature doesn't spread the poison further.</p>"
+        },
+        "level": {
+            "value": 13
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [],
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "alchemist"
+            ]
+        }
+    },
+    "type": "feat"
+}

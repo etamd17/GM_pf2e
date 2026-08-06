@@ -1,0 +1,64 @@
+{
+    "_id": "lTL5VwNrZ5xiitGV",
+    "img": "icons/tools/smithing/horseshoe-steel-grey.webp",
+    "name": "Spell Effect: Nudge the Odds",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Nudge the Odds]</p>\n<p>You gain a status bonus to Games Lore checks to gamble, and if you roll a critical failure on such a check, you get a failure instead.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "hours",
+            "value": 1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Secrets of Magic"
+        },
+        "rules": [
+            {
+                "key": "RollOption",
+                "option": "nudge-the-odds",
+                "toggleable": true
+            },
+            {
+                "key": "FlatModifier",
+                "label": "Nudge Fate",
+                "predicate": [
+                    "nudge-the-odds"
+                ],
+                "selector": "games-lore",
+                "type": "status",
+                "value": "ternary(gte(@item.level,5),2,1)"
+            },
+            {
+                "adjustment": {
+                    "criticalFailure": "one-degree-better"
+                },
+                "key": "AdjustDegreeOfSuccess",
+                "predicate": [
+                    "nudge-the-odds"
+                ],
+                "selector": "games-lore",
+                "type": "skill"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

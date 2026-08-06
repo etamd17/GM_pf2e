@@ -1,0 +1,159 @@
+{
+    "_id": "1ouUo8lLK6H79Rqh",
+    "img": "icons/consumables/potions/bottle-round-flask-fumes-purple.webp",
+    "name": "Effect: Bestial Mutagen (Major)",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Bestial Mutagen (Major)]</p>\n<p>You gain a +4 item bonus to Athletics checks and unarmed attack rolls. You gain a claw unarmed attack (4d8 slashing damage) with the agile trait and a jaws unarmed attack (4d10 piercing damage). You gain weapon specialization with the claw and jaws, or greater weapon specialization if you already have weapon specialization with these unarmed attacks.</p>\n<p>You take a –2 penalty to Reflex saves, Acrobatics checks, and Stealth checks.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "hours",
+            "value": 1
+        },
+        "level": {
+            "value": 17
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "selector": [
+                    "athletics",
+                    "unarmed-attack-roll"
+                ],
+                "type": "item",
+                "value": 4
+            },
+            {
+                "key": "FlatModifier",
+                "selector": [
+                    "reflex",
+                    "acrobatics",
+                    "stealth"
+                ],
+                "value": -2
+            },
+            {
+                "baseType": "jaws",
+                "category": "unarmed",
+                "damage": {
+                    "base": {
+                        "damageType": "piercing",
+                        "dice": 4,
+                        "die": "d10"
+                    }
+                },
+                "group": "brawling",
+                "img": "icons/creatures/abilities/mouth-teeth-long-red.webp",
+                "key": "Strike",
+                "label": "PF2E.Weapon.Base.jaws",
+                "range": null,
+                "slug": "jaws",
+                "traits": [
+                    "unarmed"
+                ]
+            },
+            {
+                "baseType": "claw",
+                "category": "unarmed",
+                "damage": {
+                    "base": {
+                        "damageType": "slashing",
+                        "dice": 4,
+                        "die": "d8"
+                    }
+                },
+                "group": "brawling",
+                "img": "icons/commodities/claws/claw-bear-brown-grey.webp",
+                "key": "Strike",
+                "label": "PF2E.Weapon.Base.claw",
+                "range": null,
+                "slug": "claw",
+                "traits": [
+                    "unarmed",
+                    "agile"
+                ]
+            },
+            {
+                "itemType": "weapon",
+                "key": "ItemAlteration",
+                "mode": "add",
+                "predicate": [
+                    "item:id:{item|id}"
+                ],
+                "property": "other-tags",
+                "value": "bestial-mutagen-strike"
+            },
+            {
+                "hideIfDisabled": true,
+                "key": "FlatModifier",
+                "label": "PF2E.WeaponSpecialization",
+                "predicate": [
+                    {
+                        "gte": [
+                            "item:proficiency:rank",
+                            2
+                        ]
+                    }
+                ],
+                "selector": "{item|id}-damage",
+                "slug": "weapon-specialization",
+                "value": 2
+            },
+            {
+                "key": "AdjustModifier",
+                "mode": "upgrade",
+                "predicate": [
+                    "item:proficiency:rank:3"
+                ],
+                "priority": 0,
+                "selector": "{item|id}-damage",
+                "slug": "weapon-specialization",
+                "value": 3
+            },
+            {
+                "key": "AdjustModifier",
+                "mode": "upgrade",
+                "predicate": [
+                    "item:proficiency:rank:4"
+                ],
+                "priority": 0,
+                "selector": "{item|id}-damage",
+                "slug": "weapon-specialization",
+                "value": 4
+            },
+            {
+                "key": "AdjustModifier",
+                "mode": "multiply",
+                "predicate": [
+                    "feature:weapon-specialization",
+                    {
+                        "not": "feature:greater-weapon-specialization"
+                    }
+                ],
+                "relabel": "PF2E.GreaterWeaponSpecialization",
+                "selector": "{item|id}-damage",
+                "slug": "weapon-specialization",
+                "value": 2
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

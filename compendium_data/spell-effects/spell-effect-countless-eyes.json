@@ -1,0 +1,53 @@
+{
+    "_id": "BfaFe1cI9IkpvmmY",
+    "img": "icons/commodities/biological/eye-green-pink.webp",
+    "name": "Spell Effect: Countless Eyes",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Countless Eyes]</p>\n<p>You can't be flanked. When you roll a success on Seek action, you critically succeed instead.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "domain": "ac",
+                "key": "RollOption",
+                "option": "self:condition:off-guard:ignore:flanking"
+            },
+            {
+                "adjusment": {
+                    "success": "one-degree-better"
+                },
+                "key": "AdjustDegreeOfSuccess",
+                "predicate": [
+                    "action:seek"
+                ],
+                "selector": "perception"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

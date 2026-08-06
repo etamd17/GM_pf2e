@@ -1,0 +1,168 @@
+{
+    "_id": "9ZIP6gWSp9OTEu8i",
+    "img": "icons/skills/trades/academics-book-study-runes.webp",
+    "name": "Spell Effect: Pocket Library",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Pocket Library]</p>\n<p>You gain a status bonus on Recall Knowledge checks using your chosen skill. If you roll a critical failure on this check, you get a failure instead.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "hours",
+            "value": 24
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Lost Omens Rival Academies"
+        },
+        "rules": [
+            {
+                "key": "RollOption",
+                "option": "pocket-library",
+                "toggleable": true
+            },
+            {
+                "choices": [
+                    {
+                        "label": "PF2E.Skill.Arcana",
+                        "predicate": [
+                            {
+                                "gte": [
+                                    "skill:arcana:rank",
+                                    1
+                                ]
+                            }
+                        ],
+                        "value": "arcana"
+                    },
+                    {
+                        "label": "PF2E.Skill.Crafting",
+                        "predicate": [
+                            {
+                                "gte": [
+                                    "skill:crafting:rank",
+                                    1
+                                ]
+                            }
+                        ],
+                        "value": "crafting"
+                    },
+                    {
+                        "label": "PF2E.Skill.Medicine",
+                        "predicate": [
+                            {
+                                "gte": [
+                                    "skill:medicine:rank",
+                                    1
+                                ]
+                            }
+                        ],
+                        "value": "medicine"
+                    },
+                    {
+                        "label": "PF2E.Skill.Nature",
+                        "predicate": [
+                            {
+                                "gte": [
+                                    "skill:nature:rank",
+                                    1
+                                ]
+                            }
+                        ],
+                        "value": "nature"
+                    },
+                    {
+                        "label": "PF2E.Skill.Occultism",
+                        "predicate": [
+                            {
+                                "gte": [
+                                    "skill:occultism:rank",
+                                    1
+                                ]
+                            }
+                        ],
+                        "value": "occultism"
+                    },
+                    {
+                        "label": "PF2E.Skill.Religion",
+                        "predicate": [
+                            {
+                                "gte": [
+                                    "skill:religion:rank",
+                                    1
+                                ]
+                            }
+                        ],
+                        "value": "religion"
+                    },
+                    {
+                        "label": "PF2E.Skill.Society",
+                        "predicate": [
+                            {
+                                "gte": [
+                                    "skill:society:rank",
+                                    1
+                                ]
+                            }
+                        ],
+                        "value": "society"
+                    }
+                ],
+                "flag": "skill",
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Prompt.Skill"
+            },
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "action:recall-knowledge",
+                    "pocket-library",
+                    {
+                        "gte": [
+                            "hands-free",
+                            1
+                        ]
+                    }
+                ],
+                "selector": "{item|flags.pf2e.rulesSelections.skill}",
+                "type": "status",
+                "value": "1+floor(@item.level/3)"
+            },
+            {
+                "adjustment": {
+                    "criticalFailure": "one-degree-better"
+                },
+                "key": "AdjustDegreeOfSuccess",
+                "predicate": [
+                    "action:recall-knowledge",
+                    "pocket-library",
+                    {
+                        "gte": [
+                            "hands-free",
+                            1
+                        ]
+                    }
+                ],
+                "selector": "{item|flags.pf2e.rulesSelections.skill}",
+                "type": "skill"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

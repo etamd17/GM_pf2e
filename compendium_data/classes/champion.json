@@ -1,0 +1,245 @@
+{
+    "_id": "x8iwnpdLbfcoZkHA",
+    "img": "systems/pf2e/icons/classes/champion.webp",
+    "name": "Champion",
+    "system": {
+        "ancestryFeatLevels": {
+            "value": [
+                1,
+                5,
+                9,
+                13,
+                17
+            ]
+        },
+        "attacks": {
+            "advanced": 0,
+            "martial": 1,
+            "other": {
+                "name": "",
+                "rank": 0
+            },
+            "simple": 1,
+            "unarmed": 1
+        },
+        "classFeatLevels": {
+            "value": [
+                1,
+                2,
+                4,
+                6,
+                8,
+                10,
+                12,
+                14,
+                16,
+                18,
+                20
+            ]
+        },
+        "defenses": {
+            "heavy": 1,
+            "light": 1,
+            "medium": 1,
+            "unarmored": 1
+        },
+        "description": {
+            "value": "<p><em>You are an emissary of a deity, a devoted servant who has taken up a weighty mantle, and you adhere to a code that holds you apart from those around you. While champions exist for every alignment, as a champion of good, you provide certainty and hope to the innocent. You have powerful defenses that you share freely with your allies and innocent bystanders, as well as holy power you use to end the threat of evil. Your devotion even attracts the attention of holy spirits who aid you on your journey.</em></p>\n<p><em>@UUID[Compendium.pf2e.journals.JournalEntry.kzxu2dI7tFxv6Ix6.JournalEntryPage.rebppVgBVi8J6TT2]{Champion}</em></p>"
+        },
+        "generalFeatLevels": {
+            "value": [
+                3,
+                7,
+                11,
+                15,
+                19
+            ]
+        },
+        "hp": 10,
+        "items": {
+            "06620": {
+                "img": "icons/equipment/chest/breastplate-banded-steel-gold.webp",
+                "level": 7,
+                "name": "Armor Expertise",
+                "uuid": "Compendium.pf2e.classfeatures.Item.Armor Expertise"
+            },
+            "1EIub": {
+                "img": "icons/magic/holy/prayer-hands-glowing-yellow-white.webp",
+                "level": 9,
+                "name": "Champion Expertise",
+                "uuid": "Compendium.pf2e.classfeatures.Item.Champion Expertise"
+            },
+            "1lzo3": {
+                "img": "icons/magic/symbols/symbol-lightning-bolt.webp",
+                "level": 9,
+                "name": "Reflex Expertise",
+                "uuid": "Compendium.pf2e.classfeatures.Item.Reflex Expertise"
+            },
+            "467es": {
+                "img": "icons/magic/nature/symbol-sun-yellow.webp",
+                "level": 17,
+                "name": "Champion Mastery",
+                "uuid": "Compendium.pf2e.classfeatures.Item.Champion Mastery"
+            },
+            "5z8hr": {
+                "img": "systems/pf2e/icons/features/classes/weapon-specialization.webp",
+                "level": 7,
+                "name": "Weapon Specialization",
+                "uuid": "Compendium.pf2e.classfeatures.Item.Weapon Specialization"
+            },
+            "7OlZe": {
+                "img": "systems/pf2e/icons/features/classes/deity.webp",
+                "level": 1,
+                "name": "Deity (Champion)",
+                "uuid": "Compendium.pf2e.classfeatures.Item.Deity (Champion)"
+            },
+            "8tXhz": {
+                "img": "icons/sundries/flags/banner-symbol-sun-gold-red.webp",
+                "level": 1,
+                "name": "Cause",
+                "uuid": "Compendium.pf2e.classfeatures.Item.Cause"
+            },
+            "967sh": {
+                "img": "icons/equipment/head/greathelm-banded-steel.webp",
+                "level": 17,
+                "name": "Legendary Armor",
+                "uuid": "Compendium.pf2e.classfeatures.Item.Legendary Armor"
+            },
+            "F0OhR": {
+                "img": "icons/skills/melee/swords-parry-block-yellow.webp",
+                "level": 11,
+                "name": "Exalted Reaction",
+                "uuid": "Compendium.pf2e.classfeatures.Item.Exalted Reaction"
+            },
+            "Kj8pb": {
+                "img": "icons/magic/light/explosion-star-glow-orange.webp",
+                "level": 1,
+                "name": "Devotion Spells",
+                "uuid": "Compendium.pf2e.classfeatures.Item.Devotion Spells"
+            },
+            "THFFj": {
+                "img": "icons/equipment/shield/round-wooden-boss-gold-brown.webp",
+                "level": 1,
+                "name": "Shield Block",
+                "uuid": "Compendium.pf2e.classfeatures.Item.Shield Block"
+            },
+            "UVWUN": {
+                "img": "icons/magic/light/explosion-star-glow-silhouette.webp",
+                "level": 3,
+                "name": "Blessing of the Devoted",
+                "uuid": "Compendium.pf2e.classfeatures.Item.Blessing of the Devoted"
+            },
+            "d0us1": {
+                "img": "icons/magic/holy/angel-winged-humanoid-blue.webp",
+                "level": 11,
+                "name": "Divine Will",
+                "uuid": "Compendium.pf2e.classfeatures.Item.Divine Will"
+            },
+            "gzf67": {
+                "img": "icons/skills/melee/strike-sword-dagger-runes-yellow.webp",
+                "level": 9,
+                "name": "Relentless Reaction",
+                "uuid": "Compendium.pf2e.classfeatures.Item.Relentless Reaction"
+            },
+            "m8rj4": {
+                "img": "systems/pf2e/icons/features/classes/weapon-expertise.webp",
+                "level": 5,
+                "name": "Weapon Expertise",
+                "uuid": "Compendium.pf2e.classfeatures.Item.Weapon Expertise"
+            },
+            "nT8sV": {
+                "img": "icons/creatures/eyes/human-single-blue.webp",
+                "level": 11,
+                "name": "Perception Expertise",
+                "uuid": "Compendium.pf2e.classfeatures.Item.Perception Expertise"
+            },
+            "pgk3u": {
+                "img": "icons/equipment/chest/breastplate-sculpted-grey.webp",
+                "level": 13,
+                "name": "Armor Mastery",
+                "uuid": "Compendium.pf2e.classfeatures.Item.Armor Mastery"
+            },
+            "r3xJI": {
+                "img": "icons/magic/holy/angel-wings-gray.webp",
+                "level": 9,
+                "name": "Sacred Body",
+                "uuid": "Compendium.pf2e.classfeatures.Item.Sacred Body"
+            },
+            "r4pcs": {
+                "img": "icons/skills/melee/unarmed-punch-fist-yellow-red.webp",
+                "level": 19,
+                "name": "Hero's Defiance",
+                "uuid": "Compendium.pf2e.classfeatures.Item.Hero's Defiance"
+            },
+            "rPn69": {
+                "img": "icons/skills/melee/hand-grip-sword-orange.webp",
+                "level": 15,
+                "name": "Greater Weapon Specialization",
+                "uuid": "Compendium.pf2e.classfeatures.Item.Greater Weapon Specialization"
+            },
+            "rwf2s": {
+                "img": "systems/pf2e/icons/features/classes/weapon-mastery.webp",
+                "level": 13,
+                "name": "Weapon Mastery",
+                "uuid": "Compendium.pf2e.classfeatures.Item.Martial Weapon Mastery"
+            }
+        },
+        "keyAbility": {
+            "value": [
+                "dex",
+                "str"
+            ]
+        },
+        "perception": 1,
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [],
+        "savingThrows": {
+            "fortitude": 2,
+            "reflex": 1,
+            "will": 2
+        },
+        "skillFeatLevels": {
+            "value": [
+                2,
+                4,
+                6,
+                8,
+                10,
+                12,
+                14,
+                16,
+                18,
+                20
+            ]
+        },
+        "skillIncreaseLevels": {
+            "value": [
+                3,
+                5,
+                7,
+                9,
+                11,
+                13,
+                15,
+                17,
+                19
+            ]
+        },
+        "spellcasting": 1,
+        "trainedSkills": {
+            "additional": 2,
+            "value": [
+                "religion"
+            ]
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "class"
+}

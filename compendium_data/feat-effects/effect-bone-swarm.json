@@ -1,0 +1,69 @@
+{
+    "_id": "r4kb2zDepFeczMsl",
+    "img": "icons/commodities/bones/bones-stack-tan.webp",
+    "name": "Effect: Bone Swarm",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.feats-srd.Item.Bone Swarm]</p>\n<p>You become Huge, gain the swarm trait, and gain a fly Speed of 40 feet. You are immune to the grabbed, prone, and restrained conditions. You have weakness 5 to area and splash damage.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Book of the Dead"
+        },
+        "rules": [
+            {
+                "key": "Weakness",
+                "type": [
+                    "area-damage",
+                    "splash-damage"
+                ],
+                "value": 5
+            },
+            {
+                "key": "CreatureSize",
+                "value": "huge"
+            },
+            {
+                "key": "Immunity",
+                "type": [
+                    "grabbed",
+                    "prone",
+                    "restrained"
+                ]
+            },
+            {
+                "key": "BaseSpeed",
+                "selector": "fly",
+                "value": 40
+            },
+            {
+                "add": [
+                    "swarm"
+                ],
+                "key": "ActorTraits"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

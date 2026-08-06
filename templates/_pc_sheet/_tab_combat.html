@@ -1,0 +1,212 @@
+        <div id="tab-combat" data-print-title="Combat" class="tab-content sheet-page space-y-6">
+            {# Usable items — scanned from inventory client-side on load.
+               Shows a compact "Use" row for healing potions, antidotes,
+               tools, etc. so players don't have to switch to Inventory
+               tab mid-combat to grab a potion. Populated by JS. #}
+            <div id="usable-items-row" class="usable-items-row no-print" aria-label="Quick-use items from your inventory"></div>
+            {# Skill-action quick row (Wave 2 #5) — the half-dozen PF2e skill
+               actions that fire 5-10 times per combat. One click rolls the
+               check and dispatches to the GM with the target save type
+               labeled, so the GM compares to the right number. #}
+            <div id="skill-actions-row" class="skill-actions-row no-print" aria-label="Common combat skill actions"></div>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="lg:col-span-1 space-y-6">
+                    {# Armor & Equipment — was "Defenses & Saves", but the
+                       AC and Fort/Ref/Will numbers now live in the under-name
+                       strip and the equipped-armor browser is the only thing
+                       this card uniquely surfaces. Tighter card, no duplicate
+                       numbers. #}
+                    <div class="panel-card">
+                        <h3 class="section-header">Armor &amp; Equipment</h3>
+                        <div class="flex flex-col bg-gray-900 p-3 rounded border border-gray-700 shadow-inner relative">
+                            <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1 block">Equipped Armor</label>
+                            <button onclick="toggleArmorBrowser()" class="w-full bg-gray-950 border border-gray-700 rounded p-2 text-sm text-amber-500 font-bold text-left hover:border-amber-500/50 transition-colors">
+                                {{ pc.armor_name or 'Unarmored' }} (AC +{{ pc.ac_item|default(0) }})
+                                <span class="text-gray-600 text-[10px] float-right mt-1">▼ Browse</span>
+                            </button>
+                            {% if pc.armor_name %}
+                            <div class="grid grid-cols-3 gap-2 mt-2 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                                <div class="bg-gray-950 p-2 rounded text-center border border-gray-700"><span class="block text-gray-500 mb-0.5">Dex Cap</span><span class="text-white">+{{ pc.ac_dex_cap }}</span></div>
+                                <div class="bg-gray-950 p-2 rounded text-center border border-gray-700"><span class="block text-gray-500 mb-0.5">Str Req</span><span class="text-white">{{ pc.armor_str_req }}</span></div>
+                                {% if pc.mods.get('str', 0) >= pc.armor_str_req %}
+                                    <div class="bg-green-900/20 p-2 rounded text-center border border-green-900/50"><span class="block text-green-500/70 mb-0.5">Penalties</span><span class="text-green-400">Erased</span></div>
+                                {% else %}
+                                    <div class="bg-red-900/20 p-2 rounded text-center border border-red-900/50" title="Check / Speed Penalty"><span class="block text-red-500/70 mb-0.5">Chk/Spd</span><span class="text-red-400">{{ pc.active_armor_penalty }} / {{ pc.active_speed_penalty }}</span></div>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    {# Active Effects — sheet-level spell/feat/item buffs.
+                       The list is server-rendered on first paint so a
+                       slow SSE reconnect doesn't show an empty card; the
+                       SSE pc_update handler repaints it in place. #}
+                    <div class="panel-card" id="active-effects-card">
+                        <div class="flex justify-between items-center mb-2">
+                            <h3 class="section-header" style="margin:0; padding:0; border:none;">Active Effects</h3>
+                            <button onclick="openActiveEffectPicker()" class="action-btn" style="font-size:10px; padding:4px 8px;" title="Apply a spell / feat / item buff to yourself">+ Add</button>
+                        </div>
+                        <p class="text-[10px] mb-2" style="color:var(--text-muted);">
+                            Spell, feat, and item buffs currently affecting you. Stat penalties from conditions are tracked separately above.
+                        </p>
+                        <div id="active-effects-list" class="flex flex-col gap-1.5">
+                            {# Initial render handled by JS once the page loads —
+                               keeps the server template lean and the JS as the
+                               single source of truth for the row layout. #}
+                        </div>
+                        <div id="active-effects-empty" class="text-[11px] py-3 text-center hidden"
+                             style="color:var(--text-muted); font-style:italic;">
+                            No active effects — drag a spell from Magic, or use + Add.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="lg:col-span-2 space-y-6">
+                    <div class="panel-card">
+                        <div class="flex justify-between items-center mb-4 pb-2 flex-wrap gap-2" style="border-bottom:2px solid var(--accent-gold);">
+                            <h3 class="section-header" style="border:none; margin:0; padding:0;">Strikes & Weapons</h3>
+                            <div class="flex items-center gap-2 flex-wrap">
+                                {# Mirror of the header reaction chip — kept in sync via JS (see player_sheet.html reaction wiring).
+                                   Lives in the Strikes card so the player never has to scroll up mid-attack to remember
+                                   whether they spent their reaction on Shield Block / AoO / Liberating Step / etc. #}
+                                <button id="reaction-chip-strikes" type="button" onclick="useReaction()"
+                                        class="reaction-chip-mirror"
+                                        title="PF2e: 1 reaction per round. Toggles in sync with the header chip."
+                                        data-reaction-used="{{ 'true' if pc.reaction_used else 'false' }}">
+                                    <span class="reaction-dot" aria-hidden="true"></span>
+                                    <span class="reaction-mirror-lbl">{% if pc.reaction_used %}Reaction Spent{% else %}Reaction Ready{% endif %}</span>
+                                </button>
+                                <button onclick="openWeaponBrowser()" class="action-btn primary">
+                                    + Equip Weapon
+                                </button>
+                            </div>
+                        </div>
+
+                        {# PF2e core reminder — new players routinely forget the
+                           ±10 crit rule and the −5 / −10 MAP penalties. Pathbuilder
+                           exposes the same reference on the attacks panel. Folded
+                           behind the same class-cheatsheet <details> pattern used
+                           on the Feats tab — closed by default so it stops eating
+                           space for players who already know the math. #}
+                        <details class="class-cheatsheet mb-3">
+                            <summary>Crit &amp; MAP Rules Reminder</summary>
+                            <div class="class-cheatsheet-body flex flex-wrap items-center gap-x-4 gap-y-1"
+                                 title="Critical hit: roll exceeds target DC by 10, OR a nat 20 that hits. Critical miss: roll falls 10 below DC, OR a nat 1 that misses. Multiple Attack Penalty stacks each Strike.">
+                                <span><span style="color:#FBBF24;">Crit</span> = beat target DC by 10 (or nat 20 on hit)</span>
+                                <span><span style="color:#F87171;">Crit Fail</span> = miss DC by 10 (or nat 1 on miss)</span>
+                                <span><span style="color:var(--accent-gold);">MAP</span> −5 / −10 (−4 / −8 on agile)</span>
+                            </div>
+                        </details>
+
+                        <div id="forge-ui" class="hidden bg-gray-900 border border-amber-500/30 rounded p-4 mb-6">
+                            <h4 class="text-amber-400 font-bold mb-3">Weapon Forge</h4>
+                            <p class="text-xs text-gray-400 mb-3 italic">ABP is enabled. Matrix attack potency applies automatically.</p>
+                            <div class="grid grid-cols-2 gap-3 mb-4">
+                                <div class="col-span-2">
+                                    <label class="block text-[10px] text-gray-500 uppercase font-bold mb-1">Base Weapon / Spell</label>
+                                    <select id="forge-base" onchange="calcForge()" class="w-full bg-gray-950 border border-gray-700 text-white rounded p-2 text-sm focus:border-amber-500"></select>
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] text-gray-500 uppercase font-bold mb-1">Attack Stat</label>
+                                    <select id="forge-stat" onchange="calcForge()" class="w-full bg-gray-950 border border-gray-700 text-white rounded p-2 text-sm focus:border-amber-500">
+                                        <option value="str">Strength</option>
+                                        <option value="dex">Dexterity</option>
+                                        <option value="con">Constitution</option>
+                                        <option value="int">Intelligence</option>
+                                        <option value="wis">Wisdom</option>
+                                        <option value="cha">Charisma</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] text-gray-500 uppercase font-bold mb-1">Proficiency Rank</label>
+                                    <select id="forge-prof" onchange="calcForge()" class="w-full bg-gray-950 border border-gray-700 text-white rounded p-2 text-sm focus:border-amber-500">
+                                        <option value="0">Untrained</option>
+                                        <option value="2" selected>Trained</option>
+                                        <option value="4">Expert</option>
+                                        <option value="6">Master</option>
+                                        <option value="8">Legendary</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <button onclick="saveForgedWeapon()" id="btn-forge-save" class="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded font-bold shadow-lg transition-colors w-full">Equip Weapon</button>
+                        </div>
+
+                        {% if pc.attacks %}
+                            <div class="space-y-3">
+                            {% for attack in pc.attacks %}
+                                <div class="ds-surface-sunken p-4 group" style="border-radius:var(--radius-md);" data-weapon-card data-attack-name="{{ attack.name }}">
+                                <div class="flex justify-between items-start mb-2">
+                                    <div class="flex items-center gap-2">
+                                        {# Strike action cost — unified onto the shared action_pips()
+                                           diamond-pip macro (audit N5/F3) instead of the retired
+                                           .action-cost badge, so Strikes read the same glyph
+                                           language as Feats/Magic. A PF2e Strike always costs
+                                           exactly 1 action (MAP applies within it), so '◆'. #}
+                                        {{ action_pips('◆') }}
+                                        <span class="font-header font-bold block leading-none" style="font-size:17px; letter-spacing:0.02em; color:var(--gilt);">{{ attack.name }}</span>
+                                        {% if attack.has_two_hand %}
+                                        <button data-twohand-btn onclick="toggleTwoHand('{{ attack.name|replace("'", "\\'") }}')" class="px-2 py-0.5 rounded font-bold uppercase tracking-wider border transition-colors {% if attack.is_two_handed %}bg-amber-600 text-white border-amber-500{% else %}text-gray-400 border-gray-600 hover:text-white{% endif %}" style="font-size:var(--text-2xs); background:{% if not attack.is_two_handed %}var(--surface-overlay){% endif %};">
+                                            2H
+                                        </button>
+                                        {% endif %}
+                                    </div>
+                                    <button onclick="deleteWeapon('{{ attack.name|replace("'", "\\'") }}')" class="text-gray-600 hover:text-red-500 transition-colors px-1 opacity-0 group-hover:opacity-100 text-xs font-bold" title="Unequip">
+                                        DROP
+                                    </button>
+                                </div>
+                                {# Paizo-style compact summary line. Primary hit bonus + damage expression read as a single statline, separating "what are my numbers" from the interactive 1st/2nd/3rd MAP buttons below. #}
+                                <div class="weapon-statline" style="font-family:var(--font-flavor); font-size:13px; color:var(--text-secondary); margin-bottom:8px; line-height:1.4;">
+                                    {% if attack.strikes and attack.strikes[0] %}<span data-tohit-label style="font-family:var(--font-display); color:var(--text-primary); font-variant-numeric:lining-nums tabular-nums; font-weight:700;">{{ attack.strikes[0].label }}</span> to hit<span style="color:var(--t4);"> &middot; </span>{% endif %}
+                                    <span data-damage-label style="font-family:var(--font-display); font-variant-numeric:lining-nums tabular-nums;">{{ attack.damage }}</span>
+                                    {% if attack.damage_type %} {{ attack.damage_type }}{% endif %}
+                                </div>
+                                {% if attack.traits %}
+                                <div class="mb-3">
+                                    {% for t in attack.traits %}
+                                    {% set t_lower = t|lower %}
+                                    <span class="trait-pill {% if 'agile' in t_lower %}agile{% elif 'finesse' in t_lower %}finesse{% elif 'deadly' in t_lower or 'fatal' in t_lower %}deadly{% elif 'ranged' in t_lower or 'thrown' in t_lower or 'propulsive' in t_lower %}ranged{% elif 'magical' in t_lower or 'arcane' in t_lower or 'divine' in t_lower or 'occult' in t_lower or 'primal' in t_lower %}magical{% endif %}">{{ t }}</span>
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+
+                                    <div class="flex flex-col md:flex-row gap-3 w-full">
+                                        <div class="flex flex-1 gap-1">
+                                            {% for strike in attack.strikes %}
+                                            <button data-strike-btn="{{ loop.index0 }}" onclick="rollAttack('{{ attack.name|replace("'", "\\'") }}', {{ strike.mod }}, '{{ attack.damage }}')"
+                                                    class="flex-1 text-white py-2 rounded text-sm transition-all hover:scale-105 transform"
+                                                    style="background:var(--surface-overlay); border:1px solid var(--border-default); border-left:3px solid {% if loop.index0 == 0 %}var(--color-ref){% elif loop.index0 == 1 %}var(--accent-gold){% else %}var(--color-danger){% endif %};"
+                                                    aria-label="{{ attack.name }} strike {{ loop.index }} at {{ strike.label }}"
+                                                    title="{% if loop.index0 == 0 %}1st Strike {{ strike.label }} — {{ attack.breakdown }}{% else %}Strike {{ loop.index }} {{ strike.label }} — {{ attack.breakdown }} · MAP {{ strike.map_label }}{% endif %}">
+                                                <span class="block font-bold uppercase tracking-widest mb-1" style="font-size:var(--text-2xs); color:{% if loop.index0 == 0 %}var(--color-ref){% elif loop.index0 == 1 %}var(--accent-gold){% else %}var(--color-danger){% endif %};">
+                                                    {% if loop.index0 == 0 %}1st{% elif loop.index0 == 1 %}2nd{% else %}3rd{% endif %}
+                                                </span>
+                                                <span data-strike-label class="block text-lg font-bold leading-none">{{ strike.label }}</span>
+                                                {# MAP delta — show on all three buttons so 1st reads as parallel to 2nd/3rd.
+                                                   1st: "MAP +0" (no penalty); 2nd/3rd show the actual −5/−10 or agile −4/−8. #}
+                                                <span class="block text-[9px] mt-0.5 opacity-85" style="color:{% if loop.index0 == 0 %}var(--text-muted){% else %}var(--color-danger){% endif %}; font-weight:700;">
+                                                    MAP {% if loop.index0 == 0 %}+0{% else %}{{ strike.map_label }}{% endif %}
+                                                </span>
+                                            </button>
+                                            {% endfor %}
+                                        </div>
+                                        <button data-damage-btn onclick="rollDamage('{{ attack.name|replace("'", "\\'") }}', '{{ attack.damage }}')" class="md:w-40 px-3 py-2 rounded transition-colors flex flex-col justify-center items-center relative overflow-hidden" style="background:rgba(107,21,37,0.2); border:1px solid rgba(251,113,133,0.2); color:#FDA4AF;">
+                                            <span class="font-bold uppercase tracking-wider" style="font-size:var(--text-2xs); color:var(--color-danger);">Damage</span>
+                                            <span data-damage-text class="text-sm font-bold">{{ attack.damage }}</span>
+                                            {% if attack.crit_effects %}
+                                            <div class="absolute bottom-0 w-full py-0.5 text-center" style="background:rgba(107,21,37,0.3); border-top:1px solid rgba(251,113,133,0.15);">
+                                                <span class="font-bold uppercase tracking-widest" style="font-size:var(--text-2xs); color:var(--accent-gold);">{{ attack.crit_effects }}</span>
+                                            </div>
+                                            {% endif %}
+                                        </button>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="text-center italic p-4 ds-surface-sunken" style="color:var(--text-muted); border-radius:var(--radius-md);">No weapons equipped.</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>

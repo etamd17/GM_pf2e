@@ -1,0 +1,215 @@
+[
+ {
+  "_id": "qOXZSTYaP6jhnvBV",
+  "description": "",
+  "displayRoll": false,
+  "flags": {},
+  "folder": null,
+  "formula": "1d20",
+  "img": "icons/skills/wounds/injury-pain-body-orange.webp",
+  "name": "Injury Duration",
+  "replacement": true,
+  "results": [
+   {
+    "_id": "CRw5Bg39c9YsjqIb",
+    "documentId": null,
+    "drawn": false,
+    "flags": {
+     "cosmere-rpg": {
+      "injury-data": {
+       "type": "death"
+      }
+     }
+    },
+    "img": "icons/magic/death/skeleton-skull-soul-blue.webp",
+    "range": [
+     -100,
+     -6
+    ],
+    "text": "<strong>Death.</strong> The character dies.",
+    "type": "text",
+    "weight": 1
+   },
+   {
+    "_id": "IiPgT9EZYnvd84l7",
+    "documentId": null,
+    "drawn": false,
+    "flags": {
+     "cosmere-rpg": {
+      "injury-data": {
+       "type": "permanent_injury"
+      }
+     }
+    },
+    "img": "icons/skills/wounds/bone-broken-marrow-red.webp",
+    "range": [
+     -5,
+     0
+    ],
+    "text": "<strong>Permanent Injury.</strong> The character suffers a permanent injury.",
+    "type": "text",
+    "weight": 1
+   },
+   {
+    "_id": "abMYSaKItDQ6UCpO",
+    "documentId": null,
+    "drawn": false,
+    "flags": {
+     "cosmere-rpg": {
+      "injury-data": {
+       "durationFormula": "6d6",
+       "type": "vicious_injury"
+      }
+     }
+    },
+    "img": "icons/skills/wounds/injury-hand-blood-red.webp",
+    "range": [
+     1,
+     5
+    ],
+    "text": "<strong>Vicious Injury.</strong> The character suffers a temporary injury with a duration of [[6d6]] days.",
+    "type": "text",
+    "weight": 1
+   },
+   {
+    "_id": "WnBhe042FZVoih9R",
+    "documentId": null,
+    "drawn": false,
+    "flags": {
+     "cosmere-rpg": {
+      "injury-data": {
+       "durationFormula": "1d6",
+       "type": "shallow_injury"
+      }
+     }
+    },
+    "img": "icons/skills/wounds/blood-spurt-spray-red.webp",
+    "range": [
+     6,
+     15
+    ],
+    "text": "<strong>Shallow Injury.</strong> The character suffers a temporary injury with a duration of [[1d6]] days.",
+    "type": "text",
+    "weight": 1
+   },
+   {
+    "_id": "EkpBg0WjoIV5Xfdg",
+    "documentId": null,
+    "drawn": false,
+    "flags": {
+     "cosmere-rpg": {
+      "injury-data": {
+       "durationFormula": "1",
+       "type": "flesh_wound"
+      }
+     }
+    },
+    "img": "icons/skills/wounds/injury-triple-slash-bleed.webp",
+    "range": [
+     16,
+     100
+    ],
+    "text": "<strong>Flesh Wound.</strong> The character suffers a temporary injury for the remainder of the day.",
+    "type": "text",
+    "weight": 1
+   }
+  ]
+ },
+ {
+  "_id": "VZKozajxpYEmjeL5",
+  "description": "",
+  "displayRoll": true,
+  "flags": {},
+  "folder": null,
+  "formula": "1d8",
+  "img": "icons/skills/wounds/bone-broken-marrow-yellow.webp",
+  "name": "Injury Effects",
+  "replacement": true,
+  "results": [
+   {
+    "_id": "gpJNDSRsoaWUM0T0",
+    "documentId": null,
+    "drawn": false,
+    "flags": {},
+    "img": "icons/svg/sleep.svg",
+    "range": [
+     1,
+     2
+    ],
+    "text": "<strong>Exausted (-1)</strong> Any Injury that lowers your overall stamina.",
+    "type": "text",
+    "weight": 1
+   },
+   {
+    "_id": "hp5hWMYB10llrOtH",
+    "documentId": null,
+    "drawn": false,
+    "flags": {},
+    "img": "icons/svg/sleep.svg",
+    "range": [
+     3,
+     3
+    ],
+    "text": "<strong>Exausted (-2)</strong> Any Injury that lowers your overall stamina.",
+    "type": "text",
+    "weight": 1
+   },
+   {
+    "_id": "fpye65P7pqocOxCq",
+    "documentId": null,
+    "drawn": false,
+    "flags": {},
+    "img": "icons/svg/net.svg",
+    "range": [
+     4,
+     5
+    ],
+    "text": "<strong>Slowed</strong> Injured leg or foot, or any injury that lowers your overall speed.",
+    "type": "text",
+    "weight": 1
+   },
+   {
+    "_id": "K6q4agriRKoldHkS",
+    "documentId": null,
+    "drawn": false,
+    "flags": {},
+    "img": "icons/svg/stoned.svg",
+    "range": [
+     6,
+     6
+    ],
+    "text": "<strong>Disoriented</strong> Injured head, or widespread injury that overwhelms your senses.",
+    "type": "text",
+    "weight": 1
+   },
+   {
+    "_id": "Xsus0oW97bVGoZEW",
+    "documentId": null,
+    "drawn": false,
+    "flags": {},
+    "img": "icons/svg/terror.svg",
+    "range": [
+     7,
+     7
+    ],
+    "text": "<strong>Surprised</strong> Overwhelmed due to the shock of an injury.",
+    "type": "text",
+    "weight": 1
+   },
+   {
+    "_id": "W2tWPsVNKlnoXpIo",
+    "documentId": null,
+    "drawn": false,
+    "flags": {},
+    "img": "icons/svg/cancel.svg",
+    "range": [
+     8,
+     8
+    ],
+    "text": "<strong>Can only use one hand</strong> Injured arm or hand, or any injury that lowers your overall coordination.",
+    "type": "text",
+    "weight": 1
+   }
+  ]
+ }
+]

@@ -1,0 +1,54 @@
+{
+    "_id": "nlaxROgSSLVHZ1hx",
+    "img": "icons/skills/melee/shield-block-fire-orange.webp",
+    "name": "Effect: Monster Warden",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.feats-srd.Item.Monster Warden]</p>\n<p>You gain a +2 circumstance bonus either to your AC the next time the assessed creature attacks you or to your next saving throw against an effect from that particular creature.</p>"
+        },
+        "duration": {
+            "expiry": null,
+            "sustained": false,
+            "unit": "unlimited",
+            "value": -1
+        },
+        "level": {
+            "value": 2
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core"
+        },
+        "rules": [
+            {
+                "key": "TokenMark",
+                "slug": "monster-warden"
+            },
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "origin:mark:monster-warden"
+                ],
+                "selector": [
+                    "ac",
+                    "saving-throw"
+                ],
+                "type": "circumstance",
+                "value": 2
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

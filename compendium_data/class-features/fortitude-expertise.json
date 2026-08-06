@@ -1,0 +1,67 @@
+{
+    "_id": "F57Na5VxfBp56kke",
+    "img": "icons/magic/life/cross-explosion-burst-green.webp",
+    "name": "Fortitude Expertise",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p><strong>Animist</strong> Spiritual energy reinforces your body, making you more resilient. Your proficiency rank for Fortitude saves increases to expert.</p>\n<p><strong>Bard, Commander, Investigator, Swashbuckler</strong> Your physique has grown hardy in your adventures. Your proficiency rank for Fortitude saves increases to expert.</p>\n<p><strong>Druid</strong> Adventures have made your physique more hardy. Your proficiency rank for Fortitude saves increases to expert.</p>"
+        },
+        "level": {
+            "value": 3
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core"
+        },
+        "rules": [
+            {
+                "itemId": "{item|id}",
+                "key": "ItemAlteration",
+                "mode": "override",
+                "property": "description",
+                "value": [
+                    {
+                        "text": "PF2E.SpecificRule.ClassFeatures.FortitudeExpertise.{actor|class.slug}.Description"
+                    }
+                ]
+            },
+            {
+                "itemId": "{item|id}",
+                "key": "ItemAlteration",
+                "mode": "add",
+                "property": "traits",
+                "value": "{actor|class.slug}"
+            }
+        ],
+        "subfeatures": {
+            "proficiencies": {
+                "fortitude": {
+                    "rank": 2
+                }
+            }
+        },
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "animist",
+                "bard",
+                "commander",
+                "druid",
+                "investigator",
+                "swashbuckler"
+            ]
+        }
+    },
+    "type": "feat"
+}

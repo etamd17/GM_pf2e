@@ -1,0 +1,46 @@
+{
+    "_id": "4ag0OHKfjROmR4Pm",
+    "img": "icons/creatures/eyes/human-single-brown.webp",
+    "name": "Spell Effect: Anticipate Peril",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Anticipate Peril]</p>\n<p>You gain a status bonus to your next initiative roll.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 10
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Lost Omens Divine Mysteries"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "removeAfterRoll": [
+                    "check:type:initiative"
+                ],
+                "selector": "initiative",
+                "type": "status",
+                "value": "clamped(ceil(@item.level / 2), 1, 4)"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

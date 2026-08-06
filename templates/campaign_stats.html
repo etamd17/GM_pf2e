@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Campaign Stats{% endblock %}
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="font-display text-xl" style="color:var(--gilt-100); letter-spacing:0.04em;">Campaign Stats</h1>
+            <p class="text-xs" style="color:var(--text-on-dark-3); margin-top:2px;">Lifetime counters across all sessions</p>
+        </div>
+        <a href="/gm" class="text-xs px-3 py-1.5 rounded" style="color:var(--text-on-dark-2); border:1px solid var(--border-card);">Back to Hub</a>
+    </div>
+
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+        <div class="stat-card">
+            <div class="stat-value">{{ stats.get('sessions_started', 0) }}</div>
+            <div class="stat-label">Sessions Started</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ stats.get('total_rolls', 0) }}</div>
+            <div class="stat-label">Total Rolls</div>
+        </div>
+        <div class="stat-card accent">
+            <div class="stat-value">{{ stats.get('total_crits', 0) }}</div>
+            <div class="stat-label">Critical Hits</div>
+        </div>
+        <div class="stat-card danger">
+            <div class="stat-value">{{ stats.get('total_fumbles', 0) }}</div>
+            <div class="stat-label">Critical Failures</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ stats.get('total_damage_dealt', 0) }}</div>
+            <div class="stat-label">Damage Dealt</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ stats.get('total_healing', 0) }}</div>
+            <div class="stat-label">Healing Done</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ stats.get('total_combat_rounds', 0) }}</div>
+            <div class="stat-label">Combat Rounds</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ stats.get('conditions_applied', 0) }}</div>
+            <div class="stat-label">Conditions Applied</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ stats.get('hero_points_awarded', 0) }}</div>
+            <div class="stat-label">Hero Points Awarded</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ stats.get('chat_messages_sent', 0) }}</div>
+            <div class="stat-label">Chat Messages</div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .stat-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-card);
+        border-radius: var(--r-md);
+        padding: var(--sp-5) var(--sp-4);
+        text-align: center;
+    }
+    .stat-card .stat-value {
+        font-family: var(--font-display);
+        font-size: 32px;
+        font-weight: 700;
+        color: var(--text-on-dark);
+        line-height: 1;
+        margin-bottom: var(--sp-2);
+    }
+    .stat-card.accent .stat-value { color: var(--gilt-200); }
+    .stat-card.danger .stat-value { color: var(--ruby-200); }
+    .stat-card .stat-label {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--text-on-dark-3);
+    }
+</style>
+{% endblock %}

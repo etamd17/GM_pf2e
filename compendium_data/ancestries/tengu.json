@@ -1,0 +1,82 @@
+{
+    "_id": "18xDKYPDBLEv2myX",
+    "img": "systems/pf2e/icons/ancestries/tengu.webp",
+    "name": "Tengu",
+    "system": {
+        "additionalLanguages": {
+            "count": 0,
+            "custom": "",
+            "value": [
+                "dwarven",
+                "elven",
+                "fey",
+                "gnomish",
+                "goblin",
+                "halfling"
+            ]
+        },
+        "boosts": {
+            "0": {
+                "value": [
+                    "dex"
+                ]
+            },
+            "1": {
+                "value": []
+            },
+            "2": {
+                "value": [
+                    "str",
+                    "dex",
+                    "con",
+                    "int",
+                    "wis",
+                    "cha"
+                ]
+            }
+        },
+        "description": {
+            "value": "<p><em>Tengu are survivalists and conversationalists, equally at home living off the wilderness and finding a niche in dense cities. They accumulate knowledge, tools, and companions, adding them to their collection as they travel.</em></p>\n<p>@UUID[Compendium.pf2e.journals.JournalEntry.45SK8rdbbxvEHfMn.JournalEntryPage.YGIwmuVOJI7uNhGM]{Tengu}</p>"
+        },
+        "flaws": {
+            "0": {
+                "value": []
+            }
+        },
+        "hands": 2,
+        "hp": 6,
+        "items": {
+            "vo9ge": {
+                "img": "systems/pf2e/icons/features/ancestry/sharp-beak.webp",
+                "level": 0,
+                "name": "Sharp Beak",
+                "uuid": "Compendium.pf2e.ancestryfeatures.Item.Sharp Beak"
+            }
+        },
+        "languages": {
+            "custom": "",
+            "value": [
+                "common",
+                "tengu"
+            ]
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "reach": 5,
+        "rules": [],
+        "size": "med",
+        "speed": 25,
+        "traits": {
+            "rarity": "uncommon",
+            "value": [
+                "humanoid",
+                "tengu"
+            ]
+        },
+        "vision": "low-light-vision"
+    },
+    "type": "ancestry"
+}

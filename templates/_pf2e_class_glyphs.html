@@ -1,0 +1,25 @@
+{# ════════════════════════════════════════════════════════════════════════════
+   PF2E CLASS RUNE SPRITE
+   Original monoline "carved rune" marks (ring + inner mark) for the party's
+   classes, plus a generic adventurer fallback so an unmapped class never
+   renders empty. One shared geometric language, parallel to the Cosmere
+   glyph sprite (_cosmere_glyphs.html) — NOT copies of published iconography.
+
+   Include once per page; reference with:
+     <svg class="rg"><use href="#rn-champion"></use></svg>
+   Strokes inherit currentColor; size via CSS on .rg.
+   rn-flame is the Hero Point flame (filled, not stroked).
+   ════════════════════════════════════════════════════════════════════════════ #}
+<svg width="0" height="0" style="position:absolute;width:0;height:0;overflow:hidden;" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="rn-champion" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6l4.5 1.8V12c0 3.2-2 5.3-4.5 6.5C9.5 17.3 7.5 15.2 7.5 12V7.8z"/><path d="M12 9.5v5M9.8 12h4.4"/></symbol>
+    <symbol id="rn-kineticist" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6.5l3 3-3 3-3-3z"/><path d="M7 16c1.6-1.2 3.2.8 5 0s3.4-1.2 5 0"/></symbol>
+    <symbol id="rn-cleric" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 7.5v9M7.5 12h9"/><path d="M9 9L7.6 7.6M15 9l1.4-1.4M9 15l-1.4 1.4M15 15l1.4 1.4"/></symbol>
+    <symbol id="rn-druid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 16c0-5 3-8 8-8 0 5-3 8-8 8z"/><path d="M9.5 14.5c2-2 4-4 6-6"/></symbol>
+    <symbol id="rn-adventurer" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6l1.8 4.2L18 12l-4.2 1.8L12 18l-1.8-4.2L6 12l4.2-1.8z"/></symbol>
+    <symbol id="rn-flame" viewBox="0 0 14 16"><path d="M7 0c1 3-3 4-3 7.5A3.5 3.5 0 0 0 7 11a2.5 2.5 0 0 0 1-4.8C9.3 7.5 10 9 10 10a3.5 3.5 0 0 1-7 0c0-1.2.5-2 1-3C4.6 5.7 6 4 7 0z"/></symbol>
+  </defs>
+</svg>
+<style>
+  .rg { width:1em; height:1em; display:inline-block; vertical-align:-0.15em; }
+</style>

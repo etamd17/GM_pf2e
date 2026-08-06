@@ -1,0 +1,64 @@
+{
+    "_id": "NMmsJyeMTawpgLVR",
+    "img": "icons/equipment/shield/heater-steel-segmented-purple.webp",
+    "name": "Effect: Resounding Bravery",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.feats-srd.Item.Resounding Bravery]</p>\n<p>You gain a +1 status bonus to saves and a number of temporary Hit Points equal to half your level. These benefits are doubled if you critically succeed against a fear effect.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 8
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core"
+        },
+        "rules": [
+            {
+                "adjustName": false,
+                "choices": [
+                    {
+                        "label": "PF2E.UI.RuleElements.ChoiceSet.YesLabel",
+                        "value": 2
+                    },
+                    {
+                        "label": "PF2E.UI.RuleElements.ChoiceSet.NoLabel",
+                        "value": 1
+                    }
+                ],
+                "flag": "bonus",
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Fighter.ResoundingBravery.Prompt"
+            },
+            {
+                "key": "FlatModifier",
+                "selector": "saving-throw",
+                "type": "status",
+                "value": "@item.flags.pf2e.rulesSelections.bonus"
+            },
+            {
+                "key": "TempHP",
+                "value": "floor((@item.flags.pf2e.rulesSelections.bonus * @actor.level) / 2)"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

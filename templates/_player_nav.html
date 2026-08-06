@@ -1,0 +1,363 @@
+{# Player bottom nav bar -- included on every player-facing page.
+   Requires: player_name (from context processor), active_player_tab (set before include).
+   Provides: turn notification (banner + chime + browser notification),
+             roll feed handler hooks, nav bar with turn indicator. #}
+{% if not is_gm and player_name %}
+<nav id="player-nav" class="player-nav" role="navigation" aria-label="Player navigation">
+    <a href="/player/sheet/{{ player_name|urlencode }}"
+       class="player-nav-tab{% if active_player_tab == 'sheet' %} active{% endif %}"
+       aria-label="Character sheet">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
+        <span>Sheet</span>
+    </a>
+    <a href="/mobile"
+       class="player-nav-tab{% if active_player_tab == 'combat' %} active{% endif %}"
+       id="nav-combat-tab"
+       aria-label="Combat tracker">
+        <svg viewBox="0 0 24 24"><path d="M14.5 2.5L12 5l-2.5-2.5L7 5l-2.5-2.5L2 5v16.5l2.5-2.5L7 21.5l2.5-2.5L12 21.5l2.5-2.5 2.5 2.5 2.5-2.5L22 21.5V5l-2.5-2.5L17 5z"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/></svg>
+        <span>Combat</span>
+        <span id="turn-alert-dot" class="turn-dot hidden"></span>
+    </a>
+    <a href="/party"
+       class="player-nav-tab{% if active_player_tab == 'party' %} active{% endif %}"
+       aria-label="Party">
+        <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span>Party</span>
+    </a>
+    <a href="/player/map"
+       class="player-nav-tab{% if request.path == '/player/map' %} active{% endif %}"
+       aria-label="Tactical map">
+        <svg viewBox="0 0 24 24"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21 3 6"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
+        <span>Map</span>
+    </a>
+    {% if chronicle_published %}
+    <a href="/chronicle"
+       class="player-nav-tab{% if request.path.startswith('/chronicle') %} active{% endif %}"
+       aria-label="Chronicle">
+        <svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+        <span>Chronicle</span>
+    </a>
+    {% else %}
+    <a href="/notes"
+       class="player-nav-tab{% if active_player_tab == 'notes' %} active{% endif %}"
+       aria-label="Session notes">
+        <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
+        <span>Notes</span>
+    </a>
+    {% endif %}
+    {% if account_user %}
+    {# Leave the campaign — back to the home screen with all your tables + characters. #}
+    <a href="/me"
+       class="player-nav-tab"
+       aria-label="Home — all your campaigns and characters">
+        <svg viewBox="0 0 24 24"><path d="M3 9.5L12 3l9 6.5"/><path d="M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10"/><polyline points="9 21 9 14 15 14 15 21"/></svg>
+        <span>Home</span>
+    </a>
+    {% endif %}
+</nav>
+
+{# Roll feed toast container (shared across all player pages) #}
+<div id="player-roll-toast-container" class="fixed top-16 right-4 z-[200] flex flex-col gap-2 pointer-events-none" style="width:280px;"></div>
+<div id="pf2e-action-toast-container"></div>
+
+<script>
+(function() {
+    // ---- Shared state ----
+    var _playerName = {{ player_name|tojson }};
+    var _isMyTurn = false;
+    var _audioCtx = null;
+    var _notifPermRequested = false;
+
+    // Expose for page-level SSE handlers to call into
+    window._playerNavName = _playerName;
+
+    // ---- Audio: two-note ascending chime ----
+    function _getAudioCtx() {
+        if (!_audioCtx) {
+            try { _audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+            catch(e) { return null; }
+        }
+        if (_audioCtx.state === 'suspended') _audioCtx.resume();
+        return _audioCtx;
+    }
+    function _playTurnChime() {
+        var ctx = _getAudioCtx();
+        if (!ctx) return;
+        // Note 1: G5 (784 Hz), triangle wave
+        var osc1 = ctx.createOscillator();
+        var gain1 = ctx.createGain();
+        osc1.type = 'triangle';
+        osc1.frequency.value = 784;
+        gain1.gain.setValueAtTime(0, ctx.currentTime);
+        gain1.gain.linearRampToValueAtTime(0.18, ctx.currentTime + 0.01);
+        gain1.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.15);
+        osc1.connect(gain1); gain1.connect(ctx.destination);
+        osc1.start(ctx.currentTime);
+        osc1.stop(ctx.currentTime + 0.15);
+        // Note 2: C6 (1047 Hz), triangle wave, offset 100ms
+        var osc2 = ctx.createOscillator();
+        var gain2 = ctx.createGain();
+        osc2.type = 'triangle';
+        osc2.frequency.value = 1047;
+        gain2.gain.setValueAtTime(0, ctx.currentTime + 0.1);
+        gain2.gain.linearRampToValueAtTime(0.18, ctx.currentTime + 0.11);
+        gain2.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.28);
+        osc2.connect(gain2); gain2.connect(ctx.destination);
+        osc2.start(ctx.currentTime + 0.1);
+        osc2.stop(ctx.currentTime + 0.28);
+    }
+
+    // ---- Browser Notification API ----
+    function _requestNotifPermission() {
+        if (_notifPermRequested) return;
+        _notifPermRequested = true;
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
+        }
+    }
+    // Request on first interaction
+    document.addEventListener('click', _requestNotifPermission, { once: true });
+    document.addEventListener('touchstart', _requestNotifPermission, { once: true });
+
+    function _sendBrowserNotification(round) {
+        if (!document.hidden) return;
+        if (!('Notification' in window) || Notification.permission !== 'granted') return;
+        try {
+            var n = new Notification('Your Turn', {
+                body: 'Round ' + (round || '?'),
+                tag: 'pf2e-turn',
+                requireInteraction: false
+            });
+            setTimeout(function() { n.close(); }, 5000);
+        } catch(e) {}
+    }
+
+    // ---- Turn banner (persistent until dismissed) ----
+    function _dismissTurnBanner() {
+        var el = document.getElementById('turn-banner');
+        if (!el) return;
+        el.style.animation = 'turnBannerSlideOut 0.3s ease forwards';
+        setTimeout(function() { el.remove(); }, 300);
+    }
+
+    window.showPlayerTurnBanner = function(round) {
+        // Remove existing
+        var existing = document.getElementById('turn-banner');
+        if (existing) existing.remove();
+
+        var banner = document.createElement('div');
+        banner.id = 'turn-banner';
+        banner.className = 'turn-banner-overlay pulsing';
+        banner.onclick = _dismissTurnBanner;
+        banner.innerHTML = '<div>Your Turn</div>'
+            + '<div class="turn-banner-sub">Round ' + (round || '?') + '</div>'
+            + '<div class="turn-banner-dismiss">tap to dismiss</div>';
+        document.body.appendChild(banner);
+
+        _playTurnChime();
+        _sendBrowserNotification(round);
+
+        // Nav bar combat tab glow
+        _setTurnActive(true);
+    };
+
+    function _setTurnActive(active) {
+        _isMyTurn = active;
+        var tab = document.getElementById('nav-combat-tab');
+        var dot = document.getElementById('turn-alert-dot');
+        if (tab) {
+            if (active) { tab.classList.add('turn-active'); }
+            else { tab.classList.remove('turn-active'); }
+        }
+        if (dot) {
+            if (active) { dot.classList.remove('hidden'); }
+            else { dot.classList.add('hidden'); }
+        }
+    }
+
+    // ---- SSE handler hooks (called by each page's existing EventSource) ----
+    window._navHandleEncounterUpdate = function(data) {
+        if (data.active_name === _playerName) {
+            if (!_isMyTurn) {
+                window.showPlayerTurnBanner(data.round);
+            }
+        } else {
+            if (_isMyTurn) {
+                _dismissTurnBanner();
+                _setTurnActive(false);
+            }
+        }
+    };
+
+    window._navHandlePlayerRoll = function(roll) {
+        // Skip own rolls
+        if (roll.name === _playerName) return;
+        // Skip if player_sheet.html already handles rolls
+        if (window._playerSheetHandlesRolls) return;
+        _showNavRollToast(roll);
+    };
+
+    function _showNavRollToast(roll) {
+        var container = document.getElementById('player-roll-toast-container');
+        if (!container) return;
+        var toast = document.createElement('div');
+        toast.style.cssText = 'pointer-events:auto; padding:10px 12px; border-radius:8px; border:1px solid var(--border-rule); background:var(--bg-card-2); box-shadow:0 4px 16px rgba(0,0,0,0.4); animation:slideIn 0.3s cubic-bezier(0.16,1,0.3,1) forwards;';
+        var isCrit = roll.detail && roll.detail.indexOf('[CRIT') >= 0;
+        toast.innerHTML = '<div style="display:flex; justify-content:space-between; margin-bottom:4px;">'
+            + '<span style="font-weight:700; font-size:11px; color:var(--gilt-300); text-transform:uppercase; letter-spacing:0.05em;">' + _esc(roll.name) + '</span>'
+            + '<button onclick="this.closest(\'div[style]\').remove()" style="color:var(--text-on-dark-3); font-size:11px; cursor:pointer; background:none; border:none;">x</button>'
+            + '</div>'
+            + '<div style="font-size:13px; color:var(--text-on-dark-2);">' + _esc(roll.action) + ': <span style="font-weight:700; color:' + (isCrit ? 'var(--gilt-200)' : 'var(--text-on-dark)') + ';">' + _esc(roll.result) + '</span></div>'
+            + '<div style="font-size:10px; color:var(--text-on-dark-3); font-family:var(--font-ui); margin-top:4px;">' + _esc(roll.detail || '') + '</div>';
+        container.prepend(toast);
+        setTimeout(function() {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateX(100%)';
+            toast.style.transition = 'all 0.3s ease';
+            setTimeout(function() { toast.remove(); }, 300);
+        }, 6000);
+    }
+
+    function _esc(s) {
+        if (s == null) return '';
+        var d = document.createElement('div');
+        d.textContent = String(s);
+        return d.innerHTML;
+    }
+
+    // ---- Fallback SSE (for pages that do not open their own EventSource) ----
+    // Wait 2s for the page to hook into us; if nobody calls the handlers,
+    // open our own connection.
+    var _navSseAttached = false;
+    window._navMarkSseAttached = function() { _navSseAttached = true; };
+
+    setTimeout(function() {
+        if (_navSseAttached) return;
+        // Fallback: nobody marked a page-level SSE within 2s, so subscribe on
+        // the shared hub ourselves. The hub owns the single socket + reconnect,
+        // so the old nested re-open dance is gone.
+        window.appSSE('encounter_update', function(e) {
+            try { window._navHandleEncounterUpdate(JSON.parse(e.data)); } catch(ex) {}
+        });
+        window.appSSE('player_roll', function(e) {
+            try { window._navHandlePlayerRoll(JSON.parse(e.data)); } catch(ex) {}
+        });
+    }, 2000);
+
+    // Action toast (lightweight feedback for conditions, HP, loot)
+    window.pf2eToast = function(msg, type) {
+        type = type || 'info';
+        var c = document.getElementById('pf2e-action-toast-container');
+        if (!c) return;
+        var existing = c.querySelectorAll('.pf2e-action-toast');
+        for (var i = 0; i < existing.length; i++) {
+            if (existing[i].textContent === msg) return;
+        }
+        var el = document.createElement('div');
+        el.className = 'pf2e-action-toast ' + type;
+        el.textContent = msg;
+        c.appendChild(el);
+        setTimeout(function() {
+            el.classList.add('fade-out');
+            setTimeout(function() { el.remove(); }, 300);
+        }, 3000);
+    };
+})();
+</script>
+
+{# ── Condition quick-reference tooltip (for pages not using base.html) ── #}
+<script>
+(function() {
+    if (document.getElementById('pf2e-cond-tooltip')) return;
+    var tip = document.createElement('div');
+    tip.id = 'pf2e-cond-tooltip';
+    tip.className = 'cond-tooltip';
+    tip.innerHTML = '<div class="cond-tooltip-name"></div><div class="cond-tooltip-desc"></div>';
+    document.body.appendChild(tip);
+
+    var _condCache = {};
+    var _activeEl = null;
+    var _hideTimer = null;
+
+    function _condKey(el) {
+        return (el.getAttribute('data-cond-name') || '').toLowerCase().replace(/ /g, '-');
+    }
+
+    function _show(el, name, desc) {
+        tip.querySelector('.cond-tooltip-name').textContent = name.replace(/-/g, ' ');
+        tip.querySelector('.cond-tooltip-desc').textContent = desc;
+        var rect = el.getBoundingClientRect();
+        var tipW = 320;
+        var left = rect.left + rect.width / 2 - tipW / 2;
+        if (left < 8) left = 8;
+        if (left + tipW > window.innerWidth - 8) left = window.innerWidth - tipW - 8;
+        var top = rect.bottom + 8;
+        tip.style.left = left + 'px';
+        tip.style.top = top + 'px';
+        tip.style.maxWidth = tipW + 'px';
+        tip.classList.add('visible');
+        requestAnimationFrame(function() {
+            var tipRect = tip.getBoundingClientRect();
+            if (tipRect.bottom > window.innerHeight - 8) {
+                tip.style.top = (rect.top - tipRect.height - 8) + 'px';
+            }
+        });
+    }
+
+    function _hide() {
+        tip.classList.remove('visible');
+        _activeEl = null;
+    }
+
+    function _fetch(el) {
+        var key = _condKey(el);
+        if (!key) return;
+        if (_condCache[key]) {
+            _show(el, key, _condCache[key]);
+            return;
+        }
+        fetch('/api/condition_info/' + encodeURIComponent(key))
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.desc) {
+                    _condCache[key] = data.desc;
+                    if (_activeEl === el) _show(el, key, data.desc);
+                }
+            })
+            .catch(function() {});
+    }
+
+    function _findPill(target) {
+        return target.closest('.condition-pill[data-cond-name], .condition-toggle[data-cond-name], .cond-chip[data-cond-name], .cp[data-cond-name]');
+    }
+
+    document.addEventListener('mouseenter', function(e) {
+        var pill = _findPill(e.target);
+        if (!pill) return;
+        if (_hideTimer) { clearTimeout(_hideTimer); _hideTimer = null; }
+        _activeEl = pill;
+        _fetch(pill);
+    }, true);
+
+    document.addEventListener('mouseleave', function(e) {
+        var pill = _findPill(e.target);
+        if (!pill) return;
+        _hideTimer = setTimeout(_hide, 120);
+    }, true);
+
+    document.addEventListener('touchstart', function(e) {
+        var pill = _findPill(e.target);
+        if (pill) {
+            if (_activeEl === pill) {
+                _hide();
+                return;
+            }
+            _activeEl = pill;
+            _fetch(pill);
+        } else if (_activeEl) {
+            _hide();
+        }
+    }, { passive: true });
+})();
+</script>
+{% endif %}

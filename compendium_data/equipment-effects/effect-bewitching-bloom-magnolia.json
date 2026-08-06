@@ -1,0 +1,43 @@
+{
+    "_id": "qLl1jwybXY6EbOoI",
+    "img": "icons/magic/symbols/arrowhead-green.webp",
+    "name": "Effect: Bewitching Bloom (Magnolia)",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Bewitching Bloom (Magnolia)]</p>\n<p>You gain a +1 status bonus to Diplomacy checks.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 10
+        },
+        "level": {
+            "value": 6
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Treasure Vault (Remastered)"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "selector": "diplomacy",
+                "type": "status",
+                "value": 1
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

@@ -1,0 +1,72 @@
+{
+    "_id": "fEhCbATDNlt6c1Ug",
+    "img": "icons/skills/melee/blade-tip-energy-green.webp",
+    "name": "Spell Effect: Extract Poison",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Extract Poison]</p>\n<p>You add 1d6 poison damage per level of the poison you counteracted to the chosen weapon's Strike damage.</p>"
+        },
+        "duration": {
+            "expiry": null,
+            "sustained": false,
+            "unit": "unlimited",
+            "value": -1
+        },
+        "level": {
+            "value": 2
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Secrets of Magic"
+        },
+        "rules": [
+            {
+                "adjustName": false,
+                "choices": {
+                    "ownedItems": true,
+                    "predicate": [
+                        {
+                            "gte": [
+                                "item:hands-held",
+                                1
+                            ]
+                        }
+                    ],
+                    "types": [
+                        "weapon"
+                    ]
+                },
+                "flag": "weapon",
+                "key": "ChoiceSet"
+            },
+            {
+                "choices": {
+                    "config": "levels"
+                },
+                "flag": "level",
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Prompt.Level"
+            },
+            {
+                "damageType": "poison",
+                "diceNumber": "@item.flags.pf2e.rulesSelections.level",
+                "dieSize": "d6",
+                "key": "DamageDice",
+                "selector": "{item|flags.pf2e.rulesSelections.weapon}-damage"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

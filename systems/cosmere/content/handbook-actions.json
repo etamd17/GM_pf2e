@@ -1,0 +1,1369 @@
+[
+ {
+  "_id": "xeAxqcLYdFWSwUur",
+  "color": null,
+  "description": "",
+  "flags": {},
+  "folder": null,
+  "name": "Basic",
+  "sorting": "a",
+  "type": "Item"
+ },
+ {
+  "_id": "yIMHrJJvgkLq0wgx",
+  "color": null,
+  "description": "",
+  "flags": {},
+  "folder": null,
+  "name": "Stormlight",
+  "sorting": "a",
+  "type": "Item"
+ },
+ {
+  "_id": "K2QgKOSezyeYnnxl",
+  "effects": [],
+  "flags": {},
+  "folder": "xeAxqcLYdFWSwUur",
+  "img": "icons/skills/social/diplomacy-handshake.webp",
+  "name": "Aid",
+  "system": {
+   "activation": {
+    "consume": [
+     {
+      "resource": "foc",
+      "type": "resource",
+      "value": {
+       "actual": 0,
+       "max": 1,
+       "min": 1
+      }
+     }
+    ],
+    "cost": {
+     "type": "rea",
+     "value": null
+    },
+    "flavor": "",
+    "plotDie": false,
+    "type": "utility",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "<p>Before an ally makes a skill test, you can use this reaction and spend 1 focus to grant them an advantage on their test.</p><p>To aid an ally, you must be prepared and in range to realistically assist them.</p>",
+    "short": "<p>Before an ally makes a skill test, you can use this reaction and spend 1 focus to grant them an advantage on their test.</p><p>To aid an ally, you must be prepared and in range to realistically assist them. For example, you might aid their attack by flanking and distracting an enemy you’re engaged with, or if you’re within speaking distance, you might coordinate with them to search for a hidden enemy.</p>",
+    "value": "<p>You step in to help an ally. Before an ally makes a skill test, you can use this reaction and spend 1 focus to grant them an advantage on their test.</p><p>To aid an ally, you must be prepared and in range to realistically assist them. For example, you might aid their attack by flanking and distracting an enemy you’re engaged with, or if you’re within speaking distance, you might coordinate with them to search for a hidden enemy.</p>"
+   },
+   "id": "aid",
+   "type": "basic"
+  },
+  "type": "action"
+ },
+ {
+  "_id": "9cVxEnB5ayw52fTA",
+  "effects": [],
+  "flags": {},
+  "folder": "xeAxqcLYdFWSwUur",
+  "img": "icons/magic/control/debuff-energy-snare-blue.webp",
+  "name": "Avoid Danger",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "type": "rea",
+     "value": null
+    },
+    "flavor": "",
+    "modifierFormula": "",
+    "plotDie": false,
+    "skill": "agi",
+    "type": "skill_test",
+    "uses": null
+   },
+   "damage": {
+    "attribute": null,
+    "formula": null,
+    "grazeOverrideFormula": "",
+    "skill": null,
+    "type": null
+   },
+   "description": {
+    "chat": "<p>Make an Agility test to avoid the danger. If doing so in reaction to a test (such as an attack or @UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.ttTSR1u5C8D6vbGf]{Shove} action) the DC is equal to that test’s result. Otherwise, the DC is 15. If you fail, you don’t avoid the danger. If you succeed, you avoid the danger to a reasonable degree, as determined by the GM.</p>",
+    "short": "<p>When you’re imperiled by your surroundings—such as standing under a falling boulder or being shoved off a balcony—you can use this reaction to attempt to save yourself. This might allow you to catch yourself before you fall, to dodge out of the way of a boulder, or to similarly avoid the danger.</p><p>Make an Agility test to avoid the danger. If doing so in reaction to a test (such as an attack or @UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.ttTSR1u5C8D6vbGf]{Shove} action) the DC is equal to that test’s result. Otherwise, the DC is 15. If you fail, you don’t avoid the danger. If you succeed, you avoid the danger to a reasonable degree, as determined by the GM.</p>",
+    "value": "<p>When you’re imperiled by your surroundings—such as standing under a falling boulder or being shoved off a balcony—you can use this reaction to attempt to save yourself. This might allow you to catch yourself before you fall, to dodge out of the way of a boulder, or to similarly avoid the danger.</p><p>Make an Agility test to avoid the danger. If doing so in reaction to a test (such as an attack or @UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.ttTSR1u5C8D6vbGf]{Shove} action) the DC is equal to that test’s result. Otherwise, the DC is 15. If you fail, you don’t avoid the danger. If you succeed, you avoid the danger to a reasonable degree, as determined by the GM.</p><p>For example, if you’re trying to avoid an area attack from the Division surge, the GM might say you move 5 feet on a success—if this movement gets you out of the area, you aren’t hit, but if the area is larger, you’ll likely still be affected to some degree. The more narrative focused the danger, the more likely you can entirely avoid it, but any potential damage or repercussions are at the GM’s discretion.</p>"
+   },
+   "id": "avoid_danger",
+   "type": "basic"
+  },
+  "type": "action"
+ },
+ {
+  "_id": "YLN9KgaotlN8ZcQK",
+  "effects": [],
+  "flags": {},
+  "folder": "xeAxqcLYdFWSwUur",
+  "img": "icons/magic/sonic/scream-wail-shout-teal.webp",
+  "name": "Banter",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "type": "fre",
+     "value": null
+    },
+    "flavor": "",
+    "plotDie": false,
+    "type": "utility",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "<p>You can freely speak at any point during your turn, and other characters can briefly respond.</p><p>If you wish to use speech in a more nuanced way (such as to persuade someone or do something else that would require a skill test), this demands enough of your attention that you must instead @UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.A4fgvQ6HoxCIpxFS]{Use a Skill}.</p>",
+    "short": "<p>You can freely speak at any point during your turn, and other characters can briefly respond.</p><p>If you wish to use speech in a more nuanced way (such as to persuade someone or do something else that would require a skill test), this demands enough of your attention that you must instead @UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.A4fgvQ6HoxCIpxFS]{Use a Skill} to do so.</p>",
+    "value": "<p>You can freely speak at any point during your turn, and other characters can briefly respond. However, because each round is only about 10 seconds of time, the GM might limit you to only a couple sentences per turn.</p><p>If you wish to use speech in a more nuanced way (such as to persuade someone or do something else that would require a skill test), this demands enough of your attention that you must instead @UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.A4fgvQ6HoxCIpxFS]{Use a Skill} to do so.</p>"
+   },
+   "id": "banter",
+   "type": "basic"
+  },
+  "type": "action"
+ },
+ {
+  "_id": "I1CQjZicYdeG9NCN",
+  "effects": [],
+  "flags": {},
+  "folder": "xeAxqcLYdFWSwUur",
+  "img": "icons/skills/melee/shield-block-bash-blue.webp",
+  "name": "Brace",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 1
+    },
+    "flavor": "",
+    "plotDie": false,
+    "type": "utility",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "<p>You hide behind cover within 5 feet of you (see @UUID[Compendium.cosmere-rpg-stormlight-handbook.handbook.JournalEntry.lJPyAzY5D5yrFF8D.JournalEntryPage.rMs5NOkzGPLSbj9y#terrain]{Terrain}). All attacks against you gain a disadvantage for as long as you stay behind cover. If you attack or move, the benefits of this action end.</p><p>If you have a weapon with the <strong>Defensive</strong> trait, you can wield it to create mobile cover for yourself. When you do, you must keep that weapon raised and between yourself and any potential attackers.</p>",
+    "short": "<p>You hide behind cover within 5 feet of you (see @UUID[Compendium.cosmere-rpg-stormlight-handbook.handbook.JournalEntry.lJPyAzY5D5yrFF8D.JournalEntryPage.rMs5NOkzGPLSbj9y#terrain]{Terrain}) to defend yourself against incoming attacks. All attacks against you gain a disadvantage for as long as you stay behind cover. If you attack or move, the benefits of this action end.</p><p>If you have a weapon with the <strong>Defensive</strong> trait (such as a shield), you can wield it to create mobile cover for yourself. When you do, you must keep that weapon raised and between yourself and any potential attackers.</p>",
+    "value": "<p>You hide behind cover within 5 feet of you (see @UUID[Compendium.cosmere-rpg-stormlight-handbook.handbook.JournalEntry.lJPyAzY5D5yrFF8D.JournalEntryPage.rMs5NOkzGPLSbj9y#terrain]{Terrain}) to defend yourself against incoming attacks. All attacks against you gain a disadvantage for as long as you stay behind cover. If you attack or move, the benefits of this action end.</p><p>You’re only protected against attacks from the other side of your cover, and it must be substantial enough to realistically defend you against the attack. For example, you could press yourself against a wall or duck behind an obstacle, but if an enemy rounds the corner toward you, they can attack you without disadvantage.</p><p>If you have a weapon with the <strong>Defensive</strong> trait (such as a shield), you can wield it to create mobile cover for yourself. When you do, you must keep that weapon raised and between yourself and any potential attackers.</p>"
+   },
+   "id": "brace",
+   "type": "basic"
+  },
+  "type": "action"
+ },
+ {
+  "_id": "kzgs9GPqYqfHHS2q",
+  "effects": [],
+  "flags": {},
+  "folder": "yIMHrJJvgkLq0wgx",
+  "img": "icons/magic/sonic/scream-wail-shout-teal.webp",
+  "name": "Breathe Stormlight",
+  "system": {
+   "activation": {
+    "complication": null,
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 2
+    },
+    "flavor": "",
+    "opportunity": null,
+    "plotDie": false,
+    "type": "utility",
+    "uses": null
+   },
+   "ancestry": null,
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": "<div class=\"jss255 jss267 element-display-container-page MuiBox-root css-0\"><div class=\"main-holder page MuiBox-root css-0\"><div class=\"jss257 jss269 page-inner-holder inner-holder MuiBox-root css-0\"><p class=\"COREbodyCxSpFirst\">You draw Stormlight from your infused spheres into yourself; if you have enough spheres, you recover <strong>Investiture</strong> up to your maximum.</p><p class=\"COREbodyCxSpMiddle\">In normal times, dun spheres can be readily exchanged for infused spheres, and highstorms occur regularly. If you have at least three times as many marks as your Investiture total, it’s assumed you have enough infused spheres to draw from.</p><p class=\"COREbodyCxSpLast\">In some situations, the GM may ask you to keep track of how many of your marks are infused. On those occasions, you recover 1 Investiture for each infused mark or broam you drain.</p></div></div></div>"
+   },
+   "events": {
+    "QxB58MvGEfzx6f1W": {
+     "description": "Refill Investiture",
+     "event": "use",
+     "handler": {
+      "inline": true,
+      "macro": {
+       "command": "await actor.update({'system.resources.inv.value': actor.system.resources.inv.max.value});",
+       "type": "script"
+      },
+      "type": "execute-macro",
+      "uuid": null
+     },
+     "id": "QxB58MvGEfzx6f1W"
+    }
+   },
+   "id": "breathe-stormlight",
+   "modality": null,
+   "type": "stormlight"
+  },
+  "type": "action"
+ },
+ {
+  "_id": "wC4Z0mdGwRxLDpMC",
+  "effects": [],
+  "flags": {},
+  "folder": "xeAxqcLYdFWSwUur",
+  "img": "icons/skills/movement/figure-running-gray.webp",
+  "name": "Disengage",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 1
+    },
+    "flavor": "",
+    "plotDie": false,
+    "type": "utility",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "<p>Move 5 feet without triggering@UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.QpFIxaoCBezzt6yw]{Reactive Strikes}.</p>",
+    "short": "<p>Move 5 feet without triggering@UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.QpFIxaoCBezzt6yw]{Reactive Strikes}.</p>",
+    "value": "<p>You carefully step away from an enemy, defending yourself so they can’t seize the opportunity to attack.</p><p>Move 5 feet without triggering @UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.QpFIxaoCBezzt6yw]{Reactive Strikes}.</p>"
+   },
+   "id": "disengage",
+   "type": "basic"
+  },
+  "type": "action"
+ },
+ {
+  "_id": "6Vm9QIbIjDOeSCwq",
+  "effects": [],
+  "flags": {},
+  "folder": "xeAxqcLYdFWSwUur",
+  "img": "icons/magic/movement/abstract-ribbons-red-orange.webp",
+  "name": "Dodge",
+  "system": {
+   "activation": {
+    "consume": [
+     {
+      "resource": "foc",
+      "type": "resource",
+      "value": {
+       "actual": 0,
+       "max": 1,
+       "min": 1
+      }
+     }
+    ],
+    "cost": {
+     "type": "rea",
+     "value": null
+    },
+    "flavor": "",
+    "plotDie": false,
+    "type": "utility",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "<p>Before an enemy targets you with an attack, you can use this reaction and spend 1 focus to add a disadvantage to their attack test. You can’t use this reaction on area attacks or on those that target multiple characters.</p>",
+    "short": "<p>Before an enemy targets you with an attack, you can use this reaction and spend 1 focus to add a disadvantage to their attack test. You can’t use this reaction on area attacks or on those that target multiple characters.</p>",
+    "value": "<p>Before an enemy targets you with an attack, you can use this reaction and spend 1 focus to add a disadvantage to their attack test. You can’t use this reaction on area attacks or on those that target multiple characters,  though you might be able to @UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.9cVxEnB5ayw52fTA]{Avoid Danger} and move out of the way.</p>"
+   },
+   "id": "dodge",
+   "type": "basic"
+  },
+  "type": "action"
+ },
+ {
+  "_id": "DOeZCEIwrwFuYQEd",
+  "effects": [],
+  "flags": {},
+  "folder": "xeAxqcLYdFWSwUur",
+  "img": "icons/skills/social/wave-halt-stop.webp",
+  "name": "Drop",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "type": "fre",
+     "value": null
+    },
+    "flavor": "",
+    "plotDie": false,
+    "type": "utility",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "<p>You can drop any number of objects you are holding in your hands or another appendage. (If you want to do so on someone else’s turn, you must use the @UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.Gona1nDaqRcioeim]{Ready} action.)</p>",
+    "short": "<p>You can drop any number of objects you are holding in your hands or another appendage. (If you want to do so on someone else’s turn, you must use the @UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.Gona1nDaqRcioeim]{Ready} action.)</p>",
+    "value": "<p>You can drop any number of objects you are holding in your hands or another appendage. (If you want to do so on someone else’s turn, you must use the @UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.Gona1nDaqRcioeim]{Ready} action.)</p>"
+   },
+   "id": "drop",
+   "type": "basic"
+  },
+  "type": "action"
+ },
+ {
+  "_id": "2YpPFHYxjgieDoTk",
+  "effects": [
+   {
+    "_id": "4vfBytGN27cPfkEQ",
+    "changes": [
+     {
+      "key": "system.attributes.str.bonus",
+      "mode": 2,
+      "priority": null,
+      "value": "1"
+     }
+    ],
+    "description": "",
+    "disabled": true,
+    "duration": {
+     "combat": null,
+     "rounds": 1,
+     "seconds": null,
+     "startRound": null,
+     "startTime": null,
+     "startTurn": null,
+     "turns": null
+    },
+    "flags": {},
+    "img": "icons/magic/control/buff-strength-muscle-damage-orange.webp",
+    "name": "Enhanced (Strength +1)",
+    "origin": null,
+    "statuses": [],
+    "system": {},
+    "tint": "#ffffff",
+    "transfer": true,
+    "type": "base"
+   },
+   {
+    "_id": "fMFiJkPJcfGHyfAx",
+    "changes": [
+     {
+      "key": "system.attributes.spd.bonus",
+      "mode": 2,
+      "priority": null,
+      "value": "1"
+     }
+    ],
+    "description": "",
+    "disabled": true,
+    "duration": {
+     "combat": null,
+     "rounds": 1,
+     "seconds": null,
+     "startRound": null,
+     "startTime": null,
+     "startTurn": null,
+     "turns": null
+    },
+    "flags": {},
+    "img": "icons/skills/movement/feet-winged-boots-glowing-yellow.webp",
+    "name": "Enhanced (Speed +1)",
+    "origin": null,
+    "statuses": [],
+    "system": {},
+    "tint": "#ffffff",
+    "transfer": true,
+    "type": "base"
+   }
+  ],
+  "flags": {},
+  "folder": "yIMHrJJvgkLq0wgx",
+  "img": "icons/magic/control/sihouette-hold-beam-green.webp",
+  "name": "Enhance",
+  "system": {
+   "activation": {
+    "complication": null,
+    "consume": [
+     {
+      "resource": "inv",
+      "type": "resource",
+      "value": {
+       "actual": 0,
+       "max": 1,
+       "min": 1
+      }
+     }
+    ],
+    "cost": {
+     "type": "act",
+     "value": 1
+    },
+    "flavor": "",
+    "opportunity": null,
+    "plotDie": false,
+    "type": "utility",
+    "uses": null
+   },
+   "ancestry": null,
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": "<p>Spend 1 <strong>Investiture </strong>to become <strong>Enhanced (Strength +1)</strong> and <strong>Enhanced (Speed +1)</strong> until the end of your next turn. At the end of that turn and each of your turns thereafter, you can spend 1 <strong>Investiture</strong> (<span aria-label=\"Free Action\" class=\"cosmere-icon\" data-tooltip=\"Free Action\">0</span>) to maintain these conditions until the end of your next turn.</p><hr><p>(<strong>Req:</strong> Speak the Second Ideal) While your current <strong>Investiture</strong> is 1 or greater, you can use Enhance as <span aria-label=\"Free Action\" class=\"cosmere-icon\" data-tooltip=\"Free Action\">0</span>, and you don’t need to spend Investiture to use this action or maintain its effect.</p>"
+   },
+   "events": {
+    "dgcnA3ViMy8pGZp3": {
+     "description": "Toggle Effect(s)",
+     "event": "use",
+     "handler": {
+      "inline": true,
+      "macro": {
+       "command": "for (eff of event.item.transferredEffects) {\nif (eff.disabled) {await eff.update({disabled:false});}\nelse if (!eff.disabled) {await eff.update({disabled:true});}\n}",
+       "type": "script"
+      },
+      "type": "execute-macro",
+      "uuid": null
+     },
+     "id": "dgcnA3ViMy8pGZp3"
+    },
+    "oWlFj0pmvlBDylHq": {
+     "description": "Second Ideal",
+     "event": "update-actor",
+     "handler": {
+      "inline": true,
+      "macro": {
+       "command": "let enhanceActions = actor.items.filter(y => y.system.id == \"enhance\");\nfor (let action of enhanceActions ) {\n\tif (actor.system.resources.inv.value >= 1 && actor.items.filter(x => x.name == 'Speak the Second Ideal' && x.type == 'goal')[0].system.level == 3) {\n\t\tawait action.update({'system.activation.cost.type': \"fre\", 'system.activation.consume': []});\n\t} else {\n\t\tawait action.update({'system.activation.cost.type': \"act\"});\n\t\tif (action.system.activation.consume.length < 1) {\n\t\t\tawait action.update({'system.activation.consume': [{\"type\": \"resource\", \"value\": {\"min\": 1, \"max\": 1, \"actual\": 0}, \"resource\": \"inv\"}]});\n\t\t}\n\t}\n\n}",
+       "type": "script"
+      },
+      "type": "execute-macro",
+      "uuid": null
+     },
+     "id": "oWlFj0pmvlBDylHq"
+    }
+   },
+   "id": "enhance",
+   "modality": null,
+   "type": "stormlight"
+  },
+  "type": "action"
+ },
+ {
+  "_id": "8yQ5MMIrywehKyTS",
+  "effects": [],
+  "flags": {},
+  "folder": "xeAxqcLYdFWSwUur",
+  "img": "icons/skills/social/trading-injustice-scale-gray.webp",
+  "name": "Gain Advantage",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 1
+    },
+    "flavor": "",
+    "plotDie": false,
+    "type": "utility",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "<p>You use one of your skills to seek the upper hand over your opponent. Explain how you are doing so, then make a test using a relevant skill against the enemy’s corresponding defense. On a success, you gain an advantage on your next test against that enemy that uses a different skill.</p>",
+    "short": "<p>You use one of your skills to seek the upper hand over your opponent, such as through clever tactics, unexpected feints, or superior strength. Explain how you are doing so, then make a test using a relevant skill against the enemy’s corresponding defense. On a success, you gain an advantage on your next test against that enemy that uses a different skill.</p>",
+    "value": "<p>You use one of your skills to seek the upper hand over your opponent, such as through clever tactics, unexpected feints, or superior strength. Explain how you are doing so, then make a test using a relevant skill against the enemy’s corresponding defense. On a success, you gain an advantage on your next test against that enemy that uses a different skill. For example, you can test Deduction to guess at your foe’s next move, then use that advantage on your next Light Weaponry test; however, you can’t test Light Weaponry then use that advantage on another Light Weaponry test.</p><p>(See @UUID[Compendium.cosmere-rpg-stormlight-handbook.handbook.JournalEntry.gFfAz9BEmn5v9aSC.JournalEntryPage.f4WUJcFOPWHd0u62]{Skills} in chapter 3 for more examples of tests to Gain Advantage.)</p>"
+   },
+   "id": "gain_advantage",
+   "type": "basic"
+  },
+  "type": "action"
+ },
+ {
+  "_id": "EVPgpHL6Y4jrumwI",
+  "effects": [],
+  "flags": {},
+  "folder": "xeAxqcLYdFWSwUur",
+  "img": "icons/skills/melee/unarmed-punch-fist.webp",
+  "name": "Grapple",
+  "system": {
+   "activation": {
+    "attribute": null,
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 2
+    },
+    "flavor": "",
+    "modifierFormula": "",
+    "plotDie": false,
+    "skill": "ath",
+    "type": "skill_test",
+    "uses": null
+   },
+   "damage": {
+    "attribute": null,
+    "formula": null,
+    "grazeOverrideFormula": "",
+    "skill": null,
+    "type": null
+   },
+   "description": {
+    "chat": "<p>Make an Athletics test against the Physical defense of a character within your reach. On a success, they become @UUID[Compendium.cosmere-rpg-stormlight-handbook.handbook.JournalEntry.MfPDUyrCWc3mXm5N.JournalEntryPage.jQvh7ULoKmh49sYA#restrained]{Restrained} until either you become @UUID[Compendium.cosmere-rpg-stormlight-handbook.handbook.JournalEntry.MfPDUyrCWc3mXm5N.JournalEntryPage.jQvh7ULoKmh49sYA#unconscious]{Unconscious}, you choose to end the effect ( <span class=\"cosmere-icon\" data-tooltip=\"One Action\" aria-label=\"One Action\">0</span>), or they are no longer within your reach.</p>",
+    "short": "<p>Make an Athletics test against the Physical defense of a character within your reach. On a success, they become @UUID[Compendium.cosmere-rpg-stormlight-handbook.handbook.JournalEntry.MfPDUyrCWc3mXm5N.JournalEntryPage.jQvh7ULoKmh49sYA#restrained]{Restrained} until either you become @UUID[Compendium.cosmere-rpg-stormlight-handbook.handbook.JournalEntry.MfPDUyrCWc3mXm5N.JournalEntryPage.jQvh7ULoKmh49sYA#unconscious]{Unconscious}, you choose to end the effect ( <span class=\"cosmere-icon\" data-tooltip=\"One Action\" aria-label=\"One Action\">0</span>), or they are no longer within your reach.</p>",
+    "value": "<p>Through strength and skill, you grab your opponent or control their movements to keep them restrained and focused on you. </p><p>Make an Athletics test against the Physical defense of a character within your reach (see the @UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.ttTSR1u5C8D6vbGf]{Shove} action). On a success, they become @UUID[Compendium.cosmere-rpg-stormlight-handbook.handbook.JournalEntry.MfPDUyrCWc3mXm5N.JournalEntryPage.jQvh7ULoKmh49sYA#restrained]{Restrained} until either you become @UUID[Compendium.cosmere-rpg-stormlight-handbook.handbook.JournalEntry.MfPDUyrCWc3mXm5N.JournalEntryPage.jQvh7ULoKmh49sYA#unconscious]{Unconscious}, you choose to end the effect ( <span class=\"cosmere-icon\" data-tooltip=\"One Action\" aria-label=\"One Action\">0</span>), or they are no longer within your reach.</p>"
+   },
+   "id": "grapple",
+   "type": "basic"
+  },
+  "type": "action"
+ },
+ {
+  "_id": "iqjFbO4BLuTSt4cQ",
+  "effects": [],
+  "flags": {},
+  "folder": "xeAxqcLYdFWSwUur",
+  "img": "icons/magic/air/air-smoke-casting.webp",
+  "name": "Interact",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 1
+    },
+    "flavor": "",
+    "plotDie": false,
+    "type": "utility",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "<p>You quickly interact with an object you can reach. This action usually doesn’t require a skill test.</p><p>You can use the <strong>Interact</strong> action more than once per turn.</p>",
+    "short": "<p>You quickly interact with an object you can reach. Unlike the @UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.A4fgvQ6HoxCIpxFS]{Use a Skill} action, this action usually doesn’t require a skill test.</p><p>You can use the <strong>Interact</strong> action more than once per turn.</p>",
+    "value": "<p>You quickly interact with an object you can reach. Unlike the @UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.A4fgvQ6HoxCIpxFS]{Use a Skill} action, this action usually doesn’t require a skill test. For example, you might Interact to:</p><ul><li><p>Open or close a door.</p></li><li><p>Pick up an item.</p></li><li><p>Draw or sheathe your weapon.</p></li><li><p>Retrieve something from your pack.</p></li><li><p>Pass something to an ally.</p></li><li><p>Quickly scarf down pancakes.</p></li><li><p>Put on or take off a simple piece of clothing.</p></li></ul><p>You can use the <strong>Interact</strong> action more than once per turn.</p>"
+   },
+   "id": "interact",
+   "type": "basic"
+  },
+  "type": "action"
+ },
+ {
+  "_id": "UEGVL0QnZ6UelxxZ",
+  "effects": [],
+  "flags": {},
+  "folder": "xeAxqcLYdFWSwUur",
+  "img": "icons/skills/movement/feet-winged-sandals-tan.webp",
+  "name": "Move",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 1
+    },
+    "flavor": "",
+    "plotDie": false,
+    "type": "utility",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "<p>You move a distance up to your movement rate. If you’re crawling, climbing, swimming, or being stealthy, you become @UUID[Compendium.cosmere-rpg-stormlight-handbook.handbook.JournalEntry.MfPDUyrCWc3mXm5N.JournalEntryPage.jQvh7ULoKmh49sYA#slowed]{Slowed} for this movement, reducing how far you can move.</p><p>You can use the <strong>Move</strong> action more than once per turn.</p>",
+    "short": "<p>You move a distance up to your movement rate. If you’re crawling, climbing, swimming, or being stealthy, you become @UUID[Compendium.cosmere-rpg-stormlight-handbook.handbook.JournalEntry.MfPDUyrCWc3mXm5N.JournalEntryPage.jQvh7ULoKmh49sYA#slowed]{Slowed} for this movement, reducing how far you can move. Leaping or climbing as part of your movement might require an Agility or Athletics test.</p><p>You can use the <strong>Move</strong> action more than once per turn.</p>",
+    "value": "<p>You move a distance up to your movement rate. If you’re crawling, climbing, swimming, or being stealthy, you become @UUID[Compendium.cosmere-rpg-stormlight-handbook.handbook.JournalEntry.MfPDUyrCWc3mXm5N.JournalEntryPage.jQvh7ULoKmh49sYA#slowed]{Slowed} for this movement, reducing how far you can move. Leaping or climbing as part of your movement might require an Agility or Athletics test.</p><p>You can use the <strong>Move</strong> action more than once per turn.</p>"
+   },
+   "id": "move",
+   "type": "basic"
+  },
+  "type": "action"
+ },
+ {
+  "_id": "QpFIxaoCBezzt6yw",
+  "effects": [],
+  "flags": {},
+  "folder": "xeAxqcLYdFWSwUur",
+  "img": "icons/skills/melee/strike-sword-gray.webp",
+  "name": "Reactive Strike",
+  "system": {
+   "activation": {
+    "consume": [
+     {
+      "resource": "foc",
+      "type": "resource",
+      "value": {
+       "actual": 0,
+       "max": 1,
+       "min": 1
+      }
+     }
+    ],
+    "cost": {
+     "type": "rea",
+     "value": null
+    },
+    "flavor": "",
+    "plotDie": false,
+    "type": "utility",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "<p>As an enemy retreats, you use the opening to attack. When an enemy voluntarily leaves your reach, you can use this reaction and spend 1 focus to make a melee weapon attack or unarmed attack against the enemy’s Physical defense. You can’t use this reaction to attack a character who transports themself with @UUID[Compendium.cosmere-rpg-stormlight-handbook.handbook.JournalEntry.UckJaV79R63u6a5y.JournalEntryPage.fuwhzsRlWwlkrRB5]{Transportation} or who otherwise moves instantaneously.</p>",
+    "short": "<p>As an enemy retreats, you use the opening to attack. When an enemy voluntarily leaves your reach, you can use this reaction and spend 1 focus to make a melee weapon attack or unarmed attack against the enemy’s Physical defense. You can’t use this reaction to attack a character who transports themself with @UUID[Compendium.cosmere-rpg-stormlight-handbook.handbook.JournalEntry.UckJaV79R63u6a5y.JournalEntryPage.fuwhzsRlWwlkrRB5]{Transportation} or who otherwise moves instantaneously.</p>",
+    "value": "<p>As an enemy retreats, you use the opening to attack. When an enemy voluntarily leaves your reach, you can use this reaction and spend 1 focus to make a melee weapon attack or unarmed attack against the enemy’s Physical defense. You can’t use this reaction to attack a character who transports themself with @UUID[Compendium.cosmere-rpg-stormlight-handbook.handbook.JournalEntry.UckJaV79R63u6a5y.JournalEntryPage.fuwhzsRlWwlkrRB5]{Transportation} or who otherwise moves instantaneously.</p>"
+   },
+   "id": "reactive_strike",
+   "type": "basic"
+  },
+  "type": "action"
+ },
+ {
+  "_id": "Gona1nDaqRcioeim",
+  "effects": [],
+  "flags": {},
+  "folder": "xeAxqcLYdFWSwUur",
+  "img": "icons/skills/melee/hand-grip-staff-yellow-brown.webp",
+  "name": "Ready",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 1
+    },
+    "flavor": "",
+    "plotDie": false,
+    "type": "utility",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "<p>Choose the trigger you’re waiting for and choose the action you want to use in response. If that trigger occurs before the start of your next turn, you can use the chosen action in response to the trigger, even if it’s not your turn. If you choose not to respond to the trigger, you don’t regain your spent actions.</p><p>Your readied action must follow all other rules as if you were using it on your turn.</p><p><em>To use this action, you must use </em><span class=\"cosmere-icon\" data-tooltip=\"One Action\" aria-label=\"One Action\">1</span><em> for the <strong>Ready</strong> action itself, plus the number of </em><span class=\"cosmere-icon\" data-tooltip=\"One Action\" aria-label=\"One Action\">1</span><em> required for the action you chose to prepare.</em></p>",
+    "short": "<p>Choose the trigger you’re waiting for and choose the action you want to use in response. If that trigger occurs before the start of your next turn, you can use the chosen action in response to the trigger, even if it’s not your turn. If you choose not to respond to the trigger, you don’t regain your spent actions.</p><p>Your readied action must follow all other rules as if you were using it on your turn. For example, if you already used a @UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.wC4Z0mdGwRxLDpMC]{Disengage} action, you can't ready a second <strong>Disengage</strong> action.</p><p><em>To use this action, you must use </em><span class=\"cosmere-icon\" data-tooltip=\"One Action\" aria-label=\"One Action\">1</span><em> for the <strong>Ready</strong> action itself, plus the number of </em><span class=\"cosmere-icon\" data-tooltip=\"One Action\" aria-label=\"One Action\">1</span><em> required for the action you chose to prepare.</em></p>",
+    "value": "<p>You prepare to respond to something happening on the battlefield. Choose the trigger you’re waiting for (such as a character using a certain action or gaining a certain condition) and choose the action (or free action) you want to use in response. If that trigger occurs before the start of your next turn, you can use the chosen action in response to the trigger, even if it’s not your turn. If you choose not to respond to the trigger, you don’t regain your spent actions.</p><p>Your readied action must follow all other rules as if you were using it on your turn. For example, if you already used a @UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.wC4Z0mdGwRxLDpMC]{Disengage} action, you can't ready a second <strong>Disengage</strong> action.</p><p><em>To use this action, you must use </em><span class=\"cosmere-icon\" data-tooltip=\"One Action\" aria-label=\"One Action\">1</span><em> for the <strong>Ready</strong> action itself, plus the number of </em><span class=\"cosmere-icon\" data-tooltip=\"One Action\" aria-label=\"One Action\">1</span><em> required for the action you chose to prepare.</em></p>"
+   },
+   "id": "ready",
+   "type": "basic"
+  },
+  "type": "action"
+ },
+ {
+  "_id": "Y9lzSbkmwGg7mN61",
+  "effects": [],
+  "flags": {},
+  "folder": "xeAxqcLYdFWSwUur",
+  "img": "icons/magic/life/cross-explosion-burst-green.webp",
+  "name": "Recover",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 2
+    },
+    "flavor": "",
+    "plotDie": false,
+    "type": "utility",
+    "uses": {
+     "max": 1,
+     "recharge": "per_scene",
+     "type": "use",
+     "value": 1
+    }
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "<p>Roll your recovery die to recover health and/or focus, as if you just finished a short rest.</p><p>You can only use the <strong>Recover</strong> action once per scene.</p>",
+    "short": "<p>Roll your recovery die to recover health and/or focus, as if you just finished a short rest.</p><p>You can only use the <strong>Recover</strong> action once per scene.</p>",
+    "value": "<p>You take a deep breath and steel yourself. Roll your recovery die to recover health and/or focus, as if you just finished a short rest.</p><p>You can only use the <strong>Recover</strong> action once per scene.</p>"
+   },
+   "id": "recover",
+   "type": "basic"
+  },
+  "type": "action"
+ },
+ {
+  "_id": "Lwb3n4lfhPO0Y4xF",
+  "effects": [],
+  "flags": {},
+  "folder": "yIMHrJJvgkLq0wgx",
+  "img": "icons/magic/life/cross-area-circle-green-white.webp",
+  "name": "Regenerate",
+  "system": {
+   "activation": {
+    "complication": null,
+    "consume": [
+     {
+      "resource": "inv",
+      "type": "resource",
+      "value": {
+       "actual": 0,
+       "max": 1,
+       "min": 1
+      }
+     }
+    ],
+    "cost": {
+     "type": "fre",
+     "value": null
+    },
+    "flavor": "",
+    "opportunity": null,
+    "plotDie": false,
+    "type": "utility",
+    "uses": null
+   },
+   "ancestry": null,
+   "damage": {
+    "formula": "1d6 + @tier",
+    "type": "heal"
+   },
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": "<p>At the start of your turn, you can use <strong>Investiture</strong> to heal your wounds; you can use this free action even if you’re <strong>Unconscious</strong> or otherwise prevented from taking actions. Spend 1 <strong>Investiture</strong> to recover health equal to 1d6 plus your current tier (1 for a tier one character, 2 for tier two, etc.).</p>"
+   },
+   "id": "regenerate",
+   "modality": null,
+   "type": "stormlight"
+  },
+  "type": "action"
+ },
+ {
+  "_id": "ttTSR1u5C8D6vbGf",
+  "effects": [],
+  "flags": {},
+  "folder": "xeAxqcLYdFWSwUur",
+  "img": "icons/skills/melee/unarmed-punch-fist-blue.webp",
+  "name": "Shove",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 2
+    },
+    "flavor": "",
+    "modifierFormula": "",
+    "plotDie": false,
+    "skill": "ath",
+    "type": "skill_test",
+    "uses": null
+   },
+   "damage": {
+    "attribute": null,
+    "formula": null,
+    "grazeOverrideFormula": "",
+    "skill": null,
+    "type": null
+   },
+   "description": {
+    "chat": "<p>Make an Athletics test against the Physical defense of a character within your reach. On a success, you push or pull the target 5 feet horizontally. If you successfully Shove a character who has grappled you, it ends the @UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.EVPgpHL6Y4jrumwI]{Grapple} effect.</p>",
+    "short": "<p>Make an Athletics test against the Physical defense of a character within your reach. On a success, you push or pull the target 5 feet horizontally. If you successfully Shove a character who has grappled you, it ends the @UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.EVPgpHL6Y4jrumwI]{Grapple} effect.</p>",
+    "value": "<p>Through strength and skill, you forcibly maneuver your opponent. Make an Athletics test against the Physical defense of a character within your reach. On a success, you push or pull the target 5 feet horizontally. If you successfully <strong>Shove</strong> a character who has grappled you, it ends the@UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.EVPgpHL6Y4jrumwI]{ Grapple }effect.</p>"
+   },
+   "id": "shove",
+   "type": "basic"
+  },
+  "type": "action"
+ },
+ {
+  "_id": "3op19r41SDSlITWg",
+  "effects": [],
+  "flags": {},
+  "folder": null,
+  "img": "icons/magic/light/hand-sparks-smoke-teal.webp",
+  "name": "Stormlight Actions Pack",
+  "system": {
+   "activation": {
+    "attribute": "default",
+    "complication": null,
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "opportunity": null,
+    "plotDie": false,
+    "type": "none",
+    "uses": null
+   },
+   "ancestry": null,
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": "<p>Drag this pack onto a character sheet to quickly add the basic stormlight actions. These include:</p><ul><li><p>@UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.kzgs9GPqYqfHHS2q]{Breathe Stormlight}</p></li><li><p>@UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.2YpPFHYxjgieDoTk]{Enhance}</p></li><li><p>@UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.Lwb3n4lfhPO0Y4xF]{Regenerate}</p></li></ul>"
+   },
+   "events": {
+    "1TcPgNzTiRrZeba0": {
+     "description": "Grant Stormlight Actions",
+     "event": "add-to-actor",
+     "handler": {
+      "allowDuplicates": false,
+      "increaseQuantity": false,
+      "items": [
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.actions.Item.kzgs9GPqYqfHHS2q"
+       },
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.actions.Item.2YpPFHYxjgieDoTk"
+       },
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.actions.Item.Lwb3n4lfhPO0Y4xF"
+       }
+      ],
+      "notify": true,
+      "pickOne": false,
+      "type": "grant-items"
+     },
+     "id": "1TcPgNzTiRrZeba0"
+    },
+    "kTzF6lK6N4tTR19C": {
+     "description": "Remove Kit",
+     "event": "add-to-actor",
+     "handler": {
+      "items": [
+       "Compendium.cosmere-rpg-stormlight-handbook.actions.Item.3op19r41SDSlITWg"
+      ],
+      "reduceQuantity": false,
+      "type": "remove-items"
+     },
+     "id": "kTzF6lK6N4tTR19C"
+    }
+   },
+   "id": "stormlight-actions-kit",
+   "modality": null,
+   "relationships": {},
+   "type": "basic"
+  },
+  "type": "action"
+ },
+ {
+  "_id": "Da4Xj4WnVbtHMH7k",
+  "effects": [],
+  "flags": {},
+  "folder": "xeAxqcLYdFWSwUur",
+  "img": "icons/skills/melee/hand-grip-sword-strike-orange.webp",
+  "name": "Strike",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 1
+    },
+    "flavor": "",
+    "plotDie": false,
+    "type": "utility",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "<p>You attack using an unarmed attack or a weapon you’re wielding against the Physical defense of a target.<br>You can use the <strong>Strike</strong> action more than once per turn, but each attack must use a different hand.</p><p>If you attack using your offhand, you must spend 2 focus.</p>",
+    "short": "<p>You attack using an unarmed attack or a weapon you’re wielding against the Physical defense of a target.<br>You can use the <strong>Strike</strong> action more than once per turn, but each attack must use a different hand.</p><p>If you attack using your offhand, you must spend 2 focus.</p>",
+    "value": "<p>You attack using an unarmed attack or a weapon you’re wielding against the Physical defense of a target.<br>You can use the <strong>Strike</strong> action more than once per turn, but each attack must use a different hand.</p><p>If you attack using your offhand, you must spend 2 focus.</p>"
+   },
+   "id": "strike",
+   "type": "basic"
+  },
+  "type": "action"
+ },
+ {
+  "_id": "A4fgvQ6HoxCIpxFS",
+  "effects": [],
+  "flags": {},
+  "folder": "xeAxqcLYdFWSwUur",
+  "img": "icons/skills/trades/academics-investigation-study-blue.webp",
+  "name": "Use A Skill",
+  "system": {
+   "activation": {
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 1
+    },
+    "flavor": "",
+    "plotDie": false,
+    "type": "utility",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "<p>You use one of your skills to perform challenging tasks around the battlefield.</p>",
+    "short": "<p>You use one of your skills to perform challenging tasks around the battlefield. This action covers many creative tasks you might attempt.</p>",
+    "value": "<p>You use one of your skills to perform challenging tasks around the battlefield—for example, you could make a Perception test to search the environment, make a Stealth test to hide, or make a Medicine test to treat an ally. This action covers many creative tasks you might attempt.</p>"
+   },
+   "id": "use_a_skill",
+   "type": "basic"
+  },
+  "type": "action"
+ },
+ {
+  "_id": "9CgaiuwHuMp0H6tl",
+  "effects": [],
+  "flags": {},
+  "folder": null,
+  "img": "icons/skills/social/thumbsup-approval-like.webp",
+  "name": "Basic Actions Pack",
+  "system": {
+   "activation": {
+    "attribute": "default",
+    "complication": null,
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "opportunity": null,
+    "plotDie": false,
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": "<p>Drag this pack onto a character sheet to quickly add <strong>ALL</strong> the basic actions.</p>"
+   },
+   "events": {
+    "Yw7zcWVMGqdvjzn6": {
+     "description": "Remove Kit",
+     "event": "add-to-actor",
+     "handler": {
+      "amount": 1,
+      "items": [
+       "Compendium.cosmere-rpg-stormlight-handbook.actions.Item.9CgaiuwHuMp0H6tl"
+      ],
+      "reduceQuantity": false,
+      "type": "remove-items"
+     },
+     "id": "Yw7zcWVMGqdvjzn6",
+     "order": 0
+    },
+    "m49yKwgGgczAO9Ww": {
+     "description": "Add Basic Actions",
+     "event": "add-to-actor",
+     "handler": {
+      "allowDuplicates": false,
+      "increaseQuantity": false,
+      "items": [
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.actions.Item.K2QgKOSezyeYnnxl"
+       },
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.actions.Item.9cVxEnB5ayw52fTA"
+       },
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.actions.Item.YLN9KgaotlN8ZcQK"
+       },
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.actions.Item.I1CQjZicYdeG9NCN"
+       },
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.actions.Item.wC4Z0mdGwRxLDpMC"
+       },
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.actions.Item.6Vm9QIbIjDOeSCwq"
+       },
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.actions.Item.DOeZCEIwrwFuYQEd"
+       },
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.actions.Item.8yQ5MMIrywehKyTS"
+       },
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.actions.Item.EVPgpHL6Y4jrumwI"
+       },
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.actions.Item.iqjFbO4BLuTSt4cQ"
+       },
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.actions.Item.UEGVL0QnZ6UelxxZ"
+       },
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.actions.Item.QpFIxaoCBezzt6yw"
+       },
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.actions.Item.Gona1nDaqRcioeim"
+       },
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.actions.Item.Y9lzSbkmwGg7mN61"
+       },
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.actions.Item.ttTSR1u5C8D6vbGf"
+       },
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.actions.Item.Da4Xj4WnVbtHMH7k"
+       },
+       {
+        "quantity": "1",
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.actions.Item.DqVTxZTw827gfNJz"
+       },
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.actions.Item.A4fgvQ6HoxCIpxFS"
+       }
+      ],
+      "notify": true,
+      "pickOne": false,
+      "type": "grant-items"
+     },
+     "id": "m49yKwgGgczAO9Ww",
+     "order": 0
+    }
+   },
+   "price": {
+    "currency": "none",
+    "denomination": {
+     "primary": "none",
+     "secondary": "none"
+    },
+    "unit": "none",
+    "value": 0
+   },
+   "quantity": 1,
+   "relationships": {},
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "0smqtYLVhL0OxqWE",
+  "effects": [],
+  "flags": {},
+  "folder": null,
+  "img": "icons/skills/melee/unarmed-punch-fist-yellow-red.webp",
+  "name": "Common Actions Pack",
+  "system": {
+   "activation": {
+    "attribute": "default",
+    "complication": null,
+    "consume": [],
+    "cost": {
+     "value": null
+    },
+    "flavor": "",
+    "opportunity": null,
+    "plotDie": false,
+    "type": "none",
+    "uses": null
+   },
+   "damage": {
+    "formula": null,
+    "type": null
+   },
+   "description": {
+    "chat": "",
+    "short": "",
+    "value": "<p>Drag this pack onto a character sheet to quickly add commonly used basic actions. These include:</p><ul><li><p>@UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.K2QgKOSezyeYnnxl]{Aid}</p></li><li><p>@UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.9cVxEnB5ayw52fTA]{Avoid Danger}</p></li><li><p>@UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.I1CQjZicYdeG9NCN]{Brace}</p></li><li><p>@UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.wC4Z0mdGwRxLDpMC]{Disengage}</p></li><li><p>@UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.6Vm9QIbIjDOeSCwq]{Dodge}</p></li><li><p>@UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.EVPgpHL6Y4jrumwI]{Grapple}</p></li><li><p>@UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.ttTSR1u5C8D6vbGf]{Shove}</p></li><li><p>@UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.DqVTxZTw827gfNJz]{Unarmed Strike}</p></li><li><p>@UUID[Compendium.cosmere-rpg-stormlight-handbook.actions.Item.Y9lzSbkmwGg7mN61]{Recover}</p></li></ul>"
+   },
+   "events": {
+    "7yHw9QmIH5AzBaq4": {
+     "description": "Remove Kit",
+     "event": "add-to-actor",
+     "handler": {
+      "amount": 1,
+      "items": [
+       "Compendium.cosmere-rpg-stormlight-handbook.actions.Item.0smqtYLVhL0OxqWE"
+      ],
+      "reduceQuantity": false,
+      "type": "remove-items"
+     },
+     "id": "7yHw9QmIH5AzBaq4",
+     "order": 0
+    },
+    "bRk5XtP52xifZBoi": {
+     "description": "Add Common Actions",
+     "event": "add-to-actor",
+     "handler": {
+      "allowDuplicates": false,
+      "increaseQuantity": false,
+      "items": [
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.actions.Item.K2QgKOSezyeYnnxl"
+       },
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.actions.Item.9cVxEnB5ayw52fTA"
+       },
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.actions.Item.I1CQjZicYdeG9NCN"
+       },
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.actions.Item.wC4Z0mdGwRxLDpMC"
+       },
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.actions.Item.6Vm9QIbIjDOeSCwq"
+       },
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.actions.Item.EVPgpHL6Y4jrumwI"
+       },
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.actions.Item.ttTSR1u5C8D6vbGf"
+       },
+       {
+        "quantity": "1",
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.actions.Item.DqVTxZTw827gfNJz"
+       },
+       {
+        "uuid": "Compendium.cosmere-rpg-stormlight-handbook.actions.Item.Y9lzSbkmwGg7mN61"
+       }
+      ],
+      "notify": true,
+      "pickOne": false,
+      "type": "grant-items"
+     },
+     "id": "bRk5XtP52xifZBoi",
+     "order": 0
+    }
+   },
+   "price": {
+    "currency": "none",
+    "denomination": {
+     "primary": "none",
+     "secondary": "none"
+    },
+    "unit": "none",
+    "value": 0
+   },
+   "quantity": 1,
+   "relationships": {},
+   "type": "basic",
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "equipment"
+ },
+ {
+  "_id": "DqVTxZTw827gfNJz",
+  "effects": [],
+  "flags": {},
+  "folder": "xeAxqcLYdFWSwUur",
+  "img": "icons/skills/melee/unarmed-punch-fist.webp",
+  "name": "Unarmed Strike",
+  "system": {
+   "activation": {
+    "complication": null,
+    "consume": [],
+    "cost": {
+     "type": "act",
+     "value": 1
+    },
+    "flavor": "",
+    "modifierFormula": "",
+    "opportunity": null,
+    "plotDie": false,
+    "skill": "ath",
+    "type": "skill_test",
+    "uses": null
+   },
+   "alwaysEquipped": true,
+   "attack": {
+    "range": null,
+    "type": "melee"
+   },
+   "damage": {
+    "attribute": null,
+    "formula": "@scalar.damage.unarmed",
+    "grazeOverrideFormula": "",
+    "skill": "ath",
+    "type": "impact"
+   },
+   "description": {
+    "chat": "<p>Any character can make an unarmed attack using <strong>Athletics</strong>.</p><p><strong>Always Available.</strong> You don’t have to be holding a weapon to make an unarmed attack, and you can’t be disarmed of your unarmed attacks. You can make an unarmed attack even if each of your hands is holding something, but if your second Strike on a turn is an unarmed attack, it follows the rules for an offhand attack.</p><p><strong>Strength Training.</strong> When you make an unarmed attack, its damage die is based on your Strength score, as shown on the Unarmed Damage table.</p><table><thead><tr><th><p>Strength</p></th><th><p>Unarmed Damage</p></th></tr></thead><tbody><tr><td><p>0–2</p></td><td><p>1 (no die roll) impact</p></td></tr><tr><td><p>3–4</p></td><td><p>1d4 impact</p></td></tr><tr><td><p>5–6</p></td><td><p>1d8 impact</p></td></tr><tr><td><p>7–8</p></td><td><p>2d6 impact</p></td></tr><tr><td><p>9+</p></td><td><p>2d10 impact</p></td></tr></tbody></table>",
+    "short": "<p>Any character can make an unarmed attack using <strong>Athletics</strong>.</p><p><strong>Expertise.</strong> Unlike other entries on the Special Weapons table, you can choose Unarmed Attacks as a weapon expertise.</p><p><strong>Unique Traits.</strong> Unarmed attacks add the following unique traits:</p><p><strong>Always Available.</strong> Unarmed attacks don’t count as weapon attacks, but they are melee attacks intrinsic to each character. You don’t have to be holding a weapon to make an unarmed attack, and you can’t be disarmed of your unarmed attacks. You can make an unarmed attack even if each of your hands is holding something, but if your second Strike on a turn is an unarmed attack, it follows the rules for an offhand attack.</p><p><strong>Strength Training.</strong> When you make an unarmed attack, its damage die is based on your Strength score, as shown on the Unarmed Damage table.</p><table><thead><tr><th><p>Strength</p></th><th><p>Unarmed Damage</p></th></tr></thead><tbody><tr><td><p>0–2</p></td><td><p>1 (no die roll) impact</p></td></tr><tr><td><p>3–4</p></td><td><p>1d4 impact</p></td></tr><tr><td><p>5–6</p></td><td><p>1d8 impact</p></td></tr><tr><td><p>7–8</p></td><td><p>2d6 impact</p></td></tr><tr><td><p>9+</p></td><td><p>2d10 impact</p></td></tr></tbody></table>",
+    "value": "<p><strong>Damage</strong> Unique; <strong>Range</strong> Melee; <strong>Traits</strong> Unique; <strong>Expert Traits</strong> Momentum, Offhand;</p><p><strong>Type</strong> Special Weapons; <strong>Weapons Skill</strong> Athletics; <strong>Price</strong> —; <strong>Weight</strong> —;</p><p>Punches, kicks, thrown elbows, headbutts, and bites are examples of unarmed attacks. Any character can make an unarmed attack using <strong>Athletics</strong>.</p><p><strong>Expertise.</strong> Unlike other entries on the Special Weapons table, you can choose Unarmed Attacks as a weapon expertise.</p><p><strong>Unique Traits.</strong> Unarmed attacks add the following unique traits:</p><p><strong>Always Available.</strong> Unarmed attacks don’t count as weapon attacks, but they are melee attacks intrinsic to each character. You don’t have to be holding a weapon to make an unarmed attack, and you can’t be disarmed of your unarmed attacks. You can make an unarmed attack even if each of your hands is holding something, but if your second Strike on a turn is an unarmed attack, it follows the rules for an offhand attack.</p><p><strong>Strength Training.</strong> When you make an unarmed attack, its damage die is based on your Strength score, as shown on the Unarmed Damage table.</p><table><thead><tr><th><p>Strength</p></th><th><p>Unarmed Damage</p></th></tr></thead><tbody><tr><td><p>0–2</p></td><td><p>1 (no die roll) impact</p></td></tr><tr><td><p>3–4</p></td><td><p>1d4 impact</p></td></tr><tr><td><p>5–6</p></td><td><p>1d8 impact</p></td></tr><tr><td><p>7–8</p></td><td><p>2d6 impact</p></td></tr><tr><td><p>9+</p></td><td><p>2d10 impact</p></td></tr></tbody></table>"
+   },
+   "equip": {
+    "hold": "one_handed",
+    "type": "hold"
+   },
+   "equipped": false,
+   "expertise": false,
+   "id": "unarmed",
+   "price": {
+    "currency": "none",
+    "denomination": {
+     "primary": "none",
+     "secondary": "none"
+    },
+    "unit": "none",
+    "value": 0
+   },
+   "quantity": 1,
+   "traits": {
+    "cumbersome": {
+     "defaultActive": false,
+     "defaultValue": 0,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "dangerous": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "deadly": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "defensive": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "discreet": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "fragile": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "indirect": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "loaded": {
+     "defaultActive": false,
+     "defaultValue": 0,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "momentum": {
+     "active": false,
+     "defaultActive": false,
+     "defaultValue": null,
+     "expertise": {
+      "toggleActive": true,
+      "value": null
+     },
+     "value": null
+    },
+    "offhand": {
+     "active": false,
+     "defaultActive": false,
+     "defaultValue": null,
+     "expertise": {
+      "toggleActive": true,
+      "value": null
+     },
+     "value": null
+    },
+    "pierce": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "quickdraw": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "reach": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "thrown": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "two_handed": {
+     "defaultActive": false,
+     "expertise": {
+      "toggleActive": false
+     }
+    },
+    "unique": {
+     "active": true,
+     "defaultActive": true,
+     "defaultValue": null,
+     "expertise": {
+      "toggleActive": false,
+      "value": null
+     },
+     "value": null
+    }
+   },
+   "type": "special_wpn",
+   "weight": {
+    "unit": "lb",
+    "value": 0
+   }
+  },
+  "type": "weapon"
+ }
+]

@@ -1,0 +1,75 @@
+{
+    "_id": "A61eVVVyUuaUl3tz",
+    "img": "icons/magic/fire/barrier-wall-flame-ring-yellow.webp",
+    "name": "Spell Effect: Celestial Brand",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Celestial Brand]</p>\n<p>You gain a +1 status bonus to your attack rolls and skill checks against the marked creature, and deal additional spirit damage to it.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "rounds",
+            "value": 1
+        },
+        "level": {
+            "value": 5
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "key": "TokenMark",
+                "slug": "celestial-brand"
+            },
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "target:mark:celestial-brand"
+                ],
+                "selector": [
+                    "attack-roll",
+                    "skill-check"
+                ],
+                "type": "status",
+                "value": 1
+            },
+            {
+                "damageType": "spirit",
+                "diceNumber": 1,
+                "dieSize": "d4",
+                "key": "DamageDice",
+                "predicate": [
+                    "self:trait:holy",
+                    "target:mark:celestial-brand"
+                ],
+                "selector": "damage"
+            },
+            {
+                "damageType": "spirit",
+                "key": "FlatModifier",
+                "predicate": [
+                    "self:trait:holy",
+                    "target:mark:celestial-brand"
+                ],
+                "selector": "damage",
+                "value": "floor((@item.level - 5) / 2)"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

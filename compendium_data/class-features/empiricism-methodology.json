@@ -1,0 +1,78 @@
+{
+    "_id": "g3mNzNphtVxyR9Xr",
+    "img": "systems/pf2e/icons/features/classes/empiricism-methodology.webp",
+    "name": "Empiricism Methodology",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p>Everything comes down to data. Calculating statistics, running numbers, and using inductive reasoning allows you to determine the most likely outcome of any scenario, and anything out of place draws your keen attention.</p>\n<p>You are trained in one Intelligence-based skill of your choice. You gain the @UUID[Compendium.pf2e.feats-srd.Item.That's Odd] investigator feat, and you gain the @UUID[Compendium.pf2e.actionspf2e.Item.Expeditious Inspection] free action.</p>"
+        },
+        "level": {
+            "value": 1
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "key": "GrantItem",
+                "uuid": "Compendium.pf2e.feats-srd.Item.That's Odd"
+            },
+            {
+                "key": "GrantItem",
+                "uuid": "Compendium.pf2e.actionspf2e.Item.Expeditious Inspection"
+            },
+            {
+                "adjustName": false,
+                "choices": [
+                    {
+                        "label": "PF2E.Skill.Arcana",
+                        "value": "arcana"
+                    },
+                    {
+                        "label": "PF2E.Skill.Crafting",
+                        "value": "crafting"
+                    },
+                    {
+                        "label": "PF2E.Skill.Occultism",
+                        "value": "occultism"
+                    },
+                    {
+                        "label": "PF2E.Skill.Society",
+                        "value": "society"
+                    }
+                ],
+                "flag": "skill",
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Prompt.Skill"
+            },
+            {
+                "key": "ActiveEffectLike",
+                "mode": "upgrade",
+                "path": "system.skills.{item|flags.pf2e.rulesSelections.skill}.rank",
+                "value": 1
+            }
+        ],
+        "traits": {
+            "otherTags": [
+                "investigator-methodology"
+            ],
+            "rarity": "common",
+            "value": [
+                "investigator"
+            ]
+        }
+    },
+    "type": "feat"
+}

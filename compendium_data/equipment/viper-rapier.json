@@ -1,0 +1,100 @@
+{
+    "_id": "nSAA77N0cnSkljmE",
+    "img": "systems/pf2e/icons/equipment/weapons/rapier.webp",
+    "name": "Viper Rapier",
+    "system": {
+        "ammo": null,
+        "apex": {
+            "attribute": "dex"
+        },
+        "baseItem": "rapier",
+        "bonus": {
+            "value": 0
+        },
+        "bonusDamage": {
+            "value": 0
+        },
+        "bulk": {
+            "value": 1
+        },
+        "category": "martial",
+        "containerId": null,
+        "damage": {
+            "damageType": "piercing",
+            "dice": 1,
+            "die": "d6"
+        },
+        "description": {
+            "value": "<p>Crafted from flawless jade, the guard of this rapier takes the form of a twisting serpent with the blade thrusting from its open mouth. This rapier functions as a +3 greater striking quickstrike rapier. While wielding the rapier, your movement doesn't trigger reactions when you Stride, @UUID[Compendium.pf2e.actionspf2e.Item.Balance], or @UUID[Compendium.pf2e.actionspf2e.Item.Tumble Through]. When you invest the rapier, you either increase your Dexterity modifier by 1 or increase it to +4, whichever would give you a higher value.</p>\n<p><strong>Activate</strong> <span class=\"action-glyph\">R</span> (concentrate)</p>\n<p><strong>Frequency</strong> once per day</p>\n<p><strong>Trigger</strong> You fail, but don't critically fail, an attack using the viper rapier</p><hr /><p><strong>Effect</strong> The tip of the rapier briefly takes the form of a viper's head, and the blade twists and contorts, biting the target you missed. The target is affected as if successfully poisoned with cave worm venom (DC 43).</p><hr /><p><strong>Activate</strong> <span class=\"action-glyph\">R</span> (concentrate)</p>\n<p><strong>Trigger</strong> A creature misses or critically misses you with an attack</p><hr /><p><strong>Effect</strong> With a slight, obviously mocking bow or curtsy, you Step.</p><hr /><p><strong>Activate</strong> <span class=\"action-glyph\">2</span> (manipulate)</p>\n<p><strong>Frequency</strong> once per hour</p><hr /><p><strong>Effect</strong> You twirl your rapier in a serpentine pattern, causing your form to become a blur of motion. You're @UUID[Compendium.pf2e.conditionitems.Item.Concealed] for 1 minute or until you take a hostile action. While you're concealed, you also gain a +2 circumstance bonus to Reflex saving throws.</p>\n<p>@UUID[Compendium.pf2e.equipment-effects.Item.Effect: Viper Rapier]</p>"
+        },
+        "expend": null,
+        "grade": null,
+        "group": "sword",
+        "hardness": 0,
+        "hp": {
+            "max": 0,
+            "value": 0
+        },
+        "level": {
+            "value": 20
+        },
+        "material": {
+            "grade": null,
+            "type": null
+        },
+        "price": {
+            "value": {
+                "gp": 70000
+            }
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Treasure Vault (Remastered)"
+        },
+        "quantity": 1,
+        "range": null,
+        "reload": {
+            "value": null
+        },
+        "rules": [],
+        "runes": {
+            "potency": 3,
+            "property": [
+                "speed"
+            ],
+            "striking": 2
+        },
+        "size": "med",
+        "specific": {
+            "material": {
+                "grade": null,
+                "type": null
+            },
+            "runes": {
+                "potency": 3,
+                "property": [
+                    "speed"
+                ],
+                "striking": 2
+            }
+        },
+        "splashDamage": {
+            "value": 0
+        },
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "apex",
+                "deadly-d8",
+                "disarm",
+                "finesse",
+                "invested"
+            ]
+        },
+        "usage": {
+            "value": "held-in-one-hand"
+        }
+    },
+    "type": "weapon"
+}

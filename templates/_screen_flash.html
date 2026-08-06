@@ -1,0 +1,14 @@
+{# Full-screen edge flash for dramatic moments (crit / nat-1). Self-contained:
+   include on any page that shows roll toasts. window.pf2eFlash('crit'|'fumble')
+   blooms a colored rim for a beat. CSS lives in system.css (#screen-flash). #}
+<div id="screen-flash" class="no-print" aria-hidden="true"></div>
+<script>
+window.pf2eFlash = function(kind) {
+    var el = document.getElementById('screen-flash');
+    if (!el || (kind !== 'crit' && kind !== 'fumble')) return;
+    el.className = 'no-print';            // reset
+    void el.offsetWidth;                  // reflow so the animation restarts
+    el.classList.add('flash-' + kind);
+    setTimeout(function() { el.className = 'no-print'; }, 700);
+};
+</script>

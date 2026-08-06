@@ -1,0 +1,18 @@
+{% extends "_account_base.html" %}
+{% block title %}New campaign{% endblock %}
+{% block content %}
+<h1>New campaign</h1>
+<p class="sub">You'll be its GM. Pick the game system &mdash; it sets the rules, sheets, and tools for the whole table.</p>
+{% if error %}<div class="err">{{ error }}</div>{% endif %}
+<form method="POST">
+  <label>Campaign name</label>
+  <input name="name" required autofocus placeholder="The Roshar Game">
+  <label>System</label>
+  <select name="system" style="width:100%;padding:10px 12px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-size:14px;font-family:inherit;">
+    <option value="pf2e">Pathfinder 2e</option>
+    <option value="cosmere">Cosmere RPG (Stormlight)</option>
+  </select>
+  <button type="submit">Create campaign</button>
+</form>
+<p class="foot muted"><a href="/me">&larr; Back to my table</a></p>
+{% endblock %}

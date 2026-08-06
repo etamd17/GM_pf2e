@@ -1,0 +1,56 @@
+{
+    "_id": "l8HkOKfiUqd3BUwT",
+    "img": "icons/magic/lightning/orb-ball-spiral-blue.webp",
+    "name": "Spell Effect: Ancestral Form",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Ancestral Form]</p>\n<p>You gain resistance to all damage (except force and damage from Strikes with the ghost touch property rune), and this resistance is doubled against non-magical and precision damage.</p>\n<p>You gain a fly Speed equal to your land Speed.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": true,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 6
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "key": "BaseSpeed",
+                "selector": "fly",
+                "value": "@actor.system.movement.speeds.land.value"
+            },
+            {
+                "doubleVs": [
+                    "non-magical",
+                    "precision"
+                ],
+                "exceptions": [
+                    "force",
+                    "ghost-touch"
+                ],
+                "key": "Resistance",
+                "type": "all-damage",
+                "value": "10 + 5*floor((@item.level -6)/2)"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

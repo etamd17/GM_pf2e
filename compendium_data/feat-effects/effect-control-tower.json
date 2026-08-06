@@ -1,0 +1,54 @@
+{
+    "_id": "mkIamZGtQaSsUWLk",
+    "img": "icons/environment/settlement/watchtower-tribe.webp",
+    "name": "Effect: Control Tower",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.feats-srd.Item.Control Tower]</p>\n<p>You gain a +2 circumstance bonus when using the Seek action to find hidden or undetected creatures within the overwatch field.</p>"
+        },
+        "duration": {
+            "expiry": null,
+            "sustained": false,
+            "unit": "unlimited",
+            "value": -1
+        },
+        "level": {
+            "value": 14
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Guns & Gears"
+        },
+        "rules": [
+            {
+                "domain": "perception",
+                "key": "RollOption",
+                "label": "Seeking a Hidden or Undetected Target",
+                "option": "seeking-hidden-undetected",
+                "toggleable": true
+            },
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "seeking-hidden-undetected"
+                ],
+                "selector": "perception",
+                "type": "circumstance",
+                "value": 2
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

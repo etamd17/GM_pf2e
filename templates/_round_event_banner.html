@@ -1,0 +1,175 @@
+{# ════════════════════════════════════════════════════════════════════
+   ROUND EVENT banner  (round-events lane, feature 7 — table display)
+   Self-contained drop-in: include on any page, then call
+   window.pf2eRoundEvent({title, text, round}) to slide an ember banner
+   from the top. UNLIKE boss-reveal/initiative-flourish (which piggyback
+   on base.html's own /api/events dispatch), this partial subscribes
+   itself via window.appSSE('round_event', ...) per the round-events-lane
+   spec — if the shared SSE hub isn't on this page, it no-ops silently
+   rather than opening a second EventSource (gunicorn --workers 1 pins a
+   thread per stream; see templates/_sse_hub.html).
+
+   GM frame always carries title/text; the player frame is only broadcast
+   at all when the event's "show on table" flag is set (server-side split
+   in app.py::_broadcast_round_event) — this partial renders whatever
+   arrives, no client-side filtering.
+
+   Title/text are GM-authored free text, so they are rendered via
+   textContent (never innerHTML) — no HTML/script injection regardless of
+   whether a page-local esc() helper exists.
+   ════════════════════════════════════════════════════════════════════ #}
+<div id="round-event-banner" class="reb no-print" aria-hidden="true" role="status">
+    <div class="reb-content">
+        <div class="reb-headline"><span id="reb-round"></span><span id="reb-title"></span></div>
+        <div id="reb-text" class="reb-text"></div>
+    </div>
+</div>
+
+<style>
+    /* Sits above ordinary page content/docks but BELOW every modal overlay:
+       the tracker's .trk-modal backdrops are z-index 150 (the lowest modal
+       layer anywhere in the app; sheet modals start at 500), so the banner
+       stays under them all — the spec forbids intercepting clicks over an
+       open modal. Fully independent of the boss-reveal /
+       initiative-flourish cinematic layer (99990/99991), which is a
+       non-interactive full-bleed takeover, not a modal. */
+    .reb {
+        position: fixed; top: 0; left: 50%;
+        transform: translate(-50%, -100%);
+        z-index: 130;
+        width: min(640px, 92vw);
+        margin-top: 10px;
+        pointer-events: none;
+        opacity: 0;
+        font-family: 'Cinzel', 'Cormorant Garamond', serif;
+    }
+    .reb.show {
+        pointer-events: auto;
+        opacity: 1;
+        transform: translate(-50%, 0);
+        transition: transform 0.42s cubic-bezier(0.16,1,0.3,1), opacity 0.3s ease;
+    }
+    .reb.hide {
+        opacity: 0;
+        transform: translate(-50%, -100%);
+        transition: transform 0.38s cubic-bezier(0.4,0,1,1), opacity 0.32s ease;
+    }
+
+    .reb-content {
+        cursor: pointer;
+        padding: 14px 22px;
+        border-radius: 0 0 10px 10px;
+        background: linear-gradient(180deg, rgba(30,20,10,0.96), rgba(14,10,6,0.97));
+        border: 1px solid rgba(201,163,78,0.5);
+        border-top: none;
+        box-shadow: 0 10px 32px rgba(0,0,0,0.55), 0 0 24px rgba(190,120,40,0.18);
+        text-align: center;
+    }
+
+    .reb-headline {
+        font-size: clamp(14px, 2.4vw, 19px);
+        font-weight: 700; letter-spacing: 0.03em;
+        color: #f4e6b0;
+        text-shadow: 0 0 18px rgba(190,80,30,0.45), 0 2px 8px rgba(0,0,0,0.7);
+    }
+    .reb-headline #reb-round {
+        color: #e0bf78;
+        font-style: italic;
+        font-weight: 600;
+        margin-right: 0.4em;
+    }
+    .reb-headline #reb-round:empty { display: none; }
+
+    .reb-text {
+        margin-top: 4px;
+        font-family: 'Inter', system-ui, sans-serif;
+        font-size: clamp(12px, 1.6vw, 14px);
+        color: rgba(224,204,168,0.88);
+        line-height: 1.4;
+    }
+    .reb-text:empty { display: none; }
+
+    @media (prefers-reduced-motion: reduce) {
+        .reb { transition: none; transform: translate(-50%, 0); }
+        .reb.show { transition: opacity 0.25s ease; transform: translate(-50%, 0); }
+        .reb.hide { transition: opacity 0.25s ease; transform: translate(-50%, 0); }
+    }
+</style>
+
+<script>
+(function() {
+    // Two or more events can fire on the SAME round boundary (a one-shot
+    // plus a repeat landing together): the frames arrive back-to-back, and
+    // the old restart idiom replaced banner 1 with banner 2 in ~0ms — the
+    // table never saw the first narrative. Queue them and play in order.
+    var queue = [];
+    var active = false;
+
+    function show(data) {
+        var el = document.getElementById('round-event-banner');
+        if (!el) return;
+        var roundEl = document.getElementById('reb-round');
+        var titleEl = document.getElementById('reb-title');
+        var textEl  = document.getElementById('reb-text');
+        var hasRound = (data.round !== undefined && data.round !== null && data.round !== '');
+        // The em dash belongs to the title — a title-less event otherwise
+        // reads "Round 4 — " with nothing after it.
+        roundEl.textContent = hasRound
+            ? ('Round ' + data.round + (data.title ? ' — ' : '')) : '';
+        titleEl.textContent = data.title || '';
+        textEl.textContent  = data.text || '';
+        // Restart cleanly even if a banner is mid-hide — same
+        // reflow-restart idiom as boss-reveal.
+        el.classList.remove('show', 'hide');
+        void el.offsetWidth;             // reflow so the slide-in replays
+        el.classList.add('show');
+        el.setAttribute('aria-hidden', 'false');
+        active = true;
+        clearTimeout(el._rebTimer);
+        el._rebTimer = setTimeout(function() { window.pf2eRoundEventDismiss(); }, 6000);
+    }
+
+    window.pf2eRoundEvent = function(data) {
+        data = data || {};
+        // Payload-only events (no title, no text) have nothing to say —
+        // don't pop an empty "Round 4 — " shell.
+        if (!data.title && !data.text) return;
+        if (active) {
+            if (queue.length < 4) queue.push(data);
+            return;
+        }
+        show(data);
+    };
+
+    window.pf2eRoundEventDismiss = function() {
+        var el = document.getElementById('round-event-banner');
+        if (!el) return;
+        clearTimeout(el._rebTimer);
+        el.classList.remove('show');
+        el.classList.add('hide');
+        el.setAttribute('aria-hidden', 'true');
+        setTimeout(function() {
+            el.classList.remove('hide');
+            active = false;
+            var next = queue.shift();
+            if (next) show(next);
+        }, 420);
+    };
+
+    var el = document.getElementById('round-event-banner');
+    if (el) el.addEventListener('click', function() { window.pf2eRoundEventDismiss(); });
+    // Subscribe directly through the shared SSE hub (window.appSSE) rather
+    // than piggybacking on a page's own dispatcher, per the round-events
+    // spec. Pages that never load the hub (no _sse_hub.html include)
+    // simply never get window.appSSE — no-op rather than error.
+    try {
+        if (window.appSSE) {
+            window.appSSE('round_event', function(e) {
+                var d = null;
+                try { d = JSON.parse(e.data); } catch (_) {}
+                try { window.pf2eRoundEvent(d || {}); } catch (_) {}
+            });
+        }
+    } catch (_) {}
+})();
+</script>

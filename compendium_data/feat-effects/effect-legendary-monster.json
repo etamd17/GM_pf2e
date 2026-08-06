@@ -1,0 +1,84 @@
+{
+    "_id": "ELCODoiGDBEqRAtT",
+    "img": "icons/creatures/magical/humanoid-horned-rider.webp",
+    "name": "Effect: Legendary Monster",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.feats-srd.Item.Legendary Monster]</p>\n<p>When you Unleash Yaoguai Might, you can gain one of the following additional benefits.</p><ul><li>Your body grows to impossible heights. Your @UUID[Compendium.pf2e.spells-srd.Item.Enlarge] effect is heightened to 4th rank.</li><li>Your spiritual power erupts to punish your enemies. You deal an additional 1d4 spirit damage with all Strikes and attack spells, and your Strikes and attack spells gain the spirit trait.</li><li>You can leap off the air itself. You gain the effects of the @UUID[Compendium.pf2e.spells-srd.Item.Fly] spell.</li></ul>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Lost Omens Tian Xia Character Guide"
+        },
+        "rules": [
+            {
+                "choices": [
+                    {
+                        "label": "PF2E.SpecificRule.Yaoguai.LegendaryMonster.Options.Enlarge",
+                        "value": "enlarge"
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.Yaoguai.LegendaryMonster.Options.Damage",
+                        "value": "damage"
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.Yaoguai.LegendaryMonster.Options.Fly",
+                        "value": "fly"
+                    }
+                ],
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Yaoguai.LegendaryMonster.Prompt",
+                "rollOption": "legendary-monster-boost"
+            },
+            {
+                "key": "BaseSpeed",
+                "predicate": [
+                    "change-shape:yaoguai",
+                    "legendary-monster-boost:fly"
+                ],
+                "selector": "fly",
+                "value": "max(20,@actor.system.movement.speeds.land.value)"
+            },
+            {
+                "damageType": "spirit",
+                "diceNumber": 1,
+                "dieSize": "d4",
+                "hideIfDisabled": true,
+                "key": "DamageDice",
+                "predicate": [
+                    "change-shape:yaoguai",
+                    "legendary-monster-boost:damage"
+                ],
+                "selector": [
+                    "strike-damage",
+                    "spell-damage"
+                ]
+            },
+            {
+                "key": "GrantItem",
+                "uuid": "Compendium.pf2e.feat-effects.Item.Effect: Unleash Yaoguai Might"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

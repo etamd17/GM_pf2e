@@ -1,0 +1,88 @@
+{
+    "_id": "4tepFOJLhZSelPoa",
+    "img": "systems/pf2e/icons/equipment/consumables/talismans/dragon-turtle-scale.webp",
+    "name": "Effect: Dragon Turtle Scale",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Dragon Turtle Scale], @UUID[Compendium.pf2e.equipment-srd.Item.Dragon Turtle Scale (Greater)]</p>\n<p>You gain a swim Speed equal to half your land Speed or equal to your land Speed (<em>greater</em>) .</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 4
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder GM Core"
+        },
+        "rules": [
+            {
+                "adjustName": false,
+                "choices": [
+                    {
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:origin:item:slug:dragon-turtle-scale",
+                                    {
+                                        "not": "parent:origin:item"
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": "Compendium.pf2e.equipment-srd.Item.Dragon Turtle Scale"
+                    },
+                    {
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:origin:item:slug:dragon-turtle-scale-greater",
+                                    {
+                                        "not": "parent:origin:item"
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": "Compendium.pf2e.equipment-srd.Item.Dragon Turtle Scale (Greater)"
+                    }
+                ],
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Prompt.EquipmentVariety",
+                "rollOption": "dragon-turtle-scale"
+            },
+            {
+                "key": "BaseSpeed",
+                "predicate": [
+                    "dragon-turtle-scale:dragon-turtle-scale"
+                ],
+                "selector": "swim",
+                "value": "floor(@actor.system.movement.speeds.land.value*0.5)"
+            },
+            {
+                "key": "BaseSpeed",
+                "predicate": [
+                    "dragon-turtle-scale:dragon-turtle-scale-greater"
+                ],
+                "selector": "swim",
+                "value": "@actor.system.movement.speeds.land.value"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

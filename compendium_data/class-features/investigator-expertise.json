@@ -1,0 +1,66 @@
+{
+    "_id": "PFvB79O2VFdiAeSj",
+    "img": "icons/commodities/treasure/medal-ribbon-gold-blue.webp",
+    "name": "Investigator Expertise",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p>You've refined your investigative techniques to an exceptional degree. Your circumstance bonus from @UUID[Compendium.pf2e.actionspf2e.Item.Pursue a Lead] increases to +2. Your proficiency rank for your investigator class DC increases to expert.</p>"
+        },
+        "level": {
+            "value": 9
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "itemType": "action",
+                "key": "ItemAlteration",
+                "mode": "add",
+                "predicate": [
+                    "item:slug:clue-in"
+                ],
+                "property": "other-tags",
+                "value": "investigator-expertise"
+            },
+            {
+                "key": "AdjustModifier",
+                "mode": "upgrade",
+                "selectors": [
+                    "perception",
+                    "skill-check",
+                    "saving-throw"
+                ],
+                "slug": "pursue-a-lead",
+                "value": 2
+            }
+        ],
+        "subfeatures": {
+            "proficiencies": {
+                "investigator": {
+                    "attribute": null,
+                    "rank": 2
+                }
+            }
+        },
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "investigator"
+            ]
+        }
+    },
+    "type": "feat"
+}

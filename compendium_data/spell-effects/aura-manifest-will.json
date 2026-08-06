@@ -1,0 +1,136 @@
+{
+    "_id": "WtuhkNCNAW1JaGSe",
+    "img": "icons/magic/symbols/star-rising-purple.webp",
+    "name": "Aura: Manifest Will",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Manifest Will]</p>\n<p>You emanate a 10-ft aura. If you have the Multifaceted Will feat, you can choose any tradition. You and your allies gain a +1 status bonus to saves against spells with that tradition trait.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": true,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder War of Immortals"
+        },
+        "rules": [
+            {
+                "alwaysActive": true,
+                "key": "RollOption",
+                "option": "manifest-will-tradition",
+                "placement": "spellcasting",
+                "suboptions": [
+                    {
+                        "label": "PF2E.TraitArcane",
+                        "predicate": [
+                            {
+                                "or": [
+                                    {
+                                        "not": "parent:origin:item"
+                                    },
+                                    "parent:origin:item:tag:multifaceted-will",
+                                    "parent:spellcasting:tradition:arcane"
+                                ]
+                            }
+                        ],
+                        "value": "arcane"
+                    },
+                    {
+                        "label": "PF2E.TraitDivine",
+                        "predicate": [
+                            {
+                                "or": [
+                                    {
+                                        "not": "parent:origin:item"
+                                    },
+                                    "parent:origin:item:tag:multifaceted-will",
+                                    "parent:spellcasting:tradition:divine"
+                                ]
+                            }
+                        ],
+                        "value": "divine"
+                    },
+                    {
+                        "label": "PF2E.TraitOccult",
+                        "predicate": [
+                            {
+                                "or": [
+                                    {
+                                        "not": "parent:origin:item"
+                                    },
+                                    "parent:origin:item:tag:multifaceted-will",
+                                    "parent:spellcasting:tradition:occult"
+                                ]
+                            }
+                        ],
+                        "value": "occult"
+                    },
+                    {
+                        "label": "PF2E.TraitPrimal",
+                        "predicate": [
+                            {
+                                "or": [
+                                    {
+                                        "not": "parent:origin:item"
+                                    },
+                                    "parent:origin:item:tag:multifaceted-will",
+                                    "parent:spellcasting:tradition:primal"
+                                ]
+                            }
+                        ],
+                        "value": "primal"
+                    }
+                ],
+                "toggleable": true
+            },
+            {
+                "key": "ActiveEffectLike",
+                "mode": "override",
+                "path": "flags.pf2e.manifestWillTradition",
+                "value": "{item|flags.pf2e.rulesSelections.manifestWillTradition}"
+            },
+            {
+                "itemType": "spell",
+                "key": "ItemAlteration",
+                "mode": "add",
+                "predicate": [
+                    "item:slug:manifest-will"
+                ],
+                "property": "other-tags",
+                "value": "manifest-will:{item|flags.pf2e.rulesSelections.manifestWillTradition}"
+            },
+            {
+                "effects": [
+                    {
+                        "affects": "allies",
+                        "predicate": [
+                            "parent:origin:item:tag:multifaceted-will"
+                        ],
+                        "uuid": "Compendium.pf2e.feat-effects.Item.Effect: Multifaceted Will"
+                    }
+                ],
+                "key": "Aura",
+                "radius": 10,
+                "slug": "manifest-will"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

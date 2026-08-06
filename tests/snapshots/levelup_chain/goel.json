@@ -1,0 +1,828 @@
+{
+  "10": {
+    "class_dc": 27,
+    "feat_count": 19,
+    "fort": 15,
+    "hp": 132,
+    "level": 10,
+    "perception": 19,
+    "proficiencies": {
+      "ac": 0,
+      "class_dc": 2,
+      "fortitude": 2,
+      "light": 2,
+      "martial": 4,
+      "perception": 4,
+      "reflex": 2,
+      "simple": 4,
+      "spell_attack": 2,
+      "spell_dc": 2,
+      "unarmed": 4,
+      "unarmored": 2,
+      "will": 6
+    },
+    "ref": 15,
+    "spell_dc": 27,
+    "spell_slots": [
+      {
+        "name": "Cleric",
+        "perDay": [
+          5,
+          3,
+          3,
+          3,
+          3,
+          3,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "Cleric Font",
+        "perDay": [
+          5,
+          3,
+          3,
+          3,
+          3,
+          3,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "Scion of Slayers",
+        "perDay": [
+          5,
+          3,
+          3,
+          3,
+          3,
+          3,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "Mask of Power",
+        "perDay": [
+          5,
+          3,
+          3,
+          3,
+          3,
+          3,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    ],
+    "will": 21
+  },
+  "2": {
+    "class_dc": 18,
+    "feat_count": 7,
+    "fort": 5,
+    "hp": 32,
+    "level": 2,
+    "perception": 8,
+    "proficiencies": {
+      "ac": 0,
+      "class_dc": 2,
+      "fortitude": 2,
+      "perception": 2,
+      "reflex": 2,
+      "simple": 2,
+      "spell_attack": 2,
+      "spell_dc": 2,
+      "unarmed": 2,
+      "unarmored": 2,
+      "will": 4
+    },
+    "ref": 5,
+    "spell_dc": 18,
+    "spell_slots": [
+      {
+        "name": "Cleric",
+        "perDay": [
+          5,
+          3,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "Cleric Font",
+        "perDay": [
+          5,
+          3,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "Scion of Slayers",
+        "perDay": [
+          5,
+          3,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "Mask of Power",
+        "perDay": [
+          5,
+          3,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    ],
+    "will": 10
+  },
+  "3": {
+    "class_dc": 19,
+    "feat_count": 8,
+    "fort": 6,
+    "hp": 42,
+    "level": 3,
+    "perception": 9,
+    "proficiencies": {
+      "ac": 0,
+      "class_dc": 2,
+      "fortitude": 2,
+      "light": 2,
+      "martial": 2,
+      "perception": 2,
+      "reflex": 2,
+      "simple": 2,
+      "spell_attack": 2,
+      "spell_dc": 2,
+      "unarmed": 2,
+      "unarmored": 2,
+      "will": 4
+    },
+    "ref": 6,
+    "spell_dc": 19,
+    "spell_slots": [
+      {
+        "name": "Cleric",
+        "perDay": [
+          5,
+          3,
+          2,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "Cleric Font",
+        "perDay": [
+          5,
+          3,
+          2,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "Scion of Slayers",
+        "perDay": [
+          5,
+          3,
+          2,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "Mask of Power",
+        "perDay": [
+          5,
+          3,
+          2,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    ],
+    "will": 11
+  },
+  "4": {
+    "class_dc": 20,
+    "feat_count": 10,
+    "fort": 7,
+    "hp": 52,
+    "level": 4,
+    "perception": 10,
+    "proficiencies": {
+      "ac": 0,
+      "class_dc": 2,
+      "fortitude": 2,
+      "light": 2,
+      "martial": 2,
+      "perception": 2,
+      "reflex": 2,
+      "simple": 2,
+      "spell_attack": 2,
+      "spell_dc": 2,
+      "unarmed": 2,
+      "unarmored": 2,
+      "will": 4
+    },
+    "ref": 7,
+    "spell_dc": 20,
+    "spell_slots": [
+      {
+        "name": "Cleric",
+        "perDay": [
+          5,
+          3,
+          3,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "Cleric Font",
+        "perDay": [
+          5,
+          3,
+          3,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "Scion of Slayers",
+        "perDay": [
+          5,
+          3,
+          3,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "Mask of Power",
+        "perDay": [
+          5,
+          3,
+          3,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    ],
+    "will": 12
+  },
+  "5": {
+    "class_dc": 21,
+    "feat_count": 11,
+    "fort": 9,
+    "hp": 67,
+    "level": 5,
+    "perception": 13,
+    "proficiencies": {
+      "ac": 0,
+      "class_dc": 2,
+      "fortitude": 2,
+      "light": 2,
+      "martial": 2,
+      "perception": 4,
+      "reflex": 2,
+      "simple": 2,
+      "spell_attack": 2,
+      "spell_dc": 2,
+      "unarmed": 2,
+      "unarmored": 2,
+      "will": 4
+    },
+    "ref": 9,
+    "spell_dc": 21,
+    "spell_slots": [
+      {
+        "name": "Cleric",
+        "perDay": [
+          5,
+          3,
+          3,
+          2,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "Cleric Font",
+        "perDay": [
+          5,
+          3,
+          3,
+          2,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "Scion of Slayers",
+        "perDay": [
+          5,
+          3,
+          3,
+          2,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "Mask of Power",
+        "perDay": [
+          5,
+          3,
+          3,
+          2,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    ],
+    "will": 13
+  },
+  "6": {
+    "class_dc": 22,
+    "feat_count": 13,
+    "fort": 10,
+    "hp": 78,
+    "level": 6,
+    "perception": 14,
+    "proficiencies": {
+      "ac": 0,
+      "class_dc": 2,
+      "fortitude": 2,
+      "light": 2,
+      "martial": 2,
+      "perception": 4,
+      "reflex": 2,
+      "simple": 2,
+      "spell_attack": 2,
+      "spell_dc": 2,
+      "unarmed": 2,
+      "unarmored": 2,
+      "will": 4
+    },
+    "ref": 10,
+    "spell_dc": 22,
+    "spell_slots": [
+      {
+        "name": "Cleric",
+        "perDay": [
+          5,
+          3,
+          3,
+          3,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "Cleric Font",
+        "perDay": [
+          5,
+          3,
+          3,
+          3,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "Scion of Slayers",
+        "perDay": [
+          5,
+          3,
+          3,
+          3,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "Mask of Power",
+        "perDay": [
+          5,
+          3,
+          3,
+          3,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    ],
+    "will": 14
+  },
+  "7": {
+    "class_dc": 23,
+    "feat_count": 14,
+    "fort": 11,
+    "hp": 89,
+    "level": 7,
+    "perception": 15,
+    "proficiencies": {
+      "ac": 0,
+      "class_dc": 2,
+      "fortitude": 2,
+      "light": 2,
+      "martial": 4,
+      "perception": 4,
+      "reflex": 2,
+      "simple": 4,
+      "spell_attack": 2,
+      "spell_dc": 2,
+      "unarmed": 4,
+      "unarmored": 2,
+      "will": 4
+    },
+    "ref": 11,
+    "spell_dc": 23,
+    "spell_slots": [
+      {
+        "name": "Cleric",
+        "perDay": [
+          5,
+          3,
+          3,
+          3,
+          2,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "Cleric Font",
+        "perDay": [
+          5,
+          3,
+          3,
+          3,
+          2,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "Scion of Slayers",
+        "perDay": [
+          5,
+          3,
+          3,
+          3,
+          2,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "Mask of Power",
+        "perDay": [
+          5,
+          3,
+          3,
+          3,
+          2,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    ],
+    "will": 15
+  },
+  "8": {
+    "class_dc": 24,
+    "feat_count": 16,
+    "fort": 12,
+    "hp": 100,
+    "level": 8,
+    "perception": 16,
+    "proficiencies": {
+      "ac": 0,
+      "class_dc": 2,
+      "fortitude": 2,
+      "light": 2,
+      "martial": 4,
+      "perception": 4,
+      "reflex": 2,
+      "simple": 4,
+      "spell_attack": 2,
+      "spell_dc": 2,
+      "unarmed": 4,
+      "unarmored": 2,
+      "will": 4
+    },
+    "ref": 12,
+    "spell_dc": 24,
+    "spell_slots": [
+      {
+        "name": "Cleric",
+        "perDay": [
+          5,
+          3,
+          3,
+          3,
+          3,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "Cleric Font",
+        "perDay": [
+          5,
+          3,
+          3,
+          3,
+          3,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "Scion of Slayers",
+        "perDay": [
+          5,
+          3,
+          3,
+          3,
+          3,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "Mask of Power",
+        "perDay": [
+          5,
+          3,
+          3,
+          3,
+          3,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    ],
+    "will": 16
+  },
+  "9": {
+    "class_dc": 25,
+    "feat_count": 17,
+    "fort": 13,
+    "hp": 111,
+    "level": 9,
+    "perception": 17,
+    "proficiencies": {
+      "ac": 0,
+      "class_dc": 2,
+      "fortitude": 2,
+      "light": 2,
+      "martial": 4,
+      "perception": 4,
+      "reflex": 2,
+      "simple": 4,
+      "spell_attack": 2,
+      "spell_dc": 2,
+      "unarmed": 4,
+      "unarmored": 2,
+      "will": 6
+    },
+    "ref": 13,
+    "spell_dc": 25,
+    "spell_slots": [
+      {
+        "name": "Cleric",
+        "perDay": [
+          5,
+          3,
+          3,
+          3,
+          3,
+          2,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "Cleric Font",
+        "perDay": [
+          5,
+          3,
+          3,
+          3,
+          3,
+          2,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "Scion of Slayers",
+        "perDay": [
+          5,
+          3,
+          3,
+          3,
+          3,
+          2,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "Mask of Power",
+        "perDay": [
+          5,
+          3,
+          3,
+          3,
+          3,
+          2,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    ],
+    "will": 19
+  }
+}

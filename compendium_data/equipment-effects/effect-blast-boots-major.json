@@ -1,0 +1,43 @@
+{
+    "_id": "oiO3cQfqp8MuxR82",
+    "img": "systems/pf2e/icons/equipment/worn-items/other-worn-items/blast-boots.webp",
+    "name": "Effect: Blast Boots (Major)",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Blast Boots (Major)]</p>\n<p>You gain a 30-foot Fly speed.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 17
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Guns & Gears"
+        },
+        "rules": [
+            {
+                "key": "BaseSpeed",
+                "selector": "fly",
+                "value": 30
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

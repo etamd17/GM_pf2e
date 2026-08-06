@@ -1,0 +1,114 @@
+{
+    "_id": "7JbiaZ8bxODM5mzS",
+    "img": "icons/weapons/thrown/bomb-fuse-blue.webp",
+    "name": "Bomber",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p>You specialize in explosions and other violent reactions.</p>\n<p><strong>Formulas</strong> Two common 1st-level alchemical bombs.</p>\n<p><strong>Field Benefit</strong> When throwing an alchemical bomb with the splash trait, you can choose to deal splash damage to only your primary target instead of the usual splash area.</p>\n<p><strong>Field Vials</strong> When you @UUID[Compendium.pf2e.actionspf2e.Item.Strike] with a versatile vial, you can choose to have it deal cold, electricity, or fire damage instead of acid damage.</p>\n<p><strong>@UUID[Compendium.pf2e.classfeatures.Item.Field Discovery (Bomber)]{Field Discovery} (5th)</strong> You have calculated all the angles to maximize a bomb's splash. When you throw an alchemical bomb with the splash trait, you can cause the bomb to deal splash damage equal to your Intelligence modifier (minimum 1) instead of the normal amount.</p>\n<p><strong>@UUID[Compendium.pf2e.classfeatures.Item.Advanced Vials (Bomber)]{Advanced Vials} (11th)</strong> You can mix special ingredients into your vials, such as magical dust or flakes of precious minerals. When you create a versatile vial, you can choose to have it treated as one special material of your choice, chosen from adamantine, cold iron, and dawnsilver. If you're wearing or wielding an item of a different precious material when you make the vial, you can choose that material instead.</p>\n<p><strong>@UUID[Compendium.pf2e.classfeatures.Item.Greater Field Discovery (Bomber)]{Greater Field Discovery} (13th)</strong> You can increase the splash on your bombs to damage creatures within 10 feet, or 15 feet if you have Expanded Splash.</p>"
+        },
+        "level": {
+            "value": 1
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "key": "Note",
+                "predicate": [
+                    "item:trait:alchemical",
+                    "item:trait:bomb",
+                    "item:trait:splash"
+                ],
+                "selector": "strike-damage",
+                "text": "PF2E.SpecificRule.Alchemist.ResearchField.Bomber.FieldBenefit",
+                "title": "{item|name}"
+            },
+            {
+                "key": "ActiveEffectLike",
+                "mode": "override",
+                "path": "flags.pf2e.alchemist",
+                "value": {
+                    "advancedVials": "Compendium.pf2e.classfeatures.Item.Advanced Vials (Bomber)",
+                    "fieldDiscovery": "Compendium.pf2e.classfeatures.Item.Field Discovery (Bomber)",
+                    "greaterFieldDiscovery": "Compendium.pf2e.classfeatures.Item.Greater Field Discovery (Bomber)"
+                }
+            },
+            {
+                "key": "RollOption",
+                "label": "PF2E.SpecificRule.Alchemist.ResearchField.Bomber.FieldVials.RollOptionLabel",
+                "option": "bomber-field-vials",
+                "suboptions": [
+                    {
+                        "label": "PF2E.TraitCold",
+                        "value": "cold"
+                    },
+                    {
+                        "label": "PF2E.TraitElectricity",
+                        "value": "electricity"
+                    },
+                    {
+                        "label": "PF2E.TraitFire",
+                        "value": "fire"
+                    }
+                ],
+                "toggleable": true
+            },
+            {
+                "itemType": "weapon",
+                "key": "ItemAlteration",
+                "mode": "override",
+                "predicate": [
+                    "bomber-field-vials",
+                    "item:slug:versatile-vial"
+                ],
+                "property": "damage-type",
+                "value": "{item|flags.pf2e.rulesSelections.bomberFieldVials}"
+            },
+            {
+                "itemType": "weapon",
+                "key": "ItemAlteration",
+                "mode": "add",
+                "predicate": [
+                    "bomber-field-vials",
+                    "item:slug:versatile-vial"
+                ],
+                "property": "traits",
+                "value": "{item|flags.pf2e.rulesSelections.bomberFieldVials}"
+            },
+            {
+                "itemType": "weapon",
+                "key": "ItemAlteration",
+                "mode": "remove",
+                "predicate": [
+                    "bomber-field-vials",
+                    "item:slug:versatile-vial"
+                ],
+                "property": "traits",
+                "value": "acid"
+            }
+        ],
+        "traits": {
+            "otherTags": [
+                "alchemist-research-field"
+            ],
+            "rarity": "common",
+            "value": [
+                "alchemist"
+            ]
+        }
+    },
+    "type": "feat"
+}

@@ -1,0 +1,44 @@
+{
+    "_id": "AKKHagjg5bL1fMG5",
+    "img": "systems/pf2e/icons/spells/prying-eye.webp",
+    "name": "Effect: Overwatch Field",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.feats-srd.Item.Overwatch Dedication]</p>\n<p>You gain a +2 circumstance bonus to initiative rolls.</p>"
+        },
+        "duration": {
+            "expiry": null,
+            "sustained": false,
+            "unit": "unlimited",
+            "value": -1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Guns & Gears"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "selector": "initiative",
+                "type": "circumstance",
+                "value": 2
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

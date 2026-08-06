@@ -1,0 +1,63 @@
+{
+    "_id": "Jgv2PAJic7LPoGQx",
+    "img": "icons/consumables/plants/dried-herb-bundle-brown.webp",
+    "name": "Soothing Toddy",
+    "system": {
+        "baseItem": null,
+        "bulk": {
+            "value": 0.1
+        },
+        "category": "elixir",
+        "containerId": null,
+        "damage": null,
+        "description": {
+            "value": "<p><strong>Activate</strong> <span class=\"action-glyph\">1</span> (manipulate)</p><hr /><p>Hot tea with a comforting, flowery aroma, a soothing toddy grants you a +1 item bonus to saving throws against emotion effects and against effects with a trait determined by the liquor mixed into the tea when it's created. These benefits last for 1 hour.</p><ul><li><strong>Amaretto</strong> Auditory</li><li><strong>Limoncello</strong> Olfactory</li><li><strong>Whiskey</strong> Visual</li></ul><p>@UUID[Compendium.pf2e.equipment-effects.Item.Effect: Soothing Toddy]</p>"
+        },
+        "hardness": 0,
+        "hp": {
+            "max": 0,
+            "value": 0
+        },
+        "level": {
+            "value": 6
+        },
+        "material": {
+            "grade": null,
+            "type": null
+        },
+        "price": {
+            "per": 1,
+            "value": {
+                "gp": 45
+            }
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Treasure Vault (Remastered)"
+        },
+        "quantity": 1,
+        "rules": [],
+        "size": "med",
+        "traits": {
+            "otherTags": [
+                "alchemical-food"
+            ],
+            "rarity": "common",
+            "value": [
+                "alchemical",
+                "consumable",
+                "elixir"
+            ]
+        },
+        "usage": {
+            "value": "held-in-one-hand"
+        },
+        "uses": {
+            "autoDestroy": true,
+            "max": 1,
+            "value": 1
+        }
+    },
+    "type": "consumable"
+}

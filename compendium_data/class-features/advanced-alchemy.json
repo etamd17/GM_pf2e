@@ -1,0 +1,48 @@
+{
+    "_id": "Pe0zmIqyTBc2Td0I",
+    "img": "icons/skills/toxins/poison-skull-herbs-bottle-pink.webp",
+    "name": "Advanced Alchemy",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p>During your daily preparations, you spend some time to create alchemical items that can be used over the course of the day.</p>\n<p>You don't need to attempt a Crafting check to do this, you can use an alchemist's toolkit instead of an alchemist's lab, and you ignore both the number of days typically required to create the items and any alchemical raw materials requirements.</p>\n<p>You can Craft a number of alchemical items up to 4 + your Intelligence modifier. Each item must be in your formula book, have an item level equal to or lower than your level, and have the consumable trait.</p>\n<p>These items have the infused trait and remain potent for 24 hours or until your next daily preparations, whichever comes first.</p>"
+        },
+        "level": {
+            "value": 1
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "craftableItems": [
+                    "item:trait:alchemical",
+                    "item:trait:consumable"
+                ],
+                "isDailyPrep": true,
+                "key": "CraftingAbility",
+                "label": "PF2E.SpecificRule.Alchemist.AdvancedAlchemy",
+                "maxSlots": "4 + @actor.system.abilities.int.mod",
+                "slug": "advanced-alchemy"
+            }
+        ],
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "alchemist"
+            ]
+        }
+    },
+    "type": "feat"
+}

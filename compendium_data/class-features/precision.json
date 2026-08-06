@@ -1,0 +1,152 @@
+{
+    "_id": "u6cBjqz2fiRBadBt",
+    "img": "icons/skills/ranged/target-bullseye-archer-orange.webp",
+    "name": "Precision",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p>You have trained to aim for your prey's weak points. The first time you hit your hunted prey in a round, you also deal 1d8 additional precision damage. (Precision damage increases the damage you already deal, using the same type, but is ineffective against creatures that lack vital organs or weak points.) At 11th level, the extra damage increases to 2d8 precision damage, and at 19th level, the extra damage increases to 3d8 precision damage.</p>"
+        },
+        "level": {
+            "value": 1
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core"
+        },
+        "rules": [
+            {
+                "disabledIf": [
+                    {
+                        "not": "self:effect:hunt-prey"
+                    }
+                ],
+                "disabledValue": false,
+                "key": "RollOption",
+                "label": "PF2E.SpecificRule.Ranger.HuntersEdge.Precision.ToggleLabel",
+                "mergeable": true,
+                "option": "precision-hunters-edge",
+                "suboptions": [
+                    {
+                        "label": "PF2E.SpecificRule.Numbers.Ordinals.First",
+                        "value": "first-hit"
+                    }
+                ],
+                "toggleable": true
+            },
+            {
+                "category": "precision",
+                "diceNumber": "ternary(lt(@actor.level,11),1,ternary(lt(@actor.level,19),2,3))",
+                "dieSize": "d8",
+                "key": "DamageDice",
+                "predicate": [
+                    "precision-hunters-edge",
+                    "target:mark:hunted-prey"
+                ],
+                "selector": "strike-damage",
+                "slug": "precision"
+            },
+            {
+                "itemType": "feat",
+                "key": "ItemAlteration",
+                "mode": "add",
+                "predicate": [
+                    "item:tag:hunters-edge-sharing"
+                ],
+                "property": "description",
+                "value": [
+                    {
+                        "text": "PF2E.SpecificRule.Ranger.HuntersEdge.Precision.Description"
+                    },
+                    {
+                        "predicate": [
+                            {
+                                "nand": [
+                                    "item:slug:animal-companion-ranger",
+                                    "feat:masterful-companion"
+                                ]
+                            }
+                        ],
+                        "text": "@UUID[Compendium.pf2e.feat-effects.Item.Effect: Share Hunter's Edge (Precision)]"
+                    },
+                    {
+                        "predicate": [
+                            "feat:masterful-companion",
+                            "item:slug:animal-companion-ranger"
+                        ],
+                        "text": "PF2E.SpecificRule.Ranger.MasterfulHunter.Precision",
+                        "title": "PF2E.SpecificRule.Ranger.MasterfulHunter.Label"
+                    },
+                    {
+                        "predicate": [
+                            "feat:masterful-companion",
+                            "item:slug:animal-companion-ranger"
+                        ],
+                        "text": "@UUID[Compendium.pf2e.feat-effects.Item.Effect: Share Hunter's Edge (Precision, Masterful)]"
+                    }
+                ]
+            },
+            {
+                "itemType": "action",
+                "key": "ItemAlteration",
+                "mode": "add",
+                "predicate": [
+                    "item:slug:hunt-prey"
+                ],
+                "priority": 130,
+                "property": "description",
+                "value": [
+                    {
+                        "text": "PF2E.SpecificRule.Ranger.HuntersEdge.Precision.Description"
+                    },
+                    {
+                        "predicate": [
+                            {
+                                "or": [
+                                    "feat:animal-companion-ranger",
+                                    "feat:shared-prey"
+                                ]
+                            }
+                        ],
+                        "text": "@UUID[Compendium.pf2e.feat-effects.Item.Effect: Share Hunter's Edge (Precision)]"
+                    },
+                    {
+                        "predicate": [
+                            "feat:masterful-companion",
+                            "feature:masterful-hunter"
+                        ],
+                        "text": "PF2E.SpecificRule.Ranger.MasterfulHunter.Precision",
+                        "title": "PF2E.SpecificRule.Ranger.MasterfulHunter.Label"
+                    },
+                    {
+                        "predicate": [
+                            "feat:masterful-companion",
+                            "feature:masterful-hunter"
+                        ],
+                        "text": "@UUID[Compendium.pf2e.feat-effects.Item.Effect: Share Hunter's Edge (Precision, Masterful)]"
+                    }
+                ]
+            }
+        ],
+        "traits": {
+            "otherTags": [
+                "ranger-hunters-edge"
+            ],
+            "rarity": "common",
+            "value": [
+                "ranger"
+            ]
+        }
+    },
+    "type": "feat"
+}

@@ -1,0 +1,83 @@
+{
+    "_id": "wYruARP1YLfTQBsc",
+    "img": "systems/pf2e/icons/equipment/weapons/fangwire.webp",
+    "name": "Fangwire",
+    "system": {
+        "ammo": null,
+        "baseItem": "fangwire",
+        "bonus": {
+            "value": 0
+        },
+        "bonusDamage": {
+            "value": 0
+        },
+        "bulk": {
+            "value": 0.1
+        },
+        "category": "martial",
+        "containerId": null,
+        "damage": {
+            "damageType": "slashing",
+            "dice": 1,
+            "die": "d4"
+        },
+        "description": {
+            "value": "<p>This kobold wire is thin and hard to see, making it perfect for an ambush. The wielder flicks one handle around a vulnerable spot so that it serves as a catch for the wire, then yanks the other handle back, pulling the wire tight and inflicting painful lacerations. The function and name come from a wire-based trap called a \"slow fang.\"</p>"
+        },
+        "expend": null,
+        "grade": null,
+        "group": "brawling",
+        "hardness": 0,
+        "hp": {
+            "max": 0,
+            "value": 0
+        },
+        "level": {
+            "value": 0
+        },
+        "material": {
+            "grade": null,
+            "type": null
+        },
+        "price": {
+            "value": {
+                "gp": 4
+            }
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "quantity": 1,
+        "range": null,
+        "reload": {
+            "value": null
+        },
+        "rules": [],
+        "runes": {
+            "potency": 0,
+            "property": [],
+            "striking": 0
+        },
+        "size": "med",
+        "splashDamage": {
+            "value": 0
+        },
+        "traits": {
+            "rarity": "uncommon",
+            "value": [
+                "agile",
+                "backstabber",
+                "deadly-d8",
+                "finesse",
+                "grapple",
+                "kobold"
+            ]
+        },
+        "usage": {
+            "value": "held-in-one-hand"
+        }
+    },
+    "type": "weapon"
+}

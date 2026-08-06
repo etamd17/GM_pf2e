@@ -1,0 +1,66 @@
+{
+    "_id": "0OC945wcZ4H4akLz",
+    "img": "icons/creatures/mammals/humanoid-fox-cat-archer.webp",
+    "name": "Spell Effect: Summoner's Visage",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Summoner's Visage]</p>\n<p>You gain a +4 status bonus to Deception checks to Impersonate the origin and can add your level to such checks even if you're untrained.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 10
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Secrets of Magic"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "action:impersonate",
+                    "impersonating-summoner"
+                ],
+                "selector": "deception",
+                "slug": "summoners-visage-status",
+                "type": "status",
+                "value": 4
+            },
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "action:impersonate",
+                    "impersonating-summoner",
+                    "proficiency:untrained"
+                ],
+                "selector": "deception",
+                "slug": "summoners-visage-proficiency",
+                "type": "proficiency",
+                "value": "@actor.level"
+            },
+            {
+                "key": "RollOption",
+                "option": "impersonating-summoner",
+                "toggleable": true
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

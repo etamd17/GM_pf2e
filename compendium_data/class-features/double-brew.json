@@ -1,0 +1,36 @@
+{
+    "_id": "76cwNLJEm4Yetnee",
+    "img": "icons/magic/light/orbs-hand-gray.webp",
+    "name": "Double Brew",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p>You know your formulas so well that you can concoct two items at once.</p>\n<p>When using the @UUID[Compendium.pf2e.actionspf2e.Item.Quick Alchemy] action, you can create two items. These items don't have to be the same. If you create two consumables, you have to expend a versatile vial for each one.</p>"
+        },
+        "level": {
+            "value": 9
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [],
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "alchemist"
+            ]
+        }
+    },
+    "type": "feat"
+}

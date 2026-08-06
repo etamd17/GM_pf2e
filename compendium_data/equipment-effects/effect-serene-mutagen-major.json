@@ -1,0 +1,91 @@
+{
+    "_id": "t7VUJHSUT6bkVUjg",
+    "img": "systems/pf2e/icons/equipment/alchemical-items/alchemical-elixirs/serene-mutagen.webp",
+    "name": "Effect: Serene Mutagen (Major)",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Serene Mutagen (Major)]</p>\n<p><strong>Benefit</strong> You gain a +4 bonus to Will saves and Perception, Medicine, Nature, Religion, and Survival checks. When you roll a success on a Will save against a mental effect, you get a critical success instead, and your critical failures on Will saves against mental effects become failures instead.</p>\n<p><strong>Drawback</strong> You take a -1 penalty to attack rolls and save DCs of offensive spells, and a -1 penalty per damage die to all weapon and unarmed attack damage.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "hours",
+            "value": 1
+        },
+        "level": {
+            "value": 17
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "selector": [
+                    "medicine",
+                    "nature",
+                    "perception",
+                    "religion",
+                    "survival",
+                    "will"
+                ],
+                "slug": "serene-mutagen-bonus",
+                "type": "item",
+                "value": 4
+            },
+            {
+                "key": "RollOption",
+                "label": "PF2E.Mutagens.SereneMutagen.PenaltyLabel",
+                "option": "serene-mutagen-dc-penalty",
+                "placement": "spellcasting",
+                "toggleable": true
+            },
+            {
+                "key": "FlatModifier",
+                "selector": "attack-roll",
+                "slug": "serene-mutagen-attack-penalty",
+                "value": -1
+            },
+            {
+                "key": "FlatModifier",
+                "selector": "strike-damage",
+                "slug": "serene-mutagen-strike-damage-penalty",
+                "value": "-@weapon.system.damage.dice"
+            },
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "serene-mutagen-dc-penalty"
+                ],
+                "selector": "spell-dc",
+                "slug": "serene-mutagen-spell-dc-penalty",
+                "value": -1
+            },
+            {
+                "adjustment": {
+                    "criticalFailure": "one-degree-better",
+                    "success": "one-degree-better"
+                },
+                "key": "AdjustDegreeOfSuccess",
+                "predicate": [
+                    "item:trait:mental"
+                ],
+                "selector": "will"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

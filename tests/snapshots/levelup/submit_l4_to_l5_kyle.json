@@ -1,0 +1,27 @@
+{
+  "feat_count": 11,
+  "level": 5,
+  "proficiencies": {
+    "fortitude": 4,
+    "perception": 4,
+    "reflex": 4
+  },
+  "spell_casters": [
+    {
+      "name": "Druid",
+      "perDay": [
+        5,
+        3,
+        3,
+        2,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    }
+  ]
+}

@@ -1,0 +1,91 @@
+{
+    "_id": "Jemq5UknGdMO7b73",
+    "img": "systems/pf2e/icons/spells/shield.webp",
+    "name": "Spell Effect: Shield",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Shield]</p>\n<p>You gain a +1 circumstance bonus to AC. While the spell is in effect, you can use the Shield Block reaction with your magic shield. After you use Shield Block, the spell ends.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "rounds",
+            "value": 1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core"
+        },
+        "rules": [
+            {
+                "key": "ActiveEffectLike",
+                "mode": "override",
+                "path": "system.attributes.shield",
+                "predicate": [
+                    {
+                        "or": [
+                            "self:type:character",
+                            "self:type:npc"
+                        ]
+                    }
+                ],
+                "value": {
+                    "ac": 1,
+                    "broken": false,
+                    "brokenThreshold": 0,
+                    "destroyed": false,
+                    "hp": {
+                        "max": 0,
+                        "value": 0
+                    },
+                    "icon": "systems/pf2e/icons/spells/shield.webp",
+                    "itemId": "{item|_id}",
+                    "name": "PF2E.ShieldLabel",
+                    "raised": true
+                }
+            },
+            {
+                "key": "ActiveEffectLike",
+                "mode": "override",
+                "path": "system.attributes.shield.hardness",
+                "predicate": [
+                    {
+                        "or": [
+                            "self:type:character",
+                            "self:type:npc"
+                        ]
+                    }
+                ],
+                "value": "5*ceil(@item.level/2)"
+            },
+            {
+                "key": "RollOption",
+                "option": "self:shield:equipped",
+                "predicate": [
+                    {
+                        "or": [
+                            "self:type:character",
+                            "self:type:npc"
+                        ]
+                    }
+                ]
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

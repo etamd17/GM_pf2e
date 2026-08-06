@@ -1,0 +1,71 @@
+{
+    "_id": "KBhwFjdptrKyN5EM",
+    "img": "systems/pf2e/icons/features/classes/braggart-style.webp",
+    "name": "Braggart",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p>You boast, taunt, and psychologically needle your foes. You are trained in Intimidation. When you @UUID[Compendium.pf2e.actionspf2e.Item.Demoralize], the action gains the bravado trait.</p>"
+        },
+        "level": {
+            "value": 1
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "key": "ActiveEffectLike",
+                "mode": "upgrade",
+                "path": "system.skills.intimidation.rank",
+                "predicate": [
+                    "class:swashbuckler"
+                ],
+                "value": 1
+            },
+            {
+                "key": "Note",
+                "outcome": [
+                    "success",
+                    "criticalSuccess"
+                ],
+                "predicate": [
+                    "finisher",
+                    "feature:exemplary-finisher"
+                ],
+                "selector": "strike-attack-roll",
+                "text": "PF2E.SpecificRule.ExemplaryFinisher.Braggart",
+                "title": "PF2E.SpecificRule.ExemplaryFinisher.Name"
+            },
+            {
+                "domain": "skill-check",
+                "key": "RollOption",
+                "option": "item:trait:bravado",
+                "predicate": [
+                    "action:demoralize"
+                ]
+            }
+        ],
+        "traits": {
+            "otherTags": [
+                "swashbuckler-style"
+            ],
+            "rarity": "common",
+            "value": [
+                "swashbuckler"
+            ]
+        }
+    },
+    "type": "feat"
+}

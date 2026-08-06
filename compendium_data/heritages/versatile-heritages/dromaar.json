@@ -1,0 +1,54 @@
+{
+    "_id": "tLd8Qg82AwEbbmgX",
+    "folder": "khXMNyAoAoZ70PpT",
+    "img": "systems/pf2e/icons/ancestries/dromaar.webp",
+    "name": "Dromaar",
+    "system": {
+        "ancestry": null,
+        "description": {
+            "value": "<p>Orcish strength emboldens your bloodline. You have a green tinge to your skin and other indicators of orc heritage. You gain the orc trait, the dromaar trait, and low-light vision. When you gain an ancestry feat, you can choose from dromaar and orc feats in addition to those from your ancestry.</p>"
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core"
+        },
+        "rules": [
+            {
+                "key": "Sense",
+                "selector": "low-light-vision"
+            },
+            {
+                "add": [
+                    "orc"
+                ],
+                "key": "ActorTraits"
+            },
+            {
+                "key": "ActiveEffectLike",
+                "mode": "override",
+                "path": "system.details.ancestry.versatile",
+                "value": "orc"
+            },
+            {
+                "key": "ActiveEffectLike",
+                "mode": "add",
+                "path": "system.details.ancestry.countsAs",
+                "value": "dromaar"
+            },
+            {
+                "key": "ActiveEffectLike",
+                "mode": "add",
+                "path": "system.details.ancestry.countsAs",
+                "value": "orc"
+            }
+        ],
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "dromaar"
+            ]
+        }
+    },
+    "type": "heritage"
+}

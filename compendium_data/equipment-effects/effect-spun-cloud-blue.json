@@ -1,0 +1,42 @@
+{
+    "_id": "FV5d8zdo8CGZuRbg",
+    "img": "icons/consumables/potions/potion-bottle-corked-blue.webp",
+    "name": "Effect: Spun Cloud (Blue)",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Spun Cloud (Blue)]</p>\n<p>Creatures gain resistance 5 to electricity while in the cloud.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 6
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": true,
+            "title": "Pathfinder Rage of Elements"
+        },
+        "rules": [
+            {
+                "key": "Resistance",
+                "type": "electricity",
+                "value": 5
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

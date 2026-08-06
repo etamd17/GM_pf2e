@@ -1,0 +1,56 @@
+{
+    "_id": "hPxrIpuL54XRlA2h",
+    "img": "systems/pf2e/icons/equipment/adventuring-gear/earplugs.webp",
+    "name": "Effect: Earplugs",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Earplugs]</p>\n<p>You take a -2 circumstance penalty to all auditory Perception checks but also gain a +2 circumstance bonus to saving throws against auditory effects.</p>"
+        },
+        "duration": {
+            "expiry": null,
+            "sustained": false,
+            "unit": "unlimited",
+            "value": -1
+        },
+        "level": {
+            "value": 0
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Lost Omens Pathfinder Society Guide"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "item:trait:auditory"
+                ],
+                "selector": "saving-throw",
+                "type": "item",
+                "value": 2
+            },
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "item:trait:hearing"
+                ],
+                "selector": "perception",
+                "type": "item",
+                "value": -2
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

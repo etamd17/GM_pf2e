@@ -1,0 +1,120 @@
+{
+    "_id": "RQH6vigvhmiYKKjg",
+    "img": "systems/pf2e/icons/features/classes/precise-strike.webp",
+    "name": "Precise Strike",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p>When you make a Strike with an agile or finesse melee weapon or agile or finesse unarmed attack, you deal 2 additional precision damage. If the Strike is part of a finisher, the additional damage is 2d6 precision damage instead.</p>\n<p>As your swashbuckler level increases, so does your additional damage for precise strike. At 5th, 9th, 13th, and 17th level, increase the amount of additional damage on a Strike by 1 and the additional damage on a finisher by 1d6.</p>"
+        },
+        "level": {
+            "value": 1
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "key": "ActiveEffectLike",
+                "mode": "override",
+                "path": "flags.pf2e.swashbuckler.preciseStrike",
+                "predicate": [
+                    "class:swashbuckler"
+                ],
+                "value": "ceil(@actor.level/4) + 1"
+            },
+            {
+                "damageCategory": "precision",
+                "key": "FlatModifier",
+                "predicate": [
+                    {
+                        "or": [
+                            "item:melee",
+                            {
+                                "and": [
+                                    "feat:flying-blade",
+                                    "item:thrown",
+                                    "target:range-increment:1"
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "or": [
+                            "item:trait:agile",
+                            "item:trait:finesse"
+                        ]
+                    },
+                    {
+                        "not": "finisher"
+                    }
+                ],
+                "selector": "strike-damage",
+                "slug": "precise-strike",
+                "value": "@actor.flags.pf2e.swashbuckler.preciseStrike"
+            },
+            {
+                "category": "precision",
+                "diceNumber": "@actor.flags.pf2e.swashbuckler.preciseStrike",
+                "dieSize": "d6",
+                "key": "DamageDice",
+                "predicate": [
+                    "finisher",
+                    {
+                        "or": [
+                            "item:melee",
+                            {
+                                "and": [
+                                    "feat:flying-blade",
+                                    "item:thrown",
+                                    {
+                                        "or": [
+                                            "target:range-increment:1",
+                                            {
+                                                "and": [
+                                                    "finisher:twirling-throw",
+                                                    {
+                                                        "lte": [
+                                                            "target:range-increment",
+                                                            3
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "or": [
+                            "item:trait:agile",
+                            "item:trait:finesse"
+                        ]
+                    }
+                ],
+                "selector": "strike-damage",
+                "slug": "finisher"
+            }
+        ],
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "swashbuckler"
+            ]
+        }
+    },
+    "type": "feat"
+}

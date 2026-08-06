@@ -1,0 +1,144 @@
+{
+  "1": {},
+  "10": {
+    "class_dc": 4,
+    "fortitude": 6,
+    "perception": 4,
+    "will": 4
+  },
+  "11": {
+    "class_dc": 4,
+    "fortitude": 6,
+    "perception": 4,
+    "reflex": 6,
+    "simple": 4,
+    "unarmed": 4,
+    "will": 4
+  },
+  "12": {
+    "class_dc": 4,
+    "fortitude": 6,
+    "perception": 4,
+    "reflex": 6,
+    "simple": 4,
+    "unarmed": 4,
+    "will": 4
+  },
+  "13": {
+    "class_dc": 4,
+    "fortitude": 6,
+    "light": 4,
+    "perception": 4,
+    "reflex": 6,
+    "simple": 4,
+    "unarmed": 4,
+    "unarmored": 4,
+    "will": 4
+  },
+  "14": {
+    "class_dc": 4,
+    "fortitude": 6,
+    "light": 4,
+    "perception": 4,
+    "reflex": 6,
+    "simple": 4,
+    "unarmed": 4,
+    "unarmored": 4,
+    "will": 4
+  },
+  "15": {
+    "class_dc": 6,
+    "fortitude": 8,
+    "light": 4,
+    "perception": 4,
+    "reflex": 6,
+    "simple": 4,
+    "unarmed": 4,
+    "unarmored": 4,
+    "will": 4
+  },
+  "16": {
+    "class_dc": 6,
+    "fortitude": 8,
+    "light": 4,
+    "perception": 4,
+    "reflex": 6,
+    "simple": 4,
+    "unarmed": 4,
+    "unarmored": 4,
+    "will": 4
+  },
+  "17": {
+    "class_dc": 6,
+    "fortitude": 8,
+    "light": 4,
+    "perception": 4,
+    "reflex": 6,
+    "simple": 4,
+    "unarmed": 4,
+    "unarmored": 4,
+    "will": 4
+  },
+  "18": {
+    "class_dc": 6,
+    "fortitude": 8,
+    "light": 4,
+    "perception": 4,
+    "reflex": 6,
+    "simple": 4,
+    "unarmed": 4,
+    "unarmored": 4,
+    "will": 4
+  },
+  "19": {
+    "class_dc": 8,
+    "fortitude": 8,
+    "light": 6,
+    "perception": 4,
+    "reflex": 6,
+    "simple": 4,
+    "unarmed": 4,
+    "unarmored": 6,
+    "will": 4
+  },
+  "2": {},
+  "20": {
+    "class_dc": 8,
+    "fortitude": 8,
+    "light": 6,
+    "perception": 4,
+    "reflex": 6,
+    "simple": 4,
+    "unarmed": 4,
+    "unarmored": 6,
+    "will": 4
+  },
+  "3": {
+    "will": 4
+  },
+  "4": {
+    "will": 4
+  },
+  "5": {
+    "will": 4
+  },
+  "6": {
+    "will": 4
+  },
+  "7": {
+    "class_dc": 4,
+    "fortitude": 6,
+    "will": 4
+  },
+  "8": {
+    "class_dc": 4,
+    "fortitude": 6,
+    "will": 4
+  },
+  "9": {
+    "class_dc": 4,
+    "fortitude": 6,
+    "perception": 4,
+    "will": 4
+  }
+}

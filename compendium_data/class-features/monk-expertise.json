@@ -1,0 +1,54 @@
+{
+    "_id": "lxImO5D0qWp0gXFB",
+    "img": "icons/magic/unholy/silhouette-robe-evil-power.webp",
+    "name": "Monk Expertise",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p>Your proficiency rank for your monk class DC increases to expert. If you have qi spells, your proficiency rank for spell attacks and spell DCs increases to expert.</p>"
+        },
+        "level": {
+            "value": 9
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "key": "ActiveEffectLike",
+                "mode": "upgrade",
+                "path": "system.proficiencies.spellcasting.rank",
+                "predicate": [
+                    "feat:qi-spells"
+                ],
+                "value": 2
+            }
+        ],
+        "subfeatures": {
+            "proficiencies": {
+                "monk": {
+                    "attribute": null,
+                    "rank": 2
+                }
+            }
+        },
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "monk"
+            ]
+        }
+    },
+    "type": "feat"
+}

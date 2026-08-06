@@ -1,0 +1,77 @@
+{
+    "_id": "gsyTHkbGRaiHgs6p",
+    "img": "systems/pf2e/icons/default-icons/background.svg",
+    "name": "Firebrand Follower",
+    "system": {
+        "boosts": {
+            "0": {
+                "value": [
+                    "cha",
+                    "str"
+                ]
+            },
+            "1": {
+                "value": [
+                    "cha",
+                    "con",
+                    "dex",
+                    "int",
+                    "str",
+                    "wis"
+                ]
+            }
+        },
+        "description": {
+            "value": "<p>You were once rescued or liberated from a hopeless situation by a group of Firebrands, and you have since aspired to become a Firebrand to continue their legacy. You still follow news of their adventures, and you hope to one day meet your heroes as comrades.</p>\n<p>Choose two attribute boosts. One must be to <strong>Strength</strong> or <strong>Charisma</strong>, and one is a free attribute boost.</p>\n<p>You are trained in your choice of the Athletics or Performance skill as well as the Firebrand Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Assurance] skill feat in your chosen skill.</p>"
+        },
+        "items": {},
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Lost Omens Firebrands"
+        },
+        "rules": [
+            {
+                "adjustName": false,
+                "choices": [
+                    {
+                        "label": "PF2E.Skill.Athletics",
+                        "value": "athletics"
+                    },
+                    {
+                        "label": "PF2E.Skill.Performance",
+                        "value": "performance"
+                    }
+                ],
+                "flag": "skill",
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Prompt.Skill"
+            },
+            {
+                "key": "ActiveEffectLike",
+                "mode": "upgrade",
+                "path": "system.skills.{item|flags.pf2e.rulesSelections.skill}.rank",
+                "value": 1
+            },
+            {
+                "key": "GrantItem",
+                "preselectChoices": {
+                    "assurance": "{item|flags.pf2e.rulesSelections.skill}"
+                },
+                "uuid": "Compendium.pf2e.feats-srd.Item.Assurance"
+            }
+        ],
+        "trainedSkills": {
+            "custom": "",
+            "lore": [
+                "Firebrand Lore"
+            ],
+            "value": []
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "background"
+}

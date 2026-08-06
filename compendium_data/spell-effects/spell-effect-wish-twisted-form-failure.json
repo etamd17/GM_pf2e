@@ -1,0 +1,118 @@
+{
+    "_id": "bBD7HFzBPlSxYrtW",
+    "img": "icons/magic/lightning/bolt-strike-creature-pink.webp",
+    "name": "Spell Effect: Wish-Twisted Form (Failure)",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Wish-Twisted Form].</p>\n<p>You gain weakness to the chosen damage type, take a –10-foot status penalty to all your Speeds, and a -1 status penalty to your saving throws. On a critical failure, you also takes a -1 status penalty to AC.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 5
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Advanced Player's Guide"
+        },
+        "rules": [
+            {
+                "key": "Weakness",
+                "type": "{item|flags.pf2e.rulesSelections.wishTwistedFormDamageType}",
+                "value": "@item.level"
+            },
+            {
+                "key": "FlatModifier",
+                "selector": "all-speeds",
+                "type": "status",
+                "value": -10
+            },
+            {
+                "key": "FlatModifier",
+                "selector": "saving-throw",
+                "type": "status",
+                "value": -1
+            },
+            {
+                "choices": [
+                    {
+                        "label": "PF2E.TraitAcid",
+                        "value": "acid"
+                    },
+                    {
+                        "label": "PF2E.TraitCold",
+                        "value": "cold"
+                    },
+                    {
+                        "label": "PF2E.TraitElectricity",
+                        "value": "electricity"
+                    },
+                    {
+                        "label": "PF2E.TraitFire",
+                        "value": "fire"
+                    },
+                    {
+                        "label": "PF2E.TraitForce",
+                        "value": "force"
+                    },
+                    {
+                        "label": "PF2E.TraitVoid",
+                        "value": "void"
+                    },
+                    {
+                        "label": "PF2E.TraitVitality",
+                        "value": "vitality"
+                    },
+                    {
+                        "label": "PF2E.TraitSonic",
+                        "value": "sonic"
+                    }
+                ],
+                "flag": "wishTwistedFormDamageType",
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Prompt.EnergyType"
+            },
+            {
+                "choices": [
+                    {
+                        "label": "PF2E.Check.Result.Degree.Check.failure",
+                        "value": "failure"
+                    },
+                    {
+                        "label": "PF2E.Check.Result.Degree.Check.criticalFailure",
+                        "value": "critical-failure"
+                    }
+                ],
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Prompt.DegreeOfSuccess",
+                "rollOption": "wish-twisted-form"
+            },
+            {
+                "hideIfDisabled": true,
+                "key": "FlatModifier",
+                "predicate": [
+                    "wish-twisted-form:critical-failure"
+                ],
+                "selector": "ac",
+                "type": "status",
+                "value": -1
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

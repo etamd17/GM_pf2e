@@ -1,0 +1,106 @@
+{
+    "_id": "xFQRiVU6h8EA6Lw9",
+    "img": "icons/consumables/potions/bottle-round-flask-fumes-purple.webp",
+    "name": "Effect: Bestial Mutagen (Moderate)",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Bestial Mutagen (Moderate)]</p>\n<p>You gain a +2 item bonus to Athletics checks and unarmed attack rolls. You gain a claw unarmed attack (2d6 slashing damage) with the agile trait and a jaws unarmed attack (2d8 piercing damage).</p>\n<p>You take a –2 penalty to Reflex saves, Acrobatics checks, and Stealth checks.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 10
+        },
+        "level": {
+            "value": 3
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "selector": [
+                    "athletics",
+                    "unarmed-attack-roll"
+                ],
+                "type": "item",
+                "value": 2
+            },
+            {
+                "key": "FlatModifier",
+                "selector": [
+                    "reflex",
+                    "acrobatics",
+                    "stealth"
+                ],
+                "value": -2
+            },
+            {
+                "baseType": "jaws",
+                "category": "unarmed",
+                "damage": {
+                    "base": {
+                        "damageType": "piercing",
+                        "dice": 2,
+                        "die": "d8"
+                    }
+                },
+                "group": "brawling",
+                "img": "icons/creatures/abilities/mouth-teeth-long-red.webp",
+                "key": "Strike",
+                "label": "PF2E.Weapon.Base.jaws",
+                "range": null,
+                "slug": "jaws",
+                "traits": [
+                    "unarmed"
+                ]
+            },
+            {
+                "baseType": "claw",
+                "category": "unarmed",
+                "damage": {
+                    "base": {
+                        "damageType": "slashing",
+                        "dice": 2,
+                        "die": "d6"
+                    }
+                },
+                "group": "brawling",
+                "img": "icons/commodities/claws/claw-bear-brown-grey.webp",
+                "key": "Strike",
+                "label": "PF2E.Weapon.Base.claw",
+                "range": null,
+                "traits": [
+                    "unarmed",
+                    "agile"
+                ]
+            },
+            {
+                "itemType": "weapon",
+                "key": "ItemAlteration",
+                "mode": "add",
+                "predicate": [
+                    "item:id:{item|id}"
+                ],
+                "property": "other-tags",
+                "value": "bestial-mutagen-strike"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

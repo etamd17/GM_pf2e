@@ -1,0 +1,42 @@
+{
+    "_id": "OoUqJJB77VfWbWRM",
+    "folder": "Tz2Pzy7TnDEnUJmH",
+    "img": "systems/pf2e/icons/features/ancestry/cliifscale-lizardfolk.webp",
+    "name": "Cliffscale Lizardfolk",
+    "system": {
+        "ancestry": {
+            "name": "Lizardfolk",
+            "slug": "lizardfolk",
+            "uuid": "Compendium.pf2e.ancestries.Item.HWEgF7Gmoq55VhTL"
+        },
+        "description": {
+            "value": "<p>Your toes are adapted for gripping and climbing. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Combat Climber] feat as a bonus feat, and as long as you aren't wearing footwear, you can use the sticky pads on your feet to climb, leaving your hands free. Additionally, if you roll a success on an Athletics check to climb, you get a critical success instead.</p>"
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "key": "GrantItem",
+                "uuid": "Compendium.pf2e.feats-srd.Item.Combat Climber"
+            },
+            {
+                "adjustment": {
+                    "success": "one-degree-better"
+                },
+                "key": "AdjustDegreeOfSuccess",
+                "predicate": [
+                    "action:climb"
+                ],
+                "selector": "athletics"
+            }
+        ],
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "heritage"
+}

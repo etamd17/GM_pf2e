@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+{% block title %}Encounter Templates{% endblock %}
+{% block extra_head %}
+    .et-budget { padding: var(--sp-3); border-radius: var(--r-sm); border: 1px solid var(--border-card);
+        background: var(--bg-card); cursor: pointer; transition: all var(--t-fast); text-align: center; }
+    .et-budget:hover { border-color: var(--gilt-300); }
+    .et-budget.active { border-color: var(--gilt-300); background: rgba(201,163,78,0.08); }
+    .et-creature-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+        border-radius: var(--r-sm); border: 1px solid var(--border-card); background: var(--bg-card);
+        cursor: pointer; transition: all var(--t-fast); }
+    .et-creature-row:hover { border-color: var(--gilt-300); }
+    .et-creature-row.selected { border-color: var(--gilt-300); background: rgba(201,163,78,0.08); }
+    .et-trait { font-size: 9px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+        padding: 1px 5px; border-radius: 3px; background: rgba(154,145,122,0.15);
+        color: var(--text-on-dark-3); }
+    .et-xp-badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px;
+        white-space: nowrap; }
+{% endblock %}
+{% block content %}
+<div style="max-width: 1000px; margin: 0 auto;">
+    <header style="margin-bottom: var(--sp-5);">
+        <div class="font-display" style="font-size:10px; letter-spacing:0.18em; text-transform:uppercase; color:var(--text-on-dark-3); margin-bottom:var(--sp-1);">Encounter Builder</div>
+        <h1 class="font-display" style="font-size:24px; color:var(--gilt-100); margin:0;">Encounter Templates</h1>
+    </header>
+
+    <!-- Party level + XP budget reference -->
+    <div style="display:flex; align-items:center; gap:var(--sp-3); margin-bottom:var(--sp-4); flex-wrap:wrap;">
+        <label style="font-size:12px; color:var(--text-on-dark-2);">Party Level:</label>
+        <input type="number" id="party-level" value="3" min="-1" max="25"
+               style="width:60px; font-size:13px; font-weight:700; text-align:center; background:var(--bg-card); border:1px solid var(--border-card); color:var(--gilt-100); border-radius:var(--r-sm); padding:6px;">
+        <button onclick="loadCreatures()" style="font-size:11px; padding:6px 14px; border-radius:var(--r-sm); cursor:pointer; background:rgba(201,163,78,0.12); border:1px solid rgba(201,163,78,0.35); color:var(--gilt-100);">Load Creatures</button>
+    </div>
+
+    <!-- Budget tiers -->
+    <div style="display:grid; grid-template-columns:repeat(5, 1fr); gap:var(--sp-2); margin-bottom:var(--sp-4);">
+        {% for b in budgets %}
+        <div class="et-budget" onclick="selectBudget({{ b.xp }})" data-xp="{{ b.xp }}">
+            <div class="font-display" style="font-size:13px; font-weight:700; color:var(--gilt-100);">{{ b.label }}</div>
+            <div style="font-size:18px; font-weight:800; color:var(--text-on-dark); margin:4px 0;">{{ b.xp }} XP</div>
+            <div style="font-size:10px; color:var(--text-on-dark-3);">{{ b.desc }}</div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 340px; gap:var(--sp-4);">
+        <!-- Creature list -->
+        <div>
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:var(--sp-2);">
+                <div class="font-display" style="font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--gilt-200);">Available Creatures</div>
+                <input type="text" id="creature-filter" placeholder="Filter by name..."
+                       oninput="filterCreatures()"
+                       style="width:180px; font-size:11px; background:var(--bg-base); border:1px solid var(--border-card); color:var(--text-on-dark); border-radius:var(--r-sm); padding:5px 8px;">
+            </div>
+            <div id="creature-list" style="max-height:500px; overflow-y:auto; display:flex; flex-direction:column; gap:4px;">
+                <div style="color:var(--text-on-dark-3); font-size:12px; font-style:italic; padding:var(--sp-3);">Set the party level and click Load Creatures.</div>
+            </div>
+        </div>
+
+        <!-- Selected encounter -->
+        <div style="background:var(--bg-card); border:1px solid var(--border-card); border-radius:var(--r-md); padding:var(--sp-4);">
+            <div class="font-display" style="font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--gilt-200); margin-bottom:var(--sp-2);">Encounter Build</div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--sp-3);">
+                <span style="font-size:12px; color:var(--text-on-dark-3);">Budget: <span id="budget-label" style="font-weight:700; color:var(--gilt-100);">--</span></span>
+                <span style="font-size:12px;">Total: <span id="total-xp" style="font-weight:700; color:var(--gilt-100);">0</span> XP</span>
+            </div>
+            <div id="xp-bar-wrap" style="height:8px; border-radius:4px; background:var(--bg-base); margin-bottom:var(--sp-3); overflow:hidden;">
+                <div id="xp-bar" style="height:100%; border-radius:4px; background:var(--gilt-300); transition:width 0.2s; width:0%;"></div>
+            </div>
+            <div id="selected-list" style="display:flex; flex-direction:column; gap:4px; margin-bottom:var(--sp-3);">
+                <div style="color:var(--text-on-dark-3); font-size:12px; font-style:italic;">Click creatures to add them.</div>
+            </div>
+            <div style="display:flex; gap:6px;">
+                <button onclick="clearSelection()" style="flex:1; font-size:11px; padding:8px; border-radius:var(--r-sm); cursor:pointer; background:transparent; border:1px solid var(--border-card); color:var(--text-on-dark-3);">Clear</button>
+                <button onclick="quickStart()" id="qs-btn" style="flex:1; font-size:11px; font-weight:700; padding:8px; border-radius:var(--r-sm); cursor:pointer; background:rgba(201,163,78,0.12); border:1px solid rgba(201,163,78,0.35); color:var(--gilt-100);">Quick Start</button>
+            </div>
+            <div id="qs-status" style="font-size:10px; color:var(--text-on-dark-3); margin-top:6px; text-align:center;"></div>
+        </div>
+    </div>
+
+    <!-- XP reference table -->
+    <div style="margin-top:var(--sp-5); background:var(--bg-card); border:1px solid var(--border-card); border-radius:var(--r-md); padding:var(--sp-4);">
+        <div class="font-display" style="font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--gilt-200); margin-bottom:var(--sp-2);">Creature XP by Level Difference</div>
+        <div style="display:flex; flex-wrap:wrap; gap:8px; font-size:12px;">
+            {% for diff, xp in xp_table.items()|sort %}
+            <span style="background:var(--bg-base); border:1px solid var(--border-card); border-radius:4px; padding:4px 10px;">
+                <span style="color:var(--text-on-dark-3);">{{ 'PL' if diff == 0 else ('PL' ~ ('%+d' % diff)) }}:</span>
+                <span style="font-weight:700; color:var(--gilt-100);">{{ xp }} XP</span>
+            </span>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<script>
+var creatures = [];
+var selected = []; // [{name, level, xp, path}, ...]
+var budgetXP = 80; // default moderate
+
+function selectBudget(xp) {
+    budgetXP = xp;
+    document.querySelectorAll('.et-budget').forEach(function(el) {
+        el.classList.toggle('active', parseInt(el.dataset.xp) === xp);
+    });
+    document.getElementById('budget-label').textContent = xp + ' XP';
+    updateXPBar();
+}
+selectBudget(80);
+
+async function loadCreatures() {
+    var lvl = parseInt(document.getElementById('party-level').value) || 3;
+    var r = await fetch('/api/encounter_templates/creatures?party_level=' + lvl);
+    var j = await r.json();
+    creatures = j.creatures || [];
+    renderCreatures();
+}
+
+function renderCreatures() {
+    var filter = (document.getElementById('creature-filter').value || '').toLowerCase();
+    var list = creatures.filter(function(c) { return !filter || c.name.toLowerCase().indexOf(filter) >= 0; });
+    var el = document.getElementById('creature-list');
+    if (!list.length) {
+        el.innerHTML = '<div style="color:var(--text-on-dark-3); font-size:12px; font-style:italic; padding:var(--sp-3);">No creatures match the filters.</div>';
+        return;
+    }
+    el.innerHTML = list.map(function(c) {
+        var diffLabel = c.diff === 0 ? 'PL' : 'PL' + (c.diff > 0 ? '+' : '') + c.diff;
+        var diffColor = c.diff >= 3 ? '#d36e6e' : c.diff >= 1 ? '#e0b65a' : c.diff <= -3 ? '#6a9c44' : 'var(--text-on-dark-2)';
+        var traits = (c.traits || []).map(function(t) { return '<span class="et-trait">' + t + '</span>'; }).join(' ');
+        return '<div class="et-creature-row" onclick="addCreature(\'' + c.name.replace(/'/g, "\\'") + '\',' + c.level + ',' + c.xp + ',\'' + c.path.replace(/'/g, "\\'") + '\')">' +
+            '<div style="flex:1; min-width:0;">' +
+            '<div style="font-size:13px; font-weight:600; color:var(--text-on-dark);">' + c.name + '</div>' +
+            '<div style="display:flex; gap:4px; margin-top:2px; flex-wrap:wrap;">' + traits + '</div>' +
+            '</div>' +
+            '<span style="font-size:11px; color:' + diffColor + '; font-weight:700;">' + diffLabel + '</span>' +
+            '<span class="et-xp-badge" style="background:rgba(201,163,78,0.12); color:var(--gilt-100);">Lvl ' + c.level + '</span>' +
+            '<span class="et-xp-badge" style="background:rgba(154,145,122,0.1); color:var(--text-on-dark-2);">' + c.xp + ' XP</span>' +
+            '</div>';
+    }).join('');
+}
+
+function filterCreatures() { renderCreatures(); }
+
+function addCreature(name, level, xp, path) {
+    selected.push({name: name, level: level, xp: xp, path: path});
+    renderSelected();
+}
+
+function removeCreature(idx) {
+    selected.splice(idx, 1);
+    renderSelected();
+}
+
+function clearSelection() {
+    selected = [];
+    renderSelected();
+}
+
+function renderSelected() {
+    var el = document.getElementById('selected-list');
+    if (!selected.length) {
+        el.innerHTML = '<div style="color:var(--text-on-dark-3); font-size:12px; font-style:italic;">Click creatures to add them.</div>';
+    } else {
+        el.innerHTML = selected.map(function(s, i) {
+            return '<div style="display:flex; align-items:center; justify-content:space-between; padding:4px 8px; background:var(--bg-base); border:1px solid var(--border-card); border-radius:4px;">' +
+                '<span style="font-size:12px; color:var(--text-on-dark);">' + s.name + ' <span style="color:var(--text-on-dark-3);">Lvl ' + s.level + '</span></span>' +
+                '<div style="display:flex; align-items:center; gap:6px;">' +
+                '<span style="font-size:11px; font-weight:700; color:var(--gilt-100);">' + s.xp + ' XP</span>' +
+                '<button onclick="removeCreature(' + i + ')" style="color:var(--text-on-dark-3); background:transparent; border:none; cursor:pointer; font-size:14px;">&times;</button>' +
+                '</div></div>';
+        }).join('');
+    }
+    updateXPBar();
+}
+
+function updateXPBar() {
+    var total = selected.reduce(function(sum, s) { return sum + s.xp; }, 0);
+    document.getElementById('total-xp').textContent = total;
+    var pct = budgetXP > 0 ? Math.min(100, Math.round(total / budgetXP * 100)) : 0;
+    var bar = document.getElementById('xp-bar');
+    bar.style.width = pct + '%';
+    if (total > budgetXP) bar.style.background = '#d36e6e';
+    else if (total >= budgetXP * 0.8) bar.style.background = 'var(--gilt-300)';
+    else bar.style.background = '#6a9c44';
+}
+
+async function quickStart() {
+    if (!selected.length) { document.getElementById('qs-status').textContent = 'Add creatures first.'; return; }
+    var btn = document.getElementById('qs-btn');
+    btn.disabled = true; btn.textContent = 'Starting...';
+    try {
+        // Stage each creature via the existing stage_encounter API
+        for (var i = 0; i < selected.length; i++) {
+            var s = selected[i];
+            await fetch('/api/stage_encounter', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({monster_path: s.path})
+            });
+        }
+        document.getElementById('qs-status').style.color = '#86efac';
+        document.getElementById('qs-status').textContent = 'Creatures staged! Go to the Tracker.';
+    } catch (e) {
+        document.getElementById('qs-status').style.color = '#fca5a5';
+        document.getElementById('qs-status').textContent = 'Failed: ' + e;
+    } finally {
+        btn.disabled = false; btn.textContent = 'Quick Start';
+    }
+}
+</script>
+{% endblock %}

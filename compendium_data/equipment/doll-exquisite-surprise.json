@@ -1,0 +1,58 @@
+{
+    "_id": "T99WI1hocCXE7RI0",
+    "img": "systems/pf2e/icons/equipment/held-items/doll.webp",
+    "name": "Doll (Exquisite surprise)",
+    "system": {
+        "baseItem": null,
+        "bulk": {
+            "value": 0.1
+        },
+        "containerId": null,
+        "description": {
+            "value": "<p>This doll contains a hidden compartment or pouch capable of holding a single object of up to light Bulk—typically a bell, rattle, or dried flowers.</p>\n<p>Hiding an object inside this beautifully crafted surprise doll grants you a +1 item bonus to Stealth checks made to Conceal an Item, as the compartment is particularly well-hidden and weighted to ensure the doll doesn't feel off-balance with an item inside.</p>"
+        },
+        "hardness": 0,
+        "hp": {
+            "max": 0,
+            "value": 0
+        },
+        "level": {
+            "value": 2
+        },
+        "material": {
+            "grade": null,
+            "type": null
+        },
+        "price": {
+            "value": {
+                "gp": 10
+            }
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder NPC Core"
+        },
+        "quantity": 1,
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "action:conceal-an-object"
+                ],
+                "selector": "stealth",
+                "type": "item",
+                "value": 1
+            }
+        ],
+        "size": "med",
+        "traits": {
+            "rarity": "common",
+            "value": []
+        },
+        "usage": {
+            "value": "held-in-one-hand"
+        }
+    },
+    "type": "equipment"
+}

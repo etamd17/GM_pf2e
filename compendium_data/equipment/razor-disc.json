@@ -1,0 +1,62 @@
+{
+    "_id": "hcoBRMF0zIA986Of",
+    "img": "systems/pf2e/icons/equipment/shields/razor-disc.webp",
+    "name": "Razor Disc",
+    "system": {
+        "acBonus": 1,
+        "baseItem": "razor-disc",
+        "bulk": {
+            "value": 1
+        },
+        "containerId": null,
+        "description": {
+            "value": "<p>Several small blades line the outside edge of this steel shield. This specialized throwing shield is common among warriors in the Mwangi Expanse, where its blades can cut down foliage as it flies.</p>"
+        },
+        "grade": null,
+        "hardness": 4,
+        "hp": {
+            "max": 16,
+            "value": 16
+        },
+        "level": {
+            "value": 0
+        },
+        "material": {
+            "grade": null,
+            "type": null
+        },
+        "price": {
+            "value": {
+                "gp": 5
+            }
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Treasure Vault (Remastered)"
+        },
+        "quantity": 1,
+        "rules": [],
+        "runes": {
+            "reinforcing": 0
+        },
+        "size": "med",
+        "speedPenalty": 0,
+        "traits": {
+            "integrated": {
+                "runes": {
+                    "potency": 0,
+                    "property": [],
+                    "striking": 0
+                },
+                "versatile": null
+            },
+            "rarity": "common",
+            "value": [
+                "integrated-1d6-s",
+                "shield-throw-20"
+            ]
+        }
+    },
+    "type": "shield"
+}

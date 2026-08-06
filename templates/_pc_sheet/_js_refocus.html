@@ -1,0 +1,49 @@
+        // ========================================================
+        // REFOCUS ACTIVITY (PF2e: 10 minutes, +1 Focus Point, max 3)
+        // Class-specific deed text per Archives of Nethys.
+        // ========================================================
+        const REFOCUS_DEEDS = {
+            cleric:    'Pray to your deity or perform a service in their name.',
+            champion:  "Tend the wounds of your allies or reaffirm your cause's vows.",
+            druid:     'Commune with nature, tend a plant, or care for an animal.',
+            monk:      'Meditate to recenter your ki.',
+            bard:      'Practice an instrument, write verse, or perform.',
+            sorcerer:  'Reflect on your bloodline and the source of your magic.',
+            oracle:    'Embrace your mystery and curse, communing with your divine source.',
+            witch:     'Confer with your familiar and your patron.',
+            magus:     'Drill with your weapon, channeling arcane focus through martial form.',
+            ranger:    'Tend to your warden\'s bond with nature or your companion.',
+            summoner:  'Strengthen your link with your eidolon.',
+            psychic:   'Meditate to refocus your unconscious mind.',
+            kineticist: 'Realign with your kinetic gate and the elemental planes.',
+        };
+        async function doRefocus(className, tradition) {
+            const cls = (className || '').toLowerCase();
+            const deed = REFOCUS_DEEDS[cls] || 'Spend 10 minutes performing deeds connected to your magic.';
+            if (!confirm(`Refocus (10 minutes)\n\n${deed}\n\nRestores 1 Focus Point.`)) return;
+            try {
+                const res = await fetch(`/api/refocus/${pcNameEncoded}`, { method: 'POST' });
+                const d = await res.json();
+                if (!d.success) {
+                    if (typeof showRollToast === 'function') {
+                        showRollToast('Refocus', '!', d.error || 'Could not refocus.', false, true, [], null);
+                    } else { alert(d.error || 'Could not refocus.'); }
+                    return;
+                }
+                if (typeof broadcastToGM === 'function') {
+                    broadcastToGM('Refocus', `+1 Focus Point`, `${d.message || ''}`);
+                }
+                if (typeof showRollToast === 'function') {
+                    showRollToast('Refocus', `+1`, `Focus ${d.current_focus}/${d.focus_max}`, false, false, [], null);
+                }
+                // Refresh focus pip displays without a full reload.
+                document.querySelectorAll('#focus-pips, #header-focus-pips').forEach(el => {
+                    const max = parseInt(el.querySelectorAll('.focus-pip').length, 10) || d.focus_max;
+                    let html = '';
+                    for (let i = 0; i < max; i++) {
+                        html += `<span class="focus-pip ${i < d.current_focus ? 'filled' : 'empty'}"></span>`;
+                    }
+                    el.innerHTML = html;
+                });
+            } catch (e) { console.error(e); }
+        }

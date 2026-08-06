@@ -1,0 +1,56 @@
+{
+    "_id": "vhSYlQiAQMLuXqoc",
+    "img": "icons/tools/scribal/magnifying-glass.webp",
+    "name": "Effect: Clue In",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.actionspf2e.Item.Clue In]</p>\n<p>You gain a +1 circumstance bonus to your check. If the origin has investigator expertise, this bonus increases to +2.</p>"
+        },
+        "duration": {
+            "expiry": null,
+            "sustained": false,
+            "unit": "unlimited",
+            "value": -1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "removeAfterRoll": "if-enabled",
+                "selector": "check",
+                "slug": "clue-in",
+                "type": "circumstance",
+                "value": 1
+            },
+            {
+                "key": "AdjustModifier",
+                "mode": "upgrade",
+                "predicate": [
+                    "parent:origin:item:tag:investigator-expertise"
+                ],
+                "selector": "check",
+                "slug": "clue-in",
+                "value": 2
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

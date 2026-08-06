@@ -1,0 +1,60 @@
+{
+    "_id": "UzIamWcEJTOjwfoA",
+    "img": "icons/sundries/documents/document-official-capital.webp",
+    "name": "Effect: Spin Tale",
+    "system": {
+        "description": {
+            "value": "<p>You gain a +1 status bonus to attack rolls and saving throws against the marked villain.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": true,
+            "unit": "rounds",
+            "value": 10
+        },
+        "level": {
+            "value": 2
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder #170: Spoken on the Song Wind"
+        },
+        "rules": [
+            {
+                "key": "TokenMark",
+                "slug": "spin-tale"
+            },
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "target:mark:spin-tale"
+                ],
+                "selector": "attack",
+                "type": "status",
+                "value": 1
+            },
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "origin:mark:spin-tale"
+                ],
+                "selector": "saving-throw",
+                "type": "status",
+                "value": 1
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

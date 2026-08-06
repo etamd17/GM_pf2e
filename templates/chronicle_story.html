@@ -1,0 +1,21 @@
+{% extends "chronicle_base.html" %}
+{% block chronicle %}
+<h1 class="chron-title">Story so far</h1>
+{% if recaps %}
+<ol class="chron-timeline">
+  {% for r in recaps %}
+  {% if r.chapter %}<li class="chron-chapter">{{ r.chapter }}</li>{% endif %}
+  <li class="chron-timeline__item">
+    <span class="chron-timeline__node" aria-hidden="true"></span>
+    <article class="chron-prose">
+      <h2>{{ r.title }}</h2>
+      <p class="chron-card__meta">Session {{ r.session_number }}</p>
+      {{ r.html|safe }}
+    </article>
+  </li>
+  {% endfor %}
+</ol>
+{% else %}
+<div class="chron-empty"><p>No sessions have been chronicled yet.</p></div>
+{% endif %}
+{% endblock %}

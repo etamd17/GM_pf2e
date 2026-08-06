@@ -1,0 +1,57 @@
+{
+    "_id": "6nJZGgIJIY3x0b1Q",
+    "img": "icons/commodities/tech/cog-large-steel-white.webp",
+    "name": "Spider Chair",
+    "system": {
+        "baseItem": null,
+        "bulk": {
+            "value": 3
+        },
+        "containerId": null,
+        "description": {
+            "value": "<p>This clockwork traveler's chair has spinnerets and spider legs that allow it to roll up walls, fire web lines to pull you to a location, and obstruct foes with webs. While using the chair, you gain a climb Speed equal to your Speed.</p><hr /><p><strong>Activate—Web Swing</strong> <span class=\"action-glyph\">1</span> (manipulate)</p>\n<p><strong>Frequency</strong> once per minute</p>\n<p><strong>Effect</strong> The chair shoots a web line at a solid wall, floor, or ceiling up to 60 feet away and then pulls itself and you to that location.</p><hr /><p><strong>Activate—Web</strong> <span class=\"action-glyph\">3</span> (manipulate)</p>\n<p><strong>Frequency</strong> once per hour</p>\n<p><strong>Effect</strong> You cause the chair to launch an enormous web to hinder your foes, with the effects of a 4th-rank @UUID[Compendium.pf2e.spells-srd.Item.Web] spell.</p>"
+        },
+        "hardness": 0,
+        "hp": {
+            "max": 0,
+            "value": 0
+        },
+        "level": {
+            "value": 12
+        },
+        "material": {
+            "grade": null,
+            "type": null
+        },
+        "price": {
+            "value": {
+                "gp": 1800
+            }
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Guns & Gears"
+        },
+        "quantity": 1,
+        "rules": [
+            {
+                "key": "BaseSpeed",
+                "selector": "climb",
+                "value": "@actor.system.movement.speeds.land.value"
+            }
+        ],
+        "size": "med",
+        "traits": {
+            "rarity": "uncommon",
+            "value": [
+                "clockwork",
+                "magical"
+            ]
+        },
+        "usage": {
+            "value": "worn"
+        }
+    },
+    "type": "equipment"
+}

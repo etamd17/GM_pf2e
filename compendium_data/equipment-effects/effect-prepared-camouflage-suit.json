@@ -1,0 +1,93 @@
+{
+    "_id": "jgaDboqENQJaS1sW",
+    "img": "systems/pf2e/icons/equipment/worn-items/other-worn-items/camouflage-suit.webp",
+    "name": "Effect: Prepared Camouflage Suit",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Camouflage Suit]</p>\n<p>You gain an item bonus to Stealth checks while you attempt to Hide or Sneak.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "days",
+            "value": 1
+        },
+        "level": {
+            "value": 3
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Guns & Gears"
+        },
+        "rules": [
+            {
+                "adjustName": false,
+                "choices": [
+                    {
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:origin:item:slug:camouflage-suit",
+                                    {
+                                        "not": "parent:origin:item"
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": "Compendium.pf2e.equipment-srd.Item.Camouflage Suit"
+                    },
+                    {
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:origin:item:slug:camouflage-suit-superb",
+                                    {
+                                        "not": "parent:origin:item"
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": "Compendium.pf2e.equipment-srd.Item.Camouflage Suit (Superb)"
+                    }
+                ],
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Prompt.EquipmentVariety",
+                "rollOption": "camouflage-suit"
+            },
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "action:sneak",
+                    "action:hide"
+                ],
+                "selector": "stealth",
+                "slug": "camouflage-suit-bonus",
+                "type": "item",
+                "value": 1
+            },
+            {
+                "key": "AdjustModifier",
+                "mode": "upgrade",
+                "predicate": [
+                    "camouflage-suit:camouflage-suit-superb"
+                ],
+                "selector": "stealth",
+                "slug": "camouflage-suit-bonus",
+                "value": 2
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

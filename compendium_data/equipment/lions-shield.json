@@ -1,0 +1,100 @@
+{
+    "_id": "eMDt5vCQztp7cC6B",
+    "img": "icons/equipment/shield/kite-steel-boss-gold.webp",
+    "name": "Lion's Shield",
+    "system": {
+        "acBonus": 2,
+        "baseItem": "steel-shield",
+        "bulk": {
+            "value": 1
+        },
+        "containerId": null,
+        "description": {
+            "value": "<p>This steel shield (Hardness 6, HP 36, BT 18) is forged into the shape of a roaring lion's head. The lion's head functions as <em>+1 striking shield boss</em> that can't be removed from the shield.</p><hr /><p><strong>Activate—Lion's Bite</strong> <span class=\"action-glyph\">F</span> (manipulate)</p>\n<p><strong>Frequency</strong> once per day</p>\n<p><strong>Requirements</strong> Your shield is raised</p>\n<p><strong>Effect</strong> You animate the lion's head, making a melee Strike with it. The shield's biting maw is a martial melee weapon that deals 2d6 piercing damage and has the deadly d6 trait; it can't be enhanced by runes.</p>\n<p>The shield remains animated for 1 minute, during which time you can Strike with it each time you Raise the Shield, as well as with a Strike action.</p>\n<p>@UUID[Compendium.pf2e.equipment-effects.Item.Effect: Lion's Bite]</p>"
+        },
+        "grade": null,
+        "hardness": 6,
+        "hp": {
+            "max": 36,
+            "value": 36
+        },
+        "level": {
+            "value": 6
+        },
+        "material": {
+            "grade": null,
+            "type": null
+        },
+        "price": {
+            "value": {
+                "gp": 245
+            }
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder GM Core"
+        },
+        "quantity": 1,
+        "rules": [
+            {
+                "category": "martial",
+                "damage": {
+                    "base": {
+                        "damageType": "bludgeoning",
+                        "dice": 1,
+                        "die": "d6"
+                    }
+                },
+                "group": "shield",
+                "key": "Strike",
+                "label": "PF2E.SpecificRule.Equipment.LionsShield.LionsHeadLabel",
+                "range": null,
+                "slug": "lions-head"
+            },
+            {
+                "itemType": "weapon",
+                "key": "ItemAlteration",
+                "mode": "upgrade",
+                "predicate": [
+                    "item:slug:lions-head"
+                ],
+                "property": "runes-potency",
+                "value": 1
+            },
+            {
+                "itemType": "weapon",
+                "key": "ItemAlteration",
+                "mode": "upgrade",
+                "predicate": [
+                    "item:slug:lions-head"
+                ],
+                "property": "runes-striking",
+                "value": 1
+            }
+        ],
+        "runes": {
+            "reinforcing": 0
+        },
+        "size": "med",
+        "specific": {
+            "integrated": null,
+            "material": {
+                "grade": null,
+                "type": null
+            },
+            "runes": {
+                "reinforcing": 0
+            }
+        },
+        "speedPenalty": 0,
+        "traits": {
+            "integrated": null,
+            "rarity": "common",
+            "value": [
+                "magical"
+            ]
+        }
+    },
+    "type": "shield"
+}

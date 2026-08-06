@@ -1,0 +1,18 @@
+{% extends "chronicle_base.html" %}
+{% block chronicle %}
+<article class="chron-prose">
+  <p class="chron-kicker">{{ page.section|capitalize }}</p>
+  <h1>{{ page.title }}</h1>
+  {% if page.epithet %}<p class="chron-card__epithet" style="font-size:15px;">{{ page.epithet }}</p>{% endif %}
+  {{ page_html|safe }}
+</article>
+
+{% if backlinks %}
+<aside class="chron-doc-frame" style="max-width:65ch;margin-top:var(--sp-5);">
+  <p class="chron-kicker">Appears in</p>
+  <ul class="chron-tags" role="list">
+    {% for b in backlinks %}<li><a class="chron-pill" href="/chronicle/page/{{ b.slug }}">{{ b.title }}</a></li>{% endfor %}
+  </ul>
+</aside>
+{% endif %}
+{% endblock %}

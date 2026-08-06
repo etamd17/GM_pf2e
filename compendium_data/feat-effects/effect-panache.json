@@ -1,0 +1,37 @@
+{
+    "_id": "uBJsxCzNhje8m8jj",
+    "img": "icons/commodities/treasure/crown-gold-laurel-wreath.webp",
+    "name": "Effect: Panache",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.classfeatures.Item.Panache]</p>\n<p>You gain panache.</p>"
+        },
+        "duration": {
+            "expiry": null,
+            "sustained": false,
+            "unit": "encounter",
+            "value": -1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

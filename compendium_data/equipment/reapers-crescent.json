@@ -1,0 +1,92 @@
+{
+    "_id": "Il75ytwHrdwAAOwe",
+    "img": "systems/pf2e/icons/equipment/weapons/sickle.webp",
+    "name": "Reaper's Crescent",
+    "system": {
+        "ammo": null,
+        "baseItem": "sickle",
+        "bonus": {
+            "value": 0
+        },
+        "bonusDamage": {
+            "value": 0
+        },
+        "bulk": {
+            "value": 0.1
+        },
+        "category": "simple",
+        "containerId": null,
+        "damage": {
+            "damageType": "slashing",
+            "dice": 1,
+            "die": "d4"
+        },
+        "description": {
+            "value": "<p>The blade of this alabaster <em>+1 striking sickle</em> grows thick and pitted as the moon waxes, and it thins to a sharp sliver as the moon wanes. Moonlight also causes a second rune on the blade to change shape with the moon's phases: during the new and crescent moon, the weapon has the <em>@UUID[Compendium.pf2e.equipment-srd.Item.Ghost Touch]</em> rune; during the quarter moon, the <em>@UUID[Compendium.pf2e.equipment-srd.Item.Fearsome]</em> rune; and during the gibbous and full moon, the <em>@UUID[Compendium.pf2e.equipment-srd.Item.Wounding]</em> rune.</p>\n<p>When wielded under moonlight of any strength, the <em>reaper's crescent</em> deals additional cold damage equal to the number of damage dice.</p>"
+        },
+        "expend": null,
+        "grade": null,
+        "group": "knife",
+        "hardness": 0,
+        "hp": {
+            "max": 0,
+            "value": 0
+        },
+        "level": {
+            "value": 9
+        },
+        "material": {
+            "grade": null,
+            "type": null
+        },
+        "price": {
+            "value": {
+                "gp": 575
+            }
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Treasure Vault (Remastered)"
+        },
+        "quantity": 1,
+        "range": null,
+        "reload": {
+            "value": null
+        },
+        "rules": [],
+        "runes": {
+            "potency": 1,
+            "property": [],
+            "striking": 1
+        },
+        "size": "med",
+        "specific": {
+            "material": {
+                "grade": null,
+                "type": null
+            },
+            "runes": {
+                "potency": 1,
+                "property": [],
+                "striking": 1
+            }
+        },
+        "splashDamage": {
+            "value": 0
+        },
+        "traits": {
+            "rarity": "uncommon",
+            "value": [
+                "agile",
+                "finesse",
+                "light",
+                "trip"
+            ]
+        },
+        "usage": {
+            "value": "held-in-one-hand"
+        }
+    },
+    "type": "weapon"
+}

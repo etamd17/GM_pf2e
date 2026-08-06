@@ -1,0 +1,45 @@
+{
+    "_id": "JHpYudY14g0H4VWU",
+    "img": "icons/magic/defensive/armor-stone-skin.webp",
+    "name": "Spell Effect: Mountain Resilience",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Mountain Resilience]</p>\n<p>You gain resistance to physical damage, except adamantine.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 20
+        },
+        "level": {
+            "value": 4
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core"
+        },
+        "rules": [
+            {
+                "exceptions": [
+                    "adamantine"
+                ],
+                "key": "Resistance",
+                "type": "physical",
+                "value": "ternary(gte(@item.level,10),20,ternary(gte(@item.level,8),15,ternary(gte(@item.level,6),10,5)))"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

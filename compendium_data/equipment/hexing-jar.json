@@ -1,0 +1,130 @@
+{
+    "_id": "0fHBB9Xb4m3oAoko",
+    "img": "icons/consumables/potions/flask-corked-red-glow.webp",
+    "name": "Hexing Jar",
+    "system": {
+        "baseItem": null,
+        "bulk": {
+            "value": 0
+        },
+        "containerId": null,
+        "description": {
+            "value": "<p>Dangling from a simple cord, a hexing jar houses rich soil. When a witch who has invested the jar wears it overnight, a miniature thing grows from the soil. Your patron chooses the form, commonly including glowing mushrooms, venus flytraps, mandragora roots, or undead hands reaching up. The thing whispers secrets it learned from your patron, giving you a +2 item bonus to your patron skill.</p><hr /><p><strong>Activate</strong> <span class=\"action-glyph\">F</span> (concentrate)</p>\n<p><strong>Frequency</strong> once per day</p>\n<p><strong>Effect</strong> You gain 1 Focus Point, which you can use only to cast a witch hex spell. If not used by the end of your turn, this Focus Point is lost.</p><hr /><p><strong>Activate</strong> <span class=\"action-glyph\">R</span> (concentrate)</p>\n<p><strong>Frequency</strong> once per hour</p>\n<p><strong>Trigger</strong> You roll a critical success on an attack roll with a witch spell, or your target rolls a critical failure on its saving throw against a witch spell or hex you cast</p>\n<p><strong>Effect</strong> The thing in the jar becomes more energetic—glowing, dancing, rapping on the glass, or some other action appropriate to its appearance. It encourages you until the start of your next turn, granting you and your familiar a +1 status bonus to AC and saving throws and a +2 status bonus against mental effects.</p>\n<p>@UUID[Compendium.pf2e.equipment-effects.Item.Effect: Hexing Jar]</p><hr /><p><strong>Craft Requirements</strong> You are a witch.</p>"
+        },
+        "hardness": 0,
+        "hp": {
+            "max": 0,
+            "value": 0
+        },
+        "level": {
+            "value": 11
+        },
+        "material": {
+            "grade": null,
+            "type": null
+        },
+        "price": {
+            "value": {
+                "gp": 1200
+            }
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Treasure Vault (Remastered)"
+        },
+        "quantity": 1,
+        "rules": [
+            {
+                "choices": [
+                    {
+                        "label": "PF2E.SpecificRule.Witch.Patron.Theme.BabaYaga",
+                        "value": "occultism"
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.Witch.Patron.Theme.ChoirPolitic",
+                        "value": "society"
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.Witch.Patron.Theme.Cobyslarni",
+                        "value": "occultism"
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.Witch.Patron.Theme.DevourerOfDecay",
+                        "value": "nature"
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.Witch.Patron.Theme.FaithsFlamekeeper",
+                        "value": "religion"
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.Witch.Patron.Theme.MosquitoWitch",
+                        "value": "nature"
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.Witch.Patron.Theme.ParadoxOfOpposites",
+                        "value": "religion"
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.Witch.Patron.Theme.RippleInTheDeep",
+                        "value": "nature"
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.Witch.Patron.Theme.SilenceInSnow",
+                        "value": "Nature"
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.Witch.Patron.Theme.SpinnerOfThreads",
+                        "value": "occultism"
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.Witch.Patron.Theme.StarlessShadow",
+                        "value": "occultism"
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.Witch.Patron.Theme.TheInscribedOne",
+                        "value": "arcana"
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.Witch.Patron.Theme.TheResentment",
+                        "value": "occultism"
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.Witch.Patron.Theme.TheUnseenBroker",
+                        "value": "occultism"
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.Witch.Patron.Theme.WhisperOfWings",
+                        "value": "nature"
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.Witch.Patron.Theme.WildingSteward",
+                        "value": "nature"
+                    }
+                ],
+                "flag": "hexingJarSelection",
+                "key": "ChoiceSet",
+                "prompt": "Select your Patron"
+            },
+            {
+                "key": "FlatModifier",
+                "selector": "{item|flags.pf2e.rulesSelections.hexingJarSelection}",
+                "type": "item",
+                "value": 2
+            }
+        ],
+        "size": "med",
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "focused",
+                "invested",
+                "magical"
+            ]
+        },
+        "usage": {
+            "value": "held-in-one-hand"
+        }
+    },
+    "type": "equipment"
+}

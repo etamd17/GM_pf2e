@@ -1,0 +1,61 @@
+{
+    "_id": "fRlvmul3LbLo2xvR",
+    "img": "icons/weapons/polearms/spear-ornate-gold.webp",
+    "name": "Effect: Living Fortification",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.actionspf2e.Item.Living Fortification]</p>\n<p>You gain a +1 circumstance bonus to AC until the start of your next turn.</p>"
+        },
+        "duration": {
+            "expiry": "turn-end",
+            "sustained": false,
+            "unit": "rounds",
+            "value": 0
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Guns & Gears"
+        },
+        "rules": [
+            {
+                "adjustName": false,
+                "choices": [
+                    {
+                        "label": "PF2E.UI.RuleElements.ChoiceSet.YesLabel",
+                        "value": 2
+                    },
+                    {
+                        "label": "PF2E.UI.RuleElements.ChoiceSet.NoLabel",
+                        "value": 1
+                    }
+                ],
+                "flag": "bonus",
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Parry.Prompt"
+            },
+            {
+                "key": "FlatModifier",
+                "selector": [
+                    "ac"
+                ],
+                "type": "circumstance",
+                "value": "@item.flags.pf2e.rulesSelections.bonus"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

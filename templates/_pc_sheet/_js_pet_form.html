@@ -1,0 +1,83 @@
+        // ==========================================
+        // PET / COMPANION MANAGEMENT
+        // ==========================================
+        async function savePet() {
+            const atkRaw = document.getElementById('pet-attack').value.trim();
+            let attacks = [];
+            if (atkRaw) {
+                // Support multiple attacks separated by |
+                const atkEntries = atkRaw.split('|').map(e => e.trim()).filter(e => e);
+                for (const entry of atkEntries) {
+                    const parts = entry.split(',').map(p => p.trim());
+                    if (parts.length >= 3) {
+                        attacks.push({name: parts[0], bonus: parseInt(parts[1]) || 0, damage: parts.slice(2).join(', ')});
+                    } else if (parts.length === 1) {
+                        attacks.push({name: parts[0], bonus: 0, damage: '1d6'});
+                    }
+                }
+            }
+            
+            const pet = {
+                name: document.getElementById('pet-name').value.trim() || 'Unnamed Pet',
+                type: document.getElementById('pet-type').value,
+                size: document.getElementById('pet-size').value,
+                hp: parseInt(document.getElementById('pet-hp').value) || 20,
+                speed: parseInt(document.getElementById('pet-speed').value) || 25,
+                ac: parseInt(document.getElementById('pet-ac').value) || 16,
+                fort: parseInt(document.getElementById('pet-fort').value) || 5,
+                ref: parseInt(document.getElementById('pet-ref').value) || 5,
+                will: parseInt(document.getElementById('pet-will').value) || 3,
+                str_mod: parseInt(document.getElementById('pet-str').value) || 0,
+                dex_mod: parseInt(document.getElementById('pet-dex').value) || 0,
+                con_mod: parseInt(document.getElementById('pet-con').value) || 0,
+                int_mod: parseInt(document.getElementById('pet-int').value) || -4,
+                wis_mod: parseInt(document.getElementById('pet-wis').value) || 0,
+                cha_mod: parseInt(document.getElementById('pet-cha').value) || 0,
+                attacks: attacks,
+                abilities: document.getElementById('pet-abilities').value.trim(),
+            };
+            
+            try {
+                const res = await fetch(`/api/add_pet/${pcNameEncoded}`, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(pet)
+                });
+                const data = await res.json();
+                if (data.success) window.location.reload();
+            } catch(e) { console.error(e); }
+        }
+        
+        function fillPetPreset(name, type, size, hp, ac, fort, ref, will, speed, attacks, str, dex, con, int_, wis, cha, abilities) {
+            document.getElementById('pet-name').value = name;
+            document.getElementById('pet-type').value = type;
+            document.getElementById('pet-size').value = size;
+            document.getElementById('pet-hp').value = hp;
+            document.getElementById('pet-ac').value = ac;
+            document.getElementById('pet-fort').value = fort;
+            document.getElementById('pet-ref').value = ref;
+            document.getElementById('pet-will').value = will;
+            document.getElementById('pet-speed').value = speed;
+            document.getElementById('pet-str').value = str;
+            document.getElementById('pet-dex').value = dex;
+            document.getElementById('pet-con').value = con;
+            document.getElementById('pet-int').value = int_;
+            document.getElementById('pet-wis').value = wis;
+            document.getElementById('pet-cha').value = cha;
+            document.getElementById('pet-abilities').value = abilities;
+            if (attacks.length > 0) {
+                document.getElementById('pet-attack').value = attacks.map(a => `${a.name}, ${a.bonus}, ${a.damage}`).join(' | ');
+            }
+        }
+        
+        async function removePet(name) {
+            if (!confirm(`Remove ${name}?`)) return;
+            try {
+                const res = await fetch(`/api/remove_pet/${pcNameEncoded}`, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name: name})
+                });
+                const data = await res.json();
+                if (data.success) window.location.reload();
+            } catch(e) { console.error(e); }
+        }
+

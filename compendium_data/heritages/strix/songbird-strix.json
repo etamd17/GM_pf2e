@@ -1,0 +1,47 @@
+{
+    "_id": "fWT7Mo2vFC10H4Wq",
+    "folder": "CGEpahbTpXCqGQKp",
+    "img": "icons/creatures/birds/songbird-yellow-flying.webp",
+    "name": "Songbird Strix",
+    "system": {
+        "ancestry": {
+            "name": "Strix",
+            "slug": "strix",
+            "uuid": "Compendium.pf2e.ancestries.Item.GXcC6oVa5quzgNHD"
+        },
+        "description": {
+            "value": "<p>You descend from a talented line of strix storytellers. From the highest mountains and purest landscapes where your lungs fill with glorious clean air, you trill, whistle, and croon sweet songs. While natural sounds make you predisposed to sing, voices make you predisposed to mimicry. You receive a +1 circumstance bonus on Deception checks to Impersonate a mimicked voice, where the sound of the voice is the only factor; if you are a master in Deception, you gain a +2 circumstance bonus instead. You also gain a +1 circumstance bonus on Performance checks to sing; if you are a master in Performance, you gain a +2 circumstance bonus instead.</p>"
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Lost Omens Ancestry Guide"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "action:impersonate",
+                    "voice-only"
+                ],
+                "selector": "deception",
+                "type": "circumstance",
+                "value": "ternary(gte(@actor.system.skills.deception.rank,3),2,1)"
+            },
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "action:perform:singing"
+                ],
+                "selector": "performance",
+                "type": "circumstance",
+                "value": "ternary(gte(@actor.system.skills.performance.rank,3),2,1)"
+            }
+        ],
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "heritage"
+}

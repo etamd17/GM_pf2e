@@ -1,0 +1,42 @@
+{
+    "_id": "6zo2PJGYoig7nFpR",
+    "img": "icons/consumables/potions/potion-tube-corked-red.webp",
+    "name": "Field Discovery (Toxicologist)",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p>You have handled enough poisons to become inured to their effects. You gain poison resistance equal to half your level.</p>"
+        },
+        "level": {
+            "value": 5
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "key": "Resistance",
+                "type": "poison",
+                "value": "floor(@actor.level/2)"
+            }
+        ],
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "alchemist"
+            ]
+        }
+    },
+    "type": "feat"
+}

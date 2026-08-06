@@ -1,0 +1,49 @@
+{
+    "_id": "sPtl05wwTpqFI0lL",
+    "img": "icons/tools/laboratory/vials-blue-pink.webp",
+    "name": "Quick Alchemy",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p>You gain the @UUID[Compendium.pf2e.actionspf2e.Item.Quick Alchemy] action to make the items you need on the fly.</p>"
+        },
+        "level": {
+            "value": 1
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "key": "GrantItem",
+                "uuid": "Compendium.pf2e.actionspf2e.Item.Quick Alchemy"
+            },
+            {
+                "craftableItems": [
+                    "item:trait:alchemical",
+                    "item:trait:consumable"
+                ],
+                "key": "CraftingAbility",
+                "slug": "quick-alchemy"
+            }
+        ],
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "alchemist"
+            ]
+        }
+    },
+    "type": "feat"
+}

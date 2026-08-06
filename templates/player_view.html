@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ campaign.name }} · Roster · PF2E</title>
+    {# Shared SSE hub — standalone page; defines window.appSSE before the
+       roster SSE + included _player_nav / _session_curtain partials run. #}
+    {% include "_sse_hub.html" %}
+    {# Precompiled Tailwind utilities — replaces the runtime cdn.tailwindcss.com
+       JIT (full engine + in-browser compile on every load). Built from this
+       page's classes with the inline config's colors preserved exactly. If you
+       add/remove Tailwind classes here, regenerate: see docs/tailwind-build.md. #}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tw-player_view.css') }}">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;600;700&family=Cormorant+Garamond:ital,wght@1,500&display=swap');
+        body { font-family:'Inter',system-ui,sans-serif; background:#0c0a07; color:#f0ead7; min-height:100vh; }
+        .font-display { font-family:'Cinzel',serif; }
+        ::-webkit-scrollbar { width:5px; }
+        ::-webkit-scrollbar-track { background:transparent; }
+        ::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.08); border-radius:10px; }
+    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/system.css') }}">
+    <style>
+        /* Same stage treatment as templates/campaign_intro.html — warm-ink
+           page floor with a ruby radial up-top and a gilt radial low-right
+           so the hub reads as the same brand world as the homepage. */
+        .stage {
+            position:relative;
+            min-height:100vh;
+            background:
+                radial-gradient(circle at 20% 0%, rgba(168,58,58,0.10), transparent 55%),
+                radial-gradient(circle at 80% 100%, rgba(201,163,78,0.06), transparent 55%),
+                #0c0a07;
+        }
+        /* Optional splash backdrop. When campaign.hero_image is set the
+           page wears the same fixed cinematic backdrop the homepage uses
+           — the dark gradient mask keeps typography legible regardless
+           of image brightness. */
+        .stage.has-hero::before {
+            content:""; position:fixed; inset:0; pointer-events:none; z-index:-1;
+            background-image:
+                linear-gradient(to bottom, rgba(12,10,7,0.72) 0%, rgba(12,10,7,0.92) 65%, rgba(12,10,7,0.98) 100%),
+                var(--hero-image);
+            background-size: cover, cover;
+            background-position: center 30%, center 30%;
+            background-repeat: no-repeat;
+        }
+
+        /* Hero header — compact relative to the homepage's 38vh band
+           because the roster + tracker need the screen real estate.
+           The rune-and-title pattern matches gm_hub.html and the
+           campaign_intro homepage. */
+        .roster-hero { text-align:center; padding: 28px 16px 18px; }
+        .campaign-rune {
+            font-family:'Cinzel',serif;
+            font-size:11px; letter-spacing:0.32em; text-transform:uppercase;
+            color:rgba(201,163,78,0.65);
+            margin-bottom:8px;
+        }
+        .campaign-title {
+            font-family:'Cinzel',serif; font-weight:700;
+            color:#f0d88a;
+            letter-spacing:0.06em; line-height:1.1;
+            font-size:clamp(26px, 4.2vw, 40px);
+            margin:0 0 6px;
+            text-shadow:
+                0 0 22px rgba(168,58,58,0.30),
+                0 0 50px rgba(0,0,0,0.6),
+                0 4px 20px rgba(0,0,0,0.7);
+        }
+        .campaign-flavor {
+            font-family:'Cormorant Garamond','Cinzel',serif;
+            font-style:italic; font-weight:500;
+            font-size:clamp(13px, 1.5vw, 16px);
+            color:#e0d6b9;
+            letter-spacing:0.02em;
+            margin: 0 auto 12px;
+            max-width:min(640px, 90vw);
+            text-shadow: 0 0 20px rgba(0,0,0,0.85), 0 2px 6px rgba(0,0,0,0.95);
+        }
+        .session-pills { display:flex; flex-wrap:wrap; justify-content:center; gap:6px 10px; }
+        .session-pill {
+            display:inline-flex; align-items:baseline; gap:6px;
+            font-size:11px;
+            background:rgba(201,163,78,0.06);
+            border:1px solid rgba(201,163,78,0.22);
+            border-radius:6px;
+            padding:4px 10px;
+        }
+        .session-pill .lbl {
+            font-family:'Cinzel',serif;
+            text-transform:uppercase; letter-spacing:0.12em;
+            font-size:9px; color:#c8bd9e;
+        }
+        .session-pill .val { color:#ede4cf; font-weight:500; }
+
+        /* Character cards — gilt-edged panels matching the homepage's
+           pc-tile aesthetic. HP/AC numbers in Cinzel for the same
+           "statblock under glass" feel as the GM screen. */
+        .card {
+            background:#191510;
+            border:1px solid rgba(201,163,78,0.16);
+            border-radius:10px;
+            transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+            position:relative; overflow:hidden;
+        }
+        .card:hover {
+            border-color:rgba(224,176,80,0.45);
+            transform:translateY(-2px);
+            box-shadow:0 10px 26px rgba(0,0,0,0.5);
+        }
+        .card.is-current { border-color:rgba(224,176,80,0.55); box-shadow:0 0 0 1px rgba(224,176,80,0.20), 0 8px 22px rgba(0,0,0,0.45); }
+        /* The card the returning player claimed (localStorage) — same gilt
+           glow as is-current, plus a corner ribbon so "which one is mine"
+           is answered at a glance. Applied by loadMyChar(). */
+        .card.is-mine { border-color:rgba(224,176,80,0.55); box-shadow:0 0 0 1px rgba(224,176,80,0.20), 0 8px 22px rgba(0,0,0,0.45); }
+        .mine-badge {
+            position:absolute; top:0; right:0; z-index:2;
+            font-family:'Cinzel',serif; font-size:8px; font-weight:700;
+            letter-spacing:0.14em; text-transform:uppercase;
+            color:#0c0a07; background:#c9a34e;
+            padding:2px 8px; border-bottom-left-radius:8px;
+            pointer-events:none;
+        }
+        /* First-visit hint — nudges the player to claim their PC. Only shown
+           (via loadMyChar) when nothing is claimed yet. */
+        .claim-hint {
+            margin:0 auto 20px; max-width:520px; text-align:center;
+            font-size:12px; color:#c8bd9e;
+            background:rgba(201,163,78,0.06); border:1px dashed rgba(201,163,78,0.28);
+            border-radius:8px; padding:8px 14px;
+        }
+        .claim-hint .star { color:#e0b65a; }
+
+        .hp-ring { width:44px; height:44px; position:relative; display:flex; align-items:center; justify-content:center; }
+        .hp-ring svg { position:absolute; inset:0; transform:rotate(-90deg); }
+        .erow { transition:all .2s; border-left:3px solid transparent; }
+        .erow.on { border-left-color:#c9a34e; background:rgba(201,163,78,0.06); }
+        @keyframes glow { 0%,100%{opacity:.5} 50%{opacity:1} }
+        .glow { animation:glow 2.5s ease-in-out infinite; }
+
+        /* Buttons match the homepage. .btn-primary is the warm-gilt CTA
+           used for "+ New Character"; .btn-ghost is the dim chrome chip
+           used for secondary nav. */
+        .btn-primary {
+            font-family:'Cinzel',serif; font-weight:600; letter-spacing:0.06em;
+            background:#a4842b; color:#0c0a07;
+            padding:8px 20px; border-radius:6px; font-size:12px;
+            text-transform:uppercase; border:1px solid rgba(201,163,78,0.3);
+            transition:background 0.15s, transform 0.1s;
+        }
+        .btn-primary:hover { background:#c9a34e; }
+        .btn-ghost {
+            font-size:11px; font-weight:500;
+            background:transparent; border:1px solid rgba(255,255,255,0.10);
+            color:#b8b8cc; padding:8px 16px; border-radius:6px;
+            transition:border-color 0.15s, color 0.15s;
+        }
+        .btn-ghost:hover { border-color:rgba(201,163,78,0.35); color:#ededf4; }
+
+        /* ── MOBILE ──
+           The roster/tracker table has px-4 cells × 4 columns that overflow
+           a phone. Let the table scroll horizontally inside its rounded
+           frame and tighten cell padding so it mostly fits anyway. */
+        @media (max-width: 600px) {
+            .rounded-xl.overflow-hidden { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+            table.border-collapse th, table.border-collapse td { padding-left: 8px !important; padding-right: 8px !important; }
+            .btn-primary { padding: 8px 14px !important; }
+            .roster-hero { padding: 18px 10px 12px !important; }
+        }
+    </style>
+</head>
+<body class="stage{% if campaign.hero_image %} has-hero{% endif %}{% if not is_gm and player_name %} has-player-nav{% endif %}"
+      {% if campaign.hero_image %}style="--hero-image: url('{{ campaign.hero_image }}');"{% endif %}>
+
+    <!-- Player Nav -->
+    <nav style="position:relative; z-index:10; height:48px; display:flex; align-items:center; padding:0 24px; background:rgba(12,10,7,0.92); border-bottom:1px solid rgba(201,163,78,0.14);">
+        <span style="font-family:'Cinzel',serif; font-weight:700; font-size:14px; color:#c9a34e; letter-spacing:0.08em; margin-right:28px;">PF2E</span>
+        <a href="/" style="font-family:'Inter',sans-serif; font-size:12px; color:#b8b8cc; text-decoration:none; margin-right:20px; transition:color 0.15s;" onmouseover="this.style.color='#ededf4'" onmouseout="this.style.color='#b8b8cc'">Home</a>
+        <a href="/player" style="font-family:'Inter',sans-serif; font-size:12px; color:#e0b65a; text-decoration:none; margin-right:20px; border-bottom:2px solid #c9a34e; padding-bottom:2px;">Roster</a>
+    </nav>
+
+<div class="max-w-5xl mx-auto w-full px-4 md:px-8 pb-10" style="position:relative; z-index:1;">
+
+    {# ── Hero band — matches the homepage / gm_hub brand pattern:
+       small uppercase rune above, big campaign name in Cinzel, an
+       optional italic flavor line, then a pill row with the live
+       session info. Compact so the roster stays the focus. #}
+    <header class="roster-hero">
+        <div class="campaign-rune">A Pathfinder Tale · Roster</div>
+        <h1 class="campaign-title">{{ campaign.name }}</h1>
+        {% if campaign.tagline %}
+        <p class="campaign-flavor">{{ campaign.tagline }}</p>
+        {% endif %}
+        <div class="session-pills">
+            <span class="session-pill"><span class="lbl">Session</span><span class="val">{{ campaign.session_number }}</span></span>
+            {% if campaign.next_session_at %}
+            <span class="session-pill"><span class="lbl">Next</span><span class="val">{{ campaign.next_session_at }}</span></span>
+            {% endif %}
+            <span class="session-pill"><span class="lbl">Party</span><span class="val">{{ party|length }}</span></span>
+        </div>
+    </header>
+
+    <!-- My Character Quick Access — gilt-tinted to match the brand chrome -->
+    <div id="my-char-bar" class="hidden mb-6 p-3 rounded-lg text-center" style="background:rgba(201,163,78,0.06); border:1px solid rgba(201,163,78,0.22);">
+        <span class="text-sm" style="color:#e0b65a;">Welcome back, <strong id="my-char-name" style="color:#f0d88a;"></strong></span>
+        <a id="my-char-link" href="#" class="ml-3 text-xs font-medium px-4 py-1.5 rounded transition-colors" style="background:rgba(224,176,80,0.12); border:1px solid rgba(224,176,80,0.35); color:#e0b050; font-family:'Cinzel',serif; letter-spacing:0.06em; text-transform:uppercase;">Open Sheet</a>
+        <button onclick="clearMyChar()" class="ml-2 text-base-600 text-xs hover:text-base-400 transition-colors" title="Forget my character">&times;</button>
+    </div>
+
+    <div class="flex justify-center gap-3 mb-8">
+        <a href="/" class="btn-ghost">&larr; Home</a>
+        <button onclick="document.getElementById('import-modal').classList.remove('hidden')" class="btn-ghost">Import Pathbuilder</button>
+        <a href="/player/builder" class="btn-primary">+ New Character</a>
+    </div>
+
+    {# Discoverability nudge for the "claim my PC" flow — hidden by default,
+       revealed by loadMyChar() only when no character is claimed yet. #}
+    <div id="claim-hint" class="claim-hint hidden">Tap the <span class="star">&#9733;</span> on your character below to mark it as yours &mdash; it'll be highlighted and one tap from your sheet each session.</div>
+
+    <!-- CHARACTERS — `is-current` decoration uses the server-rendered
+         session.player_name so the card a player joined as glows gold
+         even before localStorage kicks in. -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-10">
+        {% for pc in party %}
+        <div class="card p-5 block relative{% if current_player == pc.name %} is-current{% endif %}" data-char-name="{{ pc.name }}">
+            <a href="/player/sheet/{{ pc.name|urlencode }}" class="absolute inset-0 z-0" aria-label="Open {{ pc.name }}'s character sheet"></a>
+            <button onclick='event.preventDefault(); event.stopPropagation(); setMyChar({{ pc.name|tojson }})' class="absolute top-2 left-2 z-10 w-6 h-6 rounded-full flex items-center justify-center text-xs transition-opacity text-accent-400" style="opacity:0.55;" title="Set as my character (highlights it on the roster)" aria-label="Set {{ pc.name }} as my character" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=localStorage.getItem('pf2e_my_char')==={{ pc.name|tojson|forceescape }}?1:0.55">&#9733;</button>
+            {% if is_gm %}<button onclick='event.preventDefault(); event.stopPropagation(); deleteChar({{ pc.name|tojson }})' class="absolute top-2 right-2 z-10 w-6 h-6 rounded-full flex items-center justify-center text-xs transition-opacity" style="background:rgba(239,68,68,0.1); color:#fca5a5; border:1px solid rgba(239,68,68,0.15); opacity:0.3;" title="Delete character" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.3">&times;</button>{% endif %}
+            <div class="flex items-start gap-3 relative z-1 pointer-events-none">
+                <div class="hp-ring shrink-0">
+                    <svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="21" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="2.5"/>
+                    {% set hp_pct = (pc.current_hp / pc.hp * 100) if pc.hp > 0 else 0 %}
+                    <circle cx="24" cy="24" r="21" fill="none" stroke="{% if hp_pct > 50 %}#22C55E{% elif hp_pct > 25 %}#c9a34e{% else %}#ef4444{% endif %}" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="{{ (hp_pct / 100) * 131.95 }} 131.95"/></svg>
+                    {% if pc.portrait %}
+                        <img src="/portraits/{{ pc.portrait }}" alt="{{ pc.name }}"
+                             loading="lazy"
+                             class="relative z-10"
+                             style="width:36px;height:36px;border-radius:50%;object-fit:cover;object-position: {{ pc.portrait_focus_x | default(50) }}% {{ pc.portrait_focus_y | default(50) }}%;">
+                    {% else %}
+                        <span class="font-display text-accent-300 text-base font-bold relative z-10">{{ pc.name[0] }}</span>
+                    {% endif %}
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="text-base-100 font-semibold text-sm truncate">{{ pc.name }}</div>
+                    <div class="text-base-500 text-xs mt-0.5">{{ pc.ancestry }} {{ pc.class_name }}</div>
+                    {% if pc.subclass %}<div class="text-base-600 text-[11px]">{{ pc.subclass }}</div>{% endif %}
+                </div>
+                <div class="shrink-0 text-center">
+                    <div class="w-8 h-8 border border-base-600/40 rounded flex items-center justify-center" style="background:rgba(15,15,20,0.5); clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%)">
+                        <span class="font-display text-accent-400 text-xs font-bold">{{ pc.level }}</span>
+                    </div>
+                    <div class="text-[7px] text-base-600 uppercase tracking-widest mt-0.5">Lvl</div>
+                </div>
+            </div>
+            <div class="flex items-center justify-between mt-3 pt-3 relative z-1 pointer-events-none" style="border-top:1px solid rgba(255,255,255,0.04)">
+                <div class="flex gap-3 text-[10px] text-base-500 font-medium">
+                    {# Defense quartet rendered in uniform ivory — they
+                       are peer stats, so coloring them differently just
+                       reads as noise. HP stays color-coded below because
+                       HP is a live signal, not a reference number. #}
+                    <span>AC <span class="text-base-100 font-bold font-display" style="font-variant-numeric:lining-nums tabular-nums;">{{ pc.ac }}</span></span>
+                    <span>Fort <span class="text-base-100 font-bold font-display" style="font-variant-numeric:lining-nums tabular-nums;">+{{ pc.fort }}</span></span>
+                    <span>Ref <span class="text-base-100 font-bold font-display" style="font-variant-numeric:lining-nums tabular-nums;">+{{ pc.ref }}</span></span>
+                    <span>Will <span class="text-base-100 font-bold font-display" style="font-variant-numeric:lining-nums tabular-nums;">+{{ pc.will }}</span></span>
+                </div>
+                <div><span class="text-sm font-bold {% if pc.current_hp == 0 %}text-danger-500{% elif pc.current_hp < pc.hp * 0.5 %}text-gold-300{% else %}text-success-400{% endif %}">{{ pc.current_hp }}</span><span class="text-base-600 text-xs">/{{ pc.hp }}</span></div>
+            </div>
+            {# Active conditions surfaced on the card too (not just Party
+               Status) so a player sees their status while picking. Only
+               rendered when something is active -- no empty spacer. #}
+            {% set ns = namespace(has=false) %}
+            {% for cname, cval in pc.conditions.items() %}{% if cval %}{% set ns.has = true %}{% endif %}{% endfor %}
+            {% if ns.has %}
+            <div class="flex flex-wrap gap-1 mt-3 relative z-1 pointer-events-none">
+                {% for cname, cval in pc.conditions.items() %}{% if cval %}
+                <span class="text-[9px] font-medium px-1.5 py-0.5 rounded uppercase" style="background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.15); color:#fca5a5;">{{ cname.replace('_', '-') }}{% if cval is number and cval > 1 %} {{ cval }}{% endif %}</span>
+                {% endif %}{% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        {% else %}
+        <div class="col-span-full text-center py-16">
+            <div class="text-base-500 font-semibold mb-2">No Characters Yet</div>
+            <p class="text-base-600 text-sm">Create a character or import from Pathbuilder to begin.</p>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- PARTY STATUS -->
+    <div class="flex items-center gap-4 my-8">
+        <div class="flex-1 h-px" style="background:rgba(255,255,255,0.06)"></div>
+        <span class="text-base-500 text-xs tracking-widest uppercase font-medium">Party Status</span>
+        <div class="flex-1 h-px" style="background:rgba(255,255,255,0.06)"></div>
+    </div>
+
+    <div class="rounded-xl overflow-hidden" style="background:#191510; border:1px solid rgba(201,163,78,0.14);">
+        {% for pc in party %}
+        <div class="flex items-center gap-3 px-4 py-3" {% if not loop.last %}style="border-bottom:1px solid rgba(255,255,255,0.04)"{% endif %}>
+            <!-- Name (linked) -->
+            <a href="/player/sheet/{{ pc.name|urlencode }}" class="font-medium text-sm text-base-100 hover:text-accent-300 transition-colors truncate" style="min-width:90px; max-width:140px;">{{ pc.name }}</a>
+
+            <!-- Mini HP bar -->
+            {% set hp_pct = (pc.current_hp / pc.hp * 100) if pc.hp > 0 else 0 %}
+            <div class="flex-1 h-1.5 rounded-full overflow-hidden" style="background:rgba(255,255,255,0.04); max-width:180px; min-width:60px;">
+                <div class="h-full rounded-full" style="width:{{ hp_pct }}%; background:{% if hp_pct > 50 %}#22c55e{% elif hp_pct > 25 %}#c9a34e{% else %}#ef4444{% endif %};"></div>
+            </div>
+            <span class="text-[10px] text-base-500 tabular-nums shrink-0" style="min-width:42px;">{{ pc.current_hp }}/{{ pc.hp }}</span>
+
+            <!-- Hero Points (labeled, filled/empty dots) -->
+            <span class="flex items-center gap-1 shrink-0" title="Hero Points">
+                <span class="text-[8px] text-base-600 uppercase tracking-wider" aria-hidden="true">Hero</span>
+                <span class="flex gap-0.5" role="img" aria-label="{{ pc.hero_points }} of 3 hero points">
+                    {% for i in range(3) %}
+                    <span class="inline-block w-2 h-2 rounded-full" aria-hidden="true" style="background:{% if i < pc.hero_points %}#c9a34e{% else %}rgba(255,255,255,0.08){% endif %};"></span>
+                    {% endfor %}
+                </span>
+            </span>
+
+            <!-- Conditions pills -->
+            <div class="flex flex-wrap gap-1 ml-auto">
+                {% for cname, cval in pc.conditions.items() %}
+                {% if cval %}
+                <span class="text-[9px] font-medium px-1.5 py-0.5 rounded uppercase" style="background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.15); color:#fca5a5;">{{ cname.replace('_', '-') }}{% if cval is number and cval > 1 %} {{ cval }}{% endif %}</span>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+        {% else %}
+        <div class="p-8 text-center text-base-600 italic text-sm">No party members yet.</div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- IMPORT MODAL -->
+<div id="import-modal" class="fixed inset-0 bg-black/80 hidden z-50 flex items-center justify-center p-4" onclick="if(event.target===this)this.classList.add('hidden')">
+    <div class="rounded-xl w-full max-w-lg p-6" style="background:#28221a; border:1px solid rgba(201,163,78,0.22)">
+        <div class="flex justify-between items-center mb-5">
+            <h3 class="font-display text-accent-300 text-lg">Import Character</h3>
+            <button onclick="document.getElementById('import-modal').classList.add('hidden')" class="text-base-500 hover:text-base-200 text-xl">&times;</button>
+        </div>
+        <p class="text-base-400 text-sm mb-5">Upload a Pathbuilder JSON export <span class="text-base-500">or</span> a filled official Paizo PF2e character-sheet PDF &mdash; or paste Pathbuilder JSON below.</p>
+        <div class="space-y-4">
+            <div class="rounded-lg p-6 text-center cursor-pointer" style="border:2px dashed rgba(255,255,255,0.08); background:rgba(15,15,20,0.5)" onclick="document.getElementById('pb-file-input').click()">
+                <input type="file" id="pb-file-input" accept=".json,.pdf" class="hidden" onchange="handleFileImport(this)">
+                <div class="text-base-500 text-sm">Click to upload a Pathbuilder <b>.json</b> or Paizo sheet <b>.pdf</b></div>
+            </div>
+            <div class="flex items-center gap-3"><div class="flex-1 h-px" style="background:rgba(255,255,255,0.06)"></div><span class="text-[10px] text-base-600 uppercase tracking-widest">or paste</span><div class="flex-1 h-px" style="background:rgba(255,255,255,0.06)"></div></div>
+            <textarea id="pb-json-paste" rows="3" placeholder="Paste Pathbuilder JSON..." class="w-full rounded-lg p-3 text-xs font-mono text-base-200 focus:outline-none resize-none" style="background:#0c0a07; border:1px solid rgba(201,163,78,0.18)"></textarea>
+            <div id="import-status" class="hidden text-sm font-semibold p-3 rounded-lg"></div>
+            <div class="flex gap-2 justify-end">
+                <button onclick="document.getElementById('import-modal').classList.add('hidden')" class="btn-ghost">Cancel</button>
+                <button onclick="submitPastedImport()" class="btn-primary">Import</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    async function deleteChar(name) {
+        if (!confirm(`Delete ${name}? This cannot be undone.`)) return;
+        try {
+            const res = await fetch(`/api/delete_character/${encodeURIComponent(name)}`, { method: 'POST' });
+            const data = await res.json();
+            if (data.success) window.location.reload();
+        } catch(e) { alert('Error deleting character.'); }
+    }
+    function setMyChar(name) { localStorage.setItem('pf2e_my_char', name); loadMyChar(); }
+    // Strip the "mine" decoration from every card + reset the claim stars.
+    function _clearMineHighlight() {
+        document.querySelectorAll('.card.is-mine').forEach(c => c.classList.remove('is-mine'));
+        document.querySelectorAll('.mine-badge').forEach(b => b.remove());
+        document.querySelectorAll('.card [title^="Set as my character"]').forEach(s => { s.style.opacity = '0.55'; });
+    }
+    // Glow the claimed card, drop a "Mine" ribbon on it, and light its star.
+    function _applyMineHighlight(name) {
+        let card = null;
+        document.querySelectorAll('.card[data-char-name]').forEach(c => {
+            if (c.getAttribute('data-char-name') === name) card = c;
+        });
+        if (!card) return;
+        card.classList.add('is-mine');
+        const star = card.querySelector('[title^="Set as my character"]');
+        if (star) star.style.opacity = '1';
+        if (!card.querySelector('.mine-badge')) {
+            const badge = document.createElement('span');
+            badge.className = 'mine-badge';
+            badge.textContent = 'Mine';
+            card.appendChild(badge);
+        }
+    }
+    function clearMyChar() {
+        localStorage.removeItem('pf2e_my_char');
+        document.getElementById('my-char-bar').classList.add('hidden');
+        _clearMineHighlight();
+        loadMyChar();
+    }
+    function loadMyChar() {
+        _clearMineHighlight();
+        const roster = [...document.querySelectorAll('[data-char-name]')]
+            .map(el => el.getAttribute('data-char-name'));
+        const hint = document.getElementById('claim-hint');
+        const name = localStorage.getItem('pf2e_my_char');
+        // Unclaimed: nudge the player to claim (only when there are cards to claim).
+        if (!name) {
+            document.getElementById('my-char-bar').classList.add('hidden');
+            if (hint) hint.classList.toggle('hidden', roster.length === 0);
+            return;
+        }
+        if (roster.length > 0 && !roster.includes(name)) {
+            localStorage.removeItem('pf2e_my_char');
+            const bar = document.getElementById('my-char-bar');
+            if (bar) bar.classList.add('hidden');
+            if (hint) hint.classList.toggle('hidden', roster.length === 0);
+            const toast = document.createElement('div');
+            toast.style.cssText =
+                'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);' +
+                'background:rgba(127,29,29,0.95);color:#fca5a5;padding:8px 14px;' +
+                'border:1px solid #991b1b;border-radius:6px;font-size:12px;z-index:1000;';
+            toast.textContent = `"${name}" is no longer in the roster — pick a character below.`;
+            document.body.appendChild(toast);
+            setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 400); }, 4000);
+            return;
+        }
+        if (hint) hint.classList.add('hidden');
+        document.getElementById('my-char-bar').classList.remove('hidden');
+        document.getElementById('my-char-name').textContent = name;
+        document.getElementById('my-char-link').href = '/player/sheet/' + encodeURIComponent(name);
+        _applyMineHighlight(name);
+    }
+    loadMyChar();
+
+    // ── SSE (shared visual flourishes only — encounter tracker removed) ──
+    let evtSrc = null;
+
+    function connectSSE() {
+        try {
+            // Shared SSE hub (see <head>) — one socket per tab, hub owns reconnect.
+            // The evtSrc alias keeps the handler registrations below unchanged.
+            evtSrc = { addEventListener: (name, fn) => window.appSSE(name, fn) };
+            evtSrc.addEventListener('handout', e => {
+                try {
+                    const h = JSON.parse(e.data);
+                    const myName = localStorage.getItem('pf2e_my_char') || '';
+                    if (!h.recipients.includes('all') && !h.recipients.includes(myName)) return;
+                    showHandoutPopup(h);
+                } catch(err) {}
+            });
+            // Roll for Initiative: GM broadcast -> cinematic banner.
+            evtSrc.addEventListener('roll_initiative', () => {
+                try { window.pf2eRollInitiative && window.pf2eRollInitiative(); } catch(_) {}
+            });
+            // Boss reveal: GM broadcast -> cinematic name card.
+            evtSrc.addEventListener('boss_reveal', e => {
+                let d = null; try { d = JSON.parse(e.data); } catch(_) {}
+                try { window.pf2eBossReveal && window.pf2eBossReveal(d || {}); } catch(_) {}
+            });
+            // Scene mood: GM broadcast -> subtle full-screen tint.
+            evtSrc.addEventListener('scene_mood', e => {
+                let d = null; try { d = JSON.parse(e.data); } catch(_) {}
+                try { window.pf2eSceneMood && window.pf2eSceneMood((d && d.mood) || 'calm'); } catch(_) {}
+            });
+            // Session Complete scrapbook: party moments + own card.
+            evtSrc.addEventListener('session_scrapbook', e => {
+                let d = null; try { d = JSON.parse(e.data); } catch(_) {}
+                let mine = '';
+                try { mine = localStorage.getItem('pf2e_my_char') || ''; } catch(_) {}
+                try { window.pf2eScrapbook && window.pf2eScrapbook(d || {}, mine || null); } catch(_) {}
+            });
+            // MVP poll live tally.
+            evtSrc.addEventListener('mvp_vote', e => {
+                let d = null; try { d = JSON.parse(e.data); } catch(_) {}
+                try { window.pf2eScrapbookVote && window.pf2eScrapbookVote(d || {}); } catch(_) {}
+            });
+            // Nav partial: turn notification + roll feed
+            evtSrc.addEventListener('encounter_update', e => {
+                try { window._navHandleEncounterUpdate && window._navHandleEncounterUpdate(JSON.parse(e.data)); } catch(_) {}
+            });
+            evtSrc.addEventListener('player_roll', e => {
+                try { window._navHandlePlayerRoll && window._navHandlePlayerRoll(JSON.parse(e.data)); } catch(_) {}
+            });
+            // No onerror — the shared hub owns reconnect-with-backoff.
+        } catch (e) { /* no appSSE / browser without EventSource */ }
+    }
+    connectSSE();
+
+    function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+    function showImportStatus(m,e){const el=document.getElementById('import-status');el.classList.remove('hidden');el.style.background=e?'rgba(239,68,68,0.1)':'rgba(34,197,94,0.1)';el.style.color=e?'#fca5a5':'#86efac';el.style.border=e?'1px solid rgba(239,68,68,0.15)':'1px solid rgba(34,197,94,0.15)';el.innerText=m;}
+    async function handleFileImport(i){if(!i.files||!i.files[0])return;const f=new FormData();f.append('file',i.files[0]);try{const r=await fetch('/api/import_pathbuilder',{method:'POST',body:f});const d=await r.json();if(d.success){showImportStatus(`Imported ${d.name} (Lv ${d.level} ${d.class})`,false);setTimeout(()=>window.location.reload(),1500);}else showImportStatus(d.error||'Failed.',true);}catch(e){showImportStatus('Error.',true);}}
+    async function submitPastedImport(){const raw=document.getElementById('pb-json-paste').value.trim();if(!raw){showImportStatus('Paste JSON first.',true);return;}let p;try{p=JSON.parse(raw);}catch(e){showImportStatus('Invalid JSON.',true);return;}try{const r=await fetch('/api/import_pathbuilder',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});const d=await r.json();if(d.success){showImportStatus(`Imported ${d.name} (Lv ${d.level} ${d.class})`,false);setTimeout(()=>window.location.reload(),1500);}else showImportStatus(d.error||'Failed.',true);}catch(e){showImportStatus('Error.',true);}}
+
+    function showHandoutPopup(h) {
+        const existing = document.getElementById('handout-popup');
+        if (existing) existing.remove();
+        const popup = document.createElement('div');
+        popup.id = 'handout-popup';
+        popup.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;padding:16px;';
+        popup.onclick = function(e) { if (e.target === this) this.remove(); };
+        let inner = `<div style="background:#28221a;border:1px solid rgba(224,176,80,0.35);border-radius:12px;max-width:600px;width:100%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+            <div style="padding:16px 20px;border-bottom:1px solid rgba(201,163,78,0.18);background:#0c0a07;border-radius:12px 12px 0 0;display:flex;justify-content:space-between;align-items:center;">
+                <div><div style="font-family:'Cinzel',serif;color:#d4a244;font-size:18px;font-weight:700;"> ${esc(h.title||'Handout')}</div>
+                <div style="font-size:10px;color:#8080a0;margin-top:2px;">From the GM • ${h.time||''}</div></div>
+                <button onclick="document.getElementById('handout-popup').remove()" style="color:#8080a0;font-size:22px;background:none;border:none;cursor:pointer;line-height:1;">&times;</button>
+            </div><div style="padding:20px;">`;
+        if (h.image_url) inner += `<img src="${h.image_url}" style="width:100%;border-radius:8px;margin-bottom:16px;border:1px solid rgba(255,255,255,0.06);" alt="Handout">`;
+        if (h.content) inner += `<div style="color:#c8c8d8;font-size:14px;line-height:1.7;white-space:pre-wrap;">${esc(h.content)}</div>`;
+        inner += `</div></div>`;
+        popup.innerHTML = inner;
+        document.body.appendChild(popup);
+    }
+</script>
+{# Roll for Initiative flourish (shared overlay + window.pf2eRollInitiative). #}
+{% include "_initiative_flourish.html" %}
+{# Boss reveal name card (shared overlay + window.pf2eBossReveal). #}
+{% include "_boss_reveal.html" %}
+{# Round-event table banner (shared overlay + window.pf2eRoundEvent). #}
+{% include "_round_event_banner.html" %}
+{# Scene mood tint (shared overlay + window.pf2eSceneMood). #}
+{% include "_scene_mood.html" %}
+
+{# Player bottom nav bar #}
+{% set active_player_tab = 'party' %}
+{% include "_player_nav.html" %}
+<script>
+// Player view opens its own EventSource; tell nav partial not to open a second.
+if (window._navMarkSseAttached) window._navMarkSseAttached();
+</script>
+</body>
+</html>

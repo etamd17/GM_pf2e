@@ -1,0 +1,58 @@
+{
+    "_id": "uDOxq24S7IT2EcXv",
+    "img": "icons/magic/air/air-smoke-casting.webp",
+    "name": "Spell Effect: Object Memory (Weapon)",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Object Memory].</p>\n<p>Your proficiency rank with a chosen weapon temporarily increases to trained (if it is not already higher).</p><hr /><p><strong>Heightened (6th)</strong> Your proficiency rank increases to expert instead of trained.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Lost Omens Divine Mysteries"
+        },
+        "rules": [
+            {
+                "choices": {
+                    "ownedItems": true,
+                    "types": [
+                        "weapon"
+                    ]
+                },
+                "flag": "weapon",
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Prompt.Weapon"
+            },
+            {
+                "definition": [
+                    "item:id:{item|flags.pf2e.rulesSelections.weapon}"
+                ],
+                "key": "MartialProficiency",
+                "label": "PF2E.SpecificRule.ObjectMemory",
+                "slug": "object-memory",
+                "value": "ternary(lt(@item.level, 6), 1, 2)"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

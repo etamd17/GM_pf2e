@@ -1,0 +1,36 @@
+{
+    "_id": "13QpCrR8a8XULbJa",
+    "img": "icons/equipment/head/hat-tricorn-pirate-black.webp",
+    "name": "Continuous Flair",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p>While not equal to your panache in combat, you have a dramatic flair about you in any situation. The circumstance bonus from Stylish Combatant applies in exploration mode.</p>"
+        },
+        "level": {
+            "value": 11
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [],
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "swashbuckler"
+            ]
+        }
+    },
+    "type": "feat"
+}

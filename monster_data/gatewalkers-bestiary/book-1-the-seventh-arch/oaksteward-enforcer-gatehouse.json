@@ -1,0 +1,1105 @@
+{
+    "_id": "MmyFD8SI0IvzCTuR",
+    "folder": "GZbCRZqdSLJh3oxm",
+    "img": "systems/pf2e/icons/default-icons/npc.svg",
+    "items": [
+        {
+            "_id": "VypjDV3jlcnVFHxH",
+            "img": "systems/pf2e/icons/default-icons/spellcastingEntry.svg",
+            "name": "Primal Prepared Spells",
+            "sort": 100000,
+            "system": {
+                "autoHeightenLevel": {
+                    "value": null
+                },
+                "description": {
+                    "value": ""
+                },
+                "prepared": {
+                    "flexible": false,
+                    "value": "prepared"
+                },
+                "proficiency": {
+                    "value": 1
+                },
+                "publication": {
+                    "license": "OGL",
+                    "remaster": false,
+                    "title": ""
+                },
+                "rules": [],
+                "slots": {
+                    "slot0": {
+                        "max": 4,
+                        "prepared": [
+                            {
+                                "id": "03CgkuQhgLpXEy3e"
+                            },
+                            {
+                                "id": "1Cx1t3Ix0IWKRedM"
+                            },
+                            {
+                                "id": "nMmp6SR1jTZcFZI2"
+                            },
+                            {
+                                "id": "NXzc9WMEal63JGWD"
+                            }
+                        ]
+                    },
+                    "slot1": {
+                        "max": 2,
+                        "prepared": [
+                            {
+                                "id": "ickPzYuKk1ZQq79R"
+                            },
+                            {
+                                "id": "tR8ZNf2hxufxHnZq"
+                            }
+                        ]
+                    }
+                },
+                "slug": null,
+                "spelldc": {
+                    "dc": 16,
+                    "value": 8
+                },
+                "tradition": {
+                    "value": "primal"
+                },
+                "traits": {}
+            },
+            "type": "spellcastingEntry"
+        },
+        {
+            "_id": "ickPzYuKk1ZQq79R",
+            "_stats": {
+                "compendiumSource": "Compendium.pf2e.spells-srd.Item.4koZzrnMXhhosn0D"
+            },
+            "folder": "T8AzYUgNIAgTJ9Iz",
+            "img": "systems/pf2e/icons/spells/fear.webp",
+            "name": "Fear",
+            "sort": 200000,
+            "system": {
+                "area": null,
+                "cost": {
+                    "value": ""
+                },
+                "counteraction": false,
+                "damage": {},
+                "defense": {
+                    "save": {
+                        "basic": false,
+                        "statistic": "will"
+                    }
+                },
+                "description": {
+                    "value": "<p>You plant fear in the target; it must attempt a Will save.</p>\n<hr />\n<p><strong>Critical Success</strong> The target is unaffected.</p>\n<p><strong>Success</strong> The target is @UUID[Compendium.pf2e.conditionitems.Item.Frightened]{Frightened 1}.</p>\n<p><strong>Failure</strong> The target is @UUID[Compendium.pf2e.conditionitems.Item.Frightened]{Frightened 2}.</p>\n<p><strong>Critical Failure</strong> The target is @UUID[Compendium.pf2e.conditionitems.Item.Frightened]{Frightened 3} and @UUID[Compendium.pf2e.conditionitems.Item.Fleeing] for 1 round.</p>\n<hr />\n<p><strong>Heightened (3rd)</strong> You can target up to five creatures.</p>"
+                },
+                "duration": {
+                    "sustained": false,
+                    "value": "varies"
+                },
+                "heightening": {
+                    "levels": {
+                        "3": {
+                            "target": {
+                                "value": "5 creatures"
+                            }
+                        }
+                    },
+                    "type": "fixed"
+                },
+                "level": {
+                    "value": 1
+                },
+                "location": {
+                    "value": "VypjDV3jlcnVFHxH"
+                },
+                "publication": {
+                    "license": "ORC",
+                    "remaster": true,
+                    "title": "Pathfinder Player Core"
+                },
+                "range": {
+                    "value": "30 feet"
+                },
+                "requirements": "",
+                "rules": [],
+                "slug": "fear",
+                "target": {
+                    "value": "1 creature"
+                },
+                "time": {
+                    "value": "2"
+                },
+                "traits": {
+                    "rarity": "common",
+                    "traditions": [
+                        "arcane",
+                        "divine",
+                        "occult",
+                        "primal"
+                    ],
+                    "value": [
+                        "concentrate",
+                        "emotion",
+                        "fear",
+                        "manipulate",
+                        "mental"
+                    ]
+                }
+            },
+            "type": "spell"
+        },
+        {
+            "_id": "03CgkuQhgLpXEy3e",
+            "_stats": {
+                "compendiumSource": "Compendium.pf2e.spells-srd.Item.IxhGEKl63R4QBvkj"
+            },
+            "folder": "D7UVaOiB40wTR6kv",
+            "img": "icons/magic/movement/trail-streak-impact-blue.webp",
+            "name": "Frostbite",
+            "sort": 300000,
+            "system": {
+                "area": null,
+                "cost": {
+                    "value": ""
+                },
+                "counteraction": false,
+                "damage": {
+                    "3bsJUDEgedKhPx6T": {
+                        "applyMod": false,
+                        "category": null,
+                        "formula": "2d4",
+                        "kinds": [
+                            "damage"
+                        ],
+                        "materials": [],
+                        "type": "cold"
+                    }
+                },
+                "defense": {
+                    "save": {
+                        "basic": true,
+                        "statistic": "fortitude"
+                    }
+                },
+                "description": {
+                    "value": "<p>An orb of biting cold coalesces around your target, freezing its body. The target takes 2d4 cold damage with a basic Fortitude save. On a critical failure, the target also gains weakness 1 to bludgeoning until the start of your next turn.</p>\n<p>@UUID[Compendium.pf2e.spell-effects.Item.Spell Effect: Frostbite]</p>\n<hr />\n<p><strong>Heightened (+1)</strong> The damage increases by 1d4 and the weakness on a critical failure increases by 1.</p>"
+                },
+                "duration": {
+                    "sustained": false,
+                    "value": ""
+                },
+                "heightening": {
+                    "damage": {
+                        "3bsJUDEgedKhPx6T": "1d4"
+                    },
+                    "interval": 1,
+                    "type": "interval"
+                },
+                "level": {
+                    "value": 1
+                },
+                "location": {
+                    "value": "VypjDV3jlcnVFHxH"
+                },
+                "publication": {
+                    "license": "ORC",
+                    "remaster": true,
+                    "title": "Pathfinder Player Core"
+                },
+                "range": {
+                    "value": "60 feet"
+                },
+                "requirements": "",
+                "rules": [],
+                "slug": "frostbite",
+                "target": {
+                    "value": "1 creature"
+                },
+                "time": {
+                    "value": "2"
+                },
+                "traits": {
+                    "rarity": "common",
+                    "traditions": [
+                        "arcane",
+                        "primal"
+                    ],
+                    "value": [
+                        "cantrip",
+                        "cold",
+                        "concentrate",
+                        "manipulate"
+                    ]
+                }
+            },
+            "type": "spell"
+        },
+        {
+            "_id": "1Cx1t3Ix0IWKRedM",
+            "_stats": {
+                "compendiumSource": "Compendium.pf2e.spells-srd.Item.WBmvzNDfpwka3qT4"
+            },
+            "folder": "D7UVaOiB40wTR6kv",
+            "img": "systems/pf2e/icons/spells/light.webp",
+            "name": "Light",
+            "sort": 400000,
+            "system": {
+                "area": null,
+                "cost": {
+                    "value": ""
+                },
+                "counteraction": false,
+                "damage": {},
+                "defense": null,
+                "description": {
+                    "value": "<p>You create an orb of light that sheds bright light in a 20-foot radius (and dim light for the next 20 feet) in a color you choose. If you create the light in the same space as a willing creature, you can attach the light to the creature, causing it to float near that creature as it moves. You can Sustain the spell to move the light up to 60 feet; you can attach or detach it from a creature as part of this movement.</p>\n<p>You can Dismiss the spell. If you Cast the Spell while you already have four <em>light</em> spells active, you must choose one of the existing spells to end.</p>\n<p>@UUID[Compendium.pf2e.spell-effects.Item.Spell Effect: Light]</p>\n<hr />\n<p><strong>Heightened (4th)</strong> The orb sheds light in a 60-foot radius (and dim light for the next 60 feet).</p>"
+                },
+                "duration": {
+                    "sustained": false,
+                    "value": "until your next daily preparations"
+                },
+                "level": {
+                    "value": 1
+                },
+                "location": {
+                    "value": "VypjDV3jlcnVFHxH"
+                },
+                "publication": {
+                    "license": "ORC",
+                    "remaster": true,
+                    "title": "Pathfinder Player Core"
+                },
+                "range": {
+                    "value": "120 feet"
+                },
+                "requirements": "",
+                "rules": [],
+                "slug": "light",
+                "target": {
+                    "value": ""
+                },
+                "time": {
+                    "value": "2"
+                },
+                "traits": {
+                    "rarity": "common",
+                    "traditions": [
+                        "arcane",
+                        "divine",
+                        "occult",
+                        "primal"
+                    ],
+                    "value": [
+                        "cantrip",
+                        "concentrate",
+                        "light",
+                        "manipulate"
+                    ]
+                }
+            },
+            "type": "spell"
+        },
+        {
+            "_id": "tR8ZNf2hxufxHnZq",
+            "_stats": {
+                "compendiumSource": "Compendium.pf2e.spells-srd.Item.TFitdEOpQC4SzKQQ"
+            },
+            "folder": "T8AzYUgNIAgTJ9Iz",
+            "img": "systems/pf2e/icons/spells/magic-weapon.webp",
+            "name": "Runic Weapon",
+            "sort": 500000,
+            "system": {
+                "area": null,
+                "cost": {
+                    "value": ""
+                },
+                "counteraction": false,
+                "damage": {},
+                "defense": null,
+                "description": {
+                    "value": "<p>The weapon glimmers with magic as temporary runes carve down its length. The target becomes a <em>+1 striking weapon</em>, gaining a +1 item bonus to attack rolls and increasing the number of weapon damage dice to two.</p>\n<hr />\n<p><strong>Heightened (6th)</strong> The weapon is <em>+2 greater striking</em>.</p>\n<p><strong>Heightened (9th)</strong> The weapon is <em>+3 major striking</em>.</p>\n<p>@UUID[Compendium.pf2e.spell-effects.Item.Spell Effect: Runic Weapon]</p>"
+                },
+                "duration": {
+                    "sustained": false,
+                    "value": "1 minute"
+                },
+                "level": {
+                    "value": 1
+                },
+                "location": {
+                    "value": "VypjDV3jlcnVFHxH"
+                },
+                "publication": {
+                    "license": "ORC",
+                    "remaster": true,
+                    "title": "Pathfinder Player Core"
+                },
+                "range": {
+                    "value": "touch"
+                },
+                "requirements": "",
+                "rules": [],
+                "slug": "runic-weapon",
+                "target": {
+                    "value": "1 weapon that is unattended or wielded by a willing creature"
+                },
+                "time": {
+                    "value": "2"
+                },
+                "traits": {
+                    "rarity": "common",
+                    "traditions": [
+                        "arcane",
+                        "divine",
+                        "occult",
+                        "primal"
+                    ],
+                    "value": [
+                        "concentrate",
+                        "manipulate"
+                    ]
+                }
+            },
+            "type": "spell"
+        },
+        {
+            "_id": "nMmp6SR1jTZcFZI2",
+            "_stats": {
+                "compendiumSource": "Compendium.pf2e.spells-srd.Item.SnjhtQYexDtNDdEg"
+            },
+            "folder": "D7UVaOiB40wTR6kv",
+            "img": "icons/magic/control/debuff-energy-hold-yellow.webp",
+            "name": "Stabilize",
+            "sort": 600000,
+            "system": {
+                "area": null,
+                "cost": {
+                    "value": ""
+                },
+                "counteraction": false,
+                "damage": {},
+                "defense": null,
+                "description": {
+                    "value": "<p>Life energy shuts death's door. The target loses the @UUID[Compendium.pf2e.conditionitems.Item.Dying] condition, though it remains @UUID[Compendium.pf2e.conditionitems.Item.Unconscious] at 0 Hit Points.</p>"
+                },
+                "duration": {
+                    "sustained": false,
+                    "value": ""
+                },
+                "level": {
+                    "value": 1
+                },
+                "location": {
+                    "value": "VypjDV3jlcnVFHxH"
+                },
+                "publication": {
+                    "license": "ORC",
+                    "remaster": true,
+                    "title": "Pathfinder Player Core"
+                },
+                "range": {
+                    "value": "30 feet"
+                },
+                "requirements": "",
+                "rules": [],
+                "slug": "stabilize",
+                "target": {
+                    "value": "1 dying creature"
+                },
+                "time": {
+                    "value": "2"
+                },
+                "traits": {
+                    "rarity": "common",
+                    "traditions": [
+                        "divine",
+                        "primal"
+                    ],
+                    "value": [
+                        "cantrip",
+                        "concentrate",
+                        "healing",
+                        "manipulate",
+                        "vitality"
+                    ]
+                }
+            },
+            "type": "spell"
+        },
+        {
+            "_id": "NXzc9WMEal63JGWD",
+            "_stats": {
+                "compendiumSource": "Compendium.pf2e.spells-srd.Item.uZK2BYzPnxUBnDjr"
+            },
+            "folder": "D7UVaOiB40wTR6kv",
+            "img": "icons/magic/nature/root-vine-entangled-hand.webp",
+            "name": "Tangle Vine",
+            "sort": 700000,
+            "system": {
+                "area": null,
+                "cost": {
+                    "value": ""
+                },
+                "counteraction": false,
+                "damage": {},
+                "defense": null,
+                "description": {
+                    "value": "<p>A vine appears from thin air, flicking from your hand and lashing itself to the target. Attempt a spell attack roll against the target.</p>\n<p>@UUID[Compendium.pf2e.spell-effects.Item.Spell Effect: Tangle Vine]</p>\n<hr />\n<p><strong>Critical Success</strong> The target gains the @UUID[Compendium.pf2e.conditionitems.Item.Immobilized] condition and takes a –10-foot circumstance penalty to its Speeds for 1 round. It can attempt to @UUID[Compendium.pf2e.actionspf2e.Item.Escape] against your spell DC to remove the penalty and the immobilized condition.</p>\n<p><strong>Success</strong> The target takes a –10-foot circumstance penalty to its Speeds for 1 round. It can attempt to Escape against your spell DC to remove the penalty.</p>\n<p><strong>Failure</strong> The target is unaffected.</p>\n<hr />\n<p><strong>Heightened (2nd)</strong> The effects last for 2 rounds.</p>\n<p><strong>Heightened (4th)</strong> The effects last for 1 minute.</p>"
+                },
+                "duration": {
+                    "sustained": false,
+                    "value": ""
+                },
+                "level": {
+                    "value": 1
+                },
+                "location": {
+                    "value": "VypjDV3jlcnVFHxH"
+                },
+                "publication": {
+                    "license": "ORC",
+                    "remaster": true,
+                    "title": "Pathfinder Player Core"
+                },
+                "range": {
+                    "value": "30 feet"
+                },
+                "requirements": "",
+                "rules": [],
+                "slug": "tangle-vine",
+                "target": {
+                    "value": "1 creature"
+                },
+                "time": {
+                    "value": "2"
+                },
+                "traits": {
+                    "rarity": "common",
+                    "traditions": [
+                        "arcane",
+                        "primal"
+                    ],
+                    "value": [
+                        "attack",
+                        "cantrip",
+                        "concentrate",
+                        "manipulate",
+                        "plant",
+                        "wood"
+                    ]
+                }
+            },
+            "type": "spell"
+        },
+        {
+            "_id": "tSszm4UVBpfu0AfB",
+            "_stats": {
+                "compendiumSource": "Compendium.pf2e.equipment-srd.Item.FVjTuBCIefAgloUU"
+            },
+            "img": "icons/weapons/staves/staff-simple.webp",
+            "name": "Staff",
+            "sort": 800000,
+            "system": {
+                "baseItem": "staff",
+                "bonus": {
+                    "value": 0
+                },
+                "bonusDamage": {
+                    "value": 0
+                },
+                "bulk": {
+                    "value": 1
+                },
+                "category": "simple",
+                "containerId": null,
+                "damage": {
+                    "damageType": "bludgeoning",
+                    "dice": 1,
+                    "die": "d4"
+                },
+                "description": {
+                    "value": "<p>This long piece of wood can aid in walking and deliver a mighty blow.</p>"
+                },
+                "equipped": {
+                    "carryType": "worn",
+                    "handsHeld": 0,
+                    "invested": null
+                },
+                "expend": null,
+                "group": "club",
+                "hardness": 0,
+                "hp": {
+                    "max": 0,
+                    "value": 0
+                },
+                "level": {
+                    "value": 0
+                },
+                "material": {
+                    "grade": null,
+                    "type": null
+                },
+                "price": {
+                    "value": {}
+                },
+                "publication": {
+                    "license": "OGL",
+                    "remaster": false,
+                    "title": "Pathfinder Core Rulebook"
+                },
+                "quantity": 1,
+                "range": null,
+                "reload": {
+                    "value": null
+                },
+                "rules": [],
+                "runes": {
+                    "potency": 0,
+                    "property": [],
+                    "striking": 0
+                },
+                "size": "med",
+                "slug": "staff",
+                "splashDamage": {
+                    "value": 0
+                },
+                "traits": {
+                    "rarity": "common",
+                    "value": [
+                        "two-hand-d8"
+                    ]
+                },
+                "usage": {
+                    "value": "held-in-one-hand"
+                }
+            },
+            "type": "weapon"
+        },
+        {
+            "_id": "gO9bL1IyuufcJb5u",
+            "_stats": {
+                "compendiumSource": "Compendium.pf2e.equipment-srd.Item.giO4LwIKGzJZoaxa"
+            },
+            "img": "systems/pf2e/icons/equipment/weapons/heavy-crossbow.webp",
+            "name": "Heavy Crossbow",
+            "sort": 900000,
+            "system": {
+                "ammo": {
+                    "baseType": "bolts",
+                    "builtIn": false,
+                    "capacity": 1
+                },
+                "baseItem": "heavy-crossbow",
+                "bonus": {
+                    "value": 0
+                },
+                "bonusDamage": {
+                    "value": 0
+                },
+                "bulk": {
+                    "value": 2
+                },
+                "category": "simple",
+                "containerId": null,
+                "damage": {
+                    "damageType": "piercing",
+                    "dice": 1,
+                    "die": "d10"
+                },
+                "description": {
+                    "value": "<p>This large crossbow is harder to load and more substantial than a regular crossbow, but it packs a greater punch.</p>"
+                },
+                "equipped": {
+                    "carryType": "worn",
+                    "handsHeld": 0,
+                    "invested": null
+                },
+                "expend": 1,
+                "group": "crossbow",
+                "hardness": 0,
+                "hp": {
+                    "max": 0,
+                    "value": 0
+                },
+                "level": {
+                    "value": 0
+                },
+                "material": {
+                    "grade": null,
+                    "type": null
+                },
+                "price": {
+                    "value": {
+                        "gp": 4
+                    }
+                },
+                "publication": {
+                    "license": "OGL",
+                    "remaster": false,
+                    "title": "Pathfinder Core Rulebook"
+                },
+                "quantity": 1,
+                "range": 120,
+                "reload": {
+                    "value": "2"
+                },
+                "rules": [],
+                "runes": {
+                    "potency": 0,
+                    "property": [],
+                    "striking": 0
+                },
+                "size": "med",
+                "slug": "heavy-crossbow",
+                "splashDamage": {
+                    "value": 0
+                },
+                "traits": {
+                    "rarity": "common",
+                    "value": []
+                },
+                "usage": {
+                    "value": "held-in-two-hands"
+                }
+            },
+            "type": "weapon"
+        },
+        {
+            "_id": "X3cN6CGlfXFWQqZi",
+            "_stats": {
+                "compendiumSource": "Compendium.pf2e.equipment-srd.Item.4tIVTg9wj56RrveA"
+            },
+            "img": "icons/equipment/chest/breastplate-banded-simple-leather-brown.webp",
+            "name": "Leather Armor",
+            "sort": 1000000,
+            "system": {
+                "acBonus": 1,
+                "baseItem": "leather-armor",
+                "bulk": {
+                    "value": 1
+                },
+                "category": "light",
+                "checkPenalty": -1,
+                "containerId": null,
+                "description": {
+                    "value": "<p>A mix of flexible and molded boiled leather, a suit of this type of armor provides some protection with maximum flexibility.</p>"
+                },
+                "dexCap": 4,
+                "equipped": {
+                    "carryType": "worn",
+                    "inSlot": false,
+                    "invested": null
+                },
+                "group": "leather",
+                "hardness": 0,
+                "hp": {
+                    "max": 0,
+                    "value": 0
+                },
+                "level": {
+                    "value": 0
+                },
+                "material": {
+                    "grade": null,
+                    "type": null
+                },
+                "price": {
+                    "value": {
+                        "gp": 2
+                    }
+                },
+                "publication": {
+                    "license": "OGL",
+                    "remaster": false,
+                    "title": "Pathfinder Core Rulebook"
+                },
+                "quantity": 1,
+                "rules": [],
+                "runes": {
+                    "potency": 0,
+                    "property": [],
+                    "resilient": 0
+                },
+                "size": "med",
+                "slug": "leather-armor",
+                "speedPenalty": 0,
+                "strength": 0,
+                "traits": {
+                    "rarity": "common",
+                    "value": []
+                }
+            },
+            "type": "armor"
+        },
+        {
+            "_id": "WzJuvEqszgXYTqyM",
+            "img": "systems/pf2e/icons/equipment/worn-items/other-worn-items/mask-plague.webp",
+            "name": "Oak Leaf Mask",
+            "sort": 1100000,
+            "system": {
+                "baseItem": null,
+                "bulk": {
+                    "value": 0
+                },
+                "containerId": null,
+                "description": {
+                    "value": ""
+                },
+                "equipped": {
+                    "carryType": "worn",
+                    "handsHeld": 0,
+                    "invested": null
+                },
+                "hardness": 0,
+                "hp": {
+                    "max": 0,
+                    "value": 0
+                },
+                "level": {
+                    "value": 0
+                },
+                "material": {
+                    "grade": null,
+                    "type": null
+                },
+                "price": {
+                    "value": {}
+                },
+                "publication": {
+                    "license": "OGL",
+                    "remaster": false,
+                    "title": ""
+                },
+                "quantity": 1,
+                "rules": [],
+                "size": "med",
+                "slug": null,
+                "traits": {
+                    "rarity": "common",
+                    "value": []
+                },
+                "usage": {
+                    "value": "held-in-one-hand"
+                }
+            },
+            "type": "equipment"
+        },
+        {
+            "_id": "EJqsGgEEGZJ5sfTu",
+            "_stats": {
+                "compendiumSource": "Compendium.pf2e.equipment-srd.Item.AITVZmakiu3RgfKo"
+            },
+            "img": "systems/pf2e/icons/equipment/weapons/bolts.webp",
+            "name": "Bolts",
+            "sort": 1200000,
+            "system": {
+                "baseItem": "bolts",
+                "bulk": {
+                    "value": 0.1
+                },
+                "containerId": null,
+                "craftableAs": null,
+                "description": {
+                    "value": "<p>Shorter than traditional arrows but similar in construction, bolts are the ammunition used by crossbows.</p>"
+                },
+                "level": {
+                    "value": 0
+                },
+                "price": {
+                    "per": 10,
+                    "value": {
+                        "sp": 1
+                    }
+                },
+                "publication": {
+                    "license": "OGL",
+                    "remaster": false,
+                    "title": "Pathfinder Core Rulebook"
+                },
+                "quantity": 10,
+                "rules": [],
+                "size": "med",
+                "slug": "bolts",
+                "traits": {
+                    "rarity": "common",
+                    "value": [
+                        "consumable"
+                    ]
+                },
+                "uses": {
+                    "autoDestroy": true,
+                    "max": 1,
+                    "value": 1
+                }
+            },
+            "type": "ammo"
+        },
+        {
+            "_id": "b67DdUmkXE67zBK4",
+            "flags": {
+                "pf2e": {
+                    "linkedWeapon": "tSszm4UVBpfu0AfB"
+                }
+            },
+            "img": "systems/pf2e/icons/default-icons/melee.svg",
+            "name": "Staff",
+            "sort": 1300000,
+            "system": {
+                "attack": {
+                    "value": ""
+                },
+                "attackEffects": {
+                    "value": []
+                },
+                "bonus": {
+                    "value": 6
+                },
+                "damageRolls": {
+                    "qr3rvEI9hJPYyj5o": {
+                        "damage": "1d4+2",
+                        "damageType": "bludgeoning"
+                    }
+                },
+                "description": {
+                    "value": ""
+                },
+                "publication": {
+                    "license": "OGL",
+                    "remaster": false,
+                    "title": ""
+                },
+                "range": null,
+                "rules": [
+                    {
+                        "domain": "damage",
+                        "key": "RollOption",
+                        "label": "PF2E.SpecificRule.TwoHanded.Staff",
+                        "option": "two-handed",
+                        "toggleable": true
+                    },
+                    {
+                        "key": "DamageAlteration",
+                        "mode": "upgrade",
+                        "predicate": [
+                            "two-handed"
+                        ],
+                        "property": "dice-faces",
+                        "selectors": [
+                            "{item|_id}-damage"
+                        ],
+                        "slug": "base",
+                        "value": 8
+                    }
+                ],
+                "slug": null,
+                "traits": {
+                    "rarity": "common",
+                    "value": [
+                        "two-hand-d8"
+                    ]
+                }
+            },
+            "type": "melee"
+        },
+        {
+            "_id": "tw3myngfgHjbOdVt",
+            "flags": {
+                "pf2e": {
+                    "linkedWeapon": "gO9bL1IyuufcJb5u"
+                }
+            },
+            "img": "systems/pf2e/icons/default-icons/melee.svg",
+            "name": "Heavy Crossbow",
+            "sort": 1400000,
+            "system": {
+                "attack": {
+                    "value": ""
+                },
+                "attackEffects": {
+                    "value": []
+                },
+                "bonus": {
+                    "value": 5
+                },
+                "damageRolls": {
+                    "AWi92Z1hTMarp0pa": {
+                        "damage": "1d10",
+                        "damageType": "piercing"
+                    }
+                },
+                "description": {
+                    "value": ""
+                },
+                "publication": {
+                    "license": "OGL",
+                    "remaster": false,
+                    "title": ""
+                },
+                "range": {
+                    "increment": 120,
+                    "max": null
+                },
+                "rules": [],
+                "slug": null,
+                "traits": {
+                    "rarity": "common",
+                    "value": [
+                        "reload-2"
+                    ]
+                }
+            },
+            "type": "melee"
+        },
+        {
+            "_id": "aySHJHzMJYDg2R4h",
+            "img": "systems/pf2e/icons/actions/TwoActions.webp",
+            "name": "Untamed Shift",
+            "sort": 1500000,
+            "system": {
+                "actionType": {
+                    "value": "action"
+                },
+                "actions": {
+                    "value": 2
+                },
+                "category": "offensive",
+                "description": {
+                    "value": "<p><strong>Frequency</strong> once per day</p><hr /><p><strong>Effect</strong> The Oaksteward's hands transform into wild claws for 1 minute. The Oaksteward gains the following Strike.</p>\n<p><strong>Melee</strong> <span class=\"action-glyph\">1</span> claw +7 (agile, finesse), <strong>Damage</strong> 1d6+2 slashing</p>"
+                },
+                "frequency": {
+                    "max": 1,
+                    "per": "day",
+                    "value": 1
+                },
+                "publication": {
+                    "license": "OGL",
+                    "remaster": false,
+                    "title": ""
+                },
+                "rules": [],
+                "selfEffect": {
+                    "name": "Effect: Untamed Shift (Oaksteward)",
+                    "uuid": "Compendium.pf2e.bestiary-effects.Item.Effect: Untamed Shift (Oaksteward)"
+                },
+                "slug": null,
+                "traits": {
+                    "rarity": "common",
+                    "value": [
+                        "concentrate",
+                        "manipulate",
+                        "morph",
+                        "primal"
+                    ]
+                }
+            },
+            "type": "action"
+        }
+    ],
+    "name": "Oaksteward Enforcer (Gatehouse)",
+    "system": {
+        "abilities": {
+            "cha": {
+                "mod": 0
+            },
+            "con": {
+                "mod": 0
+            },
+            "dex": {
+                "mod": 4
+            },
+            "int": {
+                "mod": -2
+            },
+            "str": {
+                "mod": 2
+            },
+            "wis": {
+                "mod": 4
+            }
+        },
+        "attributes": {
+            "ac": {
+                "details": "",
+                "value": 16
+            },
+            "allSaves": {
+                "value": ""
+            },
+            "hp": {
+                "details": "",
+                "max": 15,
+                "temp": 0,
+                "value": 15
+            },
+            "speed": {
+                "otherSpeeds": [],
+                "value": 25
+            }
+        },
+        "details": {
+            "blurb": "Male Oaksteward enforcer",
+            "languages": {
+                "details": "",
+                "value": [
+                    "common",
+                    "wildsong"
+                ]
+            },
+            "level": {
+                "value": 0
+            },
+            "privateNotes": "",
+            "publicNotes": "",
+            "publication": {
+                "license": "ORC",
+                "remaster": true,
+                "title": "Pathfinder Adventure Path: Gatewalkers"
+            }
+        },
+        "initiative": {
+            "statistic": "perception"
+        },
+        "perception": {
+            "details": "",
+            "mod": 6,
+            "senses": []
+        },
+        "resources": {},
+        "saves": {
+            "fortitude": {
+                "saveDetail": "",
+                "value": 4
+            },
+            "reflex": {
+                "saveDetail": "",
+                "value": 6
+            },
+            "will": {
+                "saveDetail": "",
+                "value": 8
+            }
+        },
+        "skills": {
+            "intimidation": {
+                "base": 5
+            },
+            "nature": {
+                "base": 6
+            }
+        },
+        "traits": {
+            "rarity": "rare",
+            "size": {
+                "value": "med"
+            },
+            "value": [
+                "human",
+                "humanoid"
+            ]
+        }
+    },
+    "type": "npc"
+}

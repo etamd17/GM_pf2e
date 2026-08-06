@@ -1,0 +1,45 @@
+{
+    "_id": "58QyKgMWfsUPqZn1",
+    "img": "icons/skills/melee/maneuver-daggers-paired-orange.webp",
+    "name": "Effect: Even the Odds",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.feats-srd.Item.Even the Odds]</p>\n<p>You gain panache.</p>"
+        },
+        "duration": {
+            "expiry": "turn-end",
+            "sustained": false,
+            "unit": "rounds",
+            "value": 0
+        },
+        "fromSpell": false,
+        "level": {
+            "value": 4
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "key": "GrantItem",
+                "onDeleteActions": {
+                    "grantee": "cascade"
+                },
+                "uuid": "Compendium.pf2e.feat-effects.Item.Effect: Panache"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

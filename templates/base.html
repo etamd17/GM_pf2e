@@ -1,0 +1,1252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script>
+        // Single design system — collapse any legacy theme value to "dark"
+        // so the parchment / hi-contrast / light variants from earlier
+        // builds can't beat the new tokens at the attribute level.
+        (function() {
+            document.documentElement.setAttribute('data-theme', 'dark');
+            try { localStorage.setItem('pf2e_theme', 'dark'); } catch(_) {}
+            try { localStorage.removeItem('pf2e_theme_v1'); } catch(_) {}
+        })();
+    </script>
+    {# Shared SSE hub — defines window.appSSE before any body script / partial
+       runs. Standalone pages (player sheet/view, mobile combat) include this
+       same partial in their own <head>. #}
+    {% include "_sse_hub.html" %}
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}PF2E Dashboard{% endblock %}</title>
+
+    {# Precompiled Tailwind utilities — replaces the runtime Tailwind Play CDN
+       (full engine + in-browser JIT). Regenerate: cd tools/tailwind &&
+       npm install && node build.mjs (see docs/tailwind-build.md). #}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tw-base.css') }}">
+    {# dice-adapter.js + dice-overlay.js (the 3D dice engine) import the bare
+       specifier 'three'; this import map resolves it to the vendored build.
+       Must appear before the module script below. Same pattern as
+       templates/player_sheet.html. dice-adapter.js itself is tiny and does
+       NOT pull in three.js (~400 KB gzipped) until a roll actually happens —
+       every base.html page pays only for this small module, not the engine. #}
+    <script type="importmap">
+    {"imports": {"three": "{{ url_for('static', filename='js/vendor/three.module.js') }}"}}
+    </script>
+    <script type="module" src="{{ url_for('static', filename='js/dice-adapter.js') }}"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;600;700&display=swap');
+        body { font-family:var(--font-ui); background:var(--bg-page); color:var(--text-on-dark); }
+        .font-display { font-family:var(--font-display); }
+        ::-webkit-scrollbar { width:5px; }
+        ::-webkit-scrollbar-track { background:transparent; }
+        ::-webkit-scrollbar-thumb { background:var(--border-rule); border-radius:10px; }
+        ::-webkit-scrollbar-thumb:hover { background:var(--text-on-dark-3); }
+        .nav-links { overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+        .nav-links::-webkit-scrollbar { display:none; }
+        @keyframes slideIn { from { transform:translateX(100%); opacity:0; } to { transform:translateX(0); opacity:1; } }
+        .toast-animate { animation:slideIn 0.3s cubic-bezier(0.16,1,0.3,1) forwards; }
+        {% block extra_head %}{% endblock %}
+    </style>
+    {# Cosmere world-skin display fonts — only loaded on the Cosmere side so the
+       PF2e pages stay lean. Stormlight = Cormorant Garamond, Mistborn = Playfair. #}
+    {% if active_system == 'cosmere' %}<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Playfair+Display:wght@500;600&display=swap">{% endif %}
+    <!-- Design system — loaded LAST in cascade. Single source of truth
+         for the two-color brand (gilt + ruby), neutral grays, and
+         strict typography roles. New code consumes classes from here. -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/system.css') }}">
+    {# Additive head seam: child templates inject a stylesheet <link> that a
+       late @import inside the block above could not (cascade drops it). #}
+    {% block head_extra %}{% endblock %}
+</head>
+<body data-active-system="{{ active_system }}" class="min-h-screen flex flex-col system-{{ active_system }}{% if active_system == 'cosmere' %} cosmere-{{ cosmere_world }}{% endif %}{% if not is_gm and (player_name or active_system == 'cosmere') %} has-player-nav{% endif %}">
+
+    <nav class="border-b shrink-0" style="background:var(--bg-sunken); border-color:var(--border-card);">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-12">
+                <a href="{{ system_ui.gm_home }}" class="flex items-center gap-2" title="{{ system_ui.brand }}" style="text-decoration:none;">
+                    {% if nav_crest %}<img src="{{ nav_crest }}" alt="" class="nav-crest">{% endif %}
+                    <span class="font-display text-accent-300 text-sm font-semibold tracking-wider">{{ system_ui.brand }}</span>
+                </a>
+                <div class="nav-links flex items-center gap-1 text-xs font-medium flex-nowrap">
+                    {% if account_user %}
+                    {# One-click home — straight to the screen with all your campaigns + characters
+                       (was previously only reachable buried inside the switcher dropdown). #}
+                    <a href="/me" class="text-base-300 hover:text-base-100 px-2 py-1.5 rounded transition-colors flex items-center" title="Home — all your campaigns &amp; characters" aria-label="Home">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5L12 3l9 6.5"/><path d="M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10"/><polyline points="9 21 9 14 15 14 15 21"/></svg>
+                    </a>
+                    <div class="campaign-switcher" style="position:relative;">
+                        <button type="button" id="cs-btn" onclick="window._csToggle && window._csToggle()" aria-haspopup="true" aria-expanded="false" class="text-base-300 hover:text-base-100 px-3 py-1.5 rounded transition-colors whitespace-nowrap" title="Switch campaign / my characters">{% if active_campaign %}{{ active_campaign.name }}{% else %}My Table{% endif %} &#9662;</button>
+                        <div id="cs-menu" role="menu" style="display:none; position:absolute; right:0; top:100%; margin-top:4px; min-width:248px; background:var(--bg-sunken); border:1px solid var(--border-card); border-radius:8px; box-shadow:0 10px 28px rgba(0,0,0,.45); z-index:60; overflow:hidden;">
+                            <div style="padding:8px 12px; font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--text-on-dark-3);">Switch table</div>
+                            <div id="cs-list" style="max-height:60vh; overflow:auto;"><div style="padding:10px 12px; font-size:12px; color:var(--text-on-dark-3);">Loading&hellip;</div></div>
+                            <a href="/me" style="display:block; padding:9px 12px; font-size:12px; border-top:1px solid var(--border-card); color:var(--text-on-dark-2); text-decoration:none;">All campaigns &amp; characters &rarr;</a>
+                        </div>
+                    </div>
+                    {% endif %}
+                    {# Nav links are registry-driven: each system declares its GM + player nav (systems/<key>/__init__.py SystemUI), so a new system needs no edits here and the GM/player split is structural. No cross-system bleed. #}
+                    {% for ln in (system_ui.gm_nav if is_gm else system_ui.player_nav) %}
+                    <a href="{{ ln.url }}" class="{{ 'text-accent-300 hover:text-accent-200' if ln.accent else 'text-base-300 hover:text-base-100' }} px-3 py-1.5 rounded transition-colors whitespace-nowrap"{% if ln.title %} title="{{ ln.title }}"{% endif %}>{{ ln.label }}</a>
+                    {% endfor %}
+                    {# Chronicle is NOT in the registry nav: it only exists once the GM has
+                       published a vault, and NavLink is plain data with no conditional. Gated
+                       on the same `chronicle_published` processor the player nav uses, so the
+                       GM sees exactly what their players can see -- and no dead link before a
+                       first publish. Shared here, so both systems get it with no per-system edit. #}
+                    {% if is_gm and chronicle_published %}
+                    <a href="/chronicle" class="{% if request.path.startswith('/chronicle') %}text-accent-300 hover:text-accent-200{% else %}text-base-300 hover:text-base-100{% endif %} px-3 py-1.5 rounded transition-colors whitespace-nowrap" title="The published player Chronicle -- what your players can read">Chronicle</a>
+                    {% endif %}
+                    {% if is_gm %}
+                    <button type="button" onclick="window._qsOpen && window._qsOpen()" class="text-base-400 hover:text-base-200 px-2 py-1.5 rounded transition-colors whitespace-nowrap flex items-center gap-1" title="Quick Search (Cmd+K)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <kbd class="hidden sm:inline" style="font-size:9px; padding:1px 4px; border-radius:3px; background:var(--bg-page); border:1px solid var(--border-card); color:var(--text-on-dark-3); font-family:var(--font-ui);">&#8984;K</kbd>
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </nav>
+    <style>
+      /* System accent that follows the active campaign — an unmistakable cue you
+         can't run a PF2e check in the Cosmere game (and vice versa). */
+      body.system-pf2e nav { box-shadow: inset 0 -2px 0 rgba(240,216,138,.45); }
+      body.system-cosmere nav { box-shadow: inset 0 -2px 0 rgba(159,210,242,.5); }
+    </style>
+    {% if account_user %}
+    <script>
+    // In-nav campaign switcher: a real dropdown, populated from /api/my_campaigns,
+    // each row a same-origin POST to /campaign/<id>/activate (CSRF-safe).
+    (function(){
+      var menu = document.getElementById('cs-menu'), btn = document.getElementById('cs-btn'),
+          list = document.getElementById('cs-list'), loaded = false, open = false;
+      if (!menu || !btn) return;
+      function esc(s){ var d=document.createElement('span'); d.textContent=String(s==null?'':s); return d.innerHTML; }
+      function badge(sys){
+        var on = sys==='cosmere'; var col = on ? '#9fd2f2' : '#f0d88a';
+        return '<span style="font-size:9px;font-weight:700;letter-spacing:.08em;padding:2px 5px;border-radius:3px;border:1px solid '+col+'55;color:'+col+';">'+(on?'COSMERE':'PF2E')+'</span>';
+      }
+      function row(c){
+        var live = c.is_live ? ' <span style="color:#6ee7a8;">&#9679; LIVE</span>' : '';
+        var active = c.is_active ? ' <span style="opacity:.55;">&middot; active</span>' : '';
+        return '<form method="POST" action="/campaign/'+encodeURIComponent(c.id)+'/activate" style="margin:0;">'
+          + '<button type="submit" style="display:flex;width:100%;align-items:center;gap:8px;padding:9px 12px;background:none;border:none;border-top:1px solid var(--border-card);cursor:pointer;text-align:left;color:var(--text-on-dark);font-size:12px;">'
+          + badge(c.system)
+          + '<span style="flex:1;">'+esc(c.name)+active+live+'</span>'
+          + '<span style="opacity:.6;font-size:10px;">'+esc(c.role)+'</span>'
+          + '</button></form>';
+      }
+      function load(){
+        if (loaded) return; loaded = true;
+        fetch('/api/my_campaigns').then(function(r){ return r.json(); }).then(function(d){
+          var cs = (d && d.campaigns) || [];
+          var rows = cs.length ? cs.map(row).join('')
+            : '<div style="padding:10px 12px;font-size:12px;color:var(--text-on-dark-3);">No campaigns yet.</div>';
+          // "Stop active campaign": park the session with NO active table so the
+          // GM can switch systems without the old one bleeding over. Shown only
+          // while a campaign is active.
+          var stop = (d && d.active)
+            ? '<form method="POST" action="/campaign/stop" style="margin:0;border-top:1px solid var(--border-card);">'
+              + '<button type="submit" title="Leave the active table; the lobby resets so you can pick another system cleanly"'
+              + ' style="display:flex;width:100%;align-items:center;gap:8px;padding:9px 12px;background:none;border:none;cursor:pointer;text-align:left;color:#f3b9a3;font-size:12px;">'
+              + 'Stop active campaign<span style="opacity:.55;font-size:10px;margin-left:auto;">switch cleanly</span></button></form>'
+            : '';
+          list.innerHTML = rows + stop;
+        }).catch(function(){ list.innerHTML = '<div style="padding:10px 12px;font-size:12px;color:var(--text-on-dark-3);">Couldn\'t load.</div>'; });
+      }
+      window._csToggle = function(){
+        open = !open; menu.style.display = open ? 'block' : 'none';
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        if (open) load();
+      };
+      document.addEventListener('click', function(e){
+        if (open && !menu.contains(e.target) && e.target !== btn && !btn.contains(e.target)) { open=false; menu.style.display='none'; btn.setAttribute('aria-expanded','false'); }
+      });
+      document.addEventListener('keydown', function(e){ if (open && e.key==='Escape'){ open=false; menu.style.display='none'; btn.setAttribute('aria-expanded','false'); } });
+    })();
+    </script>
+    {% endif %}
+
+    <div class="flex-1 overflow-y-auto p-4 lg:p-8">
+        <div class="max-w-7xl mx-auto">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+
+
+    <div id="gm-toast-container" class="fixed top-16 right-4 z-[200] flex flex-col gap-2 pointer-events-none w-72"></div>
+    <div id="pf2e-action-toast-container"></div>
+
+    {# UX-A: Action Dock — gather the floating widgets (dice, audio, chat,
+       journal, safety X-Card) into one bottom-right row instead of competing
+       corners that overlap a tablet sheet/tracker. Each widget's panel still
+       opens above its own button. Player views sit above the mobile nav. #}
+    <style>
+      #dice-widget, #audio-widget, #chat-widget, #journal-widget, #safety-fab {
+        bottom: {% if not is_gm and player_name %}76px{% else %}14px{% endif %} !important;
+        left: auto !important; top: auto !important; z-index: 40 !important;
+      }
+      #dice-widget    { right: 14px !important; }
+      #audio-widget   { right: 64px !important; }
+      #chat-widget    { right: 114px !important; }
+      #journal-widget { right: 164px !important; }
+      #safety-fab     { right: 214px !important; width: 44px !important; height: 44px !important; }
+    </style>
+
+    <!-- Dice Roller -->
+    <div id="dice-widget" class="fixed {% if not is_gm and player_name %}bottom-[72px]{% else %}bottom-4{% endif %} right-4 z-[100] flex flex-col items-end">
+        <div id="dice-panel" class="hidden mb-3 w-64 rounded-lg overflow-hidden shadow-2xl" style="background:var(--bg-card-2); border:1px solid var(--border-rule);">
+            <div class="px-3 py-2 flex justify-between items-center" style="background:var(--bg-card); border-bottom:1px solid var(--border-card);">
+                <span class="text-xs font-semibold text-accent-300">Dice Roller</span>
+                <button onclick="toggleDicePanel()" aria-label="Close" class="text-base-500 hover:text-base-200 text-lg leading-none">&times;</button>
+            </div>
+            <div class="p-3">
+                <div class="rounded p-3 mb-3 text-center min-h-[70px] flex flex-col justify-center" style="background:var(--bg-page); border:1px solid var(--border-rule);">
+                    <div id="dice-total" class="text-3xl font-bold text-accent-300 leading-none">--</div>
+                    <div id="dice-breakdown" class="text-[10px] text-base-500 mt-1.5 font-mono">Roll the bones...</div>
+                </div>
+                <div class="grid grid-cols-4 gap-1.5 mb-3">
+                    <button onclick="quickRoll(4)" class="py-1.5 rounded text-xs font-semibold border border-white/[0.08] text-base-300 hover:border-accent-500/30 hover:text-accent-300 transition-colors" style="background:var(--bg-card);">d4</button>
+                    <button onclick="quickRoll(6)" class="py-1.5 rounded text-xs font-semibold border border-white/[0.08] text-base-300 hover:border-accent-500/30 hover:text-accent-300 transition-colors" style="background:var(--bg-card);">d6</button>
+                    <button onclick="quickRoll(8)" class="py-1.5 rounded text-xs font-semibold border border-white/[0.08] text-base-300 hover:border-accent-500/30 hover:text-accent-300 transition-colors" style="background:var(--bg-card);">d8</button>
+                    <button onclick="quickRoll(10)" class="py-1.5 rounded text-xs font-semibold border border-white/[0.08] text-base-300 hover:border-accent-500/30 hover:text-accent-300 transition-colors" style="background:var(--bg-card);">d10</button>
+                    <button onclick="quickRoll(12)" class="py-1.5 rounded text-xs font-semibold border border-white/[0.08] text-base-300 hover:border-accent-500/30 hover:text-accent-300 transition-colors" style="background:var(--bg-card);">d12</button>
+                    <button onclick="quickRoll(20)" class="col-span-2 py-1.5 rounded text-xs font-bold border border-accent-500/20 text-accent-300 hover:bg-accent-500/10 transition-colors" style="background:var(--bg-card);">d20</button>
+                    <button onclick="quickRoll(100)" class="py-1.5 rounded text-xs font-semibold border border-white/[0.08] text-base-300 hover:border-accent-500/30 hover:text-accent-300 transition-colors" style="background:var(--bg-card);">d100</button>
+                </div>
+                <button onclick="rollPlotDie()" class="w-full mb-3 py-1.5 rounded text-xs font-bold border transition-colors" style="background:rgba(56,189,248,.12); border-color:rgba(56,189,248,.4); color:#5eead4;" title="Cosmere RPG — roll the Plot Die when the stakes are raised (Opportunity / Complication / blank)">Plot Die</button>
+                <form id="custom-roll-form" class="flex gap-1.5" onsubmit="event.preventDefault(); customRoll();">
+                    <input type="text" id="custom-roll-input" placeholder="2d6+4" class="flex-1 rounded px-2 py-1.5 text-xs text-center font-mono focus:outline-none" style="background:var(--bg-page); border:1px solid var(--border-rule); color:var(--text-on-cream);">
+                    <button type="submit" class="px-3 py-1.5 rounded text-xs font-semibold text-white transition-colors" style="background:var(--accent); color:var(--ink-950);">Roll</button>
+                </form>
+            </div>
+        </div>
+        <button onclick="toggleDicePanel()" class="w-11 h-11 rounded-full shadow-lg flex items-center justify-center text-white transition-transform hover:scale-105" style="background:var(--accent); color:var(--ink-950);">
+            <span class="font-display text-sm font-bold">d20</span>
+        </button>
+    </div>
+
+    <script>
+        // Global modal helpers — opt-in via .modal-backdrop / .detail-overlay
+        // class on the overlay element. ESC closes the topmost visible
+        // overlay; a click directly on the overlay (not its children) does
+        // the same. Pages that want custom behavior add
+        // data-no-global-dismiss="true" on the overlay.
+        (function() {
+            function _visible(el) {
+                if (!el) return false;
+                if (el.classList.contains('hidden')) return false;
+                const cs = getComputedStyle(el);
+                return cs.display !== 'none' && cs.visibility !== 'hidden';
+            }
+            function _hide(el) {
+                if (el.dataset.noGlobalDismiss === 'true') return false;
+                if (el.style.display && el.style.display !== 'none') el.style.display = 'none';
+                else el.classList.add('hidden');
+                return true;
+            }
+            document.addEventListener('keydown', function(e) {
+                if (e.key !== 'Escape') return;
+                const overlays = document.querySelectorAll('.modal-backdrop, .detail-overlay');
+                const visible = Array.from(overlays).filter(_visible);
+                if (!visible.length) return;
+                if (_hide(visible[visible.length - 1])) e.stopPropagation();
+            });
+            document.addEventListener('click', function(e) {
+                const t = e.target;
+                if (!t || !t.classList) return;
+                if (!t.classList.contains('modal-backdrop') && !t.classList.contains('detail-overlay')) return;
+                if (!_visible(t)) return;
+                _hide(t);
+            });
+        })();
+
+        const dicePanel = document.getElementById('dice-panel');
+        const diceTotal = document.getElementById('dice-total');
+        const diceBreakdown = document.getElementById('dice-breakdown');
+        const customInput = document.getElementById('custom-roll-input');
+
+        function toggleDicePanel() {
+            dicePanel.classList.toggle('hidden');
+            if (!dicePanel.classList.contains('hidden')) customInput.focus();
+        }
+
+        function executeRoll(qty, sides, modStr, modVal) {
+            let rolls = [], sum = 0;
+            for (let i = 0; i < qty; i++) { let r = Math.floor(Math.random() * sides) + 1; rolls.push(r); sum += r; }
+            let bd = `[${rolls.join(', ')}]`;
+            if (modStr && modVal) { let m = parseInt(modVal, 10); if (modStr === '+') { sum += m; bd += ` + ${m}`; } else { sum -= m; bd += ` - ${m}`; } }
+            diceTotal.style.transform = 'scale(1.15)';
+            diceTotal.style.color = ''; diceTotal.style.fontSize = '';   // clear any Plot-Die styling
+            setTimeout(() => { diceTotal.innerText = sum; diceBreakdown.innerText = `${qty}d${sides}${modStr ? modStr + modVal : ''}: ${bd}`; diceTotal.style.transform = 'scale(1)'; }, 80);
+        }
+        function quickRoll(sides) { executeRoll(1, sides, null, null); }
+        function rollPlotDie() {
+            fetch('/api/plot_die', { method: 'POST' }).then(r => r.json()).then(d => {
+                const colors = { opportunity: '#34d399', complication: '#f87171', blank: '#9ca3af' };
+                diceTotal.style.color = colors[d.type] || '#5eead4';
+                diceTotal.style.fontSize = '1.25rem';
+                diceTotal.innerText = d.label;
+                diceBreakdown.innerHTML = (d.spend && d.spend.length)
+                    ? 'Spend: ' + d.spend.slice(0, 3).map(s => s.split(' — ')[0]).join(' · ')
+                    : 'No side effect — resolve as normal.';
+            }).catch(() => { diceBreakdown.innerText = 'Plot Die roll failed.'; });
+        }
+        function customRoll() {
+            const input = customInput.value.trim().toLowerCase();
+            if (!input) return;
+            const m = input.match(/^(\d*)d(\d+)(?:\s*([+-])\s*(\d+))?$/);
+            if (m) { const q = m[1] ? parseInt(m[1]) : 1; const s = parseInt(m[2]); if (q > 0 && s > 0 && q <= 100) executeRoll(q, s, m[3], m[4]); }
+            customInput.value = '';
+        }
+
+        // GM toast notifications for player rolls — SSE-driven (no polling).
+        // Other pages may open their own EventSource for tracker/map/pc updates;
+        // EventSource is cheap, so this connection is dedicated to the toast layer.
+        if (!window.location.pathname.startsWith('/player')) {
+            // Phase 7: degree-of-success banner shared across GM toasts and
+            // the tracker combat-log. Kept on window so tracker.html can use
+            // the same styling without duplicating the palette.
+            function _degBanner(degree) {
+                if (!degree) return '';
+                const cfg = {
+                    crit_success: {label:'CRIT SUCCESS', bg:'#fbbf24', fg:'#1f1f1f'},
+                    success:      {label:'SUCCESS',      bg:'#22c55e', fg:'#052e16'},
+                    failure:      {label:'FAILURE',      bg:'#dc2626', fg:'#fff'},
+                    crit_failure: {label:'CRIT FAIL',    bg:'#7f1d1d', fg:'#fca5a5'},
+                }[degree];
+                if (!cfg) return '';
+                return `<div style="margin:4px 0 2px; padding:4px 8px; border-radius:4px; background:${cfg.bg}; color:${cfg.fg}; font-weight:800; font-size:10px; letter-spacing:0.08em; text-align:center;">${cfg.label}</div>`;
+            }
+            window._degBanner = _degBanner;
+
+            // Phase 8: infer damage type from a breakdown string like
+            // "1d8 + 4 = 12 slashing" so the "Apply" button sends the right type
+            // for W/R/I adjustments. Falls back to 'untyped'.
+            function _inferDamageType(detail) {
+                if (!detail) return 'untyped';
+                const known = ['bludgeoning','piercing','slashing','fire','cold','acid','electricity','sonic','negative','positive','force','mental','poison','bleed','precision','spirit','vitality','void'];
+                const lower = detail.toLowerCase();
+                for (const t of known) { if (lower.includes(t)) return t; }
+                return 'untyped';
+            }
+
+            // Phase 8: apply a pasted damage total to a selected encounter
+            // participant. `btn` is the chip that was clicked; we replace the
+            // chip row with the picker to keep the toast compact.
+            async function _toastApplyDamage(btn, amount, dtype) {
+                const row = btn.parentNode;
+                row.innerHTML = '<span class="text-[10px] text-base-400">Loading…</span>';
+                try {
+                    const resp = await fetch('/api/tracker_state');
+                    const data = await resp.json();
+                    const combatants = (data && data.combatants) ? data.combatants : [];
+                    if (!combatants.length) {
+                        row.innerHTML = '<span class="text-[10px] text-base-400">No active encounter</span>';
+                        return;
+                    }
+                    row.innerHTML = '';
+                    const sel = document.createElement('select');
+                    sel.className = 'flex-1';
+                    sel.style.cssText = 'font-size:10px; padding:2px 4px; border-radius:3px; background:var(--bg-page); border:1px solid var(--border-rule); color:var(--text-on-cream);';
+                    sel.innerHTML = '<option value="">Pick target…</option>' + combatants.map(c => `<option value="${c.instance_id}">${c.name} (${c.current_hp}/${c.max_hp})</option>`).join('');
+                    const apply = document.createElement('button');
+                    apply.textContent = 'Apply';
+                    apply.style.cssText = 'padding:2px 8px; font-size:10px; border-radius:3px; background:rgba(220,38,38,0.2); border:1px solid rgba(220,38,38,0.4); color:#fca5a5; font-weight:700; cursor:pointer;';
+                    apply.onclick = async () => {
+                        const iid = sel.value;
+                        if (!iid) { sel.style.borderColor = '#dc2626'; return; }
+                        const fd = new FormData();
+                        fd.append('amount', String(amount));
+                        fd.append('action', 'damage');
+                        fd.append('damage_type', dtype);
+                        try {
+                            const r = await fetch(`/api/adjust_hp/${iid}`, {method:'POST', headers:{'X-Requested-With':'XMLHttpRequest'}, body: fd});
+                            if (r.ok) {
+                                row.innerHTML = `<span class="text-[10px]" style="color:#86efac;"> Applied ${amount}${dtype!=='untyped'?' '+dtype:''}</span>`;
+                            } else {
+                                row.innerHTML = '<span class="text-[10px]" style="color:#fca5a5;">Apply failed</span>';
+                            }
+                        } catch(_) {
+                            row.innerHTML = '<span class="text-[10px]" style="color:#fca5a5;">Apply failed</span>';
+                        }
+                    };
+                    row.appendChild(sel);
+                    row.appendChild(apply);
+                } catch(_) {
+                    row.innerHTML = '<span class="text-[10px] text-base-400">Fetch failed</span>';
+                }
+            }
+            window._toastApplyDamage = _toastApplyDamage;
+
+            function showToast(log) {
+                const c = document.getElementById('gm-toast-container');
+                if (!c) return;
+                // Escape roll fields before they hit innerHTML below: /api/log_roll
+                // is unauthenticated and forwards action/detail verbatim, so an
+                // attacker could otherwise inject script into every GM/player screen.
+                const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+                const degHTML = _degBanner(log.degree);
+
+                // Phase 8: if this is a damage roll, show an Apply button that
+                // lets the GM push the total onto a picked combatant with one click.
+                let applyHTML = '';
+                const action = String(log.action || '');
+                const isDamageRoll = /^(CRIT )?Damage:/i.test(action);
+                const dmgTotal = parseInt(log.result, 10);
+                if (isDamageRoll && !isNaN(dmgTotal) && dmgTotal > 0) {
+                    const dtype = _inferDamageType(log.detail);
+                    applyHTML = `<div class="flex items-center gap-2 mt-1" data-apply-row>
+                        <button onclick="_toastApplyDamage(this, ${dmgTotal}, '${dtype}')" style="padding:2px 8px; font-size:10px; border-radius:3px; background:rgba(220,38,38,0.15); border:1px solid rgba(220,38,38,0.35); color:#fca5a5; font-weight:700; cursor:pointer;">Apply ${dmgTotal}${dtype!=='untyped'?' '+dtype:''}</button>
+                        <span class="text-[9px] text-base-400">→ pick target</span>
+                    </div>`;
+                }
+
+                // Crit / nat-1 flourish + screen-edge flash (degree first, then
+                // fall back to sniffing the detail string for NAT 20 / NAT 1).
+                // Computed up front (not from the `t` element) so the same flags
+                // can also feed the optional 3D roll below.
+                const _blob = ((log.detail || '') + ' ' + (log.degree || '')).toUpperCase();
+                const isCritRoll = log.degree === 'crit_success' || _blob.indexOf('[CRIT SUCCESS') >= 0 || _blob.indexOf('NAT 20') >= 0;
+                const isFumbleRoll = !isCritRoll && (log.degree === 'crit_failure' || _blob.indexOf('[CRIT FAIL') >= 0 || _blob.indexOf('NAT 1]') >= 0 || /\bNAT 1\b/.test(_blob));
+
+                function appendToast() {
+                    const t = document.createElement('div');
+                    t.className = 'rounded-lg shadow-xl p-3 toast-animate pointer-events-auto';
+                    t.style.background = 'var(--bg-card-2)';
+                    t.style.border = '1px solid var(--border-rule)';
+                    t.classList.add('roll-toast');
+                    t.innerHTML = `<div class="flex justify-between mb-1"><span class="font-semibold text-accent-300 text-xs">${esc(log.name)}</span><span class="text-[10px] text-base-400">Now</span></div><div class="text-xs mb-1" style="color:var(--text-on-cream)">${esc(log.action)}</div>${degHTML}<div class="text-[10px] font-mono text-base-400 p-1.5 rounded" style="background:var(--bg-page)">${esc(log.detail)}</div>${applyHTML}`;
+                    c.prepend(t);
+                    if (isCritRoll) {
+                        t.classList.add('crit-flourish');
+                        try { window.pf2eFlash && window.pf2eFlash('crit'); } catch(_) {}
+                    } else if (isFumbleRoll) {
+                        t.classList.add('fumble-flourish');
+                        try { window.pf2eFlash && window.pf2eFlash('fumble'); } catch(_) {}
+                    }
+                    // Damage-apply toasts stick longer so the GM has time to pick a target.
+                    const ttl = isDamageRoll ? 15000 : 6000;
+                    setTimeout(() => { t.style.opacity='0'; t.style.transform='translateX(100%)'; t.style.transition='all 0.3s'; setTimeout(() => t.remove(), 300); }, ttl);
+                }
+
+                // 3D dice (dice-batch-b, Task 1): when this roll carries the
+                // individual die faces the roller actually saw (see
+                // _sanitize_roll_dice in app.py), and 3D is on + supported on
+                // THIS screen, animate them before the toast lands — the same
+                // "settle-or-timeout, then show the result" guarantee
+                // player_sheet.html uses, via window.diceRoller.roll()'s
+                // contract that it never rejects/hangs, so appendToast() in
+                // .finally() is guaranteed to run exactly once either way.
+                // consumeLocalRoll skips re-animating a roll THIS tab already
+                // played locally (e.g. the Cosmere sheet, which extends
+                // base.html and both animates its own rolls directly and
+                // receives them back over this same player_roll SSE event) —
+                // the toast still appends normally in that case too.
+                const dice = Array.isArray(log.dice) && log.dice.length ? log.dice : null;
+                const rollSig = `${log.action || ''}|${log.result || ''}|${log.detail || ''}`;
+                const selfEcho = !!(dice && window.diceRoller && window.diceRoller.consumeLocalRoll &&
+                    window.diceRoller.consumeLocalRoll(rollSig));
+                const can3D = dice && !selfEcho && window.diceRoller && window.diceRoller.enabled &&
+                    window.DiceRoller && window.DiceRoller.isSupported();
+                if (can3D) {
+                    const total = Number(log.result);
+                    const diceSum = dice.reduce((a, d) => a + (Number(d.value) || 0), 0);
+                    const haveTotal = Number.isFinite(total);
+                    window.diceRoller.roll({
+                        dice: dice,
+                        modifier: haveTotal ? (total - diceSum) : 0,
+                        total: haveTotal ? total : diceSum,
+                        label: log.action, detail: log.detail,
+                        isCrit: isCritRoll, isFumble: isFumbleRoll
+                    }).finally(appendToast);
+                } else {
+                    appendToast();
+                }
+            }
+            try {
+                // Shared SSE hub (see <head>): register on the one socket.
+                const _toastSSE = { addEventListener: function(n, h) { window.appSSE(n, h); } };
+                _toastSSE.addEventListener('player_roll', function(e) {
+                    let log = null;
+                    try { log = JSON.parse(e.data); } catch(_) {}
+                    if (log) showToast(log);
+                    // Audio engine (GM device): dice clatter + crit/fumble cue.
+                    try { window.pf2eAudio && window.pf2eAudio.onPlayerRoll(log); } catch(_) {}
+                });
+                // Encounter updates drive the combat-start drum hit.
+                _toastSSE.addEventListener('encounter_update', function(e) {
+                    try { window.pf2eAudio && window.pf2eAudio.onEncounterUpdate(JSON.parse(e.data)); } catch(_) {}
+                });
+                // Roll for Initiative (Chunk 4c): cinematic banner on every
+                // screen + a drum hit on the GM device (pf2eAudio is GM-only).
+                _toastSSE.addEventListener('roll_initiative', function() {
+                    try { window.pf2eRollInitiative && window.pf2eRollInitiative(); } catch(_) {}
+                    try { window.pf2eAudio && window.pf2eAudio.drum(); } catch(_) {}
+                });
+                // Boss reveal (Chunk 4d): cinematic name card on every screen
+                // + an ominous drum hit on the GM device.
+                _toastSSE.addEventListener('boss_reveal', function(e) {
+                    var d = null; try { d = JSON.parse(e.data); } catch(_) {}
+                    try { window.pf2eBossReveal && window.pf2eBossReveal(d || {}); } catch(_) {}
+                    try { window.pf2eAudio && window.pf2eAudio.drum(); } catch(_) {}
+                });
+                // Scene mood (Chunk 5): subtle full-screen tint on every screen.
+                _toastSSE.addEventListener('scene_mood', function(e) {
+                    var d = null; try { d = JSON.parse(e.data); } catch(_) {}
+                    try { window.pf2eSceneMood && window.pf2eSceneMood((d && d.mood) || 'calm'); } catch(_) {}
+                });
+                // Combat_log events exist for tracker log sync but aren't shown as toasts
+                // (they have a different shape — msg/type instead of name/action/detail).
+            } catch(_) {}
+        }
+    </script>
+
+
+    {# Crit / nat-1 screen-edge flash (shared overlay + window.pf2eFlash). #}
+    {% include "_screen_flash.html" %}
+
+    {# Roll for Initiative flourish (shared overlay + window.pf2eRollInitiative). #}
+    {% include "_initiative_flourish.html" %}
+
+    {# Boss reveal name card (shared overlay + window.pf2eBossReveal). #}
+    {% include "_boss_reveal.html" %}
+
+    {# Round-event table banner (shared overlay + window.pf2eRoundEvent). #}
+    {% include "_round_event_banner.html" %}
+
+    {# Scene mood tint (shared overlay + window.pf2eSceneMood). #}
+    {% include "_scene_mood.html" %}
+
+    {# Player bottom nav bar + turn notifications + roll feed.
+       Only renders for joined players (not GM). The active tab is inferred
+       from the current URL path. #}
+    {% if not is_gm and player_name %}
+    {% set active_player_tab = 'party' if request.path.startswith('/party') else ('combat' if request.path.startswith('/tracker') else 'sheet') %}
+    {% include "_player_nav.html" %}
+    <script>
+    (function() {
+        // Wire base.html SSE to the nav partial handlers. The toast SSE
+        // at line ~315 only fires on GM pages (guarded by pathname check).
+        // Open a player-specific SSE for encounter_update + player_roll.
+        if (window._navMarkSseAttached) window._navMarkSseAttached();
+        (function hookNavSSE() {
+            // Shared SSE hub (see <head>) — one socket per tab, hub owns the
+            // reconnect-with-backoff that PR #28 added here.
+            var src = { addEventListener: function(n, h) { window.appSSE(n, h); } };
+            src.addEventListener('encounter_update', function(e) {
+                try { window._navHandleEncounterUpdate && window._navHandleEncounterUpdate(JSON.parse(e.data)); } catch(ex) {}
+            });
+            src.addEventListener('player_roll', function(e) {
+                try { window._navHandlePlayerRoll && window._navHandlePlayerRoll(JSON.parse(e.data)); } catch(ex) {}
+            });
+        })();
+    })();
+    </script>
+    {% endif %}
+
+    {# Cosmere player bottom nav -- the Cosmere sibling, for joined Cosmere
+       players (no player_name session; system-driven). No PF2e bleed. #}
+    {% if not is_gm and active_system == 'cosmere' %}
+    {% set active_player_tab = 'party' if request.path.startswith('/cosmere/pcs') else ('combat' if request.path.startswith('/cosmere/combat') else ('notes' if request.path.startswith('/notes') else 'sheet')) %}
+    {% include "_cosmere_player_nav.html" %}
+    {% endif %}
+
+    {# ════════════════ QUICK SEARCH (Cmd+K) ════════════════
+       Global rules-lookup popover. Searches spells, feats, items, and
+       conditions via /api/compendium_search. GM-only. #}
+    {% if is_gm %}
+    <div id="qs-overlay" class="hidden" style="position:fixed; inset:0; z-index:9000; background:var(--bg-overlay);">
+        <div id="qs-dialog" style="position:absolute; top:14%; left:50%; transform:translateX(-50%); width:560px; max-width:92vw; max-height:72vh; display:flex; flex-direction:column; background:var(--bg-card-2); border:1px solid var(--border-rule); border-radius:12px; box-shadow:0 16px 48px rgba(0,0,0,0.6); overflow:hidden;">
+            <div style="padding:12px 16px; border-bottom:1px solid var(--border-card); display:flex; align-items:center; gap:8px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-on-dark-3)" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input id="qs-input" type="text" placeholder="Search spells, feats, items, conditions..." style="flex:1; background:transparent; border:none; outline:none; font-size:15px; color:var(--text-on-dark); font-family:var(--font-ui);">
+                <kbd style="font-size:10px; padding:2px 6px; border-radius:4px; background:var(--bg-page); color:var(--text-on-dark-3); border:1px solid var(--border-card); font-family:var(--font-ui);">esc</kbd>
+            </div>
+            <div id="qs-cats" style="padding:6px 16px; display:flex; gap:6px; flex-wrap:wrap; border-bottom:1px solid var(--border-card);"></div>
+            <div id="qs-results" style="flex:1; overflow-y:auto; max-height:52vh; padding:4px 0;"></div>
+        </div>
+    </div>
+    <style>
+        #qs-overlay .qs-pill {
+            font-size:11px; font-weight:600; padding:4px 12px; border-radius:999px;
+            cursor:pointer; border:1px solid var(--border-card);
+            background:transparent; color:var(--text-on-cream-2);
+            font-family:var(--font-ui); transition:all .12s;
+        }
+        #qs-overlay .qs-pill:hover { border-color:var(--border-rule); color:var(--text-on-cream); }
+        #qs-overlay .qs-pill.active { background:rgba(201,163,78,0.14); border-color:var(--gilt-300); color:var(--gilt-300); }
+        #qs-overlay .qs-row {
+            display:flex; align-items:flex-start; gap:10px; padding:8px 16px;
+            cursor:pointer; transition:background .1s;
+        }
+        #qs-overlay .qs-row:hover { background:rgba(201,163,78,0.07); }
+        #qs-overlay .qs-row.active { background:rgba(201,163,78,0.12); }
+        #qs-overlay .qs-badge {
+            display:inline-block; font-size:9px; font-weight:700; text-transform:uppercase;
+            letter-spacing:0.06em; padding:2px 6px; border-radius:4px;
+            white-space:nowrap; flex-shrink:0; margin-top:2px;
+        }
+        #qs-overlay .qs-badge[data-t="spell"]     { background:rgba(201,163,78,0.18); color:var(--gilt-200); }
+        #qs-overlay .qs-badge[data-t="feat"]       { background:rgba(106,156,68,0.18); color:#9bc06f; }
+        #qs-overlay .qs-badge[data-t="item"]       { background:rgba(154,145,122,0.18); color:var(--ink-300); }
+        #qs-overlay .qs-badge[data-t="condition"]  { background:rgba(211,110,110,0.18); color:#d36e6e; }
+        #qs-overlay .qs-detail {
+            padding:16px; overflow-y:auto; max-height:52vh;
+            font-size:13px; line-height:1.6; color:var(--text-on-cream);
+            font-family:var(--font-ui);
+        }
+        #qs-overlay .qs-detail h3 {
+            font-family:var(--font-display); font-size:18px; color:var(--gilt-300);
+            margin:0 0 4px; font-weight:600;
+        }
+        #qs-overlay .qs-detail .qs-meta {
+            font-size:11px; color:var(--text-on-cream-3); margin-bottom:12px;
+        }
+        #qs-overlay .qs-detail .qs-desc { color:var(--text-on-cream-2); }
+        #qs-overlay .qs-back {
+            display:inline-flex; align-items:center; gap:4px; font-size:11px;
+            color:var(--gilt-300); cursor:pointer; margin-bottom:10px;
+            background:none; border:none; font-family:var(--font-ui); font-weight:600;
+            padding:0;
+        }
+        #qs-overlay .qs-back:hover { color:var(--gilt-200); }
+        #qs-overlay .qs-empty {
+            padding:32px 16px; text-align:center; font-size:13px;
+            color:var(--text-on-cream-3); font-family:var(--font-ui);
+        }
+    </style>
+    <script>
+    (function() {
+        var overlay = document.getElementById('qs-overlay');
+        var dialog  = document.getElementById('qs-dialog');
+        var input   = document.getElementById('qs-input');
+        var catsEl  = document.getElementById('qs-cats');
+        var resEl   = document.getElementById('qs-results');
+        var activeCat = 'all';
+        var debounceTimer = null;
+        var activeIdx = -1;
+        var currentResults = [];
+
+        var CATS = [
+            {id:'all',        label:'All'},
+            {id:'spells',     label:'Spells'},
+            {id:'feats',      label:'Feats'},
+            {id:'equipment',  label:'Items'},
+            {id:'conditions', label:'Conditions'}
+        ];
+
+        // Build category pills
+        CATS.forEach(function(cat) {
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'qs-pill' + (cat.id === activeCat ? ' active' : '');
+            btn.textContent = cat.label;
+            btn.setAttribute('data-cat', cat.id);
+            btn.addEventListener('click', function() {
+                activeCat = cat.id;
+                catsEl.querySelectorAll('.qs-pill').forEach(function(p) {
+                    p.classList.toggle('active', p.getAttribute('data-cat') === activeCat);
+                });
+                doSearch();
+                input.focus();
+            });
+            catsEl.appendChild(btn);
+        });
+
+        function open() {
+            overlay.classList.remove('hidden');
+            input.value = '';
+            resEl.innerHTML = '<div class="qs-empty">Type to search spells, feats, items, and conditions</div>';
+            activeIdx = -1;
+            currentResults = [];
+            setTimeout(function() { input.focus(); }, 30);
+        }
+        function close() {
+            overlay.classList.add('hidden');
+            input.value = '';
+            resEl.innerHTML = '';
+            activeIdx = -1;
+            currentResults = [];
+        }
+        window._qsOpen = open;
+
+        // Keyboard: Cmd+K / Ctrl+K to open
+        document.addEventListener('keydown', function(e) {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+                e.preventDefault();
+                if (overlay.classList.contains('hidden')) open(); else close();
+            }
+        });
+
+        // Close on Escape (before global modal handler to avoid conflict)
+        overlay.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') { e.stopPropagation(); close(); }
+            // Arrow navigation within results
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (currentResults.length) {
+                    activeIdx = Math.min(activeIdx + 1, currentResults.length - 1);
+                    highlightRow();
+                }
+            }
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (currentResults.length) {
+                    activeIdx = Math.max(activeIdx - 1, 0);
+                    highlightRow();
+                }
+            }
+            if (e.key === 'Enter' && activeIdx >= 0 && currentResults[activeIdx]) {
+                e.preventDefault();
+                showDetail(currentResults[activeIdx]);
+            }
+        });
+
+        // Close on click outside dialog
+        overlay.addEventListener('click', function(e) {
+            if (e.target === overlay) close();
+        });
+
+        // Debounced search
+        input.addEventListener('input', function() {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(doSearch, 200);
+        });
+
+        function doSearch() {
+            var q = input.value.trim();
+            if (q.length < 2) {
+                resEl.innerHTML = '<div class="qs-empty">Type to search spells, feats, items, and conditions</div>';
+                activeIdx = -1;
+                currentResults = [];
+                return;
+            }
+            var url = '/api/compendium_search?q=' + encodeURIComponent(q) + '&cat=' + activeCat;
+            fetch(url).then(function(r) { return r.json(); }).then(function(data) {
+                currentResults = data.results || [];
+                activeIdx = -1;
+                renderResults();
+            }).catch(function() {
+                resEl.innerHTML = '<div class="qs-empty">Search failed</div>';
+            });
+        }
+
+        function renderResults() {
+            if (!currentResults.length) {
+                resEl.innerHTML = '<div class="qs-empty">No results found</div>';
+                return;
+            }
+            var html = '';
+            currentResults.forEach(function(r, i) {
+                var levelStr = (r.level !== null && r.level !== undefined) ? 'Lvl ' + r.level : '';
+                var descPreview = (r.desc || '').substring(0, 120);
+                if ((r.desc || '').length > 120) descPreview += '...';
+                html += '<div class="qs-row" data-idx="' + i + '">'
+                    + '<span class="qs-badge" data-t="' + r.type + '">' + r.type + '</span>'
+                    + '<div style="flex:1; min-width:0;">'
+                    + '<div style="display:flex; align-items:baseline; gap:6px;">'
+                    + '<span style="font-family:var(--font-display); font-size:13px; font-weight:600; color:var(--text-on-cream);">' + escHtml(r.name) + '</span>'
+                    + (levelStr ? '<span style="font-size:10px; color:var(--text-on-cream-3);">' + levelStr + '</span>' : '')
+                    + (r.meta ? '<span style="font-size:10px; color:var(--text-on-cream-3);">' + escHtml(r.meta) + '</span>' : '')
+                    + '</div>'
+                    + '<div style="font-size:11px; color:var(--text-on-cream-3); margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + escHtml(descPreview) + '</div>'
+                    + '</div>'
+                    + '</div>';
+            });
+            resEl.innerHTML = html;
+            resEl.querySelectorAll('.qs-row').forEach(function(row) {
+                row.addEventListener('click', function() {
+                    var idx = parseInt(row.getAttribute('data-idx'));
+                    if (currentResults[idx]) showDetail(currentResults[idx]);
+                });
+            });
+        }
+
+        function highlightRow() {
+            resEl.querySelectorAll('.qs-row').forEach(function(row, i) {
+                row.classList.toggle('active', i === activeIdx);
+                if (i === activeIdx) row.scrollIntoView({block:'nearest'});
+            });
+        }
+
+        function showDetail(r) {
+            // Conditions already have full desc from search results
+            if (r.type === 'condition') {
+                renderDetail({name: r.name, type: 'condition', description: r.desc, meta: 'Condition'});
+                return;
+            }
+            // For spells/feats/items, fetch full detail
+            resEl.innerHTML = '<div class="qs-empty">Loading...</div>';
+            var url = '/api/compendium_detail?name=' + encodeURIComponent(r.name) + '&type=' + r.type;
+            fetch(url).then(function(resp) { return resp.json(); }).then(function(data) {
+                if (data.error) { resEl.innerHTML = '<div class="qs-empty">' + escHtml(data.error) + '</div>'; return; }
+                renderDetail(data);
+            }).catch(function() {
+                resEl.innerHTML = '<div class="qs-empty">Failed to load details</div>';
+            });
+        }
+
+        function renderDetail(d) {
+            var desc = d.description || d.desc || '';
+            // Light HTML cleanup: keep basic formatting tags, strip scripts
+            desc = desc.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+
+            var metaParts = [];
+            if (d.type) metaParts.push(d.type.charAt(0).toUpperCase() + d.type.slice(1));
+            if (d.level !== undefined && d.level !== null) metaParts.push('Level ' + d.level);
+            if (d.traditions) metaParts.push(d.traditions);
+            if (d.category) metaParts.push(d.category);
+            if (d.traits) metaParts.push(d.traits);
+            if (d.meta && d.type === 'condition') metaParts.push(d.meta);
+
+            var html = '<div class="qs-detail">'
+                + '<button type="button" class="qs-back" id="qs-back-btn">'
+                + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>'
+                + 'Back to results</button>'
+                + '<h3>' + escHtml(d.name || '') + '</h3>'
+                + '<div class="qs-meta">' + escHtml(metaParts.join(' / ')) + '</div>'
+                + '<div class="qs-desc">' + desc + '</div>'
+                + '</div>';
+            resEl.innerHTML = html;
+            document.getElementById('qs-back-btn').addEventListener('click', function() {
+                renderResults();
+            });
+        }
+
+        function escHtml(s) {
+            var d = document.createElement('div');
+            d.textContent = s;
+            return d.innerHTML;
+        }
+    })();
+    </script>
+    {% endif %}
+    <script>
+    window.pf2eToast = function(msg, type) {
+        type = type || 'info';
+        var c = document.getElementById('pf2e-action-toast-container');
+        if (!c) return;
+        var existing = c.querySelectorAll('.pf2e-action-toast');
+        for (var i = 0; i < existing.length; i++) {
+            if (existing[i].textContent === msg) return;
+        }
+        var el = document.createElement('div');
+        el.className = 'pf2e-action-toast ' + type;
+        el.textContent = msg;
+        c.appendChild(el);
+        setTimeout(function() {
+            el.classList.add('fade-out');
+            setTimeout(function() { el.remove(); }, 300);
+        }, 3000);
+    };
+
+    // Shared modal controller for centered overlays built on .pf2e-modal:
+    //   <div id="x" class="pf2e-modal" style="position:fixed; inset:0; ...">
+    //       <div onclick="event.stopPropagation()"> ...card... </div>
+    //   </div>
+    // open()/close() toggle a single .is-open class; CSS shows it
+    // (.pf2e-modal.is-open { display:flex }). There is no inline `display`, so
+    // the class can't be beaten by one — the footgun behind the stuck-modal bug.
+    // Backdrop-click and Escape close the topmost open modal automatically.
+    (function() {
+        var stack = [];
+        function resolve(x) { return typeof x === 'string' ? document.getElementById(x) : x; }
+        window.pf2eModal = {
+            open: function(x) {
+                var m = resolve(x); if (!m) return;
+                m.classList.add('is-open');
+                var i = stack.indexOf(m); if (i !== -1) stack.splice(i, 1);
+                stack.push(m);
+            },
+            close: function(x) {
+                var m = resolve(x); if (!m) return;
+                m.classList.remove('is-open');
+                var i = stack.indexOf(m); if (i !== -1) stack.splice(i, 1);
+            }
+        };
+        document.addEventListener('click', function(e) {
+            var t = e.target;
+            if (t && t.classList && t.classList.contains('pf2e-modal') && t.classList.contains('is-open')) {
+                window.pf2eModal.close(t);
+            }
+        });
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && stack.length) {
+                window.pf2eModal.close(stack[stack.length - 1]);
+            }
+        });
+    })();
+    </script>
+
+    {# ── Condition quick-reference tooltip (shared across all pages) ── #}
+    <script>
+    (function() {
+        if (document.getElementById('pf2e-cond-tooltip')) return;
+        var tip = document.createElement('div');
+        tip.id = 'pf2e-cond-tooltip';
+        tip.className = 'cond-tooltip';
+        tip.innerHTML = '<div class="cond-tooltip-name"></div><div class="cond-tooltip-desc"></div>';
+        document.body.appendChild(tip);
+
+        var _condCache = {};
+        var _activeEl = null;
+        var _hideTimer = null;
+
+        function _escHtml(s) {
+            var d = document.createElement('div');
+            d.textContent = s;
+            return d.innerHTML;
+        }
+
+        function _condKey(el) {
+            return (el.getAttribute('data-cond-name') || '').toLowerCase().replace(/ /g, '-');
+        }
+
+        function _show(el, name, desc) {
+            tip.querySelector('.cond-tooltip-name').textContent = name.replace(/-/g, ' ');
+            tip.querySelector('.cond-tooltip-desc').textContent = desc;
+            var rect = el.getBoundingClientRect();
+            var tipW = 320;
+            var left = rect.left + rect.width / 2 - tipW / 2;
+            if (left < 8) left = 8;
+            if (left + tipW > window.innerWidth - 8) left = window.innerWidth - tipW - 8;
+            var top = rect.bottom + 8;
+            tip.style.left = left + 'px';
+            tip.style.top = top + 'px';
+            tip.style.maxWidth = tipW + 'px';
+            tip.classList.add('visible');
+            // Reposition if tooltip goes below viewport
+            requestAnimationFrame(function() {
+                var tipRect = tip.getBoundingClientRect();
+                if (tipRect.bottom > window.innerHeight - 8) {
+                    tip.style.top = (rect.top - tipRect.height - 8) + 'px';
+                }
+            });
+        }
+
+        function _hide() {
+            tip.classList.remove('visible');
+            _activeEl = null;
+        }
+
+        function _fetch(el) {
+            var key = _condKey(el);
+            if (!key) return;
+            if (_condCache[key]) {
+                _show(el, key, _condCache[key]);
+                return;
+            }
+            fetch('/api/condition_info/' + encodeURIComponent(key))
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.desc) {
+                        _condCache[key] = data.desc;
+                        if (_activeEl === el) _show(el, key, data.desc);
+                    }
+                })
+                .catch(function() {});
+        }
+
+        function _findPill(target) {
+            return target.closest('.condition-pill[data-cond-name], .condition-toggle[data-cond-name], .cond-chip[data-cond-name], .cp[data-cond-name]');
+        }
+
+        // Desktop: hover
+        document.addEventListener('mouseenter', function(e) {
+            var pill = _findPill(e.target);
+            if (!pill) return;
+            if (_hideTimer) { clearTimeout(_hideTimer); _hideTimer = null; }
+            _activeEl = pill;
+            _fetch(pill);
+        }, true);
+
+        document.addEventListener('mouseleave', function(e) {
+            var pill = _findPill(e.target);
+            if (!pill) return;
+            _hideTimer = setTimeout(_hide, 120);
+        }, true);
+
+        // Mobile: tap to show, tap elsewhere to dismiss
+        document.addEventListener('touchstart', function(e) {
+            var pill = _findPill(e.target);
+            if (pill) {
+                if (_activeEl === pill) {
+                    _hide();
+                    return;
+                }
+                _activeEl = pill;
+                _fetch(pill);
+            } else if (_activeEl) {
+                _hide();
+            }
+        }, { passive: true });
+    })();
+    </script>
+
+    {# ════════════════ PARTY CHAT (Tier 4, feature 20) ════════════════
+       Collapsible chat panel visible to GM and players. Messages are
+       in-memory on the server, broadcast via SSE. #}
+    <div id="chat-widget" class="no-print" style="position:fixed; {% if not is_gm and player_name %}bottom:72px{% else %}bottom:16px{% endif %}; left:16px; z-index:100;">
+        <div id="chat-panel" class="hidden" style="position:absolute; bottom:48px; left:0; width:300px; max-height:400px; background:var(--bg-card-2); border:1px solid var(--border-rule); border-radius:10px; box-shadow:0 8px 28px rgba(0,0,0,0.5); overflow:hidden; display:flex; flex-direction:column;">
+            <div style="padding:8px 11px; display:flex; justify-content:space-between; align-items:center; background:var(--bg-card); border-bottom:1px solid var(--border-card);">
+                <span class="font-display" style="font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--gilt-300);">Party Chat</span>
+                <button type="button" onclick="toggleChatPanel()" aria-label="Close" style="color:var(--text-on-dark-3); background:none; border:none; font-size:16px; cursor:pointer; line-height:1;">&times;</button>
+            </div>
+            <div id="chat-messages" style="flex:1; overflow-y:auto; padding:8px; max-height:280px; min-height:100px;"></div>
+            <form id="chat-form" onsubmit="event.preventDefault(); sendChat();" style="padding:8px; border-top:1px solid var(--border-card); display:flex; gap:6px;">
+                <input type="text" id="chat-input" placeholder="Type a message..." maxlength="500" autocomplete="off" style="flex:1; font-size:12px; padding:6px 8px; border-radius:6px; background:var(--bg-page); border:1px solid var(--border-rule); color:var(--text-on-dark); font-family:var(--font-ui); outline:none;">
+                <button type="submit" style="padding:6px 12px; font-size:11px; font-weight:700; border-radius:6px; background:var(--accent); border:none; color:var(--ink-950); cursor:pointer;">Send</button>
+            </form>
+        </div>
+        <button type="button" onclick="toggleChatPanel()" id="chat-fab" title="Party Chat" style="width:42px; height:42px; border-radius:50%; cursor:pointer; background:var(--bg-card-2); border:1px solid var(--border-rule); color:var(--text-on-dark-3); font-size:16px; box-shadow:0 4px 12px rgba(0,0,0,0.4); display:flex; align-items:center; justify-content:center; position:relative;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <span id="chat-unread" class="hidden" style="position:absolute; top:-2px; right:-2px; width:10px; height:10px; border-radius:50%; background:var(--ruby-300);"></span>
+        </button>
+    </div>
+    <script>
+    (function() {
+        var chatPanel = document.getElementById('chat-panel');
+        var chatMessages = document.getElementById('chat-messages');
+        var chatInput = document.getElementById('chat-input');
+        var chatUnread = document.getElementById('chat-unread');
+        var chatOpen = false;
+        var chatLoaded = false;
+
+        window.toggleChatPanel = function() {
+            chatOpen = !chatOpen;
+            chatPanel.classList.toggle('hidden', !chatOpen);
+            if (chatOpen) {
+                chatUnread.classList.add('hidden');
+                if (!chatLoaded) { loadChat(); chatLoaded = true; }
+                chatInput.focus();
+            }
+        };
+
+        function loadChat() {
+            fetch('/api/chat').then(function(r){return r.json();}).then(function(data) {
+                chatMessages.innerHTML = '';
+                (data.messages || []).forEach(function(m) { appendMsg(m); });
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }).catch(function(){});
+        }
+
+        function appendMsg(m) {
+            var div = document.createElement('div');
+            div.style.cssText = 'margin-bottom:6px; font-size:12px; line-height:1.4;';
+            var senderColor = m.sender === 'GM' ? 'var(--gilt-300)' : 'var(--text-on-dark)';
+            div.innerHTML = '<span style="font-weight:700; color:' + senderColor + ';">' + _esc(m.sender) + '</span> '
+                + '<span style="font-size:9px; color:var(--text-on-dark-3);">' + _esc(m.timestamp || '') + '</span>'
+                + '<div style="color:var(--text-on-dark-2); margin-top:1px;">' + _esc(m.text) + '</div>';
+            chatMessages.appendChild(div);
+        }
+
+        window.sendChat = function() {
+            var text = chatInput.value.trim();
+            if (!text) return;
+            chatInput.value = '';
+            fetch('/api/chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({text: text})
+            }).catch(function(){});
+        };
+
+        // Listen for chat_message via the shared SSE hub (see <head>).
+        function hookSSE() {
+            try {
+                window.appSSE('chat_message', function(e) {
+                    try {
+                        var m = JSON.parse(e.data);
+                        appendMsg(m);
+                        chatMessages.scrollTop = chatMessages.scrollHeight;
+                        if (!chatOpen) {
+                            chatUnread.classList.remove('hidden');
+                        }
+                    } catch(ex) {}
+                });
+            } catch(ex) {}
+        }
+        hookSSE();
+
+        function _esc(s) {
+            if (s == null) return '';
+            var d = document.createElement('div');
+            d.textContent = String(s);
+            return d.innerHTML;
+        }
+    })();
+    </script>
+
+    {# ════════════════ KEYBOARD SHORTCUTS FOR GM (Tier 4, feature 28) ════════════════ #}
+    {% if is_gm %}
+    <div id="kb-help-card" class="hidden modal-backdrop" style="position:fixed; inset:0; z-index:9000; background:var(--bg-overlay); display:flex; align-items:center; justify-content:center;">
+        <div style="background:var(--bg-card-2); border:1px solid var(--border-rule); border-radius:12px; max-width:400px; width:90vw; padding:var(--sp-5);" onclick="event.stopPropagation()">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--sp-3);">
+                <h2 class="font-display" style="font-size:16px; color:var(--gilt-100);">Keyboard Shortcuts</h2>
+                <button onclick="document.getElementById('kb-help-card').classList.add('hidden'); document.getElementById('kb-help-card').style.display='none';" aria-label="Close" style="color:var(--text-on-dark-3); background:none; border:none; font-size:18px; cursor:pointer;">&times;</button>
+            </div>
+            <table style="width:100%; font-size:12px; color:var(--text-on-dark-2);">
+                <tr><td style="padding:4px 0;"><kbd class="kbd">N</kbd></td><td>Next turn</td></tr>
+                <tr><td style="padding:4px 0;"><kbd class="kbd">P</kbd></td><td>Previous turn</td></tr>
+                <tr><td style="padding:4px 0;"><kbd class="kbd">Cmd+K</kbd></td><td>Quick Search</td></tr>
+                <tr><td style="padding:4px 0;"><kbd class="kbd">C</kbd></td><td>Open condition toggle (active combatant)</td></tr>
+                <tr><td style="padding:4px 0;"><kbd class="kbd">H</kbd></td><td>Open HP adjust (active combatant)</td></tr>
+                <tr><td style="padding:4px 0;"><kbd class="kbd">?</kbd></td><td>Show this help card</td></tr>
+            </table>
+        </div>
+    </div>
+    <script>
+    (function() {
+        document.addEventListener('keydown', function(e) {
+            // Skip when typing in inputs
+            var tag = (e.target.tagName || '').toLowerCase();
+            if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable) return;
+            // Skip if modifier keys (except shift for ?)
+            if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+            var key = e.key;
+            if (key === '?') {
+                e.preventDefault();
+                var card = document.getElementById('kb-help-card');
+                if (card.classList.contains('hidden')) {
+                    card.classList.remove('hidden');
+                    card.style.display = 'flex';
+                } else {
+                    card.classList.add('hidden');
+                    card.style.display = 'none';
+                }
+                return;
+            }
+
+            if (key === 'n' || key === 'N') {
+                e.preventDefault();
+                fetch('/api/cycle_turn/next', {method:'POST', headers:{'X-Requested-With':'XMLHttpRequest'}}).catch(function(){});
+                return;
+            }
+            if (key === 'p' || key === 'P') {
+                e.preventDefault();
+                fetch('/api/cycle_turn/prev', {method:'POST', headers:{'X-Requested-With':'XMLHttpRequest'}}).catch(function(){});
+                return;
+            }
+            if (key === 'c' || key === 'C') {
+                e.preventDefault();
+                // Try to click the condition toggle for the active combatant
+                var condBtn = document.querySelector('.combatant-row.active-turn .condition-toggle-btn, .combatant-row.active-turn [data-action="conditions"]');
+                if (condBtn) condBtn.click();
+                return;
+            }
+            if (key === 'h' || key === 'H') {
+                e.preventDefault();
+                // Try to click the HP adjust for the active combatant
+                var hpBtn = document.querySelector('.combatant-row.active-turn .hp-adjust-btn, .combatant-row.active-turn [data-action="hp"]');
+                if (hpBtn) hpBtn.click();
+                return;
+            }
+        });
+    })();
+    </script>
+    {% endif %}
+
+    {# ════════════════ PLAYER JOURNAL (Tier 4, feature 26) ════════════════ #}
+    {% if not is_gm and player_name %}
+    <div id="journal-widget" class="no-print" style="position:fixed; bottom:72px; left:72px; z-index:100;">
+        <div id="journal-panel" class="hidden" style="position:absolute; bottom:48px; left:0; width:320px; max-height:420px; background:var(--bg-card-2); border:1px solid var(--border-rule); border-radius:10px; box-shadow:0 8px 28px rgba(0,0,0,0.5); overflow:hidden; display:flex; flex-direction:column;">
+            <div style="padding:8px 11px; display:flex; justify-content:space-between; align-items:center; background:var(--bg-card); border-bottom:1px solid var(--border-card);">
+                <span class="font-display" style="font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--gilt-300);">Journal</span>
+                <button type="button" onclick="toggleJournalPanel()" aria-label="Close" style="color:var(--text-on-dark-3); background:none; border:none; font-size:16px; cursor:pointer; line-height:1;">&times;</button>
+            </div>
+            <div id="journal-entries" style="flex:1; overflow-y:auto; padding:8px; max-height:260px; min-height:60px;"></div>
+            <form id="journal-form" onsubmit="event.preventDefault(); addJournalEntry();" style="padding:8px; border-top:1px solid var(--border-card);">
+                <textarea id="journal-input" placeholder="Write a note..." maxlength="2000" rows="2" style="width:100%; font-size:12px; padding:6px 8px; border-radius:6px; background:var(--bg-page); border:1px solid var(--border-rule); color:var(--text-on-dark); font-family:var(--font-ui); outline:none; resize:vertical;"></textarea>
+                <button type="submit" style="margin-top:4px; padding:6px 14px; font-size:11px; font-weight:700; border-radius:6px; background:var(--accent); border:none; color:var(--ink-950); cursor:pointer;">Add Entry</button>
+            </form>
+        </div>
+        <button type="button" onclick="toggleJournalPanel()" title="Session Journal" style="width:42px; height:42px; border-radius:50%; cursor:pointer; background:var(--bg-card-2); border:1px solid var(--border-rule); color:var(--text-on-dark-3); font-size:16px; box-shadow:0 4px 12px rgba(0,0,0,0.4); display:flex; align-items:center; justify-content:center;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+        </button>
+    </div>
+    <script>
+    (function() {
+        var panel = document.getElementById('journal-panel');
+        var entries = document.getElementById('journal-entries');
+        var input = document.getElementById('journal-input');
+        var journalOpen = false;
+        var loaded = false;
+
+        window.toggleJournalPanel = function() {
+            journalOpen = !journalOpen;
+            panel.classList.toggle('hidden', !journalOpen);
+            if (journalOpen && !loaded) { loadJournal(); loaded = true; }
+        };
+
+        function loadJournal() {
+            fetch('/api/journal').then(function(r){return r.json();}).then(function(data) {
+                renderEntries(data.entries || []);
+            }).catch(function(){});
+        }
+
+        function renderEntries(list) {
+            if (!list.length) {
+                entries.innerHTML = '<div style="font-size:12px; color:var(--text-on-dark-3); padding:16px; text-align:center;">No journal entries yet</div>';
+                return;
+            }
+            entries.innerHTML = '';
+            list.forEach(function(e, i) {
+                var div = document.createElement('div');
+                div.style.cssText = 'padding:6px 4px; border-bottom:1px solid var(--border-card); font-size:12px;';
+                var d = document.createElement('div');
+                d.textContent = e.text;
+                d.style.cssText = 'color:var(--text-on-dark-2); line-height:1.5; white-space:pre-wrap;';
+                var meta = document.createElement('div');
+                meta.style.cssText = 'display:flex; justify-content:space-between; margin-top:3px;';
+                meta.innerHTML = '<span style="font-size:10px; color:var(--text-on-dark-3);">' + (e.timestamp || '') + '</span>'
+                    + '<button onclick="deleteJournalEntry(' + i + ')" style="font-size:10px; color:var(--text-on-dark-3); background:none; border:none; cursor:pointer;">delete</button>';
+                div.appendChild(d);
+                div.appendChild(meta);
+                entries.appendChild(div);
+            });
+            entries.scrollTop = entries.scrollHeight;
+        }
+
+        window.addJournalEntry = function() {
+            var text = input.value.trim();
+            if (!text) return;
+            input.value = '';
+            fetch('/api/journal', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({text: text})
+            }).then(function(r){return r.json();}).then(function(data) {
+                if (data.entries) renderEntries(data.entries);
+            }).catch(function(){});
+        };
+
+        window.deleteJournalEntry = function(idx) {
+            fetch('/api/journal/delete', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({index: idx})
+            }).then(function(r){return r.json();}).then(function(data) {
+                if (data.entries) renderEntries(data.entries);
+            }).catch(function(){});
+        };
+    })();
+    </script>
+    {% endif %}
+
+    {# ════════════════ SFX TOGGLE IN AUDIO PANEL ════════════════ #}
+
+    {# ════════════════ PWA: Service Worker + Manifest (Tier 4, feature 31) ════════════════ #}
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0c0a07">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="PF2E GM">
+    <script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+            navigator.serviceWorker.register('/sw.js', {scope: '/'}).catch(function(){});
+        });
+    }
+    </script>
+</body>
+</html>

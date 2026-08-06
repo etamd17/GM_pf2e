@@ -1,0 +1,45 @@
+{
+    "_id": "8QAFgy9U8PxEa7Dw",
+    "img": "icons/weapons/thrown/bomb-fuse-pink.webp",
+    "name": "Field Discovery (Bomber)",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p>You have calculated all the angles to maximize a bomb's splash. When you throw an alchemical bomb with the splash trait, you can cause the bomb to deal splash damage equal to your Intelligence modifier (minimum 1) instead of the normal amount.</p>"
+        },
+        "level": {
+            "value": 5
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "key": "AdjustModifier",
+                "mode": "upgrade",
+                "relabel": "{item|name}",
+                "selector": "alchemical-bomb-damage",
+                "slug": "splash",
+                "value": "@actor.abilities.int.mod"
+            }
+        ],
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "alchemist"
+            ]
+        }
+    },
+    "type": "feat"
+}

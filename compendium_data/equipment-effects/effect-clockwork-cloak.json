@@ -1,0 +1,49 @@
+{
+    "_id": "3LhreroLRmI4atE6",
+    "img": "icons/equipment/back/cloak-collared-orange.webp",
+    "name": "Effect: Clockwork Cloak",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Clockwork Cloak]</p>\n<p>You take a -4 penalty to Perception checks while on standby mode. If you leave standby mode to initiate combat, you gain a +2 item bonus to your initiative roll.</p>"
+        },
+        "duration": {
+            "expiry": null,
+            "sustained": false,
+            "unit": "unlimited",
+            "value": -1
+        },
+        "level": {
+            "value": 18
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Treasure Vault (Remastered)"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "selector": "perception",
+                "value": -4
+            },
+            {
+                "key": "FlatModifier",
+                "selector": "initiative",
+                "type": "item",
+                "value": 2
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

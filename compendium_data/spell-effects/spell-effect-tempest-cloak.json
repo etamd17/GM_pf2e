@@ -1,0 +1,66 @@
+{
+    "_id": "8y6Ap9xIsnseYYvk",
+    "img": "icons/magic/air/wind-vortex-swirl-blue.webp",
+    "name": "Spell Effect: Tempest Cloak",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Tempest Cloak]</p>\n<p>The twisting shield of wind creates difficult terrain in a 5-foot burst surrounding you. You gain a +2 circumstance bonus to your AC against physical ranged attacks. You also gain a +2 circumstance bonus to all defenses against auditory effects.</p>"
+        },
+        "duration": {
+            "expiry": "turn-end",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 3
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": true,
+            "title": "Pathfinder Rage of Elements"
+        },
+        "rules": [
+            {
+                "key": "Aura",
+                "radius": 5,
+                "slug": "tempest-cloak",
+                "traits": []
+            },
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "item:damage:category:physical",
+                    "item:ranged"
+                ],
+                "selector": "ac",
+                "type": "circumstance",
+                "value": 2
+            },
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "item:trait:auditory"
+                ],
+                "selector": [
+                    "ac",
+                    "saving-throw"
+                ],
+                "slug": "auditory-defenses",
+                "type": "circumstance",
+                "value": 2
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

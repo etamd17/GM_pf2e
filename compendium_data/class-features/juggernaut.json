@@ -1,0 +1,71 @@
+{
+    "_id": "OMZs5y16jZRW9KQK",
+    "img": "icons/creatures/mammals/bull-horned-blue.webp",
+    "name": "Juggernaut",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "classfeature",
+        "description": {
+            "value": "<p><strong>Barbarian, Thaumaturge</strong> Your body is accustomed to physical hardship and resistant to ailments. Your proficiency rank for Fortitude saves increases to master. When you roll a success on a Fortitude save, you get a critical success instead.</p>\n<p><strong>Magus</strong> Your body is accustomed to physical hardship and resistant to a wide range of ailments. Your proficiency rank for Fortitude saves increases to master. When you roll a success on a Fortitude save, you get a critical success instead.</p>"
+        },
+        "level": {
+            "value": 7
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "adjustment": {
+                    "success": "one-degree-better"
+                },
+                "key": "AdjustDegreeOfSuccess",
+                "selector": "fortitude"
+            },
+            {
+                "itemId": "{item|id}",
+                "key": "ItemAlteration",
+                "mode": "override",
+                "property": "description",
+                "value": [
+                    {
+                        "text": "PF2E.SpecificRule.ClassFeatures.Juggernaut.{actor|class.slug}.Description"
+                    }
+                ]
+            },
+            {
+                "itemId": "{item|id}",
+                "key": "ItemAlteration",
+                "mode": "add",
+                "property": "traits",
+                "value": "{actor|class.slug}"
+            }
+        ],
+        "subfeatures": {
+            "proficiencies": {
+                "fortitude": {
+                    "rank": 3
+                }
+            }
+        },
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "barbarian",
+                "magus",
+                "thaumaturge"
+            ]
+        }
+    },
+    "type": "feat"
+}

@@ -1,0 +1,37 @@
+{% extends "_account_base.html" %}
+{% block title %}Campaigns{% endblock %}
+{% block content %}
+<h1>Campaigns</h1>
+<p class="sub">Every campaign and the game system it's stored as. If a Pathfinder game shows
+<strong>COSMERE</strong> here, that's why the app routes it to the Cosmere side &mdash; switch it back below.</p>
+{% if notice %}
+<div class="err" style="background:rgba(58,120,120,0.15);border-color:rgba(125,196,196,0.4);color:#A8DEDE;">
+  <strong>{{ notice.name }}</strong>: system changed from <code>{{ notice.old }}</code> to <code>{{ notice.new }}</code>.
+</div>
+{% endif %}
+<ul class="list">
+  {% for c in campaigns %}
+  <li class="row">
+    <div>
+      <strong>{{ c.name }}</strong>
+      {% if c.is_live %} <span class="badge">live</span>{% endif %}
+      <div class="meta">
+        <code>{{ c.system|upper }}</code>
+        &middot; {{ c.members }} member{{ '' if c.members == 1 else 's' }}
+        &middot; {{ c.owner }}
+        &middot; <span style="opacity:.6;">{{ c.id[:8] }}</span>
+      </div>
+    </div>
+    <form method="POST" action="/admin/campaigns/{{ c.id }}/system" style="display:flex;gap:6px;align-items:center;">
+      <select name="system" style="padding:7px 9px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-family:inherit;">
+        {% for s in systems %}
+        <option value="{{ s }}"{% if s == c.system %} selected{% endif %}>{{ 'Pathfinder 2e' if s == 'pf2e' else 'Cosmere RPG' }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit">Update system</button>
+    </form>
+  </li>
+  {% endfor %}
+</ul>
+<p class="foot muted"><a href="/me">&larr; Back to my table</a></p>
+{% endblock %}

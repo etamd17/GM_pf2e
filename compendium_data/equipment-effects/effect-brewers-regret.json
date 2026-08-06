@@ -1,0 +1,98 @@
+{
+    "_id": "9e6iVkPpGqJYwMyb",
+    "img": "systems/pf2e/icons/equipment/alchemical-items/alchemical-tapas/brewers-regret.webp",
+    "name": "Effect: Brewer's Regret",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Brewer's Regret], @UUID[Compendium.pf2e.equipment-srd.Item.Brewer's Regret (Greater)]</p>\n<p>You gain an item bonus to saves against death and void effects.</p>"
+        },
+        "duration": {
+            "expiry": "turn-end",
+            "sustained": false,
+            "unit": "hours",
+            "value": 1
+        },
+        "level": {
+            "value": 9
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Lost Omens The Grand Bazaar"
+        },
+        "rules": [
+            {
+                "adjustName": false,
+                "choices": [
+                    {
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:origin:item:slug:brewers-regret",
+                                    {
+                                        "not": "parent:origin:item"
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": "Compendium.pf2e.equipment-srd.Item.Brewer's Regret"
+                    },
+                    {
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:origin:item:slug:brewers-regret-greater",
+                                    {
+                                        "not": "parent:origin:item"
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": "Compendium.pf2e.equipment-srd.Item.Brewer's Regret (Greater)"
+                    }
+                ],
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Prompt.EquipmentVariety",
+                "rollOption": "brewers-regret"
+            },
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    {
+                        "or": [
+                            "item:trait:death",
+                            "item:trait:void"
+                        ]
+                    }
+                ],
+                "selector": "saving-throw",
+                "slug": "brewers-regret-bonus",
+                "type": "item",
+                "value": 2
+            },
+            {
+                "key": "AdjustModifier",
+                "mode": "upgrade",
+                "predicate": [
+                    "brewers-regret:brewers-regret-greater"
+                ],
+                "selector": "saving-throw",
+                "slug": "brewers-regret-bonus",
+                "type": "item",
+                "value": 3
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

@@ -1,0 +1,135 @@
+{
+    "_id": "KJXNLvJAl0mNnGvn",
+    "img": "icons/commodities/materials/feather-red.webp",
+    "name": "Effect: Jyoti's Feather - Weapon",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.equipment-srd.Item.Jyoti's Feather], @UUID[Compendium.pf2e.equipment-srd.Item.Jyoti's Feather (Greater)], @UUID[Compendium.pf2e.equipment-srd.Item.Jyoti's Feather (Major)]</p>\n<p>The weapon has the <em>vitalizing rune</em> or <em>greater vitalizing rune</em> (<em>major</em>).</p>"
+        },
+        "duration": {
+            "expiry": null,
+            "sustained": false,
+            "unit": "unlimited",
+            "value": -1
+        },
+        "level": {
+            "value": 10
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Treasure Vault (Remastered)"
+        },
+        "rules": [
+            {
+                "adjustName": false,
+                "choices": [
+                    {
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:origin:item:slug:jyotis-feather",
+                                    {
+                                        "not": "parent:origin:item"
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": "Compendium.pf2e.equipment-srd.Item.Jyoti's Feather"
+                    },
+                    {
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:origin:item:slug:jyotis-feather-greater",
+                                    {
+                                        "not": "parent:origin:item"
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": "Compendium.pf2e.equipment-srd.Item.Jyoti's Feather (Greater)"
+                    },
+                    {
+                        "predicate": [
+                            {
+                                "or": [
+                                    "parent:origin:item:slug:jyotis-feather-major",
+                                    {
+                                        "not": "parent:origin:item"
+                                    }
+                                ]
+                            }
+                        ],
+                        "value": "Compendium.pf2e.equipment-srd.Item.Jyoti's Feather (Major)"
+                    }
+                ],
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Prompt.EquipmentVariety",
+                "rollOption": "jyotis-feather"
+            },
+            {
+                "choices": {
+                    "includeHandwraps": true,
+                    "ownedItems": true,
+                    "types": [
+                        "weapon"
+                    ]
+                },
+                "flag": "effectJyotisFeatherWeapon",
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Prompt.Weapon"
+            },
+            {
+                "definition": [
+                    {
+                        "or": [
+                            "item:category:{item|flags.pf2e.rulesSelections.effectJyotisFeatherWeapon}",
+                            "item:id:{item|flags.pf2e.rulesSelections.effectJyotisFeatherWeapon}"
+                        ]
+                    }
+                ],
+                "key": "AdjustStrike",
+                "mode": "add",
+                "predicate": [
+                    {
+                        "or": [
+                            "jyotis-feather:jyotis-feather",
+                            "jyotis-feather:jyotis-feather-greater"
+                        ]
+                    }
+                ],
+                "property": "property-runes",
+                "value": "disrupting"
+            },
+            {
+                "definition": [
+                    {
+                        "or": [
+                            "item:category:{item|flags.pf2e.rulesSelections.effectJyotisFeatherWeapon}",
+                            "item:id:{item|flags.pf2e.rulesSelections.effectJyotisFeatherWeapon}"
+                        ]
+                    }
+                ],
+                "key": "AdjustStrike",
+                "mode": "add",
+                "predicate": [
+                    "jyotis-feather:jyotis-feather-major"
+                ],
+                "property": "property-runes",
+                "value": "greater-disrupting"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

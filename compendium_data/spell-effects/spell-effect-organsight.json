@@ -1,0 +1,87 @@
+{
+    "_id": "Uj9VFXoVMH0mTTdt",
+    "img": "icons/equipment/head/mask-plague-leather-brown.webp",
+    "name": "Spell Effect: Organsight",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.spells-srd.Item.Organsight]</p>\n<p>You gain a +2 circumstance bonus on Medicine checks against the target that depend on its organs, but a -2 circumstance penalty on Medicine checks depending on seeing its skin.</p>\n<p>If you succeed the Recall Knowledge check, the next time you deal piercing or slashing damage to the target with a Strike or spell, you deal additional precision damage.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "minutes",
+            "value": 1
+        },
+        "level": {
+            "value": 3
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Secrets of Magic"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "label": "PF2E.SpecificRule.Organsight.Organs",
+                "predicate": [
+                    "organ-dependent"
+                ],
+                "selector": "medicine",
+                "slug": "organsight-med-bonus",
+                "type": "circumstance",
+                "value": 2
+            },
+            {
+                "key": "FlatModifier",
+                "label": "PF2E.SpecificRule.Organsight.Skin",
+                "predicate": [
+                    "skin-dependent"
+                ],
+                "selector": "medicine",
+                "slug": "organsight-med-penalty",
+                "type": "circumstance",
+                "value": -2
+            },
+            {
+                "category": "precision",
+                "diceNumber": "1 + @item.level",
+                "dieSize": "d6",
+                "key": "DamageDice",
+                "label": "Organsight",
+                "predicate": [
+                    "organsight",
+                    {
+                        "or": [
+                            "item:damage:type:piercing",
+                            "item:damage:type:slashing"
+                        ]
+                    }
+                ],
+                "selector": [
+                    "strike-damage",
+                    "spell-damage"
+                ]
+            },
+            {
+                "domain": "damage",
+                "key": "RollOption",
+                "label": "PF2E.SpecificRule.Organsight.Success",
+                "option": "organsight",
+                "toggleable": true
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}

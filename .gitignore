@@ -1,0 +1,76 @@
+__pycache__/
+*.pyc
+.DS_Store
+*.db-journal
+venv/
+.venv/
+.env
+
+# Agent worktrees — git linked-worktree checkouts under .claude/ are local
+# scratch; never commit their checkouts or pointer files.
+# (.claude/launch.json is tracked and intentionally kept.)
+.claude/worktrees/
+
+# Local-only Pathbuilder PC exports — used for verifying class progressions
+# and calculation fixes. PCs reach the live site through the in-app
+# JSON-upload + character-creator flow, NOT via the repo.
+party_data/*.json
+!party_data/portraits/
+
+# GM-authored campaign intro metadata — local content, not repo state.
+campaign.json
+
+# Obsidian vault sync state — populated on the server's persistent
+# volume by tools/push_vault.py; never committed.
+vault_data/
+.vault_last_push_ts
+.vault_local_last_push_ts
+obsidian_vault
+
+# GM-uploaded campaign assets (splash images etc.) — server-local,
+# never committed; lives on the Railway volume.
+campaign_assets/
+
+# Campaign audio — a symlink to the GM's local Foundry/audio folder (or a
+# PF2E_AUDIO_DIR). Machine-specific, never committed.
+campaign_audio
+
+# Session-complete scrapbook data (Chunk 6) — runtime state on the volume
+# (DATA_DIR): the in-flight highlights accumulator + saved per-session
+# scrapbooks. Never committed.
+session_highlights.json
+scrapbooks/
+
+# Per-campaign runtime state. In account/campaign mode these live under
+# DATA_DIR/campaigns/<id>/; in the legacy flat layout the app writes them to
+# the DATA_DIR root (locally, the repo root). Runtime state, never committed.
+# (story_threads.json is intentionally tracked as seed content — not listed here.)
+campaign_stats.json
+loot_ledger.json
+pinned_generators.json
+calendar.json
+journals/
+uploads/
+
+# Built Cosmere player characters — runtime store on the volume (DATA_DIR),
+# kept out of the PF2e party_data. Never committed.
+cosmere_pcs/
+
+# Per-campaign Cosmere homebrew shelf — runtime store on the volume (DATA_DIR).
+homebrew.json
+
+# Per-player session-notes scratchpads — runtime state on the volume.
+session_notes/
+
+# Tactical scenes: scene JSON, the active-scene index, and GM-uploaded map
+# backgrounds. In campaign mode these live under DATA_DIR/campaigns/<id>/scenes/;
+# in the legacy flat layout core.storage.scenes_dir(None) writes them to the
+# DATA_DIR root (locally, the repo root). Runtime state + uploaded art, never
+# committed.
+scenes/
+
+# Persisted Flask session secret (stable across restarts; never commit)
+.secret_key
+
+# Brainstorming visual-companion session artifacts
+.superpowers/

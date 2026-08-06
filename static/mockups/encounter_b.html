@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Encounter Mockup B — Tactical Grid</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-base:#0f1117; --bg-surface:#161921; --bg-raised:#1c2029; --bg-higher:#232736;
+  --red:#c43c3c; --red-b:#e85555; --red-d:#8a2929;
+  --gold:#c8a84e; --teal:#4a9696; --purple:#9b7ede; --blue:#5a8ee8; --green:#3eba68;
+  --t1:#eaebf0; --t2:#9ca0b4; --t3:#5e6378; --t4:#3d4158;
+  --border:#262b3a;
+  --row-active: rgba(196,60,60,0.10);
+}
+* { box-sizing:border-box; }
+html, body { margin:0; padding:0; background:var(--bg-base); color:var(--t1); font-family:'Inter',system-ui,sans-serif; font-size:13px; }
+.mono { font-family:'JetBrains Mono',monospace; }
+.font-d { font-family:'Cinzel',serif; }
+
+body { min-height:100vh; }
+
+/* ============ HERO BAR (turn control) ============ */
+.hero-bar {
+  display:grid;
+  grid-template-columns: 1fr 340px 1fr;
+  gap:16px;
+  padding:14px 20px;
+  background:linear-gradient(180deg, #181c26 0%, var(--bg-surface) 100%);
+  border-bottom:2px solid var(--border);
+  align-items:center;
+  position:sticky; top:0; z-index:20;
+}
+.hb-left { display:flex; align-items:baseline; gap:12px; }
+.hb-left .name { font-family:'Cinzel',serif; font-size:17px; font-weight:700; }
+.hb-left .meta { font-size:11px; color:var(--t3); text-transform:uppercase; letter-spacing:1px; }
+.xp-tag { background:rgba(200,168,78,0.12); border:1px solid rgba(200,168,78,0.4); color:var(--gold); padding:3px 9px; border-radius:10px; font-size:10px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; }
+
+.hb-turn {
+  display:flex; align-items:center; justify-content:center; gap:14px;
+  background:var(--bg-raised); border:1px solid var(--border); border-radius:14px;
+  padding:10px 16px; box-shadow:0 4px 14px rgba(0,0,0,0.3);
+}
+.round-num {
+  font-family:'Cinzel',serif; font-size:24px; font-weight:700;
+  display:flex; flex-direction:column; align-items:center; line-height:1;
+}
+.round-num .l { font-size:9px; color:var(--t3); letter-spacing:1.5px; font-weight:600; margin-bottom:3px; }
+.turn-now {
+  flex:1; text-align:center;
+  display:flex; flex-direction:column;
+  padding:0 10px; border-left:1px solid var(--border); border-right:1px solid var(--border);
+}
+.turn-now .l { font-size:9px; color:var(--t3); letter-spacing:1.5px; font-weight:600; }
+.turn-now .v { font-family:'Cinzel',serif; font-size:16px; font-weight:700; color:var(--red-b); margin-top:2px; line-height:1; }
+.next-btn {
+  background:linear-gradient(180deg, var(--red) 0%, var(--red-d) 100%);
+  color:#fff; font-weight:700; border:none;
+  padding:9px 16px; border-radius:8px; cursor:pointer;
+  font-size:12px; letter-spacing:.5px; text-transform:uppercase;
+  box-shadow:0 3px 10px rgba(196,60,60,0.35);
+}
+.next-btn:hover { background:linear-gradient(180deg, var(--red-b) 0%, var(--red) 100%); }
+.prev-btn {
+  background:transparent; color:var(--t2); border:1px solid var(--border);
+  padding:7px 10px; border-radius:7px; cursor:pointer; font-size:12px;
+}
+
+.hb-right { display:flex; gap:7px; justify-content:flex-end; flex-wrap:wrap; }
+.hb-btn { padding:6px 11px; background:var(--bg-raised); border:1px solid var(--border); border-radius:7px; color:var(--t1); font-size:11px; font-weight:600; cursor:pointer; }
+.hb-btn:hover { background:var(--bg-higher); border-color:var(--t4); }
+.hb-btn.gold { color:var(--gold); border-color:rgba(200,168,78,0.3); }
+.hb-btn.danger { color:var(--red-b); }
+
+/* ============ LAYOUT ============ */
+.layout { display:grid; grid-template-columns: 1fr 320px; min-height:calc(100vh - 65px); }
+.stage { padding:14px 16px 14px 20px; min-width:0; }
+.side { padding:14px 20px 14px 0; position:sticky; top:65px; height:calc(100vh - 65px); overflow-y:auto; }
+
+/* ============ TOOL STRIP ============ */
+.tool-strip {
+  display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+  padding:10px 14px; background:var(--bg-surface); border:1px solid var(--border);
+  border-radius:10px; margin-bottom:12px;
+}
+.ts-search { position:relative; flex:1; min-width:200px; }
+.ts-search input { width:100%; background:var(--bg-raised); border:1px solid var(--border); color:var(--t1); padding:8px 11px 8px 30px; border-radius:7px; font-size:12px; }
+.ts-search::before { content:"🔍"; position:absolute; left:9px; top:50%; transform:translateY(-50%); opacity:.55; font-size:11px; }
+.ts-btn { padding:7px 12px; background:var(--bg-raised); border:1px solid var(--border); border-radius:7px; color:var(--t1); font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; }
+.ts-btn.primary { background:var(--red); border-color:var(--red); color:#fff; }
+.ts-btn.primary:hover { background:var(--red-b); }
+.ts-divider { width:1px; height:24px; background:var(--border); margin:0 2px; }
+
+/* ============ DATA GRID ============ */
+.grid-wrap { background:var(--bg-surface); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+.grid-head {
+  display:grid;
+  grid-template-columns: 28px 44px 1fr 52px 180px 210px 130px 40px;
+  gap:6px; padding:9px 10px;
+  background:var(--bg-raised); border-bottom:1px solid var(--border);
+  font-size:9px; letter-spacing:1.4px; color:var(--t3); text-transform:uppercase; font-weight:700;
+}
+.grid-head > div { display:flex; align-items:center; }
+.combatant {
+  display:grid;
+  grid-template-columns: 28px 44px 1fr 52px 180px 210px 130px 40px;
+  gap:6px; padding:10px 10px;
+  border-bottom:1px solid var(--border);
+  align-items:center;
+  transition:background .15s;
+}
+.combatant:hover { background:rgba(255,255,255,0.02); }
+.combatant.active {
+  background:linear-gradient(90deg, var(--row-active), rgba(196,60,60,0.03) 30%, transparent);
+  box-shadow:inset 3px 0 0 var(--red);
+}
+.combatant.delayed { opacity:.55; font-style:italic; }
+.combatant.down { opacity:.5; }
+.combatant.down .nm { text-decoration:line-through; color:var(--t3); }
+
+/* cells */
+.c-drag { cursor:grab; color:var(--t4); font-size:14px; user-select:none; }
+.c-init { text-align:center; }
+.c-init input { width:40px; background:var(--bg-higher); border:1px solid var(--border); color:var(--t1); padding:4px 0; text-align:center; border-radius:5px; font-family:'JetBrains Mono',monospace; font-weight:700; font-size:13px; }
+.combatant.active .c-init input { border-color:var(--red); color:var(--red-b); box-shadow:0 0 0 1px rgba(196,60,60,0.3); }
+
+.c-name { display:flex; align-items:center; gap:8px; min-width:0; }
+.port { width:30px; height:30px; border-radius:6px; background:var(--bg-higher); display:flex; align-items:center; justify-content:center; font-family:'Cinzel',serif; font-weight:700; color:var(--t2); flex-shrink:0; font-size:13px; }
+.port.pc { background:rgba(74,150,150,0.15); color:var(--teal); border:1px solid rgba(74,150,150,0.4); }
+.port.enemy { background:rgba(196,60,60,0.15); color:var(--red-b); border:1px solid rgba(196,60,60,0.4); }
+.port.ally { background:rgba(62,186,104,0.15); color:var(--green); border:1px solid rgba(62,186,104,0.4); }
+.port.caster { background:rgba(155,126,222,0.15); color:var(--purple); border:1px solid rgba(155,126,222,0.4); }
+.nm-wrap { min-width:0; }
+.nm { font-weight:600; font-size:13px; line-height:1.15; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.nm-sub { font-size:10px; color:var(--t3); text-transform:uppercase; letter-spacing:.4px; }
+.nm-sub .k { color:var(--red-b); font-weight:700; }
+.nm-sub .k.pc { color:var(--teal); }
+.nm-sub .k.ally { color:var(--green); }
+
+.c-ac { font-family:'JetBrains Mono',monospace; font-weight:700; font-size:14px; color:var(--blue); text-align:center; }
+
+.c-hp { display:flex; flex-direction:column; gap:4px; }
+.c-hp-top { display:flex; justify-content:space-between; align-items:center; font-size:11px; }
+.c-hp-top .cur { font-family:'JetBrains Mono',monospace; font-weight:700; }
+.c-hp-top .max { color:var(--t3); font-family:'JetBrains Mono',monospace; }
+.c-hp-bar { height:6px; background:var(--bg-higher); border-radius:3px; overflow:hidden; }
+.c-hp-fill { height:100%; background:linear-gradient(90deg, var(--green), #5fd884); transition:width .3s; }
+.c-hp-fill.mid { background:linear-gradient(90deg, var(--gold), #e0b858); }
+.c-hp-fill.low { background:linear-gradient(90deg, var(--red), var(--red-b)); }
+.c-hp-ctrl { display:flex; gap:3px; margin-top:2px; }
+.c-hp-ctrl input { flex:1; min-width:0; background:var(--bg-higher); border:1px solid var(--border); color:var(--t1); padding:3px 5px; border-radius:4px; font-size:11px; font-family:'JetBrains Mono',monospace; }
+.c-hp-ctrl button { padding:3px 8px; border-radius:4px; font-size:11px; font-weight:700; border:none; cursor:pointer; }
+.c-hp-ctrl .minus { background:rgba(196,60,60,0.15); color:var(--red-b); border:1px solid rgba(196,60,60,0.4); }
+.c-hp-ctrl .plus { background:rgba(62,186,104,0.15); color:var(--green); border:1px solid rgba(62,186,104,0.4); }
+
+.c-cond { display:flex; flex-wrap:wrap; gap:3px; align-content:center; }
+.cp {
+  font-size:9px; padding:2px 7px; border-radius:9px; font-weight:700;
+  letter-spacing:.5px; text-transform:uppercase;
+  display:inline-flex; gap:5px; align-items:center;
+}
+.cp.purple { background:rgba(155,126,222,0.15); color:var(--purple); border:1px solid rgba(155,126,222,0.35); }
+.cp.red { background:rgba(196,60,60,0.15); color:var(--red-b); border:1px solid rgba(196,60,60,0.35); }
+.cp.gold { background:rgba(200,168,78,0.15); color:var(--gold); border:1px solid rgba(200,168,78,0.35); }
+.cp .x { cursor:pointer; opacity:.6; }
+.cp .x:hover { opacity:1; color:var(--red-b); }
+.cp-add { font-size:10px; padding:2px 6px; background:var(--bg-higher); border:1px dashed var(--t4); color:var(--t3); border-radius:9px; cursor:pointer; }
+.cp-add:hover { border-color:var(--purple); color:var(--purple); }
+
+.c-act { display:flex; gap:3px; justify-content:flex-end; }
+.ic-btn { width:24px; height:24px; border-radius:5px; background:var(--bg-higher); border:1px solid var(--border); color:var(--t2); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:11px; }
+.ic-btn:hover { border-color:var(--t4); color:var(--t1); }
+.ic-btn.del:hover { border-color:var(--red); color:var(--red-b); }
+
+/* EXPAND BUTTON */
+.c-expand { cursor:pointer; color:var(--t3); font-size:14px; text-align:center; }
+.c-expand.open { color:var(--red-b); }
+
+/* expanded row */
+.combatant-x {
+  padding:14px 18px 18px 74px;
+  background:linear-gradient(180deg, rgba(196,60,60,0.05) 0%, transparent 40%);
+  border-bottom:1px solid var(--border);
+  display:grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap:14px;
+}
+.cx-card { background:var(--bg-raised); border:1px solid var(--border); border-radius:8px; padding:9px 11px; }
+.cx-h { font-size:9px; letter-spacing:1.3px; text-transform:uppercase; color:var(--t3); font-weight:700; margin-bottom:6px; }
+.cx-strikes .s { display:flex; justify-content:space-between; padding:3px 0; border-bottom:1px dashed var(--border); font-size:11px; }
+.cx-strikes .s:last-child { border-bottom:0; }
+.cx-strikes .s .hits { font-family:'JetBrains Mono',monospace; color:var(--gold); font-size:11px; }
+.cx-saves { display:grid; grid-template-columns: repeat(4,1fr); gap:4px; font-size:10px; text-align:center; }
+.cx-saves .sv { padding:5px 0; background:var(--bg-higher); border-radius:4px; }
+.cx-saves .sv .l { font-size:8px; color:var(--t3); letter-spacing:.8px; text-transform:uppercase; font-weight:700; }
+.cx-saves .sv .v { font-family:'JetBrains Mono',monospace; font-weight:700; font-size:12px; margin-top:1px; }
+.cx-saves .sv .v.g { color:var(--green); } .cx-saves .sv .v.b { color:var(--blue); } .cx-saves .sv .v.p { color:var(--purple); } .cx-saves .sv .v.y { color:var(--gold); }
+
+/* ============ SIDE PANEL ============ */
+.side-card { background:var(--bg-surface); border:1px solid var(--border); border-radius:10px; padding:12px 13px; margin-bottom:12px; }
+.side-card-h { font-family:'Cinzel',serif; font-size:11px; letter-spacing:1.3px; text-transform:uppercase; color:var(--t2); border-bottom:1px solid var(--border); padding-bottom:6px; margin-bottom:9px; display:flex; justify-content:space-between; align-items:center; }
+.side-card-h .live { font-size:9px; color:var(--red-b); font-weight:700; letter-spacing:1.2px; }
+.side-card-h .live::before { content:"●"; margin-right:3px; animation:pulse 1.5s infinite; }
+@keyframes pulse { 50% { opacity:.3; } }
+
+.log-feed { max-height:280px; overflow-y:auto; padding-right:3px; }
+.le { padding:6px 8px; margin-bottom:4px; background:var(--bg-raised); border-radius:5px; border-left:2px solid var(--border); font-size:11px; line-height:1.4; }
+.le.turn { border-left-color:var(--red-b); }
+.le.dmg { border-left-color:var(--red); }
+.le.heal { border-left-color:var(--green); }
+.le.crit { border-left-color:var(--gold); background:rgba(200,168,78,0.05); }
+.le.cond { border-left-color:var(--purple); }
+.le .tm { font-family:'JetBrains Mono',monospace; color:var(--t3); font-size:9.5px; margin-right:5px; }
+.le .who { color:var(--red-b); font-weight:700; }
+.le .amt { color:var(--red-b); font-weight:700; }
+.le.heal .amt { color:var(--green); }
+
+/* secret roll inline */
+.sr-inline { display:grid; grid-template-columns: 45px 45px 45px 1fr; gap:5px; margin-bottom:7px; }
+.sr-inline input { background:var(--bg-higher); border:1px solid var(--border); color:var(--t1); padding:5px 6px; border-radius:4px; font-size:11px; font-family:'JetBrains Mono',monospace; text-align:center; }
+.sr-inline input:last-child { text-align:left; font-family:'Inter',sans-serif; }
+.sr-btn { width:100%; padding:6px; background:linear-gradient(180deg, #d8b85b, var(--gold)); color:#1a1410; border:none; border-radius:5px; font-weight:700; cursor:pointer; font-size:11px; }
+.sr-results { margin-top:6px; }
+.sr-result { font-size:10.5px; padding:5px 7px; background:var(--bg-raised); border-radius:4px; margin-bottom:3px; display:flex; justify-content:space-between; }
+.sr-result .lbl { color:var(--t2); }
+.sr-result .val { font-family:'JetBrains Mono',monospace; color:var(--gold); font-weight:700; }
+
+/* handout */
+.ho-grid { display:grid; grid-template-columns: repeat(3,1fr); gap:5px; }
+.ho-btn { padding:7px 4px; background:var(--bg-raised); border:1px solid var(--border); border-radius:5px; color:var(--t1); font-size:10.5px; font-weight:600; cursor:pointer; text-align:center; }
+.ho-btn:hover { border-color:var(--gold); color:var(--gold); }
+
+/* dice dock */
+.dice-dock { display:flex; gap:4px; margin-bottom:8px; }
+.d-btn { flex:1; padding:7px 0; background:var(--bg-raised); border:1px solid var(--border); border-radius:5px; color:var(--t1); font-family:'Cinzel',serif; font-weight:700; cursor:pointer; font-size:11px; }
+.d-btn:hover { border-color:var(--red); color:var(--red-b); }
+
+/* scrollbar */
+::-webkit-scrollbar { width:6px; height:6px; }
+::-webkit-scrollbar-track { background:var(--bg-base); }
+::-webkit-scrollbar-thumb { background:var(--t4); border-radius:3px; }
+
+.stamp { position:fixed; bottom:6px; left:10px; font-size:10px; color:var(--t4); font-family:monospace; letter-spacing:1px; z-index:5; }
+</style>
+</head>
+<body>
+
+<!-- HERO BAR -->
+<div class="hero-bar">
+  <div class="hb-left">
+    <span class="name">Sepulcher of the Serpent Queen</span>
+    <span class="meta">Session 4</span>
+    <span class="xp-tag">PL 4 · Severe · 120 XP</span>
+  </div>
+  <div class="hb-turn">
+    <div class="round-num"><span class="l">Round</span><span>3</span></div>
+    <div class="turn-now">
+      <span class="l">Now Acting</span>
+      <span class="v">KYLE</span>
+    </div>
+    <button class="prev-btn">◀</button>
+    <button class="next-btn">Next Turn ▶</button>
+  </div>
+  <div class="hb-right">
+    <button class="hb-btn">Roll Init</button>
+    <button class="hb-btn">Sort</button>
+    <button class="hb-btn gold">Recall Know.</button>
+    <button class="hb-btn">Handout</button>
+    <button class="hb-btn">Save</button>
+    <button class="hb-btn">Load</button>
+    <button class="hb-btn danger">Clear</button>
+  </div>
+</div>
+
+<div class="layout">
+
+  <!-- STAGE -->
+  <div class="stage">
+
+    <div class="tool-strip">
+      <div class="ts-search"><input type="text" placeholder="Search monsters, allies, hazards…"></div>
+      <button class="ts-btn primary">+ Add Party</button>
+      <button class="ts-btn">+ Custom</button>
+      <div class="ts-divider"></div>
+      <button class="ts-btn">Hold</button>
+      <button class="ts-btn">Delay</button>
+    </div>
+
+    <div class="grid-wrap">
+      <div class="grid-head">
+        <div></div>
+        <div>Init</div>
+        <div>Combatant</div>
+        <div>AC</div>
+        <div>Hit Points</div>
+        <div>Conditions</div>
+        <div>Actions</div>
+        <div></div>
+      </div>
+
+      <!-- active -->
+      <div class="combatant active">
+        <div class="c-drag">⠇</div>
+        <div class="c-init"><input value="22"></div>
+        <div class="c-name">
+          <div class="port pc">K</div>
+          <div class="nm-wrap">
+            <div class="nm">Kyle</div>
+            <div class="nm-sub"><span class="k pc">PC</span> • Druid 4 · Awakened Animal</div>
+          </div>
+        </div>
+        <div class="c-ac">21</div>
+        <div class="c-hp">
+          <div class="c-hp-top"><span class="cur">42<span class="max">/48</span></span><span style="color:var(--green);">88%</span></div>
+          <div class="c-hp-bar"><div class="c-hp-fill" style="width:88%"></div></div>
+          <div class="c-hp-ctrl">
+            <input placeholder="-" value="12">
+            <button class="minus">−</button>
+            <button class="plus">+</button>
+          </div>
+        </div>
+        <div class="c-cond">
+          <span class="cp purple">Frightened 1 <span class="x">✕</span></span>
+          <span class="cp-add">+ add</span>
+        </div>
+        <div class="c-act">
+          <button class="ic-btn" title="Attack roll">🗡</button>
+          <button class="ic-btn" title="Save">🛡</button>
+          <button class="ic-btn del" title="Remove">🗑</button>
+        </div>
+        <div class="c-expand open">▾</div>
+      </div>
+      <div class="combatant-x">
+        <div class="cx-card">
+          <div class="cx-h">Saves</div>
+          <div class="cx-saves">
+            <div class="sv"><div class="l">Fort</div><div class="v g">+8</div></div>
+            <div class="sv"><div class="l">Ref</div><div class="v b">+9</div></div>
+            <div class="sv"><div class="l">Will</div><div class="v p">+12</div></div>
+            <div class="sv"><div class="l">Perc</div><div class="v y">+10</div></div>
+          </div>
+        </div>
+        <div class="cx-card cx-strikes">
+          <div class="cx-h">Strikes</div>
+          <div class="s"><span>Scimitar +1</span><span class="hits">+14 / +9 / +4 · 2d6+4 S</span></div>
+          <div class="s"><span>Electric Arc</span><span class="hits">DC 20 · 3d4+4 elec</span></div>
+        </div>
+        <div class="cx-card">
+          <div class="cx-h">Speed · Senses</div>
+          <div style="font-size:11px; color:var(--t2); line-height:1.5;">Speed 25ft<br>Darkvision, Low-Light<br>Focus 2/2 · Hero 1</div>
+        </div>
+      </div>
+
+      <!-- row -->
+      <div class="combatant">
+        <div class="c-drag">⠇</div>
+        <div class="c-init"><input value="19"></div>
+        <div class="c-name">
+          <div class="port enemy">S</div>
+          <div class="nm-wrap">
+            <div class="nm">Serpent Guard A</div>
+            <div class="nm-sub"><span class="k">ENEMY</span> · Level 3</div>
+          </div>
+        </div>
+        <div class="c-ac">20</div>
+        <div class="c-hp">
+          <div class="c-hp-top"><span class="cur">22<span class="max">/40</span></span><span style="color:var(--gold);">55%</span></div>
+          <div class="c-hp-bar"><div class="c-hp-fill mid" style="width:55%"></div></div>
+          <div class="c-hp-ctrl">
+            <input placeholder="-">
+            <button class="minus">−</button>
+            <button class="plus">+</button>
+          </div>
+        </div>
+        <div class="c-cond">
+          <span class="cp-add">+ add</span>
+        </div>
+        <div class="c-act">
+          <button class="ic-btn">🗡</button>
+          <button class="ic-btn">🛡</button>
+          <button class="ic-btn del">🗑</button>
+        </div>
+        <div class="c-expand">▸</div>
+      </div>
+
+      <div class="combatant">
+        <div class="c-drag">⠇</div>
+        <div class="c-init"><input value="17"></div>
+        <div class="c-name">
+          <div class="port pc">V</div>
+          <div class="nm-wrap">
+            <div class="nm">Vera</div>
+            <div class="nm-sub"><span class="k pc">PC</span> · Fighter 4 · Half-Elf</div>
+          </div>
+        </div>
+        <div class="c-ac">22</div>
+        <div class="c-hp">
+          <div class="c-hp-top"><span class="cur">58<span class="max">/58</span></span><span style="color:var(--green);">100%</span></div>
+          <div class="c-hp-bar"><div class="c-hp-fill" style="width:100%"></div></div>
+          <div class="c-hp-ctrl">
+            <input placeholder="-">
+            <button class="minus">−</button>
+            <button class="plus">+</button>
+          </div>
+        </div>
+        <div class="c-cond">
+          <span class="cp-add">+ add</span>
+        </div>
+        <div class="c-act">
+          <button class="ic-btn">🗡</button>
+          <button class="ic-btn">🛡</button>
+          <button class="ic-btn del">🗑</button>
+        </div>
+        <div class="c-expand">▸</div>
+      </div>
+
+      <div class="combatant">
+        <div class="c-drag">⠇</div>
+        <div class="c-init"><input value="15"></div>
+        <div class="c-name">
+          <div class="port enemy">S</div>
+          <div class="nm-wrap">
+            <div class="nm">Serpent Guard B</div>
+            <div class="nm-sub"><span class="k">ENEMY</span> · Level 3</div>
+          </div>
+        </div>
+        <div class="c-ac">20</div>
+        <div class="c-hp">
+          <div class="c-hp-top"><span class="cur">7<span class="max">/40</span></span><span style="color:var(--red-b);">18%</span></div>
+          <div class="c-hp-bar"><div class="c-hp-fill low" style="width:18%"></div></div>
+          <div class="c-hp-ctrl">
+            <input placeholder="-">
+            <button class="minus">−</button>
+            <button class="plus">+</button>
+          </div>
+        </div>
+        <div class="c-cond">
+          <span class="cp red">Bleed 1d4 <span class="x">✕</span></span>
+          <span class="cp purple">Off-Guard <span class="x">✕</span></span>
+          <span class="cp-add">+</span>
+        </div>
+        <div class="c-act">
+          <button class="ic-btn">🗡</button>
+          <button class="ic-btn">🛡</button>
+          <button class="ic-btn del">🗑</button>
+        </div>
+        <div class="c-expand">▸</div>
+      </div>
+
+      <div class="combatant">
+        <div class="c-drag">⠇</div>
+        <div class="c-init"><input value="12"></div>
+        <div class="c-name">
+          <div class="port pc">T</div>
+          <div class="nm-wrap">
+            <div class="nm">Thorn</div>
+            <div class="nm-sub"><span class="k pc">PC</span> · Cleric 4 · Dwarf</div>
+          </div>
+        </div>
+        <div class="c-ac">20</div>
+        <div class="c-hp">
+          <div class="c-hp-top"><span class="cur">31<span class="max">/50</span></span><span style="color:var(--gold);">62%</span></div>
+          <div class="c-hp-bar"><div class="c-hp-fill mid" style="width:62%"></div></div>
+          <div class="c-hp-ctrl">
+            <input placeholder="-">
+            <button class="minus">−</button>
+            <button class="plus">+</button>
+          </div>
+        </div>
+        <div class="c-cond">
+          <span class="cp-add">+ add</span>
+        </div>
+        <div class="c-act">
+          <button class="ic-btn">🗡</button>
+          <button class="ic-btn">🛡</button>
+          <button class="ic-btn del">🗑</button>
+        </div>
+        <div class="c-expand">▸</div>
+      </div>
+
+      <div class="combatant delayed">
+        <div class="c-drag">⠇</div>
+        <div class="c-init"><input value="8"></div>
+        <div class="c-name">
+          <div class="port pc">R</div>
+          <div class="nm-wrap">
+            <div class="nm">Rook</div>
+            <div class="nm-sub"><span class="k pc">PC</span> · <span style="color:var(--gold);">DELAYING</span></div>
+          </div>
+        </div>
+        <div class="c-ac">19</div>
+        <div class="c-hp">
+          <div class="c-hp-top"><span class="cur">46<span class="max">/50</span></span><span style="color:var(--green);">92%</span></div>
+          <div class="c-hp-bar"><div class="c-hp-fill" style="width:92%"></div></div>
+          <div class="c-hp-ctrl">
+            <input placeholder="-">
+            <button class="minus">−</button>
+            <button class="plus">+</button>
+          </div>
+        </div>
+        <div class="c-cond"><span class="cp-add">+</span></div>
+        <div class="c-act">
+          <button class="ic-btn">🗡</button>
+          <button class="ic-btn">🛡</button>
+          <button class="ic-btn del">🗑</button>
+        </div>
+        <div class="c-expand">▸</div>
+      </div>
+
+      <div class="combatant">
+        <div class="c-drag">⠇</div>
+        <div class="c-init"><input value="5"></div>
+        <div class="c-name">
+          <div class="port caster">A</div>
+          <div class="nm-wrap">
+            <div class="nm">Aapoph Chanter</div>
+            <div class="nm-sub"><span class="k">ENEMY</span> · Level 5 · Divine Caster</div>
+          </div>
+        </div>
+        <div class="c-ac">22</div>
+        <div class="c-hp">
+          <div class="c-hp-top"><span class="cur">65<span class="max">/65</span></span><span style="color:var(--green);">100%</span></div>
+          <div class="c-hp-bar"><div class="c-hp-fill" style="width:100%"></div></div>
+          <div class="c-hp-ctrl">
+            <input placeholder="-">
+            <button class="minus">−</button>
+            <button class="plus">+</button>
+          </div>
+        </div>
+        <div class="c-cond"><span class="cp-add">+ add</span></div>
+        <div class="c-act">
+          <button class="ic-btn">🗡</button>
+          <button class="ic-btn">🛡</button>
+          <button class="ic-btn del">🗑</button>
+        </div>
+        <div class="c-expand">▸</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- SIDE PANEL -->
+  <div class="side">
+
+    <div class="side-card">
+      <div class="side-card-h">Combat Log <span class="live">LIVE</span></div>
+      <div class="log-feed">
+        <div class="le turn"><span class="tm">14:03</span><span class="who">Kyle</span>'s turn begins.</div>
+        <div class="le cond"><span class="tm">14:02</span><span class="who">Kyle</span> becomes Frightened 1.</div>
+        <div class="le dmg"><span class="tm">14:02</span>Serpent B takes <span class="amt">3</span> bleed dmg.</div>
+        <div class="le turn"><span class="tm">14:01</span><span class="who">Serpent B</span>'s turn ends.</div>
+        <div class="le crit"><span class="tm">14:00</span>Vera <b>CRITS</b> Serpent B: <span class="amt" style="color:var(--gold);">32</span> dmg.</div>
+        <div class="le heal"><span class="tm">13:59</span>Thorn heals Kyle: <span class="amt">+8</span>.</div>
+        <div class="le turn"><span class="tm">13:58</span>Round 3 begins.</div>
+        <div class="le dmg"><span class="tm">13:57</span>Kyle takes <span class="amt">6</span> piercing.</div>
+      </div>
+    </div>
+
+    <div class="side-card">
+      <div class="side-card-h">Secret GM Roll</div>
+      <div class="sr-inline">
+        <input value="1">
+        <input value="20">
+        <input value="5">
+        <input type="text" placeholder="Label" value="Kyle Stealth">
+      </div>
+      <button class="sr-btn">Roll Hidden ◎</button>
+      <div class="sr-results">
+        <div class="sr-result"><span class="lbl">Kyle Stealth</span><span class="val">18 (13+5)</span></div>
+        <div class="sr-result"><span class="lbl">Trap Search</span><span class="val">22 (16+6)</span></div>
+      </div>
+    </div>
+
+    <div class="side-card">
+      <div class="side-card-h">Quick Dice</div>
+      <div class="dice-dock">
+        <button class="d-btn">d4</button>
+        <button class="d-btn">d6</button>
+        <button class="d-btn">d8</button>
+        <button class="d-btn">d10</button>
+        <button class="d-btn">d12</button>
+        <button class="d-btn">d20</button>
+      </div>
+    </div>
+
+    <div class="side-card">
+      <div class="side-card-h">Send Handout</div>
+      <div class="ho-grid">
+        <button class="ho-btn">Map</button>
+        <button class="ho-btn">NPC</button>
+        <button class="ho-btn">Letter</button>
+        <button class="ho-btn">Trap</button>
+        <button class="ho-btn">Scene</button>
+        <button class="ho-btn">Custom</button>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<div class="stamp">MOCKUP B — TACTICAL GRID</div>
+
+</body>
+</html>

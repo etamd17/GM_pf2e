@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Cosmere Bestiary{% endblock %}
+
+{% block extra_head %}
+  .cb-head { display:flex; align-items:baseline; gap:.7rem; border-bottom:1px solid var(--border-card);
+             padding-bottom:.7rem; margin-bottom:1.1rem; }
+  .cb-title { font-family:var(--font-display, serif); font-size:1.7rem; font-weight:700;
+              color:var(--accent); text-shadow:0 0 16px rgba(95,168,224,.18); }
+  .cb-count { font-size:12px; color:var(--text-on-dark-3); }
+  .cb-grid { display:grid; gap:.7rem; grid-template-columns:repeat(auto-fill, minmax(220px,1fr)); }
+  .cb-card { display:block; text-decoration:none; background:var(--bg-sunken,#131922);
+             border:1px solid var(--border-card); border-radius:11px; padding:.85rem 1rem; transition:all .12s; }
+  .cb-card:hover { border-color:rgba(95,168,224,.5); transform:translateY(-1px); box-shadow:0 4px 18px rgba(95,168,224,.10); }
+  .cb-nm { font-size:15px; font-weight:600; color:#e8eef5; }
+  .cb-meta { margin-top:.45rem; display:flex; gap:.35rem; flex-wrap:wrap; }
+  .cb-chip { font-size:10px; text-transform:uppercase; letter-spacing:.05em; padding:2px 8px; border-radius:999px;
+             background:rgba(95,168,224,.10); border:1px solid rgba(95,168,224,.3); color:var(--accent); }
+  .cb-search { margin-left:auto; min-width:180px; font-size:13px; padding:.4rem .7rem; border-radius:8px;
+               background:var(--bg-sunken,#131922); border:1px solid var(--border-card); color:var(--text-on-dark); }
+  .cb-search:focus { outline:none; border-color:rgba(95,168,224,.5); }
+  .cb-empty { color:var(--text-on-dark-3); font-size:13px; padding:1rem 0; }
+{% endblock %}
+
+{% block content %}
+<div class="cb-head">
+  <span class="cb-title">Cosmere Bestiary</span>
+  <span class="cb-count">{{ adversaries|length }} adversaries &middot; core + modules</span>
+  <input type="text" class="cb-search" id="cb-search" placeholder="Filter by name…" autocomplete="off" oninput="cbFilter(this.value)">
+</div>
+<div class="cb-grid" id="cb-grid">
+  {% for adv in adversaries %}
+  <a class="cb-card" href="/cosmere/sheet/{{ adv.id }}" data-name="{{ adv.name|lower }}" data-role="{{ adv.role|lower }}">
+    <div class="cb-nm">{{ adv.name }}</div>
+    <div class="cb-meta">
+      {% if adv.tier is not none %}<span class="cb-chip">Tier {{ adv.tier }}</span>{% endif %}
+      {% if adv.role %}<span class="cb-chip">{{ adv.role }}</span>{% endif %}
+      {% if adv.size %}<span class="cb-chip">{{ adv.size }}</span>{% endif %}
+    </div>
+  </a>
+  {% endfor %}
+</div>
+<div class="cb-empty" id="cb-empty" style="display:none;">No adversaries match that filter.</div>
+<script>
+function cbFilter(q) {
+  q = (q || '').trim().toLowerCase();
+  var shown = 0;
+  document.querySelectorAll('#cb-grid .cb-card').forEach(function (c) {
+    var hit = !q || (c.dataset.name || '').indexOf(q) !== -1 || (c.dataset.role || '').indexOf(q) !== -1;
+    c.style.display = hit ? '' : 'none';
+    if (hit) shown++;
+  });
+  document.getElementById('cb-empty').style.display = shown ? 'none' : 'block';
+}
+</script>
+{% endblock %}

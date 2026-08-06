@@ -1,0 +1,45 @@
+{
+    "_id": "0jKdU1YdER9dLBdx",
+    "img": "icons/magic/holy/barrier-shield-winged-cross.webp",
+    "name": "Effect: Rejuvenating Touch",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.feats-srd.Item.Rejuvenating Touch]</p>\n<p>You gain 10 temporary Hit Points immediately and at the start of your turns.</p>"
+        },
+        "duration": {
+            "expiry": "turn-start",
+            "sustained": false,
+            "unit": "rounds",
+            "value": 10
+        },
+        "level": {
+            "value": 18
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "events": {
+                    "onCreate": true,
+                    "onTurnStart": true
+                },
+                "key": "TempHP",
+                "value": 10
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

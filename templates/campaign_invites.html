@@ -1,0 +1,151 @@
+{% extends "_account_base.html" %}
+{% block title %}Manage campaign{% endblock %}
+{% block head %}
+<style>
+  .invite-row { align-items:flex-start; }
+  .invite-main { display:flex; gap:14px; align-items:flex-start; width:100%; }
+  .invite-main .qr { flex:0 0 auto; width:96px; height:96px; background:#f5efe0; border-radius:8px; padding:5px; box-sizing:border-box; }
+  .invite-main .qr svg { width:100%; height:100%; display:block; }
+  .invite-main .qr:empty { display:none; }
+  .invite-body { flex:1; min-width:0; display:flex; flex-direction:column; gap:7px; }
+  .invite-body .link { display:block; word-break:break-all; font-size:11px; }
+  .invite-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .copy-btn.copied { background:rgba(120,180,110,.18); border-color:rgba(150,200,120,.5); color:#bfe0a8; }
+  .ok-note { background:rgba(120,180,110,.14); border:1px solid rgba(150,200,120,.4); color:#bfe0a8; padding:10px 12px; border-radius:8px; font-size:13px; margin-bottom:10px; }
+</style>
+{% endblock %}
+{% block content %}
+<h1>{{ campaign.name }} &mdash; manage</h1>
+<p class="sub">Add players, hand out characters, and manage who's in your campaign.</p>
+
+<div class="section-title">Members</div>
+{% if members %}
+<ul class="list">
+  {% for m in members %}
+  <li class="row">
+    <div>
+      <strong>{{ m.name }}</strong>{% if m.is_self %} <span class="muted">(you)</span>{% endif %}
+      <div class="meta"><span class="badge">{{ m.role|upper }}</span></div>
+    </div>
+    {% if not m.is_self %}
+    <div style="display:flex;gap:8px;align-items:center;">
+      {% if m.role == 'player' %}
+      <form method="POST" action="/campaign/{{ campaign.id }}/members/{{ m.user_id }}/role"><input type="hidden" name="role" value="gm"><button type="submit" title="Promote to co-GM">Make GM</button></form>
+      {% elif gm_total > 1 %}
+      <form method="POST" action="/campaign/{{ campaign.id }}/members/{{ m.user_id }}/role"><input type="hidden" name="role" value="player"><button type="submit" title="Demote to player">Make player</button></form>
+      {% endif %}
+      <form method="POST" action="/campaign/{{ campaign.id }}/members/{{ m.user_id }}/remove" onsubmit="return confirm('Remove {{ m.name }} from {{ campaign.name }}?');"><button type="submit">Remove</button></form>
+    </div>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% else %}<p class="muted">No members yet.</p>{% endif %}
+
+<div class="section-title">Invite people</div>
+<p class="sub">Share a join link. They create an account (or sign in) and join your campaign.</p>
+<div style="display:flex;gap:10px;margin-bottom:12px;">
+  <form method="POST" action="/campaign/{{ campaign.id }}/invite"><input type="hidden" name="role" value="player"><button type="submit">+ Player link</button></form>
+  <form method="POST" action="/campaign/{{ campaign.id }}/invite"><input type="hidden" name="role" value="gm"><button type="submit">+ Co-GM link</button></form>
+</div>
+<p class="sub" style="margin-top:-4px;">Players can <strong>scan the QR</strong> off your screen &mdash; no typing the link.</p>
+{% if open_invites %}
+<ul class="list invite-list">
+  {% for inv in open_invites %}
+  {% set link = url_for('join', code=inv.code, _external=True) %}
+  <li class="row invite-row">
+    <div class="invite-main">
+      <div class="qr">{{ qr_svg(link) | safe }}</div>
+      <div class="invite-body">
+        <div class="meta"><span class="badge">{{ inv.role|upper }}</span></div>
+        <code class="muted link" data-link="{{ link }}">{{ link }}</code>
+        <div class="invite-actions">
+          <button type="button" class="copy-btn" data-link="{{ link }}">Copy link</button>
+          <form method="POST" action="/campaign/{{ campaign.id }}/invite/{{ inv.code }}/revoke" style="display:inline;"><button type="submit" title="Cancel this code">Revoke</button></form>
+        </div>
+      </div>
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+{% if rows %}
+<div class="section-title">Characters</div>
+<p class="sub">A character link claims that specific character. A character you built yourself can be <em>handed off</em> to free its link.</p>
+<ul class="list invite-list">
+  {% for r in rows %}
+  <li class="row invite-row">
+    {% if r.claimed %}
+    <div>
+      <strong>{{ r.name }}</strong>
+      <div class="meta"><span class="badge">claimed{% if r.owner %} &middot; {{ r.owner }}{% endif %}</span></div>
+    </div>
+    {% if r.kind == 'cosmere' %}
+    <form method="POST" action="/cosmere/pc/{{ r.id }}/release" onsubmit="return confirm('Hand off {{ r.name }}? This frees their join link so a player can claim it.');">
+      <button type="submit" title="Clear ownership and mint a fresh join link">Hand off</button>
+    </form>
+    {% endif %}
+    {% else %}
+    {% set link = url_for('join', code=r.code, _external=True) %}
+    <div class="invite-main">
+      <div class="qr">{{ qr_svg(link) | safe }}</div>
+      <div class="invite-body">
+        <strong>{{ r.name }}</strong>
+        <code class="muted link" data-link="{{ link }}">{{ link }}</code>
+        <div class="invite-actions"><button type="button" class="copy-btn" data-link="{{ link }}">Copy link</button></div>
+      </div>
+    </div>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+<div class="section-title">Game system</div>
+<p class="sub">The rules, sheets, and tools for the whole table. If this game is opening the wrong side &mdash; e.g. a Pathfinder campaign routing to the Cosmere screens &mdash; fix the stored system here.</p>
+{% if request.args.get('system_set') %}<div class="ok-note">Game system set to <strong>{{ request.args.get('system_set')|upper }}</strong>.</div>{% endif %}
+{% if request.args.get('system_error') %}<div class="err">That isn&rsquo;t a supported game system.</div>{% endif %}
+<form method="POST" action="/campaign/{{ campaign.id }}/system"
+      onsubmit="return confirm('Switch {{ campaign.name }} to the selected system? This changes the rules, sheets, and tools for the whole table.');"
+      style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+  <select name="system" style="width:auto;min-width:220px;">
+    <option value="pf2e"{% if (campaign.system or 'pf2e') == 'pf2e' %} selected{% endif %}>Pathfinder 2e</option>
+    <option value="cosmere"{% if campaign.system == 'cosmere' %} selected{% endif %}>Cosmere RPG (Stormlight)</option>
+  </select>
+  <button type="submit">Change system</button>
+  <span class="muted" style="font-size:12px;">Currently <strong>{{ (campaign.system or 'pf2e')|upper }}</strong></span>
+</form>
+
+<div class="section-title" style="color:#d36e6e; border-top:1px solid rgba(168,58,58,.25); margin-top:30px; padding-top:18px;">Danger zone</div>
+{% if request.args.get('delete_error') %}<div class="err">The name didn&rsquo;t match &mdash; the campaign was not deleted.</div>{% endif %}
+<p class="muted" style="margin-bottom:12px;">Deleting <strong>{{ campaign.name }}</strong> permanently removes the campaign and all its characters, encounters, and data. This cannot be undone.</p>
+<form method="POST" action="/campaign/{{ campaign.id }}/delete"
+      onsubmit="return confirm('Permanently delete {{ campaign.name }} and all of its data? This cannot be undone.');">
+  <label>Type the campaign name to confirm</label>
+  <input name="confirm_name" autocomplete="off" placeholder="{{ campaign.name }}">
+  <button type="submit" style="background:linear-gradient(180deg,#d36e6e,#a83a3a); border-color:rgba(211,110,110,.6); color:#fff;">Delete campaign</button>
+</form>
+
+<p class="foot muted"><a href="/me">&larr; Back to my table</a></p>
+
+<script>
+// Copy-to-clipboard for the join links (so the GM can paste into chat). The QR
+// is for in-person scanning; this is the remote-table path.
+document.addEventListener('click', function (e) {
+  var b = e.target.closest('.copy-btn'); if (!b) return;
+  var link = b.getAttribute('data-link') || '';
+  function done() {
+    var t = b.textContent; b.textContent = 'Copied'; b.classList.add('copied');
+    setTimeout(function () { b.textContent = t; b.classList.remove('copied'); }, 1400);
+  }
+  function fallback(txt) {
+    try { var ta = document.createElement('textarea'); ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); } catch (_) {}
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(link).then(done, function () { fallback(link); done(); });
+  } else { fallback(link); done(); }
+});
+</script>
+{% endblock %}

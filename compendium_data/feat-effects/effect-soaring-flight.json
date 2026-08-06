@@ -1,0 +1,43 @@
+{
+    "_id": "ytG5XJmkOnDOTjNN",
+    "img": "icons/magic/holy/angel-winged-humanoid-blue.webp",
+    "name": "Effect: Soaring Flight",
+    "system": {
+        "description": {
+            "value": "<p>Granted by @UUID[Compendium.pf2e.feats-srd.Item.Soaring Flight]</p>\n<p>You gain a fly Speed of 20 feet for this movement.</p>"
+        },
+        "duration": {
+            "expiry": "turn-end",
+            "sustained": false,
+            "unit": "rounds",
+            "value": 0
+        },
+        "level": {
+            "value": 5
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder Player Core 2"
+        },
+        "rules": [
+            {
+                "key": "BaseSpeed",
+                "selector": "fly",
+                "value": 20
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "effect"
+}
