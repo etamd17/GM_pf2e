@@ -452,7 +452,10 @@ GM_API_PREFIXES = (
     '/api/update_initiative/', '/api/roll_npc_initiative', '/api/sort_initiative',
     '/api/cycle_turn/', '/api/delay_turn/', '/api/reenter_initiative/',
     '/api/save_encounter', '/api/load_encounter', '/api/delete_encounter', '/api/encounter_notes',
-    '/api/save_stage',
+    # Both halves of the stage round-trip. load_stage reads the GM's prepped
+    # monster list out of ENCOUNTER_DIR, so gating only the POST left the
+    # contents readable to anyone who could guess a stage name.
+    '/api/save_stage', '/api/load_stage/',
     '/api/roll_all_initiative', '/api/reorder_initiative',
     # GM-only loot/check dispatch + party-wide daily prep. Players see
     # the resulting banners and loot deliveries but can't fire them.
@@ -1660,6 +1663,37 @@ def _broadcast_encounter_state():
             _ENC_BROADCAST_TIMER = t
             t.start()
 
+
+def _npc_hp_status(current_hp, max_hp):
+    """The ONLY health information a player may learn about a non-PC.
+
+    Returns (status, css_class). Players never see a monster's numbers --
+    just "Dead" at 0 HP, "Wounded" at or below half, and nothing at all above
+    that. This is the hidden-NPC leak fix from ROADMAP.md's session-critical
+    list, and it is deliberately coarse: an exact number tells the party how
+    many rounds are left in the fight.
+
+    Every player-facing payload that carries NPC health goes through here --
+    the encounter SSE frame, /api/player_state, and the tactical map's token
+    projection. Add a fourth caller rather than a fourth copy; this policy
+    was duplicated once already and the map's copy silently drifted back to
+    shipping raw HP.
+    """
+    try:
+        current_hp = int(current_hp or 0)
+        max_hp = int(max_hp or 0)
+    except (TypeError, ValueError):
+        return '', ''
+    if current_hp == 0:
+        return 'Dead', 'text-red-400'
+    if max_hp > 0 and current_hp / max_hp <= 0.5:
+        return 'Wounded', 'text-orange-400'
+    if max_hp <= 0:
+        # No max to measure against; alive but unquantifiable.
+        return 'Wounded', 'text-orange-400'
+    return '', ''
+
+
 def _do_broadcast_encounter_state():
     """Build and emit the encounter-state SSE frame (uncoalesced).
 
@@ -1713,13 +1747,7 @@ def _do_broadcast_encounter_state():
                     if isinstance(e, dict)
                 ]
             else:
-                pct = c.current_hp / c.hp if c.hp > 0 else 0
-                if c.current_hp == 0:
-                    entry['hp_status'] = 'Dead'
-                elif pct <= 0.5:
-                    entry['hp_status'] = 'Wounded'
-                else:
-                    entry['hp_status'] = ''
+                entry['hp_status'], _ = _npc_hp_status(c.current_hp, c.hp)
                 # Boss-reveal title (Chunk 4d). GM-only here; the player
                 # filter masks hidden NPCs entirely, and a revealed NPC's
                 # title is harmless to expose.
@@ -6530,18 +6558,26 @@ def _scene_live_indexes(cid):
     if cid == ACTIVE_CAMPAIGN_ID:
         for index, combatant in enumerate(ACTIVE_ENCOUNTER):
             record = by_name.get(combatant.name) if combatant.is_pc else None
-            combatants[combatant.instance_id] = {
+            current_hp = int(getattr(combatant, 'current_hp', 0) or 0)
+            max_hp = int(getattr(combatant, 'hp', 0) or 0)
+            entry = {
                 'name': combatant.name,
                 'is_pc': bool(combatant.is_pc),
                 'system': getattr(combatant, 'system', 'pf2e'),
-                'current_hp': int(getattr(combatant, 'current_hp', 0) or 0),
-                'max_hp': int(getattr(combatant, 'hp', 0) or 0),
+                'current_hp': current_hp,
+                'max_hp': max_hp,
                 'conditions': {k: v for k, v in getattr(combatant, 'conditions', {}).items()
                               if v and v is not False},
                 'visible_to_players': bool(getattr(combatant, 'visible_to_players', True)),
                 'is_active': index == TURN_INDEX,
                 'character_id': record.get('id') if record else None,
             }
+            if not combatant.is_pc:
+                # Carry the coarse status alongside the numbers. project_scene
+                # drops current_hp/max_hp on the way out to players and leaves
+                # this behind, so the two views share one computation.
+                entry['hp_status'], entry['hp_color'] = _npc_hp_status(current_hp, max_hp)
+            combatants[combatant.instance_id] = entry
     return combatants, characters
 
 
@@ -14929,11 +14965,7 @@ def player_state():
             safe_c['max_hp'] = c.hp
             safe_c['hp_pct'] = round(pct * 100)
         else:
-            pct = c.current_hp / c.hp if c.hp > 0 else 0
-            if c.current_hp == 0: safe_c['hp_status'] = "Dead"
-            elif pct <= 0.5: safe_c['hp_status'] = "Wounded"
-            else: safe_c['hp_status'] = ""
-            safe_c['hp_color'] = "text-red-400" if c.current_hp == 0 else "text-orange-400" if pct <= 0.5 else ""
+            safe_c['hp_status'], safe_c['hp_color'] = _npc_hp_status(c.current_hp, c.hp)
         state.append(safe_c)
     # Mask active_name if the active combatant is a hidden NPC (turn banner).
     if active_c and not gm_view and not active_c.is_pc and not getattr(active_c, 'visible_to_players', True):

@@ -88,6 +88,80 @@ def test_player_projection_removes_hidden_tokens_and_account_ids(scene_store):
     assert 'controller_user_id' not in projected['tokens'][0]
 
 
+# ==========================================================================
+# Player-facing health policy.
+#
+# The tracker has coarsened non-PC health for players since the hidden-NPC
+# leak fix (ROADMAP.md, session-critical item 1): a monster gets an
+# hp_status of "" / "Wounded" / "Dead" and never a number, while PC health
+# stays exact because the party shares it. The map projects the same live
+# state onto tokens, so it has to land on the same policy -- see
+# app.py::_player_state_payload for the original.
+# ==========================================================================
+
+def test_player_projection_never_carries_exact_npc_hp(scene_store):
+    scene = scenes.create_scene(CID, 'NPC Health')
+    scenes.add_token(scene, name='Ogre', combatant_id='ogre-1')
+    live = {'ogre-1': {'name': 'Ogre', 'is_pc': False, 'system': 'pf2e',
+                       'current_hp': 12, 'max_hp': 40, 'conditions': {},
+                       'hp_status': 'Wounded', 'hp_color': 'text-orange-400'}}
+
+    gm_token = scene_sync.project_scene(scene, live, {})['tokens'][0]
+    assert gm_token['live']['current_hp'] == 12
+    assert gm_token['live']['max_hp'] == 40
+
+    player_token = scene_sync.project_scene(scene, live, {}, player=True)['tokens'][0]
+    assert 'current_hp' not in player_token['live']
+    assert 'max_hp' not in player_token['live']
+    assert player_token['live']['hp_status'] == 'Wounded'
+    # The raw numbers must not survive anywhere else in the payload either.
+    assert '"current_hp"' not in json.dumps(player_token)
+
+
+def test_player_projection_keeps_exact_pc_hp(scene_store):
+    # PC health is shared knowledge at the table -- the tracker sends players
+    # current_hp/max_hp for PCs, so the map must not coarsen those.
+    scene = scenes.create_scene(CID, 'PC Health')
+    scenes.add_token(scene, name='Hero', character_id='char-1', is_pc=True)
+    live = {'char-1': {'name': 'Hero', 'is_pc': True, 'system': 'pf2e',
+                       'current_hp': 19, 'max_hp': 30, 'conditions': {}}}
+    player_token = scene_sync.project_scene(scene, {}, live, player=True)['tokens'][0]
+    assert player_token['live']['current_hp'] == 19
+    assert player_token['live']['max_hp'] == 30
+
+
+@pytest.mark.parametrize('current_hp, max_hp, expected', [
+    (40, 40, ''),            # healthy -> players are told nothing
+    (21, 40, ''),            # just above the halfway mark
+    (20, 40, 'Wounded'),     # exactly half is already Wounded
+    (1, 40, 'Wounded'),
+    (0, 40, 'Dead'),
+])
+def test_npc_hp_status_thresholds_match_the_tracker(current_hp, max_hp, expected):
+    status, _color = app._npc_hp_status(current_hp, max_hp)
+    assert status == expected
+
+
+def test_scene_api_player_read_coarsens_npc_hp(scene_client, monkeypatch):
+    scene = scenes.create_scene(CID, 'Wire Check')
+    scenes.add_token(scene, name='Ogre', combatant_id='ogre-1')
+    scenes.save_scene(CID, scene)
+    combatant = SimpleNamespace(
+        instance_id='ogre-1', name='Ogre', is_pc=False, system='pf2e',
+        current_hp=12, hp=40, conditions={}, visible_to_players=True,
+    )
+    monkeypatch.setattr(app, 'ACTIVE_ENCOUNTER', [combatant])
+    monkeypatch.setattr(app, 'TURN_INDEX', 0)
+    monkeypatch.setattr(app, '_is_gm', lambda: False)
+
+    body = scene_client.get(f'/api/scenes/{scene["id"]}').get_data(as_text=True)
+    assert 'Ogre' in body            # the token itself is still there
+    assert '"current_hp"' not in body
+    assert '"max_hp"' not in body
+    assert '"hp_status": "Wounded"' in body.replace('"hp_status":"Wounded"',
+                                                    '"hp_status": "Wounded"')
+
+
 @pytest.fixture
 def scene_client(scene_store, monkeypatch):
     monkeypatch.setattr(app, '_active_campaign_id', lambda: CID)
@@ -243,10 +317,37 @@ def test_scene_vector_elements_persist_and_filter_for_players(scene_client, monk
     monkeypatch.setattr(app, '_is_gm', lambda: False)
     player = scene_client.get(f'/api/scenes/{sid}').get_json()['scene']
     assert player['walls'][0]['kind'] == 'wall'
-    assert 'secret' not in player['walls'][0]
+    assert player['walls'][0]['secret'] is False
     assert player['lights'] == []
     assert player['fog']['operations'][0]['mode'] == 'reveal'
     assert player['templates'][0]['kind'] == 'burst'
+
+
+def test_masked_secret_door_is_indistinguishable_from_a_real_wall(scene_client, monkeypatch):
+    # Masking a closed secret door to kind='wall' is not enough on its own:
+    # add_wall writes 'secret': False on every genuine wall, so if the mask
+    # POPS the key instead of setting it, the walls MISSING it in the player
+    # payload are exactly the secret doors. Compare the key sets, not just kind.
+    scene = scenes.create_scene(CID, 'Secret Doors')
+    sid = scene['id']
+    assert scene_client.post(f'/api/scenes/{sid}/elements', json={
+        'action': 'add_wall', 'kind': 'wall',
+        'x1': 0, 'y1': 0, 'x2': 100, 'y2': 0,
+    }).status_code == 200
+    assert scene_client.post(f'/api/scenes/{sid}/elements', json={
+        'action': 'add_wall', 'kind': 'door', 'secret': True, 'open': False,
+        'x1': 0, 'y1': 200, 'x2': 100, 'y2': 200,
+    }).status_code == 200
+
+    monkeypatch.setattr(app, '_is_gm', lambda: False)
+    walls = scene_client.get(f'/api/scenes/{sid}').get_json()['scene']['walls']
+    assert len(walls) == 2
+    real_wall, masked_door = walls
+    assert masked_door['kind'] == 'wall'
+    # Same keys, and the same value for the one that gave it away.
+    assert set(real_wall) == set(masked_door)
+    assert real_wall['secret'] == masked_door['secret'] is False
+    assert real_wall['open'] == masked_door['open'] is False
 
 
 def test_bulk_map_damage_uses_linked_targets_only(scene_client, monkeypatch):
@@ -357,6 +458,115 @@ def test_map_template_and_client_subscribe_to_scene_and_combat_updates():
     assert "focusActiveTurn" in client
     assert 'visibilityPolygon' in client
     assert 'templateContainsToken' in client
+
+
+@pytest.fixture
+def real_auth_player_client(scene_store, monkeypatch):
+    """A player session that exercises the REAL _is_gm / _scene_member_allowed.
+
+    Every other client fixture here monkeypatches _is_gm to always-True, which
+    neuters @gm_required (it is just `if _is_gm()`) on every route it touches.
+    Nothing that stubs the auth functions can prove a player is actually kept
+    out. This one stubs only the mode switches: legacy mode with a GM_PASSWORD
+    set, and a session holding a player_name but not gm_authenticated. That
+    combination sends _is_gm() down its real False branch -- which matters,
+    because with no GM_PASSWORD _is_gm() returns True for EVERYONE and a
+    player-leak assertion would pass vacuously.
+    """
+    monkeypatch.setattr(app, '_active_campaign_id', lambda: CID)
+    monkeypatch.setattr(app, 'ACTIVE_CAMPAIGN_ID', CID)
+    monkeypatch.setattr(app, '_account_mode', lambda: False)
+    monkeypatch.setattr(app, 'GM_PASSWORD', 'not-the-player')
+    monkeypatch.setattr(app, '_scene_character_records', lambda _cid: {})
+    monkeypatch.setattr(app, 'ACTIVE_ENCOUNTER', [])
+    with app.app.test_client() as client:
+        with client.session_transaction() as sess:
+            sess['player_name'] = 'Kyle'
+            sess.pop('gm_authenticated', None)
+        yield client
+
+
+def test_real_player_session_is_not_gm(real_auth_player_client):
+    # Guards the fixture itself: if the session ever authenticates as GM, the
+    # assertions in the tests below stop meaning anything.
+    response = real_auth_player_client.get('/api/scenes')
+    assert response.status_code == 200          # members may list scenes
+    created = real_auth_player_client.post('/api/scenes', json={'name': 'Nope'})
+    assert created.status_code == 403           # ...but not create them
+
+
+def test_real_player_session_receives_no_npc_hp(real_auth_player_client, monkeypatch):
+    scene = scenes.create_scene(CID, 'Real Auth')
+    scenes.add_token(scene, name='Ogre', combatant_id='ogre-1')
+    scenes.add_token(scene, name='Ambusher', combatant_id='hidden-1',
+                     visible_to_players=False)
+    scenes.save_scene(CID, scene)
+    monkeypatch.setattr(app, 'ACTIVE_ENCOUNTER', [
+        SimpleNamespace(instance_id='ogre-1', name='Ogre', is_pc=False,
+                        system='pf2e', current_hp=12, hp=40, conditions={},
+                        visible_to_players=True),
+        SimpleNamespace(instance_id='hidden-1', name='Ambusher', is_pc=False,
+                        system='pf2e', current_hp=30, hp=30, conditions={},
+                        visible_to_players=False),
+    ])
+    monkeypatch.setattr(app, 'TURN_INDEX', 0)
+
+    body = real_auth_player_client.get(
+        f'/api/scenes/{scene["id"]}').get_data(as_text=True)
+    assert 'Ogre' in body
+    assert 'Ambusher' not in body      # hidden token dropped entirely
+    assert '"current_hp"' not in body
+    assert '"max_hp"' not in body
+    live = json.loads(body)['scene']['tokens'][0]['live']
+    assert live['hp_status'] == 'Wounded'
+    assert set(live) & {'current_hp', 'max_hp'} == set()
+
+
+def test_real_player_session_cannot_reach_gm_map_routes(real_auth_player_client):
+    scene = scenes.create_scene(CID, 'Locked Down')
+    sid = scene['id']
+    token = scenes.add_token(scene, name='Ogre')
+    scenes.save_scene(CID, scene)
+    forbidden = [
+        ('post', f'/api/scenes/{sid}/activate', {}),
+        ('post', f'/api/scenes/{sid}/tokens', {'name': 'Mine'}),
+        ('post', f'/api/scenes/{sid}/sync-encounter', {}),
+        ('post', f'/api/scenes/{sid}/combatants/ogre-1', {'action': 'damage', 'amount': 1}),
+        ('post', f'/api/scenes/{sid}/elements', {'action': 'fog_reset'}),
+        ('post', f'/api/scenes/{sid}/bulk-combat',
+         {'combatant_ids': ['ogre-1'], 'action': 'damage', 'amount': 1}),
+        ('patch', f'/api/scenes/{sid}', {'name': 'Renamed'}),
+        ('delete', f'/api/scenes/{sid}/tokens/{token["id"]}', None),
+    ]
+    for method, path, payload in forbidden:
+        send = getattr(real_auth_player_client, method)
+        response = send(path, json=payload) if payload is not None else send(path)
+        assert response.status_code == 403, f'{method.upper()} {path} returned {response.status_code}'
+
+    # The scene survived every one of them.
+    stored = scenes.load_scene(CID, sid)
+    assert stored['name'] == 'Locked Down'
+    assert len(stored['tokens']) == 1
+
+
+def test_pf2e_cone_templates_use_a_ninety_degree_spread():
+    # A PF2e cone is a quarter circle, so the half-angle either side of the
+    # aim vector is 45 degrees (PI/4). PI/6 would draw a 60-degree cone and,
+    # worse, auto-target the wrong squares. Both the renderer and the hit
+    # test have to agree -- there is no JS harness, so assert on the source.
+    client = (app.Path(app.BASE_DIR) / 'static' / 'js' / 'map.js').read_text(encoding='utf-8')
+    assert 'const spread = Math.PI / 4;' in client
+    assert 'Math.abs(difference) <= Math.PI / 4' in client
+    assert 'Math.PI / 6' not in client
+
+
+def test_load_stage_requires_gm(monkeypatch):
+    # /api/save_stage is prefix-gated but its GET counterpart was not, leaving
+    # the GM's prepped monster lists readable by anyone who could guess a name.
+    monkeypatch.setattr(app, '_is_gm', lambda: False)
+    with app.app.test_client() as client:
+        response = client.get('/api/load_stage/Ambush')
+    assert response.status_code == 403
 
 
 def test_encounter_builder_has_safe_additive_map_handoff():

@@ -395,7 +395,9 @@
             ctx.arc(g.x1, g.y1, g.radius, 0, Math.PI * 2);
             ctx.fill(); ctx.stroke();
         } else if (template.kind === 'cone') {
-            const spread = Math.PI / 6;
+            // A PF2e cone is a quarter circle: 45 degrees either side of the
+            // aim vector. Keep in sync with the hit test in templateContainsToken.
+            const spread = Math.PI / 4;
             ctx.beginPath();
             ctx.moveTo(g.x1, g.y1);
             ctx.arc(g.x1, g.y1, g.length, g.angle - spread, g.angle + spread);
@@ -436,7 +438,7 @@
             const distance = Math.hypot(dx, dy);
             let difference = Math.atan2(dy, dx) - g.angle;
             difference = Math.atan2(Math.sin(difference), Math.cos(difference));
-            return distance <= g.length + padding && Math.abs(difference) <= Math.PI / 6;
+            return distance <= g.length + padding && Math.abs(difference) <= Math.PI / 4;
         }
         return false;
     }
@@ -575,15 +577,25 @@
             ctx.fillText(token.name || 'Token', x, y - radius - 7);
         }
 
+        // Exact bar when we have numbers (the GM always; players for PCs, whose
+        // health the party shares). Players get no NPC numbers at all -- the
+        // server strips them -- so fall back to the same coarse Wounded/Dead
+        // signal the tracker gives them rather than showing nothing.
+        const barWidth = radius * 1.7;
+        const barLeft = x - barWidth / 2;
+        const barTop = y + radius + 6;
         if (Number(live.max_hp) > 0) {
-            const width = radius * 1.7;
             const pct = Math.max(0, Math.min(1, Number(live.current_hp) / Number(live.max_hp)));
-            const left = x - width / 2;
-            const top = y + radius + 6;
             ctx.fillStyle = 'rgba(0,0,0,.75)';
-            ctx.fillRect(left - 1, top - 1, width + 2, 7);
+            ctx.fillRect(barLeft - 1, barTop - 1, barWidth + 2, 7);
             ctx.fillStyle = pct > .5 ? '#58b37a' : pct > .25 ? '#d6a24d' : '#cf554d';
-            ctx.fillRect(left, top, width * pct, 5);
+            ctx.fillRect(barLeft, barTop, barWidth * pct, 5);
+        } else if (live.hp_status) {
+            const dead = live.hp_status === 'Dead';
+            ctx.fillStyle = 'rgba(0,0,0,.75)';
+            ctx.fillRect(barLeft - 1, barTop - 1, barWidth + 2, 7);
+            ctx.fillStyle = dead ? '#cf554d' : '#d6a24d';
+            ctx.fillRect(barLeft, barTop, dead ? barWidth : barWidth * .5, 5);
         }
         const conditions = Object.keys(live.conditions || {});
         if (conditions.length) {
@@ -998,7 +1010,9 @@
         }
         const combat = document.getElementById('map-combat-actions');
         const live = token.live || {};
-        combat.hidden = !token.combatant_id || live.current_hp === undefined;
+        // GM-only: every action in this panel posts to a @gm_required route,
+        // and players are not sent the numbers it displays.
+        combat.hidden = !cfg.isGm || !token.combatant_id || live.current_hp === undefined;
         if (!combat.hidden) {
             document.getElementById('map-combat-hp').textContent =
                 'HP ' + Number(live.current_hp || 0) + ' / ' + Number(live.max_hp || 0);

@@ -57,7 +57,7 @@ python tools/check_templates.py   # Jinja parse check (CI runs this) — run aft
 - **Tactical map (VTT).** Pages `/map`, `/map/<scene_id>` (GM) and `/player/map`; API under `/api/scenes/*`. Routes and helpers are one contiguous block, `app.py:6452-7261`. Supporting code: `core/scenes.py` (scene schema, token helpers), `services/scene_sync.py` (projection + player sanitization), `templates/map.html`, `static/js/map.js` (canvas renderer, tools, vision raycasting), `static/css/map.css`. Tests in `tests/test_scenes.py`.
   - **Scene JSON stores presentation state ONLY** — background, grid, token placement, visibility, walls, lights, fog, templates. HP, conditions, initiative, resistances, dying and healing stay authoritative in `ACTIVE_ENCOUNTER` / the character sheets, and are projected onto tokens at read time by `_scene_live_indexes` + `project_scene`. Never persist combat state into a scene file.
   - **Every player-facing byte goes through `services/scene_sync.py::project_scene(..., player=True)`.** That one function is the whole player/GM boundary: it drops hidden tokens, strips `controller_user_id`, filters GM-only lights and templates, and masks closed secret doors. If you add a field to a token, decide there whether players may see it.
-  - `core/scenes.py::sanitize_for_player` is **dead code** (zero callers) and has already drifted from `project_scene`. Don't call it; prefer deleting it over resurrecting it.
+  - There is exactly **one** player sanitizer. A second, `core/scenes.py::sanitize_for_player`, was deleted — it had zero callers and had already drifted (it never filtered GM-only templates, and it masked secret doors the fingerprintable way). Don't reintroduce a parallel one.
   - Scenes live at `DATA_DIR/campaigns/<cid>/scenes/` (or `DATA_DIR/scenes/` with no campaign), gitignored.
 
 ## High-risk areas — be careful
@@ -94,29 +94,31 @@ The app-wide UI/UX + minimal-design arc finished and shipped (see below).
 
 ### Known defects in the tactical map (confirmed by reading code, 2026-08-06)
 
-Not yet fixed. Listed so they aren't rediscovered from scratch.
+Numbering is stable — fixed items keep their number so earlier references still resolve.
 
-1. **Players receive exact monster HP.** `_scene_live_indexes` (`app.py:6537`) builds
-   `{current_hp, max_hp, conditions}` for every combatant; `project_scene`
-   (`services/scene_sync.py:18`) attaches it verbatim as `token['live']`, and the `player=True`
-   branch only drops hidden tokens and pops `controller_user_id` — it never coarsens `live`.
-   Directly contradicts the tracker policy above. **Fix first.**
-2. **Secret doors are fingerprintable.** The sanitizer masks a closed secret door by setting
-   `kind='wall'` and *popping* `secret` (`scene_sync.py:33`), but every genuine wall is written with
-   `'secret': False` present (`app.py:6996`). In the player payload the walls *missing* that key are
-   exactly the secret doors. One-line fix: set `secret=False` instead of popping.
-3. **PF2e cones are rendered at 60°, not 90°.** `const spread = Math.PI / 6` (`map.js:398`, and the
-   hit test at `:439`) — should be `Math.PI / 4`. Affects both drawing and auto-targeting.
+1. ~~**Players receive exact monster HP.**~~ **FIXED.** The policy now lives in one place,
+   `app.py::_npc_hp_status`, called by the encounter SSE frame, `/api/player_state`, and
+   `_scene_live_indexes`. `project_scene`'s player branch drops `current_hp`/`max_hp` for non-PCs
+   via `_coarsen_live_for_player` and leaves the coarse `hp_status` behind; `map.js` paints a
+   two-state bar from it. **Add a fourth caller, never a fourth copy** — this policy had already
+   been duplicated once and the map's copy drifted straight back to shipping raw HP.
+2. ~~**Secret doors are fingerprintable.**~~ **FIXED.** The mask now sets `secret=False` instead of
+   popping the key, so a masked door is byte-identical in shape to a real wall.
+3. ~~**PF2e cones are rendered at 60°, not 90°.**~~ **FIXED.** `spread` is `Math.PI / 4` in both the
+   renderer and `templateContainsToken`'s hit test; a regression test pins both.
 4. **Visibility polygon sorts across two angle ranges.** Base rays span `[0, 2π)` (`map.js:257`);
    wall-endpoint rays come from `Math.atan2`, range `(-π, π]` (`:260`). The single ascending sort at
    `:264` puts upper-half endpoint vertices at the head of the array instead of interleaving them.
    Normalize before pushing.
-5. **Auth is effectively untested.** `tests/test_scenes.py:95` monkeypatches `_is_gm` to always-True,
-   and `gm_required` is just `if _is_gm()` — so the decorator is neutered on every GM route the
-   suite touches, and `_scene_member_allowed` / `_scene_player_can_move` never execute a real
-   branch. Exactly one 403 is asserted, on one endpoint. `GET /api/scenes`, `POST .../activate` and
-   `GET/POST .../background` have zero coverage. There is no JS test harness at all, so every
-   geometry and coordinate-transform function is unverified.
+5. **Auth is mostly untested.** *Partly addressed.* The `scene_client` fixture still monkeypatches
+   `_is_gm` to always-True, and `gm_required` is just `if _is_gm()`, so that fixture neuters the
+   decorator on every route it touches — **do not add auth assertions to tests using it.** The new
+   `real_auth_player_client` fixture stubs only the mode switches (legacy mode + a `GM_PASSWORD`)
+   so `_is_gm()` and `_scene_member_allowed()` run their real branches; use it for anything
+   player-facing. It now covers the 403 on eight GM map routes plus the player payload.
+   Still uncovered: `POST .../activate` and `GET/POST .../background` success paths,
+   `_scene_player_can_move`'s real branches, and — because there is no JS harness at all — every
+   geometry and coordinate-transform function.
 6. **Six full `party_data/` directory scans per token drag.** `_scene_payload` scans twice
    (`_scene_live_indexes` + `_scene_character_records`); `_broadcast_scene` builds two payloads and
    the PATCH response builds a third. Blocking disk I/O on the single gevent worker, contending with
@@ -139,8 +141,8 @@ Not yet fixed. Listed so they aren't rediscovered from scratch.
     parses the whole multipart body before the 25 MB `content_length` check at `:7239`, and
     `MAX_CONTENT_LENGTH` is 64 MB. It also bypasses `_save_image_compressed` (`app.py:11050`). There
     is no delete-scene route anywhere, so volume growth is unbounded.
-13. **`GET /api/load_stage/<name>` is unauthenticated** (`app.py:14260`) while its POST counterpart
-    `/api/save_stage` is prefix-gated. Pre-existing, outside the map, adjacent to the builder handoff.
+13. ~~**`GET /api/load_stage/<name>` is unauthenticated**~~ **FIXED.** `/api/load_stage/` joined
+    `/api/save_stage` in `GM_API_PREFIXES`, so both halves of the stage round-trip are gated.
 
 **Do NOT work on these — explicitly owned elsewhere or deferred by the user:**
 - **Campaign Hub / the Stage** (`docs/superpowers/specs/2026-07-21-campaign-hub-design.md`). The user

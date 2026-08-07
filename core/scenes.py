@@ -6,7 +6,6 @@ the existing sheet/tracker state and are projected onto tokens at read time.
 """
 from __future__ import annotations
 
-import copy
 import os
 import time
 
@@ -225,19 +224,10 @@ def remove_token(scene, token_id):
     return len(scene['tokens']) != before
 
 
-def sanitize_for_player(scene):
-    safe = copy.deepcopy(scene)
-    safe['tokens'] = [t for t in safe.get('tokens', []) if t.get('visible_to_players', True)]
-    for token in safe['tokens']:
-        token.pop('controller_user_id', None)
-        if not token.get('is_pc'):
-            token.pop('sheet_url', None)
-    safe['lights'] = [light for light in safe.get('lights', [])
-                      if light.get('visible_to_players', True)]
-    for wall in safe.get('walls', []):
-        if wall.get('kind') == 'door' and wall.get('secret') and not wall.get('open'):
-            wall['kind'] = 'wall'
-            wall.pop('secret', None)
-        elif wall.get('kind') == 'door':
-            wall.pop('secret', None)
-    return safe
+# NOTE: a second player sanitizer, sanitize_for_player(), used to live here.
+# It had zero callers and had already drifted from the real one -- it never
+# filtered GM-only templates, and it masked closed secret doors by popping
+# 'secret' (which is exactly what made them greppable in the player payload).
+# Deleted rather than fixed: two sanitizers means one of them is wrong and
+# nobody notices. The single player/GM boundary is
+# services/scene_sync.py::project_scene(..., player=True).
