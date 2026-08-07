@@ -241,6 +241,65 @@ def test_importing_the_module_starts_the_persistence_thread(tmp_path):
     assert 'THREAD' in result.stdout and 'NO_THREAD' not in result.stdout, result.stdout
 
 
+def test_state_survives_a_full_process_exit(tmp_path):
+    """End-to-end: change HP in one process, read it back in the next.
+
+    This is the shutdown half of the fix. `atexit.register(_flush_pending_
+    persistence)` is registered inside _start_persistence_thread, so before
+    that function ran in production there was no shutdown flush either -- the
+    last few seconds of play died with the worker. gunicorn's graceful stop
+    turns Railway's SIGTERM into a normal interpreter exit, which is exactly
+    what this subprocess performs.
+
+    Deliberately does NOT call the flush itself: the process is allowed to
+    end on its own, so a missing atexit registration fails the test.
+    """
+    import subprocess
+    import sys
+
+    data_dir = tmp_path / 'data'
+    party = data_dir / 'party_data'
+    party.mkdir(parents=True)
+    raw = json.loads(_FIX.read_text(encoding='utf-8'))
+    (party / 'Kyle.json').write_text(json.dumps(raw), encoding='utf-8')
+
+    # Mark a PC dirty and exit normally. Nothing here flushes.
+    writer = (
+        'import app;'
+        'name = next(iter(app.PARTY_LIBRARY));'
+        'pc = app.PARTY_LIBRARY[name];'
+        'pc.current_hp = 17;'
+        "pc.conditions['wounded'] = 1;"
+        'app._persist_pc_combat_state(name);'
+        "print('DIRTY', name)"
+    )
+    env = dict(os.environ)
+    env.pop('PYTEST_CURRENT_TEST', None)
+    env['FLASK_DEBUG'] = 'false'
+    env['DATA_DIR'] = str(data_dir)
+    env['GM_PASSWORD'] = ''
+
+    wrote = subprocess.run([sys.executable, '-c', writer], capture_output=True,
+                           text=True, cwd=app_module.BASE_DIR, timeout=180, env=env)
+    assert wrote.returncode == 0, wrote.stderr[-2000:]
+    assert 'DIRTY' in wrote.stdout, wrote.stdout + wrote.stderr[-2000:]
+
+    # The process is gone. Whatever is on disk now is what the next boot sees.
+    stored = json.loads((party / 'Kyle.json').read_text(encoding='utf-8'))
+    build = stored.get('build', stored)
+    assert build.get('current_hp') == 17, 'HP did not survive process exit'
+    assert build.get('conditions', {}).get('wounded') == 1
+
+    # And a fresh interpreter reads it back as the live value.
+    reader = ('import app;'
+              'pc = app.PARTY_LIBRARY[next(iter(app.PARTY_LIBRARY))];'
+              "print('HP', pc.current_hp, 'WOUNDED', pc.conditions.get('wounded'))")
+    back = subprocess.run([sys.executable, '-c', reader], capture_output=True,
+                          text=True, cwd=app_module.BASE_DIR, timeout=180, env=env)
+    assert back.returncode == 0, back.stderr[-2000:]
+    assert 'HP 17 WOUNDED 1' in back.stdout, back.stdout
+
+
 def test_the_debounced_flush_actually_writes(pc):
     """_persist_pc_combat_state only marks dirty; something must flush it.
 
