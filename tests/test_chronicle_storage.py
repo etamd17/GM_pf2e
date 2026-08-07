@@ -86,6 +86,45 @@ def test_swap_publishes_and_current_resolves(chron):
     assert not os.path.exists(os.path.join(chron, '.staging', 'hashA'))
 
 
+def test_repoint_overwrites_an_existing_pointer(chron):
+    """Repointing a pointer that ALREADY EXISTS is the whole failure mode.
+
+    _chronicle_repoint builds a temp symlink and os.replace()s it onto the
+    live one. On Windows os.replace is MoveFileEx, which refuses
+    MOVEFILE_REPLACE_EXISTING when either path names a directory -- and a
+    symlink to a directory carries FILE_ATTRIBUTE_DIRECTORY. So the FIRST
+    publish (destination missing) succeeded and every republish, rotation and
+    rollback died with ERROR_ACCESS_DENIED. This exercises the repoint
+    directly so the cause is pinned, not just observed through a publish.
+    """
+    first = os.path.join(chron, 'content', 'first')
+    second = os.path.join(chron, 'content', 'second')
+    os.makedirs(first, exist_ok=True)
+    os.makedirs(second, exist_ok=True)
+    link = os.path.join(chron, 'current')
+
+    A._chronicle_repoint(link, first)             # destination missing
+    assert os.path.realpath(link) == os.path.realpath(first)
+
+    A._chronicle_repoint(link, second)            # destination EXISTS
+    assert os.path.realpath(link) == os.path.realpath(second)
+
+    # Repointing moves the pointer only -- it must never touch either target,
+    # and it must not leave the scratch symlink behind.
+    assert os.path.isdir(first) and os.path.isdir(second)
+    assert not os.path.lexists(link + '.tmp')
+
+
+def test_repoint_is_idempotent_onto_the_same_target(chron):
+    target = os.path.join(chron, 'content', 'same')
+    os.makedirs(target, exist_ok=True)
+    link = os.path.join(chron, 'current')
+    A._chronicle_repoint(link, target)
+    A._chronicle_repoint(link, target)
+    assert os.path.realpath(link) == os.path.realpath(target)
+    assert os.path.isdir(target)
+
+
 def test_second_swap_rotates_previous_and_prunes(chron):
     A._chronicle_swap(_stage_content(chron, 'h1', session=1), 'h1')
     A._chronicle_swap(_stage_content(chron, 'h2', session=2), 'h2')
