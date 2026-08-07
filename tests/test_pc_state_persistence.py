@@ -197,7 +197,7 @@ def test_persistence_is_atomic(pc):
     assert build.get('class') or build.get('name')
 
 
-def test_importing_the_module_starts_the_persistence_thread():
+def test_importing_the_module_starts_the_persistence_thread(tmp_path):
     """The regression that cost a campaign's worth of HP.
 
     `_start_persistence_thread` was called ONLY from `if __name__ ==
@@ -228,7 +228,11 @@ def test_importing_the_module_starts_the_persistence_thread():
     # this subprocess must look exactly like production.
     env.pop('PYTEST_CURRENT_TEST', None)
     env['FLASK_DEBUG'] = 'false'
-    env['DATA_DIR'] = env.get('DATA_DIR') or str(pathlib.Path(app_module.BASE_DIR))
+    # A throwaway DATA_DIR is mandatory, not tidiness. This subprocess starts
+    # the real persistence thread, and a flush with no live encounter UNLINKS
+    # <DATA_DIR>/saved_encounters/_autosave.json. Pointed at the repo it
+    # deletes a tracked file out from under the working tree.
+    env['DATA_DIR'] = str(tmp_path / 'probe-data')
 
     result = subprocess.run([sys.executable, '-c', probe], capture_output=True,
                             text=True, cwd=app_module.BASE_DIR, timeout=180, env=env)
