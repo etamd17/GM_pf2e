@@ -11980,7 +11980,11 @@ def chronicle_docs_api():
             entry = _chronicle_lib.new_entry(
                 doc_id=_storage.new_id(), slug=slug, title=title, section=section,
                 original_filename=os.path.basename(upload.filename), source_ext=ext,
-                byte_count=size, warnings=warnings)
+                byte_count=size, warnings=warnings,
+                # Persisted, not just returned: an uploaded doc has no portrait
+                # and no epithet, so without this its card is a letter tile and
+                # a title and nothing else.
+                excerpt=_chronicle_lib.plain_text_from_html(fragment, limit=180))
             _chronicle_doc_write(docs_root, slug, fragment)
             index.setdefault('docs', []).append(entry)
             _chronicle_lib.save_index(docs_root, index)
@@ -12021,6 +12025,13 @@ def chronicle_doc_api(doc_id):
 
         data = request.get_json(silent=True) or {}
         if 'published' in data:
+            # Publish is gated on the GM having opened the preview at least
+            # once. This lane has no automated spoiler strip -- the GM's own
+            # eyes ARE the firewall -- so "I looked at it" is the one
+            # precondition worth enforcing. Unpublishing is never gated.
+            if data['published'] and not entry.get('previewed_at'):
+                return jsonify({'ok': False, 'error':
+                                'preview this document before publishing it'}), 409
             entry['published'] = bool(data['published'])
         if 'section' in data:
             if data['section'] not in _chronicle_lib.SECTIONS:
@@ -17823,15 +17834,24 @@ def _chronicle_render(template, always_render=False, **ctx):
 @app.route('/chronicle')
 def chronicle_home():
     pages = _chronicle_visible_pages()
+    # Tiebreak on upload time. Uploaded recaps have no session number, so
+    # every one of them keys to 0 -- and Python's stable sort means
+    # reverse=True does NOT reverse ties, so without this the "latest recap"
+    # is whichever was uploaded FIRST.
     recaps = sorted((p for p in pages if p.get('section') == 'recap'),
-                    key=lambda p: p.get('session_updated') or 0, reverse=True)
+                    key=lambda p: (p.get('session_updated') or 0,
+                                   p.get('uploaded_at') or ''), reverse=True)
     latest = None
     if recaps:
         latest = _chronicle_page_view(recaps[0])
         latest['html'] = _chronicle_fragment(recaps[0]['slug'])
         latest['pull_quote'] = recaps[0].get('pull_quote')
+    # Vault cast entries only. An uploaded document filed under Cast is an NPC
+    # dossier or a note, not a player character -- surfacing it here presented
+    # it as a member of the party.
     party = [{'name': v['title'], 'tagline': v.get('epithet'), 'portrait_url': v['portrait_url']}
-             for v in (_chronicle_page_view(p) for p in pages if p.get('section') == 'cast')][:8]
+             for v in (_chronicle_page_view(p) for p in pages
+                       if p.get('section') == 'cast' and not p.get('is_document'))][:8]
     # `page_count` separates "nothing published at all" from "published, but no
     # session recap yet" -- the doc lane makes the latter routine, since a GM
     # can publish lore or a handout before ever running a session.
@@ -17845,7 +17865,9 @@ def chronicle_section(view):
     server-side in `_chronicle_visible_pages` / `_handout_visible_to_request`
     -- a secret page never reaches the template for a non-owner."""
     if view == 'story':
-        recaps = sorted(_chronicle_visible_pages('recap'), key=lambda p: p.get('session_updated') or 0)
+        recaps = sorted(_chronicle_visible_pages('recap'),
+                        key=lambda p: (p.get('session_updated') or 0,
+                                       p.get('uploaded_at') or ''))
         rows = [{'title': p.get('title'), 'session_number': p.get('session_updated'),
                  'html': _chronicle_fragment(p['slug']), 'chapter': p.get('chapter')}
                 for p in recaps]
@@ -17893,12 +17915,23 @@ def chronicle_manage():
         abort(403)
     index = _chronicle_docs_index()
     taken = _chronicle_vault_slugs()
-    docs = [dict(d, shadowed_by_vault=d.get('slug') in taken)
+    docs = [dict(d, shadowed_by_vault=d.get('slug') in taken,
+                 size_label=_chronicle_lib.size_label(d.get('byte_count')))
             for d in sorted(index.get('docs', []),
                             key=lambda d: d.get('uploaded_at') or '', reverse=True)]
-    return _chronicle_render('chronicle_manage.html', always_render=True, docs=docs,
-                             sections=_chronicle_lib.SECTIONS,
-                             vault_published=_chronicle_content_dir() is not None)
+    # Grouped by section so the console has real heading structure, and so the
+    # GM sees documents organised the way players will encounter them.
+    grouped = [(section, [d for d in docs if d.get('section') == section])
+               for section in _chronicle_lib.SECTIONS]
+    return _chronicle_render(
+        'chronicle_manage.html', always_render=True, docs=docs,
+        grouped=[(s, rows) for s, rows in grouped if rows],
+        sections=_chronicle_lib.SECTIONS,
+        section_labels=_chronicle_lib.SECTION_LABELS,
+        max_bytes=_CHRONICLE_DOC_MAX_BYTES,
+        max_mb=_CHRONICLE_DOC_MAX_BYTES // (1024 * 1024),
+        max_docs=_CHRONICLE_DOC_MAX_COUNT,
+        vault_published=_chronicle_content_dir() is not None)
 
 
 @app.route('/chronicle/preview/<doc_id>')
@@ -17911,23 +17944,49 @@ def chronicle_preview(doc_id):
     """
     if not _is_gm():
         abort(403)
+    docs_root = _chronicle_docs_root()
     entry = _chronicle_lib.find(_chronicle_docs_index(), doc_id)
     if not entry:
         abort(404)
     frag = _chronicle_read_fragment(_chronicle_doc_fragment_path(entry.get('slug')))
     if frag is None:
         abort(404)
+
+    # Record the preview. This is what unlocks publishing, so it has to be
+    # durable, and it broadcasts because the preview opens in a NEW TAB --
+    # the manage screen is a different document and would otherwise never
+    # learn the gate had been satisfied.
+    if not entry.get('previewed_at'):
+        with _path_lock(_chronicle_lib.index_file(docs_root)):
+            index = _chronicle_lib.load_index(docs_root)
+            stored = _chronicle_lib.find(index, doc_id)
+            if stored and not stored.get('previewed_at'):
+                stored['previewed_at'] = time.strftime('%Y-%m-%dT%H:%M:%S')
+                _chronicle_lib.save_index(docs_root, index)
+                entry = stored
+        sse_broadcast('chronicle_update', {'doc_id': doc_id, 'previewed': True})
+
     page = _chronicle_page_view(_chronicle_lib.as_page(entry))
-    return _chronicle_render('chronicle_page.html', always_render=True, page=page,
-                             page_html=frag, backlinks=[], preview_doc=entry)
+    return _chronicle_render(
+        'chronicle_page.html', always_render=True, page=page, page_html=frag,
+        backlinks=[], preview_doc=entry,
+        # Name the tab the GM will find it on, not the internal enum value.
+        preview_section_label=_chronicle_lib.SECTION_LABELS.get(
+            entry.get('section'), entry.get('section')))
 
 
 @app.route('/chronicle/journal')
 def chronicle_journal():
     """Folded-in private Notes surface -- reuses the existing per-owner notes
     store (`_notes_owner` / `_load_notes_text`) and the existing POST
-    /api/notes save endpoint unchanged; this route only reads and renders."""
-    return _chronicle_render('chronicle_journal.html', notes=_load_notes_text(_notes_owner()))
+    /api/notes save endpoint unchanged; this route only reads and renders.
+
+    always_render because a player's journal is THEIR OWN writing and has
+    nothing to do with whether the GM has published anything. Without it,
+    chronicle_base's manifest gate blanks the page whenever nothing is
+    published -- which reads as having lost your notes."""
+    return _chronicle_render('chronicle_journal.html', always_render=True,
+                             notes=_load_notes_text(_notes_owner()))
 
 
 # Recipient-scoped asset serving. The route below serves files from

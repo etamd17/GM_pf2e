@@ -239,6 +239,14 @@ def _upload(client, name='Notes.md', data=b'# Ruins\n\nA cold wind.', section='l
                        content_type='multipart/form-data')
 
 
+def _publish(roles, doc_id):
+    """Preview, then publish -- publishing is gated on having previewed."""
+    assert roles.gm().get('/chronicle/preview/' + doc_id).status_code == 200
+    response = roles.gm().patch('/api/chronicle/docs/' + doc_id, json={'published': True})
+    assert response.status_code == 200, response.get_data(as_text=True)
+    return response
+
+
 def test_upload_then_publish_then_player_sees_it(roles):
     created = _upload(roles.gm(), title='The Ruins')
     assert created.status_code == 201, created.get_data(as_text=True)
@@ -250,9 +258,7 @@ def test_upload_then_publish_then_player_sees_it(roles):
     assert roles.player().get('/chronicle/page/' + slug).status_code == 404
     assert 'The Ruins' not in roles.player().get('/chronicle/lore').get_data(as_text=True)
 
-    published = roles.gm().patch('/api/chronicle/docs/' + doc['id'],
-                                json={'published': True})
-    assert published.status_code == 200
+    published = _publish(roles, doc['id'])
     assert published.get_json()['doc']['published'] is True
 
     page = roles.player().get('/chronicle/page/' + slug)
@@ -273,7 +279,7 @@ def test_docx_upload_renders_for_players(roles):
                       title='Field Notes')
     assert created.status_code == 201, created.get_data(as_text=True)
     doc = created.get_json()['doc']
-    roles.gm().patch('/api/chronicle/docs/' + doc['id'], json={'published': True})
+    _publish(roles, doc['id'])
     body = roles.player().get('/chronicle/page/' + doc['slug']).get_data(as_text=True)
     assert 'Chapter One' in body and 'The gate stood open.' in body
 
@@ -286,7 +292,7 @@ def test_document_title_defaults_to_its_own_heading_not_the_filename(roles):
     assert doc['title'] == 'The Salted Gull'      # not 'Tavern'
     assert doc['slug'] == 'd-the-salted-gull'
 
-    roles.gm().patch('/api/chronicle/docs/' + doc['id'], json={'published': True})
+    _publish(roles, doc['id'])
     body = roles.player().get('/chronicle/page/' + doc['slug']).get_data(as_text=True)
     # Rendered once by the template heading, not twice (template + body).
     assert body.count('The Salted Gull') == 1
@@ -320,8 +326,51 @@ def test_uploaded_html_is_sanitized_before_it_can_reach_a_player(roles):
     assert 'onerror' not in fragment.lower()
     assert 'javascript:' not in fragment.lower()
 
-    roles.gm().patch('/api/chronicle/docs/' + doc['id'], json={'published': True})
+    _publish(roles, doc['id'])
     assert roles.player().get('/chronicle/page/' + doc['slug']).status_code == 200
+
+
+def test_publishing_requires_a_preview_first(roles):
+    """The preview gate is this lane's entire safety story.
+
+    There is no automated spoiler strip here -- the GM's own eyes are the
+    firewall -- so 'you looked at it' is the one precondition worth enforcing
+    before a document becomes visible to the table.
+    """
+    doc = _upload(roles.gm(), title='Unseen').get_json()['doc']
+    assert doc['previewed_at'] is None
+
+    blocked = roles.gm().patch('/api/chronicle/docs/' + doc['id'], json={'published': True})
+    assert blocked.status_code == 409
+    assert 'preview' in blocked.get_json()['error'].lower()
+    assert roles.player().get('/chronicle/page/' + doc['slug']).status_code == 404
+
+    assert roles.gm().get('/chronicle/preview/' + doc['id']).status_code == 200
+    allowed = roles.gm().patch('/api/chronicle/docs/' + doc['id'], json={'published': True})
+    assert allowed.status_code == 200
+    assert allowed.get_json()['doc']['published'] is True
+
+
+def test_unpublishing_is_never_gated(roles):
+    doc = _upload(roles.gm(), title='Retractable').get_json()['doc']
+    _publish(roles, doc['id'])
+    off = roles.gm().patch('/api/chronicle/docs/' + doc['id'], json={'published': False})
+    assert off.status_code == 200
+    assert off.get_json()['doc']['published'] is False
+
+
+def test_preview_records_itself_once(roles):
+    doc = _upload(roles.gm(), title='Seen Once').get_json()['doc']
+    roles.gm().get('/chronicle/preview/' + doc['id'])
+    listed = roles.gm().get('/api/chronicle/docs').get_json()['docs']
+    first = next(d for d in listed if d['id'] == doc['id'])
+    assert first['previewed_at']
+
+    # A second preview must not keep rewriting the index.
+    roles.gm().get('/chronicle/preview/' + doc['id'])
+    again = next(d for d in roles.gm().get('/api/chronicle/docs').get_json()['docs']
+                 if d['id'] == doc['id'])
+    assert again['previewed_at'] == first['previewed_at']
 
 
 def test_player_cannot_reach_any_doc_route(roles):
@@ -363,7 +412,7 @@ def test_spoiler_marker_warns_but_does_not_block(roles):
 
 def test_delete_removes_the_entry_and_the_fragment(roles):
     doc = _upload(roles.gm(), title='Temporary').get_json()['doc']
-    roles.gm().patch('/api/chronicle/docs/' + doc['id'], json={'published': True})
+    _publish(roles, doc['id'])
     assert roles.player().get('/chronicle/page/' + doc['slug']).status_code == 200
 
     assert roles.gm().delete('/api/chronicle/docs/' + doc['id']).status_code == 200
@@ -371,6 +420,52 @@ def test_delete_removes_the_entry_and_the_fragment(roles):
     docs_root = os.path.join(storage.chronicle_dir(CID), 'docs')
     assert not os.path.isfile(os.path.join(docs_root, 'html', doc['slug'] + '.html'))
     assert cdocs.load_index(docs_root)['docs'] == []
+
+
+def test_document_cards_get_an_excerpt_and_a_document_glyph(roles):
+    """An uploaded doc has no portrait and no epithet.
+
+    Without these the lore grid is letter tiles and bare titles -- and since
+    most titles start with "The", a wall of identical "T"s.
+    """
+    doc = _upload(roles.gm(), name='Ruins.md', title='The Drowned Ruins',
+                  data=b'# The Drowned Ruins\n\nThe water had gone out, '
+                       b'and the doors stood open.').get_json()['doc']
+    assert 'water had gone out' in doc['excerpt']
+
+    _publish(roles, doc['id'])
+    lore = roles.player().get('/chronicle/lore').get_data(as_text=True)
+    assert 'chron-docmark' in lore          # document glyph, not the monogram
+    assert 'chron-monogram' not in lore
+    assert 'water had gone out' in lore
+
+
+def test_uploaded_cast_docs_are_not_shown_as_party_members(roles):
+    doc = _upload(roles.gm(), section='cast', title='A Rival Captain').get_json()['doc']
+    _publish(roles, doc['id'])
+    home = roles.player().get('/chronicle').get_data(as_text=True)
+    # It belongs on the Cast tab, not in the home page's "The party" block.
+    assert 'A Rival Captain' in roles.player().get('/chronicle/cast').get_data(as_text=True)
+    assert 'The party' not in home
+
+
+def test_manage_screen_uses_shared_controls_not_inline_styles():
+    """Assert on the TEMPLATE, not the rendered page.
+
+    base.html carries its own inline styles (the dice panel and friends), so a
+    rendered-page assertion would be testing the wrong file. The house rule --
+    'consume classes from this file and never inline colors, gradients,
+    shadows, or paddings' (system.css header) -- applies to what we author.
+    """
+    source = (app.Path(app.BASE_DIR) / 'templates' / 'chronicle_manage.html').read_text(
+        encoding='utf-8')
+    assert 'style="' not in source
+    assert 'class="tb primary"' in source and 'class="tb danger' in source
+    assert 'class="tinput"' in source and 'class="tselect"' in source
+    # The console must not sit on the 65ch Alegreya reading surface. Match the
+    # class being APPLIED, not merely named -- the template's own comment
+    # explains why it is avoided.
+    assert 'class="chron-prose' not in source
 
 
 def test_manage_screen_renders_with_nothing_published(roles):
@@ -399,7 +494,7 @@ def test_publishing_a_doc_opens_the_player_chronicle(roles):
     assert 'The chronicle opens after your first session' in empty
 
     doc = _upload(roles.gm(), title='First Light').get_json()['doc']
-    roles.gm().patch('/api/chronicle/docs/' + doc['id'], json={'published': True})
+    _publish(roles, doc['id'])
 
     opened = roles.player().get('/chronicle').get_data(as_text=True)
     assert 'The chronicle opens after your first session' not in opened
@@ -419,7 +514,7 @@ def test_doc_lane_does_not_disturb_the_vault_lane(roles):
     app._chronicle_repoint(os.path.join(chron, 'current'), content)
 
     doc = _upload(roles.gm(), title='Uploaded').get_json()['doc']
-    roles.gm().patch('/api/chronicle/docs/' + doc['id'], json={'published': True})
+    _publish(roles, doc['id'])
 
     # Vault page still resolves, and both lanes appear together.
     assert os.path.realpath(os.path.join(chron, 'current')) == os.path.realpath(content)
