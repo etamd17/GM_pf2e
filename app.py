@@ -1265,7 +1265,11 @@ def _do_persist_encounter_state():
             encounter_data['combatants'].append(_augment_combatant_save(entry, c))
     try:
         os.makedirs(ENCOUNTER_DIR, exist_ok=True)
-        _atomic_write_json(os.path.join(ENCOUNTER_DIR, '_autosave.json'), encounter_data, indent=2)
+        # fsync=False for the same reason as the PC combat-state write: this
+        # is a live tick on the debounce, not a durable save, and fsync blocks
+        # every SSE stream on the single gevent worker.
+        _atomic_write_json(os.path.join(ENCOUNTER_DIR, '_autosave.json'),
+                           encounter_data, indent=2, fsync=False)
     except Exception as e:
         print(f"[ENCOUNTER PERSIST ERROR] {e}")
 
@@ -1299,7 +1303,25 @@ def _persistence_flush_loop():
             print(f"[PERSIST LOOP] {e}")
 
 def _start_persistence_thread():
-    """Start the background flush thread exactly once."""
+    """Start the background flush thread exactly once.
+
+    MUST run at import time, not from `if __name__ == '__main__'`. Production
+    is `gunicorn app:app` (Procfile), which IMPORTS this module -- so
+    `__name__` is 'app' and the __main__ block never executes. This was
+    called only from there, which meant that in production:
+
+      * `_persistence_flush_loop` never ran, so the 2-second debounce never
+        fired, and
+      * `atexit.register(_flush_pending_persistence)` was never registered,
+        so there was no shutdown flush either.
+
+    Both of those live in here, so nothing ever drained `_PC_PERSIST_DIRTY` /
+    `_PERSIST_DIRTY`. Every HP change, condition, focus point, hero point,
+    shield value, reaction and active effect was marked dirty and then
+    dropped when the process exited -- the table came back to a full reset
+    every deploy. (Spell slots survived because their routes write
+    synchronously, which is the tell: slots stuck, HP did not.)
+    """
     global _persist_thread_started
     if _persist_thread_started:
         return
@@ -1307,7 +1329,35 @@ def _start_persistence_thread():
     t = threading.Thread(target=_persistence_flush_loop, daemon=True, name='persistence-flush')
     t.start()
     import atexit as _atexit
+    # Railway sends SIGTERM on redeploy; gunicorn's graceful shutdown turns
+    # that into a normal interpreter exit, so atexit is what saves the last
+    # few seconds of play.
     _atexit.register(_flush_pending_persistence)
+
+
+def _autostart_persistence():
+    """Start persistence on IMPORT, which is how gunicorn loads this module.
+
+    Two deliberate exemptions:
+      * Werkzeug's reloader parent process -- the daemon thread belongs to the
+        child that actually serves, and starting it twice writes twice.
+      * pytest -- a background thread writing character files mid-assertion is
+        a flakiness source, and the suite drives `_flush_pending_persistence`
+        directly. `tests/test_pc_state_persistence.py` covers the real
+        production behaviour by importing this module in a SUBPROCESS and
+        checking the thread is alive, which is the only way to catch the
+        regression this function exists to prevent.
+    """
+    import sys as _sys          # not imported at module scope in this file
+    if 'pytest' in _sys.modules or os.environ.get('PYTEST_CURRENT_TEST'):
+        return
+    if (os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
+            and os.environ.get('WERKZEUG_RUN_MAIN') != 'true'):
+        return
+    _start_persistence_thread()
+
+
+_autostart_persistence()
 
 # --- SERVER-SENT EVENTS (SSE) FOR REAL-TIME SYNC ---
 # Each subscriber is a (queue.Queue, is_gm: bool) tuple. We tag the queue at
@@ -2540,6 +2590,11 @@ def _do_persist_pc_combat_state(pc_name):
         hero_points = int(getattr(pc, 'hero_points', 1) or 0)
         temp_hp_manual = max(0, int(getattr(pc, 'temp_hp_manual', 0) or 0))
         conditions = {k: v for k, v in pc.conditions.items() if v and v != 0 and v is not False}
+        # Condition timers. Character.__init__ READS build['condition_expiry']
+        # but nothing ever wrote it here, so a duration only survived for a PC
+        # who happened to be inside the encounter autosave -- every other
+        # "frightened 2 for 3 rounds" lost its countdown on restart.
+        condition_expiry = dict(getattr(pc, 'condition_expiry', {}) or {})
         # Shield durability and raised state — both persist-worthy now that the
         # sheet + encounter tracker both read them.
         shield_raised = bool(getattr(pc, 'shield_raised', False))
@@ -2567,6 +2622,7 @@ def _do_persist_pc_combat_state(pc_name):
         build['hero_points'] = hero_points
         build['temp_hp'] = temp_hp_manual
         build['conditions'] = conditions
+        build['condition_expiry'] = condition_expiry
         build['shield_raised'] = shield_raised
         build['shield_hp'] = shield_hp
         build['reaction_used'] = reaction_used
@@ -2576,7 +2632,15 @@ def _do_persist_pc_combat_state(pc_name):
         # Treat Wounds 1-hour immunity (ten-minute activities) — epoch
         # seconds; survives restarts so a redeploy can't reset the clock.
         build['treat_wounds_immune_until'] = treat_wounds_immune_until
-        _atomic_write_json(file_path, pc_json, indent=2)
+        # fsync=False: this is the high-frequency live-tick write the
+        # _atomic_write_json docstring is describing. Now that the flush loop
+        # actually runs in production (it never did -- see
+        # _start_persistence_thread), this fires every couple of seconds
+        # during combat, and os.fsync is the one syscall gevent cannot yield
+        # around: each one stalls every player's SSE on the single worker.
+        # os.replace stays atomic without it; the only thing traded away is
+        # durability against hard power loss, for a re-derivable HP value.
+        _atomic_write_json(file_path, pc_json, indent=2, fsync=False)
     except Exception as e:
         print(f"[PERSIST ERROR] {pc_name}: {e}")
 
@@ -3536,7 +3600,15 @@ class Character:
                 if "darkvision" in lower_desc and "Darkvision" not in self.senses: self.senses.append("Darkvision")
                 if "low-light vision" in lower_desc and "Low-Light vision" not in self.senses: self.senses.append("Low-Light Vision")
 
-        self.current_focus = safe_int(build.get('current_focus'), self.focus_max)
+        # Track whether this came off disk. The focus pool is recomputed from
+        # feats further down and can be revised UPWARD on every single load;
+        # when that happens we must raise the ceiling without refilling a PC
+        # who has spent focus -- but a fresh import (no stored value) should
+        # still start full. Only the stored/not-stored distinction tells the
+        # two apart.
+        _stored_focus = build.get('current_focus')
+        self._focus_from_disk = _stored_focus is not None
+        self.current_focus = safe_int(_stored_focus, self.focus_max)
         self.focus_points = self.focus_max
         self.hero_points = safe_int(build.get('hero_points'), 1)
         # Treat Wounds 1-hour immunity (epoch seconds; 0 = not immune).
@@ -4150,7 +4222,12 @@ class Character:
             best_focus = max(self.focus_max, pb_fp, computed_focus)
             if best_focus > self.focus_max:
                 self.focus_max = best_focus
-                self.current_focus = max(self.current_focus, self.focus_max)
+                # Raise the CEILING, not the pool. This branch fires on every
+                # load for any PC whose focus pool is derived from feats, so
+                # `max(current, focus_max)` handed spent focus back on every
+                # restart -- a redeploy mid-session refilled everyone.
+                self.current_focus = (min(self.current_focus, self.focus_max)
+                                      if self._focus_from_disk else self.focus_max)
             
             # Only add focus caster if we don't already have one from spellCasters
             has_focus_caster = any('focus' in sc.get('type', '').lower() for sc in self.spell_casters)
@@ -4196,7 +4273,10 @@ class Character:
         if cls_lower in FOCUS_CLASSES and not has_focus_caster:
             if self.focus_max == 0:
                 self.focus_max = 1
-                self.current_focus = 1
+                # Same rule as above: don't hand back a spent point just
+                # because the pool was inferred from the class on this load.
+                self.current_focus = (min(self.current_focus, 1)
+                                      if self._focus_from_disk else 1)
             TRADITION_MAP = {
                 'champion': 'Divine', 'cleric': 'Divine', 'oracle': 'Divine',
                 'druid': 'Primal', 'ranger': 'Primal',
@@ -19587,10 +19667,12 @@ if __name__ == '__main__':
     # console) must never come up unless FLASK_DEBUG is explicitly 'true'. Prod
     # runs under gunicorn (this __main__ block doesn't execute there) regardless.
     debug = os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
-    # Launch the debounced persistence flush thread. With Flask debug reloader,
-    # _start_persistence_thread() becomes a no-op in the parent process because
-    # the daemon thread is tied to the child; the WERKZEUG_RUN_MAIN check keeps
-    # us from starting it twice.
+    # The debounced persistence flush thread is started at IMPORT time by
+    # _autostart_persistence() -- it must be, because gunicorn imports this
+    # module and never runs this block. Repeated here only for the reloader
+    # case: with FLASK_DEBUG=true the import-time call deliberately skips the
+    # reloader PARENT, so the serving child arms it here. Idempotent via
+    # _persist_thread_started.
     if not debug or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
         _start_persistence_thread()
     app.run(host='0.0.0.0', port=port, debug=debug, threaded=True)
