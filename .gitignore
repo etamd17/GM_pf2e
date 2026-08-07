@@ -69,6 +69,13 @@ session_notes/
 # committed.
 scenes/
 
+# Published Chronicle content + GM-uploaded Chronicle documents. Campaign mode
+# puts these under DATA_DIR/campaigns/<id>/chronicle/; the legacy flat layout
+# writes them to the DATA_DIR root (locally, the repo root). Leading slash so
+# this anchors to the repo root ONLY -- an unanchored `chronicle/` would also
+# swallow docs/chronicle/, which is tracked documentation.
+/chronicle/
+
 # Persisted Flask session secret (stable across restarts; never commit)
 .secret_key
 

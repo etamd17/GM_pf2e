@@ -87,13 +87,17 @@
                     {% for ln in (system_ui.gm_nav if is_gm else system_ui.player_nav) %}
                     <a href="{{ ln.url }}" class="{{ 'text-accent-300 hover:text-accent-200' if ln.accent else 'text-base-300 hover:text-base-100' }} px-3 py-1.5 rounded transition-colors whitespace-nowrap"{% if ln.title %} title="{{ ln.title }}"{% endif %}>{{ ln.label }}</a>
                     {% endfor %}
-                    {# Chronicle is NOT in the registry nav: it only exists once the GM has
-                       published a vault, and NavLink is plain data with no conditional. Gated
-                       on the same `chronicle_published` processor the player nav uses, so the
-                       GM sees exactly what their players can see -- and no dead link before a
-                       first publish. Shared here, so both systems get it with no per-system edit. #}
-                    {% if is_gm and chronicle_published %}
-                    <a href="/chronicle" class="{% if request.path.startswith('/chronicle') %}text-accent-300 hover:text-accent-200{% else %}text-base-300 hover:text-base-100{% endif %} px-3 py-1.5 rounded transition-colors whitespace-nowrap" title="The published player Chronicle -- what your players can read">Chronicle</a>
+                    {# Chronicle is NOT in the registry nav: NavLink is plain data with no
+                       conditional. Shared here, so both systems get it with no per-system edit.
+
+                       UNCONDITIONAL for the GM. It used to be gated on `chronicle_published`,
+                       which was a chicken-and-egg: the GM's only way in appeared after a first
+                       publish, but /chronicle/manage is where a publish is made. Published ->
+                       the player-facing Chronicle; not yet -> straight to the manage screen.
+                       The PLAYER nav keeps the published gate (_player_nav.html) so players
+                       never see an empty tab. #}
+                    {% if is_gm %}
+                    <a href="{{ '/chronicle' if chronicle_published else '/chronicle/manage' }}" class="{% if request.path.startswith('/chronicle') %}text-accent-300 hover:text-accent-200{% else %}text-base-300 hover:text-base-100{% endif %} px-3 py-1.5 rounded transition-colors whitespace-nowrap" title="{{ 'The published player Chronicle -- what your players can read' if chronicle_published else 'Publish documents to your players' }}">Chronicle</a>
                     {% endif %}
                     {% if is_gm %}
                     <button type="button" onclick="window._qsOpen && window._qsOpen()" class="text-base-400 hover:text-base-200 px-2 py-1.5 rounded transition-colors whitespace-nowrap flex items-center gap-1" title="Quick Search (Cmd+K)">
