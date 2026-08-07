@@ -703,7 +703,14 @@ def _bind_campaign_paths(cid):
         JOURNAL_DIR = os.path.join(DATA_DIR, 'journals')
         PINNED_GENERATORS_FILE = os.path.join(DATA_DIR, 'pinned_generators.json')
         CALENDAR_FILE = os.path.join(DATA_DIR, 'calendar.json')
-        STORY_THREADS_FILE = os.path.join(BASE_DIR, 'story_threads.json')
+        # DATA_DIR, like all fifteen siblings above. This alone said BASE_DIR
+        # -- the ephemeral checkout -- so in legacy mode the file was restored
+        # from the repo's committed copy on EVERY deploy, no matter how the
+        # volume was configured. tools/migrate_to_campaigns.py calls it "a
+        # known misplacement"; it reads both locations, so nothing pre-existing
+        # is stranded by this move. (Campaign mode was never affected: line
+        # ~691 uses _storage.story_threads_file(cid).)
+        STORY_THREADS_FILE = os.path.join(DATA_DIR, 'story_threads.json')
         COSMERE_PC_DIR = os.path.join(DATA_DIR, 'cosmere_pcs')
         COSMERE_HOMEBREW_FILE = os.path.join(DATA_DIR, 'homebrew.json')
         HANDOUTS_FILE = os.path.join(DATA_DIR, 'handouts.json')
