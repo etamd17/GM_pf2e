@@ -19,8 +19,8 @@ import pytest
 import app
 
 _REPO = pathlib.Path(__file__).resolve().parent.parent
-_TPL = (_REPO / 'templates' / 'cosmere_gm_vitals.html').read_text()
-_HUB = (_REPO / 'templates' / 'gm_hub.html').read_text()
+_TPL = (_REPO / 'templates' / 'cosmere_gm_vitals.html').read_text(encoding='utf-8')
+_HUB = (_REPO / 'templates' / 'gm_hub.html').read_text(encoding='utf-8')
 
 
 def test_route_is_gm_gated_and_renders(tmp_path, monkeypatch):

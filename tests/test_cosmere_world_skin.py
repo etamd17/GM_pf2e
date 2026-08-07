@@ -21,7 +21,7 @@ _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def _read(rel: str) -> str:
-    return pathlib.Path(_REPO, rel).read_text()
+    return pathlib.Path(_REPO, rel).read_text(encoding='utf-8')
 
 
 def test_world_setting_is_a_campaign_config_key():

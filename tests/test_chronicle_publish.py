@@ -90,7 +90,7 @@ def _zip_dir_bytes_with_session(src_dir, session_number):
     SAME hash and _chronicle_swap never rotates `previous` (no-op republish).
     Tests that need a real `previous` to exist must publish two DISTINCT
     payloads, which this produces."""
-    man = json.load(open(os.path.join(src_dir, 'manifest.json')))
+    man = json.load(open(os.path.join(src_dir, 'manifest.json'), encoding='utf-8'))
     man['session_number'] = session_number
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as z:
@@ -109,7 +109,7 @@ def _zip_dir_bytes_with_session(src_dir, session_number):
 
 
 def test_sample_fixture_is_valid_vault():
-    man = json.load(open(os.path.join(_FIX, 'manifest.json')))
+    man = json.load(open(os.path.join(_FIX, 'manifest.json'), encoding='utf-8'))
     assert man['schema_version'] == 1
     assert isinstance(man['pages'], list) and man['pages']
     for p in man['pages']:
@@ -210,7 +210,7 @@ j = r.get_json(); assert j['ok'] and j['pages'] == 2, j
 content = A._chronicle_content_dir()
 assert content and os.path.isfile(os.path.join(content, 'html', 'home.html'))
 assert os.path.isfile(os.path.join(content, 'html', 'romi.html'))
-assert '<div class="chron-callout-quote">' in open(os.path.join(content, 'html', 'home.html')).read()
+assert '<div class="chron-callout-quote">' in open(os.path.join(content, 'html', 'home.html'), encoding='utf-8').read()
 assert A._chronicle_manifest()['session_number'] == 3
 
 # leak -> 400, and `current` is UNCHANGED (still the good publish)

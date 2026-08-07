@@ -57,8 +57,8 @@ def test_ideal_states_view():
 
 
 def test_builder_and_sheet_wiring():
-    b = pathlib.Path(_REPO, 'templates', 'cosmere_builder.html').read_text()
+    b = pathlib.Path(_REPO, 'templates', 'cosmere_builder.html').read_text(encoding='utf-8')
     assert 'renderIdeals' in b and 'function speakIdeal' in b and 'RADIANT_IDEALS' in b
     assert 'f-ideal-progress' in b
-    s = pathlib.Path(_REPO, 'templates', 'cosmere_sheet.html').read_text()
+    s = pathlib.Path(_REPO, 'templates', 'cosmere_sheet.html').read_text(encoding='utf-8')
     assert 'ideal_states' in s

@@ -18,7 +18,7 @@ _TEMPLATES = pathlib.Path(__file__).parent.parent / 'templates'
 
 @pytest.fixture
 def kyle(tmp_path, monkeypatch):
-    raw = json.loads(_FIX.read_text())
+    raw = json.loads(_FIX.read_text(encoding='utf-8'))
     pc_file = tmp_path / 'Kyle.json'
     pc_file.write_text(json.dumps(raw), encoding='utf-8')
     monkeypatch.setitem(app_module.PARTY_LIBRARY, 'Kyle', Character(raw, file_path=str(pc_file)))
@@ -170,16 +170,16 @@ def test_standalone_pages_that_use_appsse_define_the_hub():
 # SSE reliability: the hub recovers a silently-dead socket on wake, and the live
 # surfaces refetch on (re)connect so events missed while asleep are reconciled.
 def test_sse_hub_recovers_on_wake():
-    hub = (_TEMPLATES / '_sse_hub.html').read_text()
+    hub = (_TEMPLATES / '_sse_hub.html').read_text(encoding='utf-8')
     assert 'visibilitychange' in hub and 'function wake' in hub, \
         '_sse_hub.html must force-reconnect on wake (a slept socket never fires onerror)'
     assert "addEventListener('online'" in hub and "addEventListener('pageshow'" in hub
 
 
 def test_live_surfaces_refetch_on_reconnect():
-    tracker = (_TEMPLATES / 'tracker.html').read_text()
+    tracker = (_TEMPLATES / 'tracker.html').read_text(encoding='utf-8')
     assert "appSSE('connected'" in tracker and '/api/tracker_state' in tracker, \
         'tracker must refetch state on (re)connect'
-    sheet = (_TEMPLATES / 'cosmere_sheet.html').read_text()
+    sheet = (_TEMPLATES / 'cosmere_sheet.html').read_text(encoding='utf-8')
     assert "addEventListener('connected'" in sheet, \
         'Cosmere sheet must resync its combat strip on (re)connect'

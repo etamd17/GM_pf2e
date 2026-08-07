@@ -28,7 +28,7 @@ import tempfile, shutil, json, io, zipfile
 TMP = tempfile.mkdtemp(); os.environ['DATA_DIR'] = TMP; os.environ['GM_PASSWORD'] = ''
 pd = os.path.join(TMP, 'party_data'); os.makedirs(pd)
 shutil.copy2(os.path.join(os.path.abspath('.'), 'tests', 'fixtures', 'kyle_l10.json'), os.path.join(pd, 'Kyle.json'))
-json.dump({'name': 'Shades of Blood'}, open(os.path.join(TMP, 'campaign.json'), 'w'))
+json.dump({'name': 'Shades of Blood'}, open(os.path.join(TMP, 'campaign.json'), 'w', encoding='utf-8'))
 
 import app as A
 from core import storage
@@ -54,7 +54,7 @@ newid = imp['id']
 newparty = os.path.join(storage.campaign_dir(newid), 'party_data')
 fns = [f for f in os.listdir(newparty) if f.endswith('.json')]
 assert fns, 'no PC restored'
-cd = json.load(open(os.path.join(newparty, fns[0])))
+cd = json.load(open(os.path.join(newparty, fns[0]), encoding='utf-8'))
 assert cd.get('campaign_id') == newid, cd.get('campaign_id')
 
 # it shows in My Campaigns, GM role, and the original is untouched
@@ -67,5 +67,5 @@ print('BACKUP_OK')
 
 
 def test_backup_ui_wired():
-    h = pathlib.Path(_REPO, 'templates', 'account_home.html').read_text()
+    h = pathlib.Path(_REPO, 'templates', 'account_home.html').read_text(encoding='utf-8')
     assert '/export' in h and 'restoreBackup' in h and '/campaign/import' in h

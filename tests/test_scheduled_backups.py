@@ -26,7 +26,7 @@ def tmpdata(tmp_path, monkeypatch):
 
 def _mk():
     cid = C.create_campaign('Saga', 'pf2e', 'u1')['id']
-    with open(os.path.join(S.party_dir(cid), 'pc.json'), 'w') as f:
+    with open(os.path.join(S.party_dir(cid), 'pc.json'), 'w', encoding='utf-8') as f:
         f.write('{"hp":42}')
     return cid
 

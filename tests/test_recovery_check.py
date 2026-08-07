@@ -39,7 +39,7 @@ _AJAX = {'X-Requested-With': 'XMLHttpRequest'}
 
 @pytest.fixture
 def kyle(tmp_path, monkeypatch):
-    raw = json.loads(_KYLE_FIX.read_text())
+    raw = json.loads(_KYLE_FIX.read_text(encoding='utf-8'))
     pc_file = tmp_path / 'Kyle.json'
     pc_file.write_text(json.dumps(raw), encoding='utf-8')
     pc = Character(raw, file_path=str(pc_file))

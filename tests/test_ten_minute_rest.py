@@ -39,7 +39,7 @@ _AJAX = {'X-Requested-With': 'XMLHttpRequest'}
 
 
 def _register(monkeypatch, fixture, tmp_path, fname):
-    raw = json.loads((_FIX_DIR / fixture).read_text())
+    raw = json.loads((_FIX_DIR / fixture).read_text(encoding='utf-8'))
     pc_file = tmp_path / fname
     pc_file.write_text(json.dumps(raw), encoding='utf-8')
     pc = Character(raw, file_path=str(pc_file))
@@ -196,7 +196,7 @@ def test_immunity_survives_persistence_roundtrip(duo, client):
     goel.current_hp = 50
     _treat(client, kyle.name, target=goel.name, tier='trained', d20=3)
     app_module._flush_pc_dirty(goel.name)
-    saved = json.loads(pathlib.Path(duo['files'][goel.name]).read_text())
+    saved = json.loads(pathlib.Path(duo['files'][goel.name]).read_text(encoding='utf-8'))
     build = saved.get('build', saved)
     assert build.get('treat_wounds_immune_until', 0) > time.time() - 5
 

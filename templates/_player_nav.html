@@ -25,7 +25,7 @@
         <span>Party</span>
     </a>
     <a href="/player/map"
-       class="player-nav-tab{% if request.path == '/player/map' %} active{% endif %}"
+       class="player-nav-tab{% if active_player_tab == 'map' %} active{% endif %}"
        aria-label="Tactical map">
         <svg viewBox="0 0 24 24"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21 3 6"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
         <span>Map</span>

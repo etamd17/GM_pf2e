@@ -29,7 +29,7 @@ TMP = tempfile.mkdtemp(); os.environ['DATA_DIR'] = TMP; os.environ['GM_PASSWORD'
 pd = os.path.join(TMP, 'party_data'); os.makedirs(pd)
 shutil.copy2(os.path.join(os.path.abspath('.'), 'tests', 'fixtures', 'kyle_l10.json'),
              os.path.join(pd, 'Kyle.json'))
-json.dump({'name': 'Test Campaign'}, open(os.path.join(TMP, 'campaign.json'), 'w'))
+json.dump({'name': 'Test Campaign'}, open(os.path.join(TMP, 'campaign.json'), 'w', encoding='utf-8'))
 
 import app as A
 from core import storage, auth
@@ -42,8 +42,8 @@ gm_id = auth.get_user_by_username('gm')['id']
 # is not what we are testing here)
 party = os.path.join(storage.campaign_dir(cid), 'party_data')
 fn = [f for f in os.listdir(party) if f.endswith('.json')][0]
-p = os.path.join(party, fn); doc = json.load(open(p)); doc['owner_user_id'] = gm_id
-json.dump(doc, open(p, 'w'))
+p = os.path.join(party, fn); doc = json.load(open(p, encoding='utf-8')); doc['owner_user_id'] = gm_id
+json.dump(doc, open(p, 'w', encoding='utf-8'))
 
 # activate the campaign for the session
 assert c.post('/campaign/%s/activate' % cid).status_code == 302

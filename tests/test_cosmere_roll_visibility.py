@@ -90,7 +90,7 @@ def test_unknown_visibility_defaults_to_group(pc, monkeypatch):
 
 
 def test_sheet_has_visibility_control():
-    h = (_REPO / 'templates' / 'cosmere_sheet.html').read_text()
+    h = (_REPO / 'templates' / 'cosmere_sheet.html').read_text(encoding='utf-8')
     assert 'cs-vis' in h
     for mode in ('group', 'gm', 'private'):
         assert "cosVis('%s')" % mode in h
@@ -99,7 +99,7 @@ def test_sheet_has_visibility_control():
 
 
 def test_cosmere_nav_shows_incoming_rolls():
-    h = (_REPO / 'templates' / '_cosmere_player_nav.html').read_text()
+    h = (_REPO / 'templates' / '_cosmere_player_nav.html').read_text(encoding='utf-8')
     assert 'cos-roll-toast-container' in h
     assert "appSSE('player_roll'" in h
     assert 'roll.name === CHAR' in h                 # don't toast my own roll

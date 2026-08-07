@@ -337,14 +337,23 @@ def test_weakness_physical_does_not_match_energy():
     assert notes == []
 
 
-def test_weakness_all_category_does_NOT_match():
-    # POSSIBLE BUG: resistances honor an 'all' category but weaknesses do not --
-    # the weakness loop only checks exact type or 'physical'. A creature with
-    # "weakness all 5" (PF2e: weakness to all damage, e.g. some constructs/swarms
-    # vs area) would take NO extra damage here. Locking current behavior.
-    eff, notes = calc(20, 'fire', weaknesses=['all 5'])
-    assert eff == 20
-    assert notes == []
+def test_weakness_all_matches_any_type():
+    # Was once a known gap: resistances honored an 'all' category but weaknesses
+    # did not, so "weakness all 5" (PF2e: weakness to all damage -- some
+    # constructs/swarms vs area) added nothing. `_calculate_damage_with_wri` now
+    # matches wtype == 'all' the same way the resistance loop does. Mirrors
+    # test_resistance_all_matches_any_type.
+    for dt in ('fire', 'slashing', 'mental', 'poison'):
+        eff, notes = calc(20, dt, weaknesses=['all 5'])
+        assert eff == 25, dt
+        assert notes == [f'Weak {dt} +5'], dt
+
+
+def test_weakness_all_is_first_match_and_breaks():
+    # 'all' matches first; a later specific entry never runs (break).
+    eff, notes = calc(20, 'fire', weaknesses=['all 5', 'fire 10'])
+    assert eff == 25
+    assert notes == ['Weak fire +5']
 
 
 def test_weakness_is_case_insensitive():

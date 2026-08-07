@@ -28,7 +28,7 @@ def test_grip_toggle_swaps_bastard_sword_die():
         os.environ['DATA_DIR'] = tempfile.mkdtemp(); os.environ['GM_PASSWORD'] = ''
         import app as A
         c = A.app.test_client(); J = {'X-Requested-With': 'XMLHttpRequest'}
-        pb = json.load(open('tests/fixtures/goel_l10.json'))
+        pb = json.load(open('tests/fixtures/goel_l10.json', encoding='utf-8'))
         c.post('/api/import_pathbuilder', json=pb, headers=J)
         name = pb['build']['name']
 

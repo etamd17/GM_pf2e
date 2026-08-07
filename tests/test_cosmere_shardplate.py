@@ -18,7 +18,7 @@ import pytest
 import app
 
 _REPO = pathlib.Path(__file__).resolve().parent.parent
-_SHEET = (_REPO / 'templates' / 'cosmere_sheet.html').read_text()
+_SHEET = (_REPO / 'templates' / 'cosmere_sheet.html').read_text(encoding='utf-8')
 
 
 def test_sheet_has_shardplate_toggle_and_override():

@@ -17,13 +17,13 @@ _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def test_advancement_ui_wired():
-    gm = pathlib.Path(_REPO, 'templates', 'gm_hub.html').read_text()
+    gm = pathlib.Path(_REPO, 'templates', 'gm_hub.html').read_text(encoding='utf-8')
     assert 'setAdvMode' in gm and 'awardXp' in gm and 'markReady' in gm
-    sheet = pathlib.Path(_REPO, 'templates', 'player_sheet.html').read_text()
+    sheet = pathlib.Path(_REPO, 'templates', 'player_sheet.html').read_text(encoding='utf-8')
     assert 'ready-to-level-banner' in sheet
-    cos = pathlib.Path(_REPO, 'templates', 'cosmere_gm.html').read_text()
+    cos = pathlib.Path(_REPO, 'templates', 'cosmere_gm.html').read_text(encoding='utf-8')
     assert 'cosMarkReady' in cos
-    csheet = pathlib.Path(_REPO, 'templates', 'cosmere_sheet.html').read_text()
+    csheet = pathlib.Path(_REPO, 'templates', 'cosmere_sheet.html').read_text(encoding='utf-8')
     assert 'Ready to level up' in csheet
 
 
@@ -40,7 +40,7 @@ import tempfile, shutil, json
 TMP = tempfile.mkdtemp(); os.environ['DATA_DIR'] = TMP; os.environ['GM_PASSWORD'] = ''
 pd = os.path.join(TMP, 'party_data'); os.makedirs(pd)
 shutil.copy2(os.path.join(os.path.abspath('.'), 'tests', 'fixtures', 'kyle_l10.json'), os.path.join(pd, 'Kyle.json'))
-json.dump({'name': 'T'}, open(os.path.join(TMP, 'campaign.json'), 'w'))
+json.dump({'name': 'T'}, open(os.path.join(TMP, 'campaign.json'), 'w', encoding='utf-8'))
 
 import app as A
 from core import storage, auth
@@ -50,9 +50,9 @@ cid = storage.list_campaign_ids()[0]
 gm_id = auth.get_user_by_username('gm')['id']
 party = os.path.join(storage.campaign_dir(cid), 'party_data')
 fn = [f for f in os.listdir(party) if f.endswith('.json')][0]
-p = os.path.join(party, fn); doc = json.load(open(p)); doc['owner_user_id'] = gm_id; json.dump(doc, open(p, 'w'))
+p = os.path.join(party, fn); doc = json.load(open(p, encoding='utf-8')); doc['owner_user_id'] = gm_id; json.dump(doc, open(p, 'w', encoding='utf-8'))
 assert c.post('/campaign/%s/activate' % cid).status_code == 302
-name = json.load(open(p))['build']['name']
+name = json.load(open(p, encoding='utf-8'))['build']['name']
 
 # default mode is milestone
 assert A._advancement_mode() == 'milestone'
@@ -61,10 +61,10 @@ assert c.post('/api/gm/advancement_mode', json={'mode': 'xp'}).get_json()['ok']
 assert A._advancement_mode() == 'xp'
 
 # award 1200 XP -> added to existing xp, and rolls the ready flag on (>=1000)
-start_xp = int(json.load(open(p))['build'].get('xp', 0) or 0)
+start_xp = int(json.load(open(p, encoding='utf-8'))['build'].get('xp', 0) or 0)
 aw = c.post('/api/gm/award_xp', json={'amount': 1200}).get_json()
 assert aw['ok'] and aw['amount'] == 1200, aw
-b = json.load(open(p))['build']
+b = json.load(open(p, encoding='utf-8'))['build']
 assert b['xp'] == start_xp + 1200 and b.get('ready_to_level') is True, b
 
 # XP award is PF2e-only is enforced elsewhere; here confirm a bad mode is rejected
@@ -72,7 +72,7 @@ assert c.post('/api/gm/advancement_mode', json={'mode': 'nonsense'}).status_code
 
 # milestone: clearing ready works
 assert c.post('/api/gm/mark_ready', json={'ready': 0}).get_json()['ok']
-assert json.load(open(p))['build'].get('ready_to_level') is False
+assert json.load(open(p, encoding='utf-8'))['build'].get('ready_to_level') is False
 
 # the live pc_state payload carries xp + ready_to_level
 ps = c.get('/api/pc_state/' + name).get_json()

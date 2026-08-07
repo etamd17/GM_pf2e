@@ -236,7 +236,7 @@ assert j2["session_number"] == 1, j2        # rolled back within A only
 
 # B is untouched by any of this.
 jb_manifest = json.load(open(os.path.join(
-    os.path.realpath(os.path.join(storage.chronicle_dir(cid_b), "current")), "manifest.json")))
+    os.path.realpath(os.path.join(storage.chronicle_dir(cid_b), "current")), "manifest.json"), encoding='utf-8'))
 assert jb_manifest["session_number"] == 9
 print("STATUS_ROLLBACK_SCOPED_OK")
 ''')
@@ -448,7 +448,7 @@ b_root = storage.chronicle_dir(cid_b)
 a_current_target = os.path.realpath(os.path.join(a_root, "current"))
 b_current_target = os.path.realpath(os.path.join(b_root, "current"))
 assert os.path.isdir(a_current_target) and os.path.isdir(b_current_target)
-b_manifest_before = open(os.path.join(b_current_target, "manifest.json")).read()
+b_manifest_before = open(os.path.join(b_current_target, "manifest.json"), encoding='utf-8').read()
 
 r = c.post("/api/chronicle/unpublish", json={"campaign_id": cid_a})
 assert r.status_code == 200, r.data
@@ -481,7 +481,7 @@ with c.session_transaction() as s:
 # B: completely untouched -- same target dir, same bytes, still live.
 assert os.path.realpath(os.path.join(b_root, "current")) == b_current_target
 assert os.path.isdir(b_current_target)
-assert open(os.path.join(b_current_target, "manifest.json")).read() == b_manifest_before
+assert open(os.path.join(b_current_target, "manifest.json"), encoding='utf-8').read() == b_manifest_before
 print("UNPUBLISH_REMOVES_TARGET_OK")
 ''')
     assert 'UNPUBLISH_REMOVES_TARGET_OK' in r.stdout, r.stdout + r.stderr
@@ -631,7 +631,7 @@ b_camp_dir = storage.campaign_dir(cid_b)
 marker_dir = os.path.join(a_camp_dir, "party_data")
 os.makedirs(marker_dir, exist_ok=True)
 marker_file = os.path.join(marker_dir, "marker.json")
-with open(marker_file, "w") as fh:
+with open(marker_file, "w", encoding='utf-8') as fh:
     json.dump({"marker": "must survive"}, fh)
 
 r = c.post("/api/chronicle/unpublish", json={"campaign_id": cid_a})
@@ -642,7 +642,7 @@ assert r.status_code == 200 and r.get_json()["ok"] is True, r.data
 assert os.path.isdir(a_camp_dir)
 assert campaigns.get_campaign(cid_a)["name"] == "Shades of Blood"
 assert os.path.isfile(marker_file)
-assert json.load(open(marker_file))["marker"] == "must survive"
+assert json.load(open(marker_file, encoding='utf-8'))["marker"] == "must survive"
 
 # The chronicle root ITSELF still exists (only current/previous/content
 # inside it were removed) -- unpublish is not campaign deletion.

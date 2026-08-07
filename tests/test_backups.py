@@ -41,7 +41,7 @@ def test_prune_keeps_only_n_newest(tmp_path, monkeypatch):
     os.makedirs(d)
     for i in range(10):
         p = os.path.join(d, f'2026-{i:02d}.zip')
-        open(p, 'w').close()
+        open(p, 'w', encoding='utf-8').close()
         os.utime(p, (1000 + i, 1000 + i))  # ascending mtime => i=9 newest
     # max_age huge so only the keep-count gates.
     backups.prune_campaign(CID, keep=7, max_age_days=10 ** 6)

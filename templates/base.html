@@ -520,7 +520,7 @@
        Only renders for joined players (not GM). The active tab is inferred
        from the current URL path. #}
     {% if not is_gm and player_name %}
-    {% set active_player_tab = 'party' if request.path.startswith('/party') else ('combat' if request.path.startswith('/tracker') else 'sheet') %}
+    {% set active_player_tab = 'party' if request.path.startswith('/party') else ('combat' if request.path.startswith('/tracker') else ('map' if request.path.startswith('/player/map') else 'sheet')) %}
     {% include "_player_nav.html" %}
     <script>
     (function() {

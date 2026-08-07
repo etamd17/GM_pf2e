@@ -24,7 +24,7 @@ def tmpdata(tmp_path, monkeypatch):
 def _mk(name='Saga', user='u1'):
     cid = C.create_campaign(name, 'pf2e', user)['id']
     os.makedirs(S.party_dir(cid), exist_ok=True)
-    with open(os.path.join(S.party_dir(cid), 'pc.json'), 'w') as f:
+    with open(os.path.join(S.party_dir(cid), 'pc.json'), 'w', encoding='utf-8') as f:
         f.write('{"keep":1}')
     return cid
 

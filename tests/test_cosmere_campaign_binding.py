@@ -137,7 +137,7 @@ def test_cosmere_player_hub_claim_flow():
         pid = uuid.uuid4().hex
         doc = {'id': pid, 'system': 'cosmere', 'name': 'Shallan',
                'build': {'name': 'Shallan', 'radiant_order': 'lightweavers', 'ideals_sworn': 1, 'level': 2}}
-        with open(os.path.join(storage.cosmere_pc_dir(cid), pid + '.json'), 'w') as f:
+        with open(os.path.join(storage.cosmere_pc_dir(cid), pid + '.json'), 'w', encoding='utf-8') as f:
             json.dump(doc, f)
 
         # the invites page lists the Cosmere PC + mints a join code
