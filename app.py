@@ -219,6 +219,7 @@ if GM_PASSWORD:
 # via the logged-in user's per-campaign role; with no accounts yet (tests /
 # un-bootstrapped) we fall back to the legacy GM_PASSWORD behavior below.
 from core import auth as _auth, campaigns as _campaigns, backups as _backups
+from core import chronicle_docs as _chronicle_lib
 
 
 def _account_mode():
@@ -6138,8 +6139,19 @@ def _inject_chronicle_ctx():
     true once THIS request's active campaign has a publish (_chronicle_content_dir
     resolves per-request -- see _chronicle_root -- so this never leaks another
     campaign's publish state). Checks content-dir existence (stat only, no
-    JSON parse) per render -- cheaper than loading the manifest."""
-    return {'chronicle_published': _chronicle_content_dir() is not None}
+    JSON parse) per render -- cheaper than loading the manifest.
+
+    True for EITHER lane: a vault publish, or at least one published GM
+    document. The GM's own Chronicle entry points are deliberately NOT gated
+    on this (see base.html) -- they must be reachable in order to publish the
+    first thing; this flag only decides whether PLAYERS see a Chronicle tab.
+    """
+    if _chronicle_content_dir() is not None:
+        return {'chronicle_published': True}
+    try:
+        return {'chronicle_published': bool(_chronicle_doc_pages())}
+    except Exception:
+        return {'chronicle_published': False}
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -7240,6 +7252,7 @@ def gm_hub():
     ingame_date = '%s %s %s' % (cal.get('day', 1),
                                 GOLARION_MONTHS[cal.get('month', 0) % len(GOLARION_MONTHS)]['name'],
                                 cal.get('year', 4724))
+    chronicle_docs = _chronicle_docs_index().get('docs', [])
     return render_template(
         'gm_hub.html',
         party_count=len(PARTY_LIBRARY),
@@ -7252,6 +7265,8 @@ def gm_hub():
         party_level=party_level,
         ingame_date=ingame_date,
         session_stats=_load_campaign_stats(),
+        chronicle_doc_count=len(chronicle_docs),
+        chronicle_published_count=sum(1 for d in chronicle_docs if d.get('published')),
     )
 
 
@@ -10914,6 +10929,245 @@ def chronicle_unpublish():
 
     return jsonify({'ok': True, 'campaign_id': cid, 'campaign_name': camp.get('name'),
                     'removed': removed})
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# CHRONICLE DOCUMENTS — the GM-upload lane
+#
+# Upload a .md / .txt / .docx, preview exactly what players will see, then
+# toggle it public. Independent of the Obsidian vault lane in storage (see
+# core/chronicle_docs.py for why they cannot share content/ + current), and
+# unioned with it at read time by _chronicle_visible_pages.
+#
+# Trust model differs from the vault lane on purpose. That pipeline derives a
+# player-safe subset from a vault full of secrets, so it hard-aborts on a
+# surviving [!danger]/[!secret]/[!gm] marker. Here the GM hand-picks and
+# previews each document, so a marker is surfaced as a WARNING on the doc
+# instead of blocking the upload -- a GM writing in Word has no callout
+# syntax to begin with, and a false positive that refuses the file would
+# fight the whole point of the feature. Nothing is player-visible until the
+# GM flips `published` regardless.
+# ══════════════════════════════════════════════════════════════════════════
+_CHRONICLE_DOC_MAX_BYTES = 10 * 1024 * 1024      # per file, matches handouts
+_CHRONICLE_DOC_MAX_COUNT = 200                   # per campaign
+
+
+def _chronicle_docs_root():
+    """Per-request docs dir, resolved from the caller's own active campaign
+    exactly like _chronicle_root() (never the live-slot global)."""
+    root = _chronicle_root()
+    return os.path.join(root, 'docs') if root else None
+
+
+def _chronicle_docs_index():
+    root = _chronicle_docs_root()
+    return _chronicle_lib.load_index(root) if root else {'schema_version': 1, 'docs': []}
+
+
+def _chronicle_vault_slugs():
+    man = _chronicle_manifest() or {}
+    return {p.get('slug') for p in man.get('pages', []) if p.get('slug')}
+
+
+def _chronicle_doc_pages():
+    """Published docs projected into the page shape the read side expects.
+
+    A doc whose slug collides with a live vault page is DROPPED here rather
+    than shadowing it: the vault lane owns the unprefixed namespace and its
+    pages carry backlinks other pages point at. Slugs are 'd-' prefixed at
+    upload, so this only fires if a vault page is itself named 'd-...'. The
+    manage screen surfaces the conflict so it is visible, not silent.
+    """
+    taken = _chronicle_vault_slugs()
+    return [_chronicle_lib.as_page(d) for d in _chronicle_lib.published_docs(_chronicle_docs_index())
+            if d.get('slug') not in taken]
+
+
+def _chronicle_doc_fragment_path(slug):
+    root = _chronicle_docs_root()
+    if not root or not _CHRONICLE_SLUG_RE.match(slug or ''):
+        return None
+    return os.path.join(root, 'html', slug + '.html')
+
+
+def _chronicle_doc_write(docs_root, slug, html_fragment):
+    """Write a SANITIZED fragment for `slug`. Caller must have sanitized."""
+    html_dir = os.path.join(docs_root, 'html')
+    os.makedirs(html_dir, exist_ok=True)
+    path = os.path.join(html_dir, slug + '.html')
+    fd, tmp = tempfile.mkstemp(dir=html_dir, suffix='.tmp')
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            f.write(html_fragment)
+        os.replace(tmp, path)
+    except Exception:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
+
+
+def _chronicle_doc_convert(ext, tmp_path):
+    """(html_fragment, warnings) for an uploaded document, already sanitized.
+
+    Every branch funnels through _chronicle_sanitize_html -- the allowlist
+    tokenizer that also guards the vault lane. _chronicle_fragment hands what
+    we write straight to `|safe`, so this call is the only thing between a
+    GM-pasted <script> and the table.
+    """
+    if ext in _chronicle_lib.EXT_DOCX:
+        raw = _chronicle_lib.docx_to_html(tmp_path)          # raises DocxError
+    else:
+        with open(tmp_path, 'rb') as f:
+            text = f.read().decode('utf-8', errors='replace')
+        raw = (_chronicle_render_markdown(text) if ext in _chronicle_lib.EXT_MARKDOWN
+               else _chronicle_lib.text_to_html(text))
+    clean = _chronicle_sanitize_html(raw)
+    # Scan the CONVERTED text, not the uploaded bytes: in a .docx the markers
+    # are split across <w:r> runs and would never match the raw file.
+    lowered = clean.lower()
+    warnings = ['Contains %s -- a GM-only marker from the vault workflow. '
+                'Check this document before publishing it.' % marker
+                for marker in _CHRONICLE_LEAK_MARKERS if marker in lowered]
+    return clean, warnings
+
+
+@app.route('/api/chronicle/docs', methods=['GET', 'POST'])
+def chronicle_docs_api():
+    """List (GET) or upload (POST) GM chronicle documents.
+
+    GM-gated by the '/api/chronicle' GM_API_PREFIXES entry (check_gm_access),
+    so no decorator is needed -- see CLAUDE.md on the three auth patterns.
+    """
+    docs_root = _chronicle_docs_root()
+    if not docs_root:
+        return jsonify({'ok': False, 'error': 'no active campaign'}), 400
+
+    if request.method == 'GET':
+        index = _chronicle_docs_index()
+        taken = _chronicle_vault_slugs()
+        return jsonify({'ok': True, 'docs': [
+            dict(d, shadowed_by_vault=d.get('slug') in taken)
+            for d in index.get('docs', [])
+        ]})
+
+    upload = request.files.get('document')
+    if not upload or not upload.filename:
+        return jsonify({'ok': False, 'error': 'no file uploaded (field "document")'}), 400
+    ext = os.path.splitext(upload.filename)[1].lower()
+    if ext not in _chronicle_lib.ALLOWED_EXTS:
+        return jsonify({'ok': False, 'error':
+                        'upload a Word (.docx), Markdown (.md) or text (.txt) file'}), 400
+
+    # Size before bytes land anywhere durable (the handout idiom, app.py:11174).
+    upload.stream.seek(0, os.SEEK_END)
+    size = upload.stream.tell()
+    upload.stream.seek(0)
+    if size > _CHRONICLE_DOC_MAX_BYTES:
+        return jsonify({'ok': False, 'error': 'document must be 10 MB or smaller'}), 413
+    if size == 0:
+        return jsonify({'ok': False, 'error': 'that file is empty'}), 400
+
+    section = str(request.form.get('section') or _chronicle_lib.DEFAULT_SECTION)
+    if section not in _chronicle_lib.SECTIONS:
+        return jsonify({'ok': False, 'error': 'unknown section: %s' % section}), 400
+    given_title = (request.form.get('title') or '').strip()[:120]
+
+    os.makedirs(docs_root, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(dir=docs_root, suffix=ext)
+    os.close(fd)
+    try:
+        # Stream to disk rather than BytesIO(f.read()) -- the single gevent
+        # worker must not hold a whole document in RAM (chronicle_publish
+        # documents the same rule).
+        upload.save(tmp_path)
+        try:
+            fragment, warnings = _chronicle_doc_convert(ext, tmp_path)
+        except _chronicle_lib.DocxError as exc:
+            return jsonify({'ok': False, 'error': str(exc)}), 400
+        # Emptiness is judged on the CONVERTED output, before the title
+        # heading is lifted out -- otherwise a document consisting of nothing
+        # but its title would be rejected as unreadable.
+        if not fragment.strip():
+            return jsonify({'ok': False, 'error':
+                            'that document has no readable text in it'}), 400
+        # A document usually opens with its own title. Lift it out so the page
+        # doesn't print the name twice (the template already renders
+        # page.title above the body), and use it as a better default than the
+        # filename when the GM didn't type one.
+        heading, fragment = _chronicle_lib.split_leading_heading(fragment)
+        title = (given_title or heading or
+                 os.path.splitext(os.path.basename(upload.filename))[0]).strip()[:120]
+        if not title:
+            return jsonify({'ok': False, 'error': 'give the document a title'}), 400
+
+        with _path_lock(_chronicle_lib.index_file(docs_root)):
+            index = _chronicle_lib.load_index(docs_root)
+            if len(index.get('docs', [])) >= _CHRONICLE_DOC_MAX_COUNT:
+                return jsonify({'ok': False, 'error':
+                                'this campaign already has %d documents; delete one first'
+                                % _CHRONICLE_DOC_MAX_COUNT}), 400
+            slug = _chronicle_lib.unique_slug(index, _chronicle_lib.slugify_title(title))
+            entry = _chronicle_lib.new_entry(
+                doc_id=_storage.new_id(), slug=slug, title=title, section=section,
+                original_filename=os.path.basename(upload.filename), source_ext=ext,
+                byte_count=size, warnings=warnings)
+            _chronicle_doc_write(docs_root, slug, fragment)
+            index.setdefault('docs', []).append(entry)
+            _chronicle_lib.save_index(docs_root, index)
+    finally:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+    return jsonify({'ok': True, 'doc': entry,
+                    'excerpt': _chronicle_lib.plain_text_from_html(fragment)}), 201
+
+
+@app.route('/api/chronicle/docs/<doc_id>', methods=['PATCH', 'DELETE'])
+def chronicle_doc_api(doc_id):
+    """Toggle `published`, edit title/section, or delete a chronicle document.
+
+    Publishing is the ONLY thing that makes a document player-visible; every
+    upload starts private. The toggle is also the rollback -- there is no
+    rotation to undo, unlike the vault lane's current/previous symlinks.
+    """
+    docs_root = _chronicle_docs_root()
+    if not docs_root:
+        return jsonify({'ok': False, 'error': 'no active campaign'}), 400
+
+    with _path_lock(_chronicle_lib.index_file(docs_root)):
+        index = _chronicle_lib.load_index(docs_root)
+        entry = _chronicle_lib.find(index, doc_id)
+        if not entry:
+            return jsonify({'ok': False, 'error': 'document not found'}), 404
+
+        if request.method == 'DELETE':
+            index['docs'] = [d for d in index['docs'] if d.get('id') != doc_id]
+            _chronicle_lib.save_index(docs_root, index)
+            frag = _chronicle_doc_fragment_path(entry.get('slug'))
+            if frag and os.path.isfile(frag):
+                os.unlink(frag)
+            sse_broadcast('chronicle_update', {'doc_id': doc_id, 'deleted': True})
+            return jsonify({'ok': True, 'deleted': True})
+
+        data = request.get_json(silent=True) or {}
+        if 'published' in data:
+            entry['published'] = bool(data['published'])
+        if 'section' in data:
+            if data['section'] not in _chronicle_lib.SECTIONS:
+                return jsonify({'ok': False, 'error':
+                                'unknown section: %s' % data['section']}), 400
+            entry['section'] = data['section']
+        if 'title' in data:
+            new_title = str(data['title'] or '').strip()[:120]
+            if not new_title:
+                return jsonify({'ok': False, 'error': 'title cannot be empty'}), 400
+            entry['title'] = new_title
+        entry['updated_at'] = time.strftime('%Y-%m-%dT%H:%M:%S')
+        _chronicle_lib.save_index(docs_root, index)
+
+    sse_broadcast('chronicle_update', {'doc_id': doc_id,
+                                       'published': bool(entry.get('published'))})
+    return jsonify({'ok': True, 'doc': entry})
 
 
 def _parse_damage_type_value(entry_str):
@@ -16585,13 +16839,20 @@ def _chronicle_current_user():
 
 
 def _chronicle_visible_pages(section=None):
-    """Manifest pages this caller may see (recipient/ownership filter, Part 3),
-    optionally limited to one manifest `section`."""
-    man = _chronicle_manifest()
-    if not man:
+    """Pages this caller may see, across BOTH publishing lanes.
+
+    The Obsidian vault's manifest pages plus every PUBLISHED GM-uploaded
+    document (core/chronicle_docs.py). Both go through the same recipient/
+    ownership filter, so an unpublished doc -- or one addressed to another
+    player -- never reaches a template. Every /chronicle* route funnels
+    through here, which is why merging in one place is enough.
+    """
+    man = _chronicle_manifest() or {}
+    pages = list(man.get('pages', [])) + _chronicle_doc_pages()
+    if not pages:
         return []
     user, gm = _chronicle_current_user(), _is_gm()
-    return [p for p in man.get('pages', [])
+    return [p for p in pages
             if (section is None or p.get('section') == section)
             and _chronicle_page_visible(p, user=user, is_gm=gm)]
 
@@ -16604,25 +16865,47 @@ def _chronicle_page_view(p):
     if not is_public:
         label = ', '.join(recips) if isinstance(recips, (list, tuple)) else str(recips)
     v = dict(p)
+    v.pop('_lane', None)          # internal lane tag, never reaches a template
     v['portrait_url'] = chronicle_asset_url(p['portrait']) if p.get('portrait') else None
     v['recipient_label'] = label
     return v
 
 
-def _chronicle_fragment(slug):
-    """Read a pre-rendered, already-sanitized html/<slug>.html fragment. Slug is
-    regex-validated (no traversal); None if unpublished or missing."""
-    cdir = _chronicle_content_dir()
-    if not cdir or not _CHRONICLE_SLUG_RE.match(slug or ''):
-        return None
-    fpath = os.path.join(cdir, 'html', slug + '.html')
-    if not os.path.isfile(fpath):
+def _chronicle_read_fragment(path):
+    if not path or not os.path.isfile(path):
         return None
     try:
-        with open(fpath, encoding='utf-8') as f:
+        with open(path, encoding='utf-8') as f:
             return f.read()
     except OSError:
         return None
+
+
+def _chronicle_fragment(slug):
+    """Read a pre-rendered, already-sanitized fragment for `slug`, from
+    whichever lane owns it. Slug is regex-validated (no traversal); None if
+    unpublished or missing.
+
+    Vault first: it owns the unprefixed slug namespace and its pages carry
+    backlinks, so on the (prefix-guarded, but possible) collision of a vault
+    page literally named 'd-...' the vault wins and _chronicle_doc_pages drops
+    the shadowed doc, rather than the two lanes disagreeing about which one a
+    URL means.
+
+    The doc lane is consulted ONLY for a slug that resolves to a currently
+    PUBLISHED document -- unpublishing must make the fragment 404, not merely
+    drop it from the index listing.
+    """
+    if not _CHRONICLE_SLUG_RE.match(slug or ''):
+        return None
+    cdir = _chronicle_content_dir()
+    if cdir:
+        vault = _chronicle_read_fragment(os.path.join(cdir, 'html', slug + '.html'))
+        if vault is not None:
+            return vault
+    if any(d.get('slug') == slug for d in _chronicle_doc_pages()):
+        return _chronicle_read_fragment(_chronicle_doc_fragment_path(slug))
+    return None
 
 
 def _chronicle_nav_counts():
@@ -16638,10 +16921,26 @@ def _chronicle_nav_counts():
     return counts
 
 
-def _chronicle_render(template, **ctx):
+def _chronicle_render(template, always_render=False, **ctx):
     """Shared entry: every screen gets `manifest` + `nav`. When unpublished,
-    chronicle_base shows the empty state and the screen block is skipped."""
-    return render_template(template, manifest=_chronicle_manifest(),
+    chronicle_base shows the empty state and the screen block is skipped.
+
+    `always_render` forces a manifest so the screen block renders even with
+    nothing published -- the GM's manage and preview screens are exactly the
+    place where the first publish happens, so they cannot be hidden behind
+    "nothing is published yet".
+
+    A campaign can be publishing through the doc lane alone, with no vault
+    manifest at all. `manifest` is the templates' has-anything-been-published
+    flag, so synthesize a minimal one in that case -- otherwise the GM
+    publishes a document and their players still see "The chronicle opens
+    after your first session."
+    """
+    man = _chronicle_manifest()
+    if not man and (always_render or _chronicle_doc_pages()):
+        man = {'schema_version': CHRONICLE_SCHEMA_VERSION, 'pages': [],
+               'session_number': _load_campaign_config().get('session_number', 1)}
+    return render_template(template, manifest=man,
                            nav=_chronicle_nav_counts(), **ctx)
 
 
@@ -16657,7 +16956,11 @@ def chronicle_home():
         latest['pull_quote'] = recaps[0].get('pull_quote')
     party = [{'name': v['title'], 'tagline': v.get('epithet'), 'portrait_url': v['portrait_url']}
              for v in (_chronicle_page_view(p) for p in pages if p.get('section') == 'cast')][:8]
-    return _chronicle_render('chronicle_home.html', latest_recap=latest, party=party)
+    # `page_count` separates "nothing published at all" from "published, but no
+    # session recap yet" -- the doc lane makes the latter routine, since a GM
+    # can publish lore or a handout before ever running a session.
+    return _chronicle_render('chronicle_home.html', latest_recap=latest, party=party,
+                             page_count=len(pages))
 
 
 @app.route('/chronicle/<any(story,lore,cast,handouts):view>')
@@ -16698,6 +17001,49 @@ def chronicle_page(slug):
         abort(404)
     return _chronicle_render('chronicle_page.html', page=_chronicle_page_view(match),
                              page_html=frag, backlinks=match.get('backlinks') or [])
+
+
+@app.route('/chronicle/manage')
+def chronicle_manage():
+    """GM console for the document lane: upload, preview, publish, delete.
+
+    Reachable whenever the caller is a GM -- deliberately NOT gated on
+    anything being published, because this is where the first publish
+    happens. Inline _is_gm() check (auth pattern 3) because /chronicle* has
+    no prefix gate; the mutating work all lives under /api/chronicle/docs,
+    which the GM_API_PREFIXES entry covers.
+    """
+    if not _is_gm():
+        abort(403)
+    index = _chronicle_docs_index()
+    taken = _chronicle_vault_slugs()
+    docs = [dict(d, shadowed_by_vault=d.get('slug') in taken)
+            for d in sorted(index.get('docs', []),
+                            key=lambda d: d.get('uploaded_at') or '', reverse=True)]
+    return _chronicle_render('chronicle_manage.html', always_render=True, docs=docs,
+                             sections=_chronicle_lib.SECTIONS,
+                             vault_published=_chronicle_content_dir() is not None)
+
+
+@app.route('/chronicle/preview/<doc_id>')
+def chronicle_preview(doc_id):
+    """GM-only preview of one uploaded document, published or not.
+
+    Renders the real player page template against the SAME sanitized fragment
+    file the published route serves, so what the GM approves is byte-for-byte
+    what the table gets.
+    """
+    if not _is_gm():
+        abort(403)
+    entry = _chronicle_lib.find(_chronicle_docs_index(), doc_id)
+    if not entry:
+        abort(404)
+    frag = _chronicle_read_fragment(_chronicle_doc_fragment_path(entry.get('slug')))
+    if frag is None:
+        abort(404)
+    page = _chronicle_page_view(_chronicle_lib.as_page(entry))
+    return _chronicle_render('chronicle_page.html', always_render=True, page=page,
+                             page_html=frag, backlinks=[], preview_doc=entry)
 
 
 @app.route('/chronicle/journal')

@@ -208,6 +208,12 @@
                     <h2 class="tile__title">Player Hub</h2>
                     <p class="tile__desc">See what the players see &mdash; sheets, builders, the read-only initiative bar.</p>
                 </a>
+                <a href="/chronicle/manage" class="tile">
+                    <div class="tile__glyph"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><path d="M9 7h7M9 11h7"/></svg></div>
+                    <h2 class="tile__title">Chronicle</h2>
+                    <p class="tile__desc">Upload documents, preview what the players see, then publish them to the table.</p>
+                    <div class="tile-stat">{{ chronicle_doc_count }} document{{ '' if chronicle_doc_count == 1 else 's' }} &middot; {{ chronicle_published_count }} published</div>
+                </a>
                 <a href="/gm/stats" class="tile">
                     <div class="tile__glyph"><svg viewBox="0 0 24 24"><path d="M4 20V11M10 20V4M16 20v-6M22 20H2"/></svg></div>
                     <h2 class="tile__title">Campaign Stats</h2>
