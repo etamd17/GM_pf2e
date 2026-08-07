@@ -1,0 +1,34 @@
+{
+  "round": 1,
+  "turn_index": 0,
+  "combatants": [
+    {
+      "type": "pc",
+      "path": "Kyle",
+      "instance_id": "1f8606b0-61b8-47bb-95d8-0b729d6cd9f4",
+      "initiative": 0,
+      "current_hp": 8,
+      "conditions": {
+        "frightened": 0,
+        "sickened": 0,
+        "enfeebled": 0,
+        "clumsy": 0,
+        "drained": 0,
+        "stupefied": 0,
+        "stunned": 0,
+        "slowed": 0,
+        "dying": 0,
+        "wounded": 0,
+        "doomed": 0,
+        "prone": false,
+        "off_guard": false,
+        "concealed": false,
+        "hidden": false
+      },
+      "persistent_damage": [],
+      "elite_weak": 0,
+      "delaying": false,
+      "visible_to_players": true
+    }
+  ]
+}
