@@ -4,15 +4,19 @@
    sanitized fragment file the published page serves, so this is what players
    will read -- not a re-render that could drift from it. #}
 {% if preview_doc %}
-<div class="chron-doc-frame" style="max-width:65ch;margin-bottom:var(--sp-4);">
-  <p class="chron-kicker">Preview{% if not preview_doc.published %} · not published{% endif %}</p>
-  <p style="margin:0 0 10px;">This is the page body your players will see. It appears under
-    <strong>{{ preview_doc.section|capitalize }}</strong>{% if preview_doc.published %} and is
+<div class="chron-doc-frame">
+  <p class="chron-kicker">Preview{% if not preview_doc.published %} &middot; not published{% endif %}</p>
+  <p>This is the page body your players will see. It appears under
+    <strong>{{ preview_section_label }}</strong>{% if preview_doc.published %} and is
     <strong>live now</strong>{% else %} once you publish it{% endif %}.</p>
   {% for w in preview_doc.warnings or [] %}
-  <p class="chron-pill chron-pill--restricted" style="display:block;margin:6px 0;">{{ w }}</p>
+  <p class="chron-notice">{{ w }}</p>
   {% endfor %}
-  <a class="chron-pill" href="/chronicle/manage">Back to documents</a>
+  {% if not preview_doc.published %}
+  <p class="chron-notice chron-notice--muted">You have now previewed this document, so you can
+     publish it from the documents screen.</p>
+  {% endif %}
+  <a class="tb" href="/chronicle/manage">Back to documents</a>
 </div>
 {% endif %}
 <article class="chron-prose">

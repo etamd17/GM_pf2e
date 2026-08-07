@@ -55,6 +55,29 @@ SLUG_PREFIX = 'd-'
 SECTIONS = ('recap', 'lore', 'cast', 'handout')
 DEFAULT_SECTION = 'lore'
 
+# What the GM sees. The stored values are the vault's internal enum, but the
+# player-facing tabs are named Story/Lore/Cast/Handouts -- so a GM filing
+# something under "recap" had no way to know it lands on the Story tab.
+SECTION_LABELS = {
+    'recap': 'Story',
+    'lore': 'Lore',
+    'cast': 'Cast',
+    'handout': 'Handouts',
+}
+
+
+def size_label(byte_count):
+    """A human file size. Small enough not to warrant a dependency."""
+    try:
+        size = int(byte_count or 0)
+    except (TypeError, ValueError):
+        return ''
+    if size < 1024:
+        return '%d B' % size
+    if size < 1024 * 1024:
+        return '%d KB' % round(size / 1024)
+    return '%.1f MB' % (size / (1024 * 1024))
+
 EXT_MARKDOWN = ('.md', '.markdown')
 EXT_TEXT = ('.txt',)
 EXT_DOCX = ('.docx',)
@@ -121,7 +144,7 @@ def unique_slug(index, desired, ignore_id=None):
 
 
 def new_entry(*, doc_id, slug, title, section, original_filename, source_ext,
-              byte_count, warnings=None):
+              byte_count, excerpt='', warnings=None):
     now = _now()
     return {
         'id': doc_id,
@@ -130,9 +153,13 @@ def new_entry(*, doc_id, slug, title, section, original_filename, source_ext,
         'section': section if section in SECTIONS else DEFAULT_SECTION,
         'recipients': 'all',
         'published': False,          # uploads are always private until toggled
+        # Publishing is gated on the GM having actually opened the preview --
+        # this is the whole safety story for a lane with no automated strip.
+        'previewed_at': None,
         'original_filename': original_filename,
         'source_ext': source_ext,
         'byte_count': int(byte_count or 0),
+        'excerpt': excerpt or '',
         'warnings': list(warnings or []),
         'uploaded_at': now,
         'updated_at': now,
@@ -145,7 +172,9 @@ def as_page(entry):
     Mirrors a vault manifest page closely enough that every existing
     `/chronicle*` route and template renders it with no changes. `_lane` tells
     `_chronicle_fragment` which store to read from and is stripped before the
-    dict reaches a template.
+    dict reaches a template; `is_document` survives, so card templates can
+    give an uploaded doc a document glyph instead of the initial-letter
+    monogram meant for a portrait-less character.
     """
     return {
         'slug': entry['slug'],
@@ -153,6 +182,9 @@ def as_page(entry):
         'section': entry.get('section') or DEFAULT_SECTION,
         'recipients': entry.get('recipients', 'all'),
         'session_updated': entry.get('session_updated'),
+        'excerpt': entry.get('excerpt') or '',
+        'uploaded_at': entry.get('uploaded_at'),
+        'is_document': True,
         '_lane': 'docs',
     }
 
