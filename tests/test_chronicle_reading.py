@@ -26,10 +26,10 @@ def seed_chronicle(chronicle_dir, pages, *, session_number=3, html=None, assets=
     manifest = {'schema_version': 1, 'session_number': session_number,
                 'generated_at': '2026-07-15T00:00:00Z', 'pages': pages,
                 'mysteries': [], 'calendar': {}, 'fieldguide': [], 'spine': []}
-    with open(os.path.join(content, 'manifest.json'), 'w') as f:
+    with open(os.path.join(content, 'manifest.json'), 'w', encoding='utf-8') as f:
         json.dump(manifest, f)
     for slug, frag in (html or {}).items():
-        with open(os.path.join(content, 'html', slug + '.html'), 'w') as f:
+        with open(os.path.join(content, 'html', slug + '.html'), 'w', encoding='utf-8') as f:
             f.write(frag)
     for rel, data in (assets or {}).items():
         with open(os.path.join(content, 'assets', rel), 'wb') as f:
@@ -194,7 +194,7 @@ auth.create_user('shai','pw123456','Shai'); shai = auth.get_user_by_username('sh
 campaigns.add_member(cid, shai['id'], 'player')
 pdir = storage.party_dir(cid); os.makedirs(pdir, exist_ok=True)
 doc = storage.wrap_character('c'*32, cid, 'pf2e', {'build':{'name':'Shallan'}}, owner_user_id=shai['id'])
-with open(os.path.join(pdir,'shallan.json'),'w') as f: json.dump(doc, f)
+with open(os.path.join(pdir,'shallan.json'),'w', encoding='utf-8') as f: json.dump(doc, f)
 seed_chronicle(storage.chronicle_dir(cid), [
     {'slug':'romi','section':'cast','title':'Romi','recipients':'all'},
     {'slug':'secret','section':'cast','title':'Kaladin-only','recipients':['kaladin']},

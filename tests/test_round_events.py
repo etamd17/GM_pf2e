@@ -393,7 +393,7 @@ def test_persistence_writes_round_events_to_autosave_file(tmp_path, monkeypatch)
     app_module.ROUND_EVENTS[:] = [ev]
     try:
         app_module._do_persist_encounter_state()
-        raw = json.loads((tmp_path / '_autosave.json').read_text())
+        raw = json.loads((tmp_path / '_autosave.json').read_text(encoding='utf-8'))
         assert 'round_events' in raw
         assert raw['round_events'][0]['id'] == ev['id']
     finally:
@@ -765,10 +765,10 @@ cid = 'cafecafecafecafecafecafecafecafe'
 camp = os.path.join(TMP, 'campaigns', cid)
 enc = os.path.join(camp, 'saved_encounters')
 os.makedirs(enc)
-json.dump({'live_campaign_id': cid}, open(os.path.join(TMP, 'server_state.json'), 'w'))
+json.dump({'live_campaign_id': cid}, open(os.path.join(TMP, 'server_state.json'), 'w', encoding='utf-8'))
 json.dump({'schema_version': 1, 'id': cid, 'slug': 'storm', 'name': 'Storm',
            'system': 'cosmere', 'members': [], 'system_config': {}},
-          open(os.path.join(camp, 'campaign.json'), 'w'))
+          open(os.path.join(camp, 'campaign.json'), 'w', encoding='utf-8'))
 json.dump({'round': 4, 'turn_index': 0, 'notes': '', 'session_timer_start': None,
            'round_events': [{'id': 'ev1', 'round': 2, 'repeat_every': None,
                              'title': 'Highstorm', 'text': 'It hits.',
@@ -777,7 +777,7 @@ json.dump({'round': 4, 'turn_index': 0, 'notes': '', 'session_timer_start': None
            'combatants': [{'system': 'cosmere', 'type': 'pc', 'cosmere_id': 'missing-pc',
                            'path': 'Kaladin', 'instance_id': 'k1', 'initiative': 12,
                            'current_hp': 19, 'conditions': {}}]},
-          open(os.path.join(enc, '_autosave.json'), 'w'))
+          open(os.path.join(enc, '_autosave.json'), 'w', encoding='utf-8'))
 
 import app as A
 assert A.ROUND_NUMBER == 4, 'round not restored: %r' % A.ROUND_NUMBER

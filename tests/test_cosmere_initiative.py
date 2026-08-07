@@ -56,7 +56,7 @@ def test_initiative_mode_route_preserves_campaign(camp):
     assert r.get_json()['mode'] == 'traditional'
     assert app._cosmere_initiative_mode() == 'traditional'
     # the config write keeps the campaign doc's identity (the _save_campaign_config fix)
-    saved = json.loads(camp.read_text())
+    saved = json.loads(camp.read_text(encoding='utf-8'))
     assert saved['system'] == 'cosmere' and saved['id'] == 'c1'
     assert saved['cosmere_initiative'] == 'traditional'
     c.post('/api/cosmere/initiative_mode', json={'mode': 'phases'})

@@ -21,7 +21,7 @@ _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def _css() -> str:
-    return pathlib.Path(_REPO, 'static', 'css', 'system.css').read_text()
+    return pathlib.Path(_REPO, 'static', 'css', 'system.css').read_text(encoding='utf-8')
 
 
 def _cosmere_token_block(css: str) -> str:

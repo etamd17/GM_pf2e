@@ -26,13 +26,13 @@ def test_pc_sheet_url_per_system():
 
 
 def test_account_home_deeplinks_play_and_offers_resume_and_live():
-    h = pathlib.Path('templates/account_home.html').read_text()
+    h = pathlib.Path('templates/account_home.html').read_text(encoding='utf-8')
     assert 'name="then"' in h and 'sheet_url' in h          # Play deep-links to the sheet
     assert 'last_campaign' in h                              # Resume-last-session hero
     assert 'is_live' in h                                    # LIVE indicator on cards
 
 
 def test_base_nav_has_real_campaign_switcher():
-    h = pathlib.Path('templates/base.html').read_text()
+    h = pathlib.Path('templates/base.html').read_text(encoding='utf-8')
     assert '/api/my_campaigns' in h                          # dropdown is data-driven
     assert 'campaign-switcher' in h or 'campaignSwitcher' in h

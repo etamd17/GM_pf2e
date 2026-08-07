@@ -28,7 +28,7 @@ _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def _sheet() -> str:
-    return pathlib.Path(_REPO, 'templates', 'cosmere_sheet.html').read_text()
+    return pathlib.Path(_REPO, 'templates', 'cosmere_sheet.html').read_text(encoding='utf-8')
 
 
 def test_conditions_threaded_into_client_state():

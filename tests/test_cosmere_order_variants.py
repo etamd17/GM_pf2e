@@ -25,7 +25,7 @@ import systems.cosmere.radiant as R
 import systems.cosmere.build as B
 
 _REPO = pathlib.Path(__file__).resolve().parent.parent
-_BUILDER = (_REPO / 'templates' / 'cosmere_builder.html').read_text()
+_BUILDER = (_REPO / 'templates' / 'cosmere_builder.html').read_text(encoding='utf-8')
 
 
 def test_variant_catalog():

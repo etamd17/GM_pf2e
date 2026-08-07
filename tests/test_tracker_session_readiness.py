@@ -90,7 +90,7 @@ def test_clear_encounter_works_without_initiative(enc):
 def test_tracker_header_has_prominent_end_button():
     """The End/Clear action must live in the always-visible header, not only in
     the Tools overflow menu."""
-    html = open(os.path.join(_REPO, 'templates', 'tracker.html')).read()
+    html = open(os.path.join(_REPO, 'templates', 'tracker.html'), encoding='utf-8').read()
     header = html[html.index('class="hb-right"'):html.index('id="trk-tools-menu"')]
     assert 'clear_encounter' in header, 'no header-level End Encounter button (only in Tools menu)'
 
@@ -186,7 +186,7 @@ def test_clear_encounter_drops_pending_undo(enc):
 def test_costpips_handles_variable_action_range():
     """foundry_action_cost emits range glyphs (e.g. '◆-◆◆◆' = 1 to 3 actions) for
     dozens of real monster abilities; costPips must render them, not drop them."""
-    html = open(os.path.join(_REPO, 'templates', 'tracker.html')).read()
+    html = open(os.path.join(_REPO, 'templates', 'tracker.html'), encoding='utf-8').read()
     fn = html[html.index('function costPips('):]
     fn = fn[:fn.index('\n}') + 2]
     assert "indexOf('-')" in fn or 'split(/[-' in fn, \
@@ -210,7 +210,7 @@ def test_tracker_payload_carries_ability_action_cost(enc):
 def test_monster_parse_extracts_action_cost():
     """The Monster action parser must read the Foundry action cost (not just
     name + description)."""
-    src = open(os.path.join(_REPO, 'app.py')).read()
+    src = open(os.path.join(_REPO, 'app.py'), encoding='utf-8').read()
     line = src[src.index("self.actions.append({'name': name"):]
     line = line[:line.index('\n')]
     assert 'foundry_action_cost' in line, 'monster action parse does not capture the action cost'
@@ -226,7 +226,7 @@ def test_closed_modal_cannot_swallow_clicks():
     Invariants: (1) the closed .trk-modal base state uses visibility:hidden so NO
     descendant can hit-test; (2) the side-panel's inner pointer-events:auto is
     scoped to the .open state only."""
-    css = open(os.path.join(_REPO, 'templates', 'tracker.html')).read()
+    css = open(os.path.join(_REPO, 'templates', 'tracker.html'), encoding='utf-8').read()
 
     def block(selector):
         i = css.index(selector + ' {')
@@ -244,7 +244,7 @@ def test_closed_modal_cannot_swallow_clicks():
 
 
 def test_tracker_ability_render_shows_cost():
-    html = open(os.path.join(_REPO, 'templates', 'tracker.html')).read()
+    html = open(os.path.join(_REPO, 'templates', 'tracker.html'), encoding='utf-8').read()
     # The NPC "Abilities" render must pip the cost like strikes/spells already do.
     seg = html[html.index('// NPC abilities'):]
     seg = seg[:seg.index('// PC Feats')]

@@ -74,7 +74,7 @@ _UPLOAD = textwrap.dedent(
                  content_type="multipart/form-data")
     assert bad.status_code == 400, bad.status_code
 
-    open(os.environ["H_FN"], "w").write(fn)
+    open(os.environ["H_FN"], "w", encoding='utf-8').write(fn)
     """
 )
 
@@ -85,7 +85,7 @@ _SERVE = textwrap.dedent(
     import os, app
     app.app.config["TESTING"] = True
     c = app.app.test_client()
-    fn = open(os.environ["H_FN"]).read().strip()
+    fn = open(os.environ["H_FN"], encoding='utf-8').read().strip()
     payload = open(os.environ["H_PAYLOAD"], "rb").read()
 
     g = c.get("/handouts/" + fn)
@@ -129,7 +129,7 @@ def test_handout_survives_simulated_restart(tmp_path):
     assert up.returncode == 0, f"upload phase failed:\nSTDOUT:\n{up.stdout}\nSTDERR:\n{up.stderr}"
 
     # The file physically exists on the (persistent) volume after phase 1.
-    saved = fn_path.read_text().strip()
+    saved = fn_path.read_text(encoding='utf-8').strip()
     assert (data_dir / "uploads" / "handouts" / saved).is_file()
 
     serve = _run(_SERVE, data_dir, fn_path, payload_path)

@@ -23,7 +23,7 @@ import app
 import systems.cosmere.fabrial_crafting as FC
 
 _REPO = pathlib.Path(__file__).resolve().parent.parent
-_SHEET = (_REPO / 'templates' / 'cosmere_sheet.html').read_text()
+_SHEET = (_REPO / 'templates' / 'cosmere_sheet.html').read_text(encoding='utf-8')
 
 
 def test_crafting_rules_data():

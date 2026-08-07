@@ -39,5 +39,5 @@ def test_path_talents_tagged_and_grouped():
 
 
 def test_builder_groups_picker_by_specialty():
-    h = pathlib.Path(_REPO, 'templates', 'cosmere_builder.html').read_text()
+    h = pathlib.Path(_REPO, 'templates', 'cosmere_builder.html').read_text(encoding='utf-8')
     assert 'optgroup' in h and 't.specialty' in h and "(specialty)" in h

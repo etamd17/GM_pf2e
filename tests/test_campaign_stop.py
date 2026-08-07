@@ -28,7 +28,7 @@ def test_stop_then_activate_round_trip():
         c.post('/campaigns/new', data={'name': 'PF', 'system': 'pf2e'})
         c.post('/campaigns/new', data={'name': 'Cos', 'system': 'cosmere'})
         DD = os.environ['DATA_DIR']
-        camps = {json.load(open(f))['system']: json.load(open(f))['id']
+        camps = {json.load(open(f, encoding='utf-8'))['system']: json.load(open(f, encoding='utf-8'))['id']
                  for f in glob.glob(DD + '/campaigns/*/campaign.json')}
         pf, cos = camps['pf2e'], camps['cosmere']
 

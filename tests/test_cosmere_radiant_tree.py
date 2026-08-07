@@ -41,7 +41,7 @@ def test_ideal_nodes_excluded_and_gates_carried():
 
 
 def test_builder_renders_radiant_tree_with_ideal_level_gates():
-    h = pathlib.Path(_REPO, 'templates', 'cosmere_builder.html').read_text()
+    h = pathlib.Path(_REPO, 'templates', 'cosmere_builder.html').read_text(encoding='utf-8')
     assert 'RADIANT_TREES' in h and 'function renderRadiantTree' in h and 'radiant-tree' in h
     # _nodeMet now honours level + Ideal gates (used by the radiant nodes)
     assert 'n.levelReq' in h and 'n.idealReq' in h and '_idealsSworn' in h

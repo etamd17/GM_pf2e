@@ -43,7 +43,7 @@ def test_narrative_fields_roundtrip():
 
 
 def test_builder_and_sheet_wiring():
-    bld = pathlib.Path(_REPO, 'templates', 'cosmere_builder.html').read_text()
+    bld = pathlib.Path(_REPO, 'templates', 'cosmere_builder.html').read_text(encoding='utf-8')
     assert 'f-connections' in bld and 'cs-derived-pv' in bld
-    sheet = pathlib.Path(_REPO, 'templates', 'cosmere_sheet.html').read_text()
+    sheet = pathlib.Path(_REPO, 'templates', 'cosmere_sheet.html').read_text(encoding='utf-8')
     assert 'cs-derived' in sheet and 'derived.movement' in sheet and 'build.connections' in sheet

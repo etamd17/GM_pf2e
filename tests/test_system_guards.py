@@ -30,6 +30,6 @@ def test_shared_routes_unchanged_in_pf2e_mode(monkeypatch):
 
 
 def test_player_nav_combat_links_to_mobile():
-    html = pathlib.Path('templates/_player_nav.html').read_text()
+    html = pathlib.Path('templates/_player_nav.html').read_text(encoding='utf-8')
     assert 'href="/mobile"' in html
     assert 'href="/tracker"' not in html

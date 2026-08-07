@@ -214,9 +214,9 @@ pages = [{'slug':'pub','section':'lore','title':'P','recipients':'all'},
          {'slug':'sec','section':'lore','title':'S','recipients':['aria']}]
 json.dump({'schema_version':1,'session_number':1,'generated_at':'x','pages':pages,
            'mysteries':[],'calendar':{},'fieldguide':[],'spine':[]},
-          open(os.path.join(content,'manifest.json'),'w'))
-open(os.path.join(content,'html','pub.html'),'w').write('<p>public</p>')
-open(os.path.join(content,'html','sec.html'),'w').write('<img src="assets/secret.png">')
+          open(os.path.join(content,'manifest.json'),'w', encoding='utf-8'))
+open(os.path.join(content,'html','pub.html'),'w', encoding='utf-8').write('<p>public</p>')
+open(os.path.join(content,'html','sec.html'),'w', encoding='utf-8').write('<img src="assets/secret.png">')
 open(os.path.join(content,'assets','secret.png'),'wb').write(b'PNG-SECRET')
 link = os.path.join(A.CHRONICLE_DIR,'current'); tmp=link+'.tmp'
 os.symlink(content, tmp); os.replace(tmp, link)

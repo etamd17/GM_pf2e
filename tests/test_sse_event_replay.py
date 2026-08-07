@@ -9,7 +9,7 @@ import pathlib
 
 import app
 
-_HUB = (pathlib.Path(__file__).resolve().parent.parent / 'templates' / '_sse_hub.html').read_text()
+_HUB = (pathlib.Path(__file__).resolve().parent.parent / 'templates' / '_sse_hub.html').read_text(encoding='utf-8')
 
 
 def _reset(monkeypatch):
