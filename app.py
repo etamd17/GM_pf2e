@@ -8229,9 +8229,12 @@ def gm_hub():
 
 def _load_story_threads():
     """Load story-thread beats for the /gm/threads diagram from
-    story_threads.json (repo root). The GM's Cowork regenerates this file from
-    the Obsidian vault and hands it over; it's dropped in here. Returns a list
-    of beat dicts (empty on any error)."""
+    story_threads.json. The GM's Cowork regenerates this file from the Obsidian
+    vault and hands it over; it's dropped in here. Returns a list of beat dicts
+    (empty on any error, so a missing file is fine).
+
+    Lives under DATA_DIR (campaign-scoped in campaign mode) -- NOT the repo
+    root, which is ephemeral on Railway and would discard it every deploy."""
     try:
         with open(STORY_THREADS_FILE, encoding='utf-8') as f:
             return json.load(f).get('beats') or []
