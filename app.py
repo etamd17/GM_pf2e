@@ -840,12 +840,34 @@ def _chronicle_swap(staging_dir, new_hash, chronicle_dir=None):
 def _chronicle_repoint(link_path, target):
     """Atomically point `link_path` (a symlink) at `target`: create a temp
     symlink in the same dir, then os.replace it onto link_path (atomic on POSIX;
-    works whether or not link_path already exists)."""
+    works whether or not link_path already exists).
+
+    Windows cannot do this atomically. os.replace maps to MoveFileEx, which
+    refuses MOVEFILE_REPLACE_EXISTING when either path names a directory -- and
+    a symlink to a directory carries FILE_ATTRIBUTE_DIRECTORY, so replacing an
+    EXISTING pointer fails with ERROR_ACCESS_DENIED (WinError 5). Replacing a
+    MISSING one is fine, which is why a first publish works and every
+    republish/rollback used to blow up. Win32 offers no atomic directory-symlink
+    swap, so there we unlink first and accept a sub-millisecond window where
+    link_path does not exist.
+
+    Production is Linux (DEPLOY.md), so the real deployment always takes the
+    atomic path; the fallback only ever runs on a Windows dev box.
+    """
     tmp = link_path + '.tmp'
     if os.path.lexists(tmp):
         os.remove(tmp)
     os.symlink(target, tmp)
-    os.replace(tmp, link_path)
+    try:
+        os.replace(tmp, link_path)
+    except OSError:
+        # Gated on os.name so a GENUINE replace failure on POSIX (read-only
+        # volume, permissions) still raises with the existing pointer intact,
+        # rather than unlinking a live `current` and then failing anyway.
+        if os.name != 'nt' or not os.path.lexists(link_path):
+            raise
+        os.remove(link_path)
+        os.replace(tmp, link_path)
 
 
 def _chronicle_rollback(chronicle_dir=None):
