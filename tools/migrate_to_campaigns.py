@@ -37,8 +37,15 @@ FILE_ITEMS = [
     ('campaign_stats.json',     os.path.join(DATA_DIR, 'campaign_stats.json'),     storage.campaign_stats_file),
     ('pinned_generators.json',  os.path.join(DATA_DIR, 'pinned_generators.json'),  storage.pinned_generators_file),
     ('calendar.json',           os.path.join(DATA_DIR, 'calendar.json'),           storage.calendar_file),
-    # story_threads.json currently lives at BASE_DIR (a known misplacement); fixed here.
-    ('story_threads.json',      os.path.join(BASE_DIR, 'story_threads.json'),      storage.story_threads_file),
+    # story_threads.json used to be bound to BASE_DIR (a known misplacement,
+    # since corrected in app.py's legacy branch to DATA_DIR like its siblings).
+    # Prefer the DATA_DIR copy; fall back to the historical BASE_DIR one so an
+    # install that never restarted after the fix is not stranded.
+    ('story_threads.json',
+     (os.path.join(DATA_DIR, 'story_threads.json')
+      if os.path.exists(os.path.join(DATA_DIR, 'story_threads.json'))
+      else os.path.join(BASE_DIR, 'story_threads.json')),
+     storage.story_threads_file),
 ]
 OLD_CAMPAIGN_FILE = os.path.join(DATA_DIR, 'campaign.json')
 OLD_CAMPAIGN_AUDIO = os.path.join(DATA_DIR, 'campaign_audio')

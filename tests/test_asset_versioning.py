@@ -82,7 +82,7 @@ def test_sw_route_injects_deploy_version():
 
 
 def test_sw_source_has_no_bare_versionless_shell_css():
-    sw = (_REPO / 'static' / 'sw.js').read_text()
+    sw = (_REPO / 'static' / 'sw.js').read_text(encoding='utf-8')
     m = re.search(r'SHELL_URLS\s*=\s*\[(.*?)\]', sw, re.S)
     assert m, 'SHELL_URLS array not found'
     assert '/static/css/system.css' not in m.group(1), \
@@ -93,7 +93,7 @@ def test_sw_static_handler_is_version_aware():
     # Versioned URLs (?v=) are immutable within a deploy -> cache-first (no
     # redundant revalidation); a background refresh (only for unversioned URLs)
     # must be tied to the event lifetime so it can't be killed mid-write.
-    sw = (_REPO / 'static' / 'sw.js').read_text()
+    sw = (_REPO / 'static' / 'sw.js').read_text(encoding='utf-8')
     assert 'url.search' in sw and "'v='" in sw, \
         'static handler no longer distinguishes versioned (immutable) URLs'
     assert 'event.waitUntil' in sw, 'background revalidation is not tied to the event lifetime'
@@ -104,8 +104,8 @@ def test_sw_static_handler_is_version_aware():
 # --------------------------------------------------------------------------
 
 def test_no_unversioned_static_in_leaky_templates():
-    mc = (_REPO / 'templates' / 'mobile_combat.html').read_text()
-    ps = (_REPO / 'templates' / 'player_sheet.html').read_text()
+    mc = (_REPO / 'templates' / 'mobile_combat.html').read_text(encoding='utf-8')
+    ps = (_REPO / 'templates' / 'player_sheet.html').read_text(encoding='utf-8')
     assert 'href="/static/css/system.css"' not in mc, 'mobile_combat still hardcodes system.css'
     # dice-engine.js was retired in favor of dice-adapter.js (dice-overlay.js +
     # three.js, vendored) — same guard, new filename.
@@ -119,7 +119,7 @@ def test_no_unversioned_static_in_leaky_templates():
 # --------------------------------------------------------------------------
 
 def test_connected_frame_carries_version():
-    src = (_REPO / 'app.py').read_text()
+    src = (_REPO / 'app.py').read_text(encoding='utf-8')
     assert 'json.dumps({"v": DEPLOY_VERSION})' in src, \
         'the SSE connected frame does not embed DEPLOY_VERSION'
 
@@ -131,7 +131,7 @@ def test_context_processor_injects_app_version():
 
 
 def test_hub_compares_version_and_can_reload():
-    hub = (_REPO / 'templates' / '_sse_hub.html').read_text()
+    hub = (_REPO / 'templates' / '_sse_hub.html').read_text(encoding='utf-8')
     assert 'app_version' in hub, 'hub does not stamp the server-provided app_version'
     assert 'LOADED_VERSION' in hub
     assert 'location.reload' in hub, 'no reload path on a version mismatch'

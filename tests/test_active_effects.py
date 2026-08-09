@@ -936,7 +936,7 @@ class TestFixtureIntegration:
         if not path.exists():
             pytest.skip("kyle_l10 fixture missing")
         from app import Character
-        return Character(json.loads(path.read_text()), file_path=str(path))
+        return Character(json.loads(path.read_text(encoding='utf-8')), file_path=str(path))
 
     def test_frightened_lowers_a_real_pc_ac_by_value(self, kyle):
         base_ac = int(kyle.ac)

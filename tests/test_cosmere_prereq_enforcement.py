@@ -37,6 +37,6 @@ def test_clean_build_has_no_prereq_block():
 
 
 def test_save_route_comment_and_method_wired():
-    src = __import__('pathlib').Path(A.__file__).read_text()
+    src = __import__('pathlib').Path(A.__file__).read_text(encoding='utf-8')
     # The save route blocks on hard_violations (which now includes prereqs).
     assert 'build.hard_violations()' in src and "'blocked': True" in src

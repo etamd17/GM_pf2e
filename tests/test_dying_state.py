@@ -42,7 +42,7 @@ _AJAX = {'X-Requested-With': 'XMLHttpRequest'}
 # Fixtures
 # --------------------------------------------------------------------------
 def _load_pc(fixture_path, pc_file):
-    raw = json.loads(fixture_path.read_text())
+    raw = json.loads(fixture_path.read_text(encoding='utf-8'))
     pc_file.write_text(json.dumps(raw), encoding='utf-8')
     return Character(raw, file_path=str(pc_file))
 

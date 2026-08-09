@@ -138,13 +138,13 @@ def test_homebrew_save_list_delete(cosmere_mode):
     assert r.get_json()['ok']
     eid = r.get_json()['id']
     # persisted to the file
-    assert json.loads(cosmere_mode.read_text())['talent'][0]['name'] == 'Resolute Stance'
+    assert json.loads(cosmere_mode.read_text(encoding='utf-8'))['talent'][0]['name'] == 'Resolute Stance'
     # manager page lists it
     body = c.get('/cosmere/homebrew').data.decode()
     assert 'Resolute Stance' in body and 'Homebrew' in body
     # delete
     assert c.post('/cosmere/homebrew/%s/delete' % eid, json={}).get_json()['ok']
-    assert json.loads(cosmere_mode.read_text())['talent'] == []
+    assert json.loads(cosmere_mode.read_text(encoding='utf-8'))['talent'] == []
 
 
 def test_homebrew_surfaces_in_builder(cosmere_mode):

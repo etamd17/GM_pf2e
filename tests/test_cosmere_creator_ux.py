@@ -23,7 +23,7 @@ import pathlib
 import app as A
 
 _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_BUILDER = pathlib.Path(_REPO, 'templates', 'cosmere_builder.html').read_text()
+_BUILDER = pathlib.Path(_REPO, 'templates', 'cosmere_builder.html').read_text(encoding='utf-8')
 
 
 def test_path_talents_carry_effect_text():

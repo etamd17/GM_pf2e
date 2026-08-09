@@ -54,7 +54,7 @@ def test_phase1_end_to_end():
         pd = os.path.join(TMP, 'party_data'); os.makedirs(pd)
         for fx in glob.glob(os.path.join(os.path.abspath('.'), 'tests', 'fixtures', '*_l10.json')):
             shutil.copy2(fx, os.path.join(pd, os.path.basename(fx)))
-        json.dump({'name': 'Test Campaign'}, open(os.path.join(TMP, 'campaign.json'), 'w'))
+        json.dump({'name': 'Test Campaign'}, open(os.path.join(TMP, 'campaign.json'), 'w', encoding='utf-8'))
 
         import app as A
         from core import storage, auth, campaigns

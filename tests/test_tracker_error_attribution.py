@@ -22,7 +22,7 @@ _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def _tracker() -> str:
-    return pathlib.Path(_REPO, 'templates', 'tracker.html').read_text()
+    return pathlib.Path(_REPO, 'templates', 'tracker.html').read_text(encoding='utf-8')
 
 
 def _js_fn(src: str, name: str) -> str:

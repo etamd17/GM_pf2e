@@ -20,7 +20,7 @@ def _render(name: str, **ctx) -> str:
 
 
 def _read(name: str) -> str:
-    return pathlib.Path(_REPO, 'templates', name).read_text()
+    return pathlib.Path(_REPO, 'templates', name).read_text(encoding='utf-8')
 
 
 # ---- 1. Player nav Home link (gated on account mode) ----------------------

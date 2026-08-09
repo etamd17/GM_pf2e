@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pathlib
 
-_TRACKER = (pathlib.Path(__file__).resolve().parent.parent / 'templates' / 'tracker.html').read_text()
+_TRACKER = (pathlib.Path(__file__).resolve().parent.parent / 'templates' / 'tracker.html').read_text(encoding='utf-8')
 
 
 def test_turn_timer_markup_present():

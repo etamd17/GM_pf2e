@@ -11,6 +11,11 @@
   {{ latest_recap.html|safe }}
   <p><a href="/chronicle/story">Read the full story &rarr;</a></p>
 </article>
+{% elif page_count %}
+{# Content exists, just no session recap yet -- e.g. the GM has published
+   lore or handouts through /chronicle/manage before running a session.
+   Claiming the chronicle hasn't opened would contradict the tabs above. #}
+<div class="chron-empty"><p>No session recap yet &mdash; browse the chronicle using the tabs above.</p></div>
 {% else %}
 <div class="chron-empty"><p>The chronicle opens after your first session.</p></div>
 {% endif %}

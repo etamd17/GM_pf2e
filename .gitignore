@@ -43,13 +43,28 @@ scrapbooks/
 # Per-campaign runtime state. In account/campaign mode these live under
 # DATA_DIR/campaigns/<id>/; in the legacy flat layout the app writes them to
 # the DATA_DIR root (locally, the repo root). Runtime state, never committed.
-# (story_threads.json is intentionally tracked as seed content — not listed here.)
 campaign_stats.json
 loot_ledger.json
 pinned_generators.json
 calendar.json
 journals/
 uploads/
+
+# Live server state the app REWRITES at runtime. These were tracked, which is
+# actively harmful in three ways:
+#   1. The app deletes and rewrites them. _do_persist_encounter_state removes
+#      _autosave.json whenever no encounter is active, so merely running the
+#      app against the repo shows a tracked file as deleted.
+#   2. The committed copies are stale and wrong. server_state.json has NO
+#      live_campaign_id, so if DATA_DIR ever resolves to the checkout a deploy
+#      points the app at no campaign at all; _autosave.json holds a captured
+#      fight ("Kyle", 8 HP) that would rehydrate over a real one.
+#   3. DEPLOY.md's routine update is `git add -A`, which sweeps whatever the
+#      current session happened to write into a commit.
+# They stay on disk; git just stops tracking them.
+server_state.json
+saved_encounters/
+story_threads.json
 
 # Built Cosmere player characters — runtime store on the volume (DATA_DIR),
 # kept out of the PF2e party_data. Never committed.
@@ -60,6 +75,13 @@ homebrew.json
 
 # Per-player session-notes scratchpads — runtime state on the volume.
 session_notes/
+
+# Published Chronicle content + GM-uploaded Chronicle documents. Campaign mode
+# puts these under DATA_DIR/campaigns/<id>/chronicle/; the legacy flat layout
+# writes them to the DATA_DIR root (locally, the repo root). Leading slash so
+# this anchors to the repo root ONLY -- an unanchored `chronicle/` would also
+# swallow docs/chronicle/, which is tracked documentation.
+/chronicle/
 
 # Persisted Flask session secret (stable across restarts; never commit)
 .secret_key

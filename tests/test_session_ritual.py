@@ -21,7 +21,7 @@ def test_save_campaign_config_preserves_doc_identity(tmp_path, monkeypatch):
     }))
     monkeypatch.setattr(app, 'CAMPAIGN_FILE', str(f))
     app._save_campaign_config({'tagline': 'A world of storms and stone.'})
-    saved = json.loads(f.read_text())
+    saved = json.loads(f.read_text(encoding='utf-8'))
     # multi-campaign doc identity survives a config write
     assert saved['system'] == 'cosmere'
     assert saved['id'] == 'abc123' and saved['slug'] == 'roshar'

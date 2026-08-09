@@ -24,6 +24,14 @@
 [data-theme="parchment"],
 [data-theme="hi-contrast"],
 [data-theme="default"] {
+    /* Tell the browser this is a dark UI. Without it, every NATIVE control
+       the app doesn't explicitly style -- file pickers, checkboxes, select
+       dropdown panels, scrollbars -- renders in the OS light palette on a
+       #0d0c10 page. The design system styles .tinput/.tselect but cannot
+       reach a checkbox's box or a file input's button. */
+    color-scheme: dark;
+    accent-color: #c9a34e;      /* --gilt-400, literal: tokens aren't defined yet here */
+
     /* Brand */
     --gilt-50:  #faf2dd;
     --gilt-100: #f0d88a;
@@ -5064,6 +5072,168 @@ body.system-cosmere .trk .grid-wrap::after {
 
 @media (prefers-reduced-motion: reduce) {
     .chron-tab, .chron-card, .chron-live-bar__link { transition: none; }
+}
+
+/* ── Chronicle, second pass: GM console + uploaded-document cards ────────
+   Additive only; nothing above this line changes. Tokens only, same
+   anti-ornament contract as the block above (hairlines, flat, no glow).   */
+
+/* Visually-hidden text. Lets a repeated control ("Delete", "Preview", the
+   publish switch) carry its document's name for a screen reader without N
+   identical accessible names -- and without an aria-label, which would
+   OVERRIDE the visible word and break WCAG 2.5.3 Label in Name. */
+.sr-only {
+    position: absolute; width: 1px; height: 1px;
+    padding: 0; margin: -1px; overflow: hidden;
+    clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+
+/* The console shell. `.chron-body` is already on <main> in chronicle_base
+   and had no rule at all -- a free hook. The GM manage screen must NOT sit
+   in .chron-prose: that is the 65ch Alegreya READING surface, and using it
+   for a management console puts a data list in a manuscript. */
+.chron-body--console { max-width: none; }
+
+/* Focus. Nothing in the original block had a focus-visible state, so keyboard
+   focus survived only on the UA ring. Matches the 2px accent ring the rest of
+   the app uses. */
+.chron-tab:focus-visible,
+.chron-card:focus-visible,
+.chron-live-bar__link:focus-visible,
+.chron-doc-row:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: var(--r-sm);
+}
+
+/* Document glyph — the figure slot for an uploaded document. The monogram it
+   replaces is an initial-letter tile meant for a portrait-less CHARACTER; on
+   a grid of documents (most titled "The ...") it renders a wall of identical
+   letters. Same 56x56 footprint and flat well, so the grid rhythm holds. */
+.chron-docmark {
+    display: flex; align-items: center; justify-content: center;
+    width: 56px; height: 56px; border-radius: var(--r-sm);
+    background: var(--ink-700); flex-shrink: 0;
+}
+.chron-docmark svg {
+    width: 24px; height: 24px;
+    fill: none; stroke: var(--gilt-400); stroke-width: 1.5;
+    stroke-linecap: round; stroke-linejoin: round;
+}
+
+/* Card excerpt. Distinct from .chron-card__epithet on purpose: an epithet is
+   an authored tagline (italic Alegreya), an excerpt is machine-lifted body
+   prose and should read as quiet UI text, clamped so a long first paragraph
+   cannot stretch the grid row. */
+.chron-card__excerpt {
+    font-family: var(--font-ui); font-size: 12px; line-height: 1.45;
+    color: var(--text-on-cream-2); margin: 0 0 var(--sp-2);
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* Status line (upload feedback). Replaces a runtime inline colour; the error
+   tone is a brand token, not the 2.49:1 contrast the raw --danger gave. */
+.chron-status { font-family: var(--font-ui); font-size: 12px; color: var(--text-on-dark-3); min-height: 1.2em; }
+.chron-status--error { color: var(--ruby-200); }
+.chron-status--ok { color: var(--gilt-300); }
+
+/* Notice — a warning that needs READING, e.g. a spoiler marker found in an
+   uploaded document. Was a .chron-pill: a 10px tracked TAG component holding
+   two sentences, at exactly the moment the GM most needs to read it. Borrows
+   the live-bar's left-rule idiom. */
+.chron-notice {
+    display: flex; gap: var(--sp-3); align-items: flex-start;
+    padding: var(--sp-3) var(--sp-4); margin: var(--sp-3) 0;
+    background: var(--bg-card-2);
+    border: 1px solid var(--border-card);
+    border-left: 3px solid var(--ruby-300);
+    border-radius: var(--r-sm);
+    font-family: var(--font-ui); font-size: 12px; line-height: 1.5;
+    color: var(--ruby-200);
+}
+.chron-notice--muted { border-left-color: var(--gilt-400); color: var(--text-on-dark-2); }
+
+/* Document row — the GM console's list item. A card, not a table row: it
+   reflows on a phone, and it has room for the excerpt/meta the table hid. */
+.chron-doc-row {
+    display: flex; gap: var(--sp-4); align-items: flex-start;
+    padding: var(--sp-4);
+    background: var(--bg-card);
+    border: 1px solid var(--border-card);
+    border-radius: var(--r-md);
+    margin-bottom: var(--sp-3);
+}
+.chron-doc-row__body { flex: 1; min-width: 0; }
+.chron-doc-row__title {
+    font-family: var(--font-display); font-size: 16px; font-weight: 600;
+    color: var(--text-on-cream); margin: 0 0 2px; letter-spacing: 0.01em;
+}
+.chron-doc-row__controls {
+    display: flex; gap: var(--sp-2); align-items: center;
+    flex-wrap: wrap; margin-top: var(--sp-3);
+}
+.chron-doc-row--published { border-left: 3px solid var(--gilt-400); }
+
+/* Publish switch. The label carries the state word, so it stays readable
+   with the control disabled (preview-gated) -- a disabled checkbox alone
+   reads as "broken" rather than "not yet". */
+.chron-switch { display: inline-flex; align-items: center; gap: var(--sp-2); font-family: var(--font-ui); font-size: 12px; color: var(--text-on-dark-2); }
+.chron-switch input { width: 16px; height: 16px; accent-color: var(--gilt-400); }
+.chron-switch input:disabled { cursor: not-allowed; }
+.chron-switch--on { color: var(--gilt-300); }
+.chron-switch--blocked { color: var(--ruby-200); }
+
+/* Upload panel. .chron-doc-frame is the existing "box inside a page"
+   primitive; this only lays the fields out inside it. */
+.chron-upload { display: flex; flex-wrap: wrap; gap: var(--sp-3); align-items: flex-end; }
+.chron-upload__field { flex: 1 1 200px; min-width: 0; }
+.chron-upload__field--wide { flex: 2 1 240px; }
+/* A file input sizes itself to its button plus the filename, so it ignores the
+   flex basis and pushes the panel wider than the phone viewport. */
+.chron-upload__field .tinput,
+.chron-upload__field .tselect,
+.chron-upload__field .tb {
+    width: 100%; max-width: 100%; box-sizing: border-box;
+}
+/* The file input's own button is a shadow-DOM part: `color-scheme: dark` does
+   not reach it, so it renders as a light-grey OS widget on a near-black page.
+   It is the last natively-styled control on the screen. */
+.chron-upload input[type="file"]::file-selector-button {
+    font-family: var(--font-ui); font-size: 11px; font-weight: 600;
+    letter-spacing: 0.06em;
+    padding: 4px 10px; margin-right: var(--sp-3);
+    background: var(--bg-card-2); color: var(--text-on-dark-2);
+    border: 1px solid var(--border-rule); border-radius: var(--r-sm);
+    cursor: pointer;
+}
+.chron-upload input[type="file"]::file-selector-button:hover {
+    background: var(--bg-card); color: var(--text-on-dark);
+}
+
+/* Section grouping on the console -- also the <h2> structure the screen
+   otherwise lacked entirely. */
+.chron-doc-group { margin-bottom: var(--sp-6); }
+.chron-doc-group__head {
+    font-family: var(--font-ui); font-size: 11px; font-weight: 600;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--gilt-300); margin: 0 0 var(--sp-3);
+    padding-bottom: var(--sp-2); border-bottom: 1px solid var(--border-card);
+}
+
+/* Phone. The player screens already reflowed; these are the two places that
+   did not. .chron-prose kept 32px of side padding at every width -- 17% of a
+   375px screen before a word of text. */
+@media (max-width: 600px) {
+    .chron-prose { padding: var(--sp-5) var(--sp-4); font-size: 17px; }
+    .chron-doc-row { flex-direction: column; gap: var(--sp-3); }
+    .chron-upload__field, .chron-upload__field--wide { flex: 1 1 100%; }
+}
+@media (max-width: 480px) {
+    /* Keep the tab strip on one line rather than wrapping to a second row,
+       which left the current-tab underline floating above the head rule. */
+    .chron-subnav { flex-wrap: nowrap; overflow-x: auto; gap: var(--sp-3); }
+    .chron-tab { white-space: nowrap; }
 }
 
 /* ── Coding-font retirement (app-wide) ───────────────────────────────────

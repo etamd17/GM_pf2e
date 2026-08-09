@@ -41,7 +41,7 @@ _GAVIN = _FIX_DIR / 'gavin_l11.json'        # Kineticist L11
 def _build(fixture_path, conditions=None):
     """Construct a Character from a fixture, optionally seeding build conditions
     (needed only for drained, whose max-HP effect is applied in __init__)."""
-    raw = copy.deepcopy(json.loads(fixture_path.read_text()))
+    raw = copy.deepcopy(json.loads(fixture_path.read_text(encoding='utf-8')))
     if conditions is not None:
         raw['build']['conditions'] = conditions
     return Character(raw, file_path=str(fixture_path))
@@ -309,7 +309,7 @@ def test_drained_reduces_max_hp_by_value_times_level():
 
 def test_drained_clamps_current_hp_to_reduced_max():
     # Stored current_hp (130) sits above the drained-reduced max; it must clamp.
-    raw = copy.deepcopy(json.loads(_GOEL.read_text()))
+    raw = copy.deepcopy(json.loads(_GOEL.read_text(encoding='utf-8')))
     raw['build']['conditions'] = {'drained': 3}
     raw['build']['current_hp'] = 130
     pc = Character(raw, file_path=str(_GOEL))

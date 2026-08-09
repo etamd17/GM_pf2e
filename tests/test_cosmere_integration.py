@@ -169,7 +169,7 @@ def test_tracker_offers_cosmere_damage_types():
     (spirit/vital), instead of only PF2e types. Guards the UI half of the
     Deflect-reachability fix (the server half is covered by the route test)."""
     import pathlib
-    html = pathlib.Path('templates/tracker.html').read_text()
+    html = pathlib.Path('templates/tracker.html').read_text(encoding='utf-8')
     # the Cosmere damage-type vocabulary is defined for the JS
     assert 'COSMERE_DAMAGE_TYPES' in html
     for t in ('impact', 'keen', 'energy', 'spirit', 'vital'):

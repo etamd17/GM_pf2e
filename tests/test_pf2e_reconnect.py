@@ -22,7 +22,7 @@ _SHEET = pathlib.Path(__file__).parent.parent / 'templates' / 'player_sheet.html
 
 @pytest.fixture
 def kyle(tmp_path, monkeypatch):
-    raw = json.loads(_FIX.read_text())
+    raw = json.loads(_FIX.read_text(encoding='utf-8'))
     pc_file = tmp_path / 'Kyle.json'
     pc_file.write_text(json.dumps(raw), encoding='utf-8')
     monkeypatch.setitem(app_module.PARTY_LIBRARY, 'Kyle', Character(raw, file_path=str(pc_file)))
@@ -47,7 +47,7 @@ def test_pc_state_unknown_is_404():
 
 
 def test_sheet_refetches_full_state_on_reconnect():
-    html = _SHEET.read_text()
+    html = _SHEET.read_text(encoding='utf-8')
     assert 'window.refetchPcState' in html
     assert '/api/pc_state/' in html
     assert 'window.applyPcUpdate' in html

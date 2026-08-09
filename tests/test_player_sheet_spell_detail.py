@@ -21,7 +21,7 @@ _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def _sheet() -> str:
-    with open(os.path.join(_REPO, 'templates', 'player_sheet.html')) as f:
+    with open(os.path.join(_REPO, 'templates', 'player_sheet.html'), encoding='utf-8') as f:
         return f.read()
 
 

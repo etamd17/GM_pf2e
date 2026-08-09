@@ -89,6 +89,11 @@ def cosmere_adversaries_file(cid): return os.path.join(campaign_dir(cid), 'cosme
 def cosmere_pc_dir(cid):           return os.path.join(campaign_dir(cid), 'cosmere_pcs')
 def homebrew_file(cid):            return os.path.join(campaign_dir(cid), 'homebrew.json')
 def chronicle_dir(cid):            return os.path.join(campaign_dir(cid), 'chronicle')
+# GM-uploaded Chronicle documents. A sibling of the vault lane's content/ +
+# current/previous symlinks, NOT a child of them -- _chronicle_swap prunes
+# every content/<hash> it does not point at, so docs kept there would be
+# deleted by the next vault publish. See core/chronicle_docs.py.
+def chronicle_docs_dir(cid):       return os.path.join(chronicle_dir(cid), 'docs')
 
 
 def delete_campaign_dir(cid):

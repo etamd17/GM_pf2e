@@ -148,7 +148,9 @@ def test_reactive_strike_allows_unarmed():
     # SL:21844 "melee weapon attack OR unarmed attack" -- value/chat dropped it.
     import json
     import os
-    path = os.path.join(origins.__file__.rsplit('/', 1)[0], 'content', 'actions.json')
+    # os.path.dirname, not rsplit('/') -- __file__ uses backslashes on Windows,
+    # so the split was a no-op there and the path became origins.py/content/...
+    path = os.path.join(os.path.dirname(origins.__file__), 'content', 'actions.json')
     docs = json.load(open(path, encoding='utf-8'))
     rs = next(d for d in docs if d.get('system', {}).get('id') == 'reactive_strike')
     for field in ('value', 'chat', 'short'):

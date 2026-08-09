@@ -42,7 +42,7 @@ def test_nodes_carry_positions_edges_and_structured_prereqs():
 
 
 def test_builder_renders_and_gates_the_tree():
-    h = pathlib.Path(_REPO, 'templates', 'cosmere_builder.html').read_text()
+    h = pathlib.Path(_REPO, 'templates', 'cosmere_builder.html').read_text(encoding='utf-8')
     assert 'PATH_TREES' in h and 'function renderPathTree' in h and 'tree-svg' in h
     assert 'function toggleTreeTalent' in h
     # locked nodes can't be picked from the tree

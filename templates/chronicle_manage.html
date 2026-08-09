@@ -1,0 +1,264 @@
+{% extends "chronicle_base.html" %}
+{% block chronicle %}
+{# GM console. Deliberately NOT wrapped in .chron-prose -- that is the 65ch
+   Alegreya reading surface for long-form pages, and using it here put a data
+   list inside a manuscript. Controls use the app's existing primitives
+   (.tb / .tinput / .tselect / .tlabel), not inline styles. #}
+<div class="chron-body--console">
+  <p class="chron-kicker">Game Master</p>
+  <h1 class="chron-title">Chronicle documents</h1>
+
+  <div class="chron-doc-frame">
+    <h2 class="chron-doc-group__head">Add a document</h2>
+    <form id="chron-doc-form" class="chron-upload">
+      <div class="chron-upload__field chron-upload__field--wide">
+        <label class="tlabel" for="chron-doc-file">File</label>
+        <input class="tinput" type="file" id="chron-doc-file" name="document" required
+               accept=".docx,.md,.markdown,.txt" aria-describedby="chron-doc-limits">
+      </div>
+      <div class="chron-upload__field chron-upload__field--wide">
+        <label class="tlabel" for="chron-doc-title">Title</label>
+        <input class="tinput" type="text" id="chron-doc-title" maxlength="120"
+               placeholder="Taken from the document's own heading">
+      </div>
+      <div class="chron-upload__field">
+        <label class="tlabel" for="chron-doc-section">Section</label>
+        <select class="tselect" id="chron-doc-section">
+          {% for s in sections %}
+          <option value="{{ s }}"{% if s == 'lore' %} selected{% endif %}>{{ section_labels[s] }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="chron-upload__field">
+        <button type="submit" id="chron-doc-submit" class="tb primary">Upload</button>
+      </div>
+    </form>
+    <p id="chron-doc-limits" class="chron-status">
+      Word, Markdown or plain text, up to {{ max_mb }} MB. {{ docs|length }} of {{ max_docs }} documents used.
+      Uploads stay private until you preview and publish them.
+    </p>
+    <p id="chron-doc-status" class="chron-status" role="status" aria-live="polite"></p>
+  </div>
+
+  {% if not docs %}
+  <div class="chron-empty" id="chron-doc-empty">
+    <svg class="chron-empty__glyph" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6 2h9l5 5v15H6z"/><path d="M15 2v5h5"/><path d="M9 12h7M9 16h7"/>
+    </svg>
+    <p>No documents yet. Upload one above and it stays private until you publish it.</p>
+    {% if vault_published %}
+    <p>Your Obsidian vault Chronicle is published separately and is unaffected by anything here.</p>
+    {% endif %}
+  </div>
+  {% else %}
+  <div id="chron-doc-list">
+    {% for section, rows in grouped %}
+    <section class="chron-doc-group">
+      <h2 class="chron-doc-group__head">{{ section_labels[section] }} &middot; {{ rows|length }}</h2>
+      {% for d in rows %}
+      <article class="chron-doc-row{% if d.published %} chron-doc-row--published{% endif %}"
+               data-doc-id="{{ d.id }}" data-previewed="{{ '1' if d.previewed_at else '' }}">
+        <span class="chron-docmark" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6z"/><path d="M15 2v5h5"/><path d="M9 12h7M9 16h7"/></svg>
+        </span>
+        <div class="chron-doc-row__body">
+          <h3 class="chron-doc-row__title">{{ d.title }}</h3>
+          {% if d.excerpt %}<p class="chron-card__excerpt">{{ d.excerpt }}</p>{% endif %}
+          <p class="chron-card__meta">
+            <span>{{ d.original_filename }}</span>
+            <span>{{ d.size_label }}</span>
+            <span>{{ d.uploaded_at[:10] if d.uploaded_at else '' }}</span>
+          </p>
+
+          {% for w in d.warnings or [] %}
+          <p class="chron-notice">{{ w }}</p>
+          {% endfor %}
+          {% if d.shadowed_by_vault %}
+          <p class="chron-notice">Blocked: a vault page already uses the address
+             <code>{{ d.slug }}</code>. Rename this document to publish it.</p>
+          {% endif %}
+
+          <div class="chron-doc-row__controls">
+            <label class="chron-switch{% if d.published %} chron-switch--on{% endif %}{% if d.shadowed_by_vault %} chron-switch--blocked{% endif %}">
+              <input type="checkbox" class="chron-doc-publish"
+                     {% if d.published %}checked{% endif %}
+                     {% if d.shadowed_by_vault or not d.previewed_at %}disabled{% endif %}>
+              <span class="chron-doc-publish-label">
+                {%- if d.shadowed_by_vault %}Blocked
+                {%- elif d.published %}Published
+                {%- elif not d.previewed_at %}Preview first
+                {%- else %}Private{% endif -%}
+              </span>
+              <span class="sr-only">{{ d.title }}</span>
+            </label>
+            {# New tab: the preview IS the real player page, and keeping the
+               list in place matters when working through a batch. #}
+            <a class="tb" href="/chronicle/preview/{{ d.id }}" target="_blank" rel="noopener">
+              Preview<span class="sr-only"> {{ d.title }}</span>
+            </a>
+            <button type="button" class="tb danger chron-doc-delete">
+              Delete<span class="sr-only"> {{ d.title }}</span>
+            </button>
+          </div>
+        </div>
+      </article>
+      {% endfor %}
+    </section>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+<script>
+(function () {
+  var statusEl = document.getElementById('chron-doc-status');
+  function say(msg, kind) {
+    statusEl.textContent = msg || '';
+    statusEl.className = 'chron-status' + (kind ? ' chron-status--' + kind : '');
+  }
+
+  // Read a response body without assuming it is JSON. A Werkzeug 413 from the
+  // global MAX_CONTENT_LENGTH is HTML, and an unguarded r.json() surfaced the
+  // parser's own syntax error to the GM instead of a useful message.
+  function readJson(r) {
+    return r.json().then(function (j) { return { ok: r.ok, status: r.status, j: j }; },
+                         function () { return { ok: r.ok, status: r.status, j: {} }; });
+  }
+  function errorFrom(res, fallback) {
+    if (res.j && res.j.error) return res.j.error;
+    if (res.status === 413) return 'That file is too large.';
+    if (res.status === 403) return 'You are not signed in as the GM any more.';
+    return fallback + ' (' + res.status + ')';
+  }
+
+  var MAX_BYTES = {{ max_bytes }};
+
+  // ---- Upload ----
+  var form = document.getElementById('chron-doc-form');
+  if (form) form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var fileEl = document.getElementById('chron-doc-file');
+    var file = fileEl.files && fileEl.files[0];
+    if (!file) { say('Choose a file first.', 'error'); return; }
+    // Check locally so a too-big file is not pushed over table wifi first.
+    if (file.size > MAX_BYTES) {
+      say('That file is ' + Math.round(file.size / 1048576) + ' MB; the limit is '
+          + Math.round(MAX_BYTES / 1048576) + ' MB.', 'error');
+      return;
+    }
+
+    var body = new FormData();
+    body.append('document', file);
+    body.append('section', document.getElementById('chron-doc-section').value);
+    var title = document.getElementById('chron-doc-title').value.trim();
+    if (title) body.append('title', title);
+
+    var btn = document.getElementById('chron-doc-submit');
+    btn.disabled = true;
+    say('Uploading ' + file.name + '...');
+    // No Content-Type header -- the browser sets the multipart boundary.
+    fetch('/api/chronicle/docs', { method: 'POST', body: body })
+      .then(readJson)
+      .then(function (res) {
+        if (!res.ok || !res.j.ok) throw new Error(errorFrom(res, 'Upload failed'));
+        // Reload to place the new row in its section group. Cheap here
+        // because upload is a deliberate, low-frequency action -- unlike the
+        // toggle, which must never reload.
+        window.location.reload();
+      })
+      .catch(function (err) { say(err.message, 'error'); btn.disabled = false; });
+  });
+
+  // ---- Per-row actions ----
+  // NOTE: patch() deliberately does NOT swallow its rejection. It used to end
+  // in .catch, which returned a RESOLVED promise -- so the caller's rollback
+  // never ran and a failed publish left the switch reading "Published".
+  function patch(row, payload) {
+    return fetch('/api/chronicle/docs/' + encodeURIComponent(row.dataset.docId), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).then(readJson).then(function (res) {
+      if (!res.ok || !res.j.ok) throw new Error(errorFrom(res, 'Update failed'));
+      return res.j.doc;
+    });
+  }
+
+  function paintPublishState(row, doc) {
+    var label = row.querySelector('.chron-doc-publish-label');
+    var wrap = row.querySelector('.chron-switch');
+    var box = row.querySelector('.chron-doc-publish');
+    var previewed = !!row.dataset.previewed;
+    label.textContent = doc.published ? 'Published' : (previewed ? 'Private' : 'Preview first');
+    wrap.classList.toggle('chron-switch--on', !!doc.published);
+    box.disabled = !previewed;
+    row.classList.toggle('chron-doc-row--published', !!doc.published);
+  }
+
+  function wireRow(row) {
+    var toggle = row.querySelector('.chron-doc-publish');
+    if (toggle) toggle.addEventListener('change', function () {
+      var wanted = toggle.checked;
+      toggle.disabled = true;
+      patch(row, { published: wanted })
+        .then(function (doc) { say('Saved.', 'ok'); paintPublishState(row, doc); })
+        .catch(function (err) {
+          toggle.checked = !wanted;                 // the rollback that used to be dead
+          paintPublishState(row, { published: !wanted });
+          say(err.message, 'error');
+        });
+    });
+
+    var del = row.querySelector('.chron-doc-delete');
+    if (del) del.addEventListener('click', function () {
+      var title = row.querySelector('.chron-doc-row__title').textContent.trim();
+      var live = row.classList.contains('chron-doc-row--published');
+      var msg = live
+        ? 'Delete "' + title + '"? Your players will no longer see it.'
+        : 'Delete "' + title + '"? It was never published.';
+      if (!window.confirm(msg)) return;
+      fetch('/api/chronicle/docs/' + encodeURIComponent(row.dataset.docId), { method: 'DELETE' })
+        .then(readJson)
+        .then(function (res) {
+          if (!res.ok || !res.j.ok) throw new Error(errorFrom(res, 'Delete failed'));
+          // Move focus before removing the node, or it falls to <body>.
+          var next = row.nextElementSibling || row.parentElement;
+          var target = next && next.querySelector ? next.querySelector('.tb, input') : null;
+          (target || document.getElementById('chron-doc-file')).focus();
+          var group = row.closest('.chron-doc-group');
+          row.remove();
+          if (group && !group.querySelector('.chron-doc-row')) group.remove();
+          say('Deleted.', 'ok');
+          if (!document.querySelector('.chron-doc-row')) window.location.reload();
+        })
+        .catch(function (err) { say(err.message, 'error'); });
+    });
+  }
+
+  document.querySelectorAll('.chron-doc-row').forEach(wireRow);
+
+  // ---- Live updates ----
+  // The preview opens in a NEW TAB, so this document never learns the preview
+  // gate was satisfied unless it listens. Shared hub only -- never a bare
+  // EventSource (one socket per tab; the hub multiplexes and reconnects).
+  if (window.appSSE) {
+    window.appSSE('chronicle_update', function (event) {
+      var data = null;
+      try { data = JSON.parse(event.data); } catch (_) { return; }
+      if (!data || !data.doc_id) return;
+      var row = document.querySelector('.chron-doc-row[data-doc-id="' + data.doc_id + '"]');
+      if (!row) return;
+      if (data.previewed) {
+        row.dataset.previewed = '1';
+        paintPublishState(row, { published: row.classList.contains('chron-doc-row--published') });
+        say('Previewed - you can publish it now.', 'ok');
+      } else if (typeof data.published === 'boolean') {
+        var box = row.querySelector('.chron-doc-publish');
+        if (box) box.checked = data.published;
+        paintPublishState(row, { published: data.published });
+      }
+    });
+  }
+})();
+</script>
+{% endblock %}

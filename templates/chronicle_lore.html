@@ -9,13 +9,21 @@
       <div class="chron-card__figure">
         {% if p.portrait_url %}
           <img class="chron-portrait" src="{{ p.portrait_url }}" alt="" loading="lazy" width="56" height="56">
+        {% elif p.is_document %}
+          {# An uploaded document is not a portrait-less character: the
+             initial-letter monogram would render a grid of identical "T"s,
+             since most titles begin with "The". #}
+          <span class="chron-docmark" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6z"/><path d="M15 2v5h5"/><path d="M9 12h7M9 16h7"/></svg>
+          </span>
         {% else %}
           <span class="chron-monogram" aria-hidden="true">{{ (p.title or '?')[0]|upper }}</span>
         {% endif %}
       </div>
       <div class="chron-card__body">
         <h2 class="chron-card__title">{{ p.title }}</h2>
-        {% if p.epithet %}<p class="chron-card__epithet">{{ p.epithet }}</p>{% endif %}
+        {% if p.epithet %}<p class="chron-card__epithet">{{ p.epithet }}</p>
+        {% elif p.excerpt %}<p class="chron-card__excerpt">{{ p.excerpt }}</p>{% endif %}
         {% if p.tags %}<div class="chron-tags">{% for t in p.tags %}<span class="chron-pill">{{ t }}</span>{% endfor %}</div>{% endif %}
         {% if is_gm and p.recipient_label %}<p class="chron-card__meta"><span class="chron-pill chron-pill--restricted">Only {{ p.recipient_label }}</span></p>{% endif %}
       </div>
