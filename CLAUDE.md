@@ -36,7 +36,7 @@ python tools/check_templates.py   # Jinja parse check (CI runs this) — run aft
 - **`app.py` is a ~17k-line monolith** — all Flask routes plus the `Character` (PF2e) and `Monster` classes. Live combat state is held in **process globals** (`ACTIVE_ENCOUNTER`, `ROUND_NUMBER`, `TURN_INDEX`, `PARTY_LIBRARY`, …), flushed to `server_state.json` (`_persist_encounter_state`) and re-hydrated on boot. There is **one live campaign slot** at a time; `load_campaign(cid)` rebinds the globals.
 - **Server-rendered Jinja + vanilla JS.** No build step, no SPA framework.
 - **SSE** (`/api/events`): every page subscribes through the shared hub `window.appSSE(eventName, handler)` in `templates/_sse_hub.html` — **never** `new EventSource('/api/events')` directly (one socket per tab; the hub multiplexes + reconnects). Broadcast from the server with `sse_broadcast(event, data, player_filter=...)`: `data` goes to GMs, and `player_filter(copy)` returns the player-facing payload (or `None` to drop it for players entirely) — computed once and shared by all player subscribers.
-  - **`?audience=table` is NOT a server-side feature.** Its only use is client-side in `_sse_hub.html`: a passive table screen has no operator, so it self-reloads on a new deploy instead of showing the "New version" toast. There is no audience concept in `app.py` (grep: 0 hits) and no shared-table frame yet — the Campaign Hub's Stage has to build one.
+  - **`?audience=table` is NOT a server-side feature.** Its only use is client-side in `_sse_hub.html`: a passive table screen has no operator, so it self-reloads on a new deploy instead of showing the "New version" toast. There is no audience concept in `app.py` (grep: 0 hits) and no shared-table frame at all. (The Campaign Hub's Stage was going to build one; that project is cancelled, so a shared-table frame now has no owner.)
 - **The Chronicle has TWO publishing lanes**, and they share storage with nothing.
   - **Vault lane** (original): `tools/chronicle_build.py` runs on the GM's machine, derives a spoiler-safe player vault from the Obsidian GM vault, hard-aborts on a surviving `[!danger]`/`[!secret]`/`[!gm]` marker, zips it and POSTs to `/api/chronicle/publish`. Whole-tree replace via `content/<hash>` + `current`/`previous` symlinks (`_chronicle_swap`).
   - **Doc lane** (`core/chronicle_docs.py`): the GM uploads a `.docx`/`.md`/`.txt` at `/chronicle/manage`, previews it, then toggles `published`. Stored at `chronicle/docs/` — a **sibling** of `content/`, never inside it, because `_chronicle_swap`'s prune deletes every content dir it doesn't point at. No symlinks, no rotation; the toggle *is* the rollback.
@@ -69,17 +69,31 @@ Engine fidelity is audited and documented — check these before claiming a rule
 **No feature work is currently in flight.** The app-wide UI/UX + minimal-design arc finished and
 shipped (see below); pick up whatever the user asks for next.
 
-**Do NOT work on these — explicitly owned elsewhere or deferred by the user:**
-- **Campaign Hub / the Stage** (`docs/superpowers/specs/2026-07-21-campaign-hub-design.md`). The user
-  is building this **separately, with its own multi-agent setup**, to see how that approach performs.
-  It is **out of scope for this repo's live site for now** and will be integrated much later. Do not
-  implement it, and do not start prep work for it, unless the user explicitly reopens it. (No Stage
-  code was ever written here — `api_stage_encounter()` in app.py is an unrelated pre-existing route
-  for staging an encounter.)
-- The **battle-map/VTT** — a separate parallel effort.
-- Player-sheet **inventory reorg** ("hold on inventory scope").
-- A **sticky HP/conditions chip** on the player sheet — considered and dropped by the user.
-- **Player-vault ingestion** (plan: `docs/superpowers/plans/2026-07-21-chronicle-player-vault-ingest.md`).
+**Do NOT work on these — deferred by the user:**
+- Player-sheet **inventory reorg** ("hold on inventory scope"). The hold is on SCOPE, not on the
+  work: a cosmetic restyle shipped (`952adb25`) and the structural questions behind it were never
+  written down. Two real defects sit inside it if it ever reopens — `/api/add_item` appends
+  `[name, qty]` with no bulk, and `Character.__init__` defaults a 2-element entry to `'0'`, so
+  every item added in-app registers as **0 Bulk forever** and the encumbrance gauge is only truthful
+  for a straight Pathbuilder import; and `invested` lives in `localStorage` only, so it does not
+  follow the player to another device and the GM never sees it.
+- A **sticky HP/conditions chip** on the player sheet. Note the record is weaker than "dropped":
+  commit `71680180` **deferred** it from a deliberately CSS-only pass because it needs markup plus a
+  JS paint hook. On desktop `.char-header` is already `position: sticky`, so HP never scrolls away;
+  the gap is real only at **≤768px**, where the header is reset to `relative` and HP, conditions, AC
+  and shield all scroll off together — i.e. on the phones the players actually use. `.header-hp-chip`
+  is already styled (`system.css:3176`) and both mirrors already write `#header-hp-chip-cur`.
+
+**Campaign Hub / the Stage was CANCELLED (2026-08-09)** — do not resurrect it, and do not treat
+`api_stage_encounter()` in app.py as related (it is an unrelated pre-existing route for staging an
+encounter).
+
+**Player-vault ingestion is SHIPPED, not parked.** It used to be listed here, citing a plan file
+that has never existed in git history. The scoping commit that deferred it (`686a2a76`, 14:18) was
+followed by the implementation the same afternoon (`435a692d`..`5ba2eb98`, 15:54–20:04), all of it
+ancestors of HEAD: `--mode player-vault` on `tools/chronicle_build.py` ingests an already
+player-facing hand-authored vault instead of deriving one. The only thing outstanding is that it has
+never been run against a real `--publish-url` — dry-run only.
 
 ### Recently shipped (do NOT re-suggest as new work)
 - **App-wide UI/UX + minimal-design arc — COMPLETE**, live on Railway in three merges: `3c4cffba`
