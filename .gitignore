@@ -13,8 +13,25 @@ venv/
 # Local-only Pathbuilder PC exports — used for verifying class progressions
 # and calculation fixes. PCs reach the live site through the in-app
 # JSON-upload + character-creator flow, NOT via the repo.
+#
+# BOTH patterns are needed. A pattern containing an internal slash is anchored
+# to this file's directory, so `party_data/*.json` matches ONLY the repo root --
+# it does not cover campaigns/<cid>/party_data/, which is where every PC
+# actually lives in campaign mode. That gap plus DEPLOY.md's `git add -A`
+# routine is how real player data gets published to a public repo.
 party_data/*.json
+**/party_data/*.json
 !party_data/portraits/
+!**/party_data/portraits/
+
+# Account layer + per-campaign runtime data. Created by the app at runtime and
+# stored on the Railway volume; none of it is source. users.json holds password
+# hashes and invites.json holds live invite codes, so committing either is a
+# credential leak, not just noise.
+users.json
+invites.json
+campaigns/
+campaigns_trash/
 
 # GM-authored campaign intro metadata — local content, not repo state.
 campaign.json

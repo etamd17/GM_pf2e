@@ -4737,6 +4737,10 @@
            normal rollSpell pipeline so the player gets the roll toast +
            GM broadcast just like a regular cast. */
         async function quickCastFont(kind, casterIdx) {
+            // Reachable straight from markup, so it can fire before the initial
+            // slot GET lands. Reading _expendedSlots early would see {} and the
+            // write below would clear every spent slot.
+            try { await window._spellStateReady; } catch (_) {}
             const spellName = (kind === 'harm') ? 'Harm' : 'Heal';
             const caster = (typeof castersData !== 'undefined' && castersData[casterIdx]) || null;
             if (!caster) { rollSpell(spellName); return; }
@@ -4985,15 +4989,23 @@
             window._expendedSlots = {};
             window._preparedSpells = {};
             window._castPrep = {};
-            try {
-                const res = await fetch(`/api/spell_slots/${pcNameEncoded}`);
-                const data = await res.json();
-                if (data.success) {
-                    window._expendedSlots = data.expended_slots || {};
-                    window._preparedSpells = data.prepared_spells || {};
-                    window._castPrep = data.cast_prep || {};
-                }
-            } catch(e) {}
+            // Every writer below sends the WHOLE slot map, and these three
+            // start EMPTY. A click that lands before this GET resolves would
+            // therefore persist {} and clear every spent slot on the sheet --
+            // real on table wifi, and silent. Writers await this promise
+            // before reading or mutating the maps.
+            window._spellStateReady = (async () => {
+                try {
+                    const res = await fetch(`/api/spell_slots/${pcNameEncoded}`);
+                    const data = await res.json();
+                    if (data.success) {
+                        window._expendedSlots = data.expended_slots || {};
+                        window._preparedSpells = data.prepared_spells || {};
+                        window._castPrep = data.cast_prep || {};
+                    }
+                } catch(e) {}
+            })();
+            await window._spellStateReady;
 
             // Spell-slot toggles are buttons now (was <input type=checkbox>).
             // The "spent" state is reflected by .spent class + aria-pressed,
@@ -5144,6 +5156,9 @@
 
         let _spellSaveToastTimer = null;
         async function _saveSpellState() {
+            // Never write before the initial read has landed -- this posts the
+            // whole map, so writing early would clear every spent slot.
+            try { await window._spellStateReady; } catch (_) {}
             try {
                 await fetch(`/api/spell_slots/${pcNameEncoded}`, {
                     method: 'POST',
@@ -6298,6 +6313,9 @@
         // If no free slot exists, we fail LOUDLY (toast) instead of silently
         // casting — the player has to pick a higher rank or a different spell.
         async function _autoExpendSpellSlot(casterIdx, rank) {
+            // Same gate as the other writers: read the server's slot state
+            // before deciding which slot is free and posting the whole map.
+            try { await window._spellStateReady; } catch (_) {}
             if (typeof casterIdx !== 'number' || typeof rank !== 'number') return true;
             if (rank <= 0) return true; // cantrips
             const key = `c${casterIdx}_l${rank}`;
@@ -7626,6 +7644,9 @@
                 }
                 const _isButton = cb.tagName === 'BUTTON';
                 const handler = async () => {
+                    // renderPrepUI can run before the slot GET resolves, so gate
+                    // here too -- this handler posts the whole map.
+                    try { await window._spellStateReady; } catch (_) {}
                     let nowSpent;
                     if (_isButton) {
                         nowSpent = !cb.classList.contains('spent');

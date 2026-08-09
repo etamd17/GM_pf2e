@@ -16778,16 +16778,29 @@ def delete_session_note(pc_name, note_idx):
 @app.route('/api/sync_spell_slots/<pc_name>', methods=['POST'])
 @require_pc_self_or_gm
 def sync_spell_slots(pc_name):
-    """Sync expended spell slot state to the character JSON for GM visibility."""
+    """Sync expended spell slot state to the character JSON for GM visibility.
+
+    Currently has NO callers -- /api/spell_slots is the live writer. Kept, but
+    hardened, because as written it was a way to silently destroy a caster's
+    whole day: `data.get('expended_slots', {})` meant a POST that OMITTED the
+    key wrote an empty dict over every expended slot, and it took no spell lock
+    so it could also clobber an in-flight /api/cast_spell write."""
     if pc_name not in PARTY_LIBRARY:
         return jsonify({"error": "Character not found"}), 404
-    data = request.json
+    data = request.json or {}
+    # Absent key = "nothing to sync", NOT "clear everything".
+    if 'expended_slots' not in data:
+        return jsonify({"error": "expended_slots is required"}), 400
+    if not isinstance(data['expended_slots'], dict):
+        return jsonify({"error": "expended_slots must be an object"}), 400
     file_path = get_pc_file_path(pc_name)
-    with open(file_path, 'r', encoding='utf-8') as f:
-        pc_json = json.load(f)
-    build = pc_json.get('build', pc_json)
-    build['expended_slots'] = data.get('expended_slots', {})
-    save_and_reload_character(pc_name, pc_json, file_path)
+    # Same lock as /api/spell_slots, so the two writers of this field serialize.
+    with _pc_spell_lock(pc_name):
+        with open(file_path, 'r', encoding='utf-8') as f:
+            pc_json = json.load(f)
+        build = pc_json.get('build', pc_json)
+        build['expended_slots'] = data['expended_slots']
+        save_and_reload_character(pc_name, pc_json, file_path)
     _broadcast_pc_state(pc_name)
     return jsonify({"success": True})
 
