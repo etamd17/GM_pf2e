@@ -19,6 +19,13 @@
             const val  = document.getElementById('temp-hp-val');
             if (val) val.textContent = currentTempHp;
             if (chip) chip.style.display = currentTempHp > 0 ? '' : 'none';
+            // Mirror into the pinned vitals bar HERE, in the single funnel all
+            // five callers already go through -- not at the call sites, which
+            // is how HP policy drifted into three copies before.
+            const pinWrap = document.getElementById('hp-pin-temp');
+            const pinVal  = document.getElementById('hp-pin-temp-val');
+            if (pinVal) pinVal.textContent = currentTempHp;
+            if (pinWrap) pinWrap.hidden = !(currentTempHp > 0);
         }
         function _paintShieldGauge() {
             const txt   = document.getElementById('shield-hp-text');

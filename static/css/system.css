@@ -5241,3 +5241,67 @@ body.system-cosmere .trk .grid-wrap::after {
    monospace default now resolve to the text sans with tabular figures, so
    numbers stay column-aligned without the "built by a developer" look. */
 .font-mono { font-family: var(--font-ui) !important; font-variant-numeric: tabular-nums; }
+
+/* ── Pinned vitals bar (PF2e player sheet) ───────────────────────────────
+   Strictly additive, appended at the end per CLAUDE.md's rule for the
+   highest-risk UI file: nothing above this line changes, and no existing
+   markup, id or handler moves.
+
+   Why it exists: .char-header is 489px on a laptop and 824px on a 375px
+   phone, and it is NOT sticky (an inline position:relative on the element
+   beats the stylesheet's position:sticky, which has no !important). So HP,
+   temp HP and conditions scroll away on EVERY device. Pinning a header that
+   tall is not an option; this is the compact stand-in.
+
+   Visibility is driven by an IntersectionObserver on the real HP block, so
+   this only ever shows when that block is off screen -- which is what keeps
+   it from being the duplicate that got the original chip removed.          */
+.hp-pin {
+    position: fixed; top: 0; left: 0; right: 0;
+    z-index: 60;                    /* over .char-header (50) and the rails
+                                       (10 / 9); below modals and the FAB. */
+    display: flex; justify-content: center;
+    padding: var(--sp-2) var(--sp-3);
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border-rule);
+    transform: translateY(-100%);
+    transition: transform var(--t-fast, 160ms) ease;
+    pointer-events: none;
+}
+.hp-pin.is-visible { transform: translateY(0); pointer-events: auto; }
+
+.hp-pin__inner {
+    display: flex; align-items: center; gap: var(--sp-3);
+    max-width: 72rem; width: 100%;
+    background: none; border: 0; cursor: pointer;
+    font-family: var(--font-ui); color: var(--text-on-dark);
+    padding: 0;
+}
+.hp-pin__inner:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: var(--r-sm); }
+
+.hp-pin__hp {
+    font-family: var(--font-display); font-size: 17px; font-weight: 700;
+    letter-spacing: 0.01em; font-variant-numeric: tabular-nums;
+    color: var(--text-on-dark);
+}
+.hp-pin__sep { color: var(--text-on-dark-3); margin: 0 1px; font-weight: 400; }
+.hp-pin__temp { font-size: 12px; font-weight: 600; color: var(--blue, #5a8ee8); }
+
+.hp-pin__conds {
+    font-size: 12px; font-weight: 600;
+    padding: 2px 8px; border-radius: var(--r-sm);
+    background: rgba(201,163,78,0.10);
+    border: 1px solid var(--border-card);
+    color: var(--text-on-dark-2);
+}
+/* Severity tiers mirror the condition strip's own thresholds so the bar and
+   the pills never disagree about how bad things are. */
+.hp-pin__conds.is-warn { background: rgba(245,158,11,0.14); border-color: rgba(245,158,11,0.34); color: #F59E0B; }
+.hp-pin__conds.is-crit { background: rgba(196,60,60,0.16); border-color: rgba(196,60,60,0.40); color: var(--red-b, #dc2626); }
+
+/* HP tone follows the same bands the sheet already uses for the gauge. */
+.hp-pin.is-bloodied .hp-pin__hp { color: #F59E0B; }
+.hp-pin.is-critical .hp-pin__hp { color: var(--red-b, #dc2626); }
+
+@media print { .hp-pin { display: none !important; } }
+@media (prefers-reduced-motion: reduce) { .hp-pin { transition: none; } }
