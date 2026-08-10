@@ -622,3 +622,39 @@ def test_there_is_no_player_facing_map_route():
     rules = {r.rule for r in app.app.url_map.iter_rules()}
     assert '/map' in rules and '/map/<scene_id>' in rules
     assert '/player/map' not in rules
+
+def test_the_helper_is_equivalent_to_the_inline_copies_it_replaced():
+    """_npc_hp_status replaced two hand-inlined copies of this policy -- one in
+    the encounter SSE frame, one in /api/player_state. Consolidating a rule that
+    decides what players learn about a monster is only safe if it is exactly
+    equivalent, so the originals are replayed here rather than trusted.
+
+    The subtle case is max_hp <= 0: the originals computed `pct = cur/mx if
+    mx > 0 else 0`, so pct fell to 0 and a living creature read as Wounded.
+    The helper reproduces that with an explicit branch instead of by accident.
+    """
+    def original_sse_frame(cur, mx):
+        pct = cur / mx if mx > 0 else 0
+        if cur == 0:
+            return 'Dead'
+        elif pct <= 0.5:
+            return 'Wounded'
+        return ''
+
+    def original_player_state(cur, mx):
+        pct = cur / mx if mx > 0 else 0
+        if cur == 0:
+            status = 'Dead'
+        elif pct <= 0.5:
+            status = 'Wounded'
+        else:
+            status = ''
+        color = ('text-red-400' if cur == 0
+                 else 'text-orange-400' if pct <= 0.5 else '')
+        return status, color
+
+    for max_hp in (0, 1, 7, 40, 50, 999):
+        for current_hp in range(0, max_hp + 3):
+            status, color = app._npc_hp_status(current_hp, max_hp)
+            assert status == original_sse_frame(current_hp, max_hp), (current_hp, max_hp)
+            assert (status, color) == original_player_state(current_hp, max_hp), (current_hp, max_hp)

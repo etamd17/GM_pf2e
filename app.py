@@ -1924,13 +1924,9 @@ def _do_broadcast_encounter_state():
                     if isinstance(e, dict)
                 ]
             else:
-                pct = c.current_hp / c.hp if c.hp > 0 else 0
-                if c.current_hp == 0:
-                    entry['hp_status'] = 'Dead'
-                elif pct <= 0.5:
-                    entry['hp_status'] = 'Wounded'
-                else:
-                    entry['hp_status'] = ''
+                # Colour is discarded here on purpose: this frame has never
+                # carried hp_color and adding a key is not this commit's job.
+                entry['hp_status'], _ = _npc_hp_status(c.current_hp, c.hp)
                 # Boss-reveal title (Chunk 4d). GM-only here; the player
                 # filter masks hidden NPCs entirely, and a revealed NPC's
                 # title is harmless to expose.
@@ -15585,11 +15581,7 @@ def player_state():
             safe_c['max_hp'] = c.hp
             safe_c['hp_pct'] = round(pct * 100)
         else:
-            pct = c.current_hp / c.hp if c.hp > 0 else 0
-            if c.current_hp == 0: safe_c['hp_status'] = "Dead"
-            elif pct <= 0.5: safe_c['hp_status'] = "Wounded"
-            else: safe_c['hp_status'] = ""
-            safe_c['hp_color'] = "text-red-400" if c.current_hp == 0 else "text-orange-400" if pct <= 0.5 else ""
+            safe_c['hp_status'], safe_c['hp_color'] = _npc_hp_status(c.current_hp, c.hp)
         state.append(safe_c)
     # Mask active_name if the active combatant is a hidden NPC (turn banner).
     if active_c and not gm_view and not active_c.is_pc and not getattr(active_c, 'visible_to_players', True):
