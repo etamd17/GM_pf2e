@@ -2829,10 +2829,15 @@ def require_pc(pc_name):
     return PARTY_LIBRARY[pc_name], file_path, None
 
 def require_pc_json(pc_name):
-    """Validate PC exists and load its JSON for modification. Returns (pc_json, file_path, error_response)."""
+    """Validate PC exists and load its JSON for modification. Returns (pc_json, file_path, error_response).
+
+    The load is preceded by _flush_pc_dirty because this JSON is destined for a
+    read-modify-write: whatever the debounced thread still holds in memory has
+    to be on disk *before* the read, or the write-back reverts it."""
     pc, file_path, err = require_pc(pc_name)
     if err:
         return None, None, err
+    _flush_pc_dirty(pc_name)
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             pc_json = json.load(f)
@@ -15234,6 +15239,7 @@ def long_rest(pc_name):
         # up at their pre-rest HP.
         file_path = get_pc_file_path(pc_name)
         if file_path and os.path.exists(file_path):
+            _flush_pc_dirty(pc_name)
             with open(file_path, 'r', encoding='utf-8') as f: pc_json = json.load(f)
             build = pc_json.get('build', pc_json)
             build['expended_slots'] = {}
@@ -15642,6 +15648,7 @@ def cast_spell(pc_name):
         return jsonify({"success": False, "error": "no save file"}), 500
 
     with _pc_spell_lock(pc_name):
+        _flush_pc_dirty(pc_name)
         with open(file_path, 'r', encoding='utf-8') as f:
             pc_json = json.load(f)
         build = pc_json.get('build', pc_json)
@@ -15820,6 +15827,7 @@ def _deposit_loot_to_pc(pc_name, items, coins):
     file_path = get_pc_file_path(pc_name)
     if not (file_path and os.path.exists(file_path)):
         return False
+    _flush_pc_dirty(pc_name)
     with open(file_path, 'r', encoding='utf-8') as f:
         pc_json = json.load(f)
     build = pc_json.get('build', pc_json)
@@ -15928,6 +15936,7 @@ def api_loot_ledger_award(entry_id):
 def equip_armor(pc_name):
     data = request.json
     file_path = get_pc_file_path(pc_name)
+    _flush_pc_dirty(pc_name)
     with open(file_path, 'r', encoding='utf-8') as f: pc_json = json.load(f)
     build = pc_json.get('build', pc_json)
     
@@ -15961,6 +15970,7 @@ def equip_armor(pc_name):
 def update_sheet(pc_name):
     data = request.json
     file_path = get_pc_file_path(pc_name)
+    _flush_pc_dirty(pc_name)
     with open(file_path, 'r', encoding='utf-8') as f: pc_json = json.load(f)
     build = pc_json.get('build', pc_json)
     
@@ -15978,6 +15988,7 @@ def update_sheet(pc_name):
 def update_wealth(pc_name):
     data = request.json
     file_path = get_pc_file_path(pc_name)
+    _flush_pc_dirty(pc_name)
     with open(file_path, 'r', encoding='utf-8') as f: pc_json = json.load(f)
     build = pc_json.get('build', pc_json)
     
@@ -16000,6 +16011,7 @@ def spell_slots(pc_name):
         return jsonify({"error": "Character not found"}), 404
 
     if request.method == 'GET':
+        _flush_pc_dirty(pc_name)
         with open(file_path, 'r', encoding='utf-8') as f: pc_json = json.load(f)
         build = pc_json.get('build', pc_json)
         return jsonify({
@@ -16014,6 +16026,7 @@ def spell_slots(pc_name):
     # race with a /api/cast_spell write and clobber it (or vice versa).
     data = request.json
     with _pc_spell_lock(pc_name):
+        _flush_pc_dirty(pc_name)
         with open(file_path, 'r', encoding='utf-8') as f: pc_json = json.load(f)
         build = pc_json.get('build', pc_json)
         if 'expended_slots' in data:
@@ -16030,6 +16043,7 @@ def spell_slots(pc_name):
 def add_item(pc_name):
     data = request.json
     file_path = get_pc_file_path(pc_name)
+    _flush_pc_dirty(pc_name)
     with open(file_path, 'r', encoding='utf-8') as f: pc_json = json.load(f)
     build = pc_json.get('build', pc_json)
     if 'equipment' not in build or build['equipment'] is None: build['equipment'] = []
@@ -16078,6 +16092,7 @@ def item_bulk():
 def remove_item(pc_name):
     data = request.json
     file_path = get_pc_file_path(pc_name)
+    _flush_pc_dirty(pc_name)
     with open(file_path, 'r', encoding='utf-8') as f: pc_json = json.load(f)
     build = pc_json.get('build', pc_json)
     
@@ -16105,6 +16120,7 @@ def adjust_consumable(pc_name):
     file_path = get_pc_file_path(pc_name)
     if not file_path or not os.path.exists(file_path):
         return jsonify({"success": False, "error": "PC not found"}), 404
+    _flush_pc_dirty(pc_name)
     with open(file_path, 'r', encoding='utf-8') as f:
         pc_json = json.load(f)
     build = pc_json.get('build', pc_json)
@@ -16186,6 +16202,7 @@ def approve_hero_nomination():
 def add_weapon(pc_name):
     data = request.json
     file_path = get_pc_file_path(pc_name)
+    _flush_pc_dirty(pc_name)
     with open(file_path, 'r', encoding='utf-8') as f: pc_json = json.load(f)
     build = pc_json.get('build', pc_json)
     if 'weapons' not in build or build['weapons'] is None: build['weapons'] = []
@@ -16262,6 +16279,7 @@ def toggle_two_hand(pc_name):
 def delete_weapon(pc_name):
     data = request.json
     file_path = get_pc_file_path(pc_name)
+    _flush_pc_dirty(pc_name)
     with open(file_path, 'r', encoding='utf-8') as f: pc_json = json.load(f)
     build = pc_json.get('build', pc_json)
     if 'weapons' in build and isinstance(build['weapons'], list): 
@@ -16274,6 +16292,7 @@ def delete_weapon(pc_name):
 def save_notes(pc_name):
     data = request.json
     file_path = get_pc_file_path(pc_name)
+    _flush_pc_dirty(pc_name)
     with open(file_path, 'r', encoding='utf-8') as f: pc_json = json.load(f)
     pc_json.get('build', pc_json)['notes'] = data.get('notes', '')
     save_and_reload_character(pc_name, pc_json, file_path)
@@ -16618,6 +16637,7 @@ def learn_spell(pc_name):
     if not file_path:
         return jsonify({"error": "File not found"}), 404
     
+    _flush_pc_dirty(pc_name)
     with open(file_path, 'r', encoding='utf-8') as f:
         pc_json = json.load(f)
     build = pc_json.get('build', pc_json)
@@ -16683,6 +16703,7 @@ def forget_spell(pc_name):
     if not file_path:
         return jsonify({"error": "File not found"}), 404
 
+    _flush_pc_dirty(pc_name)
     with open(file_path, 'r', encoding='utf-8') as f:
         pc_json = json.load(f)
     build = pc_json.get('build', pc_json)
@@ -16736,6 +16757,7 @@ def set_signature_spells(pc_name):
 
     data = request.json or {}
     file_path = get_pc_file_path(pc_name)
+    _flush_pc_dirty(pc_name)
     with open(file_path, 'r', encoding='utf-8') as f:
         pc_json = json.load(f)
     build = pc_json.get('build', pc_json)
@@ -16811,6 +16833,7 @@ def set_focus_spells(pc_name):
     
     data = request.json
     file_path = get_pc_file_path(pc_name)
+    _flush_pc_dirty(pc_name)
     with open(file_path, 'r', encoding='utf-8') as f:
         pc_json = json.load(f)
     build = pc_json.get('build', pc_json)
@@ -16866,6 +16889,7 @@ def add_pet(pc_name):
         return jsonify({"error": "Character not found"}), 404
     data = request.json
     file_path = get_pc_file_path(pc_name)
+    _flush_pc_dirty(pc_name)
     with open(file_path, 'r', encoding='utf-8') as f:
         pc_json = json.load(f)
     build = pc_json.get('build', pc_json)
@@ -16884,6 +16908,7 @@ def remove_pet(pc_name):
     data = request.json
     pet_name = data.get('name', '')
     file_path = get_pc_file_path(pc_name)
+    _flush_pc_dirty(pc_name)
     with open(file_path, 'r', encoding='utf-8') as f:
         pc_json = json.load(f)
     build = pc_json.get('build', pc_json)
@@ -16916,6 +16941,7 @@ def save_session_note(pc_name):
         return jsonify({"error": "Empty note"}), 400
     
     file_path = get_pc_file_path(pc_name)
+    _flush_pc_dirty(pc_name)
     with open(file_path, 'r', encoding='utf-8') as f:
         pc_json = json.load(f)
     build = pc_json.get('build', pc_json)
@@ -16936,6 +16962,7 @@ def save_session_note(pc_name):
 def delete_session_note(pc_name, note_idx):
     """Delete a session note by index."""
     file_path = get_pc_file_path(pc_name)
+    _flush_pc_dirty(pc_name)
     with open(file_path, 'r', encoding='utf-8') as f:
         pc_json = json.load(f)
     build = pc_json.get('build', pc_json)
@@ -16967,6 +16994,7 @@ def sync_spell_slots(pc_name):
     file_path = get_pc_file_path(pc_name)
     # Same lock as /api/spell_slots, so the two writers of this field serialize.
     with _pc_spell_lock(pc_name):
+        _flush_pc_dirty(pc_name)
         with open(file_path, 'r', encoding='utf-8') as f:
             pc_json = json.load(f)
         build = pc_json.get('build', pc_json)
@@ -17023,6 +17051,7 @@ def upload_portrait(pc_name):
     # Update the character JSON
     file_path = get_pc_file_path(pc_name)
     if file_path and os.path.exists(file_path):
+        _flush_pc_dirty(pc_name)
         with open(file_path, 'r', encoding='utf-8') as f:
             pc_json = json.load(f)
         build = pc_json.get('build', pc_json)
@@ -17051,6 +17080,7 @@ def update_portrait_focus(pc_name):
     file_path = get_pc_file_path(pc_name)
     if not file_path or not os.path.exists(file_path):
         return jsonify({"error": "Character not found"}), 404
+    _flush_pc_dirty(pc_name)
     with open(file_path, 'r', encoding='utf-8') as f:
         pc_json = json.load(f)
     build = pc_json.get('build', pc_json)
@@ -18358,6 +18388,7 @@ def _missing_progression_for_level(build, new_level):
 def submit_levelup(pc_name):
     data = request.json
     file_path = get_pc_file_path(pc_name)
+    _flush_pc_dirty(pc_name)
     with open(file_path, 'r', encoding='utf-8') as f: pc_json = json.load(f)
     build = pc_json.get('build', pc_json)
     
@@ -18662,6 +18693,7 @@ def submit_levelup(pc_name):
 def revert_level(pc_name):
     file_path = get_pc_file_path(pc_name)
     if os.path.exists(file_path):
+        _flush_pc_dirty(pc_name)
         with open(file_path, 'r', encoding='utf-8') as f: pc_json = json.load(f)
         build = pc_json.get('build', pc_json)
         if build.get('level', 1) > 1:
@@ -19656,6 +19688,7 @@ def api_rest_apply():
             changes['focus'] = pc.current_focus
         file_path = get_pc_file_path(name)
         if file_path and os.path.exists(file_path):
+            _flush_pc_dirty(name)
             with open(file_path, 'r', encoding='utf-8') as f: pc_json = json.load(f)
             build = pc_json.get('build', pc_json)
             build['current_hp'] = pc.current_hp
