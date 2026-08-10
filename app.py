@@ -19981,6 +19981,100 @@ def web_manifest():
                                mimetype='application/manifest+json')
 
 
+# --- OBSIDIAN SESSION OPERATIONS INTEGRATION ---
+# The transport/revision/event machinery lives in services.obsidian_sync.  This
+# small adapter is the only seam into app.py's authoritative combat engine, so
+# the Obsidian pane inherits the website's PF2e math instead of reimplementing
+# HP, dying/wounded, temp HP, conditions, persistence, or broadcasts.
+def _obsidian_sync_snapshot():
+    with ENCOUNTER_LOCK:
+        campaign = _campaigns.get_campaign(ACTIVE_CAMPAIGN_ID) if ACTIVE_CAMPAIGN_ID else None
+        party = []
+        for name in sorted(PARTY_LIBRARY):
+            raw = _pc_state_payload(name) or {}
+            party.append({
+                'name': name,
+                'current_hp': raw.get('current_hp', 0),
+                'max_hp': raw.get('max_hp', 0),
+                'temp_hp': raw.get('temp_hp', 0),
+                'conditions': raw.get('conditions', {}),
+                'hero_points': raw.get('hero_points', 0),
+                'focus': raw.get('focus', 0),
+                'reaction_used': raw.get('reaction_used', False),
+                'persistent_damage': raw.get('persistent_damage', []),
+                'exploration_activity': raw.get('exploration_activity', ''),
+            })
+        tracker = _get_tracker_state()
+        combatants = []
+        for raw in tracker.get('combatants', []):
+            combatants.append({k: copy.deepcopy(raw.get(k)) for k in (
+                'instance_id', 'name', 'is_pc', 'system', 'initiative', 'is_active',
+                'current_hp', 'max_hp', 'ac', 'conditions', 'condition_expiry',
+                'actions_used', 'max_actions', 'reaction_used', 'persistent_damage',
+                'persistent_damage_list', 'delaying', 'visible_to_players', 'epithet',
+            )})
+        turn_index = int(tracker.get('turn_index', 0) or 0)
+        active = combatants[turn_index] if combatants and 0 <= turn_index < len(combatants) else None
+        return {
+            'campaign': {
+                'id': ACTIVE_CAMPAIGN_ID,
+                'name': (campaign or {}).get('name', ''),
+                'system': (campaign or {}).get('system', _active_system()),
+            },
+            'party': party,
+            'encounter': {
+                'round': int(tracker.get('round', 1) or 1),
+                'turn_index': turn_index,
+                'active_id': (active or {}).get('instance_id'),
+                'active_name': (active or {}).get('name'),
+                'session_timer_start': tracker.get('session_timer_start'),
+                'combatants': combatants,
+            },
+        }
+
+
+def _obsidian_adjust_party_hp(pc_name, amount, action):
+    if pc_name not in PARTY_LIBRARY:
+        return None
+    before = int(PARTY_LIBRARY[pc_name].current_hp or 0)
+    _, pc = apply_pc_delta(pc_name, lambda target: _party_hp_mutate(target, amount, action))
+    if action == 'damage' and amount > 0:
+        _emit_reaction_triggers(
+            pc_name=pc_name,
+            instance_id=getattr(pc, 'instance_id', None) or None,
+            event='on_damaged',
+            damage_amount=int(amount),
+        )
+    return {
+        'pc_name': pc_name,
+        'action': action,
+        'raw_amount': int(amount),
+        'old_hp': before,
+        'new_hp': int(pc.current_hp or 0),
+        'temp_hp': int(getattr(pc, 'temp_hp', 0) or 0),
+        'conditions': {k: v for k, v in pc.conditions.items() if v and v != 0 and v is not False},
+    }
+
+
+from services.obsidian_sync import register_obsidian_sync as _register_obsidian_sync
+_register_obsidian_sync(app, {
+    'active_campaign_id': lambda: ACTIVE_CAMPAIGN_ID,
+    'campaign_doc': _campaigns.get_campaign,
+    'snapshot': _obsidian_sync_snapshot,
+    'find_combatant': _find_active_combatant,
+    'apply_hp': _apply_hp_delta,
+    'maybe_remove_defeated': _maybe_auto_remove_defeated,
+    'adjust_party_hp': _obsidian_adjust_party_hp,
+    'apply_condition': _apply_condition_change,
+    'sort_encounter': _sort_encounter,
+    'persist_encounter': _persist_encounter_state,
+    'broadcast_encounter': _broadcast_encounter_state,
+    'advance_turn': cycle_turn,
+    'has_encounter': lambda: bool(ACTIVE_ENCOUNTER),
+    'gm_required': gm_required,
+})
+
+
 # --- BOOT-TIME AUTOSAVE RESTORE ---
 # Runs once at the module tail so every helper the restore path needs
 # (including the Cosmere rebuilders defined mid-file) exists. The boot
