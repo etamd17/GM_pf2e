@@ -67,8 +67,17 @@ Engine fidelity is audited and documented — check these before claiming a rule
 
 ## Current work
 
-**No feature work is currently in flight.** The app-wide UI/UX + minimal-design arc finished and
-shipped (see below); pick up whatever the user asks for next.
+**IN FLIGHT: the tactical-map feature audit. Start at `docs/map/AUDIT.md`.** The map is now on
+trunk, GM-only (PR #111, `d139688f`), and the next step is a paused, question-driven audit of the
+whole tool. That doc holds the settled decisions, ~23 findings verified against a running server,
+and seven rounds of questions written ready to ask. It exists because Claude's per-project memory
+does not travel between machines — the doc is the source of truth, not memory.
+
+Three things are already decided and must not be re-litigated: the map is **GM-only** (no
+player-facing route; `/api/scenes` is gated at the prefix), the eventual audience is **one shared
+screen at the table** rather than per-player devices, and **GM workflow** is the first priority.
+Note the shared table screen revives what this file records below as the cancelled Campaign Hub
+Stage — correct that entry when the work starts.
 
 **Do NOT work on these — deferred by the user:**
 - Player-sheet **inventory reorg** ("hold on inventory scope"). The hold is on SCOPE, not on the
