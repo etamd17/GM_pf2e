@@ -62,20 +62,30 @@
           <svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6z"/><path d="M15 2v5h5"/><path d="M9 12h7M9 16h7"/></svg>
         </span>
         <div class="chron-doc-row__body">
-          <h3 class="chron-doc-row__title">{{ d.title }}</h3>
+          {# Editable in place. The blocked notice below tells the GM to rename
+             the document, so a rename control has to exist -- and renaming has
+             to actually move the address, which it now does while the document
+             is private. #}
+          <input class="chron-doc-row__title chron-doc-row__rename" value="{{ d.title }}"
+                 maxlength="120" aria-label="Title of {{ d.title }} (edit to rename)">
           {% if d.excerpt %}<p class="chron-card__excerpt">{{ d.excerpt }}</p>{% endif %}
           <p class="chron-card__meta">
             <span>{{ d.original_filename }}</span>
             <span>{{ d.size_label }}</span>
             <span>{{ d.uploaded_at[:10] if d.uploaded_at else '' }}</span>
+            <span class="chron-doc-row__slug">/chronicle/page/<span class="js-slug">{{ d.slug }}</span></span>
           </p>
 
           {% for w in d.warnings or [] %}
           <p class="chron-notice">{{ w }}</p>
           {% endfor %}
-          {% if d.shadowed_by_vault %}
-          <p class="chron-notice">Blocked: a vault page already uses the address
-             <code>{{ d.slug }}</code>. Rename this document to publish it.</p>
+          <p class="chron-notice js-shadow-notice"{% if not d.shadowed_by_vault %} hidden{% endif %}>
+             Blocked: a vault page already uses the address
+             <code class="js-slug">{{ d.slug }}</code>. Rename this document to publish it.</p>
+          {% if d.published %}
+          <p class="chron-card__meta">Renaming a published document changes its
+             name only &mdash; its address stays put, so links you have already
+             shared keep working.</p>
           {% endif %}
 
           <div class="chron-doc-row__controls">
@@ -196,6 +206,40 @@
   }
 
   function wireRow(row) {
+    // ---- Rename ----
+    // Renaming a PRIVATE document also moves its address, which is the only
+    // thing that can clear a vault-slug collision. The server owns that rule;
+    // we just repaint whatever slug and blocked-state it returns.
+    var titleEl = row.querySelector('.chron-doc-row__rename');
+    if (titleEl) {
+      var lastTitle = titleEl.value;
+      titleEl.addEventListener('change', function () {
+        var next = titleEl.value.trim();
+        if (!next || next === lastTitle) { titleEl.value = lastTitle; return; }
+        patch(row, { title: next })
+          .then(function (doc) {
+            lastTitle = doc.title;
+            titleEl.value = doc.title;
+            row.querySelectorAll('.js-slug').forEach(function (el) { el.textContent = doc.slug; });
+            var notice = row.querySelector('.js-shadow-notice');
+            if (notice) notice.hidden = !doc.shadowed_by_vault;
+            var box = row.querySelector('.chron-doc-publish');
+            var wrap = row.querySelector('.chron-switch');
+            if (box) box.disabled = doc.shadowed_by_vault || !row.dataset.previewed;
+            if (wrap) wrap.classList.toggle('chron-switch--blocked', !!doc.shadowed_by_vault);
+            paintPublishState(row, doc);
+            say(doc.shadowed_by_vault
+              ? 'Renamed, but that address is still taken.'
+              : 'Renamed.', doc.shadowed_by_vault ? 'error' : 'ok');
+          })
+          .catch(function (err) { titleEl.value = lastTitle; say(err.message, 'error'); });
+      });
+      // Enter commits without waiting for blur.
+      titleEl.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); titleEl.blur(); }
+      });
+    }
+
     var toggle = row.querySelector('.chron-doc-publish');
     if (toggle) toggle.addEventListener('change', function () {
       var wanted = toggle.checked;

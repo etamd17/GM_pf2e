@@ -11382,12 +11382,38 @@ def chronicle_doc_api(doc_id):
             if not new_title:
                 return jsonify({'ok': False, 'error': 'title cannot be empty'}), 400
             entry['title'] = new_title
+            # Re-derive the address, but ONLY while the document is private.
+            #
+            # This is what makes the manage screen's "rename this document to
+            # publish it" instruction actually true. Before, PATCH changed the
+            # title and left the slug alone, so renaming a doc whose address
+            # collided with a vault page did nothing at all -- the advice was
+            # unfollowable.
+            #
+            # Once published, the address is frozen: /chronicle/page/<slug> is a
+            # URL players may have been given, and silently moving it turns a
+            # shared link into a 404. A published doc keeps its slug and just
+            # changes its display name.
+            if not entry.get('published'):
+                desired = _chronicle_lib.slugify_title(new_title)
+                new_slug = _chronicle_lib.unique_slug(index, desired, ignore_id=doc_id)
+                if new_slug != entry.get('slug'):
+                    old_frag = _chronicle_doc_fragment_path(entry.get('slug'))
+                    entry['slug'] = new_slug
+                    new_frag = _chronicle_doc_fragment_path(new_slug)
+                    # Move the rendered fragment with it. Without this the page
+                    # would 404 at its own new address.
+                    if old_frag and new_frag and os.path.isfile(old_frag):
+                        os.replace(old_frag, new_frag)
         entry['updated_at'] = time.strftime('%Y-%m-%dT%H:%M:%S')
         _chronicle_lib.save_index(docs_root, index)
+        # Recompute against the live vault so the caller learns immediately
+        # whether the rename actually cleared the collision.
+        shadowed = entry.get('slug') in _chronicle_vault_slugs()
 
     sse_broadcast('chronicle_update', {'doc_id': doc_id,
                                        'published': bool(entry.get('published'))})
-    return jsonify({'ok': True, 'doc': entry})
+    return jsonify({'ok': True, 'doc': dict(entry, shadowed_by_vault=shadowed)})
 
 
 def _parse_damage_type_value(entry_str):

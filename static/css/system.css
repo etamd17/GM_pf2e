@@ -5305,3 +5305,26 @@ body.system-cosmere .trk .grid-wrap::after {
 
 @media print { .hp-pin { display: none !important; } }
 @media (prefers-reduced-motion: reduce) { .hp-pin { transition: none; } }
+
+/* ── Chronicle documents: editable title + address ───────────────────────
+   Additive. The manage screen tells the GM to rename a document to clear a
+   vault-slug collision, so the title has to be editable in place -- an
+   instruction with no control was the whole defect.                       */
+.chron-doc-row__rename {
+    font-family: var(--font-display); font-size: 16px; font-weight: 600;
+    color: var(--text-on-cream); letter-spacing: 0.01em;
+    background: transparent; border: 1px solid transparent;
+    border-radius: var(--r-sm);
+    padding: 2px 6px; margin: 0 0 2px -6px; width: 100%;
+}
+.chron-doc-row__rename:hover { border-color: var(--border-card); }
+.chron-doc-row__rename:focus {
+    outline: none; background: var(--bg-input);
+    border-color: var(--accent); color: var(--text-on-cream);
+}
+/* The published address, shown so a rename's effect is visible rather than
+   implied. Wraps instead of stretching the row on a phone. */
+.chron-doc-row__slug {
+    font-family: var(--font-ui); font-size: 11px;
+    color: var(--text-on-cream-3); word-break: break-all;
+}

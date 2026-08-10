@@ -373,6 +373,105 @@ def test_preview_records_itself_once(roles):
     assert again['previewed_at'] == first['previewed_at']
 
 
+# ==========================================================================
+# Renaming. The manage screen tells the GM to "rename this document to publish
+# it" when its address collides with a vault page -- advice that was
+# unfollowable, because PATCH changed the title and left the slug alone.
+# ==========================================================================
+
+def test_renaming_a_private_doc_moves_its_address(roles):
+    doc = _upload(roles.gm(), title='First Name').get_json()['doc']
+    assert doc['slug'] == 'd-first-name'
+
+    renamed = roles.gm().patch('/api/chronicle/docs/' + doc['id'],
+                               json={'title': 'Second Name'})
+    assert renamed.status_code == 200
+    body = renamed.get_json()['doc']
+    assert body['title'] == 'Second Name'
+    assert body['slug'] == 'd-second-name', 'the address must follow while private'
+
+
+def test_renaming_moves_the_rendered_fragment_too(roles):
+    """Otherwise the page 404s at its own new address."""
+    doc = _upload(roles.gm(), title='Movable').get_json()['doc']
+    roles.gm().patch('/api/chronicle/docs/' + doc['id'], json={'title': 'Moved'})
+
+    html_dir = os.path.join(storage.chronicle_dir(CID), 'docs', 'html')
+    assert not os.path.isfile(os.path.join(html_dir, 'd-movable.html'))
+    assert os.path.isfile(os.path.join(html_dir, 'd-moved.html'))
+
+    # And it is reachable at the new address once published.
+    _publish(roles, doc['id'])
+    assert roles.player().get('/chronicle/page/d-moved').status_code == 200
+
+
+def test_renaming_clears_a_vault_collision(roles):
+    """The exact scenario the blocked message describes, end to end."""
+    chron = storage.chronicle_dir(CID)
+    content = os.path.join(chron, 'content', 'vaulthash')
+    os.makedirs(os.path.join(content, 'html'), exist_ok=True)
+    with open(os.path.join(content, 'manifest.json'), 'w', encoding='utf-8') as f:
+        json.dump({'schema_version': app.CHRONICLE_SCHEMA_VERSION, 'pages': [
+            {'slug': 'd-taken', 'source': 'content/a.md', 'title': 'Vault Page',
+             'section': 'lore'}]}, f)
+    with open(os.path.join(content, 'html', 'd-taken.html'), 'w', encoding='utf-8') as f:
+        f.write('<p>vault</p>')
+    app._chronicle_repoint(os.path.join(chron, 'current'), content)
+
+    doc = _upload(roles.gm(), title='Taken').get_json()['doc']
+    assert doc['slug'] == 'd-taken'
+
+    listed = roles.gm().get('/api/chronicle/docs').get_json()['docs']
+    assert next(d for d in listed if d['id'] == doc['id'])['shadowed_by_vault'] is True
+
+    renamed = roles.gm().patch('/api/chronicle/docs/' + doc['id'],
+                               json={'title': 'Not Taken'}).get_json()['doc']
+    assert renamed['slug'] == 'd-not-taken'
+    assert renamed['shadowed_by_vault'] is False, 'the rename must clear the block'
+
+    # And it can now actually be published, which is what the message promised.
+    _publish(roles, doc['id'])
+    assert roles.player().get('/chronicle/page/d-not-taken').status_code == 200
+
+
+def test_a_published_doc_keeps_its_address_when_renamed(roles):
+    """A shared /chronicle/page/<slug> URL must not silently 404."""
+    doc = _upload(roles.gm(), title='Public Name').get_json()['doc']
+    _publish(roles, doc['id'])
+    original = doc['slug']
+
+    renamed = roles.gm().patch('/api/chronicle/docs/' + doc['id'],
+                               json={'title': 'Renamed While Live'}).get_json()['doc']
+    assert renamed['title'] == 'Renamed While Live'
+    assert renamed['slug'] == original, 'a live address must stay put'
+    assert roles.player().get('/chronicle/page/' + original).status_code == 200
+
+
+def test_renaming_does_not_collide_with_another_doc(roles):
+    a = _upload(roles.gm(), title='Alpha').get_json()['doc']
+    _upload(roles.gm(), title='Beta')
+    renamed = roles.gm().patch('/api/chronicle/docs/' + a['id'],
+                               json={'title': 'Beta'}).get_json()['doc']
+    assert renamed['slug'] != 'd-beta', 'must not steal a sibling address'
+    assert renamed['slug'].startswith('d-beta')
+
+
+def test_rename_rejects_an_empty_title(roles):
+    doc = _upload(roles.gm(), title='Keeps Its Name').get_json()['doc']
+    blank = roles.gm().patch('/api/chronicle/docs/' + doc['id'], json={'title': '   '})
+    assert blank.status_code == 400
+    listed = roles.gm().get('/api/chronicle/docs').get_json()['docs']
+    assert next(d for d in listed if d['id'] == doc['id'])['title'] == 'Keeps Its Name'
+
+
+def test_the_manage_screen_actually_offers_a_rename_control():
+    """The defect was an instruction with no control. Guard the pairing."""
+    src = (app.Path(app.BASE_DIR) / 'templates' / 'chronicle_manage.html').read_text(
+        encoding='utf-8')
+    assert 'Rename this document to publish it' in src
+    assert 'chron-doc-row__rename' in src, 'the message promises a rename with no control'
+
+
 def test_player_cannot_reach_any_doc_route(roles):
     assert roles.player().get('/api/chronicle/docs').status_code == 403
     assert roles.player().post('/api/chronicle/docs').status_code == 403
