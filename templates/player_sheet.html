@@ -2952,6 +2952,35 @@
 
 {% include "_pf2e_class_glyphs.html" %}
 
+{# ─── Pinned vitals bar ──────────────────────────────────────────────────
+   The sheet header is 489px tall on a laptop and 824px on a phone -- 101% of
+   a 375x812 screen -- and it is NOT sticky (an inline position:relative on
+   .char-header has always beaten the stylesheet's position:sticky, so every
+   comment calling it sticky is stale). Scroll to read a feat and your HP,
+   temp HP and conditions are all gone. Pinning the header itself is not the
+   answer at that height; this is a compact stand-in.
+
+   It shows ONLY while the real HP block is off screen, which is what makes it
+   not a duplicate -- the objection that removed the original chip
+   (_header.html:46) was that it repeated the vital strip sitting right below
+   it. The two are never visible at the same time.
+
+   Deliberately a body-level sibling, NOT a child of .char-header: two
+   system.css rules key on `.char-header > div:first-child` and currently match
+   nothing (the first child is the conn-pip span), so adding a div inside the
+   header would silently activate them and restyle row 1. #}
+<div id="hp-pin" class="hp-pin no-print" aria-hidden="true">
+    <button type="button" class="hp-pin__inner" onclick="window.scrollTo({top:0,behavior:'smooth'})"
+            aria-label="Scroll to your vitals">
+        <span class="hp-pin__hp">
+            <span id="header-hp-chip-cur">{{ pc.current_hp }}</span><span
+                class="hp-pin__sep">/</span><span id="hp-pin-max">{{ pc.hp }}</span>
+        </span>
+        <span class="hp-pin__temp" id="hp-pin-temp" hidden>+<span id="hp-pin-temp-val">0</span> temp</span>
+        <span class="hp-pin__conds" id="hp-pin-conds" hidden></span>
+    </button>
+</div>
+
 {% include "_pc_sheet/_header.html" %}
 
 {% include "_pc_sheet/_status_bars.html" %}
@@ -3690,6 +3719,104 @@
         window.adjustCondition = adjustCondition;
 
         // Paint the meta-rail Quick Conditions block from a fresh conditions
+        /* ─── Pinned vitals bar ────────────────────────────────────────────
+           The sheet header is 489px on a laptop, 824px on a 375px phone, and
+           has never actually been sticky, so HP and conditions scroll away on
+           every device. This bar stands in for them while they are off screen.
+
+           It deliberately does NOT re-derive HP: #header-hp-chip-cur is already
+           written by both existing HP writers (modifyHP and applyHpUpdate), so
+           adding a third writer would make their ordering unprovable. This only
+           adds the tone class, the conditions summary and the show/hide.     */
+        function _hpPinTone() {
+            const pin = document.getElementById('hp-pin');
+            const cur = document.getElementById('header-hp-chip-cur');
+            const max = document.getElementById('hp-pin-max');
+            if (!pin || !cur || !max) return;
+            const c = parseInt(cur.textContent, 10) || 0;
+            const m = parseInt(max.textContent, 10) || 0;
+            const pct = m > 0 ? c / m : 1;
+            pin.classList.toggle('is-critical', c === 0 || pct <= 0.25);
+            pin.classList.toggle('is-bloodied', c > 0 && pct > 0.25 && pct <= 0.5);
+        }
+
+        function _paintHpPinConds(conds) {
+            const el = document.getElementById('hp-pin-conds');
+            if (!el) return;
+            // A missing key means CLEARED -- _pc_state_payload filters falsy
+            // values out of the frame, so absent is the normal "off" shape.
+            const active = Object.entries(conds || {}).filter(([, v]) => v && v !== 0);
+            if (!active.length) { el.hidden = true; el.classList.remove('is-warn', 'is-crit'); return; }
+
+            const val = k => parseInt((conds || {})[k] || 0, 10) || 0;
+            const dying = val('dying');
+            // The status penalty is a MAX, not a sum (app.py::status_penalty).
+            const penalty = Math.max(val('frightened'), val('sickened'));
+
+            // A bare count cannot distinguish {concealed, prone, off_guard} from
+            // {dying 2, wounded 1, doomed 1}, so lead with what is actually
+            // actionable and keep the count as context.
+            let label;
+            if (dying > 0) label = `Dying ${dying}`;
+            else if (penalty > 0) label = `-${penalty} all checks`;
+            else label = `${active.length} active`;
+            if (dying > 0 || penalty > 0) label += ` · ${active.length}`;
+            el.textContent = label;
+
+            // Same thresholds the condition pills use, so the two never disagree.
+            const worst = Math.max(...active.map(([k, v]) => (k === 'dying' ? val(k) + 1 : (parseInt(v, 10) || 1))));
+            el.classList.toggle('is-crit', dying > 0 || worst >= 3);
+            el.classList.toggle('is-warn', dying === 0 && worst === 2);
+            el.hidden = false;
+            _hpPinTone();
+        }
+
+        // Show the bar only while the REAL HP block is off screen. That is what
+        // stops it being the duplicate that got the original header chip removed
+        // (_header.html:46) -- the two are never on screen together.
+        function _initHpPin() {
+            const pin = document.getElementById('hp-pin');
+            const anchor = document.querySelector('.hp-area') || document.getElementById('current-hp');
+            if (!pin || !anchor) return;
+            _paintHpPinConds(typeof currentConditions !== 'undefined' ? currentConditions : {});
+            _hpPinTone();
+
+            // Scroll + rAF rather than IntersectionObserver. IO is the tidier
+            // tool and works fine in a real browser, but it cannot be exercised
+            // in this project's headless preview pane (it never composites, so
+            // IO delivers no callbacks -- not even the initial one for
+            // document.body), which means an IO version could only ever ship
+            // unverified. This version is verifiable end to end. One element,
+            // one rAF-coalesced read per frame; do not "upgrade" it back to IO
+            // without a way to actually test the result.
+            let queued = false;
+            function sync() {
+                queued = false;
+                const r = anchor.getBoundingClientRect();
+                const off = r.bottom <= 0 || r.top >= (window.innerHeight || 0);
+                if (pin.classList.contains('is-visible') === off) return;   // no churn
+                pin.classList.toggle('is-visible', off);
+                pin.setAttribute('aria-hidden', off ? 'false' : 'true');
+                if (off) _hpPinTone();      // catch up on anything painted while hidden
+            }
+            function onScroll() {
+                if (queued) return;
+                queued = true;
+                window.requestAnimationFrame(sync);
+            }
+            window.addEventListener('scroll', onScroll, { passive: true });
+            window.addEventListener('resize', onScroll, { passive: true });
+            sync();
+        }
+        // NOT a bare addEventListener('DOMContentLoaded', ...): this code runs
+        // inside an existing DOMContentLoaded handler, and a listener added for
+        // an event that is already dispatching never fires. Check readyState.
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', _initHpPin);
+        } else {
+            _initHpPin();
+        }
+
         // dict (server-canonical). Called after adjustCondition + on SSE
         // pc_update so other players' changes propagate.
         function _paintMetaQuickConds(conds) {
@@ -3718,6 +3845,12 @@
                 const n = Object.values(conds || {}).filter(v => v && v !== 0).length;
                 countEl.textContent = n > 0 ? `(${n} active)` : '';
             }
+            // Pinned vitals bar. Hooked HERE because this is the only condition
+            // painter the pc_update SSE frame actually calls -- _refreshConditionStrip
+            // re-fetches /api/export_character and is not on the SSE path, and
+            // applyConditionUpdate only toggles visibility. Getting this wrong is
+            // how the header's static "Debuffed -N" chip went permanently stale.
+            _paintHpPinConds(conds || {});
             // Refresh the dying widget (and its dying-active HP-card pulse) on
             // every quick-conditions repaint. The local adjustCondition path now
             // adopts the server-echoed map into currentConditions before calling
@@ -5402,6 +5535,7 @@
                     currentHp = newHp;
                     const chip = document.getElementById('header-hp-chip-cur');
                     if (chip) chip.textContent = currentHp;
+                    if (typeof _hpPinTone === 'function') _hpPinTone();
                     // Temp-HP sync: damage may have drained it, heal leaves it alone.
                     if (typeof data.temp_hp === 'number') {
                         currentTempHp = data.temp_hp;
@@ -5477,6 +5611,7 @@
             // Direct mirror to the header HP chip — no MutationObserver needed.
             const chip = document.getElementById('header-hp-chip-cur');
             if (chip) chip.textContent = currentHp;
+            if (typeof _hpPinTone === 'function') _hpPinTone();
             // Pulse the HP block so the player notices the GM-driven change.
             const hpBlock = hpEl.closest('.panel-card') || hpEl.parentElement;
             sheetPulse(hpBlock, newHp < prevHp ? 'dmg' : 'heal');
