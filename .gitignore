@@ -83,6 +83,13 @@ server_state.json
 saved_encounters/
 story_threads.json
 
+# Boot counter for the /health storage probe. Written to DATA_DIR, which
+# resolves to the checkout when DATA_DIR is unset -- exactly the local-dev case,
+# so without this line every dev run dirties the tree. Its whole purpose is to
+# be older than the current process; committing it would make the count a
+# property of the repo rather than of the volume.
+.storage_marker.json
+
 # Built Cosmere player characters — runtime store on the volume (DATA_DIR),
 # kept out of the PF2e party_data. Never committed.
 cosmere_pcs/
