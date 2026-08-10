@@ -644,6 +644,96 @@ MONSTER_DIR = os.path.join(DATA_DIR, 'monster_data')         # shared bestiary (
 DB_PATH = os.path.join(BASE_DIR, 'pf2e_database.db')         # ships with repo, read-only
 COMPENDIUM_DATA_DIR = os.path.join(BASE_DIR, 'compendium_data')
 
+# --- Storage durability probe (runs at boot, surfaced on /health) ------------
+# The line above falls back to BASE_DIR *silently*, so a missing DATA_DIR means
+# every write lands in the container and every deploy wipes it. The quieter
+# failure is worse: DATA_DIR=/data is set correctly but the Railway volume did
+# not mount, so the app writes to the container's own /data. Configured-from-env
+# is true, distinct-from-BASE_DIR is true, writable is true -- no inspection of
+# the current process can tell that apart from a healthy mount.
+#
+# Only evidence across time can, so this leaves one: a marker file counting
+# boots. A directory that has seen more than one boot is persisting. One
+# reporting boots=1 on a service you have redeployed several times is not, and
+# that is the whole point -- it is the same symptom (players lose their sheets
+# on deploy) as the persistence-thread bug, with a completely different cause.
+#
+# The probe runs ONCE at import and its write doubles as the writability check,
+# so /health itself touches no disk and stays cheap for Railway to poll.
+_STORAGE_MARKER_NAME = '.storage_marker.json'
+STORAGE_HEALTH = {}
+
+
+def _probe_storage(data_dir, base_dir, *, write=True):
+    """Describe how durable `data_dir` is. Pure in its arguments so tests can
+    drive it against a tmp dir; `write=False` inspects without touching disk
+    (and so cannot gather evidence -- boots stay at whatever is on record)."""
+    marker = os.path.join(data_dir, _STORAGE_MARKER_NAME)
+    prior = {}
+    try:
+        with open(marker, 'r', encoding='utf-8') as f:
+            prior = json.load(f) or {}
+    except Exception:
+        prior = {}                      # absent, unreadable, or not a dict
+
+    try:
+        boots = int(prior.get('boots') or 0)
+    except (TypeError, ValueError):
+        boots = 0
+    first_seen = prior.get('first_seen')
+    if not isinstance(first_seen, (int, float)):
+        first_seen = None
+
+    now = time.time()
+    writable = False
+    if write:
+        try:
+            os.makedirs(data_dir, exist_ok=True)
+            _atomic_write_json(marker, {
+                'boots': boots + 1,
+                'first_seen': first_seen if first_seen is not None else now,
+                'last_boot': now,
+            }, indent=2, fsync=False)
+            boots += 1
+            if first_seen is None:
+                first_seen = now
+            writable = True
+        except Exception as e:
+            print(f"[STORAGE] {data_dir} is not writable: {e}")
+    else:
+        writable = os.path.isdir(data_dir) and os.access(data_dir, os.W_OK)
+
+    return {
+        # Was DATA_DIR set at all, or did it silently default to the repo?
+        'configured': bool(os.environ.get('DATA_DIR')),
+        # A volume is a different filesystem location than the checkout.
+        'separate_from_repo': os.path.abspath(data_dir) != os.path.abspath(base_dir),
+        'writable': writable,
+        # Evidence, not inference: how many boots this directory has survived.
+        'boots_observed': boots,
+        'age_days': (round((now - first_seen) / 86400.0, 1)
+                     if first_seen is not None else None),
+        # True only with proof. One boot is not yet evidence either way.
+        'persistence_proven': boots > 1,
+    }
+
+
+def _autostart_storage_probe():
+    """Same two exemptions as _autostart_persistence: never count a boot from
+    the Werkzeug reloader parent (the child is the process that serves), and
+    never write under pytest, where DATA_DIR defaults to the repo root and the
+    marker would land in the checkout. Tests call _probe_storage directly."""
+    import sys as _sys          # not imported at module scope in this file
+    under_pytest = 'pytest' in _sys.modules or os.environ.get('PYTEST_CURRENT_TEST')
+    reloader_parent = (os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
+                       and os.environ.get('WERKZEUG_RUN_MAIN') != 'true')
+    STORAGE_HEALTH.update(
+        _probe_storage(DATA_DIR, BASE_DIR,
+                       write=not (under_pytest or reloader_parent)))
+
+
+_autostart_storage_probe()
+
 # --- Active-campaign path binding -------------------------------------------
 # The app operates on ONE active campaign at a time (the live slot). Every
 # per-campaign data path is (re)bound to that campaign by _bind_campaign_paths();
@@ -6017,13 +6107,23 @@ load_libraries(restore_autosave=False)
 
 @app.route('/health')
 def health_check():
-    """Health check endpoint for Railway/container orchestration."""
+    """Health check endpoint for Railway/container orchestration.
+
+    This route is deliberately NOT in GM_API_PREFIXES -- Railway polls it with
+    no session -- so the storage block is split. The findings (is a volume
+    configured, does it persist) are safe for anyone; the absolute paths are
+    filesystem layout and go only to a GM."""
+    storage = dict(STORAGE_HEALTH)
+    if _is_gm():
+        storage['data_dir'] = DATA_DIR
+        storage['base_dir'] = BASE_DIR
     return jsonify({
         'status': 'healthy',
         'party_count': len(PARTY_LIBRARY),
         'monster_count': len(MONSTER_LIBRARY),
         'encounter_active': len(ACTIVE_ENCOUNTER),
         'sse_connections': sse_subscriber_count(),
+        'storage': storage,
     })
 
 @app.errorhandler(404)

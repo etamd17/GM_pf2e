@@ -36,6 +36,40 @@ git add -A && git commit -m "…" && git push      # to main
 
 Railway auto-deploys. Volume data persists across deploys.
 
+### Confirming the volume is actually mounted
+
+`GET /health` reports what the app resolved `DATA_DIR` to and, more usefully,
+whether that directory has survived a restart:
+
+```bash
+curl -s https://<your-app>/health | python -m json.tool
+```
+
+```json
+"storage": {
+  "configured": true,          // DATA_DIR was set (not silently defaulted)
+  "separate_from_repo": true,  // it is not the checkout
+  "writable": true,
+  "boots_observed": 14,        // boots this directory has survived
+  "age_days": 31.4,
+  "persistence_proven": true   // true only once boots_observed > 1
+}
+```
+
+**`boots_observed` is the field that matters.** The first three are inferences
+about the current process, and all three read `true` even when `DATA_DIR=/data`
+is set but the volume failed to mount — the app then writes to the container's
+own `/data`, which looks perfectly healthy and is erased on every deploy.
+`boots_observed` is evidence instead: if it sits at **1** on a service you have
+redeployed several times, **the volume is not persisting** and player data is
+being lost each deploy. Check the volume's mount path in Railway.
+
+`persistence_proven` is deliberately `false` on a brand-new volume's first boot
+— one boot is not evidence either way. Redeploy once and it flips.
+
+The absolute paths (`data_dir`, `base_dir`) are included only when you are
+logged in as a GM; the endpoint is public so Railway can poll it.
+
 ---
 
 ## Staging deploy — preview the new login + campaign/character select risk-free
