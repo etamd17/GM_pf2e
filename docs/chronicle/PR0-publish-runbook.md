@@ -80,16 +80,32 @@ python tools/chronicle_build.py \
 
 - **Local dev** (`GM_PASSWORD=''`, legacy-open): no token needed; the app treats everyone as GM.
 - **Prod** (Railway, `GM_PASSWORD` set): set `CHRONICLE_PUBLISH_TOKEN` in the app's environment
-  (a long, high-entropy secret), and pass the same value to the CLI as `--token`. The tool sends it
-  as the `X-Chronicle-Token` header; the app's `check_gm_access` allows it for `/api/chronicle*`
-  ONLY (it unlocks nothing else). A wrong/absent token, or an unset server env, still 403s.
+  (a long, high-entropy secret). The tool sends it as the `X-Chronicle-Token` header; the app's
+  `check_gm_access` allows it for `/api/chronicle*` ONLY (it unlocks nothing else). A wrong/absent
+  token, or an unset server env, still 403s.
+
+**Pass it via the environment, not `--token`.** The CLI reads the same
+`CHRONICLE_PUBLISH_TOKEN` variable the server does, so you export one value and both ends agree.
+A token in argv is readable by any process on the box via `ps` while the publish runs, and it stays
+in your shell history afterwards — and this token replaces the entire player-facing Chronicle, so
+it is worth keeping off the command line. `--token` still wins if given, for existing scripts.
+
+Both sources are stripped of surrounding whitespace: `export TOKEN=$(cat secret)` picks up a
+trailing newline, which would otherwise fail the server's `hmac.compare_digest` and surface as an
+inexplicable 403.
 
 ```bash
 # On the app host (Railway variables): CHRONICLE_PUBLISH_TOKEN=<generated-secret>
-# On the Mac, at publish time:
-python tools/chronicle_build.py ... --publish-url https://<app>/api/chronicle/publish \
-  --token "$CHRONICLE_PUBLISH_TOKEN"
+# At publish time, same variable name:
+export CHRONICLE_PUBLISH_TOKEN='<the-secret>'
+python tools/chronicle_build.py ... --publish-url https://<app>/api/chronicle/publish
 ```
+
+You also need the **target campaign's id** for `--campaign-id`. In account mode the publish route
+resolves its target from the manifest and a missing or unknown id is a hard 400 — it never falls
+back to "whatever campaign is live", so a typo cannot land your players' Chronicle in the wrong
+campaign. Get the id from `/campaign/<id>/invites`. (The `campaign_id: null` you see against a
+local legacy-open dev app is the no-accounts path, not that fallback.)
 
 ## End-to-end smoke test (Task 21)
 
@@ -192,16 +208,40 @@ Verified against the real vault: the dry-run above exits 0 and reports 53 pages 
    `zz_Attachments/` yet, so both degrade to nothing in the published page. This is expected until
    fixed; to fix it, add the two files to `zz_Attachments/` under exactly the referenced names.
 
-## OPEN ITEM — reconcile the tool output with the existing player vault
+## SETTLED — `--out` points at the player vault itself (Option A)
 
 `~/Documents/Campaign Chronicle/` already exists with a hand-authored structure
 (`01 - Chronicle`, `02 - Cast`, `04 - Atlas`, `Home.md`, ...). The build tool writes
 `manifest.json` + `content/<slug>.md` + `assets/` (the app reads the manifest; the folder layout
-is irrelevant to the app). These coexist safely (the tool never touches the other folders), but
-decide before the first real publish:
-- **Option A:** point `--out` at the existing Campaign Chronicle vault; the tool's
-  `manifest.json`/`content/`/`assets/` become the published source, and your `01-*` folders remain
-  your own Obsidian organization (ignored by the app).
-- **Option B:** point `--out` at a dedicated/fresh folder used only as the build+publish artifact,
-  keeping it separate from the hand-authored vault.
-This is a GM preference, not a code decision; the tool supports either.
+is irrelevant to the app). This was an open question until 2026-08-10; **the GM chose Option A**:
+
+> `--out` IS the Campaign Chronicle vault. The tool's `manifest.json` / `content/` / `assets/`
+> live inside it and are the published source; the `01-*` / `02-*` folders remain the GM's own
+> Obsidian organization and the app ignores them.
+
+Two behaviors already documented above exist specifically to make Option A safe, and they are the
+reason it is a reasonable default rather than a risk: the pre-zip re-scan is scoped to the tool's
+own managed outputs (so an in-world `[!danger]` in a hand-authored note cannot false-positive-abort
+a clean publish), and the archive is written to a temp path so the vault never accrues a stray
+`chronicle.zip`. The tool also never deletes `--out` or anything in it.
+
+Option B (a dedicated build folder) remains supported; nothing in the tool assumes A.
+
+## Platform note — the tool runs on Windows too
+
+Every path in this runbook is a Mac path, which is where the vault has historically lived. The
+tool itself is platform-agnostic and was exercised end to end on Windows 11 on 2026-08-10
+(`.venv/Scripts/python.exe tools/chronicle_build.py ...`, forward or backslashes both fine).
+
+What was verified there, against a real running app rather than in dry-run:
+
+- A **real, non-dry-run publish** in `--mode player-vault` against a live `--publish-url`
+  (`tests/fixtures/player_vault_sample`, 6 pages) — the first time that path had been run against
+  a real publish URL at all. `/chronicle` then served the published content.
+- The **leak gate** aborts in player-vault mode: `tests/fixtures/player_vault_leak_sample` exits 1,
+  writes no zip, and leaves `--out` untouched **even with `--publish-url` supplied**.
+- **Rollback** works, including the Windows directory-symlink case that `os.replace` cannot do
+  (`_chronicle_repoint` handles it). After a second publish, `can_rollback` flips true and
+  `POST /api/chronicle/rollback` returns `current` to the prior publish.
+- `can_rollback` is **false after a first-ever publish** — there is no previous tree to return to.
+  Worth knowing before the very first prod publish: that one has no undo, only a re-publish.
