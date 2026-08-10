@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block title %}Obsidian Sync{% endblock %}
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 py-6">
+    <div class="flex items-center justify-between gap-4 mb-6">
+        <div>
+            <h1 class="font-display text-xl" style="color:var(--gilt-100); letter-spacing:.04em;">Obsidian Session Operations</h1>
+            <p class="text-xs mt-1" style="color:var(--text-on-dark-3);">Create a revocable key for the Obsidian live-control pane.</p>
+        </div>
+        <a href="/gm" class="text-xs px-3 py-1.5 rounded" style="color:var(--text-on-dark-2); border:1px solid var(--border-card);">Back to Hub</a>
+    </div>
+
+    {% if not campaign_id %}
+    <div class="sync-card">
+        <h2>Activate a campaign first</h2>
+        <p>The integration is campaign-scoped, so the website needs an active table before it can issue a key.</p>
+    </div>
+    {% else %}
+    <div class="sync-card mb-4">
+        <div class="sync-grid">
+            <div>
+                <span class="sync-label">Campaign</span>
+                <strong>{{ campaign.name if campaign else campaign_id }}</strong>
+            </div>
+            <div>
+                <span class="sync-label">Campaign ID</span>
+                <code id="campaign-id">{{ campaign_id }}</code>
+            </div>
+            <div>
+                <span class="sync-label">Website URL</span>
+                <code id="website-url">{{ request.host_url.rstrip('/') }}</code>
+            </div>
+        </div>
+        <p class="sync-help">Enter the Website URL, Campaign ID, and generated token in Obsidian under Settings &rarr; Session Operations Sync. The token is shown only once.</p>
+    </div>
+
+    <div class="sync-card mb-4">
+        <div class="flex items-center justify-between gap-3">
+            <div>
+                <h2>Create a connection key</h2>
+                <p>Use one key per computer so a lost device can be revoked without interrupting the others.</p>
+            </div>
+            <button id="create-token" class="sync-primary" type="button">Generate token</button>
+        </div>
+        <div id="new-token-wrap" class="token-reveal" hidden>
+            <span class="sync-label">Copy this now; it cannot be shown again</span>
+            <div class="token-row">
+                <code id="new-token"></code>
+                <button id="copy-token" type="button">Copy</button>
+            </div>
+        </div>
+        <p id="token-message" class="sync-message" aria-live="polite"></p>
+    </div>
+
+    <div class="sync-card">
+        <h2>Connection keys</h2>
+        <div id="token-list">
+            {% for token in integration_tokens %}
+            <div class="token-record" data-token-id="{{ token.id }}">
+                <div>
+                    <strong>{{ token.label }}</strong>
+                    <div class="token-meta">Ends in {{ token.last_four }} &middot; created {{ token.created_at }}{% if token.last_used_at %} &middot; last used {{ token.last_used_at }}{% endif %}{% if token.revoked_at %} &middot; revoked {{ token.revoked_at }}{% endif %}</div>
+                </div>
+                {% if not token.revoked_at %}<button class="revoke-token" type="button">Revoke</button>{% endif %}
+            </div>
+            {% else %}
+            <p id="no-tokens" class="sync-help">No Obsidian keys have been created for this campaign.</p>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+    .sync-card { background:var(--bg-card); border:1px solid var(--border-card); border-radius:var(--r-md); padding:var(--sp-5); }
+    .sync-card h2 { color:var(--text-on-dark); font-size:14px; font-weight:700; margin:0 0 4px; }
+    .sync-card p { color:var(--text-on-dark-3); font-size:12px; margin:0; }
+    .sync-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:16px; }
+    .sync-grid strong, .sync-grid code { display:block; color:var(--text-on-dark); margin-top:4px; overflow-wrap:anywhere; }
+    .sync-label { display:block; color:var(--text-on-dark-3); font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
+    .sync-help { margin-top:16px !important; }
+    .sync-primary { background:var(--gilt-300); color:#17130b; border:0; border-radius:6px; padding:9px 14px; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap; }
+    .token-reveal { margin-top:16px; padding:14px; border:1px solid var(--gilt-400); border-radius:6px; background:var(--bg-sunken); }
+    .token-row { display:flex; gap:8px; margin-top:7px; }
+    .token-row code { flex:1; overflow-wrap:anywhere; color:var(--gilt-100); font-size:12px; }
+    .token-row button, .revoke-token { color:var(--text-on-dark-2); border:1px solid var(--border-card); border-radius:5px; padding:5px 9px; font-size:11px; background:transparent; cursor:pointer; }
+    .sync-message { margin-top:10px !important; min-height:18px; }
+    .token-record { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:12px 0; border-bottom:1px solid var(--border-card); }
+    .token-record:last-child { border-bottom:0; }
+    .token-record strong { color:var(--text-on-dark); font-size:13px; }
+    .token-meta { color:var(--text-on-dark-3); font-size:10px; margin-top:3px; }
+</style>
+
+{% if campaign_id %}
+<script>
+(function () {
+    const message = document.getElementById('token-message');
+    const createButton = document.getElementById('create-token');
+    const reveal = document.getElementById('new-token-wrap');
+    const tokenCode = document.getElementById('new-token');
+
+    async function requestJSON(url, options) {
+        const response = await fetch(url, Object.assign({
+            headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'}
+        }, options || {}));
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(body.error || ('Request failed: ' + response.status));
+        return body;
+    }
+
+    createButton.addEventListener('click', async function () {
+        createButton.disabled = true;
+        message.textContent = 'Generating a campaign-scoped key...';
+        try {
+            const body = await requestJSON('/api/integrations/obsidian/v1/tokens', {
+                method: 'POST', body: JSON.stringify({label: 'Obsidian desktop'})
+            });
+            tokenCode.textContent = body.token;
+            reveal.hidden = false;
+            message.textContent = 'Token created. Copy it into Obsidian before leaving this page.';
+        } catch (error) {
+            message.textContent = error.message;
+        } finally {
+            createButton.disabled = false;
+        }
+    });
+
+    document.getElementById('copy-token').addEventListener('click', async function () {
+        await navigator.clipboard.writeText(tokenCode.textContent || '');
+        message.textContent = 'Token copied.';
+    });
+
+    document.querySelectorAll('.revoke-token').forEach(function (button) {
+        button.addEventListener('click', async function () {
+            const row = button.closest('.token-record');
+            if (!window.confirm('Revoke this Obsidian connection key?')) return;
+            button.disabled = true;
+            try {
+                await requestJSON('/api/integrations/obsidian/v1/tokens/' + row.dataset.tokenId, {method: 'DELETE'});
+                row.remove();
+                message.textContent = 'Token revoked.';
+            } catch (error) {
+                button.disabled = false;
+                message.textContent = error.message;
+            }
+        });
+    });
+})();
+</script>
+{% endif %}
+{% endblock %}
