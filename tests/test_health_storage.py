@@ -160,8 +160,24 @@ def test_health_stays_free_of_disk_io(client, monkeypatch):
     assert calls == []
 
 
-def test_the_probe_did_not_write_into_the_repo_during_this_run():
+def test_the_autostart_probe_does_not_write_under_pytest(tmp_path, monkeypatch):
     """The suite imports app.py with DATA_DIR unset, so an unguarded probe
     would drop its marker in the checkout -- the same way an earlier test
-    dropped one and deleted a tracked file."""
-    assert not os.path.exists(os.path.join(app_module.BASE_DIR, MARKER))
+    dropped one and deleted a tracked file.
+
+    Driven at a tmp DATA_DIR rather than asserting the checkout is
+    marker-free. That earlier form looked equivalent and was not: DATA_DIR
+    defaults to the repo root, so simply RUNNING the app locally writes a
+    marker there -- gitignored, expected, and the entire point of the boot
+    counter. The test then failed for anyone who had started the dev server
+    before running the suite, which is a false positive that says nothing
+    about the exemption it exists to guard. Assert the behaviour, not a
+    filesystem side effect that legitimate use also produces.
+    """
+    monkeypatch.setattr(app_module, 'DATA_DIR', str(tmp_path))
+    monkeypatch.setattr(app_module, 'STORAGE_HEALTH', {})   # don't leak into other tests
+    app_module._autostart_storage_probe()
+    assert not (tmp_path / MARKER).exists()
+    # ...and it still reports, so the exemption isn't achieved by doing nothing.
+    assert 'writable' in app_module.STORAGE_HEALTH
+    assert app_module.STORAGE_HEALTH['boots_observed'] == 0
