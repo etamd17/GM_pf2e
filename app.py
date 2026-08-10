@@ -1856,6 +1856,81 @@ def _do_broadcast_encounter_state():
     sse_broadcast('encounter_update', payload, player_filter=_player_filter)
 
 COMPENDIUM_LIBRARY = {}
+
+# name.lower() -> canonical bulk string ('L', '0', '1', '2', ...).
+#
+# The compendium is the ONLY bulk source in this repo: pf2e_database.db has no
+# bulk column (build_db.py never extracted it), but compendium_data/equipment/
+# carries system.bulk.value for 5564 of 5566 items. The loader already walks and
+# json-parses every one of those files to fill COMPENDIUM_LIBRARY, so building
+# this index alongside it costs no extra I/O.
+#
+# Why an index at all: Pathbuilder's positional equipment row has NO bulk field.
+# Slot 2 holds a container UUID or the literal string 'Invested', which
+# Character.__init__ used to read AS bulk -- which is why every PC's total_bulk
+# was 0 and the encumbrance gauge has never worked for anyone.
+BULK_INDEX = {}
+
+# PF2e writes Light bulk as "L"; Foundry (and therefore this compendium) writes
+# it as the number 0.1. 0.1 is the single most common value in the data, so a
+# raw copy would silently drop 2494 items to zero.
+BULK_LIGHT = 'L'
+
+# Whether exceeding the encumbered limit applies its PF2e penalties (Clumsy 1
+# and -10 ft Speed). Off deliberately: bulk was broken for every PC since the
+# feature shipped, so this has never fired. Turning it on in the same change
+# that fixes bulk would drop live characters into Encumbered mid-campaign and
+# silently move their AC, Reflex, initiative, Dex skills and Speed. The gauge
+# now reports the truth; flip this when the table is ready to play the rule.
+ENCUMBRANCE_PENALTIES = False
+
+
+def canonical_bulk(raw):
+    """Normalise any bulk representation to 'L', a whole-number string, or ''.
+
+    Returns '' for "we do not know", which is deliberately distinct from '0'
+    ("weighs nothing"). The gauge shows unknowns rather than folding them into
+    the total as zero -- a meter that is confidently wrong is worse at the table
+    than one that admits a gap.
+    """
+    if raw is None:
+        return ''
+    if isinstance(raw, dict):                 # Foundry shape: {'value': 0.1}
+        raw = raw.get('value')
+        if raw is None:
+            return ''
+    if isinstance(raw, (int, float)):
+        if 0 < float(raw) < 1:                # 0.1 == Light
+            return BULK_LIGHT
+        return str(int(raw))
+    text = str(raw).strip()
+    if not text:
+        return ''
+    if text.upper() == BULK_LIGHT:
+        return BULK_LIGHT
+    if text in ('-', '—', '–'):     # dash / em dash / en dash = negligible
+        return '0'
+    try:
+        number = float(text)
+    except ValueError:
+        # A container UUID, 'Invested', or free text. Not a bulk value.
+        return ''
+    if 0 < number < 1:
+        return BULK_LIGHT
+    return str(int(number))
+
+
+def lookup_bulk(item_name):
+    """Canonical bulk for an item name, or '' when the compendium has no match.
+
+    Exact, case-insensitive. Deliberately no fuzzy matching: 6 of the sheet's
+    own quick-add labels differ from the compendium ('Rope (50ft)' vs 'Rope'),
+    and guessing would produce confident wrong numbers instead of an honest
+    unknown. The add form lets the player supply bulk when this misses.
+    """
+    if not item_name:
+        return ''
+    return BULK_INDEX.get(str(item_name).strip().lower(), '')
 COMPENDIUM_RULES = {}
 
 def _merge_rules(name, new_rules):
@@ -3696,10 +3771,23 @@ class Character:
 
         self.equipment = []
         for eq in (build.get('equipment') or []):
-            if isinstance(eq, list) and len(eq) >= 2: 
-                self.equipment.append({'name': safe_str(eq[0], 'Item'), 'qty': safe_int(eq[1], 1), 'bulk': safe_str(eq[2] if len(eq)>2 else '0')})
-            elif isinstance(eq, dict): 
-                self.equipment.append({'name': safe_str(eq.get('name'), 'Item'), 'qty': safe_int(eq.get('qty'), 1), 'bulk': safe_str(eq.get('bulk', '0'))})
+            # Bulk resolution order: an explicit value on the row (dict rows
+            # only), then the compendium by name, then unknown ('').
+            #
+            # A positional row NEVER carries bulk. Pathbuilder puts a container
+            # UUID or the literal 'Invested' in slot 2, and this used to read
+            # that slot AS bulk -- so every PC's parsed bulk was a UUID or
+            # 'Invested', scored 0 by safe_int's bare except, and total_bulk was
+            # 0 for everyone. Do not reintroduce an eq[2] read.
+            if isinstance(eq, list) and len(eq) >= 2:
+                name = safe_str(eq[0], 'Item')
+                self.equipment.append({'name': name, 'qty': safe_int(eq[1], 1),
+                                       'bulk': lookup_bulk(name)})
+            elif isinstance(eq, dict):
+                name = safe_str(eq.get('name'), 'Item')
+                bulk = canonical_bulk(eq.get('bulk'))
+                self.equipment.append({'name': name, 'qty': safe_int(eq.get('qty'), 1),
+                                       'bulk': bulk or lookup_bulk(name)})
 
         # Fall back to the PB-derived armor_name so bulk, AC item bonus,
         # and check/speed-penalty comparisons all operate on the worn
@@ -3707,25 +3795,47 @@ class Character:
         self.armor_name = safe_str(build.get('armor_name'), '') or getattr(self, '_derived_armor_name', '') or ''
         total_b = 0
         light_b = 0
-        
-        all_inventory = self.equipment + self._raw_weapons + ([{'bulk': str(build.get('armor_bulk', '0')), 'qty': 1}] if self.armor_name else [])
-        
+        unknown_bulk = 0
+
+        # Weapons and armor were contributing nothing at all: Pathbuilder weapon
+        # dicts carry no 'bulk' key, and build['armor_bulk'] is always '0'
+        # because BUILDER_ARMOR's bulk is read from a `system` column the
+        # compendium DB does not have. Both resolve by name instead.
+        weapons = [{'name': safe_str(w.get('name'), ''), 'qty': safe_int(w.get('qty'), 1),
+                    'bulk': canonical_bulk(w.get('bulk')) or lookup_bulk(w.get('name'))}
+                   for w in self._raw_weapons]
+        worn_armor = ([{'name': self.armor_name, 'qty': 1,
+                        'bulk': canonical_bulk(build.get('armor_bulk')) or lookup_bulk(self.armor_name)}]
+                      if self.armor_name else [])
+        all_inventory = self.equipment + weapons + worn_armor
+
         for item in all_inventory:
             qty = safe_int(item.get('qty', 1), 1)
-            b_str = str(item.get('bulk', '0')).upper()
-            if b_str == 'L':
+            b_str = canonical_bulk(item.get('bulk'))
+            if not b_str:
+                unknown_bulk += qty      # counted, never silently folded in as 0
+            elif b_str == BULK_LIGHT:
                 light_b += qty
             else:
                 total_b += safe_int(b_str) * qty
-                
+
         self.total_bulk = total_b + math.floor(light_b / 10)
         self.light_bulk_remainder = light_b % 10
-        
+        # How many carried items the compendium could not price. The sheet shows
+        # this so an under-count is visible rather than presented as measured.
+        self.unknown_bulk_items = unknown_bulk
+
         self.encumbered_limit = 5 + self.mods.get('str', 0)
         self.max_bulk_limit = 10 + self.mods.get('str', 0)
-        
+
         self.is_encumbered = self.total_bulk > self.encumbered_limit
-        self.clumsy_penalty = 1 if self.is_encumbered else 0
+        # Encumbrance PENALTIES are gated off. The gauge has never worked (see
+        # the equipment parse above), so this Clumsy 1 / -10 ft Speed machinery
+        # has never once fired. Switching it on together with the fix would
+        # change AC, Reflex, initiative, every Dex skill and Speed for live PCs
+        # mid-campaign, with no in-game cause. Show the truthful number first;
+        # flip this to True to enforce the rule.
+        self.clumsy_penalty = 1 if (self.is_encumbered and ENCUMBRANCE_PENALTIES) else 0
 
         ac_data = build.get('acTotal') or {}
         self.ac_item = safe_int(build.get('ac_item'), safe_int(ac_data.get('acItemBonus'), 0))
@@ -3874,7 +3984,11 @@ class Character:
         self.base_speed = safe_int(attributes.get('speed'), 25) + safe_int(attributes.get('speedBonus'), 0) + self.get_rule_mod('speed')
         if 'fleet' in [f['name'].lower() for f in self.feats]: self.base_speed += 5
         toggle_speed = self.toggle_effects_summary.get('speed', 0)
-        self.active_speed = max(5, self.base_speed - self.active_speed_penalty - (10 if self.is_encumbered else 0) + toggle_speed)
+        # The -10 ft encumbered penalty is gated with the Clumsy one: see
+        # ENCUMBRANCE_PENALTIES. Both must flip together or the sheet would show
+        # a speed hit without the matching Clumsy, which is neither the current
+        # behaviour nor the rule.
+        self.active_speed = max(5, self.base_speed - self.active_speed_penalty - (10 if (self.is_encumbered and ENCUMBRANCE_PENALTIES) else 0) + toggle_speed)
         # Temp HP has two sources: a manual pool (granted by spells/items like
         # False Life, Heroism) which drains when the PC takes damage, and a
         # passive pool from class toggles (shield raised, rage, etc.) which
@@ -5650,6 +5764,11 @@ def load_compendium():
                                 sys = data.get('system', {})
                                 desc = sys.get('description', {}).get('value', '')
                                 COMPENDIUM_LIBRARY[name.lower()] = clean_foundry_text(desc)
+                                # Index bulk here rather than in a second walk --
+                                # this loop already parsed the file.
+                                bulk_here = canonical_bulk(sys.get('bulk'))
+                                if bulk_here:
+                                    BULK_INDEX[name.lower()] = bulk_here
                                 _merge_rules(name, sys.get('rules') or [])
                                 
                                 item_type = data.get('type', '').lower()
@@ -15898,9 +16017,35 @@ def add_item(pc_name):
         elif isinstance(eq, dict) and eq.get('name', '').lower() == item_name.lower():
             eq['qty'] = int(eq.get('qty', 0)) + item_qty; found = True; break
             
-    if not found: build['equipment'].append([item_name, item_qty])
+    if not found:
+        # Store a DICT when the caller supplies an explicit bulk. Never write
+        # bulk into positional slot 2: Pathbuilder owns that slot for a
+        # container UUID / 'Invested', and conflating them is the bug that made
+        # every PC weigh nothing. A plain 2-element row is still fine when bulk
+        # is omitted -- the parse resolves those by name from the compendium.
+        supplied = canonical_bulk(data.get('bulk'))
+        if supplied:
+            build['equipment'].append({'name': item_name, 'qty': item_qty, 'bulk': supplied})
+        else:
+            build['equipment'].append([item_name, item_qty])
     save_and_reload_character(pc_name, pc_json, file_path)
-    return jsonify({"success": True})
+    return jsonify({"success": True, "bulk": canonical_bulk(data.get('bulk')) or lookup_bulk(item_name)})
+
+
+@app.route('/api/item_bulk')
+def item_bulk():
+    # Ungated, like /api/condition_info: this returns shipped PF2e reference
+    # data keyed by an item name the caller already typed. No character state,
+    # nothing campaign-scoped, nothing a player could not read in the rulebook.
+    """Canonical bulk for an item name, so the add form can prefill it.
+
+    Returns '' when the compendium has no exact match -- the form then asks the
+    player rather than silently storing 0. Six of the sheet's own quick-add
+    labels miss ('Rope (50ft)' vs 'Rope'), so this is the common case, not an
+    edge one."""
+    name = request.args.get('name', '')
+    bulk = lookup_bulk(name)
+    return jsonify({"name": name, "bulk": bulk, "known": bool(bulk)})
 
 @app.route('/api/remove_item/<pc_name>', methods=['POST'])
 @require_pc_self_or_gm
