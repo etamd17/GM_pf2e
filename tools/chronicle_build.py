@@ -1631,6 +1631,38 @@ def _encode_multipart(zip_path):
     return body, "multipart/form-data; boundary=%s" % boundary
 
 
+TOKEN_ENV_VAR = "CHRONICLE_PUBLISH_TOKEN"
+
+
+def resolve_token(cli_token, env=None):
+    """The publish token: `--token` if given, else $CHRONICLE_PUBLISH_TOKEN.
+
+    Deliberately the SAME variable name the app reads server-side, so the GM
+    exports one value and both ends agree.
+
+    The env var is the better habit, and the reason is not hypothetical: a
+    token in argv is readable by any process on the box via `ps` for as long
+    as the publish runs, and it stays in shell history afterwards. This
+    particular token unlocks `/api/chronicle*`, the route that REPLACES what
+    every player reads -- a whole-tree swap, not an append.
+
+    An explicit `--token` still wins, so existing scripted invocations behave
+    exactly as before. Both sources are stripped: these secrets never
+    meaningfully contain edge whitespace, and a trailing newline picked up
+    from `export TOKEN=$(cat secret)` or a copy-paste would otherwise fail
+    `hmac.compare_digest` server-side and surface as a baffling 403.
+
+    Returns None when neither is set, which is correct for local legacy-open
+    dev -- the app requires no token there, and `publish` omits the header
+    entirely rather than sending an empty one.
+    """
+    source = os.environ if env is None else env
+    for value in (cli_token, source.get(TOKEN_ENV_VAR)):
+        if value and value.strip():
+            return value.strip()
+    return None
+
+
 def publish(zip_path, url, token=None):
     """POST the built player-vault zip to the PR1 app's
     `/api/chronicle/publish` route as multipart/form-data (field `archive`).
@@ -1694,7 +1726,11 @@ def main(argv=None):
                               "private authoring vault; 'player-vault' ingests an already "
                               "player-facing, hand-authored vault as-is")
     parser.add_argument("--publish-url", default=None, dest="publish_url")
-    parser.add_argument("--token", default=None)
+    parser.add_argument("--token", default=None,
+                        help="publish token. Prefer leaving this off and "
+                             "exporting CHRONICLE_PUBLISH_TOKEN instead -- an "
+                             "argv token is world-readable in `ps` and lands "
+                             "in shell history.")
     parser.add_argument("--dry-run", action="store_true", dest="dry_run")
     args = parser.parse_args(argv)
 
@@ -1727,7 +1763,8 @@ def main(argv=None):
     try:
         print("Wrote archive: " + zip_path)
         if args.publish_url:
-            ok, resp = publish(zip_path, args.publish_url, token=args.token)
+            ok, resp = publish(zip_path, args.publish_url,
+                               token=resolve_token(args.token))
             if not ok:
                 print("Publish FAILED: " + str(resp), file=sys.stderr)
                 return 1
