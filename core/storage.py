@@ -94,6 +94,10 @@ def chronicle_dir(cid):            return os.path.join(campaign_dir(cid), 'chron
 # every content/<hash> it does not point at, so docs kept there would be
 # deleted by the next vault publish. See core/chronicle_docs.py.
 def chronicle_docs_dir(cid):       return os.path.join(chronicle_dir(cid), 'docs')
+def scenes_dir(cid):               return os.path.join(campaign_dir(cid), 'scenes') if cid else os.path.join(DATA_DIR, 'scenes')
+def scene_assets_dir(cid):         return os.path.join(scenes_dir(cid), 'assets')
+def scenes_index_file(cid):        return os.path.join(scenes_dir(cid), 'index.json')
+def scene_file(cid, scene_id):     return os.path.join(scenes_dir(cid), _check_id(scene_id, 'scene_id') + '.json')
 
 
 def delete_campaign_dir(cid):
@@ -175,6 +179,8 @@ CAMPAIGN_SUBDIRS = (
     'campaign_audio',
     'journals',
     'cosmere_pcs',
+    'scenes',
+    os.path.join('scenes', 'assets'),
 )
 
 

@@ -145,6 +145,12 @@
                         {% if encounter_count > 0 %}{{ encounter_count }} in initiative{% else %}no active combat{% endif %}
                     </span>
                 </a>
+                <a href="/map" class="tile tile--run">
+                    <div class="tile__glyph"><svg viewBox="0 0 24 24"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21 3 6"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg></div>
+                    <h2 class="tile__title">Tactical Map</h2>
+                    <p class="tile__desc">Shared scenes, linked tokens, live turns, health, and conditions.</p>
+                    <span class="pill" style="margin-top:var(--sp-3);">open table map</span>
+                </a>
                 <a href="/party" class="tile tile--run">
                     <div class="tile__glyph"><svg viewBox="0 0 24 24"><circle cx="9" cy="8.5" r="3"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5"/><circle cx="16.5" cy="9.5" r="2.3"/><path d="M13.5 20c.4-2.6 1.9-4.2 4-4.2 2 0 3.4 1.4 3.9 3.5"/></svg></div>
                     <h2 class="tile__title">Party View</h2>
