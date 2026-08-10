@@ -92,12 +92,20 @@
                            oninput="filterInventory(this.value)">
                     <div id="inv-list" class="space-y-2 mb-6 max-h-64 overflow-y-auto custom-scrollbar pr-2">
                         {% for item in pc.equipment %}
+                        {# item.bulk is canonicalised server-side now ('L', a
+                           whole number, or '' for unknown), so the old
+                           length-based guard that collapsed container UUIDs and
+                           'Invested' to '-' is gone. '?' means the compendium
+                           has no match and nobody has supplied a value -- shown
+                           rather than hidden, so an under-count is visible. #}
                         {% set raw_bulk = item.bulk|string|upper %}
-                        {% set display_bulk = raw_bulk if raw_bulk in ['L', '0', '1', '2', '3', '4', '5'] else ('-' if raw_bulk|length > 5 else raw_bulk) %}
+                        {% set display_bulk = raw_bulk if raw_bulk else '?' %}
                         <div class="flex justify-between items-center p-3 rounded group inv-item" data-inv-name="{{ item.name|lower }}" style="background:var(--bg-input); border:1px solid var(--border-card);">
                             <span class="text-sm font-bold truncate flex-1" style="color:var(--text-on-cream-2);">{{ item.name }}</span>
                             <button class="invested-toggle no-print mr-2" data-item-name="{{ item.name }}" title="Toggle: invested magic item (counts toward 10/day cap)" aria-label="Toggle invested for {{ item.name }}" style="background:transparent; color:var(--t4); font-size:14px; padding:0 4px; cursor:pointer;"></button>
-                            <span class="text-[9px] font-mono uppercase tracking-widest mr-2" style="color:{% if display_bulk == 'L' %}var(--gilt-400){% elif display_bulk|int > 0 %}var(--gilt-200){% else %}var(--text-on-cream-3){% endif %};">{{ display_bulk }}B</span>
+                            <span class="text-[9px] font-mono uppercase tracking-widest mr-2"
+                                  {% if display_bulk == '?' %}title="No bulk on record for this item — it is not counted in the total below. Re-add it with a bulk value to include it."{% endif %}
+                                  style="color:{% if display_bulk == 'L' %}var(--gilt-400){% elif display_bulk == '?' %}var(--red-b){% elif display_bulk|int > 0 %}var(--gilt-200){% else %}var(--text-on-cream-3){% endif %};">{{ display_bulk }}B</span>
                             <span class="text-xs font-mono px-2 py-0.5 rounded mr-2" style="color:var(--text-on-cream-3); background:var(--bg-card-2); border:1px solid var(--border-card);">x{{ item.qty }}</span>
                             <button onclick="removeInvItem('{{ item.name|replace("'", "\\'") }}')" class="transition-colors opacity-0 group-hover:opacity-100" style="color:var(--text-on-cream-3);" onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='var(--text-on-cream-3)'" title="Drop Item">×</button>
                         </div>
@@ -109,6 +117,10 @@
                     <div class="flex gap-2 mb-3">
                         <input type="text" id="add-item-name" placeholder="Item Name" class="flex-1 rounded p-2 text-sm outline-none" style="background:var(--bg-input); border:1px solid var(--border-card); color:var(--text-on-cream);" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border-card)'">
                         <input type="number" id="add-item-qty" value="1" class="w-16 rounded p-2 text-sm text-center outline-none" style="background:var(--bg-input); border:1px solid var(--border-card); color:var(--text-on-cream);" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border-card)'" title="Quantity">
+                        {# Auto-filled from the compendium when the name matches; type it
+                           yourself when it doesn't. Six of the quick-add labels below
+                           don't match by name, so an unmatched item is normal. #}
+                        <input type="text" id="add-item-bulk" placeholder="Bulk" maxlength="3" class="w-14 rounded p-2 text-sm text-center outline-none" style="background:var(--bg-input); border:1px solid var(--border-card); color:var(--text-on-cream);" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border-card)'" title="Bulk: a number, or L for Light. Leave blank to look it up.">
                         <button onclick="addInvItem()" class="font-bold px-4 py-2 rounded shadow-lg transition-colors text-sm" style="background:var(--accent); color:var(--ink-950);" onmouseover="this.style.background='var(--accent-hover)'" onmouseout="this.style.background='var(--accent)'">Add</button>
                     </div>
                     <details class="group">

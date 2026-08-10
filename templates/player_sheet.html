@@ -5329,13 +5329,44 @@
         async function addInvItem() {
             const name = document.getElementById('add-item-name').value.trim();
             const qty = document.getElementById('add-item-qty').value;
+            const bulkEl = document.getElementById('add-item-bulk');
+            const bulk = bulkEl ? bulkEl.value.trim() : '';
             if(!name) return;
+            const payload = {name: name, qty: qty};
+            // Only send bulk when the player typed one. Omitted means "look it
+            // up by name", which is the normal path for compendium items.
+            if (bulk) payload.bulk = bulk;
             try {
-                const res = await fetch(`/api/add_item/${pcNameEncoded}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({name: name, qty: qty}) });
+                const res = await fetch(`/api/add_item/${pcNameEncoded}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 const data = await res.json();
                 if(data.success) window.location.reload();
             } catch (e) {}
         }
+
+        // Prefill the bulk box from the compendium as soon as the name is
+        // recognised, so the common case needs no typing and an UNrecognised
+        // item is visibly the player's to fill in rather than silently zero.
+        (function () {
+            const nameEl = document.getElementById('add-item-name');
+            const bulkEl = document.getElementById('add-item-bulk');
+            if (!nameEl || !bulkEl) return;
+            let touched = false;
+            bulkEl.addEventListener('input', function () { touched = true; });
+            nameEl.addEventListener('change', async function () {
+                if (touched) return;                       // never overwrite a typed value
+                const n = nameEl.value.trim();
+                if (!n) { bulkEl.value = ''; bulkEl.placeholder = 'Bulk'; return; }
+                try {
+                    const res = await fetch('/api/item_bulk?name=' + encodeURIComponent(n));
+                    const data = await res.json();
+                    bulkEl.value = data.known ? data.bulk : '';
+                    bulkEl.placeholder = data.known ? 'Bulk' : 'Bulk?';
+                    bulkEl.title = data.known
+                        ? 'From the compendium. Override if you like.'
+                        : 'Not in the compendium — type a number, or L for Light, or leave blank to leave it uncounted.';
+                } catch (e) {}
+            });
+        })();
 
         async function removeInvItem(name) {
             try {
