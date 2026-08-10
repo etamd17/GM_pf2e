@@ -252,6 +252,9 @@
             <button onclick="loadToTracker()" id="btn-load" class="bg-accent-400 hover:bg-accent-300 text-white px-6 py-2.5 rounded font-bold transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed" disabled>
                 Load to Tracker →
             </button>
+            <button onclick="loadToMap()" id="btn-load-map" class="bg-success-500 hover:bg-success-400 text-white px-6 py-2.5 rounded font-bold transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                Add Stage and Open Map →
+            </button>
         </div>
     </div>
 </div>
@@ -440,8 +443,10 @@
         if (staged.length === 0) {
             container.innerHTML = '<div class="text-center text-gray-600 text-sm italic py-8">Click monsters from the search to add them here.</div>';
             document.getElementById('btn-load').disabled = true;
+            document.getElementById('btn-load-map').disabled = true;
         } else {
             document.getElementById('btn-load').disabled = false;
+            document.getElementById('btn-load-map').disabled = false;
             container.innerHTML = staged.map((s, i) => {
                 let ewLabel = s.elite_weak === 1 ? '<span class="text-[10px] bg-success-500 text-white px-1 py-0.5 rounded font-bold ml-1">ELITE</span>' : s.elite_weak === -1 ? '<span class="text-[10px] bg-danger-300 text-white px-1 py-0.5 rounded font-bold ml-1">WEAK</span>' : '';
                 let hazardLabel = s.is_hazard ? `<span class="text-[10px] bg-danger-200 text-white px-1 py-0.5 rounded font-bold ml-1">${s.hazard_type === 'complex' ? 'COMPLEX' : 'SIMPLE'} HAZARD</span>` : '';
@@ -778,6 +783,50 @@
             const data = await res.json();
             if (data.success) window.location.href = '/tracker';
         } catch (e) { btn.disabled = false; btn.innerText = 'Load to Tracker →'; }
+    }
+
+    async function loadToMap() {
+        const btn = document.getElementById('btn-load-map');
+        btn.disabled = true; btn.innerText = 'Preparing map...';
+        try {
+            const stagedResponse = await fetch('/api/stage_encounter', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    monsters: staged.map(s => ({
+                        path: s.path, count: s.count, elite_weak: s.elite_weak,
+                        is_hazard: !!s.is_hazard, name: s.name, level: s.level,
+                        hazard_type: s.hazard_type, stealth_dc: s.stealth_dc,
+                        disable_dc: s.disable_dc, trigger: s.trigger, routine: s.routine,
+                    })),
+                    add_party: document.getElementById('chk-add-party').checked,
+                    clear_first: false
+                })
+            });
+            const stagedData = await stagedResponse.json();
+            if (!stagedResponse.ok || !stagedData.success) throw new Error(stagedData.error || 'Could not stage encounter');
+
+            const scenesResponse = await fetch('/api/scenes', {headers: {'X-Requested-With': 'XMLHttpRequest'}});
+            const scenesData = await scenesResponse.json();
+            let sceneId = scenesData.active_scene_id;
+            if (!sceneId) {
+                const createdResponse = await fetch('/api/scenes', {
+                    method: 'POST', headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+                    body: JSON.stringify({name: 'Encounter Map', width: 1400, height: 900})
+                });
+                const createdData = await createdResponse.json();
+                if (!createdResponse.ok) throw new Error(createdData.error || 'Could not create a scene');
+                sceneId = createdData.scene.id;
+            }
+            const syncResponse = await fetch('/api/scenes/' + encodeURIComponent(sceneId) + '/sync-encounter', {
+                method: 'POST', headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'}, body: '{}'
+            });
+            const syncData = await syncResponse.json();
+            if (!syncResponse.ok) throw new Error(syncData.error || 'Could not place encounter tokens');
+            window.location.href = '/map/' + encodeURIComponent(sceneId);
+        } catch (error) {
+            btn.disabled = false; btn.innerText = 'Add Stage and Open Map →';
+            alert(error.message || 'Could not open the map.');
+        }
     }
 
     function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }

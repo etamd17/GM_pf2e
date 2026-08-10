@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+{% block title %}Tactical Map{% endblock %}
+{% block head_extra %}<link rel="stylesheet" href="{{ url_for('static', filename='css/map.css') }}">{% endblock %}
+
+{% block content %}
+<div class="map-page" data-map-role="{{ 'gm' if map_gm else 'player' }}">
+    <header class="map-header">
+        <div>
+            <div class="map-eyebrow">{{ 'Game Master Surface' if map_gm else 'Shared Table' }}</div>
+            <h1 id="map-title">Tactical Map</h1>
+            <p id="map-status">{{ 'Create or open a scene to begin.' if not scene_id else 'Connecting to the live scene...' }}</p>
+        </div>
+        <div class="map-header-actions">
+            <button type="button" id="map-zoom-out" class="map-btn map-btn--quiet" aria-label="Zoom out">−</button>
+            <span id="map-zoom-label" class="map-zoom-label">100%</span>
+            <button type="button" id="map-zoom-in" class="map-btn map-btn--quiet" aria-label="Zoom in">+</button>
+            <button type="button" id="map-fit" class="map-btn map-btn--quiet">Fit</button>
+            <button type="button" id="map-follow-turn" class="map-btn map-btn--quiet is-active">Follow turn</button>
+            <button type="button" id="map-undo" class="map-btn map-btn--quiet" disabled>Undo move</button>
+            {% if not map_gm %}<a href="{{ system_ui.player_home }}" class="map-btn map-btn--quiet">Player Hub</a>{% endif %}
+        </div>
+    </header>
+
+    {% if map_gm %}
+    <section class="map-create-panel{% if scene_id %} map-create-panel--compact{% endif %}">
+        <form id="map-create-form" class="map-inline-form">
+            <label for="map-new-name">New scene</label>
+            <input id="map-new-name" name="name" maxlength="100" placeholder="Scene name" required>
+            <input name="width" type="number" min="320" max="8000" value="1400" title="Scene width">
+            <span class="map-times">×</span>
+            <input name="height" type="number" min="240" max="8000" value="900" title="Scene height">
+            <button class="map-btn" type="submit">Create</button>
+        </form>
+    </section>
+    {% endif %}
+
+    {% if scene_id %}
+    <div class="map-workspace">
+        {% if map_gm %}
+        <aside class="map-sidebar" aria-label="Map controls">
+            <section class="map-panel">
+                <h2>Scene</h2>
+                <label for="map-scene-select">Active scene</label>
+                <select id="map-scene-select">
+                    {% for item in scene_summaries %}<option value="{{ item.id }}"{% if item.id == scene_id %} selected{% endif %}>{{ item.name }}</option>{% endfor %}
+                </select>
+                <label for="map-scene-name">Name</label>
+                <input id="map-scene-name" maxlength="100">
+                <div class="map-setting-row">
+                    <label for="map-grid-size">Grid size</label>
+                    <input id="map-grid-size" type="number" min="20" max="300">
+                </div>
+                <div class="map-setting-pair">
+                    <div><label for="map-grid-offset-x">Grid offset X</label><input id="map-grid-offset-x" type="number" step="1"></div>
+                    <div><label for="map-grid-offset-y">Grid offset Y</label><input id="map-grid-offset-y" type="number" step="1"></div>
+                </div>
+                <button id="map-calibrate-grid" class="map-btn map-btn--quiet map-btn--wide" type="button">Align grid by dragging</button>
+                <label class="map-check"><input id="map-grid-visible" type="checkbox"> Show grid</label>
+                <label class="map-check"><input id="map-player-movement" type="checkbox"> Players can move their tokens</label>
+                <label class="map-check"><input id="map-snap-grid" type="checkbox"> Snap movement to grid</label>
+                <label class="map-check"><input id="map-dynamic-lighting" type="checkbox"> Dynamic lighting and token vision</label>
+                <div class="map-setting-row"><label for="map-default-vision">Default vision radius</label><input id="map-default-vision" type="number" min="0" max="5000" step="5"></div>
+                <button id="map-save-settings" class="map-btn map-btn--wide" type="button">Save scene settings</button>
+            </section>
+
+            <section class="map-panel">
+                <h2>Background</h2>
+                <form id="map-upload-form">
+                    <input id="map-upload-input" type="file" name="image" accept="image/png,image/jpeg,image/webp" required>
+                    <button class="map-btn map-btn--wide" type="submit">Upload map image</button>
+                </form>
+                <p class="map-hint">PNG, JPEG, or WebP up to 25 MB.</p>
+            </section>
+
+            <section class="map-panel">
+                <h2>Tokens</h2>
+                <button id="map-sync-encounter" class="map-btn map-btn--wide" type="button">Send live encounter to map</button>
+                <p id="map-sync-status" class="map-hint">Adds or links missing tracker combatants without moving existing tokens.</p>
+                <label for="map-token-source">Add from the table</label>
+                <select id="map-token-source">
+                    <option value="">Custom token</option>
+                    {% for item in token_candidates %}<option value="{{ item.key }}">{{ item.label }}</option>{% endfor %}
+                </select>
+                <input id="map-token-name" maxlength="100" placeholder="Custom token name">
+                <button id="map-add-token" class="map-btn map-btn--wide" type="button">Add token</button>
+                <div id="map-token-actions" class="map-token-actions" hidden>
+                    <h3>Selected token</h3>
+                    <label for="map-selected-name">Name</label>
+                    <input id="map-selected-name" maxlength="100">
+                    <div class="map-setting-pair">
+                        <div>
+                            <label for="map-token-size">Size</label>
+                            <select id="map-token-size">
+                                <option value="0.5">Tiny</option>
+                                <option value="1">Small / Medium</option>
+                                <option value="2">Large</option>
+                                <option value="3">Huge</option>
+                                <option value="4">Gargantuan</option>
+                            </select>
+                        </div>
+                        <div><label for="map-token-color">Ring color</label><input id="map-token-color" type="color"></div>
+                    </div>
+                    <label for="map-token-vision">Vision radius</label>
+                    <input id="map-token-vision" type="number" min="0" max="5000" step="5">
+                    <label for="map-token-owner">Player controller</label>
+                    <select id="map-token-owner">
+                        <option value="">GM only</option>
+                        {% for item in token_candidates %}{% if item.character_id %}<option value="{{ item.character_id }}">{{ item.name }}</option>{% endif %}{% endfor %}
+                    </select>
+                    <label class="map-check"><input id="map-token-nameplate" type="checkbox"> Show nameplate</label>
+                    <label class="map-check"><input id="map-token-locked" type="checkbox"> Lock position</label>
+                    <label class="map-check"><input id="map-token-visible" type="checkbox"> Visible to players</label>
+                    <button id="map-save-token" class="map-btn map-btn--wide" type="button">Save token</button>
+                    <a id="map-token-sheet" class="map-btn map-btn--quiet map-btn--wide" href="/tracker">Open linked sheet</a>
+                    <div id="map-combat-actions" class="map-combat-actions" hidden>
+                        <div class="map-combat-heading">
+                            <strong>Live combat</strong>
+                            <span id="map-combat-hp">HP -</span>
+                        </div>
+                        <label for="map-combat-amount">HP amount</label>
+                        <input id="map-combat-amount" type="number" min="1" max="100000" value="1">
+                        <label for="map-damage-type">Damage type</label>
+                        <select id="map-damage-type">
+                            <option value="untyped">Untyped</option>
+                            <option value="bludgeoning">Bludgeoning</option>
+                            <option value="piercing">Piercing</option>
+                            <option value="slashing">Slashing</option>
+                            <option value="fire">Fire</option>
+                            <option value="cold">Cold</option>
+                            <option value="electricity">Electricity</option>
+                            <option value="acid">Acid</option>
+                            <option value="force">Force</option>
+                            <option value="mental">Mental</option>
+                            <option value="poison">Poison</option>
+                        </select>
+                        <div class="map-combat-buttons">
+                            <button id="map-apply-damage" class="map-btn map-btn--danger" type="button">Damage</button>
+                            <button id="map-apply-healing" class="map-btn" type="button">Heal</button>
+                        </div>
+                        <label for="map-condition">Condition</label>
+                        <select id="map-condition">
+                            <option value="frightened">Frightened</option>
+                            <option value="sickened">Sickened</option>
+                            <option value="prone">Prone</option>
+                            <option value="off_guard">Off-guard</option>
+                            <option value="stunned">Stunned</option>
+                            <option value="slowed">Slowed</option>
+                            <option value="enfeebled">Enfeebled</option>
+                            <option value="clumsy">Clumsy</option>
+                            <option value="drained">Drained</option>
+                            <option value="stupefied">Stupefied</option>
+                            <option value="concealed">Concealed</option>
+                            <option value="hidden">Hidden</option>
+                        </select>
+                        <div class="map-combat-buttons">
+                            <button id="map-add-condition" class="map-btn" type="button">Add / increase</button>
+                            <button id="map-remove-condition" class="map-btn map-btn--quiet" type="button">Remove / decrease</button>
+                        </div>
+                    </div>
+                    <button id="map-token-visibility" class="map-btn map-btn--quiet" type="button">Hide from players</button>
+                    <button id="map-delete-token" class="map-btn map-btn--danger" type="button">Remove token</button>
+                </div>
+            </section>
+
+            <section class="map-panel">
+                <h2>Fog, walls and lighting</h2>
+                <label class="map-check"><input id="map-fog-enabled" type="checkbox"> Enable manual fog</label>
+                <div class="map-setting-row"><label for="map-fog-radius">Fog brush radius</label><input id="map-fog-radius" type="number" min="20" max="1000" value="120"></div>
+                <div class="map-setting-row"><label for="map-template-size">Template size (squares)</label><input id="map-template-size" type="number" min="1" max="30" value="3"></div>
+                <div class="map-setting-row"><label for="map-light-radius">Light radius</label><input id="map-light-radius" type="number" min="20" max="5000" value="350"></div>
+                <label for="map-light-color">Light color</label><input id="map-light-color" type="color" value="#ffd98a">
+                <label class="map-check"><input id="map-secret-door" type="checkbox"> New doors are secret</label>
+                <button id="map-reset-fog" class="map-btn map-btn--quiet map-btn--wide" type="button">Reset fog painting</button>
+                <button id="map-clear-templates" class="map-btn map-btn--quiet map-btn--wide" type="button">Clear templates</button>
+                <p class="map-hint">Door tool: draw a door, or click an existing door to open/close it. Erase tool removes walls, doors, lights, or templates.</p>
+            </section>
+
+            <section class="map-panel" id="map-target-panel">
+                <h2>Targets</h2>
+                <div class="map-combat-heading"><strong id="map-target-count">0 selected</strong><button id="map-clear-targets" class="map-btn map-btn--quiet" type="button">Clear</button></div>
+                <div class="map-setting-pair">
+                    <div><label for="map-bulk-amount">Amount</label><input id="map-bulk-amount" type="number" min="1" value="1"></div>
+                    <div><label for="map-bulk-damage-type">Damage type</label><select id="map-bulk-damage-type"><option value="untyped">Untyped</option><option value="bludgeoning">Bludgeoning</option><option value="piercing">Piercing</option><option value="slashing">Slashing</option><option value="fire">Fire</option><option value="cold">Cold</option><option value="electricity">Electricity</option><option value="acid">Acid</option><option value="force">Force</option><option value="mental">Mental</option><option value="poison">Poison</option></select></div>
+                </div>
+                <div class="map-combat-buttons"><button id="map-bulk-damage" class="map-btn map-btn--danger" type="button">Damage targets</button><button id="map-bulk-heal" class="map-btn" type="button">Heal targets</button></div>
+                <label for="map-bulk-condition">Condition</label>
+                <select id="map-bulk-condition"><option value="frightened">Frightened</option><option value="sickened">Sickened</option><option value="prone">Prone</option><option value="off_guard">Off-guard</option><option value="stunned">Stunned</option><option value="slowed">Slowed</option><option value="enfeebled">Enfeebled</option><option value="clumsy">Clumsy</option><option value="drained">Drained</option><option value="stupefied">Stupefied</option></select>
+                <div class="map-combat-buttons"><button id="map-bulk-condition-add" class="map-btn" type="button">Add</button><button id="map-bulk-condition-remove" class="map-btn map-btn--quiet" type="button">Remove</button></div>
+                <div class="map-setting-pair">
+                    <div><label for="map-save-kind">Request save</label><select id="map-save-kind"><option value="fortitude">Fortitude</option><option value="reflex">Reflex</option><option value="will">Will</option></select></div>
+                    <div><label for="map-save-dc">DC</label><input id="map-save-dc" type="number" min="1" value="20"></div>
+                </div>
+                <button id="map-request-save" class="map-btn map-btn--wide" type="button">Request saves from targeted PCs</button>
+            </section>
+        </aside>
+        {% endif %}
+
+        <main class="map-stage-column">
+            <div class="map-stage-toolbar">
+                <span><span class="map-live-dot"></span> Live sync</span>
+                <span id="map-revision">Revision —</span>
+                <span class="map-stage-help">Drag tokens to move. Drag empty space to pan. Wheel to zoom.</span>
+            </div>
+            <div class="map-toolstrip" role="toolbar" aria-label="Map tools">
+                <button class="map-tool is-active" data-map-tool="select" type="button">Select</button>
+                <button class="map-tool" data-map-tool="target" type="button">Target</button>
+                <button class="map-tool" id="map-clear-targets-tool" type="button" disabled>Clear targets</button>
+                <button class="map-tool" data-map-tool="measure" type="button">Ruler</button>
+                <button class="map-tool" data-map-tool="burst" type="button">Burst</button>
+                <button class="map-tool" data-map-tool="emanation" type="button">Emanation</button>
+                <button class="map-tool" data-map-tool="cone" type="button">Cone</button>
+                <button class="map-tool" data-map-tool="line" type="button">Line</button>
+                {% if map_gm %}<span class="map-tool-divider"></span>
+                <button class="map-tool" data-map-tool="fog-reveal" type="button">Reveal fog</button>
+                <button class="map-tool" data-map-tool="fog-hide" type="button">Hide fog</button>
+                <button class="map-tool" data-map-tool="wall" type="button">Wall</button>
+                <button class="map-tool" data-map-tool="door" type="button">Door</button>
+                <button class="map-tool" data-map-tool="light" type="button">Light</button>
+                <button class="map-tool" data-map-tool="erase" type="button">Erase</button>{% endif %}
+                <span id="map-tool-readout" class="map-tool-readout">Select and move tokens</span>
+            </div>
+            <div id="map-viewport" class="map-viewport" tabindex="0" aria-label="Tactical map">
+                <canvas id="map-canvas"></canvas>
+                <div id="map-empty" class="map-empty" hidden>No map image yet. The grid and tokens are still usable.</div>
+            </div>
+        </main>
+    </div>
+    {% else %}
+    <div class="map-no-scene">
+        <h2>No active scene</h2>
+        <p>{{ 'Create the first scene above.' if map_gm else 'The GM has not shared a tactical scene yet.' }}</p>
+    </div>
+    {% endif %}
+</div>
+
+<div id="map-toast" class="map-toast" role="status" aria-live="polite"></div>
+<script>
+window.SCENE_MAP_CONFIG = {{ {
+    'sceneId': scene_id,
+    'isGm': map_gm,
+    'characterId': (map_character.id if map_character else none),
+    'playerName': (map_character.name if map_character else player_name or '')
+}|tojson }};
+window.SCENE_TOKEN_CANDIDATES = {{ token_candidates|tojson }};
+</script>
+{% if scene_id %}<script src="{{ url_for('static', filename='js/map.js') }}" defer></script>{% else %}<script src="{{ url_for('static', filename='js/map.js') }}" defer></script>{% endif %}
+{% endblock %}

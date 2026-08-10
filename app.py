@@ -218,7 +218,8 @@ if GM_PASSWORD:
 # Account-based auth (multi-campaign). When any user account exists we authorize
 # via the logged-in user's per-campaign role; with no accounts yet (tests /
 # un-bootstrapped) we fall back to the legacy GM_PASSWORD behavior below.
-from core import auth as _auth, campaigns as _campaigns, backups as _backups
+from core import auth as _auth, campaigns as _campaigns, backups as _backups, scenes as _scenes
+from services import scene_sync as _scene_sync
 from core import chronicle_docs as _chronicle_lib
 
 
@@ -452,7 +453,10 @@ GM_API_PREFIXES = (
     '/api/update_initiative/', '/api/roll_npc_initiative', '/api/sort_initiative',
     '/api/cycle_turn/', '/api/delay_turn/', '/api/reenter_initiative/',
     '/api/save_encounter', '/api/load_encounter', '/api/delete_encounter', '/api/encounter_notes',
-    '/api/save_stage',
+    # Both halves of the stage round-trip. load_stage reads the GM's prepped
+    # monster list out of ENCOUNTER_DIR, so gating only the POST left the
+    # contents readable to anyone who could guess a stage name.
+    '/api/save_stage', '/api/load_stage/',
     '/api/roll_all_initiative', '/api/reorder_initiative',
     # GM-only loot/check dispatch + party-wide daily prep. Players see
     # the resulting banners and loot deliveries but can't fire them.
@@ -495,6 +499,15 @@ GM_API_PREFIXES = (
     # GET reading routes live at /chronicle* (player-scoped, NOT here); only the
     # /api/chronicle/* mutations are GM-only, gated centrally by this prefix.
     '/api/chronicle',
+    # Tactical map. The whole scene API is GM-only for now: there is no player
+    # map route, and the eventual audience is a shared table screen driven by
+    # the GM, not per-player devices. Gating the prefix rather than each route
+    # means a scene endpoint added later inherits the gate instead of silently
+    # opening a player hole -- which is exactly what the per-route
+    # _scene_member_allowed() checks did: they let ANY campaign member GET any
+    # scene by id, including unreleased GM prep. Those checks are left in place
+    # below as defence in depth, but THIS is the boundary.
+    '/api/scenes',
 )
 
 def _chronicle_token_ok(path):
@@ -1457,7 +1470,7 @@ def _autostart_persistence():
 _autostart_persistence()
 
 # --- SERVER-SENT EVENTS (SSE) FOR REAL-TIME SYNC ---
-# Each subscriber is a (queue.Queue, is_gm: bool) tuple. We tag the queue at
+# Each subscriber is a (queue.Queue, is_gm: bool, campaign_id) tuple. We tag the queue at
 # connection time so sse_broadcast() can route GM-only and player-sanitized
 # payloads without peeking at per-request Flask sessions (SSE connections
 # outlive any one request).
@@ -1470,6 +1483,7 @@ _sse_last_cleanup = time.time()
 # missed — instead of silently showing stale HP/conditions until a manual reload.
 _sse_event_seq = 0
 _sse_buffer = []            # list of (id, gm_frame, player_frame_or_None)
+_sse_event_campaigns = {}   # id -> campaign_id; None means a global event
 _SSE_BUFFER_MAX = 256
 _SSE_MAX_SUBSCRIBERS = 200  # Hard cap to prevent memory leaks. Sized for a full
 # table across several devices, each tab holding multiple EventSource
@@ -1522,7 +1536,7 @@ def _ensure_sse_keepalive():
         _sse_keepalive_started = True
 
 
-def sse_broadcast(event_type, data, *, player_filter=None):
+def sse_broadcast(event_type, data, *, player_filter=None, campaign_id=None):
     """Push an event to all connected SSE clients.
 
     Parameters
@@ -1536,6 +1550,9 @@ def sse_broadcast(event_type, data, *, player_filter=None):
         Return a dict to send that filtered payload to players, or None/False
         to drop the message entirely for players (GMs still receive `data`).
         If omitted, all subscribers receive `data` unchanged.
+    campaign_id : Optional[str]
+        When set, deliver and replay this frame only to subscribers currently
+        viewing that campaign. Existing unscoped events remain global.
     """
     global _sse_last_cleanup
     _bump_perf('sse_emit_total')
@@ -1564,11 +1581,18 @@ def sse_broadcast(event_type, data, *, player_filter=None):
         gm_msg = idln + gm_msg
         player_msg = (idln + player_msg) if player_msg else None
         _sse_buffer.append((sid, gm_msg, player_msg))
+        _sse_event_campaigns[sid] = campaign_id
         if len(_sse_buffer) > _SSE_BUFFER_MAX:
             del _sse_buffer[:-_SSE_BUFFER_MAX]
+            kept_ids = {row[0] for row in _sse_buffer}
+            for old_sid in list(_sse_event_campaigns):
+                if old_sid not in kept_ids:
+                    _sse_event_campaigns.pop(old_sid, None)
         dead = []
         for entry in _sse_subscribers:
-            q, is_gm = entry
+            q, is_gm, subscriber_cid = entry
+            if campaign_id is not None and subscriber_cid != campaign_id:
+                continue
             msg = gm_msg if is_gm else player_msg
             if msg is None:
                 continue  # Player filter dropped this message
@@ -1817,6 +1841,35 @@ def _broadcast_encounter_state():
             t.daemon = True
             _ENC_BROADCAST_TIMER = t
             t.start()
+
+def _npc_hp_status(current_hp, max_hp):
+    """The ONLY health information a player may learn about a non-PC.
+
+    Returns (status, css_class). Players never see a monster's numbers --
+    just "Dead" at 0 HP, "Wounded" at or below half, and nothing at all above
+    that. This is the hidden-NPC leak fix from ROADMAP.md's session-critical
+    list, and it is deliberately coarse: an exact number tells the party how
+    many rounds are left in the fight.
+
+    Every player-facing payload that carries NPC health goes through here --
+    the encounter SSE frame, /api/player_state, and the tactical map's token
+    projection. Add a fourth caller rather than a fourth copy; this policy
+    was duplicated once already and the map's copy silently drifted back to
+    shipping raw HP.
+    """
+    try:
+        current_hp = int(current_hp or 0)
+        max_hp = int(max_hp or 0)
+    except (TypeError, ValueError):
+        return '', ''
+    if current_hp == 0:
+        return 'Dead', 'text-red-400'
+    if max_hp > 0 and current_hp / max_hp <= 0.5:
+        return 'Wounded', 'text-orange-400'
+    if max_hp <= 0:
+        # No max to measure against; alive but unquantifiable.
+        return 'Wounded', 'text-orange-400'
+    return '', ''
 
 def _do_broadcast_encounter_state():
     """Build and emit the encounter-state SSE frame (uncoalesced).
@@ -6770,6 +6823,823 @@ def party_view():
     party = list(PARTY_LIBRARY.values())
     return render_template('party_view.html', party=party,
                            skill_matrix=_build_party_skill_matrix(party))
+
+# ---------------------------------------------------------------------------
+# Tactical scenes -- campaign-scoped map state projected from tracker/sheets
+# ---------------------------------------------------------------------------
+_SCENE_IMAGE_TYPES = {
+    'image/png': '.png',
+    'image/jpeg': '.jpg',
+    'image/webp': '.webp',
+}
+
+
+def _scene_member_allowed():
+    if _is_gm():
+        return True
+    if _account_mode():
+        user = _auth.current_user()
+        return bool(user and _campaigns.user_role(_active_campaign_doc(), user['id']))
+    if not GM_PASSWORD:
+        return True
+    return bool(session.get('player_name'))
+
+
+def _scene_character_records(cid):
+    """Character identity/ownership records without duplicating sheet state."""
+    records = {}
+    pdir = _storage.party_dir(cid) if cid else PARTY_DIR
+    if os.path.isdir(pdir):
+        for filename in os.listdir(pdir):
+            if not filename.endswith('.json'):
+                continue
+            doc = _storage.load_json(os.path.join(pdir, filename))
+            if not isinstance(doc, dict):
+                continue
+            char_id = doc.get('id')
+            if not char_id:
+                continue
+            build = doc.get('build', doc)
+            char_name = _campaigns._character_name(doc)
+            portrait = build.get('portrait')
+            records[char_id] = {
+                'id': char_id,
+                'name': char_name,
+                'owner_user_id': doc.get('owner_user_id'),
+                'system': doc.get('system') or 'pf2e',
+                'is_pc': True,
+                'image': ('/portraits/' + urllib.parse.quote(str(portrait))) if portrait else None,
+                'image_focus': build.get('portrait_focus') or {'x': 50, 'y': 50},
+                'sheet_url': '/player/sheet/' + urllib.parse.quote(char_name, safe=''),
+            }
+    cdir = _storage.cosmere_pc_dir(cid) if cid else COSMERE_PC_DIR
+    if os.path.isdir(cdir):
+        for filename in os.listdir(cdir):
+            if not filename.endswith('.json'):
+                continue
+            doc = _storage.load_json(os.path.join(cdir, filename))
+            if not isinstance(doc, dict) or not doc.get('id'):
+                continue
+            char_name = doc.get('name') or (doc.get('build') or {}).get('name') or '?'
+            records[doc['id']] = {
+                'id': doc['id'],
+                'name': char_name,
+                'owner_user_id': doc.get('owner_user_id'),
+                'system': 'cosmere',
+                'is_pc': True,
+                'image': None,
+                'image_focus': {'x': 50, 'y': 50},
+                'sheet_url': '/cosmere/pc/' + urllib.parse.quote(str(doc['id']), safe=''),
+            }
+    return records
+
+
+def _scene_live_indexes(cid):
+    """Disposable live-state projections keyed by combatant/character id."""
+    characters = {}
+    records = _scene_character_records(cid)
+    by_name = {record['name']: record for record in records.values()}
+    for char_id, record in records.items():
+        state = {'name': record['name'], 'is_pc': True, 'system': record['system']}
+        if cid == ACTIVE_CAMPAIGN_ID and record['name'] in PARTY_LIBRARY:
+            pc = PARTY_LIBRARY[record['name']]
+            state.update({
+                'current_hp': int(getattr(pc, 'current_hp', 0) or 0),
+                'max_hp': int(getattr(pc, 'hp', 0) or 0),
+                'conditions': {k: v for k, v in getattr(pc, 'conditions', {}).items()
+                              if v and v is not False},
+            })
+        characters[char_id] = state
+
+    combatants = {}
+    if cid == ACTIVE_CAMPAIGN_ID:
+        for index, combatant in enumerate(ACTIVE_ENCOUNTER):
+            record = by_name.get(combatant.name) if combatant.is_pc else None
+            current_hp = int(getattr(combatant, 'current_hp', 0) or 0)
+            max_hp = int(getattr(combatant, 'hp', 0) or 0)
+            entry = {
+                'name': combatant.name,
+                'is_pc': bool(combatant.is_pc),
+                'system': getattr(combatant, 'system', 'pf2e'),
+                'current_hp': current_hp,
+                'max_hp': max_hp,
+                'conditions': {k: v for k, v in getattr(combatant, 'conditions', {}).items()
+                              if v and v is not False},
+                'visible_to_players': bool(getattr(combatant, 'visible_to_players', True)),
+                'is_active': index == TURN_INDEX,
+                'character_id': record.get('id') if record else None,
+            }
+            if not combatant.is_pc:
+                # Carry the coarse status alongside the numbers. project_scene
+                # drops current_hp/max_hp on the way out to players and leaves
+                # this behind, so the two views share one computation.
+                entry['hp_status'], entry['hp_color'] = _npc_hp_status(current_hp, max_hp)
+            combatants[combatant.instance_id] = entry
+    return combatants, characters
+
+
+def _scene_payload(scene, *, player=False):
+    combatants, characters = _scene_live_indexes(scene['campaign_id'])
+    presentable = copy.deepcopy(scene)
+    records = _scene_character_records(scene['campaign_id'])
+    for token in presentable.get('tokens', []):
+        record = records.get(token.get('character_id'))
+        if record:
+            token['image'] = token.get('image') or record.get('image')
+            token['image_focus'] = token.get('image_focus') or record.get('image_focus')
+            token['sheet_url'] = token.get('sheet_url') or record.get('sheet_url')
+        elif token.get('combatant_id') and not token.get('is_pc'):
+            token['sheet_url'] = None if player else (token.get('sheet_url') or '/tracker')
+    return _scene_sync.project_scene(presentable, combatants, characters, player=player)
+
+
+def _broadcast_scene(scene):
+    cid = scene['campaign_id']
+    gm_payload = _scene_payload(scene, player=False)
+    player_payload = _scene_payload(scene, player=True)
+    sse_broadcast('scene_update', gm_payload,
+                  player_filter=lambda _payload: player_payload,
+                  campaign_id=cid)
+
+
+def _scene_token_candidates(cid):
+    records = _scene_character_records(cid)
+    by_name = {record['name']: record for record in records.values()}
+    candidates = []
+    if cid == ACTIVE_CAMPAIGN_ID:
+        for combatant in ACTIVE_ENCOUNTER:
+            linked = by_name.get(combatant.name) if combatant.is_pc else None
+            size_name = str(getattr(combatant, 'size', '') or '').lower()
+            token_size = {
+                'tiny': .5, 'small': 1, 'medium': 1,
+                'large': 2, 'huge': 3, 'gargantuan': 4,
+            }.get(size_name, 1)
+            combatant_image = (getattr(combatant, 'image', None) or
+                               getattr(combatant, 'portrait', None))
+            candidates.append({
+                'key': 'combatant:' + combatant.instance_id,
+                'source_kind': 'combatant',
+                'source_id': combatant.instance_id,
+                'name': combatant.name,
+                'character_id': linked.get('id') if linked else None,
+                'combatant_id': combatant.instance_id,
+                'controller_user_id': linked.get('owner_user_id') if linked else None,
+                'controller_character_id': linked.get('id') if linked else None,
+                'controller_name': linked.get('name') if linked else None,
+                'is_pc': bool(combatant.is_pc),
+                'image': linked.get('image') if linked else combatant_image,
+                'image_focus': linked.get('image_focus') if linked else {'x': 50, 'y': 50},
+                'sheet_url': linked.get('sheet_url') if linked else '/tracker',
+                'size': token_size,
+                'visible_to_players': bool(getattr(combatant, 'visible_to_players', True)),
+                'label': combatant.name + (' (PC, in encounter)' if combatant.is_pc else ' (encounter)'),
+            })
+    linked_character_ids = {c.get('character_id') for c in candidates if c.get('character_id')}
+    for record in records.values():
+        if record['id'] in linked_character_ids:
+            continue
+        candidates.append({
+            'key': 'character:' + record['id'],
+            'source_kind': 'character',
+            'source_id': record['id'],
+            'name': record['name'],
+            'character_id': record['id'],
+            'combatant_id': None,
+            'controller_user_id': record.get('owner_user_id'),
+            'controller_character_id': record['id'],
+            'controller_name': record['name'],
+            'is_pc': True,
+            'image': record.get('image'),
+            'image_focus': record.get('image_focus'),
+            'sheet_url': record.get('sheet_url'),
+            'size': 1,
+            'visible_to_players': True,
+            'label': record['name'] + ' (party)',
+        })
+    return candidates
+
+
+def _scene_current_character(cid):
+    if _account_mode():
+        user = _auth.current_user()
+        if user:
+            return next((r for r in _scene_character_records(cid).values()
+                         if r.get('owner_user_id') == user['id']), None)
+        return None
+    player_name = session.get('player_name')
+    return next((r for r in _scene_character_records(cid).values()
+                 if r.get('name') == player_name), None)
+
+
+def _scene_player_can_move(token, scene):
+    if token.get('locked'):
+        return False
+    if _is_gm():
+        return True
+    if not (scene.get('settings') or {}).get('player_movement', True):
+        return False
+    if _account_mode():
+        user = _auth.current_user()
+        return bool(user and token.get('controller_user_id') == user['id'])
+    player_name = session.get('player_name')
+    return bool(player_name and (token.get('controller_name') == player_name or
+                                 token.get('name') == player_name))
+
+
+@app.route('/map')
+@gm_required
+def scene_map_home():
+    cid = _active_campaign_id()
+    if not cid and _account_mode():
+        return redirect('/me')
+    sid = _scenes.active_scene_id(cid)
+    if sid:
+        return redirect('/map/' + sid)
+    return render_template('map.html', scene_id=None, map_gm=True,
+                           scene_summaries=[], token_candidates=[])
+
+
+@app.route('/map/<scene_id>')
+@gm_required
+def scene_map_gm(scene_id):
+    cid = _active_campaign_id()
+    try:
+        scene = _scenes.load_scene(cid, scene_id)
+    except ValueError:
+        scene = None
+    if not scene:
+        abort(404)
+    return render_template('map.html', scene_id=scene_id, map_gm=True,
+                           scene_summaries=_scenes.scene_summaries(cid),
+                           token_candidates=_scene_token_candidates(cid))
+
+
+@app.route('/api/scenes', methods=['GET', 'POST'])
+def api_scenes():
+    if not _scene_member_allowed():
+        return jsonify({'error': 'campaign membership required'}), 403
+    cid = _active_campaign_id()
+    if not cid and _account_mode():
+        return jsonify({'error': 'no active campaign'}), 400
+    if request.method == 'GET':
+        return jsonify({'scenes': _scenes.scene_summaries(cid),
+                        'active_scene_id': _scenes.active_scene_id(cid)})
+    if not _is_gm():
+        return jsonify({'error': 'GM access required'}), 403
+    data = request.get_json(silent=True) or {}
+    scene = _scenes.create_scene(
+        cid,
+        data.get('name') or 'Untitled Scene',
+        width=data.get('width', _scenes.DEFAULT_WIDTH),
+        height=data.get('height', _scenes.DEFAULT_HEIGHT),
+        grid_size=data.get('grid_size', _scenes.DEFAULT_GRID),
+    )
+    _broadcast_scene(scene)
+    if _scenes.active_scene_id(cid) == scene['id']:
+        sse_broadcast('scene_activated', {'scene_id': scene['id']}, campaign_id=cid)
+    return jsonify({'scene': _scene_payload(scene), 'success': True}), 201
+
+
+@app.route('/api/scenes/<scene_id>', methods=['GET', 'PATCH'])
+def api_scene(scene_id):
+    if not _scene_member_allowed():
+        return jsonify({'error': 'campaign membership required'}), 403
+    cid = _active_campaign_id()
+    try:
+        scene = _scenes.load_scene(cid, scene_id)
+    except ValueError:
+        scene = None
+    if not scene:
+        return jsonify({'error': 'scene not found'}), 404
+    if request.method == 'GET':
+        return jsonify({'scene': _scene_payload(scene, player=not _is_gm())})
+    if not _is_gm():
+        return jsonify({'error': 'GM access required'}), 403
+    data = request.get_json(silent=True) or {}
+    with _path_lock(_storage.scene_file(cid, scene_id)):
+        scene = _scenes.load_scene(cid, scene_id)
+        if data.get('name') is not None:
+            scene['name'] = (str(data['name']).strip() or 'Untitled Scene')[:100]
+        if isinstance(data.get('grid'), dict):
+            grid = data['grid']
+            if 'size' in grid:
+                try:
+                    scene['grid']['size'] = int(max(20, min(300, float(grid['size']))))
+                except (TypeError, ValueError, OverflowError):
+                    return jsonify({'error': 'grid size must be a number from 20 to 300'}), 400
+            if 'visible' in grid:
+                scene['grid']['visible'] = bool(grid['visible'])
+            for key in ('offset_x', 'offset_y'):
+                if key in grid:
+                    try:
+                        size = float(scene['grid'].get('size') or _scenes.DEFAULT_GRID)
+                        scene['grid'][key] = float(grid[key]) % size
+                    except (TypeError, ValueError, OverflowError):
+                        return jsonify({'error': 'grid offsets must be numbers'}), 400
+        if isinstance(data.get('settings'), dict):
+            for key in ('player_movement', 'snap_to_grid', 'dynamic_lighting'):
+                if key in data['settings']:
+                    scene['settings'][key] = bool(data['settings'][key])
+            if 'default_vision' in data['settings']:
+                try:
+                    scene['settings']['default_vision'] = int(max(
+                        0, min(5000, float(data['settings']['default_vision']))))
+                except (TypeError, ValueError, OverflowError):
+                    return jsonify({'error': 'default vision must be a number from 0 to 5000'}), 400
+        _scenes.save_scene(cid, scene)
+    _broadcast_scene(scene)
+    return jsonify({'scene': _scene_payload(scene), 'success': True})
+
+
+@app.route('/api/scenes/<scene_id>/activate', methods=['POST'])
+@gm_required
+def api_scene_activate(scene_id):
+    cid = _active_campaign_id()
+    try:
+        _scenes.set_active_scene(cid, scene_id)
+        scene = _scenes.load_scene(cid, scene_id)
+    except ValueError:
+        return jsonify({'error': 'scene not found'}), 404
+    _broadcast_scene(scene)
+    sse_broadcast('scene_activated', {'scene_id': scene_id}, campaign_id=cid)
+    return jsonify({'success': True, 'active_scene_id': scene_id})
+
+
+@app.route('/api/scenes/<scene_id>/tokens', methods=['POST'])
+@gm_required
+def api_scene_add_token(scene_id):
+    cid = _active_campaign_id()
+    data = request.get_json(silent=True) or {}
+    try:
+        path = _storage.scene_file(cid, scene_id)
+    except ValueError:
+        return jsonify({'error': 'scene not found'}), 404
+    with _path_lock(path):
+        scene = _scenes.load_scene(cid, scene_id)
+        if not scene:
+            return jsonify({'error': 'scene not found'}), 404
+        source_kind = str(data.get('source_kind') or '')
+        source_id = str(data.get('source_id') or '')
+        candidate = next((c for c in _scene_token_candidates(cid)
+                          if c['source_kind'] == source_kind and c['source_id'] == source_id), None)
+        if candidate:
+            token_data = candidate
+        else:
+            token_data = {
+                'name': str(data.get('name') or 'Token')[:100],
+                'character_id': None, 'combatant_id': None,
+                'controller_user_id': None, 'controller_character_id': None,
+                'controller_name': None, 'is_pc': False, 'image': None,
+                'image_focus': {'x': 50, 'y': 50}, 'sheet_url': None,
+            }
+        token = _scenes.add_token(
+            scene, name=token_data['name'], x=data.get('x', 70), y=data.get('y', 70),
+            size=data.get('size', token_data.get('size', 1)),
+            color=data.get('color', '#4f8a62' if token_data['is_pc'] else '#a84b45'),
+            character_id=token_data.get('character_id'), combatant_id=token_data.get('combatant_id'),
+            controller_user_id=token_data.get('controller_user_id'),
+            controller_character_id=token_data.get('controller_character_id'),
+            controller_name=token_data.get('controller_name'), is_pc=token_data.get('is_pc'),
+            image=token_data.get('image'), image_focus=token_data.get('image_focus'),
+            sheet_url=token_data.get('sheet_url'),
+            visible_to_players=data.get('visible_to_players', token_data.get('visible_to_players', True)),
+        )
+        _scenes.save_scene(cid, scene)
+    _broadcast_scene(scene)
+    return jsonify({'success': True, 'token': token, 'scene': _scene_payload(scene)}), 201
+
+
+@app.route('/api/scenes/<scene_id>/sync-encounter', methods=['POST'])
+@gm_required
+def api_scene_sync_encounter(scene_id):
+    """Idempotently link every live combatant to a token in this scene."""
+    cid = _active_campaign_id()
+    path = _storage.scene_file(cid, scene_id)
+    added_ids = []
+    linked_ids = []
+    changed = False
+    with _path_lock(path):
+        scene = _scenes.load_scene(cid, scene_id)
+        if not scene:
+            return jsonify({'error': 'scene not found'}), 404
+        combatants = [candidate for candidate in _scene_token_candidates(cid)
+                      if candidate.get('source_kind') == 'combatant']
+        grid = scene.get('grid') or {}
+        size = float(grid.get('size') or _scenes.DEFAULT_GRID)
+        offset_x = float(grid.get('offset_x') or 0)
+        offset_y = float(grid.get('offset_y') or 0)
+        for index, candidate in enumerate(combatants):
+            token = next((item for item in scene.get('tokens', [])
+                          if item.get('combatant_id') == candidate['combatant_id']), None)
+            if token is None and candidate.get('character_id'):
+                token = next((item for item in scene.get('tokens', [])
+                              if item.get('character_id') == candidate['character_id']
+                              and not item.get('combatant_id')), None)
+                if token:
+                    token['combatant_id'] = candidate['combatant_id']
+                    linked_ids.append(token['id'])
+                    changed = True
+            if token is None:
+                column = index % 6
+                row = index // 6
+                token = _scenes.add_token(
+                    scene,
+                    name=candidate['name'],
+                    x=offset_x + (column + 1) * size,
+                    y=offset_y + (row + 1) * size,
+                    size=candidate.get('size', 1),
+                    color='#4f8a62' if candidate.get('is_pc') else '#a84b45',
+                    image=candidate.get('image'),
+                    image_focus=candidate.get('image_focus'),
+                    character_id=candidate.get('character_id'),
+                    combatant_id=candidate.get('combatant_id'),
+                    controller_user_id=candidate.get('controller_user_id'),
+                    controller_character_id=candidate.get('controller_character_id'),
+                    controller_name=candidate.get('controller_name'),
+                    is_pc=candidate.get('is_pc'),
+                    visible_to_players=candidate.get('visible_to_players', True),
+                    sheet_url=candidate.get('sheet_url'),
+                )
+                added_ids.append(token['id'])
+                changed = True
+            else:
+                for key in ('character_id', 'controller_user_id',
+                            'controller_character_id', 'controller_name'):
+                    if not token.get(key) and candidate.get(key):
+                        token[key] = candidate[key]
+                        changed = True
+                for key in ('image', 'image_focus', 'sheet_url'):
+                    if not token.get(key) and candidate.get(key):
+                        token[key] = candidate[key]
+                        changed = True
+        if changed:
+            _scenes.save_scene(cid, scene)
+    if changed:
+        _broadcast_scene(scene)
+    return jsonify({
+        'success': True,
+        'added': len(added_ids),
+        'linked': len(linked_ids),
+        'encounter_count': len(combatants),
+        'added_token_ids': added_ids,
+        'scene': _scene_payload(scene),
+    })
+
+
+@app.route('/api/scenes/<scene_id>/combatants/<instance_id>', methods=['POST'])
+@gm_required
+def api_scene_combatant_action(scene_id, instance_id):
+    """Run tracker-authoritative combat mutations from a linked map token."""
+    cid = _active_campaign_id()
+    scene = _scenes.load_scene(cid, scene_id)
+    if not scene:
+        return jsonify({'error': 'scene not found'}), 404
+    token = next((item for item in scene.get('tokens', [])
+                  if item.get('combatant_id') == instance_id), None)
+    if not token:
+        return jsonify({'error': 'combatant is not linked to this scene'}), 404
+    combatant = _find_active_combatant(instance_id)
+    if not combatant:
+        return jsonify({'error': 'combatant is no longer in the live encounter',
+                        'stale': True}), 409
+    data = request.get_json(silent=True) or {}
+    action = str(data.get('action') or '')
+    result = {}
+    if action in ('damage', 'heal'):
+        try:
+            amount = int(data.get('amount', 0))
+        except (TypeError, ValueError):
+            return jsonify({'error': 'amount must be a whole number'}), 400
+        if amount < 1 or amount > 100000:
+            return jsonify({'error': 'amount must be between 1 and 100000'}), 400
+        damage_type = str(data.get('damage_type') or 'untyped').strip().lower()
+        allowed_types = set(PF2E_DAMAGE_TYPES) | {'impact', 'keen', 'energy', 'vital'}
+        if damage_type not in allowed_types:
+            return jsonify({'error': 'unknown damage type'}), 400
+        old_hp = _apply_hp_delta(instance_id, amount, action, damage_type)
+        updated = _find_active_combatant(instance_id)
+        new_hp = updated.current_hp if updated is not None else 0
+        defeated = _maybe_auto_remove_defeated(instance_id, old_hp, action)
+        if defeated:
+            _persist_encounter_state()
+            _broadcast_encounter_state()
+        net = ((old_hp - new_hp) if action == 'damage' else (new_hp - old_hp)) if old_hp is not None else 0
+        result = {'action': action, 'raw': amount, 'net': int(max(0, net)),
+                  'defeated': bool(defeated)}
+    elif action == 'condition':
+        condition = str(data.get('condition') or '').strip().lower()
+        allowed_conditions = {
+            'frightened', 'sickened', 'dying', 'wounded', 'doomed', 'stunned',
+            'slowed', 'enfeebled', 'clumsy', 'drained', 'stupefied', 'prone',
+            'off_guard', 'concealed', 'hidden', 'undetected',
+        }
+        if condition not in allowed_conditions:
+            return jsonify({'error': 'unknown condition'}), 400
+        operation = str(data.get('operation') or 'add')
+        if operation not in ('add', 'increase', 'decrease', 'remove', 'toggle'):
+            return jsonify({'error': 'unknown condition operation'}), 400
+        if not _apply_condition_change(instance_id, condition, operation):
+            return jsonify({'error': 'combatant is no longer in the live encounter'}), 409
+        result = {'action': action, 'condition': condition, 'operation': operation}
+    else:
+        return jsonify({'error': 'unknown combat action'}), 400
+    return jsonify({'success': True, 'result': result,
+                    'scene': _scene_payload(scene)})
+
+
+@app.route('/api/scenes/<scene_id>/elements', methods=['POST'])
+@gm_required
+def api_scene_elements(scene_id):
+    """Mutate vector map elements: fog strokes, walls/doors, lights, templates."""
+    cid = _active_campaign_id()
+    path = _storage.scene_file(cid, scene_id)
+    data = request.get_json(silent=True) or {}
+    action = str(data.get('action') or '')
+
+    def point(value, maximum):
+        return float(max(0, min(maximum, float(value))))
+
+    with _path_lock(path):
+        scene = _scenes.load_scene(cid, scene_id)
+        if not scene:
+            return jsonify({'error': 'scene not found'}), 404
+        try:
+            if action == 'add_wall':
+                kind = 'door' if data.get('kind') == 'door' else 'wall'
+                wall = {
+                    'id': _storage.new_id(),
+                    'x1': point(data.get('x1'), scene['width']),
+                    'y1': point(data.get('y1'), scene['height']),
+                    'x2': point(data.get('x2'), scene['width']),
+                    'y2': point(data.get('y2'), scene['height']),
+                    'kind': kind,
+                    'open': bool(data.get('open', False)) if kind == 'door' else False,
+                    'secret': bool(data.get('secret', False)) if kind == 'door' else False,
+                }
+                if math.hypot(wall['x2'] - wall['x1'], wall['y2'] - wall['y1']) < 4:
+                    return jsonify({'error': 'wall segment is too short'}), 400
+                scene.setdefault('walls', []).append(wall)
+            elif action == 'toggle_door':
+                wall = next((item for item in scene.get('walls', [])
+                             if item.get('id') == data.get('id') and item.get('kind') == 'door'), None)
+                if not wall:
+                    return jsonify({'error': 'door not found'}), 404
+                wall['open'] = not bool(wall.get('open'))
+            elif action == 'delete_wall':
+                before = len(scene.get('walls', []))
+                scene['walls'] = [item for item in scene.get('walls', []) if item.get('id') != data.get('id')]
+                if len(scene['walls']) == before:
+                    return jsonify({'error': 'wall not found'}), 404
+            elif action == 'add_light':
+                light = {
+                    'id': _storage.new_id(),
+                    'x': point(data.get('x'), scene['width']),
+                    'y': point(data.get('y'), scene['height']),
+                    'radius': point(data.get('radius', 350), 5000),
+                    'color': str(data.get('color') or '#ffd98a')[:20],
+                    'intensity': float(max(.05, min(1, float(data.get('intensity', .75))))),
+                    'visible_to_players': bool(data.get('visible_to_players', True)),
+                }
+                scene.setdefault('lights', []).append(light)
+            elif action == 'delete_light':
+                before = len(scene.get('lights', []))
+                scene['lights'] = [item for item in scene.get('lights', []) if item.get('id') != data.get('id')]
+                if len(scene['lights']) == before:
+                    return jsonify({'error': 'light not found'}), 404
+            elif action == 'fog_enabled':
+                scene.setdefault('fog', {})['enabled'] = bool(data.get('enabled'))
+            elif action == 'fog_ops':
+                operations = data.get('operations') or []
+                if not isinstance(operations, list) or len(operations) > 250:
+                    return jsonify({'error': 'invalid fog brush operation batch'}), 400
+                target = scene.setdefault('fog', {}).setdefault('operations', [])
+                for operation in operations:
+                    target.append({
+                        'mode': 'hide' if operation.get('mode') == 'hide' else 'reveal',
+                        'x': point(operation.get('x'), scene['width']),
+                        'y': point(operation.get('y'), scene['height']),
+                        'radius': point(operation.get('radius', 100), 1000),
+                    })
+                scene['fog']['operations'] = target[-2000:]
+            elif action == 'fog_reset':
+                scene.setdefault('fog', {})['operations'] = []
+            elif action == 'add_template':
+                kind = str(data.get('kind') or '')
+                if kind not in ('burst', 'emanation', 'cone', 'line'):
+                    return jsonify({'error': 'unknown template kind'}), 400
+                template = {
+                    'id': _storage.new_id(), 'kind': kind,
+                    'x1': point(data.get('x1'), scene['width']),
+                    'y1': point(data.get('y1'), scene['height']),
+                    'x2': point(data.get('x2', data.get('x1')), scene['width']),
+                    'y2': point(data.get('y2', data.get('y1')), scene['height']),
+                    'radius': point(data.get('radius', 100), 3000),
+                    'width': point(data.get('width', 35), 1000),
+                    'visible_to_players': bool(data.get('visible_to_players', True)),
+                }
+                scene.setdefault('templates', []).append(template)
+            elif action == 'delete_template':
+                scene['templates'] = [item for item in scene.get('templates', []) if item.get('id') != data.get('id')]
+            elif action == 'clear_templates':
+                scene['templates'] = []
+            else:
+                return jsonify({'error': 'unknown map element action'}), 400
+        except (TypeError, ValueError, OverflowError):
+            return jsonify({'error': 'map element coordinates must be valid numbers'}), 400
+        _scenes.save_scene(cid, scene)
+    _broadcast_scene(scene)
+    return jsonify({'success': True, 'scene': _scene_payload(scene)})
+
+
+@app.route('/api/scenes/<scene_id>/bulk-combat', methods=['POST'])
+@gm_required
+def api_scene_bulk_combat(scene_id):
+    """Apply one tracker-authoritative action to selected linked tokens."""
+    cid = _active_campaign_id()
+    scene = _scenes.load_scene(cid, scene_id)
+    if not scene:
+        return jsonify({'error': 'scene not found'}), 404
+    data = request.get_json(silent=True) or {}
+    requested = data.get('combatant_ids') or []
+    if not isinstance(requested, list) or not requested or len(requested) > 50:
+        return jsonify({'error': 'select between 1 and 50 combatants'}), 400
+    linked = {token.get('combatant_id') for token in scene.get('tokens', [])
+              if token.get('combatant_id')}
+    combatant_ids = list(dict.fromkeys(str(item) for item in requested if str(item) in linked))
+    if not combatant_ids:
+        return jsonify({'error': 'no selected combatants are linked to this scene'}), 400
+    action = str(data.get('action') or '')
+    results = []
+    if action in ('damage', 'heal'):
+        try:
+            amount = int(data.get('amount', 0))
+        except (TypeError, ValueError):
+            return jsonify({'error': 'amount must be a whole number'}), 400
+        if amount < 1 or amount > 100000:
+            return jsonify({'error': 'amount must be between 1 and 100000'}), 400
+        damage_type = str(data.get('damage_type') or 'untyped').strip().lower()
+        allowed_types = set(PF2E_DAMAGE_TYPES) | {'impact', 'keen', 'energy', 'vital'}
+        if damage_type not in allowed_types:
+            return jsonify({'error': 'unknown damage type'}), 400
+        for instance_id in combatant_ids:
+            combatant = _find_active_combatant(instance_id)
+            if not combatant:
+                continue
+            old_hp = _apply_hp_delta(instance_id, amount, action, damage_type)
+            updated = _find_active_combatant(instance_id)
+            new_hp = updated.current_hp if updated is not None else 0
+            defeated = _maybe_auto_remove_defeated(instance_id, old_hp, action)
+            if defeated:
+                _persist_encounter_state()
+                _broadcast_encounter_state()
+            net = ((old_hp - new_hp) if action == 'damage' else (new_hp - old_hp)) if old_hp is not None else 0
+            results.append({'instance_id': instance_id, 'net': int(max(0, net)),
+                            'defeated': bool(defeated)})
+    elif action == 'condition':
+        condition = str(data.get('condition') or '').strip().lower()
+        allowed = {'frightened', 'sickened', 'dying', 'wounded', 'doomed', 'stunned',
+                   'slowed', 'enfeebled', 'clumsy', 'drained', 'stupefied', 'prone',
+                   'off_guard', 'concealed', 'hidden', 'undetected'}
+        if condition not in allowed:
+            return jsonify({'error': 'unknown condition'}), 400
+        operation = str(data.get('operation') or 'add')
+        if operation not in ('add', 'increase', 'decrease', 'remove', 'toggle'):
+            return jsonify({'error': 'unknown condition operation'}), 400
+        for instance_id in combatant_ids:
+            if _apply_condition_change(instance_id, condition, operation):
+                results.append({'instance_id': instance_id, 'condition': condition})
+    elif action == 'save_request':
+        save = str(data.get('save') or '').strip().lower()
+        if save not in ('fortitude', 'reflex', 'will'):
+            return jsonify({'error': 'unknown save'}), 400
+        try:
+            dc = int(data.get('dc'))
+        except (TypeError, ValueError):
+            return jsonify({'error': 'save DC must be a whole number'}), 400
+        target_names = [token.get('controller_name') or token.get('name')
+                        for token in scene.get('tokens', [])
+                        if token.get('combatant_id') in combatant_ids and token.get('is_pc')]
+        sse_broadcast('check_request', {
+            'skill': save, 'dc': dc, 'targets': target_names, 'secret': bool(data.get('secret')),
+        }, campaign_id=cid)
+        results = [{'requested': save, 'dc': dc, 'targets': target_names}]
+    else:
+        return jsonify({'error': 'unknown bulk combat action'}), 400
+    return jsonify({'success': True, 'results': results,
+                    'scene': _scene_payload(scene)})
+
+
+@app.route('/api/scenes/<scene_id>/tokens/<token_id>', methods=['PATCH', 'DELETE'])
+def api_scene_token(scene_id, token_id):
+    if not _scene_member_allowed():
+        return jsonify({'error': 'campaign membership required'}), 403
+    cid = _active_campaign_id()
+    try:
+        path = _storage.scene_file(cid, scene_id)
+    except ValueError:
+        return jsonify({'error': 'scene not found'}), 404
+    with _path_lock(path):
+        scene = _scenes.load_scene(cid, scene_id)
+        if not scene:
+            return jsonify({'error': 'scene not found'}), 404
+        token = next((t for t in scene.get('tokens', []) if t.get('id') == token_id), None)
+        if not token:
+            return jsonify({'error': 'token not found'}), 404
+        if request.method == 'DELETE':
+            if not _is_gm():
+                return jsonify({'error': 'GM access required'}), 403
+            _scenes.remove_token(scene, token_id)
+        else:
+            data = request.get_json(silent=True) or {}
+            moving = 'x' in data or 'y' in data
+            if moving:
+                if not _scene_player_can_move(token, scene):
+                    message = ('unlock this token before moving it' if token.get('locked')
+                               else 'you do not control this token')
+                    return jsonify({'error': message}), 403
+                _scenes.update_token_position(
+                    scene, token_id, data.get('x', token.get('x')), data.get('y', token.get('y')))
+            if _is_gm():
+                if 'name' in data:
+                    token['name'] = (str(data.get('name') or '').strip() or 'Token')[:100]
+                if 'size' in data:
+                    try:
+                        token['size'] = max(.5, min(6, float(data['size'])))
+                    except (TypeError, ValueError, OverflowError):
+                        return jsonify({'error': 'token size must be a number from 0.5 to 6'}), 400
+                if 'vision_radius' in data:
+                    try:
+                        token['vision_radius'] = int(max(0, min(5000, float(data['vision_radius']))))
+                    except (TypeError, ValueError, OverflowError):
+                        return jsonify({'error': 'vision radius must be a number from 0 to 5000'}), 400
+                if 'color' in data:
+                    color = str(data.get('color') or '')
+                    if not re.fullmatch(r'#[0-9a-fA-F]{6}', color):
+                        return jsonify({'error': 'token color must be a six-digit hex color'}), 400
+                    token['color'] = color
+                for key in ('visible_to_players', 'locked', 'show_nameplate'):
+                    if key in data:
+                        token[key] = bool(data[key])
+                if 'controller_character_id' in data:
+                    controller_id = str(data.get('controller_character_id') or '') or None
+                    records = _scene_character_records(cid)
+                    if controller_id and controller_id not in records:
+                        return jsonify({'error': 'unknown player character controller'}), 400
+                    record = records.get(controller_id) if controller_id else None
+                    token['controller_character_id'] = controller_id
+                    token['controller_user_id'] = record.get('owner_user_id') if record else None
+                    token['controller_name'] = record.get('name') if record else None
+        _scenes.save_scene(cid, scene)
+    _broadcast_scene(scene)
+    return jsonify({'success': True, 'scene': _scene_payload(scene, player=not _is_gm())})
+
+
+@app.route('/api/scenes/<scene_id>/background', methods=['GET', 'POST'])
+def api_scene_background(scene_id):
+    if not _scene_member_allowed():
+        return jsonify({'error': 'campaign membership required'}), 403
+    cid = _active_campaign_id()
+    try:
+        scene = _scenes.load_scene(cid, scene_id)
+    except ValueError:
+        scene = None
+    if not scene:
+        return jsonify({'error': 'scene not found'}), 404
+    if request.method == 'GET':
+        background = scene.get('background') or {}
+        filename = background.get('filename')
+        if not filename:
+            abort(404)
+        return send_from_directory(_storage.scene_assets_dir(cid), filename,
+                                   mimetype=background.get('mime'))
+    if not _is_gm():
+        return jsonify({'error': 'GM access required'}), 403
+    upload = request.files.get('image')
+    if not upload or upload.mimetype not in _SCENE_IMAGE_TYPES:
+        return jsonify({'error': 'upload a PNG, JPEG, or WebP image'}), 400
+    if request.content_length and request.content_length > 25 * 1024 * 1024:
+        return jsonify({'error': 'map image must be 25 MB or smaller'}), 413
+    ext = _SCENE_IMAGE_TYPES[upload.mimetype]
+    filename = scene_id + ext
+    os.makedirs(_storage.scene_assets_dir(cid), exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=_storage.scene_assets_dir(cid), suffix='.upload')
+    os.close(fd)
+    try:
+        upload.save(tmp)
+        os.replace(tmp, os.path.join(_storage.scene_assets_dir(cid), filename))
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+    with _path_lock(_storage.scene_file(cid, scene_id)):
+        scene = _scenes.load_scene(cid, scene_id)
+        scene['background'] = {
+            'filename': filename,
+            'mime': upload.mimetype,
+            'version': str(time.time_ns()),
+        }
+        _scenes.save_scene(cid, scene)
+    _broadcast_scene(scene)
+    return jsonify({'success': True, 'scene': _scene_payload(scene)})
 
 @app.route('/gm/login', methods=['GET', 'POST'])
 def gm_login():
@@ -14800,6 +15670,7 @@ def sse_stream():
     # sse_broadcast() uses to decide whether this subscriber gets raw GM
     # data or the player-sanitized view.
     is_gm = _is_gm()
+    subscriber_cid = _active_campaign_id()
     # On reconnect the client tells us the last event it saw (the hub passes it as
     # ?last_event_id=, native EventSource as the Last-Event-ID header); we replay
     # any events it missed from the ring buffer so the sheet never shows stale data.
@@ -14810,7 +15681,7 @@ def sse_stream():
 
     def generate():
         q = queue.Queue(maxsize=50)
-        entry = (q, is_gm)
+        entry = (q, is_gm, subscriber_cid)
         with _sse_lock:
             # Enforce max subscriber cap. Reap dead subscribers first: a full
             # queue means that client stopped draining (closed/asleep tab), so we
@@ -14825,7 +15696,9 @@ def sse_stream():
             # id at subscribe time. Events newer than this arrive live via the
             # queue (we subscribed first), so there's no gap and no duplicate.
             start_id = _sse_event_seq
-            replay = ([(i, gm, pl) for (i, gm, pl) in _sse_buffer if last_seen < i <= start_id]
+            replay = ([(i, gm, pl) for (i, gm, pl) in _sse_buffer
+                       if last_seen < i <= start_id
+                       and _sse_event_campaigns.get(i) in (None, subscriber_cid)]
                       if last_seen else [])
         try:
             # Carry the running deploy version so an already-open tab can detect a

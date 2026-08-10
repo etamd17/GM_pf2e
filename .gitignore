@@ -83,6 +83,13 @@ server_state.json
 saved_encounters/
 story_threads.json
 
+# Tactical scenes + their uploaded background images. Written to
+# DATA_DIR/scenes/, which IS the checkout whenever DATA_DIR is unset -- the
+# local-dev default. Anchored to the repo root so it can never swallow
+# core/scenes.py or tests. Without this, `git add -A` sweeps a session's map
+# state (and a multi-MB battlemap PNG) into a commit, which is reason 3 above.
+/scenes/
+
 # Boot counter for the /health storage probe. Written to DATA_DIR, which
 # resolves to the checkout when DATA_DIR is unset -- exactly the local-dev case,
 # so without this line every dev run dirties the tree. Its whole purpose is to
