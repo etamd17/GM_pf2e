@@ -117,6 +117,23 @@ class FakeAdapter:
             "broadcast_encounter": lambda: None,
             "advance_turn": self.advance,
             "has_encounter": lambda: bool(self.combatants),
+            "resolve_roll": lambda payload: {
+                "roll_id": "roll-test", "actor_name": "Hero",
+                "label": payload.get("roll_kind", "check"),
+                "formula": "1d20+8", "d20": 12, "modifier": 8,
+                "total": 20, "dc": payload.get("dc"), "degree": "success",
+                "visibility": "gm",
+            },
+            "launch_room_encounter": lambda payload: {
+                "area_id": payload.get("area_id"), "combatant_count": len(self.combatants),
+            },
+            "sync_room_reminders": lambda area_id, reminders: {
+                "area_id": area_id, "reminder_count": len(reminders),
+            },
+            "create_player_reveal": lambda payload: {
+                "id": "handout-1", "title": payload.get("title"),
+                "content": payload.get("content"), "recipients": payload.get("recipients"),
+            },
             "gm_required": lambda fn: fn,
         }
 
@@ -207,3 +224,60 @@ def test_session_lifecycle_is_recorded(sync_client):
     assert ended.status_code == 200
     assert ended.get_json()["session"]["status"] == "awaiting_processing"
     assert ended.get_json()["session"]["ended_at"]
+
+
+def test_roll_room_and_reveal_commands_are_structured(sync_client):
+    client, _fake, raw_token = sync_client
+    initial = client.get("/api/integrations/obsidian/v1/state", headers=headers(raw_token)).get_json()
+
+    rolled = client.post("/api/integrations/obsidian/v1/commands", headers=headers(raw_token), json={
+        "command_id": "roll-command-001",
+        "expected_revision": initial["revision"],
+        "type": "roll",
+        "payload": {"target_id": "hero-1", "roll_kind": "perception", "dc": 18},
+    })
+    assert rolled.status_code == 200
+    assert rolled.get_json()["result"]["total"] == 20
+
+    entered = client.post("/api/integrations/obsidian/v1/commands", headers=headers(raw_token), json={
+        "command_id": "room-command-001",
+        "expected_revision": rolled.get_json()["revision"],
+        "type": "set_active_room",
+        "payload": {"area_id": "sob-b1-c10", "title": "C10 Courtyard", "path": "C10.md"},
+    })
+    assert entered.status_code == 200
+    state = entered.get_json()["state"]
+    assert state["operations"]["active_room"]["area_id"] == "sob-b1-c10"
+
+    revealed = client.post("/api/integrations/obsidian/v1/commands", headers=headers(raw_token), json={
+        "command_id": "reveal-command-001",
+        "expected_revision": entered.get_json()["revision"],
+        "type": "create_player_reveal",
+        "payload": {"title": "Inscription", "content": "The door opens.", "recipients": ["all"]},
+    })
+    assert revealed.status_code == 200
+    assert revealed.get_json()["result"]["reveal"]["title"] == "Inscription"
+    assert revealed.get_json()["state"]["operations"]["reveal_history"][-1]["id"] == "handout-1"
+
+    events = client.get("/api/integrations/obsidian/v1/events?after=0", headers=headers(raw_token)).get_json()["events"]
+    assert [event["type"] for event in events] == ["roll", "room_entered", "player_reveal"]
+
+
+def test_player_request_is_durable_and_resolvable(sync_client):
+    client, _fake, raw_token = sync_client
+    created = obsidian_sync.append_player_request(CID, {
+        "kind": "whisper", "pc_name": "Hero", "text": "Can I inspect the altar?",
+    })
+    state = client.get("/api/integrations/obsidian/v1/state", headers=headers(raw_token)).get_json()
+    assert state["state"]["operations"]["player_requests"][0]["status"] == "open"
+
+    resolved = client.post("/api/integrations/obsidian/v1/commands", headers=headers(raw_token), json={
+        "command_id": "request-command-001",
+        "expected_revision": state["revision"],
+        "type": "resolve_player_request",
+        "payload": {"request_id": created["id"], "action": "resolve", "resolution": "Perception check"},
+    })
+    assert resolved.status_code == 200
+    item = resolved.get_json()["result"]["player_request"]
+    assert item["status"] == "resolved"
+    assert item["resolution"] == "Perception check"
