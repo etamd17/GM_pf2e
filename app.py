@@ -23,6 +23,9 @@ from werkzeug.exceptions import HTTPException, NotFound
 from class_matrix import ABP_TABLE, get_abp_bonus, CLASS_MATRIX, SUBCLASS_MATRIX, SPELL_SLOT_TABLES, PASSIVE_FEATURES, CLASS_FEATURES
 from class_matrix import CLASS_PROGRESSION, SUBCLASS_PROGRESSION, get_class_proficiency_at_level, get_new_bumps_at_level, validate_skill_rank, ANCESTRY_SPEEDS, ANCESTRY_SENSES, ANCESTRY_SIZES, ANCESTRY_FEATURES, get_required_slots_at_level
 from class_matrix import CLASS_AWARDED_FEATS, SUBCLASS_AWARDED_FEATS, HERITAGE_AWARDED_FEATS
+# Read ONLY to learn the level a class gains Weapon Specialization. Never treat
+# its entries as a source of mechanical truth on their own -- see Character.__init__.
+from class_matrix import CLASS_LEVEL_FEATURES
 from class_matrix import MONK_PATH_CONFIG
 from class_matrix import SUBCLASS_DESCRIPTIONS
 from class_matrix import SPELL_ACTIONS, get_action_cost, foundry_action_cost
@@ -3448,6 +3451,56 @@ class Character:
             if _label and _label not in self.senses:
                 self.senses.append(_label)
 
+        # WEAPON SPECIALIZATION (Player Core): "You deal 2 additional damage
+        # with weapons and unarmed attacks in which you are an expert. This
+        # damage increases to 3 if you're a master, and to 4 if you're
+        # legendary." Greater Weapon Specialization REPLACES those with 4/6/8;
+        # it is not additive.
+        #
+        # Sourced from Pathbuilder's own `specials` list, deliberately NOT from
+        # class_matrix's CLASS_LEVEL_FEATURES. That table lists Weapon
+        # Specialization at 13 for sorcerer, wizard and witch, which do not get
+        # it at all -- promoting those display strings to a mechanical input
+        # would turn three documentation errors into three live rules bugs.
+        #
+        # Safe against double-counting: Pathbuilder's own `damageBonus` DOES
+        # already include this, but app.py never reads that field (zero
+        # occurrences outside the unrelated PDF-import path), because the
+        # engine derives damage itself from ability mod + runes + rule mods.
+        _specials_lower = {
+            str(_sp).lower().strip() for _sp in (build.get('specials') or []) if isinstance(_sp, str)
+        }
+        self.has_weapon_spec = 'weapon specialization' in _specials_lower
+        self.has_greater_weapon_spec = 'greater weapon specialization' in _specials_lower
+
+        # PB's `specials` is a static snapshot of the EXPORTED level, so on its
+        # own it hands a level-5 Champion a feature he does not get until 7 --
+        # the level-walk snapshots caught exactly that. class_matrix supplies
+        # WHEN; Pathbuilder supplies WHETHER; both must agree.
+        #
+        # Requiring both is also what keeps CLASS_LEVEL_FEATURES' errors inert:
+        # it lists Weapon Specialization at 13 for sorcerer, wizard and witch,
+        # which never receive it, but PB will not list it in their specials, so
+        # the level lookup is never consulted for them.
+        if self.has_weapon_spec or self.has_greater_weapon_spec:
+            _cls_feats = (CLASS_LEVEL_FEATURES or {}).get(str(self.class_name or '').lower(), {}) or {}
+
+            def _feature_grant_level(feature_name):
+                """Level at which this class gains a named feature, or None if
+                the table does not list it (then trust PB and apply it)."""
+                for _lvl, _entries in _cls_feats.items():
+                    for _entry in (_entries or []):
+                        if isinstance(_entry, dict) and str(_entry.get('name', '')).strip().lower() == feature_name:
+                            return safe_int(_lvl, 0)
+                return None
+
+            _ws_at = _feature_grant_level('weapon specialization')
+            if _ws_at and self.level < _ws_at:
+                self.has_weapon_spec = False
+            _gws_at = _feature_grant_level('greater weapon specialization')
+            if _gws_at and self.level < _gws_at:
+                self.has_greater_weapon_spec = False
+
         def add_mod(sel, m_type, val):
             if sel not in self.rule_modifiers: self.rule_modifiers[sel] = {'circumstance': [], 'status': [], 'item': [], 'untyped': []}
             if m_type not in self.rule_modifiers[sel]: m_type = 'untyped'
@@ -4072,7 +4125,11 @@ class Character:
             'prone': saved_conds.get('prone', False),
             'off_guard': saved_conds.get('off_guard', False),
             'concealed': saved_conds.get('concealed', False),
-            'hidden': saved_conds.get('hidden', False)
+            'hidden': saved_conds.get('hidden', False),
+            # 'undetected' was the one key Monster.__init__ seeded and this did
+            # not, while both condition pickers offered it -- so applying it to
+            # a PC read a missing key and 500'd. Keep the two seeds in step.
+            'undetected': saved_conds.get('undetected', False)
         }
         # Per-condition auto-expiry timer (rounds remaining). See Monster.__init__.
         self.condition_expiry = dict(build.get('condition_expiry', {}) or {})
@@ -4998,7 +5055,20 @@ class Character:
                 dmg_mod = self.mods.get('str', 0)
             
             dmg_mod += self.get_rule_mod('damage')
-            
+
+            # WEAPON SPECIALIZATION. Keyed off THIS weapon's proficiency rank
+            # (prof_val is the bonus: 2 trained, 4 expert, 6 master, 8
+            # legendary), not character level -- a fighter who is legendary in
+            # martial weapons still gets +0 with an advanced weapon they are
+            # only trained in. getattr guards state rehydrated from disk by an
+            # older build of this class.
+            if prof_val >= 4 and (getattr(self, 'has_weapon_spec', False)
+                                  or getattr(self, 'has_greater_weapon_spec', False)):
+                _ws = 2 if prof_val < 6 else (3 if prof_val < 8 else 4)
+                if getattr(self, 'has_greater_weapon_spec', False):
+                    _ws *= 2  # Greater replaces 2/3/4 with 4/6/8
+                dmg_mod += _ws
+
             # AUTOMATION: Enfeebled drops melee STR damage
             if attack_stat == 'str':
                 enfeebled = self.conditions.get('enfeebled', 0)
@@ -13687,16 +13757,51 @@ def update_pc_condition(pc_name):
                                        if v and v != 0 and v is not False}})
     return jsonify({"success": False})
 
+# The two halves of the PF2e condition vocabulary the engine can APPLY.
+#
+# VALUED_CONDITIONS is complete for Remaster: these eleven are exactly the
+# conditions that carry a numeric value (persistent damage is the twelfth, and
+# it has its own subsystem). Do not "extend" this list -- a condition with a
+# value the rules do not define is not a PF2e condition.
+#
+# FLAG_CONDITIONS is the half that is genuinely short. Everything else in the
+# 42-condition appendix (grabbed, restrained, blinded, fleeing, ...) is a flag,
+# and adding one here is the whole change on the server side.
+#
+# These exist as constants because the lists were previously inline literals
+# and had already drifted: `undetected` is offered by both condition pickers
+# but Character.__init__ never seeded it, so applying it to a PC raised
+# KeyError -> HTTP 500 mid-combat.
+VALUED_CONDITIONS = ['frightened', 'sickened', 'dying', 'wounded', 'doomed', 'stunned',
+                     'slowed', 'enfeebled', 'clumsy', 'drained', 'stupefied']
+FLAG_CONDITIONS = ['prone', 'off_guard', 'concealed', 'hidden', 'undetected']
+APPLICABLE_CONDITIONS = VALUED_CONDITIONS + FLAG_CONDITIONS
+
+
 def _apply_condition_change(instance_id, condition, action, rounds=0):
     """Core condition-mutation logic shared by the `/api/toggle_condition`
     route and the round-events payload engine (feature 7), so both inherit
     the same PC-mirroring, combat-log, and campaign-stat side effects. The
     route thin-wraps this by pulling condition/action/rounds from
     request.form; round-events calls it directly with explicit args.
-    Returns True if a matching combatant was found and mutated."""
+    Returns True if a matching combatant was found and mutated.
+
+    Every read of `combatant.conditions` here goes through .get(). It cannot
+    assume the key exists: a PC's tracker row is rebuilt from
+    `build['conditions']`, which is persisted through a truthy-only filter, so
+    after the player clears a condition on their own sheet the row's dict holds
+    only the ACTIVE ones. A bare [] read then raised KeyError on `prone` or
+    `sickened` -- supported conditions, crashing mid-combat with a generic
+    'Internal server error' toast while the real cause sat in the Railway log."""
+    if condition not in APPLICABLE_CONDITIONS:
+        # Refuse rather than fall through. Falling through skipped both arms but
+        # still logged "Grabbed -> 0", still bumped the stat, still persisted and
+        # broadcast, and still returned True -- so the GM got a success toast for
+        # a condition that was never applied.
+        return False
     for combatant in ACTIVE_ENCOUNTER:
         if combatant.instance_id == instance_id:
-            if condition in ['frightened', 'sickened', 'dying', 'wounded', 'doomed', 'stunned', 'slowed', 'enfeebled', 'clumsy', 'drained', 'stupefied']:
+            if condition in VALUED_CONDITIONS:
                 current = combatant.conditions.get(condition, 0)
                 if action in ['increase', 'add']:
                     combatant.conditions[condition] = current + 1
@@ -13707,13 +13812,19 @@ def _apply_condition_change(instance_id, condition, action, rounds=0):
                 elif action == 'decrease' and current > 0:
                     combatant.conditions[condition] = current - 1
                     if condition == 'dying' and combatant.conditions[condition] == 0: combatant.conditions['wounded'] = combatant.conditions.get('wounded', 0) + 1
+                elif action == 'remove':
+                    # The map routes accept operation='remove' for every
+                    # condition (app.py:7480, 7724). Without this arm a valued
+                    # condition silently kept its stack while the caller was
+                    # told it had been removed.
+                    combatant.conditions[condition] = 0
                 # Clear any expiry if the condition is now 0
                 if combatant.conditions.get(condition, 0) == 0:
                     _exp = getattr(combatant, 'condition_expiry', None)
                     if isinstance(_exp, dict) and condition in _exp:
                         del _exp[condition]
-            elif condition in ['prone', 'off_guard', 'concealed', 'hidden', 'undetected']:
-                if action == 'toggle': combatant.conditions[condition] = not combatant.conditions[condition]
+            else:
+                if action == 'toggle': combatant.conditions[condition] = not combatant.conditions.get(condition, False)
                 elif action == 'add':
                     combatant.conditions[condition] = True
                     if rounds > 0:
@@ -13730,11 +13841,15 @@ def _apply_condition_change(instance_id, condition, action, rounds=0):
                     _exp = getattr(combatant, 'condition_expiry', None)
                     if isinstance(_exp, dict) and condition in _exp:
                         del _exp[condition]
+            default = 0 if condition in VALUED_CONDITIONS else False
             if combatant.is_pc and combatant.name in PARTY_LIBRARY:
-                PARTY_LIBRARY[combatant.name].conditions[condition] = combatant.conditions[condition]
+                # .get, not []: the encounter row is a deepcopy whose dict can be
+                # sparser than the library Character's (see the docstring), and a
+                # no-op action leaves the key absent entirely.
+                PARTY_LIBRARY[combatant.name].conditions[condition] = combatant.conditions.get(condition, default)
                 _broadcast_pc_state(combatant.name)
                 _persist_pc_combat_state(combatant.name)
-            new_val = combatant.conditions.get(condition, 0)
+            new_val = combatant.conditions.get(condition, default)
             if isinstance(new_val, bool):
                 _combat_log(f"{combatant.name} {'gained' if new_val else 'lost'} {condition.replace('_','-').title()}", 'condition')
                 if new_val:

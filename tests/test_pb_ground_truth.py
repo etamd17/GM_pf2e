@@ -23,6 +23,7 @@ to document via ``EXPECTED_DRIFT`` below).
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -197,3 +198,45 @@ def test_l10_weapon_attack_bonuses_match(Character, snap_key, filename):
         assert first_strike == expected, (
             f"{snap_key}: {name} first-strike engine={first_strike} != pb={expected}."
         )
+
+
+@pytest.mark.parametrize("snap_key,filename", sorted(L10_FIXTURES.items()))
+def test_l10_weapon_damage_bonus_matches(Character, snap_key, filename):
+    """Each weapon's damage modifier should match PB's pre-computed
+    ``weapons[i].damageBonus``.
+
+    This assertion did not exist until Weapon Specialization was implemented,
+    and its absence is why the gap survived: PB has always shipped the number,
+    and the engine has always disagreed with it for any character who had the
+    feature. Amadeus (Champion 11, expert in martial) is the live case -- PB
+    says 5, and the engine said 3 until the specialization term was added.
+
+    It is also the double-count tripwire. The engine derives damage itself and
+    never reads ``damageBonus``, so if a future change ever starts folding PB's
+    value in on top of the engine's own terms, this goes red immediately.
+
+    Weapons PB exports with no ``damageBonus`` are skipped rather than compared
+    against 0 -- the synthetic Fist has no PB entry at all.
+    """
+    data = _load_l10(filename)
+    pb_weapons = {w["name"]: w for w in data["build"].get("weapons") or []}
+    pc = Character(data, file_path=str(_FIXTURES_DIR / filename))
+    eng_attacks = {a["name"]: a for a in (getattr(pc, "attacks", []) or [])}
+
+    compared = 0
+    for name, pb_w in pb_weapons.items():
+        if pb_w.get("damageBonus") is None:
+            continue
+        expected = int(pb_w["damageBonus"])
+        damage = str(eng_attacks[name].get("damage", ""))
+        # '1d8 + 5S' -> 5 ; '1d4 - 1B' -> -1. Anchored on the die so a rune
+        # count or die size is never mistaken for the modifier.
+        match = re.search(r"d\d+\s*([+-]\s*\d+)", damage)
+        actual = int(match.group(1).replace(" ", "")) if match else 0
+        assert actual == expected, (
+            f"{snap_key}: {name} damage modifier engine={actual} != pb={expected} "
+            f"(engine damage string {damage!r})."
+        )
+        compared += 1
+
+    assert compared or not pb_weapons, f"{snap_key}: no PB weapon carried a damageBonus to compare"
