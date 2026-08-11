@@ -1,25 +1,31 @@
 # Tactical map — feature audit
 
-**Status: not started. Paused 2026-08-10 before round 1.** Nothing has been decided
-and no map code has been changed beyond the port itself.
+**Status: COMPLETE. All seven rounds answered 2026-08-11.** No map code has been changed
+yet beyond the port itself — **[The plan](#the-plan) is the output; start there.**
 
-This doc exists so the audit can resume on a different machine. Claude's per-project
-memory lives under `~/.claude/projects/<path>/memory/` and does **not** travel between
-machines, so anything that matters is written down here instead.
+This doc exists so the audit could survive moving between machines. Claude's per-project
+memory lives under `~/.claude/projects/<path>/memory/` and does **not** travel, so
+everything that matters is written down here instead.
 
 ---
 
-## How to resume
+## How to use this now
 
-Read this file, then start at **Round 1** below and ask its questions with the
-AskUserQuestion tool (four at a time, as written). Do not re-derive the findings —
-they were verified against a running server, not read off the code. Do not re-ask
-anything under "Settled".
+The audit is done. **Go to [The plan](#the-plan)** — six dependency-ordered stages, each
+independently shippable. Stage 1 is a few hours and fixes the two defects that make the
+tool feel broken.
 
-The rounds are ordered so earlier answers constrain later ones. Scene lifecycle first
-because activation semantics decide what the shared table screen even means.
+The rounds below are kept as the record of *why* each decision was made, with the
+original questions preserved for reference. The findings section is the evidence base:
+`[browser]` items were verified against a running server, `[code]` items were read but
+not exercised — that distinction still matters when planning work.
 
-Target: get through it in one or two sessions. Seven rounds, ~4 questions each.
+Two things carried forward that are easy to get wrong:
+
+- **The name-reveal design is unresolved** (Round 3 open sub-question). "NPCs unnamed
+  until revealed" was chosen, but no such state exists today. Settle it before coding.
+- **Finding 12 (stale pickers) was never confirmed** — a forced navigation masked it
+  during testing. It is a claim, not a fact, though the fix was chosen anyway.
 
 ---
 
@@ -160,7 +166,31 @@ Everything below was confirmed against a running server on 2026-08-10, not infer
 
 ---
 
-## Round 1 — Scene lifecycle & backgrounds
+## Round 1 — Scene lifecycle & backgrounds — **ANSWERED 2026-08-11**
+
+**Decisions:**
+
+1. **Separate open from push.** Selecting a scene opens it on the GM's screen only.
+   A distinct "Show on table" action controls what the table follows. Prep during a
+   live session must not reveal anything.
+2. **Delete with confirm + asset cleanup.** Delete removes the scene *and* its
+   background image. Blocked while the scene is live on the table.
+3. **The image defines the scene.** On upload, resize the scene to the image's real
+   dimensions (capped), preserving aspect ratio. Kills the stretch, and unlocks
+   zooming to source resolution.
+4. **Drag to calibrate the grid** over the uploaded image, deriving size + offset from
+   two gridline intersections. Build on the existing "Align grid by dragging".
+
+**Implications for later rounds:** scenes are now arbitrary-sized (a 4096px map is a
+4096px scene), so the opening view and any per-scene zoom/pan memory matter more than
+they did at a fixed 1400×900. Grid size becomes *derived* from calibration rather than
+typed, which makes "snap to cell centre" well-defined. And `active_scene_id` stops
+meaning "what the GM is looking at" — it becomes "what the table is showing", so every
+read of it needs revisiting.
+
+---
+
+### Original questions (for reference)
 
 Grounded in findings 6, 8, 9, 10.
 
@@ -185,7 +215,30 @@ Grounded in findings 6, 8, 9, 10.
    - Ignore the printed grid, overlay ours.
    - Gridless / theatre of the mind.
 
-## Round 2 — Grid, snapping & token placement
+## Round 2 — Grid, snapping & token placement — **ANSWERED 2026-08-11**
+
+**Decisions:**
+
+1. **Drag from the sidebar onto the map** to place a token. Replaces the hardcoded
+   `(70,70)` drop point entirely. The drag preview should show the token's real
+   footprint (see 2/4) so you can see what you are about to occupy.
+2. **Snap to cell centres, with size-aware footprints.** Medium sits in one square;
+   Large occupies a true 2×2, Huge 3×3, snapping to the correct block.
+3. **Remember zoom/pan per scene** so reopening prep lands where you left it.
+4. **Size drives real footprint**, not just visual scale.
+
+**Implications:** 2 and 4 together make footprint load-bearing rather than cosmetic —
+it now affects placement, snapping, and whether a template covers a creature, which
+lands squarely in Round 6. `token.size` already exists as a number in the schema, so
+this is geometry work, not a migration.
+
+Open sub-question for implementation: per-scene zoom/pan is GM view state. Client-side
+`localStorage` is simplest and correct while the map is GM-only, but the table screen
+(Round 7) has its own view, so the two must not share a key.
+
+---
+
+### Original questions (for reference)
 
 Grounded in findings 3, 4, 7.
 
@@ -200,7 +253,37 @@ Grounded in findings 3, 4, 7.
 4. **Does token size need to follow creature size?** PF2e sizes are already mapped at
    `_scene_token_candidates`. Should Large actually occupy 2×2, or stay cosmetic?
 
-## Round 3 — Tokens: identity, art, ownership, visibility
+## Round 3 — Tokens: identity, art, visibility — **ANSWERED 2026-08-11**
+
+**Decisions:**
+
+1. **Compendium art by default, with per-token upload as an override.** Monsters pull
+   their bestiary image automatically; any token can have art uploaded over the top.
+   (Combines two options — the GM asked for both.)
+2. **PCs always named; NPCs unnamed until revealed.**
+3. **Hidden tokens are ghosted for the GM, absent from the table screen.**
+4. **Pickers must refresh live** — rewire the scene/token `<select>`s off the existing
+   `encounter_update` SSE event instead of Jinja render-time snapshots.
+
+**OPEN SUB-QUESTION raised by decision 2 — do not implement blind.** There is no
+"visible but not yet named" state today. `visible_to_players` is binary (the player
+filter drops hidden NPCs entirely), and `epithet` (`app.py:5143`, set at `app.py:6138`)
+is a boss-reveal *title*, not a name-suppression flag. So "revealed" has to be built.
+Three candidate shapes, to settle before coding:
+
+- reuse `visible_to_players` (visible ⇒ named) — cheapest, but then you cannot put a
+  creature on the table without naming it, which is exactly what was asked for;
+- add a per-token/per-combatant `name_revealed` flag — explicit, one more piece of state;
+- display `epithet` ("the Hooded Figure") until revealed, then the real name — uses what
+  already exists and is the most evocative at the table.
+
+Whichever is chosen, it must live on the **combatant/tracker** side, not be re-derived
+in the map. Two separate copies of a player-visibility rule is precisely what caused the
+NPC-HP leak and the `sanitize_for_player` incident.
+
+---
+
+### Original questions (for reference)
 
 Grounded in findings 16, 12.
 
@@ -215,7 +298,28 @@ Grounded in findings 16, 12.
 4. **Stale dropdowns** (finding 12, unconfirmed). Should the token/scene pickers refresh
    live from SSE, or is a manual refresh acceptable?
 
-## Round 4 — Selection & the GM editing loop
+## Round 4 — Selection & the GM editing loop — **ANSWERED 2026-08-11**
+
+**Decisions** (all four: the GM's in-progress edit is sacred):
+
+1. **Hide the inspector when nothing is selected**, with a one-line "select a token"
+   empty state so the sidebar doesn't just develop a hole. Needs the missing `[hidden]`
+   rule on `.map-token-actions` *and* on `.map-btn` (the "Open linked sheet" anchor).
+2. **Never repaint a field the GM is editing.** Skip repaint for the focused field and
+   for anything dirty-but-unsaved; repaint everything else freely. The map stays live
+   without eating the edit.
+3. **Follow-turn scrolls but never changes selection.** Keep the viewport following;
+   drop the `selectedId` reassignment in `focusActiveTurn` (`map.js:167`).
+4. **One undo stack for everything** — walls, doors, lights, templates, fog and moves.
+   Each action needs an inverse; today only movement has one (`movementHistory`, cap 30).
+
+**Note:** 1 is two CSS lines and the single cheapest win in the whole audit. 2 and 3 are
+small and land in the same repaint path (`applyScene` → `fillControls` /
+`updateSelectionPanel`). 4 is the only large item in this round.
+
+---
+
+### Original questions (for reference)
 
 Grounded in findings 1, 2, 5, 11, 19. **This is the round that most affects day-to-day use.**
 
@@ -230,7 +334,38 @@ Grounded in findings 1, 2, 5, 11, 19. **This is the round that most affects day-
    to undo a wall. Options: a general undo stack across walls/lights/templates/fog;
    per-tool undo; leave movement-only but stop Ctrl+Z firing when a non-move tool is active.
 
-## Round 5 — Walls, doors, fog & vision
+## Round 5 — Walls, doors, fog & vision — **ANSWERED 2026-08-11**
+
+**Decisions:**
+
+1. **The table shows the union of all PCs' vision.** One screen, one answer — no
+   per-player state, which is the natural fit for the settled audience.
+2. **Fog is revealed by region/room**, not brushed.
+3. **A "preview table view" toggle** flips the GM canvas to exactly what the table is
+   showing, fog and hidden tokens included.
+4. **Finish lights** — editable radius/colour/intensity, and they contribute to what
+   the table reveals.
+
+**Dependencies and risks, in rough order of danger:**
+
+- **Region reveal presupposes walls that actually enclose.** Today walls are drawn one
+  unconnected segment at a time with no snapping, so a one-pixel gap leaks the reveal
+  into the next room. Region fog is only as good as wall completeness — so wall
+  *drawing* (chaining + snap-to-grid + batching the per-segment round-trips) is a
+  prerequisite for the fog model, not a separate nice-to-have.
+- **The preview toggle forces a refactor**: `drawVisionOverlay` currently runs only when
+  `!cfg.isGm` (`map.js:184`). Vision/fog rendering has to become a *view mode* rather
+  than a role check. That is also what makes the table screen renderable at all, so it
+  is on the critical path for Round 7 either way.
+- **Union-of-vision plus contributing lights is the expensive path.** Raycasting is
+  already `(160 + 6W)` angles × W walls per source per frame, uncached, inside
+  `pointermove`. It now runs on the machine driving the TV rather than a phone, which
+  buys headroom, but this is the decision that makes Round 7's performance question real
+  rather than theoretical.
+
+---
+
+### Original questions (for reference)
 
 Grounded in findings 13, 14, 15, 18, 20.
 
@@ -246,7 +381,36 @@ Grounded in findings 13, 14, 15, 18, 20.
 4. **Lights.** Fixed intensity, no editing after placement, no GM preview. Worth
    finishing, or cut lights entirely and rely on fog?
 
-## Round 6 — Templates, targeting & combat from the map
+## Round 6 — Templates, targeting & combat from the map — **ANSWERED 2026-08-11**
+
+**Decisions:**
+
+1. **Numeric size for every template; drag sets direction only** for cone and line.
+   Burst and emanation become genuinely distinct — emanation radiates from the
+   creature's whole footprint, burst from a point. (Today they are identical:
+   `map.js:393`, `map.js:432`.)
+2. **Auto-select targets, then adjust** — the template proposes, the GM edits the list
+   before acting.
+3. **Add:** conditions with durations, persistent damage, and live movement measurement
+   against Speed while dragging. Condition timers (`condition_expiry`) and persistent
+   damage are already modelled and persisted server-side, so those two are wiring, not
+   new engines. Drag-measurement is genuinely new (a ruler exists; measuring a move
+   against the creature's Speed does not).
+4. **Area effects start on the map, everything else stays in the tracker.**
+
+**Note on what was deliberately *not* chosen:** saving throws against a template were
+left off the "missing" list because they are not missing — `/api/scenes/<id>/bulk-combat`
+already takes a save kind + DC and reuses the existing `check_request` SSE. Read as
+confirmation of the existing path, not a rejection of it.
+
+**Dependency:** decision 2 combined with Round 2's real footprints means
+`templateContainsToken` must test the token's **footprint**, not its centre point — a
+burst clipping one corner of a Large creature has to catch it. That is the same geometry
+change footprint touches everywhere else.
+
+---
+
+### Original questions (for reference)
 
 Grounded in findings 17, 18.
 
@@ -261,7 +425,31 @@ Grounded in findings 17, 18.
 4. **Bulk actions.** Bulk damage/heal/condition and save requests exist for targeted
    tokens. Is the targeting flow the right entry point, or should it come from the tracker?
 
-## Round 7 — The shared table screen, and performance
+## Round 7 — The shared table screen, and performance — **ANSWERED 2026-08-11**
+
+**Decisions:**
+
+1. **The table screen is a browser on a TV, driven by the GM's own machine** — a second
+   window/tab dragged onto the TV. Rendering happens on the fastest hardware in the room,
+   and it needs no independent auth.
+2. **The table view shows:** fog applied and hidden tokens absent; no sidebar or tools,
+   map only; larger nameplates and health for across-the-room legibility; and a prominent
+   current-turn indicator (the tracker already broadcasts turn state).
+3. **A GM-authenticated route** (e.g. `/map/table`), behind the existing gate. This is
+   what keeps the decision to go GM-only intact — no player-facing auth surface is
+   reintroduced, so the two leaks that motivated the gate stay unreachable.
+4. **Performance work targeted at a laptop driving a TV**: `requestAnimationFrame`, stop
+   allocating offscreen canvases per frame, and cache vision until walls or tokens
+   actually move. Not the full tablet treatment.
+
+**Consequence:** decision 1 + 3 together mean the table screen is a *view mode of the
+existing page*, not a new app — which is why the vision refactor in Round 5 (render by
+view mode rather than by `!cfg.isGm`) is the single piece of work that unlocks both the
+preview toggle and the table screen.
+
+---
+
+### Original questions (for reference)
 
 Grounded in findings 21, 22, and the settled decision.
 
@@ -278,13 +466,80 @@ Grounded in findings 21, 22, and the settled decision.
 
 ---
 
-## After the audit
+## The plan
 
-Expect the output to be a prioritised change list, not a single PR. The likely split:
+All seven rounds answered 2026-08-11. Ordered by dependency, not by appeal. Each stage
+is independently shippable; nothing here is one big PR.
 
-1. **Cheap correctness** — the two CSS `[hidden]` bugs, token placement, snap-to-centre,
-   GM auto-fit. Small, independent, immediately felt.
-2. **The GM editing loop** — SSE repaint policy, selection stealing, undo.
-3. **Scene lifecycle** — prep/push split, delete, background-defines-scene.
-4. **The table screen** — new work, revives a cancelled project, needs `CLAUDE.md` updated.
-5. **Rendering** — only as far as the target device demands.
+### Stage 1 — Cheap correctness (hours, immediately felt)
+
+Nothing here depends on anything else, and stage 1 is the single best value in the audit.
+
+- `[hidden]` rules for `.map-token-actions` and `.map-btn`, plus a one-line empty state.
+  **Two CSS lines fix the permanently-visible inspector and the always-on "Open linked
+  sheet" button.** [R4.1]
+- Follow-turn scrolls but no longer reassigns `selectedId` (`map.js:167`). [R4.3]
+- Don't repaint the focused or dirty field in `fillControls` / `updateSelectionPanel`. [R4.2]
+- Rebuild the scene/token pickers from `encounter_update` instead of Jinja snapshots. [R3.4]
+
+### Stage 2 — Scene lifecycle (unblocks using real battlemaps)
+
+- Image defines scene dimensions on upload; preserve aspect, cap for sanity. [R1.3]
+- Drag-to-calibrate the grid over the image. [R1.4]
+- Delete scene + background asset, with confirm, blocked while live. [R1.2]
+- Split open from push: selecting opens locally, "Show on table" activates. **Audit
+  every read of `active_scene_id`** — it stops meaning "what the GM sees". [R1.1]
+- Remember zoom/pan per scene (client-side; must not share a key with the table view). [R2.3]
+
+### Stage 3 — Tokens and geometry
+
+- Drag-from-sidebar placement, with a footprint-accurate drag preview. [R2.1]
+- Snap to cell centres; real 2×2 / 3×3 footprints for Large / Huge. [R2.2, R2.4]
+- Compendium art by default, per-token upload as override. [R3.1]
+- Hidden tokens ghosted for the GM. [R3.3]
+- **Settle the name-reveal design first** (see Round 3's open sub-question) — there is no
+  "visible but unnamed" state today, and it must live on the combatant side, not be
+  re-derived in the map. [R3.2]
+
+### Stage 4 — Walls, fog, vision, lights (the big one)
+
+Strict internal order — each item is a prerequisite for the next:
+
+1. **Wall drawing**: polyline chaining, snap-to-grid, batch the per-segment round-trips.
+   Region fog is only as good as wall completeness; a one-pixel gap leaks a reveal.
+2. **Vision as a view mode**, not `!cfg.isGm`. This one refactor unlocks both the preview
+   toggle and the table screen.
+3. **Region/room fog reveal.** [R5.2]
+4. **Union of all PCs' vision.** [R5.1]
+5. **Finish lights** — editable radius/colour/intensity, contributing to reveal. [R5.4]
+6. **Preview-table-view toggle.** [R5.3]
+
+Do stage 6's rendering work *alongside* this, not after: union vision plus contributing
+lights is precisely what makes the current loop too slow.
+
+### Stage 5 — Templates and combat
+
+- Numeric size for all templates; drag sets direction only. Burst ≠ emanation. [R6.1]
+- `templateContainsToken` tests the **footprint**, not the centre (depends on stage 3). [R6.2]
+- Auto-select targets, then adjust. [R6.2]
+- Conditions with durations and persistent damage from the map — both already modelled
+  server-side, so this is wiring. [R6.3]
+- Live movement measurement against Speed while dragging — genuinely new. [R6.3]
+
+### Stage 6 — The table screen and performance
+
+- `requestAnimationFrame`; stop allocating two full-scene offscreen canvases per frame;
+  cache vision until walls or tokens move. Target: a laptop driving a TV. [R7.4]
+- GM-authenticated `/map/table` as a view mode of the same page. [R7.1, R7.3]
+- Table view: fog applied, hidden tokens absent, no chrome, large nameplates and health,
+  prominent turn indicator. [R7.2]
+- **Update `CLAUDE.md`** — a shared table screen revives the Campaign Hub Stage, which
+  that file still records as cancelled and unowned.
+
+### Cross-cutting
+
+- **Undo across everything** [R4.4] touches stages 3–5: every action needs an inverse.
+  Add each inverse as its action lands rather than retrofitting one stack at the end.
+- **Player projection stays untouched and tested** until stage 6 needs it. It is the
+  GM↔table boundary, and rewriting a security boundary from scratch is what caused the
+  `sanitize_for_player` incident.
