@@ -487,21 +487,49 @@
         return Math.hypot(point.x - (Number(segment.x1) + t * dx), point.y - (Number(segment.y1) + t * dy));
     }
 
-    function templateContainsToken(template, token) {
+    // The squares a creature's space occupies: its centre plus the corners of
+    // its footprint. PF2e affects a creature when the area overlaps ANY square
+    // of its space, so a Large creature clipped at one corner is caught.
+    //
+    // This replaces a circular padding of tokenRadius(). A circle of radius
+    // size*grid*0.42 is smaller than the square's half-diagonal (~0.707), so a
+    // template grazing a corner missed -- exactly the case the GM has to
+    // adjudicate out loud, and exactly the case footprints were made real for.
+    function tokenSpacePoints(token) {
+        const gridSize = Number((scene.grid || {}).size) || 70;
+        const half = tokenFootprint(token) * gridSize / 2;
+        const x = Number(token.x) || 0, y = Number(token.y) || 0;
+        return [
+            {x: x, y: y},
+            {x: x - half, y: y - half}, {x: x + half, y: y - half},
+            {x: x - half, y: y + half}, {x: x + half, y: y + half}
+        ];
+    }
+
+    function templatePointInside(template, point) {
         const g = templateGeometry(template);
-        const padding = tokenRadius(token);
         if (template.kind === 'burst' || template.kind === 'emanation') {
-            return Math.hypot(token.x - g.x1, token.y - g.y1) <= g.radius + padding;
+            return Math.hypot(point.x - g.x1, point.y - g.y1) <= g.radius;
         }
-        if (template.kind === 'line') return distanceToSegment(token, template) <= g.width / 2 + padding;
+        if (template.kind === 'line') {
+            return distanceToSegment(point, template) <= g.width / 2;
+        }
         if (template.kind === 'cone') {
-            const dx = token.x - g.x1, dy = token.y - g.y1;
+            const dx = point.x - g.x1, dy = point.y - g.y1;
             const distance = Math.hypot(dx, dy);
+            if (distance > g.length) return false;
+            if (distance < 1e-6) return true;      // the origin square itself
             let difference = Math.atan2(dy, dx) - g.angle;
             difference = Math.atan2(Math.sin(difference), Math.cos(difference));
-            return distance <= g.length + padding && Math.abs(difference) <= Math.PI / 4;
+            return Math.abs(difference) <= Math.PI / 4;
         }
         return false;
+    }
+
+    function templateContainsToken(template, token) {
+        // An emanation never catches the creature it radiates from.
+        if (template.kind === 'emanation' && template.source_token_id === token.id) return false;
+        return tokenSpacePoints(token).some(point => templatePointInside(template, point));
     }
 
     function drawTargetOverlays() {
@@ -934,13 +962,40 @@
         const sizeInput = document.getElementById('map-template-size');
         const squares = Math.max(1, Number(sizeInput ? sizeInput.value : 3) || 3);
         const radius = squares * gridSize;
+        // The number is the size, for every shape. Cone and line took their
+        // extent from how far you happened to drag, so "20 feet" meant two
+        // different things depending on which tool was selected -- and PF2e
+        // states every area in feet. The drag now only AIMS them.
         let end = draft.end || draft.start;
-        if (draft.tool === 'burst' || draft.tool === 'emanation') end = draft.start;
-        return {
+        if (draft.tool === 'burst' || draft.tool === 'emanation') {
+            end = draft.start;
+        } else {
+            const aim = Math.atan2(end.y - draft.start.y, end.x - draft.start.x);
+            const aimed = Math.hypot(end.x - draft.start.x, end.y - draft.start.y) >= 5 ? aim : 0;
+            end = {x: draft.start.x + Math.cos(aimed) * radius,
+                   y: draft.start.y + Math.sin(aimed) * radius};
+        }
+        const template = {
             kind: draft.tool, x1: draft.start.x, y1: draft.start.y,
             x2: end.x, y2: end.y, radius: radius, width: gridSize,
             visible_to_players: true
         };
+        // An emanation radiates from a creature's whole space, a burst from a
+        // point. They were rendered and hit-tested identically, so two toolbar
+        // buttons did one thing. Linking the source token is what makes them
+        // differ: the emanation grows by that creature's footprint.
+        if (draft.tool === 'emanation') {
+            const source = hitToken(draft.start);
+            if (source) {
+                template.source_token_id = source.id;
+                template.x1 = Number(source.x);
+                template.y1 = Number(source.y);
+                template.x2 = template.x1;
+                template.y2 = template.y1;
+                template.radius = radius + tokenFootprint(source) * gridSize / 2;
+            }
+        }
+        return template;
     }
 
     function selectTemplateTargets(template) {
@@ -1212,12 +1267,9 @@
                 return;
             }
             if (['burst', 'emanation', 'cone', 'line'].includes(finished.tool)) {
+                // draftTemplate already projects cone/line to the stated size
+                // and defaults their aim, so no short-drag fallback is needed.
                 const template = draftTemplate(finished);
-                if ((template.kind === 'cone' || template.kind === 'line') &&
-                    Math.hypot(template.x2 - template.x1, template.y2 - template.y1) < 5) {
-                    template.x2 = template.x1 + template.radius;
-                    template.y2 = template.y1;
-                }
                 selectTemplateTargets(template);
                 if (cfg.isGm) {
                     try {

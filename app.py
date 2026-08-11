@@ -7834,6 +7834,14 @@ def api_scene_elements(scene_id):
                     'width': point(data.get('width', 35), 1000),
                     'visible_to_players': bool(data.get('visible_to_players', True)),
                 }
+                # An emanation radiates from a creature's space rather than a
+                # point, so it remembers which creature. Validated against the
+                # scene's own tokens: an id naming nothing would make the
+                # emanation silently behave as a burst.
+                source_id = data.get('source_token_id')
+                if kind == 'emanation' and source_id:
+                    if any(t.get('id') == source_id for t in scene.get('tokens', [])):
+                        template['source_token_id'] = str(source_id)
                 scene.setdefault('templates', []).append(template)
             elif action == 'delete_template':
                 scene['templates'] = [item for item in scene.get('templates', []) if item.get('id') != data.get('id')]
