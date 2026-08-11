@@ -210,16 +210,22 @@
         drawAmbientLights();
         for (const template of scene.templates || []) drawTemplate(template);
         for (const template of localTemplates) drawTemplate(template);
-        for (const token of scene.tokens || []) drawToken(token);
-        if (!cfg.isGm) drawTargetOverlays();
-        if (!cfg.isGm) drawVisionOverlay();
+        for (const token of scene.tokens || []) {
+            // A truthful preview has to DROP hidden tokens, not dim them. The
+            // GM's payload still contains them (the server only strips them for
+            // player-facing payloads), so a preview that merely faded them
+            // would quietly lie about what the table can see.
+            if (isTableView() && token.visible_to_players === false) continue;
+            drawToken(token);
+        }
+        if (isTableView()) drawVisionOverlay();
         drawFogOverlay();
-        if (cfg.isGm) {
+        if (!isTableView()) {
             drawWallsAndDoors();
             drawLightControls();
         }
-        if (cfg.isGm) drawTargetOverlays();
-        drawToolOverlay();
+        drawTargetOverlays();
+        if (!isTableView()) drawToolOverlay();
     }
 
     function drawGrid() {
@@ -304,6 +310,10 @@
     }
 
     function ownsTokenForVision(token) {
+        // The table shows the UNION of the party's vision: one screen, one
+        // answer, and no per-player state to maintain. Anything any party
+        // member can see is revealed.
+        if (isTableView()) return !!token.is_pc;
         if (cfg.characterId && (token.controller_character_id === cfg.characterId || token.character_id === cfg.characterId)) return true;
         return !!cfg.playerName && (token.controller_name === cfg.playerName || token.name === cfg.playerName);
     }
@@ -346,7 +356,7 @@
         mask.width = canvas.width;
         mask.height = canvas.height;
         const mctx = mask.getContext('2d');
-        const darkness = cfg.isGm ? .30 : .97;
+        const darkness = isTableView() ? .97 : .30;
         mctx.fillStyle = 'rgba(4,5,6,' + darkness + ')';
         mctx.fillRect(0, 0, mask.width, mask.height);
         for (const operation of scene.fog.operations || []) {
@@ -665,7 +675,7 @@
             ctx.fillStyle = '#f3c6a7';
             ctx.fillText(text, x, y + radius + 15);
         }
-        if (cfg.isGm && token.visible_to_players === false) {
+        if (!isTableView() && token.visible_to_players === false) {
             ctx.setLineDash([5, 4]);
             ctx.beginPath();
             ctx.arc(x, y, radius + 4, 0, Math.PI * 2);
@@ -709,6 +719,21 @@
     function normalizedOffset(value, size) {
         return ((value % size) + size) % size;
     }
+
+    // What this canvas is RENDERING, as distinct from who is allowed to touch
+    // it. Vision and fog were gated on cfg.isGm, which conflated two different
+    // questions: "may this person edit the scene" and "should this canvas show
+    // only what the party can see". That is exactly why the GM could never
+    // preview the table view -- the check deciding whether to draw vision was
+    // the same check deciding whether to show the sidebar.
+    //
+    //   'gm'    everything visible; fog as a light haze so the boundary reads
+    //   'table' what the players see: vision computed, fog opaque, hidden
+    //           tokens absent, secret doors indistinguishable from walls
+    //
+    // cfg.isGm still governs every EDIT. Only rendering moved.
+    let viewMode = cfg.isGm ? 'gm' : 'table';
+    function isTableView() { return viewMode === 'table'; }
 
     // A wall run being chained: the points clicked so far. Empty when idle.
     //
@@ -1347,6 +1372,23 @@
         paintTableState();
     }
 
+    function setViewMode(mode) {
+        viewMode = mode === 'table' ? 'table' : 'gm';
+        const button = document.getElementById('map-preview-table');
+        if (button) {
+            button.classList.toggle('is-active', isTableView());
+            button.textContent = isTableView() ? 'Exit table preview' : 'Preview table view';
+        }
+        document.querySelector('.map-page').classList.toggle('is-previewing', isTableView());
+        // Drawing while previewing would edit what you cannot fully see, so the
+        // tools step back to Select.
+        if (isTableView() && activeTool !== 'select') setActiveTool('select');
+        document.getElementById('map-status').textContent = isTableView()
+            ? 'Table preview: exactly what the players would see.'
+            : 'GM view - changes are shared live';
+        draw();
+    }
+
     function setCalibrationMode(enabled) {
         calibrationMode = !!enabled;
         canvas.classList.toggle('is-calibrating', calibrationMode);
@@ -1417,6 +1459,9 @@
                 // stay -- go wherever the server says is sensible now.
                 location.href = data.default_scene_id ? '/map/' + encodeURIComponent(data.default_scene_id) : '/map';
             } catch (error) { toast(error.message, true); }
+        });
+        document.getElementById('map-preview-table').addEventListener('click', function () {
+            setViewMode(isTableView() ? 'gm' : 'table');
         });
         document.getElementById('map-calibrate-grid').addEventListener('click', function () {
             setCalibrationMode(!calibrationMode);

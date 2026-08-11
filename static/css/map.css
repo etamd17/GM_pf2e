@@ -83,3 +83,6 @@
 .map-table-state.is-live { color:var(--gilt-100); }
 .map-btn.is-dragging { opacity:.55; }
 .map-canvas.is-drop-target { outline:2px dashed rgba(224,182,90,.7); outline-offset:-2px; }
+/* Previewing renders the table's view on the GM's canvas. The frame is a
+   reminder that what is on screen is deliberately incomplete. */
+.map-page.is-previewing .map-canvas { outline:3px solid rgba(224,182,90,.85); outline-offset:-3px; }

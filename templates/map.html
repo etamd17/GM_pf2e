@@ -15,6 +15,7 @@
             <span id="map-zoom-label" class="map-zoom-label">100%</span>
             <button type="button" id="map-zoom-in" class="map-btn map-btn--quiet" aria-label="Zoom in">+</button>
             <button type="button" id="map-fit" class="map-btn map-btn--quiet">Fit</button>
+            {% if map_gm %}<button type="button" id="map-preview-table" class="map-btn map-btn--quiet">Preview table view</button>{% endif %}
             <button type="button" id="map-follow-turn" class="map-btn map-btn--quiet is-active">Follow turn</button>
             <button type="button" id="map-undo" class="map-btn map-btn--quiet" disabled>Undo move</button>
             {% if not map_gm %}<a href="{{ system_ui.player_home }}" class="map-btn map-btn--quiet">Player Hub</a>{% endif %}
