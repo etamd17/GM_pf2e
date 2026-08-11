@@ -19,7 +19,7 @@
       ]
     },
     {
-      "damage": "1d8 + 3S",
+      "damage": "1d8 + 5S",
       "first_strike": 18,
       "name": "Longsword",
       "traits": [
