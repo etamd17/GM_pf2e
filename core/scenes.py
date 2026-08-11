@@ -181,34 +181,102 @@ def save_scene(cid, scene, *, bump_revision=True):
 
 
 def create_scene(cid, name='Untitled Scene', **kwargs):
+    """Create a scene. It is NOT put on the table -- see table_scene_id."""
     if cid:
         storage.ensure_campaign_dirs(cid)
     else:
         os.makedirs(storage.scene_assets_dir(None), exist_ok=True)
     scene = new_scene(cid, name, **kwargs)
     storage.atomic_write_json(storage.scene_file(cid, scene['id']), scene, indent=2)
-    if not active_scene_id(cid):
-        set_active_scene(cid, scene['id'])
     return scene
 
 
-def active_scene_id(cid):
+# --- What the table is showing, versus what the GM is looking at -----------
+#
+# These used to be the same thing: creating or selecting a scene made it
+# "active", and every connected client navigated to it. That made prep during a
+# live session impossible -- building next week's ambush pushed it onto the
+# table mid-fight.
+#
+# The stored key stays 'active_scene_id' so no migration is needed, but its
+# meaning is now precisely "the scene the table screen is showing". What the GM
+# has open is just their URL, and is nobody else's business.
+
+def table_scene_id(cid):
+    """The scene currently pushed to the table, or None.
+
+    Deliberately does NOT fall back to "the first scene that exists". Nothing on
+    the table is a real and common state -- before a session, or between fights
+    -- and the old fallback made it unrepresentable.
+    """
     index = storage.load_json(storage.scenes_index_file(cid), default={}) or {}
     sid = index.get('active_scene_id')
-    if sid and load_scene(cid, sid):
-        return sid
-    all_scenes = list_scenes(cid)
-    return all_scenes[0]['id'] if all_scenes else None
+    return sid if (sid and load_scene(cid, sid)) else None
 
 
-def set_active_scene(cid, scene_id):
-    if not load_scene(cid, scene_id):
+def set_table_scene(cid, scene_id):
+    """Push a scene to the table, or pass None to clear it."""
+    if scene_id is not None and not load_scene(cid, scene_id):
         raise ValueError('unknown scene')
     storage.atomic_write_json(storage.scenes_index_file(cid), {
         'schema_version': SCHEMA_VERSION,
         'active_scene_id': scene_id,
         'updated_at': _now(),
     }, indent=2)
+
+
+def default_open_scene_id(cid):
+    """Which scene /map should open when the GM arrives without naming one.
+
+    This is where the old "first scene" fallback belongs: it is a convenience
+    for the GM's own landing, not a statement about the table. Prefers whatever
+    is on the table, then the most recently updated scene.
+    """
+    on_table = table_scene_id(cid)
+    if on_table:
+        return on_table
+    all_scenes = list_scenes(cid)
+    if not all_scenes:
+        return None
+
+    # Ordered by file mtime, not the stored updated_at: that is a
+    # second-resolution string, so two scenes touched in the same second tie and
+    # the winner falls out of filesystem listing order. mtime is finer grained
+    # and is the more honest answer to "which did I last work on" anyway.
+    def last_written(summary):
+        try:
+            return os.path.getmtime(storage.scene_file(cid, summary['id']))
+        except OSError:
+            return 0.0
+
+    return max(all_scenes, key=last_written)['id']
+
+
+def delete_scene(cid, scene_id):
+    """Remove a scene and its uploaded background. Returns True if it existed.
+
+    Refuses while the scene is on the table: deleting what the players are
+    currently looking at should be a deliberate two-step, not a misclick.
+    """
+    scene = load_scene(cid, scene_id)
+    if not scene:
+        return False
+    if table_scene_id(cid) == scene_id:
+        raise ValueError('scene is on the table')
+    background = (scene.get('background') or {}).get('filename')
+    if background:
+        # Only ever a bare '<scene_id><ext>' written by the upload route, but
+        # basename() it anyway: this joins a stored value onto a real path.
+        asset = os.path.join(storage.scene_assets_dir(cid), os.path.basename(background))
+        try:
+            os.remove(asset)
+        except OSError:
+            pass
+    try:
+        os.remove(storage.scene_file(cid, scene_id))
+    except OSError:
+        return False
+    return True
 
 
 def add_token(scene, *, name, x=1, y=1, size=1, color='#b88a44',

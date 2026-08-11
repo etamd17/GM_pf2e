@@ -44,6 +44,12 @@
                 <select id="map-scene-select">
                     {% for item in scene_summaries %}<option value="{{ item.id }}"{% if item.id == scene_id %} selected{% endif %}>{{ item.name }}</option>{% endfor %}
                 </select>
+                {# Opening a scene and putting it in front of the players are
+                   different acts. The picker above only opens; these decide what
+                   the table sees. #}
+                <p id="map-table-state" class="map-table-state">Not on the table</p>
+                <button id="map-show-on-table" class="map-btn map-btn--wide" type="button">Show on table</button>
+                <button id="map-delete-scene" class="map-btn map-btn--danger map-btn--wide" type="button">Delete scene</button>
                 <label for="map-scene-name">Name</label>
                 <input id="map-scene-name" maxlength="100">
                 <div class="map-setting-row">

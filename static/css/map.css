@@ -79,3 +79,5 @@
   .map-tool-readout { display:none; }
   .map-viewport { min-height:62vh; }
 }
+.map-table-state { margin:8px 0 4px; color:var(--text-on-dark-2); font:700 10px/1.3 var(--font-ui); text-transform:uppercase; letter-spacing:.04em; }
+.map-table-state.is-live { color:var(--gilt-100); }

@@ -22,11 +22,14 @@ def scene_store(tmp_path, monkeypatch):
     return campaigns
 
 
-def test_scene_create_is_campaign_scoped_and_active(scene_store):
+def test_scene_create_is_campaign_scoped_and_not_yet_on_the_table(scene_store):
+    # Creating a scene used to put it straight in front of the players, which
+    # made prep during a live session impossible. A new scene is prep until the
+    # GM pushes it -- see test_map_scene_lifecycle.py.
     scene = scenes.create_scene(CID, 'Vault of Ash', width=1200, height=800, grid_size=60)
     assert scene['campaign_id'] == CID
     assert scenes.load_scene(CID, scene['id'])['name'] == 'Vault of Ash'
-    assert scenes.active_scene_id(CID) == scene['id']
+    assert scenes.table_scene_id(CID) is None
     assert storage.scene_file(CID, scene['id']).startswith(str(scene_store))
 
 
@@ -34,7 +37,9 @@ def test_legacy_scene_store_works_without_campaign_id(tmp_path, monkeypatch):
     monkeypatch.setattr(storage, 'DATA_DIR', str(tmp_path))
     scene = scenes.create_scene(None, 'Legacy Table')
     assert scene['campaign_id'] is None
-    assert scenes.active_scene_id(None) == scene['id']
+    assert scenes.table_scene_id(None) is None
+    # ...but the GM still lands somewhere when they open /map.
+    assert scenes.default_open_scene_id(None) == scene['id']
     assert scenes.load_scene(None, scene['id'])['name'] == 'Legacy Table'
     assert storage.scene_file(None, scene['id']).startswith(str(tmp_path))
 
