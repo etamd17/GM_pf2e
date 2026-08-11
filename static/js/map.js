@@ -143,6 +143,35 @@
         applyZoom();
         viewport.scrollLeft = worldX * zoom - focus.x;
         viewport.scrollTop = worldY * zoom - focus.y;
+        saveView();
+    }
+
+    // Per-scene zoom/pan, so reopening prep lands where you left it instead of
+    // at 100% in the top-left corner. Scenes are now sized to their background
+    // image, so "top-left" can be a long way from anything.
+    //
+    // The role is part of the key on purpose: the table screen is a different
+    // view of the same scene and must never inherit the GM's viewport.
+    const VIEW_KEY = 'pf2e_map_view:' + (cfg.isGm ? 'gm' : 'table') + ':';
+
+    function saveView() {
+        if (!scene) return;
+        try {
+            localStorage.setItem(VIEW_KEY + sceneId, JSON.stringify({
+                zoom: zoom, x: viewport.scrollLeft, y: viewport.scrollTop
+            }));
+        } catch (_) { /* private mode / quota - not worth surfacing */ }
+    }
+
+    function restoreView() {
+        let saved = null;
+        try { saved = JSON.parse(localStorage.getItem(VIEW_KEY + sceneId) || 'null'); } catch (_) {}
+        if (!saved || !Number(saved.zoom)) return false;
+        zoom = Math.max(.15, Math.min(4, Number(saved.zoom)));
+        applyZoom();
+        viewport.scrollLeft = Math.max(0, Number(saved.x) || 0);
+        viewport.scrollTop = Math.max(0, Number(saved.y) || 0);
+        return true;
     }
 
     function fitMap() {
@@ -833,10 +862,13 @@
         }
         const point = pointFromEvent(event);
         if (interaction.type === 'grid') {
-            const size = Number(scene.grid.size) || 70;
-            scene.grid.offset_x = normalizedOffset(interaction.offsetX + point.x - interaction.startPoint.x, size);
-            scene.grid.offset_y = normalizedOffset(interaction.offsetY + point.y - interaction.startPoint.y, size);
+            const derived = calibrationFromDrag(interaction.startPoint, point);
+            scene.grid.size = derived.size;
+            scene.grid.offset_x = derived.offsetX;
+            scene.grid.offset_y = derived.offsetY;
             fillGridControls();
+            const sizeField = document.getElementById('map-grid-size');
+            if (sizeField && !isBeingEdited(sizeField)) sizeField.value = derived.size;
             draw();
             return;
         }
@@ -938,10 +970,11 @@
         if (finished.type === 'grid') {
             try {
                 const data = await patchScene({grid: {
+                    size: scene.grid.size,
                     offset_x: scene.grid.offset_x, offset_y: scene.grid.offset_y
                 }});
                 applyScene(data.scene);
-                toast('Grid alignment saved.');
+                toast('Grid aligned: ' + Math.round(Number(data.scene.grid.size)) + 'px squares.');
             } catch (error) { toast(error.message, true); fetchScene(); }
             return;
         }
@@ -1149,6 +1182,34 @@
         });
     }
 
+    // Derive grid size AND offset from one alignment drag.
+    //
+    // The drag is made across the printed grid of an uploaded battlemap: it
+    // starts on a gridline intersection, which fixes where the grid begins, and
+    // spans a stated number of squares, which fixes how big they are. Spanning
+    // several squares divides the pointing error across them, so it is far more
+    // accurate than trying to drag exactly one square.
+    //
+    // Only the longer axis is measured. A drag is never perfectly horizontal,
+    // and averaging both axes would let a few pixels of vertical wobble shrink
+    // the derived size.
+    function calibrationFromDrag(start, end) {
+        const squaresField = document.getElementById('map-calibrate-squares');
+        const squares = Math.max(1, Math.min(40, Math.round(Number(squaresField && squaresField.value) || 1)));
+        const dx = Math.abs(end.x - start.x);
+        const dy = Math.abs(end.y - start.y);
+        const span = Math.max(dx, dy);
+        const current = Number(scene.grid.size) || 70;
+        // Too short a drag says nothing about size; keep the current size and
+        // treat the gesture as an offset nudge, which is what it used to be.
+        const size = span < 8 ? current : Math.max(20, Math.min(300, span / squares));
+        return {
+            size: Math.round(size * 100) / 100,
+            offsetX: normalizedOffset(start.x, size),
+            offsetY: normalizedOffset(start.y, size)
+        };
+    }
+
     function setCalibrationMode(enabled) {
         calibrationMode = !!enabled;
         canvas.classList.toggle('is-calibrating', calibrationMode);
@@ -1157,8 +1218,12 @@
             button.classList.toggle('is-active', calibrationMode);
             button.textContent = calibrationMode ? 'Finish grid alignment' : 'Align grid by dragging';
         }
+        const squaresField = document.getElementById('map-calibrate-squares');
+        const squares = Math.max(1, Math.round(Number(squaresField && squaresField.value) || 1));
         document.getElementById('map-status').textContent = calibrationMode
-            ? 'Grid alignment mode: drag anywhere on the map.' : 'GM view - changes are shared live';
+            ? ('Grid alignment: drag from a gridline corner across ' + squares
+               + (squares === 1 ? ' square.' : ' squares.'))
+            : 'GM view - changes are shared live';
         draw();
     }
 
@@ -1484,5 +1549,17 @@
         window.appSSE('pc_update', fetchScene);
         window.appSSE('connected', fetchScene);
     }
-    fetchScene().then(function () { if (!cfg.isGm) fitMap(); });
+    fetchScene().then(function () {
+        // Restore where this scene was left; failing that, fit it. The GM used
+        // to get neither and always landed at 100% in the top-left corner.
+        if (!restoreView()) fitMap();
+    });
+    // Persist the viewport rather than every scroll frame.
+    let viewSaveTimer = null;
+    function scheduleViewSave() {
+        if (viewSaveTimer) clearTimeout(viewSaveTimer);
+        viewSaveTimer = setTimeout(saveView, 400);
+    }
+    viewport.addEventListener('scroll', scheduleViewSave, {passive: true});
+    window.addEventListener('pagehide', saveView);
 })();

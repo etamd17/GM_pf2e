@@ -17,6 +17,41 @@ DEFAULT_WIDTH = 1400
 DEFAULT_HEIGHT = 900
 DEFAULT_GRID = 70
 
+# Mirrors the clamps new_scene() applies. MAX_DIMENSION is a sanity bound, not a
+# rendering guarantee: 8000x8000 is 64 megapixels and iOS Safari blanks a canvas
+# past ~16.7 MP. The table screen is a laptop driving a TV, so that is not a
+# constraint today -- revisit if the map ever has to run on a tablet.
+MIN_WIDTH = 320
+MIN_HEIGHT = 240
+MAX_DIMENSION = 8000
+
+
+def fit_scene_dimensions(image_width, image_height):
+    """Scene dimensions for an uploaded background, preserving its aspect ratio.
+
+    The scene used to keep whatever size it was created with while the image was
+    drawn to fill it, so a 4096x2304 battlemap was squashed into 1400x900. The
+    image IS the map; the scene should take its shape.
+
+    Scales DOWN only -- a small image is not blown up, it just gets a small
+    scene, and zoom handles the rest. The minimums are applied last and are the
+    one case where aspect is not preserved: a 40x10 sliver would otherwise
+    produce a scene too thin to interact with.
+
+    Returns (width, height) as ints, or None if the size is unusable.
+    """
+    try:
+        width = float(image_width)
+        height = float(image_height)
+    except (TypeError, ValueError):
+        return None
+    if not (width > 0 and height > 0):
+        return None
+    scale = min(1.0, MAX_DIMENSION / width, MAX_DIMENSION / height)
+    width = int(round(width * scale))
+    height = int(round(height * scale))
+    return max(MIN_WIDTH, width), max(MIN_HEIGHT, height)
+
 
 def _now():
     return time.strftime('%Y-%m-%dT%H:%M:%S')
