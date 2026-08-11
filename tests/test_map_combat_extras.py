@@ -184,3 +184,22 @@ def test_the_measurement_is_a_gm_affordance():
 def test_the_duration_and_persistent_damage_controls_exist():
     for control in ('map-condition-rounds', 'map-pd-damage', 'map-pd-type', 'map-apply-pd'):
         assert f'id="{control}"' in _HTML, control
+
+
+def test_no_control_is_nested_inside_a_select():
+    """A regression guard with a real cause.
+
+    The duration and persistent-damage controls were first inserted directly
+    after the line opening <select id="map-condition">, which put them INSIDE
+    it. A browser auto-closes the select at the first non-<option> child, so the
+    condition dropdown lost its options and the new controls landed in the wrong
+    place. Jinja parsing did not care and neither did any assertion -- it took a
+    browser console warning to surface it.
+
+    Checked for every select on the page, not just that one.
+    """
+    import re
+    for match in re.finditer(r'<select\b[^>]*>(.*?)</select>', _HTML, re.S):
+        inner = match.group(1)
+        stray = [t for t in re.findall(r'<(\w+)', inner) if t.lower() != 'option']
+        assert not stray, f'non-option tags inside a <select>: {stray}'
