@@ -6,6 +6,7 @@
 .map-header-actions { display:flex; align-items:center; gap:6px; }
 .map-zoom-label { min-width:48px; text-align:center; color:var(--text-on-dark-2); font-size:11px; }
 .map-btn { display:inline-flex; align-items:center; justify-content:center; min-height:34px; padding:7px 12px; border:1px solid rgba(224,182,90,.5); border-radius:7px; background:rgba(224,182,90,.15); color:var(--gilt-100); font:700 11px/1 var(--font-ui); cursor:pointer; text-decoration:none; }
+.map-btn[hidden] { display:none; }
 .map-btn:hover { background:rgba(224,182,90,.24); border-color:rgba(224,182,90,.75); }
 .map-btn:disabled { opacity:.42; cursor:not-allowed; }
 .map-btn.is-active { background:rgba(224,182,90,.32); border-color:var(--gilt-300); color:var(--gilt-50); }
@@ -32,6 +33,15 @@
 .map-setting-pair { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
 .map-hint { margin:6px 0 0; color:var(--text-on-dark-3); font-size:10px; }
 .map-token-actions { display:grid; gap:6px; margin-top:10px; padding-top:10px; border-top:1px solid var(--border-card); }
+/* [hidden] is a UA rule (display:none) with the LOWEST possible specificity, so
+   any author `display:` above beats it and the element stays on screen even
+   though the JS set the attribute. .map-combat-actions below already carries
+   this; .map-token-actions and .map-btn did not, which is why the token
+   inspector never hid and "Open linked sheet" was permanently visible pointing
+   at /tracker. Any new author `display:` in this file needs the same pairing. */
+.map-token-actions[hidden] { display:none; }
+.map-token-empty { margin:10px 0 0; padding-top:10px; border-top:1px solid var(--border-card); color:var(--text-on-dark-2); font:400 11px/1.4 var(--font-ui); }
+.map-token-empty[hidden] { display:none; }
 .map-token-actions h3 { margin:0; color:var(--gilt-100); font:700 12px/1.2 var(--font-display); }
 .map-token-actions .map-btn--wide { margin-top:2px; }
 .map-combat-actions { display:grid; gap:6px; margin:8px 0; padding:10px; border:1px solid rgba(211,93,83,.34); border-radius:7px; background:rgba(128,38,32,.08); }

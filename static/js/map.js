@@ -164,8 +164,10 @@
         focusedTurnCombatantId = combatantId;
         viewport.scrollLeft = Math.max(0, Number(active.x) * zoom - viewport.clientWidth / 2);
         viewport.scrollTop = Math.max(0, Number(active.y) * zoom - viewport.clientHeight / 2);
-        selectedId = active.id;
-        updateSelectionPanel();
+        // Deliberately does NOT touch selectedId. Scrolling to the active turn is
+        // useful; silently repointing the inspector at a different token while
+        // the GM is editing one is not -- it moved the target out from under
+        // Save/Remove mid-edit. Follow the turn with the viewport only.
         draw();
     }
 
@@ -799,6 +801,10 @@
             toggleTarget(token);
             return;
         }
+        // Selecting a different token abandons any unsaved edit to the previous
+        // one, so its dirty marks must go too -- otherwise they would block the
+        // new token's values from ever painting into those fields.
+        if (selectedId !== (token ? token.id : null)) clearDirty(document.getElementById('map-token-actions'));
         selectedId = token ? token.id : null;
         updateSelectionPanel();
         draw();
@@ -962,14 +968,90 @@
     function fillGridControls() {
         const x = document.getElementById('map-grid-offset-x');
         const y = document.getElementById('map-grid-offset-y');
-        if (x) x.value = Math.round((Number(scene.grid.offset_x) || 0) * 100) / 100;
-        if (y) y.value = Math.round((Number(scene.grid.offset_y) || 0) * 100) / 100;
+        if (x && !isBeingEdited(x)) x.value = Math.round((Number(scene.grid.offset_x) || 0) * 100) / 100;
+        if (y && !isBeingEdited(y)) y.value = Math.round((Number(scene.grid.offset_y) || 0) * 100) / 100;
+    }
+
+    // An inbound scene_update repaints the whole sidebar. That is right for
+    // fields the GM is not touching and destructive for the one they are: type
+    // half a scene name, have any other client nudge a token, and the frame
+    // overwrites it mid-word. Two things count as "being edited" -- the field
+    // that currently has focus, and one that was typed into and left without
+    // saving (tab away to set something else, come back to a reverted value).
+    function isBeingEdited(el) {
+        if (!el) return false;
+        if (el === document.activeElement) return true;
+        return !!(el.dataset && el.dataset.mapDirty === '1');
+    }
+
+    // Mark on input, clear on a successful save. Delegated at the sidebar so it
+    // covers controls added later without needing to be re-wired.
+    function watchDirtyFields() {
+        const aside = document.querySelector('.map-sidebar') || document.querySelector('aside');
+        if (!aside) return;
+        aside.addEventListener('input', (event) => {
+            const el = event.target;
+            if (el && el.dataset) el.dataset.mapDirty = '1';
+        });
+    }
+
+    // The three sidebar pickers were rendered by Jinja at page load, so adding a
+    // combatant in the tracker or renaming a PC left them stale until a manual
+    // reload. Rebuilt from /api/scenes, which now carries token_candidates
+    // alongside the scene list, so one call refreshes all three.
+    //
+    // Each rebuild preserves the current value where it still exists: this runs
+    // on encounter_update, which fires while the GM is mid-action, and silently
+    // resetting a picker they had already set would be its own bug.
+    function refillSelect(id, options, keyOf, labelOf) {
+        const select = document.getElementById(id);
+        if (!select || isBeingEdited(select)) return;
+        const previous = select.value;
+        const keep = select.querySelector('option[value=""]');
+        select.textContent = '';
+        if (keep) select.appendChild(keep);
+        for (const item of options) {
+            const option = document.createElement('option');
+            option.value = keyOf(item);
+            option.textContent = labelOf(item);
+            select.appendChild(option);
+        }
+        if (previous && select.querySelector('option[value="' + CSS.escape(previous) + '"]')) {
+            select.value = previous;
+        }
+    }
+
+    async function refreshPickers() {
+        if (!cfg.isGm) return;
+        try {
+            const data = await request('/api/scenes');
+            const candidates = data.token_candidates || [];
+            refillSelect('map-scene-select', data.scenes || [],
+                         s => s.id, s => s.name);
+            const sceneSelect = document.getElementById('map-scene-select');
+            if (sceneSelect && !isBeingEdited(sceneSelect)) sceneSelect.value = sceneId;
+            refillSelect('map-token-source', candidates, c => c.key, c => c.label);
+            refillSelect('map-token-owner', candidates.filter(c => c.character_id),
+                         c => c.character_id, c => c.name);
+            // The owner picker belongs to the selected token, so restore its value.
+            const token = selectedToken();
+            const owner = document.getElementById('map-token-owner');
+            if (token && owner && !isBeingEdited(owner)) {
+                owner.value = token.controller_character_id || '';
+            }
+        } catch (_) { /* a stale picker is not worth a toast */ }
+    }
+
+    function clearDirty(root) {
+        const scope = root || document.querySelector('.map-sidebar') || document.querySelector('aside');
+        if (!scope) return;
+        scope.querySelectorAll('[data-map-dirty="1"]').forEach(el => { delete el.dataset.mapDirty; });
     }
 
     function fillControls() {
         const set = (id, value, prop) => {
             const el = document.getElementById(id);
-            if (el) el[prop || 'value'] = value;
+            if (el && !isBeingEdited(el)) el[prop || 'value'] = value;
         };
         set('map-scene-name', scene.name || '');
         set('map-grid-size', scene.grid.size || 70);
@@ -989,17 +1071,24 @@
     function updateSelectionPanel() {
         if (!cfg.isGm) return;
         const box = document.getElementById('map-token-actions');
+        const empty = document.getElementById('map-token-empty');
         const token = selectedToken();
         box.hidden = !token;
+        if (empty) empty.hidden = !!token;
         if (!token) return;
-        document.getElementById('map-selected-name').value = token.name || '';
-        document.getElementById('map-token-size').value = String(Number(token.size) || 1);
-        document.getElementById('map-token-vision').value = Number(token.vision_radius) || Number(scene.settings.default_vision) || 700;
-        document.getElementById('map-token-color').value = /^#[0-9a-f]{6}$/i.test(token.color || '') ? token.color : '#a84b45';
-        document.getElementById('map-token-owner').value = token.controller_character_id || '';
-        document.getElementById('map-token-nameplate').checked = token.show_nameplate !== false;
-        document.getElementById('map-token-locked').checked = !!token.locked;
-        document.getElementById('map-token-visible').checked = token.visible_to_players !== false;
+        // Same rule as fillControls: never overwrite what the GM is editing.
+        const setField = (id, value, prop) => {
+            const el = document.getElementById(id);
+            if (el && !isBeingEdited(el)) el[prop || 'value'] = value;
+        };
+        setField('map-selected-name', token.name || '');
+        setField('map-token-size', String(Number(token.size) || 1));
+        setField('map-token-vision', Number(token.vision_radius) || Number(scene.settings.default_vision) || 700);
+        setField('map-token-color', /^#[0-9a-f]{6}$/i.test(token.color || '') ? token.color : '#a84b45');
+        setField('map-token-owner', token.controller_character_id || '');
+        setField('map-token-nameplate', token.show_nameplate !== false, 'checked');
+        setField('map-token-locked', !!token.locked, 'checked');
+        setField('map-token-visible', token.visible_to_players !== false, 'checked');
         document.getElementById('map-token-visibility').textContent = token.visible_to_players === false
             ? 'Reveal to players' : 'Hide from players';
         const link = document.getElementById('map-token-sheet');
@@ -1159,6 +1248,7 @@
                         default_vision: document.getElementById('map-default-vision').value
                     }
                 });
+                clearDirty();
                 applyScene(data.scene);
                 toast('Scene settings saved.');
             } catch (error) { toast(error.message, true); }
@@ -1209,6 +1299,7 @@
                     locked: document.getElementById('map-token-locked').checked,
                     visible_to_players: document.getElementById('map-token-visible').checked
                 });
+                clearDirty();
                 applyScene(data.scene);
                 toast('Token saved.');
             } catch (error) { toast(error.message, true); }
@@ -1372,6 +1463,7 @@
     });
 
     wireGmControls();
+    watchDirtyFields();
     updateUndoButton();
     updateFollowTurnButton();
     if (window.appSSE) {
@@ -1385,7 +1477,10 @@
                     ? '/map/' + encodeURIComponent(data.scene_id) : '/player/map';
             } catch (_) {}
         });
-        window.appSSE('encounter_update', fetchScene);
+        window.appSSE('encounter_update', function () {
+            fetchScene();
+            refreshPickers();   // a combatant may have been added or renamed
+        });
         window.appSSE('pc_update', fetchScene);
         window.appSSE('connected', fetchScene);
     }
