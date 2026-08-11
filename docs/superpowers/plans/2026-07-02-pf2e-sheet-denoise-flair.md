@@ -16,7 +16,7 @@
 - No emojis anywhere.
 - Branch: `feat/pf2e-sheet-denoise-flair` (created by controller). Commit per task; NEVER push. Trailer exactly: `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`
 - `python3 tools/check_templates.py` must pass after every template edit (`python` does not exist; use `python3`).
-- Snapshot/correctness guards MUST stay green untouched: `tests/test_pc_snapshots.py`, `tests/test_pb_import_correctness.py` (this pass changes markup/CSS/JS only — never stat derivation).
+- Snapshot/correctness guards MUST stay green untouched: `tests/test_pc_snapshots.py`, `tests/test_pb_ground_truth.py` (this pass changes markup/CSS/JS only — never stat derivation).
 - Every new animation inert under `@media (prefers-reduced-motion: reduce)`; JS particle/pop spawns gated by `matchMedia('(prefers-reduced-motion: reduce)')`. New decorative elements print-suppressed per the file's existing `@media print` conventions.
 - Particles: ≤6 per burst, absolutely positioned, self-removing (animationend + timeout backstop).
 - Inline-handler escaping: any `{{ ... }}` interpolated into an onclick JS string must carry `|replace("'", "\\'")` (or avoid inline handlers).

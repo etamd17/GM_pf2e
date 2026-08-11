@@ -26,11 +26,13 @@ python tools/check_templates.py   # Jinja parse check (CI runs this) — run aft
 
 - **No emojis** in code, UI strings, comments, or commit messages unless explicitly asked.
 - **Commit/push only when the user asks.** Never commit directly on `main` — branch off it; the user decides when to merge/push. Co-author trailer on commits:
-  `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`
+  `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`
 - **Verify prod-facing fixes on Railway**, not just locally — local-green has missed prod-only failures before.
 - This is a **single-GM, in-person** tool (4 players + 1 GM). Snappiness with that table + tracker↔sheet sync is the priority.
 - **Removed, do not rebuild:** the in-app notes/Obsidian vault (the GM authors in real Obsidian;
-  the site only keeps a read-only story-thread view + a manual session recap).
+  the site only keeps a read-only story-thread view + a manual session recap). Note this is NOT the
+  same thing as the Session Operations plugin, which runs the opposite direction -- Obsidian drives
+  the site, the site never hosts notes. See the Obsidian bullet under Architecture.
 - **The tactical map is BACK IN SCOPE and SHIPPED.** This line used to say the VTT map was removed
   and must not be rebuilt. That was true until 2026-08-06 and is now badly wrong: `/map` is live,
   GM-only, at roughly 2,500 lines across `core/scenes.py`, `services/scene_sync.py`,
@@ -39,10 +41,10 @@ python tools/check_templates.py   # Jinja parse check (CI runs this) — run aft
 
 ## Architecture
 
-- **`app.py` is a ~17k-line monolith** — all Flask routes plus the `Character` (PF2e) and `Monster` classes. Live combat state is held in **process globals** (`ACTIVE_ENCOUNTER`, `ROUND_NUMBER`, `TURN_INDEX`, `PARTY_LIBRARY`, …), flushed to `server_state.json` (`_persist_encounter_state`) and re-hydrated on boot. There is **one live campaign slot** at a time; `load_campaign(cid)` rebinds the globals.
+- **`app.py` is a ~22k-line monolith** — all Flask routes plus the `Character` (PF2e) and `Monster` classes. Live combat state is held in **process globals** (`ACTIVE_ENCOUNTER`, `ROUND_NUMBER`, `TURN_INDEX`, `PARTY_LIBRARY`, …), flushed to `server_state.json` (`_persist_encounter_state`) and re-hydrated on boot. There is **one live campaign slot** at a time; `load_campaign(cid)` rebinds the globals.
 - **Server-rendered Jinja + vanilla JS.** No build step, no SPA framework.
 - **SSE** (`/api/events`): every page subscribes through the shared hub `window.appSSE(eventName, handler)` in `templates/_sse_hub.html` — **never** `new EventSource('/api/events')` directly (one socket per tab; the hub multiplexes + reconnects). Broadcast from the server with `sse_broadcast(event, data, player_filter=...)`: `data` goes to GMs, and `player_filter(copy)` returns the player-facing payload (or `None` to drop it for players entirely) — computed once and shared by all player subscribers.
-  - **`?audience=table` is NOT a server-side feature.** Its only use is client-side in `_sse_hub.html`: a passive table screen has no operator, so it self-reloads on a new deploy instead of showing the "New version" toast. There is no audience concept in `app.py` (grep: 0 hits). **A shared-table frame now EXISTS** — `/map/table` (map audit stage 6b) — but it is a view mode of `map.html`, not a generic frame, and it does not use `?audience=table`. The Campaign Hub's Stage, which was going to build a generic one, is still cancelled.
+  - **`?audience=table` is NOT a server-side feature.** Its only use is client-side in `_sse_hub.html`: a passive table screen has no operator, so it self-reloads on a new deploy instead of showing the "New version" toast. There is no audience concept in `app.py` (the one hit is a comment). **A shared-table frame now EXISTS** — `/map/table` (map audit stage 6b) — but it is a view mode of `map.html`, not a generic frame, and it does not use `?audience=table`. The Campaign Hub's Stage, which was going to build a generic one, is still cancelled.
 - **The Chronicle has TWO publishing lanes**, and they share storage with nothing.
   - **Vault lane** (original): `tools/chronicle_build.py` runs on the GM's machine, derives a spoiler-safe player vault from the Obsidian GM vault, hard-aborts on a surviving `[!danger]`/`[!secret]`/`[!gm]` marker, zips it and POSTs to `/api/chronicle/publish`. Whole-tree replace via `content/<hash>` + `current`/`previous` symlinks (`_chronicle_swap`).
   - **Doc lane** (`core/chronicle_docs.py`): the GM uploads a `.docx`/`.md`/`.txt` at `/chronicle/manage`, previews it, then toggles `published`. Stored at `chronicle/docs/` — a **sibling** of `content/`, never inside it, because `_chronicle_swap`'s prune deletes every content dir it doesn't point at. No symlinks, no rotation; the toggle *is* the rollback.
@@ -51,13 +53,47 @@ python tools/check_templates.py   # Jinja parse check (CI runs this) — run aft
   - **`.docx` is parsed with the stdlib** (`zipfile` + `ElementTree` over OOXML) — no new production dependency on a service that auto-deploys `main`. Handles headings, emphasis, lists, tables and links; Word styling with no allowlisted equivalent is dropped, which the sanitizer would do anyway.
   - **Every converted byte goes through `_chronicle_sanitize_html` at WRITE time.** `_chronicle_fragment` hands fragments straight to `|safe` with no checks, so that call is the only thing between GM-pasted markup and the table. Sanitize before writing, never on read.
 - **Multi-system**: `systems/` registry; `_active_system()` / `_active_campaign_id()` are request/session-scoped. Templates branch on `body.system-pf2e` / `body.system-cosmere`. Cosmere actors are `systems/cosmere/actor.py::CosmereActor` (reads the Foundry `cosmere-rpg` schema); Cosmere combat is flat-integer, defenses are static (phy/cog/spi), conditions are mostly advantage/disadvantage + Exhausted (a flat test penalty).
-- **GM auth**: a `check_gm_access` before_request gates path-prefixes in `GM_API_PREFIXES` (don't re-flag prefix-gated routes as unauthenticated); `@gm_required` is a separate per-route gate. `_is_gm()` is true for the site admin, the active campaign's GM, or legacy-open mode (no `GM_PASSWORD`).
+- **Obsidian Session Operations** — the GM drives the live site from a pane inside their own prep.
+  Two halves, and BOTH live in this repo now:
+  - **Server**: `services/obsidian_sync.py` (bearer-authed blueprint at
+    `/api/integrations/obsidian/v1`), `core/obsidian_sync.py` (tokens, revision ledger,
+    `events.jsonl`), `services/session_ops_rolls.py` (a small PF2e roll engine), and a ~20-callback
+    adapter at the bottom of `app.py`. The adapter is the ONLY seam: every command delegates into
+    the existing combat engine so this can never become a second rules engine.
+  - **Client**: `tools/obsidian-plugin/` — hand-authored CommonJS, **no build step**, `main.js` IS
+    the source. **It is not loaded from here.** Obsidian loads the copy at
+    `<vault>/.obsidian/plugins/session-operations-sync/`, so a change is not live until it is
+    copied across (see that directory's README). Edits made vault-side must be copied BACK or the
+    repo silently falls behind. `data.json` holds the live bearer token and must never be committed;
+    `tests/test_obsidian_plugin_contract.py` fails the build if one appears.
+  - **The client/server contract is guarded, because it has already broken once.** The plugin lived
+    only in the vault for its whole life and drifted a full contract version ahead of trunk — every
+    roll, room and reveal control answering `400 unsupported command type` — without a single test
+    going red. `tests/test_obsidian_plugin_contract.py` now checks that every `sendCommand` type has
+    a dispatch arm, that both condition vocabularies match, and that `API_PREFIX` agrees.
+    `tests/test_obsidian_plugin_behavior.py` drives the real plugin class under **node** with a
+    stubbed `obsidian` module (it skips where node is absent).
+  - **`/state` is polled at 1 Hz and must stay lean.** It rides the single gevent worker that also
+    serves every player's SSE. Statblocks come from `GET /combatant/<id>` on demand instead, cached
+    client-side against a `detail_key` hash. Feats and reactions were moved out after measuring
+    21 KB per poll for a four-PC party (72 MB per session). `strikes`, `actions`, `skills`,
+    `spell_casters` and the resistance tables are still in the snapshot; moving them needs the
+    pane's field names aligned with the website statblock shape, which exposes `attacks`.
+  - **Events are append-only and never rotate**, on the server AND mirrored into the vault, so
+    `_target_from_snapshot` records a fixed VOLATILE projection rather than the whole combatant.
+    Putting a statblock back into event context re-bloats a log that is never pruned.
+  - **Undo is an inverse, not a restore.** `undo_last` sends the opposite command back through the
+    same adapters (never a raw read-modify-write against a character file), inverts by the HP
+    actually applied rather than the amount requested, and refuses by name anything it cannot
+    honestly reverse. It does not retract consequences the engine applied itself — undoing damage
+    restores HP but not the dying condition that damage caused.
+- **GM auth**: a `check_gm_access` before_request gates path-prefixes in `GM_API_PREFIXES` (don't re-flag prefix-gated routes as unauthenticated); `@gm_required` is a separate per-route gate. `_is_gm()` is true for the site admin, the active campaign's GM, or legacy-open mode (no `GM_PASSWORD`). **The Obsidian prefix is NOT in that list** — it authenticates by bearer token on its own blueprint, which is why the pane cannot reuse GM-gated routes like `/api/combatant_stats`.
 - Atomic JSON writes via `_atomic_write_json`; a global `/api/*` JSON error handler.
 - **`DATA_DIR` fails silently, so `/health` carries evidence rather than inference.** `DATA_DIR = os.environ.get('DATA_DIR', BASE_DIR)` defaults to the checkout with no warning, and the worse case is quieter still: `DATA_DIR=/data` set correctly but the volume never mounted, so writes go to the container's own `/data`. `configured` / `separate_from_repo` / `writable` all read true there — nothing observable inside one process tells it apart from a healthy mount. So `_probe_storage` keeps a boot counter (`.storage_marker.json`, gitignored) in `DATA_DIR`: `boots_observed` > 1 is the only field that proves the directory survived a restart. **Diagnostic value: "players lost their sheets on deploy" now has three distinguishable causes** — the persistence thread not running, the save/reload race, and an unmounted volume — and `/health` separates the third from the other two. The probe runs once at import (`_autostart_storage_probe`, same pytest + reloader-parent exemptions as `_autostart_persistence`); `/health` itself does no disk I/O because Railway polls it. `/health` is public, so absolute paths are GM-only.
 
 ## High-risk areas — be careful
 
-- **PB import + level-up correctness** is the highest-risk surface. `Character.__init__` parses Pathbuilder exports; `class_matrix.py` drives per-level proficiency timing. Guarded by ground-truth-vs-Pathbuilder + full-sheet snapshot tests (`tests/test_pc_snapshots.py`, `tests/snapshots/`, `tests/test_pb_import_correctness.py`). If you touch stat derivation, run these; regenerate snapshots by deleting `tests/snapshots/<dir>/` and running pytest twice.
+- **PB import + level-up correctness** is the highest-risk surface. `Character.__init__` parses Pathbuilder exports; `class_matrix.py` drives per-level proficiency timing. Guarded by ground-truth-vs-Pathbuilder + full-sheet snapshot tests (`tests/test_pc_snapshots.py`, `tests/snapshots/`, `tests/test_pb_ground_truth.py`). If you touch stat derivation, run these; regenerate snapshots by deleting `tests/snapshots/<dir>/` and running pytest twice.
 - **Inline event-handler escaping (recurring bug class).** A user-controlled string (PC/spell/feat/item/combatant/compendium name) interpolated into an `onclick="..."` JS string **must** be JS-escaped: `.replace(/'/g, "\\'")` (or `.replace(/\\/g,'\\\\').replace(/'/g,"\\'")`). An apostrophe ("Go'el", "Thieves' Tools") otherwise closes the string → `SyntaxError` → dead button. **HTML escaping (`esc()`, `&#39;`) does NOT help** — the browser decodes the entity back to `'` before JS runs. Guarded by `tests/test_inline_handler_escaping.py`.
 - The PC sheet repaints in place from the `pc_update` SSE `derived` block (saves/skills/strikes/conditions) — if you add a stat the sheet paints, make sure `_pc_state_payload` ships it, or the UI goes stale.
 - **PC state persistence: anything that must survive a restart has to be started at IMPORT time.** Production is `gunicorn app:app` (`Procfile`), which **imports** this module — `__name__` is `'app'`, so `if __name__ == '__main__':` never runs. `_start_persistence_thread()` used to be called only from there, and because both the 2-second flush loop *and* `atexit.register(_flush_pending_persistence)` live inside it, production had **neither**. Nothing drained `_PC_PERSIST_DIRTY` / `_PERSIST_DIRTY`, so HP, conditions, focus, hero points, temp HP, shield, reaction, persistent damage and active effects were marked dirty and dropped on every deploy. `_autostart_persistence()` now runs at module scope; `tests/test_pc_state_persistence.py` guards it by importing the module in a **subprocess** (an in-process assertion cannot catch this — the module is already imported, and the suite takes a deliberate pytest exemption).
@@ -72,6 +108,16 @@ Engine fidelity is audited and documented — check these before claiming a rule
 `FOUNDRY_INTEROP.md`. The fullest Cosmere rules text is at `~/Downloads/Stormlight_Rules.txt`.
 
 ## Current work
+
+**Obsidian Session Operations is LIVE and actively worked on** (PRs #110, #125, #126, #128, #131).
+Both halves are in this repo — see the Obsidian bullet under Architecture for the architecture and
+the two rules that matter (keep `/state` lean; the vault copy is what Obsidian actually loads).
+Shipped: the v2 command set (rolls, rooms, reveals, player requests), dense party rows surfacing
+hero points / focus / persistent damage, condition durations, dying prominence, undo, multi-target
+damage, an on-demand statblock endpoint, leaving a live room, and adding creatures to initiative by
+name from the open note. Not yet done: **the plugin has never run a real session** — `_Session Data/`
+holds only `_Unassigned/`, so the session digest and `audio_sources` frontmatter are tested but have
+never executed against live play.
 
 **IN FLIGHT: the tactical-map feature audit. Start at `docs/map/AUDIT.md`.** The map is now on
 trunk, GM-only (PR #111, `d139688f`), and the next step is a paused, question-driven audit of the

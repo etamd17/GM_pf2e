@@ -19,7 +19,7 @@ enforced, GM toggle on the campaign manage page.
   payload, builder, validator, rail counts). No per-surface slot math.
 - High-risk surfaces: this arc TOUCHES the level-up flow — run the full
   PB-import/snapshot guard suites (tests/test_pc_snapshots.py,
-  tests/test_pb_import_correctness.py, tests/test_levelup*.py) after every
+  tests/test_pb_ground_truth.py, tests/test_levelup*.py) after every
   app.py/class_matrix change; FA off must be byte-identical behavior.
 - If the compiled DB lacks feat traits, extend the PR #89 pack join by
   `_id` (never name-fallback for flags; remember the ambiguous-name
