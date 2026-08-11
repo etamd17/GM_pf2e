@@ -560,6 +560,12 @@
         const live = token.live || {};
         const portrait = getTokenImage(token);
         ctx.save();
+        // A token hidden from players is ghosted rather than drawn normally, so
+        // the GM can stage an ambush and still see at a glance which creatures
+        // the table cannot. Without this the flag is invisible on the only
+        // screen that renders it, and it is easy to narrate a monster the party
+        // has not been shown.
+        if (token.visible_to_players === false) ctx.globalAlpha = 0.45;
         if (live.is_active) {
             ctx.beginPath();
             ctx.arc(x, y, radius + 8, 0, Math.PI * 2);
@@ -684,14 +690,29 @@
         return ((value % size) + size) % size;
     }
 
-    function snapPoint(point) {
+    // How many cells across a creature occupies. PF2e: Medium and smaller take
+    // one square, Large two, Huge three, Gargantuan four.
+    function tokenFootprint(token) {
+        return Math.max(1, Math.round(Number(token && token.size) || 1));
+    }
+
+    // Snap a token's CENTRE so its footprint lands on cells.
+    //
+    // Snapping used to round the centre to the nearest gridline intersection,
+    // which put every Medium token on a corner straddling four squares -- the
+    // one thing snapping exists to prevent. Where the centre belongs depends on
+    // the footprint: an odd number of cells centres in the middle of a cell, an
+    // even number centres ON a line, because a 2x2 creature genuinely straddles
+    // it. The half-cell shift below is the whole difference.
+    function snapPoint(point, token) {
         const grid = scene.grid || {};
         const size = Number(grid.size) || 70;
         const ox = Number(grid.offset_x) || 0;
         const oy = Number(grid.offset_y) || 0;
+        const half = (tokenFootprint(token) % 2 === 1) ? size / 2 : 0;
         return {
-            x: Math.round((point.x - ox) / size) * size + ox,
-            y: Math.round((point.y - oy) / size) * size + oy
+            x: Math.round((point.x - ox - half) / size) * size + ox + half,
+            y: Math.round((point.y - oy - half) / size) * size + oy + half
         };
     }
 
@@ -980,7 +1001,7 @@
         }
         const token = finished.token;
         if ((scene.settings || {}).snap_to_grid) {
-            const snapped = snapPoint(token);
+            const snapped = snapPoint(token, token);   // its own size decides where it lands
             token.x = Math.max(0, Math.min(scene.width, snapped.x));
             token.y = Math.max(0, Math.min(scene.height, snapped.y));
         }
@@ -1390,14 +1411,24 @@
                 toast('Map image uploaded.');
             } catch (error) { toast(error.message, true); }
         });
-        document.getElementById('map-add-token').addEventListener('click', async function () {
+        // Where a new token goes.
+        //
+        // Every token used to land on one hardcoded square -- grid*2 from the
+        // origin -- so adding four of anything produced a stack you then had to
+        // drag apart one by one. Now you drag it to the square you want.
+        function newTokenBody() {
             const key = document.getElementById('map-token-source').value;
             const candidate = candidates.find(item => item.key === key);
-            const body = candidate
+            return candidate
                 ? {source_kind: candidate.source_kind, source_id: candidate.source_id}
                 : {name: document.getElementById('map-token-name').value || 'Token'};
-            body.x = (Number(scene.grid.size) || 70) * 2 + (Number(scene.grid.offset_x) || 0);
-            body.y = (Number(scene.grid.size) || 70) * 2 + (Number(scene.grid.offset_y) || 0);
+        }
+
+        async function placeToken(at) {
+            const body = newTokenBody();
+            const spot = (scene.settings || {}).snap_to_grid ? snapPoint(at, null) : at;
+            body.x = Math.max(0, Math.min(scene.width, spot.x));
+            body.y = Math.max(0, Math.min(scene.height, spot.y));
             try {
                 const data = await request('/api/scenes/' + encodeURIComponent(sceneId) + '/tokens', {
                     method: 'POST', headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'}, body: JSON.stringify(body)
@@ -1405,6 +1436,37 @@
                 selectedId = data.token.id;
                 applyScene(data.scene);
             } catch (error) { toast(error.message, true); }
+        }
+
+        const addButton = document.getElementById('map-add-token');
+        addButton.addEventListener('dragstart', function (event) {
+            // Firefox refuses to start a drag without payload, and the payload
+            // itself is irrelevant -- the drop handler reads the live sidebar.
+            if (event.dataTransfer) {
+                event.dataTransfer.setData('text/plain', 'map-token');
+                event.dataTransfer.effectAllowed = 'copy';
+            }
+            addButton.classList.add('is-dragging');
+        });
+        addButton.addEventListener('dragend', function () { addButton.classList.remove('is-dragging'); });
+        canvas.addEventListener('dragover', function (event) {
+            event.preventDefault();
+            if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+        });
+        canvas.addEventListener('drop', function (event) {
+            event.preventDefault();
+            addButton.classList.remove('is-dragging');
+            placeToken(pointFromEvent(event));
+        });
+        // Clicking still works, and still beats the old behaviour: it drops the
+        // token in the middle of what you are looking at rather than in a corner
+        // you may have scrolled far away from.
+        addButton.addEventListener('click', function () {
+            const centre = viewportCenter();
+            placeToken({
+                x: (viewport.scrollLeft + centre.x) / zoom,
+                y: (viewport.scrollTop + centre.y) / zoom
+            });
         });
         document.getElementById('map-save-token').addEventListener('click', async function () {
             const token = selectedToken();
