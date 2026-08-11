@@ -1058,6 +1058,8 @@
         if (!cfg.isGm) return;
         try {
             const data = await request('/api/scenes');
+            tableSceneId = data.active_scene_id || null;
+            paintTableState();
             const candidates = data.token_candidates || [];
             refillSelect('map-scene-select', data.scenes || [],
                          s => s.id, s => s.name);
@@ -1210,6 +1212,42 @@
         };
     }
 
+    // Which scene the TABLE is showing -- not necessarily this one. Kept here
+    // so the sidebar can say so plainly; the GM otherwise has no way to tell
+    // whether what they are editing is currently in front of the players.
+    let tableSceneId = null;
+
+    function paintTableState() {
+        const label = document.getElementById('map-table-state');
+        const button = document.getElementById('map-show-on-table');
+        if (!label) return;
+        const live = tableSceneId && tableSceneId === sceneId;
+        label.textContent = live
+            ? 'On the table now'
+            : (tableSceneId ? 'Another scene is on the table' : 'Not on the table');
+        label.classList.toggle('is-live', !!live);
+        if (button) {
+            button.disabled = !!live;
+            button.textContent = live ? 'Already on the table' : 'Show on table';
+        }
+        // Deleting what the players are looking at is refused server-side; say
+        // so here rather than letting the GM find out from an error toast.
+        const del = document.getElementById('map-delete-scene');
+        if (del) {
+            del.disabled = !!live;
+            del.title = live ? 'Take this scene off the table before deleting it.' : '';
+        }
+    }
+
+    async function refreshTableState() {
+        if (!cfg.isGm) return;
+        try {
+            const data = await request('/api/scenes');
+            tableSceneId = data.active_scene_id || null;
+        } catch (_) { /* leave it unknown rather than lying about it */ }
+        paintTableState();
+    }
+
     function setCalibrationMode(enabled) {
         calibrationMode = !!enabled;
         canvas.classList.toggle('is-calibrating', calibrationMode);
@@ -1253,10 +1291,28 @@
         if (!cfg.isGm) return;
         wireCreateForm();
         const sceneSelect = document.getElementById('map-scene-select');
-        sceneSelect.addEventListener('change', async function () {
+        // Opening a scene is not the same as showing it to the players. This
+        // used to activate first, which meant every scene you glanced at was
+        // pushed to the table mid-session.
+        sceneSelect.addEventListener('change', function () {
+            if (sceneSelect.value) location.href = '/map/' + encodeURIComponent(sceneSelect.value);
+        });
+        document.getElementById('map-show-on-table').addEventListener('click', async function () {
             try {
-                await request('/api/scenes/' + encodeURIComponent(sceneSelect.value) + '/activate', {method: 'POST'});
-                location.href = '/map/' + encodeURIComponent(sceneSelect.value);
+                await request('/api/scenes/' + encodeURIComponent(sceneId) + '/activate', {method: 'POST'});
+                tableSceneId = sceneId;
+                paintTableState();
+                toast('This scene is now on the table.');
+            } catch (error) { toast(error.message, true); }
+        });
+        document.getElementById('map-delete-scene').addEventListener('click', async function () {
+            const name = (scene && scene.name) || 'this scene';
+            if (!window.confirm('Delete "' + name + '" and its background image? This cannot be undone.')) return;
+            try {
+                const data = await request('/api/scenes/' + encodeURIComponent(sceneId) + '/delete', {method: 'POST'});
+                // The scene we were looking at is gone, so there is nowhere to
+                // stay -- go wherever the server says is sensible now.
+                location.href = data.default_scene_id ? '/map/' + encodeURIComponent(data.default_scene_id) : '/map';
             } catch (error) { toast(error.message, true); }
         });
         document.getElementById('map-calibrate-grid').addEventListener('click', function () {
@@ -1529,6 +1585,7 @@
 
     wireGmControls();
     watchDirtyFields();
+    refreshTableState();
     updateUndoButton();
     updateFollowTurnButton();
     if (window.appSSE) {
@@ -1538,8 +1595,11 @@
         window.appSSE('scene_activated', function (event) {
             try {
                 const data = JSON.parse(event.data);
-                if (data.scene_id && data.scene_id !== sceneId) location.href = cfg.isGm
-                    ? '/map/' + encodeURIComponent(data.scene_id) : '/player/map';
+                tableSceneId = data.scene_id || null;
+                // The GM's view deliberately does NOT follow. Only the table
+                // screen should jump when a scene is pushed; yanking the GM's
+                // window mid-prep is the behaviour this stage removes.
+                paintTableState();
             } catch (_) {}
         });
         window.appSSE('encounter_update', function () {

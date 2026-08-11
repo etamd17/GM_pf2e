@@ -7048,7 +7048,7 @@ def scene_map_home():
     cid = _active_campaign_id()
     if not cid and _account_mode():
         return redirect('/me')
-    sid = _scenes.active_scene_id(cid)
+    sid = _scenes.default_open_scene_id(cid)
     if sid:
         return redirect('/map/' + sid)
     return render_template('map.html', scene_id=None, map_gm=True,
@@ -7083,7 +7083,11 @@ def api_scenes():
         # adding a combatant in the tracker left the map's list stale until a
         # manual reload -- mid-fight, exactly when you cannot afford one.
         return jsonify({'scenes': _scenes.scene_summaries(cid),
-                        'active_scene_id': _scenes.active_scene_id(cid),
+                        # Wire name kept for compatibility; it now means
+                        # strictly "the scene the table is showing", and is null
+                        # when the table is showing nothing.
+                        'active_scene_id': _scenes.table_scene_id(cid),
+                        'default_scene_id': _scenes.default_open_scene_id(cid),
                         'token_candidates': _scene_token_candidates(cid)})
     if not _is_gm():
         return jsonify({'error': 'GM access required'}), 403
@@ -7095,9 +7099,9 @@ def api_scenes():
         height=data.get('height', _scenes.DEFAULT_HEIGHT),
         grid_size=data.get('grid_size', _scenes.DEFAULT_GRID),
     )
+    # Deliberately NOT pushed to the table. A new scene is prep until the GM
+    # says otherwise, which is the whole point of separating the two.
     _broadcast_scene(scene)
-    if _scenes.active_scene_id(cid) == scene['id']:
-        sse_broadcast('scene_activated', {'scene_id': scene['id']}, campaign_id=cid)
     return jsonify({'scene': _scene_payload(scene), 'success': True}), 201
 
 
@@ -7157,13 +7161,41 @@ def api_scene(scene_id):
 def api_scene_activate(scene_id):
     cid = _active_campaign_id()
     try:
-        _scenes.set_active_scene(cid, scene_id)
+        _scenes.set_table_scene(cid, scene_id)
         scene = _scenes.load_scene(cid, scene_id)
     except ValueError:
         return jsonify({'error': 'scene not found'}), 404
     _broadcast_scene(scene)
     sse_broadcast('scene_activated', {'scene_id': scene_id}, campaign_id=cid)
     return jsonify({'success': True, 'active_scene_id': scene_id})
+
+
+@app.route('/api/scenes/<scene_id>/delete', methods=['POST'])
+@gm_required
+def api_scene_delete(scene_id):
+    """Remove a scene and its uploaded background.
+
+    POST rather than DELETE on /api/scenes/<id>: that path already serves GET
+    (read) and PATCH (edit), and its GET is reachable by anything that gets past
+    the prefix gate. Keeping destruction on its own verb+path means a future
+    change to that route cannot widen into deletion by accident.
+
+    Refused while the scene is on the table -- deleting what the players are
+    looking at should not be a misclick.
+    """
+    cid = _active_campaign_id()
+    try:
+        removed = _scenes.delete_scene(cid, scene_id)
+    except ValueError as exc:
+        if 'on the table' in str(exc):
+            return jsonify({'error': 'take this scene off the table before deleting it'}), 409
+        return jsonify({'error': 'scene not found'}), 404
+    if not removed:
+        return jsonify({'error': 'scene not found'}), 404
+    return jsonify({'success': True,
+                    'scenes': _scenes.scene_summaries(cid),
+                    'active_scene_id': _scenes.table_scene_id(cid),
+                    'default_scene_id': _scenes.default_open_scene_id(cid)})
 
 
 @app.route('/api/scenes/<scene_id>/tokens', methods=['POST'])

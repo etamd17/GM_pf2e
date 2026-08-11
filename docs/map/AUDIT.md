@@ -1,7 +1,15 @@
 # Tactical map — feature audit
 
-**Status: COMPLETE. All seven rounds answered 2026-08-11.** No map code has been changed
-yet beyond the port itself — **[The plan](#the-plan) is the output; start there.**
+**Status: audit COMPLETE (all seven rounds answered 2026-08-11). Build in progress.**
+**[The plan](#the-plan) is the running order; tick items off there.**
+
+| Stage | State |
+|---|---|
+| 1 — cheap correctness | **shipped** (`316ed367`) |
+| 2a — the image is the map | **shipped** (`a438cf2d`) |
+| 2b — scene lifecycle | in review |
+| 3–6 | not started |
+| 7 — UI audit | after the build |
 
 This doc exists so the audit could survive moving between machines. Claude's per-project
 memory lives under `~/.claude/projects/<path>/memory/` and does **not** travel, so
