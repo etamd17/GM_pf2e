@@ -138,6 +138,14 @@ class FakeAdapter:
                 {"name": "Hero", "level": 1, "is_pc": True, "ac": 18, "attacks": [], "skills": []}
                 if instance_id == "hero-1" else None
             ),
+            "add_creatures": lambda payload: (
+                {"added": [str(c.get("name")) for c in payload.get("creatures", [])
+                           if str(c.get("name", "")).lower() == "desmohund"],
+                 "unresolved": [{"name": c.get("name"), "candidates": []}
+                                for c in payload.get("creatures", [])
+                                if str(c.get("name", "")).lower() != "desmohund"],
+                 "combatant_count": 2}
+            ),
             "gm_required": lambda fn: fn,
         }
 
@@ -424,3 +432,54 @@ def test_combatant_detail_404s_for_an_unknown_combatant(sync_client):
     r = client.get("/api/integrations/obsidian/v1/combatant/ghost-9", headers=headers(raw_token))
     assert r.status_code == 404
     assert r.get_json()["ok"] is False
+
+
+def test_a_live_room_can_be_left(sync_client):
+    """Entering is one tap from any note with an area_id, so mis-taps happen.
+    Before this there was no way back to 'nowhere in particular'."""
+    client, fake, raw_token = sync_client
+    client.get("/api/integrations/obsidian/v1/state", headers=headers(raw_token))
+    entered = _command(client, raw_token, "room-enter-0001", "set_active_room",
+                       {"area_id": "sob-c11", "title": "C11 Hound Pens"}, 0)
+    assert entered.status_code == 200, entered.get_json()
+    state = client.get("/api/integrations/obsidian/v1/state", headers=headers(raw_token)).get_json()
+    assert state["state"]["operations"]["active_room"]["area_id"] == "sob-c11"
+
+    left = _command(client, raw_token, "room-leave-0001", "clear_active_room", {},
+                    entered.get_json()["revision"])
+    assert left.status_code == 200, left.get_json()
+    assert left.get_json()["result"]["cleared"]["area_id"] == "sob-c11"
+    after = client.get("/api/integrations/obsidian/v1/state", headers=headers(raw_token)).get_json()
+    assert after["state"]["operations"]["active_room"] is None
+
+
+def test_leaving_when_no_room_is_live_is_refused(sync_client):
+    client, fake, raw_token = sync_client
+    client.get("/api/integrations/obsidian/v1/state", headers=headers(raw_token))
+    r = _command(client, raw_token, "room-leave-0002", "clear_active_room", {}, 0)
+    assert r.status_code == 400
+    assert "no room is currently live" in r.get_json()["error"]
+
+
+def test_creatures_named_in_a_note_can_be_added_to_the_encounter(sync_client):
+    """The room note names creatures the way the GM writes them. Requiring a
+    hand-authored manifest of library paths was prep-time work for a play-time
+    problem."""
+    client, fake, raw_token = sync_client
+    client.get("/api/integrations/obsidian/v1/state", headers=headers(raw_token))
+    r = _command(client, raw_token, "add-creature-0001", "add_creatures",
+                 {"creatures": [{"name": "Desmohund", "count": 2}]}, 0)
+    assert r.status_code == 200, r.get_json()
+    assert r.get_json()["result"]["added"] == ["Desmohund"]
+
+
+def test_an_unresolvable_creature_is_reported_not_guessed(sync_client):
+    """Adding the wrong monster mid-round is worse than being asked which one."""
+    client, fake, raw_token = sync_client
+    client.get("/api/integrations/obsidian/v1/state", headers=headers(raw_token))
+    r = _command(client, raw_token, "add-creature-0002", "add_creatures",
+                 {"creatures": [{"name": "Hound"}]}, 0)
+    assert r.status_code == 200, r.get_json()
+    body = r.get_json()["result"]
+    assert body["added"] == []
+    assert body["unresolved"][0]["name"] == "Hound"

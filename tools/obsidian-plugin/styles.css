@@ -587,3 +587,17 @@
   background: var(--background-modifier-hover);
 }
 .so-condition-expiry { font-size: var(--font-ui-smaller); color: var(--text-faint); }
+
+/* Creature chips on the room card: the note's roster, one tap into initiative. */
+.so-creature-row { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 8px; }
+.so-creature-chip {
+  font-size: var(--font-ui-smaller);
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--background-modifier-border);
+  color: var(--text-normal);
+  background: var(--background-secondary);
+  cursor: pointer;
+}
+.so-creature-chip:hover { border-color: var(--interactive-accent); }
+.so-creature-chip.is-all { color: var(--text-accent); font-weight: 600; }

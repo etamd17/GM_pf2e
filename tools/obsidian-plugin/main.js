@@ -329,6 +329,11 @@ class SessionOperationsView extends ItemView {
     const controls = card.createDiv({ cls: 'so-inline-controls' });
     if (active?.area_id !== room.areaId) {
       this.button(controls, 'Enter room', () => this.plugin.enterCurrentRoom(), 'mod-cta');
+    } else {
+      // Entering is one tap from any note carrying an area_id, so mis-taps are
+      // routine. Without a way out the pane insisted a room was live until
+      // another was entered.
+      this.button(controls, 'Leave room', () => this.plugin.clearActiveRoom());
     }
     const manifest = room.sessionOps || {};
     const encounter = manifest.encounter || {};
@@ -339,8 +344,29 @@ class SessionOperationsView extends ItemView {
     if (encounter.template || roster.length) {
       card.createDiv({ cls: 'so-room-summary', text: `Encounter: ${encounter.template || previewNames.join(', ')}` });
       this.button(controls, 'Launch encounter', () => this.plugin.launchCurrentRoomEncounter());
-    } else if (previewNames.length) {
-      card.createDiv({ cls: 'so-room-warning', text: `Reference creatures: ${previewNames.join(', ')}. Add an explicit session_ops encounter manifest before launching.` });
+    }
+    // Every creature the note mentions, tappable. Previously this was a warning
+    // telling the GM to go and hand-author a manifest of library paths before
+    // anything could be launched -- which is work done at prep time to solve a
+    // problem that occurs at play time. Names resolve against the bestiary
+    // server-side, so the note can just say "Desmohund".
+    const addable = roster.length
+      ? roster.map((row) => ({ name: row.name || row.path || '', path: row.path || '', count: row.count || 1 }))
+      : (room.creatures || []).map((name) => ({ name: String(name), path: '', count: 1 }));
+    if (addable.length) {
+      const addRow = card.createDiv({ cls: 'so-creature-row' });
+      addRow.createDiv({ cls: 'so-duration-label', text: 'Add to initiative' });
+      addable.forEach((creature) => {
+        const chip = addRow.createDiv({
+          cls: 'so-creature-chip',
+          text: creature.count > 1 ? `${creature.name} x${creature.count}` : creature.name,
+        });
+        chip.addEventListener('click', () => this.plugin.addCreaturesToEncounter([creature]));
+      });
+      if (addable.length > 1) {
+        const all = addRow.createDiv({ cls: 'so-creature-chip is-all', text: 'add all' });
+        all.addEventListener('click', () => this.plugin.addCreaturesToEncounter(addable));
+      }
     }
     const reminders = Array.isArray(manifest.round_reminders) ? manifest.round_reminders : [];
     if (reminders.length) {
@@ -526,7 +552,21 @@ class SessionOperationsView extends ItemView {
     // Snapshot values win for anything volatile (HP, conditions) because those
     // are a second old at most, while the cached statblock may be much older.
     const cached = this.plugin.detailFor(target.target_id || target.instance_id || target.name);
-    if (cached) target = Object.assign({}, cached, target);
+    if (cached) {
+      // Fill gaps only. A plain Object.assign({}, cached, target) would let an
+      // EXPLICITLY undefined key on target clobber a good cached value --
+      // Object.assign copies undefined -- and the merge above sets exactly such
+      // keys (strikes, feats, reactions...) whenever the snapshot no longer
+      // carries them. Volatile values on target still win, because they are a
+      // second old at most while a cached statblock may be much older.
+      target = Object.assign({}, target);
+      Object.keys(cached).forEach((key) => {
+        const value = target[key];
+        const empty = value === undefined || value === null
+          || (Array.isArray(value) && value.length === 0);
+        if (empty) target[key] = cached[key];
+      });
+    }
     this.plugin.ensureDetail(target);
 
     const section = root.createDiv({ cls: 'so-section' });
@@ -1369,6 +1409,36 @@ module.exports = class SessionOperationsSyncPlugin extends Plugin {
       if (!formula) return;
     }
     await this.roll(Object.assign({}, payload, { formula }));
+  }
+
+  async clearActiveRoom() {
+    const response = await this.sendCommand('clear_active_room', {}, { queueOnOffline: false });
+    if (response) new Notice('Left the room. Nothing is live.');
+  }
+
+  /**
+   * Drop creatures named in the open note into the encounter already running.
+   *
+   * Additive: it never clears the board or re-adds the party, because the case
+   * this exists for is reinforcements arriving mid-fight. Ambiguous names come
+   * back with candidates rather than a guess -- adding the wrong monster in the
+   * middle of a round is worse than being asked which one.
+   */
+  async addCreaturesToEncounter(creatures) {
+    if (!creatures?.length) return;
+    const response = await this.sendCommand('add_creatures', { creatures }, { queueOnOffline: false });
+    if (!response) return;
+    const { added = [], unresolved = [] } = response.result || {};
+    if (added.length) new Notice(`Added ${added.join(', ')}`);
+    unresolved.forEach((miss) => {
+      const options = (miss.candidates || []).map((c) => c.name).slice(0, 4);
+      new Notice(
+        options.length
+          ? `"${miss.name}" matched several: ${options.join(', ')}. Name it exactly in the note.`
+          : `"${miss.name}" is not in the bestiary.`,
+        8000,
+      );
+    });
   }
 
   async enterCurrentRoom() {

@@ -16340,6 +16340,23 @@ def _combatant_detail_payload(c, *, is_pc=None):
         data['attacks'] = [{'name': a['name'], 'strikes': a.get('strikes', []), 'damage': a['damage']} for a in c.attacks]
         data['skills'] = c.skills
         data['spell_casters'] = c.spell_casters
+        # Feats and derived reactions used to ride the 1 Hz snapshot: 20 feats
+        # at 600 characters plus 12 reactions at 600, per PC, re-sent every
+        # second for data that cannot change mid-fight. They live here now,
+        # fetched once when a card is opened.
+        _feats = getattr(c, 'feats', []) or []
+        _plain = lambda f: re.sub(r'<[^>]*>', '', f.get('desc') or '')
+        data['feats'] = [
+            {'name': f.get('name', ''), 'description': _plain(f)[:600],
+             'level': f.get('level'), 'type': f.get('type', '')}
+            for f in _feats[:20]
+        ]
+        data['reactions'] = [
+            {'name': f.get('name', ''), 'description': _plain(f)[:600]}
+            for f in _feats
+            if str(f.get('type') or '').lower() == 'reaction'
+            or re.search(r'\btrigger\b', _plain(f), re.IGNORECASE)
+        ][:12]
     else:
         data['attacks'] = [{'name': s.get('name', ''), 'hit': (lambda b: f"+{b}" if b >= 0 else str(b))(s.get('bonus', s.get('mod', 0))), 'damage': s.get('damage', '')} for s in c.strikes]
         data['actions'] = [{'name': a['name'], 'description': a.get('description', ''), 'actions': a.get('actions', '')} for a in c.actions]
@@ -21523,17 +21540,6 @@ def _obsidian_sync_snapshot():
                 'expended_slots': copy.deepcopy(raw.get('expended_slots', {})),
                 'spell_attack': int(getattr(pc, 'spell_attack', 0) or 0),
                 'spell_dc': int(getattr(pc, 'spell_dc', 0) or 0),
-                'feats': [
-                    {'name': f.get('name', ''), 'description': re.sub(r'<[^>]*>', '', f.get('desc') or '')[:600],
-                     'level': f.get('level'), 'type': f.get('type', '')}
-                    for f in getattr(pc, 'feats', [])[:20]
-                ],
-                'reactions': [
-                    {'name': f.get('name', ''), 'description': re.sub(r'<[^>]*>', '', f.get('desc') or '')[:600]}
-                    for f in getattr(pc, 'feats', [])
-                    if str(f.get('type') or '').lower() == 'reaction'
-                    or re.search(r'\btrigger\b', re.sub(r'<[^>]*>', '', f.get('desc') or ''), re.IGNORECASE)
-                ][:12],
                 'portrait_url': f"/portraits/{getattr(pc, 'portrait', '')}" if getattr(pc, 'portrait', '') else '',
                 'portrait_focus': {
                     'x': getattr(pc, 'portrait_focus_x', 50.0),
@@ -21921,6 +21927,113 @@ def _obsidian_launch_room_encounter(payload):
     }
 
 
+def _obsidian_resolve_creature(name):
+    """Find a bestiary entry by display name, case-insensitively.
+
+    The room notes name creatures the way the GM writes them ("Desmohund"), not
+    by library path, so requiring a hand-authored manifest of paths was the
+    friction that kept the room card from being useful. Returns
+    (path, monster, candidates): an exact match wins outright; otherwise
+    candidates carries near-misses so the pane can say what it meant rather than
+    guessing.
+    """
+    wanted = str(name or '').strip().lower()
+    if not wanted:
+        return None, None, []
+    exact = []
+    partial = []
+    for path, monster in MONSTER_LIBRARY.items():
+        monster_name = str(getattr(monster, 'name', '') or '').lower()
+        if monster_name == wanted:
+            exact.append((path, monster))
+        elif wanted and wanted in monster_name:
+            partial.append((path, monster))
+    if len(exact) == 1:
+        return exact[0][0], exact[0][1], []
+    if exact:
+        # The bestiary loads from two directories, so the same creature is often
+        # present twice under one name. Identical duplicates are not ambiguity --
+        # refusing "Ankhrav" because it matched Ankhrav and Ankhrav helps nobody.
+        # Genuinely different creatures sharing a name (a rebuilt version at
+        # another level) still get asked about.
+        levels = {getattr(m, 'level', None) for _p, m in exact}
+        if len(levels) == 1:
+            return exact[0][0], exact[0][1], []
+    pool = exact or partial
+    if len(pool) == 1:
+        return pool[0][0], pool[0][1], []
+    return None, None, [
+        {'name': getattr(m, 'name', ''), 'path': p, 'level': getattr(m, 'level', None)}
+        for p, m in pool[:12]
+    ]
+
+
+def _obsidian_add_creatures(payload):
+    """Append creatures to the CURRENT encounter without disturbing it.
+
+    Distinct from launch_room_encounter, which clears the board and re-adds the
+    party: this is the "three more hounds come through the door" case, and the
+    round, turn order and everything already on the tracker must survive it.
+
+    Entries may name a creature or give a library path. Names are resolved here
+    rather than in the pane so the bestiary stays the single source of truth,
+    and an ambiguous name is reported with candidates instead of resolved by
+    guessing -- picking the wrong monster mid-fight is worse than asking.
+    """
+    global TURN_INDEX
+    rows = payload.get('creatures') or []
+    if not isinstance(rows, list) or not rows:
+        raise ValueError('no creatures were given')
+    if len(rows) > 24:
+        raise ValueError('too many creature entries in one request')
+
+    prepared = []
+    unresolved = []
+    for row in rows:
+        if not isinstance(row, dict):
+            raise ValueError('each creature entry must be an object')
+        count = max(1, min(20, int(row.get('count', 1) or 1)))
+        path = str(row.get('path') or '')
+        if path:
+            source = MONSTER_LIBRARY.get(path)
+            if source is None:
+                unresolved.append({'name': row.get('name') or path, 'candidates': []})
+                continue
+        else:
+            path, source, candidates = _obsidian_resolve_creature(row.get('name'))
+            if source is None:
+                unresolved.append({'name': row.get('name') or '', 'candidates': candidates})
+                continue
+        prepared.append((row, source, count))
+
+    if not prepared:
+        raise LookupError('none of those creatures are in the bestiary')
+
+    added = []
+    with ENCOUNTER_LOCK:
+        existing = len(ACTIVE_ENCOUNTER)
+        for row, source, count in prepared:
+            for index in range(count):
+                combatant = copy.deepcopy(source)
+                combatant.instance_id = str(uuid.uuid4())
+                adjustment = int(row.get('elite_weak', 0) or 0)
+                if adjustment and hasattr(combatant, 'apply_elite_weak'):
+                    combatant.apply_elite_weak(adjustment)
+                if count > 1:
+                    combatant.name = f'{combatant.name} {index + 1}'
+                ACTIVE_ENCOUNTER.append(combatant)
+                added.append(combatant.name)
+        # Reinforcements arriving must not steal the current turn: TURN_INDEX is
+        # a position in the list, and appending past it leaves it pointing at
+        # the same combatant.
+        if existing and TURN_INDEX >= existing:
+            TURN_INDEX = 0
+    _persist_encounter_state()
+    _broadcast_encounter_state()
+    _combat_log(f"Added from notes: {', '.join(added[:8])}" + (' ...' if len(added) > 8 else ''), 'system')
+    return {'added': added, 'unresolved': unresolved, 'combatant_count': len(ACTIVE_ENCOUNTER)}
+
+
 def _obsidian_sync_room_reminders(area_id, reminders):
     global ROUND_EVENTS
     clean = []
@@ -22021,6 +22134,7 @@ _register_obsidian_sync(app, {
     'has_encounter': lambda: bool(ACTIVE_ENCOUNTER),
     'resolve_roll': _obsidian_resolve_roll,
     'launch_room_encounter': _obsidian_launch_room_encounter,
+    'add_creatures': _obsidian_add_creatures,
     'sync_room_reminders': _obsidian_sync_room_reminders,
     'create_player_reveal': _obsidian_create_player_reveal,
     'gm_required': gm_required,

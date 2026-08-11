@@ -412,6 +412,25 @@ def _dispatch(
         runtime["active_room"] = room
         return {"active_room": copy.deepcopy(room)}
 
+    if kind == "clear_active_room":
+        # Entering a room is one tap from any note with an area_id, so mis-taps
+        # happen. Without this the pane claimed a room was live until another
+        # was entered, and there was no way back to "nowhere in particular".
+        previous = copy.deepcopy(runtime.get("active_room"))
+        if not previous:
+            raise ValueError("no room is currently live")
+        runtime["active_room"] = None
+        return {"cleared": previous}
+
+    if kind == "add_creatures":
+        # Additive counterpart to launch_room_encounter: that one clears the
+        # board and re-adds the party, this one drops creatures into the fight
+        # already in progress.
+        result = adapter["add_creatures"](payload)
+        if not isinstance(result, dict):
+            raise ValueError("adding creatures failed")
+        return result
+
     if kind == "launch_room_encounter":
         if adapter["has_encounter"]() and not bool(payload.get("replace_active")):
             raise ValueError("an encounter is already active; explicit replacement confirmation is required")
@@ -479,7 +498,7 @@ def create_obsidian_sync_blueprint(adapter: dict) -> Blueprint:
         "sort_encounter", "persist_encounter", "broadcast_encounter",
         "advance_turn", "has_encounter", "gm_required", "resolve_roll",
         "launch_room_encounter", "sync_room_reminders", "create_player_reveal",
-        "combatant_detail",
+        "combatant_detail", "add_creatures",
     }
     missing = sorted(required - set(adapter))
     if missing:
@@ -709,6 +728,8 @@ def create_obsidian_sync_blueprint(adapter: dict) -> Blueprint:
                 "capture_note": "table_note",
                 "roll": "roll",
                 "set_active_room": "room_entered",
+                "clear_active_room": "room_left",
+                "add_creatures": "creatures_added",
                 "launch_room_encounter": "encounter_launched",
                 "sync_room_reminders": "room_reminders_synced",
                 "resolve_player_request": "player_request_resolved",
