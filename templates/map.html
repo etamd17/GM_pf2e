@@ -54,6 +54,13 @@
                     <div><label for="map-grid-offset-x">Grid offset X</label><input id="map-grid-offset-x" type="number" step="1"></div>
                     <div><label for="map-grid-offset-y">Grid offset Y</label><input id="map-grid-offset-y" type="number" step="1"></div>
                 </div>
+                {# Calibration derives BOTH size and offset from one drag: the drag
+                   starts on a gridline intersection of the printed map (fixing the
+                   offset) and spans this many squares (fixing the size). Spanning
+                   several squares divides the pointing error, so it beats trying
+                   to drag one square exactly. #}
+                <label for="map-calibrate-squares">Squares per alignment drag</label>
+                <input id="map-calibrate-squares" type="number" min="1" max="40" step="1" value="5">
                 <button id="map-calibrate-grid" class="map-btn map-btn--quiet map-btn--wide" type="button">Align grid by dragging</button>
                 <label class="map-check"><input id="map-grid-visible" type="checkbox"> Show grid</label>
                 <label class="map-check"><input id="map-player-movement" type="checkbox"> Players can move their tokens</label>

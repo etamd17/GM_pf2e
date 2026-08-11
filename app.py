@@ -7622,15 +7622,36 @@ def api_scene_background(scene_id):
         return jsonify({'error': 'map image must be 25 MB or smaller'}), 413
     ext = _SCENE_IMAGE_TYPES[upload.mimetype]
     filename = scene_id + ext
-    os.makedirs(_storage.scene_assets_dir(cid), exist_ok=True)
-    fd, tmp = tempfile.mkstemp(dir=_storage.scene_assets_dir(cid), suffix='.upload')
+    assets_dir = _storage.scene_assets_dir(cid)
+    os.makedirs(assets_dir, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=assets_dir, suffix='.upload')
     os.close(fd)
     try:
         upload.save(tmp)
-        os.replace(tmp, os.path.join(_storage.scene_assets_dir(cid), filename))
+        # Read the real pixel dimensions, and in doing so verify the bytes are
+        # actually an image: the only prior check was the client-supplied
+        # mimetype, which the client chooses. PIL is already a hard dependency
+        # (requirements.txt) and app.py opens images elsewhere.
+        try:
+            from PIL import Image
+            with Image.open(tmp) as probe:
+                image_size = probe.size
+        except Exception:
+            return jsonify({'error': 'that file is not a readable PNG, JPEG, or WebP image'}), 400
+        os.replace(tmp, os.path.join(assets_dir, filename))
     finally:
         if os.path.exists(tmp):
             os.unlink(tmp)
+    # The asset is named <scene_id><ext>, so replacing a PNG with a JPEG used to
+    # strand the PNG on disk forever -- nothing ever referenced or removed it.
+    for stale_ext in set(_SCENE_IMAGE_TYPES.values()) - {ext}:
+        stale = os.path.join(assets_dir, scene_id + stale_ext)
+        if os.path.exists(stale):
+            try:
+                os.unlink(stale)
+            except OSError:
+                pass
+    fitted = _scenes.fit_scene_dimensions(*image_size)
     with _path_lock(_storage.scene_file(cid, scene_id)):
         scene = _scenes.load_scene(cid, scene_id)
         scene['background'] = {
@@ -7638,6 +7659,10 @@ def api_scene_background(scene_id):
             'mime': upload.mimetype,
             'version': str(time.time_ns()),
         }
+        # The image is the map: take its shape rather than stretching it into
+        # whatever size the scene happened to be created with.
+        if fitted:
+            scene['width'], scene['height'] = fitted
         _scenes.save_scene(cid, scene)
     _broadcast_scene(scene)
     return jsonify({'success': True, 'scene': _scene_payload(scene)})
