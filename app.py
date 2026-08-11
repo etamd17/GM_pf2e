@@ -7170,6 +7170,114 @@ def api_scene_activate(scene_id):
     return jsonify({'success': True, 'active_scene_id': scene_id})
 
 
+def _token_art_name(scene_id, token_id, ext):
+    """Token art filename. Prefixed with the scene id so a scene's assets are
+    still identifiable as a group on disk, which is what makes cleanup possible
+    without walking every scene's JSON."""
+    return '%s_token_%s%s' % (scene_id, token_id, ext)
+
+
+def _remove_token_art(cid, scene_id, token_id):
+    """Drop every stored art file for one token, whatever format it was."""
+    assets = _storage.scene_assets_dir(cid)
+    for ext in set(_SCENE_IMAGE_TYPES.values()):
+        path = os.path.join(assets, _token_art_name(scene_id, token_id, ext))
+        if os.path.exists(path):
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+
+
+@app.route('/api/scenes/<scene_id>/tokens/<token_id>/image', methods=['GET', 'POST', 'DELETE'])
+def api_scene_token_image(scene_id, token_id):
+    """Per-token art: upload, serve, or clear.
+
+    The bestiary cannot supply this. Every monster JSON carries an `img`, but
+    2473 of 2475 entries are the same generic Foundry default icon and the rest
+    are Foundry-internal paths this app cannot serve -- wiring it would give
+    every creature an identical grey silhouette, which is worse than the
+    coloured disc with initials it would replace. Uploading is the only route to
+    real token art, so it is the only one built.
+    """
+    if not _scene_member_allowed():
+        return jsonify({'error': 'campaign membership required'}), 403
+    cid = _active_campaign_id()
+    try:
+        scene = _scenes.load_scene(cid, scene_id)
+    except ValueError:
+        scene = None
+    if not scene:
+        return jsonify({'error': 'scene not found'}), 404
+    token = next((t for t in scene.get('tokens', []) if t.get('id') == token_id), None)
+    if not token:
+        return jsonify({'error': 'token not found'}), 404
+
+    if request.method == 'GET':
+        assets = _storage.scene_assets_dir(cid)
+        for mime, ext in _SCENE_IMAGE_TYPES.items():
+            name = _token_art_name(scene_id, token_id, ext)
+            if os.path.exists(os.path.join(assets, name)):
+                return send_from_directory(assets, name, mimetype=mime)
+        abort(404)
+
+    if not _is_gm():
+        return jsonify({'error': 'GM access required'}), 403
+
+    if request.method == 'DELETE':
+        _remove_token_art(cid, scene_id, token_id)
+        with _path_lock(_storage.scene_file(cid, scene_id)):
+            scene = _scenes.load_scene(cid, scene_id)
+            target = next((t for t in scene.get('tokens', []) if t.get('id') == token_id), None)
+            if target:
+                # Back to whatever the projection supplies (a linked PC's
+                # portrait) or the coloured disc.
+                target['image'] = None
+            _scenes.save_scene(cid, scene)
+        _broadcast_scene(scene)
+        return jsonify({'success': True, 'scene': _scene_payload(scene)})
+
+    upload = request.files.get('image')
+    if not upload or upload.mimetype not in _SCENE_IMAGE_TYPES:
+        return jsonify({'error': 'upload a PNG, JPEG, or WebP image'}), 400
+    if request.content_length and request.content_length > 8 * 1024 * 1024:
+        return jsonify({'error': 'token art must be 8 MB or smaller'}), 413
+    ext = _SCENE_IMAGE_TYPES[upload.mimetype]
+    assets = _storage.scene_assets_dir(cid)
+    os.makedirs(assets, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=assets, suffix='.upload')
+    os.close(fd)
+    try:
+        upload.save(tmp)
+        try:
+            from PIL import Image
+            with Image.open(tmp) as probe:
+                probe.verify()
+        except Exception:
+            return jsonify({'error': 'that file is not a readable PNG, JPEG, or WebP image'}), 400
+        # Clear other formats first: the name carries the extension, so
+        # replacing a PNG with a JPEG would otherwise leave the PNG behind and
+        # the GET above would keep finding it.
+        _remove_token_art(cid, scene_id, token_id)
+        os.replace(tmp, os.path.join(assets, _token_art_name(scene_id, token_id, ext)))
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+
+    url = '/api/scenes/%s/tokens/%s/image?v=%s' % (scene_id, token_id, time.time_ns())
+    with _path_lock(_storage.scene_file(cid, scene_id)):
+        scene = _scenes.load_scene(cid, scene_id)
+        target = next((t for t in scene.get('tokens', []) if t.get('id') == token_id), None)
+        if not target:
+            return jsonify({'error': 'token not found'}), 404
+        # Stored on the token, so it wins over the character-portrait backfill
+        # in _scene_payload -- an upload is an override by definition.
+        target['image'] = url
+        _scenes.save_scene(cid, scene)
+    _broadcast_scene(scene)
+    return jsonify({'success': True, 'image': url, 'scene': _scene_payload(scene)})
+
+
 @app.route('/api/scenes/<scene_id>/delete', methods=['POST'])
 @gm_required
 def api_scene_delete(scene_id):
@@ -7582,6 +7690,9 @@ def api_scene_token(scene_id, token_id):
             if not _is_gm():
                 return jsonify({'error': 'GM access required'}), 403
             _scenes.remove_token(scene, token_id)
+            # Otherwise the art outlives the token with nothing referencing it,
+            # the same way background assets used to be stranded.
+            _remove_token_art(cid, scene_id, token_id)
         else:
             data = request.get_json(silent=True) or {}
             moving = 'x' in data or 'y' in data

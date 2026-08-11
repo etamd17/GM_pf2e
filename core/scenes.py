@@ -263,6 +263,17 @@ def delete_scene(cid, scene_id):
         return False
     if table_scene_id(cid) == scene_id:
         raise ValueError('scene is on the table')
+    # Every asset this scene owns is prefixed with its id -- the background is
+    # '<id><ext>' and token art is '<id>_token_<token><ext>' -- so the whole set
+    # can be removed without walking the scene's tokens.
+    assets_dir = storage.scene_assets_dir(cid)
+    if os.path.isdir(assets_dir):
+        for name in os.listdir(assets_dir):
+            if name.startswith(scene_id + '_token_'):
+                try:
+                    os.remove(os.path.join(assets_dir, name))
+                except OSError:
+                    pass
     background = (scene.get('background') or {}).get('filename')
     if background:
         # Only ever a bare '<scene_id><ext>' written by the upload route, but

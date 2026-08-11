@@ -81,3 +81,5 @@
 }
 .map-table-state { margin:8px 0 4px; color:var(--text-on-dark-2); font:700 10px/1.3 var(--font-ui); text-transform:uppercase; letter-spacing:.04em; }
 .map-table-state.is-live { color:var(--gilt-100); }
+.map-btn.is-dragging { opacity:.55; }
+.map-canvas.is-drop-target { outline:2px dashed rgba(224,182,90,.7); outline-offset:-2px; }
