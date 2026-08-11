@@ -73,6 +73,9 @@
 
     function applyScene(next) {
         if (!next || next.id !== sceneId) return;
+        // Compare against the OUTGOING scene: once it is replaced there is
+        // nothing left to diff against.
+        noteMotionAndHealth(scene && scene.tokens, (next || {}).tokens);
         scene = normalizeClientScene(next);
         canvas.width = Math.max(1, Number(scene.width) || 1400);
         canvas.height = Math.max(1, Number(scene.height) || 900);
@@ -258,7 +261,9 @@
         }
         drawTargetOverlays();
         if (!isTableView()) drawToolOverlay();
+        drawFloaters();
         drawTurnBanner();
+        pruneGlides();
         syncAnimation();
     }
 
@@ -729,9 +734,100 @@
     let animationHandle = null;
     let animationClock = 0;
 
+    // Tokens in flight: id -> {fromX, fromY, toX, toY, started}. The table
+    // shows a creature SLIDE to its new square so the room can see who moved
+    // and from where, instead of noticing it is suddenly somewhere else.
+    const glides = new Map();
+    const GLIDE_MS = 260;
+
+    // Rising damage and healing numbers.
+    //
+    // Derived from a token's HP CHANGING rather than from the map's own combat
+    // buttons, which is the more useful rule: damage rolled on the tracker, or
+    // a player healing on their own sheet, floats on the table too. The map is
+    // not the only thing that changes HP.
+    const floaters = [];
+    const FLOAT_MS = 1400;
+    let lastHp = new Map();
+
+    function noteMotionAndHealth(previous, next) {
+        if (!isTableView()) { lastHp = new Map(); return; }
+        const before = new Map((previous || []).map(t => [t.id, t]));
+        for (const token of next || []) {
+            const was = before.get(token.id);
+            if (was && (Number(was.x) !== Number(token.x) || Number(was.y) !== Number(token.y))) {
+                const inFlight = glides.get(token.id);
+                glides.set(token.id, {
+                    // Continue from where it is mid-glide, not from where it
+                    // started, or a second move snaps backwards first.
+                    fromX: inFlight ? inFlight.currentX : Number(was.x),
+                    fromY: inFlight ? inFlight.currentY : Number(was.y),
+                    toX: Number(token.x), toY: Number(token.y),
+                    started: animationClock, currentX: Number(was.x), currentY: Number(was.y)
+                });
+            }
+            const hp = token.live && token.live.current_hp;
+            if (hp !== undefined && hp !== null) {
+                const had = lastHp.get(token.id);
+                if (had !== undefined && had !== hp) {
+                    floaters.push({tokenId: token.id, delta: hp - had, started: animationClock});
+                }
+                lastHp.set(token.id, hp);
+            }
+        }
+    }
+
+    // Where to draw a token this frame: its real position, or somewhere along
+    // its glide. Everything that positions a token goes through this.
+    function tokenRenderPos(token) {
+        const glide = glides.get(token.id);
+        if (!glide) return {x: Number(token.x) || 0, y: Number(token.y) || 0};
+        const t = Math.min(1, (animationClock - glide.started) / GLIDE_MS);
+        // Ease-out: fast off the mark, settling into the square.
+        const e = 1 - Math.pow(1 - t, 3);
+        glide.currentX = glide.fromX + (glide.toX - glide.fromX) * e;
+        glide.currentY = glide.fromY + (glide.toY - glide.fromY) * e;
+        return {x: glide.currentX, y: glide.currentY};
+    }
+
+    // Finished glides are dropped once per frame rather than inside
+    // tokenRenderPos, which is called more than once per token per frame (the
+    // token itself, then any floater above it). Deleting from a read would make
+    // the second call return a different answer than the first.
+    function pruneGlides() {
+        for (const [id, glide] of glides) {
+            if (animationClock - glide.started >= GLIDE_MS) glides.delete(id);
+        }
+    }
+
+    function drawFloaters() {
+        if (!floaters.length) return;
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.font = '700 26px system-ui, sans-serif';
+        for (let i = floaters.length - 1; i >= 0; i--) {
+            const f = floaters[i];
+            const t = (animationClock - f.started) / FLOAT_MS;
+            if (t >= 1) { floaters.splice(i, 1); continue; }
+            const token = (scene.tokens || []).find(x => x.id === f.tokenId);
+            if (!token) { floaters.splice(i, 1); continue; }
+            const at = tokenRenderPos(token);
+            const healing = f.delta > 0;
+            ctx.globalAlpha = 1 - t * t;
+            ctx.fillStyle = healing ? '#7fd08a' : '#f08a7a';
+            ctx.strokeStyle = 'rgba(0,0,0,.85)';
+            ctx.lineWidth = 5;
+            const text = (healing ? '+' : '') + f.delta;
+            const y = at.y - tokenRadius(token) - 14 - t * 46;
+            ctx.strokeText(text, at.x, y);
+            ctx.fillText(text, at.x, y);
+        }
+        ctx.restore();
+    }
+
     function animationsWanted() {
         if (!isTableView() || !scene) return false;
-        return (scene.lights || []).length > 0;
+        return (scene.lights || []).length > 0 || glides.size > 0 || floaters.length > 0;
     }
 
     function stepAnimation(timestamp) {
@@ -870,8 +966,9 @@
     }
 
     function drawToken(token) {
-        const x = Number(token.x) || 0;
-        const y = Number(token.y) || 0;
+        const at = tokenRenderPos(token);
+        const x = at.x;
+        const y = at.y;
         const radius = tokenRadius(token);
         const live = token.live || {};
         const portrait = getTokenImage(token);
