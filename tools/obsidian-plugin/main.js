@@ -67,9 +67,9 @@ function conditionLabel(value) {
   return String(value || '').replaceAll('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function activeConditions(conditions) {
+function activeConditions(conditions, exclude = []) {
   return Object.entries(conditions || {})
-    .filter(([, value]) => value && value !== 0)
+    .filter(([name, value]) => value && value !== 0 && !exclude.includes(name))
     .map(([name, value]) => typeof value === 'boolean' ? conditionLabel(name) : `${conditionLabel(name)} ${value}`)
     .join(', ');
 }
@@ -222,6 +222,8 @@ class SessionOperationsView extends ItemView {
     this.selectedId = null;
     this.selectedPartyName = null;
     this.selectedTab = 'overview';
+    // Sticky condition duration in rounds; 0 means no auto-expiry timer.
+    this.conditionRounds = 0;
   }
 
   getViewType() { return VIEW_TYPE; }
@@ -386,37 +388,69 @@ class SessionOperationsView extends ItemView {
       grid.createDiv({ cls: 'so-empty', text: 'No party members are loaded on the active website table.' });
       return;
     }
-    party.forEach((pc) => {
-      const card = grid.createDiv({ cls: 'so-party-card' });
-      if (pc.name === this.selectedPartyName) card.addClass('is-selected');
-      card.addEventListener('click', () => {
+    // Dying first. A PC at 0 HP is the most consequential state at the table and
+    // it used to be one comma-separated word among others; sorting it to the top
+    // means the GM never has to look for it.
+    const dyingValue = (pc) => Number((pc.conditions || {}).dying || 0);
+    const ordered = [...party].sort((a, b) => dyingValue(b) - dyingValue(a));
+
+    ordered.forEach((pc) => {
+      const dying = dyingValue(pc);
+      const row = grid.createDiv({ cls: 'so-party-row' });
+      if (pc.name === this.selectedPartyName) row.addClass('is-selected');
+      if (dying) row.addClass('is-dying');
+      row.addEventListener('click', () => {
         this.selectedPartyName = pc.name;
         this.selectedId = null;
         this.selectedTab = 'overview';
         this.render();
       });
-      card.createDiv({ cls: 'so-party-name', text: pc.name });
+
       const current = Number(pc.current_hp || 0);
       const maximum = Math.max(1, Number(pc.max_hp || 0));
-      const hpText = pc.temp_hp ? `${current}/${maximum} HP + ${pc.temp_hp} temp` : `${current}/${maximum} HP`;
-      card.createDiv({ cls: 'so-hp', text: hpText });
-      const bar = card.createDiv({ cls: 'so-hp-bar' });
-      const fill = bar.createDiv({ cls: 'so-hp-fill' });
       const percent = Math.max(0, Math.min(100, current / maximum * 100));
+
+      const top = row.createDiv({ cls: 'so-row-top' });
+      top.createDiv({ cls: 'so-party-name', text: pc.name });
+      top.createDiv({
+        cls: 'so-hp' + (percent <= 25 ? ' is-critical' : percent <= 50 ? ' is-wounded' : ''),
+        text: `${current}/${maximum}` + (pc.temp_hp ? ` +${pc.temp_hp}` : ''),
+      });
+
+      const bar = row.createDiv({ cls: 'so-hp-bar' });
+      const fill = bar.createDiv({ cls: 'so-hp-fill' });
       fill.style.width = `${percent}%`;
       if (percent <= 25) fill.addClass('is-critical');
       else if (percent <= 50) fill.addClass('is-wounded');
-      const conditions = activeConditions(pc.conditions);
-      card.createDiv({ cls: 'so-meta', text: conditions || 'No active conditions' });
-      const actions = card.createDiv({ cls: 'so-party-actions' });
+
+      // Everything below here was already crossing the wire and being discarded.
+      // hero_points, focus, reaction_used and persistent_damage have always been
+      // in the snapshot; the card rendered name, HP and a conditions string.
+      const chips = row.createDiv({ cls: 'so-chips' });
+      if (dying) {
+        chips.createDiv({ cls: 'so-chip is-danger', text: `DYING ${dying}` });
+        const wounded = Number((pc.conditions || {}).wounded || 0);
+        // Recovery DC is 10 + dying value, raised by wounded (Player Core).
+        chips.createDiv({ cls: 'so-chip is-danger', text: `recovery DC ${10 + dying + wounded}` });
+      }
+      if (pc.persistent_damage) {
+        const pd = Array.isArray(pc.persistent_damage) ? pc.persistent_damage.length : pc.persistent_damage;
+        if (pd) chips.createDiv({ cls: 'so-chip is-danger', text: `persistent ${pd}` });
+      }
+      if (Number(pc.hero_points)) chips.createDiv({ cls: 'so-chip is-hero', text: `hero ${pc.hero_points}` });
+      if (pc.focus_max) chips.createDiv({ cls: 'so-chip is-focus', text: `focus ${pc.focus || 0}/${pc.focus_max}` });
+      else if (Number(pc.focus)) chips.createDiv({ cls: 'so-chip is-focus', text: `focus ${pc.focus}` });
+      if (pc.reaction_used) chips.createDiv({ cls: 'so-chip is-muted', text: 'reaction spent' });
+      activeConditions(pc.conditions, ['dying'])
+        .split(', ')
+        .filter(Boolean)
+        .forEach((c) => chips.createDiv({ cls: 'so-chip', text: c }));
+
+      // No Inspect button: the row itself already opens the inspector, and the
+      // button did nothing else.
+      const actions = row.createDiv({ cls: 'so-party-actions' });
       this.button(actions, 'Damage', () => this.plugin.adjustPartyHp(pc.name, 'damage'));
       this.button(actions, 'Heal', () => this.plugin.adjustPartyHp(pc.name, 'heal'));
-      this.button(actions, 'Inspect', async () => {
-        this.selectedPartyName = pc.name;
-        this.selectedId = null;
-        this.selectedTab = 'overview';
-        this.render();
-      });
     });
   }
 
@@ -484,6 +518,17 @@ class SessionOperationsView extends ItemView {
       if (partyState) target = Object.assign({}, partyState, { is_pc: true, pc_name: partyState.name });
     }
     if (!target) return;
+
+    // Overlay the on-demand statblock when we have one. Additive by design: the
+    // snapshot still carries these fields today, so a server without the detail
+    // endpoint, an offline pane, or a first paint before the fetch returns all
+    // degrade to exactly the previous behaviour rather than to an empty card.
+    // Snapshot values win for anything volatile (HP, conditions) because those
+    // are a second old at most, while the cached statblock may be much older.
+    const cached = this.plugin.detailFor(target.target_id || target.instance_id || target.name);
+    if (cached) target = Object.assign({}, cached, target);
+    this.plugin.ensureDetail(target);
+
     const section = root.createDiv({ cls: 'so-section' });
     const title = section.createDiv({ cls: 'so-section-title' });
     title.createEl('h3', { text: 'Combatant inspector' });
@@ -669,6 +714,24 @@ class SessionOperationsView extends ItemView {
 
   renderInspectorConditions(panel, target) {
     const targetId = target.target_id || target.instance_id;
+
+    // Duration picker. Sticky rather than per-application on purpose: at the
+    // table you set "3 rounds" once for a spell and then tap several targets.
+    // Defaults to none, so the common case costs no extra taps and behaves
+    // exactly as before.
+    const durations = panel.createDiv({ cls: 'so-duration-row' });
+    durations.createDiv({ cls: 'so-duration-label', text: 'Duration' });
+    [0, 1, 2, 3, 10].forEach((n) => {
+      const chip = durations.createDiv({
+        cls: 'so-duration-chip' + (this.conditionRounds === n ? ' is-selected' : ''),
+        text: n === 0 ? 'none' : `${n}r`,
+      });
+      chip.addEventListener('click', () => {
+        this.conditionRounds = n;
+        this.render();
+      });
+    });
+
     const conditions = panel.createDiv({ cls: 'so-condition-list' });
     const shown = [...new Set([...Object.keys(target.conditions || {}), 'frightened', 'sickened', 'stunned', 'slowed', 'prone', 'off_guard'])]
       .filter((name) => NUMERIC_CONDITIONS.includes(name) || BOOLEAN_CONDITIONS.includes(name));
@@ -678,12 +741,15 @@ class SessionOperationsView extends ItemView {
       const value = target.conditions?.[name] || 0;
       row.createDiv({ cls: 'so-condition-value', text: typeof value === 'boolean' ? (value ? 'On' : 'Off') : String(value) });
       const controls = row.createDiv({ cls: 'so-inline-controls' });
+      const rounds = this.conditionRounds || 0;
       if (targetId && BOOLEAN_CONDITIONS.includes(name)) {
-        this.button(controls, value ? 'Remove' : 'Add', () => this.plugin.conditionAction(targetId, name, value ? 'remove' : 'add'));
+        this.button(controls, value ? 'Remove' : 'Add', () => this.plugin.conditionAction(targetId, name, value ? 'remove' : 'add', rounds));
       } else if (targetId) {
         this.button(controls, '−', () => this.plugin.conditionAction(targetId, name, 'decrease'));
-        this.button(controls, '+', () => this.plugin.conditionAction(targetId, name, 'increase'));
+        this.button(controls, '+', () => this.plugin.conditionAction(targetId, name, 'increase', rounds));
       }
+      const expiry = (target.condition_expiry || {})[name];
+      if (expiry) row.createDiv({ cls: 'so-condition-expiry', text: `${expiry}r left` });
     });
     const persistent = target.persistent_damage_list || target.persistent_damage || [];
     const entries = Array.isArray(persistent)
@@ -833,6 +899,9 @@ module.exports = class SessionOperationsSyncPlugin extends Plugin {
     this.polling = false;
     this.lastPollAt = 0;
     this.lastRoll = null;
+    // On-demand statblock cache: instance_id/name -> {detail_key, data}.
+    this.detailCache = new Map();
+    this.detailInFlight = new Set();
     this.currentRoom = null;
 
     this.registerView(VIEW_TYPE, (leaf) => new SessionOperationsView(leaf, this));
@@ -1131,6 +1200,47 @@ module.exports = class SessionOperationsSyncPlugin extends Plugin {
    * Server revision is monotonic per campaign, so "not older" is the whole
    * test. Campaign switches reset it deliberately (see the Campaign ID setting).
    */
+  /** Cached statblock for a combatant, or null. Never fetches. */
+  detailFor(id) {
+    const entry = id ? this.detailCache.get(String(id)) : null;
+    return entry ? entry.data : null;
+  }
+
+  /**
+   * Fetch a combatant's statblock if we do not have a current one.
+   *
+   * Fired from render, so it must be cheap and idempotent: it returns
+   * immediately when the cache is warm, and an in-flight set stops a repaint
+   * loop from firing the same request several times. Nothing prefetches -- a GM
+   * clicking through nine combatants would otherwise fire nine statblock builds
+   * on the worker that also serves the players' SSE.
+   */
+  ensureDetail(target) {
+    const id = target?.target_id || target?.instance_id || target?.name;
+    if (!id || !this.isConfigured()) return;
+    const key = String(id);
+    const cached = this.detailCache.get(key);
+    // detail_key changes when the statblock does -- an elite/weak toggle, a
+    // level change, a new strike. Without it a cached card would stay
+    // confidently wrong.
+    if (cached && (!target.detail_key || cached.detail_key === target.detail_key)) return;
+    if (this.detailInFlight.has(key)) return;
+    this.detailInFlight.add(key);
+    this.api(`/combatant/${encodeURIComponent(key)}`)
+      .then((response) => {
+        if (response?.detail) {
+          this.detailCache.set(key, { detail_key: target.detail_key || null, data: response.detail });
+          this.renderViews();
+        }
+      })
+      .catch(() => {
+        // Silent: the snapshot still carries these fields, so a failed detail
+        // fetch costs richness, not function. Surfacing it would put an error
+        // toast in front of the GM for something they cannot act on.
+      })
+      .finally(() => this.detailInFlight.delete(key));
+  }
+
   adoptServerState(response) {
     const incoming = Number(response?.revision ?? NaN);
     if (!Number.isFinite(incoming) || incoming < this.revision) return false;
@@ -1205,8 +1315,18 @@ module.exports = class SessionOperationsSyncPlugin extends Plugin {
     await this.sendCommand('adjust_party_hp', { pc_name: pcName, action, amount });
   }
 
-  async conditionAction(targetId, condition, action) {
-    await this.sendCommand('condition_action', { target_id: targetId, condition, action });
+  async conditionAction(targetId, condition, action, rounds = 0) {
+    // `rounds` drives the website's auto-expiry timer. It was never sent, so a
+    // "frightened 2 for 3 rounds" applied from Obsidian sat on the combatant
+    // forever and the GM had to remember to clear it. The server has always
+    // accepted and clamped the field (services/obsidian_sync.py, condition_action).
+    //
+    // Only meaningful when a condition is going ON: decrease/remove carry no
+    // duration, and sending one would set a timer on a condition being cleared.
+    const payload = { target_id: targetId, condition, action };
+    const timed = ['add', 'increase'].includes(action) && Number(rounds) > 0;
+    if (timed) payload.rounds = Math.max(1, Math.min(Math.round(Number(rounds)), 1000));
+    await this.sendCommand('condition_action', payload);
   }
 
   async setInitiative(targetId, value) {
@@ -1522,6 +1642,11 @@ module.exports = class SessionOperationsSyncPlugin extends Plugin {
         'status: live',
         `started_at: ${yamlString(session.started_at)}`,
         'ended_at:',
+        // The vault's Session Operations Specification (:120) says audio stays
+        // OUT of the vault and the Session Record holds paths, recording ids or
+        // transcript links instead. The plugin never emitted the key, so the
+        // post-session pass had nowhere to record what it reconciled against.
+        'audio_sources: []',
         'schema_version: 2',
         '---',
         '',
@@ -1542,6 +1667,86 @@ module.exports = class SessionOperationsSyncPlugin extends Plugin {
     await this.persistSnapshot('session_start');
   }
 
+  /**
+   * Turn Combat Events.jsonl into prose a human will actually reread.
+   *
+   * The events have only ever existed as machine-readable JSONL, but the vault's
+   * Post-Session Agent Workflow Specification already ranks structured website
+   * events ABOVE the audio transcript as evidence for mechanical changes -- and
+   * nothing produced them in readable form, so that lane sat empty and the
+   * reconciliation pass leaned entirely on audio for facts the website knew
+   * exactly.
+   *
+   * Grouped by round because that is how the table remembers a fight. Event ids
+   * are carried through so a later pass can cite a specific line rather than
+   * paraphrase it -- the same spec forbids filling gaps with plausible fiction.
+   */
+  async buildSessionDigest(session) {
+    const folder = this.sessionFolder(session.id);
+    const path = normalizePath(`${folder}/Combat Events.jsonl`);
+    const file = this.app.vault.getAbstractFileByPath(path);
+    if (!file) return null;
+    let raw = '';
+    try {
+      raw = await this.app.vault.read(file);
+    } catch (error) {
+      return null;
+    }
+    const events = raw.split('\n').map((line) => {
+      try { return line.trim() ? JSON.parse(line) : null; } catch (_) { return null; }
+    }).filter(Boolean);
+    if (!events.length) return null;
+
+    const describe = (event) => {
+      const p = event.payload || {};
+      const r = event.result || {};
+      const who = (event.before?.target || {}).name || p.pc_name || r.pc_name || '';
+      switch (event.command_type) {
+        case 'adjust_hp':
+        case 'adjust_party_hp': {
+          if (Array.isArray(r.targets)) {
+            return `${r.action === 'heal' ? 'Healed' : 'Damaged'} ${r.targets.length} targets for ${r.raw_amount}`;
+          }
+          const delta = (r.old_hp != null && r.new_hp != null) ? Math.abs(r.new_hp - r.old_hp) : p.amount;
+          const verb = r.action === 'heal' || p.action === 'heal' ? 'healed' : 'took';
+          return `${who || 'Someone'} ${verb} ${delta}${r.new_hp != null ? ` (now ${r.new_hp})` : ''}` +
+            (r.defeated ? ' -- defeated' : '');
+        }
+        case 'condition_action':
+          return `${who || 'Someone'}: ${conditionLabel(p.condition || '')} ${p.action}` +
+            (p.rounds ? ` for ${p.rounds} rounds` : '');
+        case 'advance_turn':
+          return `Turn ${p.direction === 'prev' ? 'stepped back' : 'advanced'}`;
+        case 'capture_note':
+          return `Note: ${p.text || ''}`;
+        case 'set_active_room':
+          return `Entered ${p.title || p.area_id || 'a room'}`;
+        case 'undo_last':
+          return `Undid a ${r.command_type || 'command'}`;
+        default:
+          return event.command_type || 'command';
+      }
+    };
+
+    const rounds = new Map();
+    events.forEach((event) => {
+      const round = event.before?.round ?? event.after?.round ?? null;
+      const key = round == null ? 'Out of combat' : `Round ${round}`;
+      if (!rounds.has(key)) rounds.set(key, []);
+      rounds.get(key).push(event);
+    });
+
+    const lines = [];
+    rounds.forEach((group, key) => {
+      lines.push('', `**${key}**`, '');
+      group.forEach((event) => {
+        const when = String(event.occurred_at || '').slice(11, 16);
+        lines.push(`- ${when ? `\`${when}\` ` : ''}${describe(event)} <!-- ${event.event_id || ''} -->`);
+      });
+    });
+    return { lines, count: events.length, lastSequence: events[events.length - 1].sequence };
+  }
+
   async materializeSessionEnd(session) {
     await this.persistSnapshot('session_end');
     await this.materializeHandoff(session, 'awaiting_processing');
@@ -1557,6 +1762,26 @@ module.exports = class SessionOperationsSyncPlugin extends Plugin {
         frontmatter.status = 'awaiting_processing';
         frontmatter.ended_at = session.ended_at;
       });
+      // The readable ledger goes in first, so the closing snapshot reads as the
+      // final line of a narrative rather than the only thing in the note.
+      const digest = await this.buildSessionDigest(session);
+      if (digest) {
+        const digestMarker = `<!-- session-operations-digest:${digest.lastSequence} -->`;
+        const current = await this.app.vault.read(file);
+        if (!current.includes(digestMarker)) {
+          await this.app.vault.append(file, [
+            '', digestMarker, '',
+            `### What the website recorded (${digest.count} events)`,
+            '',
+            '> Mechanical evidence, ranked above the transcript for HP, conditions and',
+            '> turn order by the Post-Session Agent Workflow Specification. Comments',
+            '> carry event ids so a later pass can cite rather than paraphrase.',
+            ...digest.lines,
+            '',
+          ].join('\n'));
+        }
+      }
+
       let body = await this.app.vault.read(file);
       const marker = `<!-- session-operations-closing:${this.revision} -->`;
       if (!body.includes(marker)) {

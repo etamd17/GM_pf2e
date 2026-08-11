@@ -163,6 +163,62 @@ function makePlugin() {
     out.record_label_input = label;
   }
 
+  // (7) Condition durations reach the wire, but only where they mean something.
+  {
+    const p = makePlugin();
+    const sent = [];
+    p.sendCommand = async (type, payload) => { sent.push({ type, payload }); };
+    await p.conditionAction('t1', 'frightened', 'increase', 3);
+    await p.conditionAction('t1', 'prone', 'add', 2);
+    await p.conditionAction('t1', 'frightened', 'decrease', 3);
+    await p.conditionAction('t1', 'prone', 'remove', 3);
+    await p.conditionAction('t1', 'sickened', 'increase', 0);
+    await p.conditionAction('t1', 'sickened', 'increase', 99999);
+    out.rounds_sent_on_increase = sent[0].payload.rounds === 3;
+    out.rounds_sent_on_add = sent[1].payload.rounds === 2;
+    out.no_rounds_on_decrease = !('rounds' in sent[2].payload);
+    out.no_rounds_on_remove = !('rounds' in sent[3].payload);
+    out.no_rounds_when_zero = !('rounds' in sent[4].payload);
+    out.rounds_clamped = sent[5].payload.rounds === 1000;
+    out.command_type_unchanged = sent.every((s) => s.type === 'condition_action');
+  }
+
+  // (8) The session digest turns the JSONL ledger into prose, grouped by round.
+  {
+    const p = makePlugin();
+    const events = [
+      { sequence: 1, event_id: 'e1', occurred_at: '2026-08-11T19:04:00Z', command_type: 'adjust_hp',
+        payload: { amount: 9 }, result: { action: 'damage', old_hp: 40, new_hp: 31 },
+        before: { round: 1, target: { name: 'Desmohund' } } },
+      { sequence: 2, event_id: 'e2', occurred_at: '2026-08-11T19:05:00Z', command_type: 'condition_action',
+        payload: { condition: 'frightened', action: 'increase', rounds: 3 },
+        before: { round: 1, target: { name: 'Gavin' } } },
+      { sequence: 3, event_id: 'e3', occurred_at: '2026-08-11T19:09:00Z', command_type: 'adjust_hp',
+        payload: { amount: 6 }, result: { action: 'damage', raw_amount: 6, targets: [{}, {}] },
+        before: { round: 2, target: { name: 'Desmohund' } } },
+      { sequence: 4, event_id: 'e4', occurred_at: '2026-08-11T19:20:00Z', command_type: 'capture_note',
+        payload: { text: 'the cultist fled north' }, before: { round: null } },
+    ];
+    const jsonl = events.map((e) => JSON.stringify(e)).join('\n') + '\n';
+    p.app = { vault: { getAbstractFileByPath: (path) => (path.endsWith('Combat Events.jsonl') ? { path } : null),
+                       read: async () => jsonl } };
+    const digest = await p.buildSessionDigest({ id: 'session-x' });
+    const text = digest.lines.join('\n');
+    out.digest_count = digest.count;
+    out.digest_last_sequence = digest.lastSequence;
+    out.digest_groups_rounds = text.includes('**Round 1**') && text.includes('**Round 2**');
+    out.digest_out_of_combat = text.includes('**Out of combat**');
+    out.digest_uses_real_delta = text.includes('took 9') && text.includes('now 31');
+    out.digest_names_condition = text.includes('Frightened increase for 3 rounds');
+    out.digest_multi_target = text.includes('Damaged 2 targets for 6');
+    out.digest_note_text = text.includes('the cultist fled north');
+    out.digest_cites_event_ids = ['e1', 'e2', 'e3', 'e4'].every((id) => text.includes(id));
+
+    const empty = makePlugin();
+    empty.app = { vault: { getAbstractFileByPath: () => null } };
+    out.digest_null_without_events = (await empty.buildSessionDigest({ id: 's' })) === null;
+  }
+
   process.stdout.write(JSON.stringify(out));
 })().catch((error) => {
   process.stderr.write(String(error && error.stack || error));
@@ -247,3 +303,43 @@ def test_frontmatter_survives_a_hostile_session_label(harness_output):
     assert not any(line.startswith('not_frontmatter:') for line in frontmatter), \
         'the label injected a key into the frontmatter block'
     assert len([line for line in frontmatter if line.startswith('ended_at:')]) == 1
+
+
+def test_condition_durations_are_sent_only_where_they_mean_something(harness_output):
+    """The server has always accepted a `rounds` field on condition_action and
+    fed it to the website's auto-expiry timer; the plugin never sent one, so a
+    timed condition applied from Obsidian never expired.
+
+    A duration is only meaningful when a condition goes ON. Sending one with
+    decrease/remove would set a timer on a condition being cleared.
+    """
+    assert harness_output['rounds_sent_on_increase']
+    assert harness_output['rounds_sent_on_add']
+    assert harness_output['no_rounds_on_decrease']
+    assert harness_output['no_rounds_on_remove']
+    assert harness_output['no_rounds_when_zero'], 'zero means "no timer", not "expire immediately"'
+    assert harness_output['rounds_clamped'], 'must clamp to the server ceiling of 1000'
+    assert harness_output['command_type_unchanged']
+
+
+def test_session_digest_renders_the_event_ledger_as_prose(harness_output):
+    """Combat Events.jsonl has only ever been machine-readable, yet the vault's
+    Post-Session Agent Workflow Specification ranks structured website events
+    ABOVE the audio transcript as evidence for mechanical facts. Nothing
+    produced them in readable form, so that lane sat empty.
+
+    Grouped by round because that is how a table remembers a fight, and event
+    ids are carried through so a later pass can cite rather than paraphrase --
+    the same spec forbids filling gaps with plausible fiction.
+    """
+    assert harness_output['digest_count'] == 4
+    assert harness_output['digest_last_sequence'] == 4
+    assert harness_output['digest_groups_rounds']
+    assert harness_output['digest_out_of_combat'], 'events with no round still belong somewhere'
+    assert harness_output['digest_uses_real_delta'], \
+        'must report the HP the engine actually applied, not the amount requested'
+    assert harness_output['digest_names_condition']
+    assert harness_output['digest_multi_target']
+    assert harness_output['digest_note_text']
+    assert harness_output['digest_cites_event_ids']
+    assert harness_output['digest_null_without_events']

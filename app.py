@@ -16,6 +16,7 @@ import queue
 import threading
 import tempfile
 import shutil
+import hashlib
 from functools import wraps
 from pathlib import Path
 from werkzeug.exceptions import HTTPException, NotFound
@@ -16286,52 +16287,90 @@ def party_list():
     """Simple list of party member names for vault export."""
     return jsonify({"party": [{"name": pc.name} for pc in PARTY_LIBRARY.values()]})
 
+def _combatant_detail_payload(c, *, is_pc=None):
+    """Full stat block for one combatant.
+
+    Shared by the GM tracker popup (/api/combatant_stats) and the Obsidian
+    pane's on-demand detail endpoint. One builder on purpose: the pane already
+    drifted a whole contract version away from the server once, and two hand-
+    maintained statblock shapes is exactly how that happens again.
+
+    This is the STATIC half of a combatant -- attacks, skills, spells, actions,
+    resistances. It deliberately does NOT belong in the 1 Hz /state snapshot:
+    on the single gevent worker that also serves every player's SSE, shipping
+    this for every combatant once a second is the stall CLAUDE.md warns about.
+    """
+    is_pc = c.is_pc if is_pc is None else is_pc
+    data = {
+        'name': c.name, 'level': c.level, 'is_pc': is_pc,
+        'ac': c.ac, 'fort': c.fort, 'ref': c.ref, 'will': c.will,
+        'perception': c.perception, 'speed': getattr(c, 'active_speed', getattr(c, 'speed', 25)),
+        'current_hp': c.current_hp, 'max_hp': c.hp,
+        'conditions': {k: v for k, v in c.conditions.items() if v and v != 0 and v is not False},
+    }
+    if is_pc:
+        data['class_name'] = c.class_name
+        data['ancestry'] = c.ancestry
+        data['subclass'] = getattr(c, 'subclass', '')
+        data['abilities'] = c.mods
+        data['attacks'] = [{'name': a['name'], 'strikes': a.get('strikes', []), 'damage': a['damage']} for a in c.attacks]
+        data['skills'] = c.skills
+        data['spell_casters'] = c.spell_casters
+    else:
+        data['attacks'] = [{'name': s.get('name', ''), 'hit': (lambda b: f"+{b}" if b >= 0 else str(b))(s.get('bonus', s.get('mod', 0))), 'damage': s.get('damage', '')} for s in c.strikes]
+        data['actions'] = [{'name': a['name'], 'description': a.get('description', ''), 'actions': a.get('actions', '')} for a in c.actions]
+        data['immunities'] = getattr(c, 'immunities', [])
+        data['resistances'] = getattr(c, 'resistances', [])
+        data['weaknesses'] = getattr(c, 'weaknesses', [])
+        data['traits'] = getattr(c, 'traits', [])
+        data['elite_weak'] = getattr(c, 'elite_weak', 0)
+    return data
+
+
+def _combatant_detail_key(c):
+    """Short hash of the parts of a statblock that a client may cache.
+
+    The pane fetches a combatant's detail once and keeps it. This key rides in
+    the lean /state snapshot so the pane can tell a cached statblock is stale
+    without refetching it. `elite_weak` is included because an elite/weak toggle
+    changes every number without changing any collection length -- the failure
+    mode that would otherwise show a confidently wrong statblock.
+    """
+    parts = (
+        getattr(c, 'name', ''), getattr(c, 'level', 0), getattr(c, 'elite_weak', 0),
+        len(getattr(c, 'strikes', []) or []), len(getattr(c, 'actions', []) or []),
+        len(getattr(c, 'attacks', []) or []), len(getattr(c, 'spell_casters', []) or []),
+        len(getattr(c, 'skills', []) or []), getattr(c, 'hp', 0), getattr(c, 'ac', 0),
+    )
+    return hashlib.sha1('|'.join(str(p) for p in parts).encode('utf-8')).hexdigest()[:12]
+
+
+def _obsidian_combatant_detail(instance_id):
+    """Adapter callback: the statblock for one combatant, or None."""
+    with ENCOUNTER_LOCK:
+        for c in ACTIVE_ENCOUNTER:
+            if c.instance_id == instance_id:
+                return _combatant_detail_payload(c)
+        # A PC the GM has not added to the encounter is still inspectable, keyed
+        # by name -- that is how the pane's party rows address them.
+        pc = PARTY_LIBRARY.get(instance_id)
+        if pc is not None:
+            return _combatant_detail_payload(pc, is_pc=True)
+    return None
+
+
 @app.route('/api/combatant_stats/<instance_id>')
 def combatant_stats(instance_id):
     """Return full stat block for a combatant in the encounter (for GM popup)."""
     for c in ACTIVE_ENCOUNTER:
         if c.instance_id == instance_id:
-            data = {
-                'name': c.name, 'level': c.level, 'is_pc': c.is_pc,
-                'ac': c.ac, 'fort': c.fort, 'ref': c.ref, 'will': c.will,
-                'perception': c.perception, 'speed': getattr(c, 'active_speed', getattr(c, 'speed', 25)),
-                'current_hp': c.current_hp, 'max_hp': c.hp,
-                'conditions': {k: v for k, v in c.conditions.items() if v and v != 0 and v is not False},
-            }
-            if c.is_pc:
-                data['class_name'] = c.class_name
-                data['ancestry'] = c.ancestry
-                data['subclass'] = getattr(c, 'subclass', '')
-                data['abilities'] = c.mods
-                data['attacks'] = [{'name': a['name'], 'strikes': a.get('strikes', []), 'damage': a['damage']} for a in c.attacks]
-                data['skills'] = c.skills
-                data['spell_casters'] = c.spell_casters
-            else:
-                data['attacks'] = [{'name': s.get('name', ''), 'hit': (lambda b: f"+{b}" if b >= 0 else str(b))(s.get('bonus', s.get('mod', 0))), 'damage': s.get('damage', '')} for s in c.strikes]
-                data['actions'] = [{'name': a['name'], 'description': a.get('description', ''), 'actions': a.get('actions', '')} for a in c.actions]
-                data['immunities'] = getattr(c, 'immunities', [])
-                data['resistances'] = getattr(c, 'resistances', [])
-                data['weaknesses'] = getattr(c, 'weaknesses', [])
-                data['traits'] = getattr(c, 'traits', [])
-                data['elite_weak'] = getattr(c, 'elite_weak', 0)
-            return jsonify(data)
-    
+            return jsonify(_combatant_detail_payload(c))
+
     # Not in encounter — check party library
     for name, pc in PARTY_LIBRARY.items():
         if name == instance_id:
-            return jsonify({
-                'name': pc.name, 'level': pc.level, 'is_pc': True,
-                'class_name': pc.class_name, 'ancestry': pc.ancestry, 'subclass': getattr(pc, 'subclass', ''),
-                'ac': pc.ac, 'fort': pc.fort, 'ref': pc.ref, 'will': pc.will,
-                'perception': pc.perception, 'speed': pc.active_speed,
-                'current_hp': pc.current_hp, 'max_hp': pc.hp,
-                'conditions': {k: v for k, v in pc.conditions.items() if v and v != 0 and v is not False},
-                'abilities': pc.mods,
-                'attacks': [{'name': a['name'], 'strikes': a.get('strikes', []), 'damage': a['damage']} for a in pc.attacks],
-                'skills': pc.skills,
-                'spell_casters': pc.spell_casters,
-            })
-    
+            return jsonify(_combatant_detail_payload(pc, is_pc=True))
+
     return jsonify({"error": "Combatant not found"}), 404
 
 def _sanitize_roll_dice(raw):
@@ -21492,6 +21531,11 @@ def _obsidian_sync_snapshot():
                 'resistances', 'weaknesses', 'tactics', 'portrait_url', 'portrait_focus',
                 'image_ref',
             )})
+            # Lets a client cache a statblock and know when it went stale
+            # without refetching it. See _combatant_detail_key.
+            live = _find_active_combatant(raw.get('instance_id'))
+            if live is not None:
+                combatants[-1]['detail_key'] = _combatant_detail_key(live)
         turn_index = int(tracker.get('turn_index', 0) or 0)
         active = combatants[turn_index] if combatants and 0 <= turn_index < len(combatants) else None
         return {
@@ -21940,6 +21984,7 @@ _register_obsidian_sync(app, {
     'active_campaign_id': lambda: ACTIVE_CAMPAIGN_ID,
     'campaign_doc': _campaigns.get_campaign,
     'snapshot': _obsidian_sync_snapshot,
+    'combatant_detail': _obsidian_combatant_detail,
     'find_combatant': _find_active_combatant,
     'apply_hp': _apply_hp_delta,
     'maybe_remove_defeated': _maybe_auto_remove_defeated,
