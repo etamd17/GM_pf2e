@@ -7170,6 +7170,22 @@ def api_scene_activate(scene_id):
     return jsonify({'success': True, 'active_scene_id': scene_id})
 
 
+_SCENE_LIGHT_COLOR_RE = re.compile(r'^#[0-9a-fA-F]{6}$')
+
+
+def _scene_light_color(value):
+    """A light colour as exactly #rrggbb.
+
+    The client builds a gradient stop by concatenating an alpha byte onto this
+    string, so anything that is not 6-digit hex -- a 3-digit shorthand, a named
+    colour, an empty string -- produces an invalid stop and throws inside the
+    render loop, taking the whole canvas down rather than one light. Stored
+    values were previously any 20-character string.
+    """
+    text = str(value or '').strip()
+    return text if _SCENE_LIGHT_COLOR_RE.match(text) else '#ffd98a'
+
+
 def _token_art_name(scene_id, token_id, ext):
     """Token art filename. Prefixed with the scene id so a scene's assets are
     still identifiable as a group on disk, which is what makes cleanup possible
@@ -7577,11 +7593,27 @@ def api_scene_elements(scene_id):
                     'x': point(data.get('x'), scene['width']),
                     'y': point(data.get('y'), scene['height']),
                     'radius': point(data.get('radius', 350), 5000),
-                    'color': str(data.get('color') or '#ffd98a')[:20],
+                    'color': _scene_light_color(data.get('color')),
                     'intensity': float(max(.05, min(1, float(data.get('intensity', .75))))),
                     'visible_to_players': bool(data.get('visible_to_players', True)),
                 }
                 scene.setdefault('lights', []).append(light)
+            elif action == 'update_light':
+                # Lights could only be placed and deleted, so adjusting a torch
+                # meant erasing and re-placing it -- and intensity had no UI at
+                # all, which is why every light in the scene was 0.75.
+                light = next((item for item in scene.get('lights', [])
+                              if item.get('id') == data.get('id')), None)
+                if not light:
+                    return jsonify({'error': 'light not found'}), 404
+                if 'radius' in data:
+                    light['radius'] = point(data.get('radius'), 5000)
+                if 'color' in data:
+                    light['color'] = _scene_light_color(data.get('color'))
+                if 'intensity' in data:
+                    light['intensity'] = float(max(.05, min(1, float(data.get('intensity', .75)))))
+                if 'visible_to_players' in data:
+                    light['visible_to_players'] = bool(data.get('visible_to_players'))
             elif action == 'delete_light':
                 before = len(scene.get('lights', []))
                 scene['lights'] = [item for item in scene.get('lights', []) if item.get('id') != data.get('id')]

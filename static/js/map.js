@@ -90,6 +90,7 @@
         if (cfg.isGm) fillControls();
         loadBackground();
         updateSelectionPanel();
+        if (cfg.isGm) paintLightPanel();
         updateTargetPanel();
         draw();
         focusActiveTurn();
@@ -254,9 +255,14 @@
         for (const light of scene.lights || []) {
             const radius = Math.max(1, Number(light.radius) || 1);
             const gradient = ctx.createRadialGradient(light.x, light.y, 0, light.x, light.y, radius);
-            const color = light.color || '#ffd98a';
+            // A stop is built by concatenating an alpha byte, so the colour has
+            // to be exactly #rrggbb or the stop is invalid and throws inside the
+            // render loop -- taking the whole canvas down, not just one light.
+            const color = /^#[0-9a-f]{6}$/i.test(light.color || '') ? light.color : '#ffd98a';
             const alpha = Math.max(.05, Math.min(1, Number(light.intensity) || .75));
-            gradient.addColorStop(0, color + Math.round(alpha * 90).toString(16).padStart(2, '0'));
+            // Was alpha * 90, i.e. capped at 0x5A -- about 35% -- so the
+            // difference between a candle and a bonfire was nearly invisible.
+            gradient.addColorStop(0, color + Math.round(alpha * 200).toString(16).padStart(2, '0'));
             gradient.addColorStop(1, color + '00');
             ctx.save();
             ctx.globalCompositeOperation = 'screen';
@@ -1016,6 +1022,19 @@
             canvas.setPointerCapture(event.pointerId);
             return;
         }
+        // Clicking a light with Select opens it for editing. Lights could only
+        // be placed and deleted, so changing a torch's radius meant erasing and
+        // re-placing it.
+        if (activeTool === 'select' && cfg.isGm) {
+            const light = nearestLight(point);
+            if (light && !hitToken(point)) {
+                selectedLightId = light.id;
+                paintLightPanel();
+                draw();
+                return;
+            }
+            if (selectedLightId) { selectedLightId = null; paintLightPanel(); }
+        }
         const token = hitToken(point);
         if (activeTool === 'target') {
             toggleTarget(token);
@@ -1494,6 +1513,54 @@
         paintTableState();
     }
 
+    let selectedLightId = null;
+
+    function nearestLight(point) {
+        let best = null, bestDistance = Infinity;
+        for (const light of scene.lights || []) {
+            const distance = Math.hypot(point.x - Number(light.x), point.y - Number(light.y));
+            // Grab by the handle at its centre, not anywhere in its glow --
+            // a large light would otherwise swallow every click in the room.
+            if (distance < 22 && distance < bestDistance) { best = light; bestDistance = distance; }
+        }
+        return best;
+    }
+
+    function selectedLight() {
+        return (scene.lights || []).find(light => light.id === selectedLightId) || null;
+    }
+
+    function paintLightPanel() {
+        const box = document.getElementById('map-light-actions');
+        if (!box) return;
+        const light = selectedLight();
+        box.hidden = !light;
+        if (!light) return;
+        const set = (id, value) => {
+            const el = document.getElementById(id);
+            if (el && !isBeingEdited(el)) el.value = value;
+        };
+        set('map-light-edit-radius', Number(light.radius) || 0);
+        set('map-light-edit-color', /^#[0-9a-f]{6}$/i.test(light.color || '') ? light.color : '#ffd98a');
+        set('map-light-edit-intensity', Math.round((Number(light.intensity) || .75) * 100));
+    }
+
+    async function saveSelectedLight() {
+        const light = selectedLight();
+        if (!light) return;
+        try {
+            const data = await mapElementAction({
+                action: 'update_light', id: light.id,
+                radius: document.getElementById('map-light-edit-radius').value,
+                color: document.getElementById('map-light-edit-color').value,
+                intensity: Math.max(5, Math.min(100, Number(document.getElementById('map-light-edit-intensity').value) || 75)) / 100
+            });
+            clearDirty();
+            applyScene(data.scene);
+            toast('Light updated.');
+        } catch (error) { toast(error.message, true); }
+    }
+
     function setViewMode(mode) {
         viewMode = mode === 'table' ? 'table' : 'gm';
         const button = document.getElementById('map-preview-table');
@@ -1580,6 +1647,17 @@
                 // The scene we were looking at is gone, so there is nowhere to
                 // stay -- go wherever the server says is sensible now.
                 location.href = data.default_scene_id ? '/map/' + encodeURIComponent(data.default_scene_id) : '/map';
+            } catch (error) { toast(error.message, true); }
+        });
+        document.getElementById('map-light-save').addEventListener('click', saveSelectedLight);
+        document.getElementById('map-light-delete').addEventListener('click', async function () {
+            const light = selectedLight();
+            if (!light) return;
+            try {
+                const data = await mapElementAction({action: 'delete_light', id: light.id});
+                selectedLightId = null;
+                applyScene(data.scene);
+                paintLightPanel();
             } catch (error) { toast(error.message, true); }
         });
         document.getElementById('map-preview-table').addEventListener('click', function () {
