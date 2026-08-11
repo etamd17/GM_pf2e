@@ -53,6 +53,16 @@ function safeSegment(value) {
     .slice(0, 100) || 'unknown';
 }
 
+// Frontmatter values come from the server (session id, label, timestamps), so
+// they cannot be pasted into hand-built YAML raw. JSON string syntax is a valid
+// YAML 1.2 double-quoted scalar, so this escapes quotes, backslashes, newlines
+// and control characters in one step -- a label containing a quote or a newline
+// used to corrupt the note's frontmatter permanently for every other plugin
+// that reads it.
+function yamlString(value) {
+  return JSON.stringify(String(value ?? ''));
+}
+
 function conditionLabel(value) {
   return String(value || '').replaceAll('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -769,6 +779,13 @@ class SessionOpsSettingTab extends PluginSettingTab {
         .onChange(async (value) => {
           this.plugin.settings.campaignId = value.trim();
           this.plugin.settings.lastEventSequence = 0;
+          // Revision is per-campaign and only monotonic within one, so the new
+          // campaign's revision may be lower than what we hold. adoptServerState
+          // refuses anything older, which would wedge the pane permanently, so
+          // clear the cached state with the event cursor.
+          this.plugin.revision = 0;
+          this.plugin.state = null;
+          this.plugin.session = null;
           await this.plugin.saveSettings();
         }));
 
@@ -832,10 +849,37 @@ module.exports = class SessionOperationsSyncPlugin extends Plugin {
     this.registerEvent(this.app.metadataCache.on('changed', (file) => {
       if (file?.path === this.app.workspace.getActiveFile()?.path) this.refreshCurrentRoom();
     }));
-    this.app.workspace.onLayoutReady(() => this.refreshCurrentRoom());
+    this.app.workspace.onLayoutReady(() => {
+      this.refreshCurrentRoom();
+      this.announcePendingCommands();
+    });
 
     const interval = window.setInterval(() => this.pollIfDue(), 1000);
     this.registerInterval(interval);
+  }
+
+  /**
+   * Say out loud that queued commands are waiting.
+   *
+   * The queue persists correctly across a reload and drains in order, but
+   * nothing drained it on load and nothing mentioned it: no notice, no ribbon
+   * badge, no status anywhere outside the sidebar pane. A GM who closed Obsidian
+   * mid-session came back to a plugin that looked idle while still holding
+   * unapplied table actions.
+   *
+   * Deliberately announce rather than auto-apply. The queue exists because the
+   * website was unreachable, so every entry is by definition stale, and the
+   * offline toast already promises the command "was not silently applied".
+   * Draining it without the GM looking would break that promise.
+   */
+  announcePendingCommands() {
+    const count = this.settings.pendingCommands.length;
+    if (!count) return;
+    new Notice(
+      `Session Operations has ${count} pending command${count === 1 ? '' : 's'} from an earlier outage. `
+      + 'Open the pane to review and apply them.',
+      10000,
+    );
   }
 
   async onunload() {
@@ -1017,14 +1061,16 @@ module.exports = class SessionOperationsSyncPlugin extends Plugin {
     this.polling = true;
     const wasConnected = this.connected;
     const priorRevision = this.revision;
+    // Stamp the attempt, not the success. This used to sit inside the try after
+    // the request returned, so every failure path skipped it, the elapsed-time
+    // gate in pollIfDue passed on every 1s tick, and an outage became a 1 Hz
+    // retry storm -- with backgroundPollMs dead exactly when it mattered most.
+    this.lastPollAt = Date.now();
     try {
       const response = await this.api('/state');
-      this.state = response.state;
-      this.session = response.session;
-      this.revision = response.revision;
+      this.adoptServerState(response);
       this.connected = true;
       this.lastError = '';
-      this.lastPollAt = Date.now();
       await this.pullEvents();
       if (this.revision !== priorRevision) await this.persistSnapshot('poll');
       if (!quiet) new Notice('Session Operations is synchronized.');
@@ -1069,12 +1115,45 @@ module.exports = class SessionOperationsSyncPlugin extends Plugin {
     }
   }
 
-  async acceptCommandResponse(response) {
-    this.state = response.state || this.state;
+  /**
+   * Adopt a server payload only when it is not older than what we already hold.
+   *
+   * Poll and command responses race. `this.polling` guards syncNow against
+   * itself but never covered sendCommand, so a /state reply computed BEFORE a
+   * command was applied could land after the command response and rewind
+   * this.state/this.session/this.revision. Nothing showed it: priorRevision is
+   * captured before the request, so the repaint gate saw no change and
+   * suppressed the redraw, leaving a correct-looking pane over a stale model.
+   * The next command then stamped the rewound expected_revision and 409'd for a
+   * conflict that never happened -- and repeating the action, as the toast
+   * advised, applied it twice.
+   *
+   * Server revision is monotonic per campaign, so "not older" is the whole
+   * test. Campaign switches reset it deliberately (see the Campaign ID setting).
+   */
+  adoptServerState(response) {
+    const incoming = Number(response?.revision ?? NaN);
+    if (!Number.isFinite(incoming) || incoming < this.revision) return false;
+    if (response.state) this.state = response.state;
     this.session = response.session ?? this.session;
-    this.revision = response.revision ?? this.revision;
+    this.revision = incoming;
+    return true;
+  }
+
+  async acceptCommandResponse(response) {
     this.connected = true;
     this.lastError = '';
+    // An idempotent replay is the server telling us this command_id already ran:
+    // the body is the one captured at ORIGINAL execution, so its revision and
+    // state are as old as the command. Adopting them rewound the pane and wrote
+    // a stale snapshot into the vault. Take the acknowledgement, not the payload,
+    // and let the poll that follows carry the real current state.
+    if (response?.idempotent_replay) {
+      await this.pullEvents();
+      this.renderViews();
+      return;
+    }
+    this.adoptServerState(response);
     await this.pullEvents();
     await this.persistSnapshot('command');
     this.renderViews();
@@ -1438,10 +1517,10 @@ module.exports = class SessionOperationsSyncPlugin extends Plugin {
     if (!this.app.vault.getAbstractFileByPath(recordPath)) {
       const text = [
         '---',
-        `session_id: "${session.id}"`,
-        `session_label: "${String(session.label || '').replaceAll('"', '\\"')}"`,
+        `session_id: ${yamlString(session.id)}`,
+        `session_label: ${yamlString(session.label)}`,
         'status: live',
-        `started_at: "${session.started_at}"`,
+        `started_at: ${yamlString(session.started_at)}`,
         'ended_at:',
         'schema_version: 2',
         '---',
@@ -1514,12 +1593,11 @@ module.exports = class SessionOperationsSyncPlugin extends Plugin {
     const handoffPath = normalizePath(`${folder}/Post-Session Handoff.md`);
     let file = this.app.vault.getAbstractFileByPath(handoffPath);
     if (!file) {
-      const label = String(session.label || '').replaceAll('"', '\\"');
       const text = [
         '---',
         'type: post_session_handoff',
-        `session_id: "${session.id}"`,
-        `session_label: "${label}"`,
+        `session_id: ${yamlString(session.id)}`,
+        `session_label: ${yamlString(session.label)}`,
         `status: ${status}`,
         'schema_version: 2',
         '---',
