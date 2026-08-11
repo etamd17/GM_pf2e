@@ -201,7 +201,38 @@
         draw();
     }
 
+    // --- Frame scheduling ------------------------------------------------
+    //
+    // draw() is called from 18 places, several of them inside pointermove --
+    // so dragging a token re-rendered the entire scene once per mouse event,
+    // often several times per frame. Nothing was coalesced and there was no
+    // requestAnimationFrame anywhere.
+    //
+    // draw() now only REQUESTS a frame. renderScene() is the real work and runs
+    // at most once per animation frame, which is the most the display can show
+    // anyway. Call sites are unchanged.
+    let frameQueued = false;
+
     function draw() {
+        if (frameQueued) return;
+        frameQueued = true;
+        window.requestAnimationFrame(function () {
+            frameQueued = false;
+            renderScene();
+        });
+    }
+
+    // Diagnostic seam. requestAnimationFrame does not fire in a hidden
+    // document -- correct behaviour, and what keeps a backgrounded tab from
+    // burning CPU -- but it also means this canvas never renders in a headless
+    // preview pane, where document.hidden is permanently true. Without a way to
+    // force one frame, the map cannot be visually verified there at all.
+    //
+    // Deliberately not a fallback inside draw(): rendering a hidden document on
+    // a timer is exactly the waste rAF exists to avoid.
+    window.__mapRenderNow = function () { frameQueued = false; renderScene(); };
+
+    function renderScene() {
         if (!scene) return;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = '#181611';
@@ -334,12 +365,62 @@
         maskContext.fill();
     }
 
+    // Two full-scene offscreen canvases were allocated EVERY frame -- about
+    // 5 MB each at 1400x900, and scenes are now sized to their background
+    // image, so a 2560x1440 map made that ~15 MB of garbage per frame while
+    // dragging. They are reused instead, resized only when the scene is.
+    const scratch = {};
+
+    function scratchCanvas(key) {
+        let entry = scratch[key];
+        if (!entry) {
+            entry = scratch[key] = {canvas: document.createElement('canvas')};
+            entry.ctx = entry.canvas.getContext('2d');
+        }
+        if (entry.canvas.width !== canvas.width || entry.canvas.height !== canvas.height) {
+            entry.canvas.width = canvas.width;
+            entry.canvas.height = canvas.height;
+        } else {
+            entry.ctx.setTransform(1, 0, 0, 1, 0, 0);
+            entry.ctx.globalCompositeOperation = 'source-over';
+            entry.ctx.clearRect(0, 0, entry.canvas.width, entry.canvas.height);
+        }
+        return entry;
+    }
+
+    // The vision mask is expensive -- raycasting every source against every
+    // wall -- and changes only when something that casts or blocks light moves.
+    // Panning and zooming do not change it at all, and those are exactly the
+    // gestures that used to recompute it dozens of times a second.
+    let visionKey = null;
+
+    function visionSignature() {
+        const settings = scene.settings || {};
+        const parts = [isTableView() ? 't' : 'g', settings.dynamic_lighting ? 1 : 0,
+                       settings.default_vision, canvas.width, canvas.height];
+        for (const w of scene.walls || []) {
+            parts.push(w.x1, w.y1, w.x2, w.y2, w.kind, w.open ? 1 : 0);
+        }
+        for (const l of scene.lights || []) parts.push(l.x, l.y, l.radius);
+        for (const t of scene.tokens || []) {
+            if (ownsTokenForVision(t)) parts.push(t.id, t.x, t.y, t.vision_radius);
+        }
+        return parts.join('|');
+    }
+
     function drawVisionOverlay() {
         if (!(scene.settings || {}).dynamic_lighting) return;
-        const mask = document.createElement('canvas');
-        mask.width = canvas.width;
-        mask.height = canvas.height;
-        const mctx = mask.getContext('2d');
+        const signature = visionSignature();
+        const entry = scratch.vision;
+        if (entry && visionKey === signature
+            && entry.canvas.width === canvas.width && entry.canvas.height === canvas.height) {
+            ctx.drawImage(entry.canvas, 0, 0);
+            return;
+        }
+        const fresh = scratchCanvas('vision');
+        visionKey = signature;
+        const mask = fresh.canvas;
+        const mctx = fresh.ctx;
         mctx.fillStyle = 'rgba(0,0,0,.96)';
         mctx.fillRect(0, 0, mask.width, mask.height);
         mctx.globalCompositeOperation = 'destination-out';
@@ -358,10 +439,9 @@
 
     function drawFogOverlay() {
         if (!(scene.fog || {}).enabled) return;
-        const mask = document.createElement('canvas');
-        mask.width = canvas.width;
-        mask.height = canvas.height;
-        const mctx = mask.getContext('2d');
+        const fogScratch = scratchCanvas('fog');
+        const mask = fogScratch.canvas;
+        const mctx = fogScratch.ctx;
         const darkness = isTableView() ? .97 : .30;
         mctx.fillStyle = 'rgba(4,5,6,' + darkness + ')';
         mctx.fillRect(0, 0, mask.width, mask.height);
