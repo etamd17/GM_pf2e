@@ -499,6 +499,26 @@
     }
 
     function drawToolOverlay() {
+        // The wall run in progress, so the GM can see the room taking shape
+        // before any of it is saved.
+        if (wallChain.length) {
+            ctx.save();
+            ctx.strokeStyle = activeTool === 'door' ? 'rgba(224,182,90,.95)' : 'rgba(238,225,188,.95)';
+            ctx.lineWidth = 4;
+            ctx.setLineDash([10, 6]);
+            ctx.beginPath();
+            ctx.moveTo(wallChain[0].x, wallChain[0].y);
+            for (const point of wallChain.slice(1)) ctx.lineTo(point.x, point.y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            for (const point of wallChain) {
+                ctx.beginPath();
+                ctx.arc(point.x, point.y, 5, 0, Math.PI * 2);
+                ctx.fillStyle = '#f0d88a';
+                ctx.fill();
+            }
+            ctx.restore();
+        }
         const draft = interaction && (interaction.type === 'tool' || interaction.type === 'fog') ? interaction : null;
         const ruler = draft && draft.tool === 'measure' ? draft : measurement;
         if (ruler) {
@@ -690,6 +710,48 @@
         return ((value % size) + size) % size;
     }
 
+    // A wall run being chained: the points clicked so far. Empty when idle.
+    //
+    // Walls used to be one disconnected drag per segment, each its own HTTP
+    // round-trip. Closed rooms were tedious enough to skip -- and region fog is
+    // only as good as wall completeness, since a one-pixel gap leaks the reveal
+    // into the next room. Chaining makes a closed room the easy thing to draw.
+    let wallChain = [];
+
+    // Wall ends snap to grid INTERSECTIONS, not cell centres: a wall runs along
+    // the edge of a square, not through the middle of one. This is the opposite
+    // of tokens, and deliberately so.
+    function snapToIntersection(point) {
+        const grid = scene.grid || {};
+        const size = Number(grid.size) || 70;
+        const ox = Number(grid.offset_x) || 0;
+        const oy = Number(grid.offset_y) || 0;
+        if (!(scene.settings || {}).snap_to_grid) return {x: point.x, y: point.y};
+        return {
+            x: Math.round((point.x - ox) / size) * size + ox,
+            y: Math.round((point.y - oy) / size) * size + oy
+        };
+    }
+
+    async function commitWallChain(kind) {
+        const points = wallChain;
+        wallChain = [];
+        if (points.length < 2) { draw(); return; }
+        const segments = [];
+        for (let i = 1; i < points.length; i += 1) {
+            segments.push({x1: points[i - 1].x, y1: points[i - 1].y,
+                           x2: points[i].x, y2: points[i].y});
+        }
+        try {
+            const data = await mapElementAction({
+                action: 'add_walls', kind: kind, segments: segments,
+                secret: kind === 'door' && document.getElementById('map-secret-door').checked
+            });
+            applyScene(data.scene);
+            toast(segments.length === 1 ? 'Wall added.' : segments.length + ' wall segments added.');
+        } catch (error) { toast(error.message, true); fetchScene(); }
+    }
+
     // How many cells across a creature occupies. PF2e: Medium and smaller take
     // one square, Large two, Huge three, Gargantuan four.
     function tokenFootprint(token) {
@@ -826,13 +888,41 @@
             eraseElementAt(point);
             return;
         }
-        if (activeTool === 'door' && cfg.isGm) {
+        if (activeTool === 'door' && cfg.isGm && !wallChain.length) {
             const existingDoor = nearestWall(point, true);
             if (existingDoor) {
                 mapElementAction({action: 'toggle_door', id: existingDoor.id})
                     .then(data => applyScene(data.scene)).catch(error => toast(error.message, true));
                 return;
             }
+        }
+        if ((activeTool === 'wall' || activeTool === 'door') && cfg.isGm) {
+            // Click to start, click again for each corner, Escape or a click on
+            // the last point to finish. No drag: a room is a sequence of
+            // corners, and dragging each edge separately is what made closed
+            // rooms tedious.
+            const snapped = snapToIntersection(point);
+            const last = wallChain[wallChain.length - 1];
+            const first = wallChain[0];
+            // Clicking the last point again finishes an open run.
+            if (last && Math.hypot(snapped.x - last.x, snapped.y - last.y) < 4) {
+                commitWallChain(activeTool);
+                return;
+            }
+            // Clicking the FIRST point closes the loop and finishes -- the
+            // gesture every polygon tool uses, and the one that produces the
+            // sealed rooms region fog depends on. Without it the GM has to
+            // click the start and then press Escape, and a room that merely
+            // looks closed leaks the reveal into the next one.
+            if (first && wallChain.length >= 3
+                && Math.hypot(snapped.x - first.x, snapped.y - first.y) < 4) {
+                wallChain.push({x: first.x, y: first.y});
+                commitWallChain(activeTool);
+                return;
+            }
+            wallChain.push(snapped);
+            draw();
+            return;
         }
         if ((activeTool === 'fog-reveal' || activeTool === 'fog-hide') && cfg.isGm) {
             const radiusInput = document.getElementById('map-fog-radius');
@@ -950,18 +1040,6 @@
                         radius: document.getElementById('map-light-radius').value,
                         color: document.getElementById('map-light-color').value,
                         intensity: .75, visible_to_players: true
-                    });
-                    applyScene(data.scene);
-                } catch (error) { toast(error.message, true); }
-                return;
-            }
-            if ((finished.tool === 'wall' || finished.tool === 'door') && cfg.isGm) {
-                try {
-                    const data = await mapElementAction({
-                        action: 'add_wall', kind: finished.tool,
-                        x1: finished.start.x, y1: finished.start.y,
-                        x2: finished.end.x, y2: finished.end.y,
-                        secret: finished.tool === 'door' && document.getElementById('map-secret-door').checked
                     });
                     applyScene(data.scene);
                 } catch (error) { toast(error.message, true); }
@@ -1291,11 +1369,15 @@
         measure: 'Drag to measure PF2e grid distance', burst: 'Click to place a burst',
         emanation: 'Click to place an emanation', cone: 'Drag to aim a cone', line: 'Drag to aim a line',
         'fog-reveal': 'Paint areas players can see', 'fog-hide': 'Paint fog back onto the map',
-        wall: 'Drag to create a vision-blocking wall', door: 'Drag a door or click one to open/close it',
+        wall: 'Click each corner; Esc or click the last point to finish', door: 'Click each corner to place doors, or click an existing door to open it',
         light: 'Click to place a light source', erase: 'Click a wall, door, light, or template to remove it'
     };
 
     function setActiveTool(tool) {
+        // Leaving the wall tool with a run in progress saves it. Discarding a
+        // half-drawn room because the GM reached for another tool would be the
+        // worst possible answer.
+        if (wallChain.length && tool !== activeTool) commitWallChain(activeTool);
         activeTool = tool || 'select';
         measurement = activeTool === 'measure' ? measurement : null;
         interaction = null;
@@ -1666,7 +1748,8 @@
             undoMovement();
         }
         if (event.key === 'Escape') {
-            if (calibrationMode) setCalibrationMode(false);
+            if (wallChain.length) commitWallChain(activeTool);
+            else if (calibrationMode) setCalibrationMode(false);
             else setActiveTool('select');
         }
     });
