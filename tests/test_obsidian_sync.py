@@ -134,6 +134,10 @@ class FakeAdapter:
                 "id": "handout-1", "title": payload.get("title"),
                 "content": payload.get("content"), "recipients": payload.get("recipients"),
             },
+            "combatant_detail": lambda instance_id: (
+                {"name": "Hero", "level": 1, "is_pc": True, "ac": 18, "attacks": [], "skills": []}
+                if instance_id == "hero-1" else None
+            ),
             "gm_required": lambda fn: fn,
         }
 
@@ -281,3 +285,142 @@ def test_player_request_is_durable_and_resolvable(sync_client):
     item = resolved.get_json()["result"]["player_request"]
     assert item["status"] == "resolved"
     assert item["resolution"] == "Perception check"
+
+
+# ---------------------------------------------------------------------------
+# Undo and multi-target damage
+# ---------------------------------------------------------------------------
+
+def _command(client, raw_token, cid, kind, payload, revision):
+    return client.post(
+        "/api/integrations/obsidian/v1/commands",
+        headers=headers(raw_token),
+        json={"command_id": cid, "expected_revision": revision, "type": kind, "payload": payload},
+    )
+
+
+def test_undo_reverses_damage_by_the_amount_actually_applied(sync_client):
+    """The inverse must use the recorded old/new HP, not the requested amount --
+    resistances and the max-HP ceiling mean those differ."""
+    client, fake, raw_token = sync_client
+    client.get("/api/integrations/obsidian/v1/state", headers=headers(raw_token))
+    start = fake.combatants[0].current_hp
+
+    r = _command(client, raw_token, "undo-dmg-0001", "adjust_hp",
+                 {"target_id": "hero-1", "amount": 9, "action": "damage"}, 0)
+    assert r.status_code == 200, r.get_json()
+    assert fake.combatants[0].current_hp == start - 9
+    rev = r.get_json()["revision"]
+
+    undo = _command(client, raw_token, "undo-cmd-0001", "undo_last", {}, rev)
+    assert undo.status_code == 200, undo.get_json()
+    assert fake.combatants[0].current_hp == start, "undo did not restore the HP"
+    assert undo.get_json()["result"]["command_type"] == "adjust_hp"
+
+
+def test_an_undo_cannot_itself_be_undone(sync_client):
+    """Otherwise a second tap redoes the thing you just reversed, which reads as
+    the button doing nothing while quietly toggling state."""
+    client, fake, raw_token = sync_client
+    client.get("/api/integrations/obsidian/v1/state", headers=headers(raw_token))
+    r = _command(client, raw_token, "undo-dmg-0002", "adjust_hp",
+                 {"target_id": "hero-1", "amount": 4, "action": "damage"}, 0)
+    rev = r.get_json()["revision"]
+    undo = _command(client, raw_token, "undo-cmd-0002", "undo_last", {}, rev)
+    assert undo.status_code == 200
+    again = _command(client, raw_token, "undo-cmd-0003", "undo_last", {},
+                     undo.get_json()["revision"])
+    assert again.status_code == 400
+    assert "itself an undo" in again.get_json()["error"]
+
+
+def test_undo_refuses_a_command_it_cannot_honestly_reverse(sync_client):
+    """A captured note is already written into the vault; pretending to undo it
+    would be a lie. Refuse by name rather than approximate."""
+    client, fake, raw_token = sync_client
+    client.get("/api/integrations/obsidian/v1/state", headers=headers(raw_token))
+    r = _command(client, raw_token, "note-cmd-0001", "capture_note",
+                 {"text": "the cultist fled north"}, 0)
+    assert r.status_code == 200
+    undo = _command(client, raw_token, "undo-cmd-0004", "undo_last", {},
+                    r.get_json()["revision"])
+    assert undo.status_code == 400
+    assert "cannot be undone" in undo.get_json()["error"]
+
+
+def test_undo_with_nothing_to_undo_is_refused(sync_client):
+    client, fake, raw_token = sync_client
+    client.get("/api/integrations/obsidian/v1/state", headers=headers(raw_token))
+    undo = _command(client, raw_token, "undo-cmd-0005", "undo_last", {}, 0)
+    assert undo.status_code == 400
+    assert "nothing to undo" in undo.get_json()["error"]
+
+
+def test_multi_target_damage_applies_once_per_target_in_one_command(sync_client):
+    """One command, one revision bump, one event -- so one undo takes back the
+    whole area effect rather than a quarter of it."""
+    client, fake, raw_token = sync_client
+    fake.combatants.append(SimpleNamespace(
+        instance_id="hero-2", name="Second", is_pc=True, initiative=12,
+        current_hp=30, hp=40, conditions={},
+    ))
+    client.get("/api/integrations/obsidian/v1/state", headers=headers(raw_token))
+    before = {c.instance_id: c.current_hp for c in fake.combatants}
+
+    r = _command(client, raw_token, "aoe-cmd-0001", "adjust_hp",
+                 {"target_ids": ["hero-1", "hero-2"], "amount": 6, "action": "damage"}, 0)
+    assert r.status_code == 200, r.get_json()
+    body = r.get_json()["result"]
+    assert len(body["targets"]) == 2
+    for c in fake.combatants:
+        assert c.current_hp == before[c.instance_id] - 6
+
+    events = client.get("/api/integrations/obsidian/v1/events?after=0",
+                        headers=headers(raw_token)).get_json()["events"]
+    assert len([e for e in events if e["command_type"] == "adjust_hp"]) == 1, \
+        "an area effect must be one event, not one per target"
+
+    undo = _command(client, raw_token, "aoe-undo-0001", "undo_last", {}, r.get_json()["revision"])
+    assert undo.status_code == 200, undo.get_json()
+    for c in fake.combatants:
+        assert c.current_hp == before[c.instance_id], "undo left a target un-reversed"
+
+
+def test_multi_target_is_all_or_nothing_on_a_missing_combatant(sync_client):
+    """Applying to some and failing would leave the GM unsure which half landed."""
+    client, fake, raw_token = sync_client
+    client.get("/api/integrations/obsidian/v1/state", headers=headers(raw_token))
+    before = fake.combatants[0].current_hp
+    r = _command(client, raw_token, "aoe-cmd-0002", "adjust_hp",
+                 {"target_ids": ["hero-1", "ghost-9"], "amount": 5, "action": "damage"}, 0)
+    assert r.status_code == 404
+    assert fake.combatants[0].current_hp == before, "a target was damaged despite the failure"
+
+
+def test_combatant_detail_is_served_on_demand_not_in_the_snapshot(sync_client):
+    """The statblock is the largest and least volatile thing the pane needs, so
+    it must not ride the 1 Hz /state poll on the worker that also carries every
+    player's SSE."""
+    client, fake, raw_token = sync_client
+    r = client.get("/api/integrations/obsidian/v1/combatant/hero-1", headers=headers(raw_token))
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body["ok"] is True
+    assert body["instance_id"] == "hero-1"
+    assert body["detail"]["ac"] == 18
+
+
+def test_combatant_detail_requires_the_bearer_token(sync_client):
+    """It is on the bearer blueprint, not behind the GM session gate that
+    /api/combatant_stats uses -- the pane has no session cookie."""
+    client, fake, raw_token = sync_client
+    assert client.get("/api/integrations/obsidian/v1/combatant/hero-1").status_code == 401
+    assert client.get("/api/integrations/obsidian/v1/combatant/hero-1",
+                      headers=headers("obs1_bad_token")).status_code == 401
+
+
+def test_combatant_detail_404s_for_an_unknown_combatant(sync_client):
+    client, fake, raw_token = sync_client
+    r = client.get("/api/integrations/obsidian/v1/combatant/ghost-9", headers=headers(raw_token))
+    assert r.status_code == 404
+    assert r.get_json()["ok"] is False

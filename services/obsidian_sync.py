@@ -85,6 +85,126 @@ def _event_context(snapshot: dict, payload: dict) -> dict:
     }
 
 
+# Command kinds an undo can honestly reverse, and how.
+#
+# Deliberately a short list. The GM taps the wrong row constantly, and an undo
+# that quietly half-works is worse than no undo -- so anything not named here is
+# refused by name rather than approximated. In particular a `roll` cannot be
+# un-rolled, a `capture_note` is already written into the vault, and session
+# start/end move a lifecycle the vault has mirrored to disk.
+_UNDOABLE_KINDS = {"adjust_hp", "adjust_party_hp", "condition_action", "advance_turn"}
+
+_INVERSE_CONDITION_ACTION = {
+    "increase": "decrease",
+    "add": "remove",
+    "decrease": "increase",
+    "remove": "add",
+    "toggle": "toggle",
+}
+
+
+def _last_undoable_event(campaign_id: str, runtime: dict) -> dict | None:
+    """The most recent command event, if it is one we can reverse.
+
+    Only the LAST event is eligible. Undo is for the tap you just regretted, not
+    a history browser: reversing something from five commands ago would silently
+    discard whatever happened in between.
+    """
+    sequence = int(runtime.get("event_sequence", 0) or 0)
+    if sequence <= 0:
+        return None
+    events = sync_store.read_events(campaign_id, after=sequence - 1, limit=1)
+    return events[0] if events else None
+
+
+def _undo_last(adapter: dict, campaign_id: str, runtime: dict) -> dict:
+    """Reverse the last command by sending its inverse through the same adapters.
+
+    This is an inverse, NOT a state restore. Writing HP back directly would be a
+    raw read-modify-write against a character file, which is the exact class of
+    bug CLAUDE.md documents as fixed and load-bearing; going back through
+    apply_hp / adjust_party_hp / apply_condition keeps every downstream effect
+    (dying and wounded transitions, persistence, broadcasts) consistent.
+
+    The honest consequence, which the client surfaces: an inverse is not a time
+    machine. Undoing damage that pushed a PC into dying restores the hit points
+    but does not retract the dying condition, because the engine applied that as
+    its own consequence. The client names what it will do before doing it.
+    """
+    event = _last_undoable_event(campaign_id, runtime)
+    if event is None:
+        raise ValueError("there is nothing to undo")
+    if event.get("undo_of"):
+        raise ValueError("the last action was itself an undo")
+    kind = str(event.get("command_type") or "")
+    if kind not in _UNDOABLE_KINDS:
+        raise ValueError(f"a {kind or 'command'} cannot be undone")
+
+    payload = event.get("payload") or {}
+    result = event.get("result") or {}
+    undone = {"command_type": kind, "event_id": event.get("event_id"), "sequence": event.get("sequence")}
+
+    if kind == "adjust_hp" and result.get("targets"):
+        # Multi-target: reverse every target, each by its own recorded delta,
+        # because resistances mean the same fireball landed differently on each.
+        reversed_targets = []
+        for entry in result["targets"]:
+            delta = int(entry.get("old_hp", 0)) - int(entry.get("new_hp", 0))
+            if delta == 0:
+                continue
+            target_id = str(entry.get("target_id") or "")
+            if adapter["find_combatant"](target_id) is None:
+                continue  # left the encounter; skip rather than fail the whole undo
+            adapter["apply_hp"](target_id, abs(delta), "heal" if delta > 0 else "damage", "untyped")
+            reversed_targets.append({"target_id": target_id, "amount": abs(delta)})
+        adapter["persist_encounter"]()
+        adapter["broadcast_encounter"]()
+        return {**undone, "targets": reversed_targets}
+
+    if kind in ("adjust_hp", "adjust_party_hp"):
+        # Invert by the amount the engine ACTUALLY applied, not the amount asked
+        # for: resistances, temp HP and the max-HP ceiling all mean the recorded
+        # old/new HP is the only truthful delta.
+        old_hp = result.get("old_hp")
+        new_hp = result.get("new_hp")
+        if old_hp is None or new_hp is None:
+            raise ValueError("that action did not record enough state to undo")
+        delta = int(old_hp) - int(new_hp)
+        if delta == 0:
+            return {**undone, "no_op": True}
+        action = "heal" if delta > 0 else "damage"
+        amount = abs(delta)
+        if kind == "adjust_hp":
+            target_id = str(payload.get("target_id") or "")
+            if adapter["find_combatant"](target_id) is None:
+                raise LookupError("that combatant is no longer in the encounter")
+            adapter["apply_hp"](target_id, amount, action, "untyped")
+            adapter["persist_encounter"]()
+            adapter["broadcast_encounter"]()
+            return {**undone, "target_id": target_id, "action": action, "amount": amount}
+        pc_name = str(payload.get("pc_name") or "")
+        if adapter["adjust_party_hp"](pc_name, amount, action) is None:
+            raise LookupError("that party member is no longer loaded")
+        return {**undone, "pc_name": pc_name, "action": action, "amount": amount}
+
+    if kind == "condition_action":
+        target_id = str(payload.get("target_id") or "")
+        condition = str(payload.get("condition") or "")
+        inverse = _INVERSE_CONDITION_ACTION.get(str(payload.get("action") or "").lower())
+        if not inverse:
+            raise ValueError("that condition change cannot be undone")
+        if not adapter["apply_condition"](target_id, condition, inverse, 0):
+            raise LookupError("that combatant is no longer in the encounter")
+        return {**undone, "target_id": target_id, "condition": condition, "action": inverse}
+
+    # advance_turn
+    direction = "prev" if str(payload.get("direction") or "next") == "next" else "next"
+    if not adapter["has_encounter"]():
+        raise ValueError("there is no active encounter")
+    adapter["advance_turn"](direction)
+    return {**undone, "direction": direction}
+
+
 def _sync_observed_state(runtime: dict, snapshot: dict) -> bool:
     """Notice mutations made by the website UI between Obsidian commands."""
     digest = sync_store.snapshot_hash(snapshot)
@@ -119,6 +239,51 @@ def _dispatch(
     campaign_id: str,
 ) -> dict:
     if kind == "adjust_hp":
+        # Multi-target: an area effect hits several combatants with one amount.
+        # Kept as ONE command rather than N, so it is one revision bump, one
+        # event, and one undo -- the GM who fat-fingers a fireball wants to take
+        # back the fireball, not four separate hits.
+        target_ids = payload.get("target_ids")
+        if target_ids:
+            if not isinstance(target_ids, list):
+                raise ValueError("target_ids must be a list")
+            if len(target_ids) > 24:
+                raise ValueError("target_ids must contain 24 targets or fewer")
+            try:
+                amount = int(payload.get("amount", 0))
+            except (TypeError, ValueError):
+                raise ValueError("amount must be an integer")
+            if amount < 1 or amount > 100000:
+                raise ValueError("amount must be between 1 and 100000")
+            action = str(payload.get("action") or "").lower()
+            if action not in ("damage", "heal"):
+                raise ValueError("action must be damage or heal")
+            damage_type = str(payload.get("damage_type") or "untyped")[:80]
+            ids = [str(t) for t in target_ids if str(t)]
+            missing = [t for t in ids if adapter["find_combatant"](t) is None]
+            if missing:
+                # All-or-nothing: applying to some and reporting failure would
+                # leave the GM unsure which half landed.
+                raise LookupError(f"combatant not found: {missing[0]}")
+            applied = []
+            for target_id in ids:
+                old_hp = adapter["apply_hp"](target_id, amount, action, damage_type)
+                after_target = adapter["find_combatant"](target_id)
+                applied.append({
+                    "target_id": target_id,
+                    "old_hp": old_hp,
+                    "new_hp": int(getattr(after_target, "current_hp", 0) or 0) if after_target else 0,
+                    "defeated": bool(adapter["maybe_remove_defeated"](target_id, old_hp, action)),
+                })
+            adapter["persist_encounter"]()
+            adapter["broadcast_encounter"]()
+            return {
+                "action": action,
+                "raw_amount": amount,
+                "damage_type": damage_type,
+                "targets": applied,
+            }
+
         target_id = str(payload.get("target_id") or "")
         target = adapter["find_combatant"](target_id)
         if target is None:
@@ -314,6 +479,7 @@ def create_obsidian_sync_blueprint(adapter: dict) -> Blueprint:
         "sort_encounter", "persist_encounter", "broadcast_encounter",
         "advance_turn", "has_encounter", "gm_required", "resolve_roll",
         "launch_room_encounter", "sync_room_reminders", "create_player_reveal",
+        "combatant_detail",
     }
     missing = sorted(required - set(adapter))
     if missing:
@@ -437,6 +603,24 @@ def create_obsidian_sync_blueprint(adapter: dict) -> Blueprint:
         response, _ = current_state(g.obsidian_campaign_id)
         return jsonify(response)
 
+    @bp.get(API_PREFIX + "/combatant/<instance_id>")
+    @token_required
+    def combatant_detail(instance_id):
+        """The STATIC half of a combatant: attacks, skills, spells, actions,
+        resistances -- the parts that do not change from round to round.
+
+        Served on demand rather than in /state because /state is polled once a
+        second by an open pane, on the single gevent worker that also carries
+        every player's SSE. A statblock is the largest and least volatile thing
+        the pane needs, so it is exactly the wrong payload to repeat 60 times a
+        minute. Clients cache the response and use the `detail_key` carried in
+        the snapshot to notice when it has gone stale.
+        """
+        detail = adapter["combatant_detail"](str(instance_id))
+        if detail is None:
+            return _json_error("combatant not found", 404)
+        return jsonify({"ok": True, "instance_id": str(instance_id), "detail": detail})
+
     def process_command(campaign_id: str, body: dict):
         command_id = str(body.get("command_id") or "")
         if not COMMAND_ID_RE.match(command_id):
@@ -501,6 +685,8 @@ def create_obsidian_sync_blueprint(adapter: dict) -> Blueprint:
                     current["status"] = "awaiting_processing"
                     current["ended_at"] = sync_store.utc_now()
                     result = {"session": copy.deepcopy(current)}
+                elif kind == "undo_last":
+                    result = _undo_last(adapter, campaign_id, runtime)
                 else:
                     result = _dispatch(
                         adapter,
@@ -529,7 +715,7 @@ def create_obsidian_sync_blueprint(adapter: dict) -> Blueprint:
                 "create_player_reveal": "player_reveal",
             }.get(kind, "combat_command")
             active_session = runtime.get("current_session") or session_before
-            event = sync_store.append_event(campaign_id, runtime, {
+            event_body = {
                 "type": event_type,
                 "command_id": command_id,
                 "command_type": kind,
@@ -541,7 +727,14 @@ def create_obsidian_sync_blueprint(adapter: dict) -> Blueprint:
                 "result": result,
                 "before": _event_context(before, payload),
                 "after": _event_context(after, payload),
-            })
+            }
+            if kind == "undo_last":
+                # Marks this event ineligible for a further undo. Without it,
+                # tapping Undo twice would redo the thing you just reversed --
+                # the inverse of an inverse -- which reads as the button doing
+                # nothing while quietly toggling state.
+                event_body["undo_of"] = result.get("event_id")
+            event = sync_store.append_event(campaign_id, runtime, event_body)
             response = {
                 "ok": True,
                 "command_id": command_id,
