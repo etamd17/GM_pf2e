@@ -37,17 +37,40 @@ def _bearer_token() -> str:
     return header.split(" ", 1)[1].strip()
 
 
+# What an event records about its target. Deliberately a fixed projection of
+# the VOLATILE fields, never the whole record.
+#
+# This is the difference between a durable log and an unbounded one. Every
+# accepted command appends before/after context to events.jsonl (which the vault
+# plugin then mirrors into Combat Events.jsonl), and neither file rotates. A
+# deepcopy of the full combatant wrote the target's entire statblock -- strikes,
+# feats, spell lists -- into the log twice per command, and the statblock does
+# not change between them, so it was pure duplication that grew forever.
+#
+# The projection is also the honest one for the post-session digest, whose only
+# question is "what changed": HP, temp HP, conditions, initiative. Anything
+# static belongs in the statblock, not in a per-event snapshot of it.
+_EVENT_TARGET_FIELDS = (
+    "instance_id", "name", "is_pc", "current_hp", "max_hp", "temp_hp",
+    "conditions", "initiative", "persistent_damage",
+)
+
+
+def _project_target(record: dict) -> dict:
+    return {k: copy.deepcopy(record[k]) for k in _EVENT_TARGET_FIELDS if k in record}
+
+
 def _target_from_snapshot(snapshot: dict, payload: dict) -> dict | None:
     target_id = payload.get("target_id")
     if target_id:
         for combatant in snapshot.get("encounter", {}).get("combatants", []):
             if combatant.get("instance_id") == target_id:
-                return copy.deepcopy(combatant)
+                return _project_target(combatant)
     pc_name = payload.get("pc_name")
     if pc_name:
         for pc in snapshot.get("party", []):
             if pc.get("name") == pc_name:
-                return copy.deepcopy(pc)
+                return _project_target(pc)
     return None
 
 
