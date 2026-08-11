@@ -7051,6 +7051,10 @@ def _scene_live_indexes(cid):
                 'max_hp': int(getattr(pc, 'hp', 0) or 0),
                 'conditions': {k: v for k, v in getattr(pc, 'conditions', {}).items()
                               if v and v is not False},
+                # Speed, so dragging a token can measure against it. Read from
+                # the derived value the sheet shows, which already includes
+                # bonuses and toggles -- not the raw ancestry number.
+                'speed': int(getattr(pc, 'base_speed', 0) or 0),
             })
         characters[char_id] = state
 
@@ -7071,6 +7075,8 @@ def _scene_live_indexes(cid):
                 'visible_to_players': bool(getattr(combatant, 'visible_to_players', True)),
                 'is_active': index == TURN_INDEX,
                 'character_id': record.get('id') if record else None,
+                'speed': int(getattr(combatant, 'base_speed', 0)
+                             or (getattr(combatant, 'attributes', {}) or {}).get('spd', 0) or 0),
             }
             if not combatant.is_pc:
                 # Carry the coarse status alongside the numbers. project_scene
@@ -7642,9 +7648,52 @@ def api_scene_combatant_action(scene_id, instance_id):
         operation = str(data.get('operation') or 'add')
         if operation not in ('add', 'increase', 'decrease', 'remove', 'toggle'):
             return jsonify({'error': 'unknown condition operation'}), 400
-        if not _apply_condition_change(instance_id, condition, operation):
+        # Durations. _apply_condition_change has always taken `rounds` -- the
+        # map simply never passed it, so "frightened 2 for 3 rounds" could only
+        # be set from the tracker. The timer engine, its persistence
+        # (condition_expiry) and its tick-down are all already there.
+        try:
+            rounds = int(data.get('rounds') or 0)
+        except (TypeError, ValueError):
+            return jsonify({'error': 'rounds must be a whole number'}), 400
+        if rounds < 0 or rounds > 100:
+            return jsonify({'error': 'rounds must be between 0 and 100'}), 400
+        if not _apply_condition_change(instance_id, condition, operation, rounds=rounds):
             return jsonify({'error': 'combatant is no longer in the live encounter'}), 409
-        result = {'action': action, 'condition': condition, 'operation': operation}
+        result = {'action': action, 'condition': condition,
+                  'operation': operation, 'rounds': rounds}
+    elif action == 'persistent_damage':
+        # Persistent damage is stored in two different shapes, and the split is
+        # load-bearing: a monster keeps a string ("1d6 fire"), a PC keeps a list
+        # of dicts. Writing the string form onto a PC once corrupted it into
+        # list("1d6 fire") -> ['1','d','6',...], which is why
+        # /api/set_persistent_damage 409s for PCs. Route each to its own engine
+        # rather than reimplementing either here.
+        expression = str(data.get('damage') or '').strip()[:60]
+        if not expression:
+            return jsonify({'error': 'enter a damage expression, e.g. 1d6 fire'}), 400
+        damage_type = str(data.get('damage_type') or '').strip().lower()[:30]
+        if combatant.is_pc:
+            pc_name = combatant.name
+            if pc_name not in PARTY_LIBRARY:
+                return jsonify({'error': 'that PC is not loaded'}), 404
+            entry = {'damage': expression, 'type': damage_type, 'source': 'map'}
+
+            def _add_pd(pc):
+                existing = getattr(pc, 'persistent_damage', []) or []
+                pc.persistent_damage = (list(existing) if isinstance(existing, list) else []) + [entry]
+                return True
+
+            apply_pc_delta(pc_name, _add_pd)
+        else:
+            with ENCOUNTER_LOCK:
+                for c in ACTIVE_ENCOUNTER:
+                    if c.instance_id == instance_id:
+                        c.persistent_damage = (expression + ' ' + damage_type).strip()
+                        break
+            _persist_encounter_state()
+            _broadcast_encounter_state()
+        result = {'action': action, 'damage': expression, 'damage_type': damage_type}
     else:
         return jsonify({'error': 'unknown combat action'}), 400
     return jsonify({'success': True, 'result': result,

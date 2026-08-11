@@ -161,6 +161,16 @@
                         </div>
                         <label for="map-condition">Condition</label>
                         <select id="map-condition">
+                        {# Durations: the tracker could set these all along --
+                           _apply_condition_change has always taken rounds -- but the
+                           map never passed them. 0 means no timer. #}
+                        <label for="map-condition-rounds">Rounds (0 = no timer)</label>
+                        <input id="map-condition-rounds" type="number" min="0" max="100" step="1" value="0">
+                        <label for="map-pd-damage">Persistent damage</label>
+                        <input id="map-pd-damage" maxlength="60" placeholder="1d6">
+                        <label for="map-pd-type">Persistent type</label>
+                        <input id="map-pd-type" maxlength="30" placeholder="fire">
+                        <button id="map-apply-pd" class="map-btn map-btn--wide" type="button">Apply persistent damage</button>
                             <option value="frightened">Frightened</option>
                             <option value="sickened">Sickened</option>
                             <option value="prone">Prone</option>
