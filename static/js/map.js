@@ -556,7 +556,48 @@
         return feet + ' ft (' + Math.max(sx, sy) + ' squares)';
     }
 
+    // Feet travelled while dragging, against the creature's Speed.
+    //
+    // The ruler existed, but measuring a move meant putting the token down,
+    // switching tools, measuring, switching back. This shows it as you drag --
+    // the actual question being asked ("can she reach him?") rather than a
+    // generic distance.
+    function drawMoveMeasure() {
+        if (!interaction || interaction.type !== 'token') return;
+        const token = interaction.token;
+        if (!token) return;
+        const from = {x: Number(interaction.fromX), y: Number(interaction.fromY)};
+        const to = {x: Number(token.x), y: Number(token.y)};
+        if (Math.hypot(to.x - from.x, to.y - from.y) < 2) return;
+        const speed = Number((token.live || {}).speed) || 0;
+        const label = pf2eDistanceLabel(from, to);
+        const feet = parseInt(label, 10) || 0;
+        // Over Speed is not illegal -- it is a second action, or a Stride and a
+        // Step. Flag it rather than forbid it.
+        const over = speed > 0 && feet > speed;
+        ctx.save();
+        ctx.setLineDash([8, 6]);
+        ctx.strokeStyle = over ? '#e9a13b' : '#f0d88a';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(from.x, from.y);
+        ctx.lineTo(to.x, to.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        const text = speed > 0 ? label + '  /  Speed ' + speed + ' ft' : label;
+        ctx.font = '700 16px system-ui, sans-serif';
+        const width = ctx.measureText(text).width + 16;
+        const mx = (from.x + to.x) / 2, my = (from.y + to.y) / 2 - 18;
+        ctx.fillStyle = 'rgba(10,10,12,.82)';
+        ctx.fillRect(mx - width / 2, my - 15, width, 24);
+        ctx.fillStyle = over ? '#e9a13b' : '#f4e7c0';
+        ctx.textAlign = 'center';
+        ctx.fillText(text, mx, my + 2);
+        ctx.restore();
+    }
+
     function drawToolOverlay() {
+        drawMoveMeasure();
         // The wall run in progress, so the GM can see the room taking shape
         // before any of it is saved.
         if (wallChain.length) {
@@ -1916,13 +1957,30 @@
             if (!token || !token.combatant_id) return;
             try {
                 const condition = document.getElementById('map-condition').value;
+                const roundsField = document.getElementById('map-condition-rounds');
+                const rounds = Math.max(0, Math.min(100, Number(roundsField && roundsField.value) || 0));
                 const data = await runCombatAction(token.combatant_id, {
-                    action: 'condition', condition: condition, operation: operation
+                    action: 'condition', condition: condition,
+                    operation: operation, rounds: rounds
                 });
                 applyScene(data.scene);
-                toast(condition.replace(/_/g, ' ') + ' updated.');
+                toast(condition.replace(/_/g, ' ') + (rounds ? ' for ' + rounds + ' rounds.' : ' updated.'));
             } catch (error) { toast(error.message, true); }
         }
+        document.getElementById('map-apply-pd').addEventListener('click', async function () {
+            const token = selectedToken();
+            if (!token || !token.combatant_id) return;
+            const damage = document.getElementById('map-pd-damage').value.trim();
+            if (!damage) { toast('Enter a damage expression, e.g. 1d6', true); return; }
+            try {
+                const data = await runCombatAction(token.combatant_id, {
+                    action: 'persistent_damage', damage: damage,
+                    damage_type: document.getElementById('map-pd-type').value.trim()
+                });
+                applyScene(data.scene);
+                toast('Persistent damage applied.');
+            } catch (error) { toast(error.message, true); }
+        });
         document.getElementById('map-apply-damage').addEventListener('click', () => applyHpAction('damage'));
         document.getElementById('map-apply-healing').addEventListener('click', () => applyHpAction('heal'));
         document.getElementById('map-add-condition').addEventListener('click', () => applyCondition('add'));
