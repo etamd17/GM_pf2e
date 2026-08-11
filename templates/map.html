@@ -83,6 +83,9 @@
                 </select>
                 <input id="map-token-name" maxlength="100" placeholder="Custom token name">
                 <button id="map-add-token" class="map-btn map-btn--wide" type="button">Add token</button>
+                {# Shown whenever nothing is selected, so the sidebar does not simply
+                   collapse when the inspector below hides. #}
+                <p id="map-token-empty" class="map-token-empty">Select a token to edit it.</p>
                 <div id="map-token-actions" class="map-token-actions" hidden>
                     <h3>Selected token</h3>
                     <label for="map-selected-name">Name</label>

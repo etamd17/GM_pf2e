@@ -7078,8 +7078,13 @@ def api_scenes():
     if not cid and _account_mode():
         return jsonify({'error': 'no active campaign'}), 400
     if request.method == 'GET':
+        # token_candidates rides along so the sidebar's scene AND token pickers
+        # refresh from one call. They were Jinja render-time snapshots, so
+        # adding a combatant in the tracker left the map's list stale until a
+        # manual reload -- mid-fight, exactly when you cannot afford one.
         return jsonify({'scenes': _scenes.scene_summaries(cid),
-                        'active_scene_id': _scenes.active_scene_id(cid)})
+                        'active_scene_id': _scenes.active_scene_id(cid),
+                        'token_candidates': _scene_token_candidates(cid)})
     if not _is_gm():
         return jsonify({'error': 'GM access required'}), 403
     data = request.get_json(silent=True) or {}
