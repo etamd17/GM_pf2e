@@ -62,7 +62,9 @@ def test_old_scene_tokens_receive_new_map_defaults(scene_store):
     assert token['locked'] is False
     assert token['show_nameplate'] is True
     assert token['image_focus'] == {'x': 50, 'y': 50}
-    assert loaded['fog'] == {'enabled': False, 'operations': []}
+    # revealed_cells arrived with region fog (stage 4c); an old scene must
+    # gain it empty rather than blowing up on load.
+    assert loaded['fog'] == {'enabled': False, 'operations': [], 'revealed_cells': []}
     assert loaded['walls'] == []
     assert loaded['lights'] == []
     assert loaded['templates'] == []

@@ -93,7 +93,7 @@ def new_scene(cid, name='Untitled Scene', *, width=DEFAULT_WIDTH,
             'default_vision': 700,
         },
         'tokens': [],
-        'fog': {'enabled': False, 'operations': []},
+        'fog': {'enabled': False, 'operations': [], 'revealed_cells': []},
         'walls': [],
         'lights': [],
         'templates': [],
@@ -118,6 +118,9 @@ def normalize_scene(scene):
     fog = scene.setdefault('fog', {})
     fog.setdefault('enabled', False)
     fog.setdefault('operations', [])
+    # Region fog. Bounded by the grid, unlike the arc log above, which is
+    # kept only so scenes fogged before region reveal do not go dark.
+    fog.setdefault('revealed_cells', [])
     scene.setdefault('walls', [])
     scene.setdefault('lights', [])
     scene.setdefault('templates', [])

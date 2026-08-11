@@ -7602,8 +7602,45 @@ def api_scene_elements(scene_id):
                         'radius': point(operation.get('radius', 100), 1000),
                     })
                 scene['fog']['operations'] = target[-2000:]
+            elif action == 'fog_region':
+                # Reveal or hide a whole enclosed area, stored as grid CELLS.
+                #
+                # The brush appended arcs to an operation log that was replayed
+                # in full every frame and only ever grew (capped at 2000, with
+                # no compaction). A cell set is bounded by the grid instead, so
+                # the cost is the same at the end of a session as at the start,
+                # and re-revealing a room is idempotent rather than another
+                # 30 entries.
+                #
+                # The flood fill itself is the client's: it already holds the
+                # walls, and this route is GM-only, so there is no boundary to
+                # defend here -- only shape and size.
+                cells = data.get('cells')
+                if not isinstance(cells, list) or not cells:
+                    return jsonify({'error': 'no fog cells supplied'}), 400
+                if len(cells) > 20000:
+                    return jsonify({'error': 'fog region is too large'}), 400
+                clean = set()
+                for cell in cells:
+                    if not isinstance(cell, str) or cell.count(',') != 1:
+                        return jsonify({'error': 'malformed fog cell'}), 400
+                    col, _, row = cell.partition(',')
+                    try:
+                        clean.add('%d,%d' % (int(col), int(row)))
+                    except (TypeError, ValueError):
+                        return jsonify({'error': 'malformed fog cell'}), 400
+                fog = scene.setdefault('fog', {})
+                current = set(fog.get('revealed_cells') or [])
+                if data.get('mode') == 'hide':
+                    current -= clean
+                else:
+                    current |= clean
+                if len(current) > 40000:
+                    return jsonify({'error': 'too many revealed cells'}), 400
+                fog['revealed_cells'] = sorted(current)
             elif action == 'fog_reset':
                 scene.setdefault('fog', {})['operations'] = []
+                scene['fog']['revealed_cells'] = []
             elif action == 'add_template':
                 kind = str(data.get('kind') or '')
                 if kind not in ('burst', 'emanation', 'cone', 'line'):
