@@ -359,6 +359,20 @@
         const darkness = isTableView() ? .97 : .30;
         mctx.fillStyle = 'rgba(4,5,6,' + darkness + ')';
         mctx.fillRect(0, 0, mask.width, mask.height);
+        // Revealed squares are punched out of the darkness. A cell set is
+        // bounded by the grid, so this costs the same at the end of a session
+        // as at the start -- unlike the arc log below, which only ever grew.
+        const g = gridGeometry();
+        mctx.globalCompositeOperation = 'destination-out';
+        mctx.fillStyle = '#000';
+        for (const key of scene.fog.revealed_cells || []) {
+            const parts = String(key).split(',');
+            const col = Number(parts[0]), row = Number(parts[1]);
+            if (!Number.isFinite(col) || !Number.isFinite(row)) continue;
+            mctx.fillRect(g.ox + col * g.size, g.oy + row * g.size, g.size, g.size);
+        }
+        // Legacy brush strokes. Nothing writes these any more; they are replayed
+        // so scenes fogged before region reveal do not suddenly go dark.
         for (const operation of scene.fog.operations || []) {
             mctx.globalCompositeOperation = operation.mode === 'hide' ? 'source-over' : 'destination-out';
             mctx.fillStyle = operation.mode === 'hide' ? 'rgba(4,5,6,' + darkness + ')' : '#000';
@@ -735,6 +749,104 @@
     let viewMode = cfg.isGm ? 'gm' : 'table';
     function isTableView() { return viewMode === 'table'; }
 
+    // --- Region fog ---------------------------------------------------------
+    //
+    // Fog was a brush: painted arcs appended to an operation log, replayed in
+    // full every frame and capped at 2000 entries. Round 5 chose reveal-by-room
+    // instead, which is both fewer actions and a better fit for how dungeon
+    // maps are drawn -- and it needs a different store. Revealed CELLS are
+    // bounded by the grid, so the cost stops growing with how long the session
+    // has run, and a room is one click rather than thirty brush strokes.
+    //
+    // The old operations are still rendered so existing scenes do not go dark;
+    // nothing writes them any more.
+
+    function gridGeometry() {
+        const grid = scene.grid || {};
+        return {
+            size: Math.max(8, Number(grid.size) || 70),
+            ox: Number(grid.offset_x) || 0,
+            oy: Number(grid.offset_y) || 0
+        };
+    }
+
+    function cellAt(point) {
+        const g = gridGeometry();
+        return {
+            col: Math.floor((point.x - g.ox) / g.size),
+            row: Math.floor((point.y - g.oy) / g.size)
+        };
+    }
+
+    function segmentsCross(a, b, c, d) {
+        const side = (p, q, r) => (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
+        const d1 = side(c, d, a), d2 = side(c, d, b);
+        const d3 = side(a, b, c), d4 = side(a, b, d);
+        return ((d1 > 0) !== (d2 > 0)) && ((d3 > 0) !== (d4 > 0));
+    }
+
+    // Walls that stop sight AND movement of the reveal. An OPEN door stops
+    // neither -- that is the whole point of opening it.
+    function blockingWallList() {
+        return (scene.walls || []).filter(w => w.kind !== 'door' || !w.open);
+    }
+
+    // Can the reveal step from one cell to its neighbour, or is a wall between?
+    //
+    // Tested CENTRE TO CENTRE, not along the shared edge, and that detail is
+    // load-bearing. segmentsCross uses strict sign changes, so two collinear
+    // segments never register as crossing -- and a wall snapped to the grid
+    // (which is what 4a's snapping guarantees) lies exactly along the cell edge
+    // it is supposed to block. Testing the edge therefore missed every
+    // grid-aligned wall and the reveal flooded the whole map. A centre-to-centre
+    // segment is perpendicular to such a wall, so the crossing is unambiguous.
+    function edgeBlocked(col, row, dcol, drow, walls) {
+        const g = gridGeometry();
+        const from = {x: g.ox + (col + 0.5) * g.size, y: g.oy + (row + 0.5) * g.size};
+        const to = {x: from.x + dcol * g.size, y: from.y + drow * g.size};
+        const lo = {x: Math.min(from.x, to.x), y: Math.min(from.y, to.y)};
+        const hi = {x: Math.max(from.x, to.x), y: Math.max(from.y, to.y)};
+        for (const wall of walls) {
+            const a = {x: Number(wall.x1), y: Number(wall.y1)};
+            const b = {x: Number(wall.x2), y: Number(wall.y2)};
+            // Cheap bounding-box reject before the cross-product test.
+            if (Math.min(a.x, b.x) > hi.x || Math.max(a.x, b.x) < lo.x) continue;
+            if (Math.min(a.y, b.y) > hi.y || Math.max(a.y, b.y) < lo.y) continue;
+            if (segmentsCross(from, to, a, b)) return true;
+        }
+        return false;
+    }
+
+    // Every cell reachable from the clicked one without crossing a wall.
+    // Bounded by the scene, so an unwalled map floods to its edges rather than
+    // running away.
+    function floodRegion(point) {
+        const g = gridGeometry();
+        const maxCol = Math.ceil((scene.width - g.ox) / g.size);
+        const maxRow = Math.ceil((scene.height - g.oy) / g.size);
+        const walls = blockingWallList();
+        const start = cellAt(point);
+        if (start.col < 0 || start.row < 0 || start.col >= maxCol || start.row >= maxRow) return [];
+        const seen = new Set([start.col + ',' + start.row]);
+        const queue = [start];
+        const out = [];
+        while (queue.length) {
+            const cell = queue.shift();
+            out.push(cell.col + ',' + cell.row);
+            if (out.length > 20000) break;      // pathological grid; stop rather than hang
+            for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+                const nc = cell.col + dc, nr = cell.row + dr;
+                if (nc < 0 || nr < 0 || nc >= maxCol || nr >= maxRow) continue;
+                const key = nc + ',' + nr;
+                if (seen.has(key)) continue;
+                if (edgeBlocked(cell.col, cell.row, dc, dr, walls)) continue;
+                seen.add(key);
+                queue.push({col: nc, row: nr});
+            }
+        }
+        return out;
+    }
+
     // A wall run being chained: the points clicked so far. Empty when idle.
     //
     // Walls used to be one disconnected drag per segment, each its own HTTP
@@ -950,10 +1062,20 @@
             return;
         }
         if ((activeTool === 'fog-reveal' || activeTool === 'fog-hide') && cfg.isGm) {
-            const radiusInput = document.getElementById('map-fog-radius');
-            interaction = {type: 'fog', tool: activeTool, points: [point], radius: Math.max(20, Number(radiusInput.value) || 120)};
-            canvas.setPointerCapture(event.pointerId);
-            draw();
+            // One click reveals or hides a whole enclosed area. This is why
+            // wall chaining had to land first: the flood stops at walls, so a
+            // room with a one-pixel gap leaks into the next one.
+            const cells = floodRegion(point);
+            if (!cells.length) return;
+            mapElementAction({
+                action: 'fog_region',
+                mode: activeTool === 'fog-hide' ? 'hide' : 'reveal',
+                cells: cells
+            }).then(data => {
+                applyScene(data.scene);
+                toast((activeTool === 'fog-hide' ? 'Hid ' : 'Revealed ') + cells.length
+                      + (cells.length === 1 ? ' square.' : ' squares.'));
+            }).catch(error => toast(error.message, true));
             return;
         }
         if (['measure', 'burst', 'emanation', 'cone', 'line', 'wall', 'door', 'light'].includes(activeTool)) {
@@ -1410,7 +1532,7 @@
         select: 'Select and move tokens', target: 'Click tokens to target; Shift-click also works in Select',
         measure: 'Drag to measure PF2e grid distance', burst: 'Click to place a burst',
         emanation: 'Click to place an emanation', cone: 'Drag to aim a cone', line: 'Drag to aim a line',
-        'fog-reveal': 'Paint areas players can see', 'fog-hide': 'Paint fog back onto the map',
+        'fog-reveal': 'Click a room to reveal it', 'fog-hide': 'Click a room to hide it again',
         wall: 'Click each corner; Esc or click the last point to finish', door: 'Click each corner to place doors, or click an existing door to open it',
         light: 'Click to place a light source', erase: 'Click a wall, door, light, or template to remove it'
     };
