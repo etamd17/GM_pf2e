@@ -128,6 +128,10 @@
                     <label class="map-check"><input id="map-token-locked" type="checkbox"> Lock position</label>
                     <label class="map-check"><input id="map-token-visible" type="checkbox"> Visible to players</label>
                     <button id="map-save-token" class="map-btn map-btn--wide" type="button">Save token</button>
+                    {# Uploaded art overrides whatever the projection supplies (a linked PC portrait), and Clear returns to it. #}
+                    <label for="map-token-art">Token art</label>
+                    <input id="map-token-art" type="file" accept="image/png,image/jpeg,image/webp">
+                    <button id="map-token-art-clear" class="map-btn map-btn--quiet map-btn--wide" type="button">Clear token art</button>
                     <a id="map-token-sheet" class="map-btn map-btn--quiet map-btn--wide" href="/tracker">Open linked sheet</a>
                     <div id="map-combat-actions" class="map-combat-actions" hidden>
                         <div class="map-combat-heading">

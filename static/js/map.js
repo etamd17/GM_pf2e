@@ -1468,6 +1468,36 @@
                 y: (viewport.scrollTop + centre.y) / zoom
             });
         });
+        // Token art. The bestiary cannot supply this -- almost every monster
+        // entry carries the same generic Foundry default icon -- so uploading
+        // is the only route to real art, and the only one built.
+        document.getElementById('map-token-art').addEventListener('change', async function (event) {
+            const token = selectedToken();
+            const file = event.target.files && event.target.files[0];
+            if (!token || !file) return;
+            const form = new FormData();
+            form.append('image', file);
+            try {
+                const response = await fetch('/api/scenes/' + encodeURIComponent(sceneId)
+                    + '/tokens/' + encodeURIComponent(token.id) + '/image',
+                    {method: 'POST', headers: {'X-Requested-With': 'XMLHttpRequest'}, body: form});
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Upload failed');
+                applyScene(data.scene);
+                toast('Token art updated.');
+            } catch (error) { toast(error.message, true); }
+            event.target.value = '';
+        });
+        document.getElementById('map-token-art-clear').addEventListener('click', async function () {
+            const token = selectedToken();
+            if (!token) return;
+            try {
+                const data = await request('/api/scenes/' + encodeURIComponent(sceneId)
+                    + '/tokens/' + encodeURIComponent(token.id) + '/image', {method: 'DELETE'});
+                applyScene(data.scene);
+                toast('Token art cleared.');
+            } catch (error) { toast(error.message, true); }
+        });
         document.getElementById('map-save-token').addEventListener('click', async function () {
             const token = selectedToken();
             if (!token) return;
