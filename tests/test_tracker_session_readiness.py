@@ -209,11 +209,25 @@ def test_tracker_payload_carries_ability_action_cost(enc):
 
 def test_monster_parse_extracts_action_cost():
     """The Monster action parser must read the Foundry action cost (not just
-    name + description)."""
+    name + description).
+
+    Match the whole append() call by balancing parens rather than slicing to the
+    next newline: the dict literal is spread over several lines once the parse
+    captures more than name/description/actions, and a one-line slice would stop
+    short of the cost entry and fail a parser that is perfectly correct. Slicing
+    to the first '})' is no better -- `.get('description', {})` contains one."""
     src = open(os.path.join(_REPO, 'app.py'), encoding='utf-8').read()
-    line = src[src.index("self.actions.append({'name': name"):]
-    line = line[:line.index('\n')]
-    assert 'foundry_action_cost' in line, 'monster action parse does not capture the action cost'
+    start = src.index('self.actions.append(')
+    depth, end = 0, start
+    for end in range(start + len('self.actions.append'), len(src)):
+        if src[end] == '(':
+            depth += 1
+        elif src[end] == ')':
+            depth -= 1
+            if depth == 0:
+                break
+    call = src[start:end + 1]
+    assert 'foundry_action_cost' in call, 'monster action parse does not capture the action cost'
 
 
 def test_closed_modal_cannot_swallow_clicks():

@@ -1264,6 +1264,8 @@ def _scrub_log_entries_for_players(entries):
     any endpoint that a player might hit."""
     if _is_gm():
         return entries
+    entries = [entry for entry in entries
+               if not isinstance(entry, dict) or not entry.get('gm_only')]
     hidden = _hidden_npc_names()
     if not hidden:
         return entries
@@ -1279,7 +1281,7 @@ def _scrub_log_entries_for_players(entries):
         cleaned.append(copy_e)
     return cleaned
 
-def _combat_log(msg, log_type='action'):
+def _combat_log(msg, log_type='action', gm_only=False):
     """Append a timestamped entry to the combat log and broadcast via SSE.
 
     Players must never see the literal name of an NPC the GM has hidden. The
@@ -1294,7 +1296,8 @@ def _combat_log(msg, log_type='action'):
         'time': time.strftime('%H:%M:%S'),
         'round': ROUND_NUMBER,
         'msg': msg,
-        'type': log_type
+        'type': log_type,
+        'gm_only': bool(gm_only),
     }
     # Snapshot hidden NPC names under the lock so the filter is deterministic
     # even if the encounter mutates between append and broadcast.
@@ -1308,6 +1311,8 @@ def _combat_log(msg, log_type='action'):
         ]
 
     def _player_filter(p):
+        if gm_only:
+            return None
         if not hidden_names:
             return p
         p['msg'] = _scrub_hidden_names(p.get('msg'), hidden_names)
@@ -5131,6 +5136,7 @@ def make_actor(doc, file_path=''):
 class Monster:
     def __init__(self, data, file_path=""):
         self.file_path = file_path
+        self.image = safe_str(data.get('img'), '')
         self.instance_id = ""
         self.is_pc = False
         self.initiative = 0
@@ -5169,6 +5175,20 @@ class Monster:
         
         self.strikes = []
         self.actions = []
+        self.skills = []
+        raw_skills = system.get('skills') or {}
+        if isinstance(raw_skills, dict):
+            for skill_name, skill_data in raw_skills.items():
+                if not isinstance(skill_data, dict):
+                    continue
+                value = skill_data.get('base', skill_data.get('value', skill_data.get('mod', 0)))
+                self.skills.append({'name': str(skill_name).replace('-', ' ').title(),
+                                    'total': safe_int(value, 0)})
+        for item in (data.get('items') or []):
+            if item.get('type') == 'lore':
+                value = item.get('system', {}).get('mod', {}).get('value', 0)
+                self.skills.append({'name': safe_str(item.get('name'), 'Lore'),
+                                    'total': safe_int(value, 0)})
         
         # Parse resistances, weaknesses, immunities from Foundry VTT format
         self.immunities = []
@@ -5228,10 +5248,24 @@ class Monster:
                 if isinstance(damage_rolls, dict) and damage_rolls:
                     parts = [f"{roll['damage']} {roll.get('damageType', '')}".strip() for k, roll in damage_rolls.items() if isinstance(roll, dict) and 'damage' in roll]
                     if parts: damage = ", ".join(parts)
-                rec = {'name': name, 'bonus': safe_int(system_data.get('bonus', {}).get('value'), 0), 'damage': damage}
+                rec = {
+                    'name': name,
+                    'bonus': safe_int(system_data.get('bonus', {}).get('value'), 0),
+                    'damage': damage,
+                    'traits': list(system_data.get('traits', {}).get('value', []) or []),
+                }
                 (_weapon_fallback if item_type == 'weapon' else self.strikes).append(rec)
             elif item_type == 'action':
-                self.actions.append({'name': name, 'description': clean_foundry_text(item.get('system', {}).get('description', {}).get('value', '')), 'actions': foundry_action_cost(item.get('system', {}))})
+                item_system = item.get('system', {})
+                action_type = str(item_system.get('actionType', {}).get('value') or '')
+                self.actions.append({
+                    'name': name,
+                    'description': clean_foundry_text(item_system.get('description', {}).get('value', '')),
+                    'actions': foundry_action_cost(item_system),
+                    'action_type': action_type,
+                    'category': str(item_system.get('category') or ''),
+                    'is_reaction': action_type == 'reaction',
+                })
         _real_strike_names = {s['name'] for s in self.strikes}
         self.strikes.extend(w for w in _weapon_fallback if w['name'] not in _real_strike_names)
 
@@ -5240,12 +5274,55 @@ class Monster:
         # numbers straight off the tracker. Take the highest if several entries.
         self.spell_attack = 0
         self.spell_dc = 0
+        self.spellcasting = []
+        _spell_entries = {}
         for item in (data.get('items') or []):
             if item.get('type') == 'spellcastingEntry':
                 sd = item.get('system', {}).get('spelldc', {})
                 if isinstance(sd, dict):
                     self.spell_attack = max(self.spell_attack, safe_int(sd.get('value'), 0))
                     self.spell_dc = max(self.spell_dc, safe_int(sd.get('dc'), 0))
+                entry = {
+                    'id': str(item.get('_id') or ''),
+                    'name': safe_str(item.get('name'), 'Spellcasting'),
+                    'tradition': str(item.get('system', {}).get('tradition', {}).get('value') or ''),
+                    'type': str(item.get('system', {}).get('prepared', {}).get('value') or ''),
+                    'attack': safe_int(sd.get('value'), 0) if isinstance(sd, dict) else 0,
+                    'dc': safe_int(sd.get('dc'), 0) if isinstance(sd, dict) else 0,
+                    'spells': [],
+                }
+                self.spellcasting.append(entry)
+                _spell_entries[entry['id']] = entry
+        for item in (data.get('items') or []):
+            if item.get('type') != 'spell':
+                continue
+            item_system = item.get('system', {})
+            location = item_system.get('location') or {}
+            entry = _spell_entries.get(str(location.get('value') or ''))
+            if entry is None:
+                continue
+            damage = []
+            for damage_data in (item_system.get('damage') or {}).values():
+                if not isinstance(damage_data, dict):
+                    continue
+                formula = damage_data.get('formula') or damage_data.get('damage')
+                if formula:
+                    damage.append({
+                        'formula': str(formula),
+                        'type': str(damage_data.get('type') or ''),
+                    })
+            defense = item_system.get('defense') or {}
+            save = defense.get('save') if isinstance(defense, dict) else None
+            entry['spells'].append({
+                'name': safe_str(item.get('name'), 'Spell'),
+                'rank': safe_int(location.get('heightenedLevel'),
+                                 safe_int(item_system.get('level', {}).get('value'), 0)),
+                'actions': str(item_system.get('time', {}).get('value') or ''),
+                'damage': damage,
+                'save': str((save or {}).get('statistic') or '') if isinstance(save, dict) else '',
+                'basic_save': bool((save or {}).get('basic')) if isinstance(save, dict) else False,
+                'description': clean_foundry_text(item_system.get('description', {}).get('value', ''))[:1000],
+            })
 
         self.conditions = { 'frightened': 0, 'sickened': 0, 'dying': 0, 'wounded': 0, 'doomed': 0, 'stunned': 0, 'slowed': 0, 'enfeebled': 0, 'clumsy': 0, 'drained': 0, 'stupefied': 0, 'prone': False, 'off_guard': False, 'concealed': False, 'hidden': False, 'undetected': False }
 
@@ -8914,6 +8991,10 @@ def _get_tracker_state():
                 'level': c.level, 'ac': c.ac, 'current_hp': c.current_hp, 'max_hp': c.hp,
                 'fort': c.fort, 'ref': c.ref, 'will': c.will,
                 'perception': c.perception, 'speed': getattr(c, 'active_speed', getattr(c, 'speed', 25)),
+                'skills': [
+                    {'name': str(s.get('name', '')), 'total': s.get('total', 0)}
+                    for s in (getattr(c, 'skills', []) or []) if isinstance(s, dict)
+                ],
                 'conditions': {k: v for k, v in c.conditions.items() if v and v != 0 and v is not False},
                 'condition_expiry': dict(getattr(c, 'condition_expiry', {}) or {}),
                 'actions_used': int(getattr(c, 'actions_used', 0) or 0),
@@ -8962,9 +9043,16 @@ def _get_tracker_state():
                 # Full HTML descriptions for all ~50 feats were ~9.5 KB per PC
                 # of the tracker_state payload; this cuts it to the visible tips.
                 entry['feats'] = [
-                    {'name': f['name'], 'desc': re.sub(r'<[^>]*>', '', f.get('desc') or '')[:240]}
+                    {'name': f['name'], 'desc': re.sub(r'<[^>]*>', '', f.get('desc') or '')[:240],
+                     'level': f.get('level'), 'type': f.get('type', '')}
                     for f in getattr(c, 'feats', [])[:20]
                 ]
+                entry['reactions'] = [
+                    {'name': f['name'], 'description': re.sub(r'<[^>]*>', '', f.get('desc') or '')[:600]}
+                    for f in getattr(c, 'feats', [])
+                    if str(f.get('type') or '').lower() == 'reaction'
+                    or re.search(r'\btrigger\b', re.sub(r'<[^>]*>', '', f.get('desc') or ''), re.IGNORECASE)
+                ][:12]
                 # Spell casters: name, tradition, type, and per-rank known
                 # spell list. The active-combatant card on the tracker uses
                 # this so the GM can see the PC's spell options at a glance.
@@ -8997,6 +9085,14 @@ def _get_tracker_state():
                 entry['reaction_used'] = bool(getattr(c, 'reaction_used', False))
                 entry['hero_points'] = int(getattr(c, 'hero_points', 0) or 0)
                 entry['class_name'] = getattr(c, 'class_name', '')
+                entry['portrait_url'] = (
+                    f"/portraits/{getattr(c, 'portrait', '')}"
+                    if getattr(c, 'portrait', '') else ''
+                )
+                entry['portrait_focus'] = {
+                    'x': getattr(c, 'portrait_focus_x', 50.0),
+                    'y': getattr(c, 'portrait_focus_y', 50.0),
+                }
                 # The inspector's role line renders ancestry · class · subclass;
                 # without these it always fell back to placeholder flavor text.
                 entry['ancestry'] = getattr(c, 'ancestry', '')
@@ -9011,8 +9107,14 @@ def _get_tracker_state():
                     if isinstance(e, dict)
                 ]
             else:
-                entry['strikes'] = [{'name': s.get('name', ''), 'hit': (lambda b: f"+{b}" if b >= 0 else str(b))(s.get('bonus', s.get('mod', 0))), 'damage': s.get('damage', '')} for s in getattr(c, 'strikes', [])]
-                entry['actions'] = [{'name': a['name'], 'description': a.get('description', ''), 'actions': a.get('actions', '')} for a in getattr(c, 'actions', [])]
+                entry['strikes'] = [{'name': s.get('name', ''), 'hit': (lambda b: f"+{b}" if b >= 0 else str(b))(s.get('bonus', s.get('mod', 0))), 'damage': s.get('damage', ''), 'traits': list(s.get('traits', []) or [])} for s in getattr(c, 'strikes', [])]
+                entry['actions'] = [
+                    {'name': a['name'], 'description': a.get('description', ''),
+                     'actions': a.get('actions', ''), 'action_type': a.get('action_type', ''),
+                     'category': a.get('category', ''), 'is_reaction': bool(a.get('is_reaction'))}
+                    for a in getattr(c, 'actions', [])
+                ]
+                entry['reactions'] = [a for a in entry['actions'] if a.get('is_reaction')]
                 entry['immunities'] = getattr(c, 'immunities', [])
                 entry['resistances'] = getattr(c, 'resistances', [])
                 entry['weaknesses'] = getattr(c, 'weaknesses', [])
@@ -9022,6 +9124,8 @@ def _get_tracker_state():
                 # them in the inspector the same way they can for PCs.
                 entry['spell_attack'] = int(getattr(c, 'spell_attack', 0) or 0)
                 entry['spell_dc'] = int(getattr(c, 'spell_dc', 0) or 0)
+                entry['spellcasting'] = copy.deepcopy(getattr(c, 'spellcasting', []) or [])
+                entry['image_ref'] = getattr(c, 'image', '')
             # Cosmere combatants carry an extra stat block (defenses/deflect/
             # resources); the tracker UI branches on `system` to render it.
             if entry['system'] == 'cosmere' and hasattr(c, 'tracker_block'):
@@ -16348,6 +16452,20 @@ def player_whisper(pc_name):
         'text': text,
         'ts': _t.time(),
     }
+    if ACTIVE_CAMPAIGN_ID:
+        try:
+            from core import obsidian_sync as _obsidian_store
+            request_doc = _obsidian_store.append_player_request(ACTIVE_CAMPAIGN_ID, {
+                'kind': 'whisper',
+                'pc_name': pc_name,
+                'text': text,
+                'website_timestamp': payload['ts'],
+            })
+            payload['request_id'] = request_doc.get('id')
+        except Exception as exc:
+            # The whisper remains useful through the existing GM SSE inbox if
+            # durable Session Operations storage is temporarily unavailable.
+            print(f'[OBSIDIAN SYNC] could not persist player whisper: {exc}')
     sse_broadcast('whisper', payload, player_filter=lambda d: None)
     return jsonify({"success": True})
 
@@ -20856,27 +20974,69 @@ def _obsidian_sync_snapshot():
         campaign = _campaigns.get_campaign(ACTIVE_CAMPAIGN_ID) if ACTIVE_CAMPAIGN_ID else None
         party = []
         for name in sorted(PARTY_LIBRARY):
+            pc = PARTY_LIBRARY[name]
             raw = _pc_state_payload(name) or {}
+            derived = raw.get('derived') or {}
             party.append({
                 'name': name,
+                'instance_id': getattr(pc, 'instance_id', '') or None,
+                'level': int(getattr(pc, 'level', 0) or 0),
+                'class_name': getattr(pc, 'class_name', ''),
+                'ancestry': getattr(pc, 'ancestry', ''),
+                'subclass': getattr(pc, 'subclass', ''),
                 'current_hp': raw.get('current_hp', 0),
                 'max_hp': raw.get('max_hp', 0),
                 'temp_hp': raw.get('temp_hp', 0),
+                'ac': raw.get('ac', 0),
+                'fort': derived.get('fort', getattr(pc, 'fort', 0)),
+                'ref': derived.get('ref', getattr(pc, 'ref', 0)),
+                'will': derived.get('will', getattr(pc, 'will', 0)),
+                'perception': derived.get('perception', getattr(pc, 'perception', 0)),
+                'speed': getattr(pc, 'active_speed', getattr(pc, 'speed', 25)),
                 'conditions': raw.get('conditions', {}),
                 'hero_points': raw.get('hero_points', 0),
                 'focus': raw.get('focus', 0),
+                'focus_max': int(getattr(pc, 'focus_max', 0) or 0),
                 'reaction_used': raw.get('reaction_used', False),
                 'persistent_damage': raw.get('persistent_damage', []),
                 'exploration_activity': raw.get('exploration_activity', ''),
+                'skills': copy.deepcopy(derived.get('skills', [])),
+                'strikes': copy.deepcopy(derived.get('attacks', [])),
+                'spell_casters': copy.deepcopy(raw.get('spell_casters', [])),
+                'expended_slots': copy.deepcopy(raw.get('expended_slots', {})),
+                'spell_attack': int(getattr(pc, 'spell_attack', 0) or 0),
+                'spell_dc': int(getattr(pc, 'spell_dc', 0) or 0),
+                'feats': [
+                    {'name': f.get('name', ''), 'description': re.sub(r'<[^>]*>', '', f.get('desc') or '')[:600],
+                     'level': f.get('level'), 'type': f.get('type', '')}
+                    for f in getattr(pc, 'feats', [])[:20]
+                ],
+                'reactions': [
+                    {'name': f.get('name', ''), 'description': re.sub(r'<[^>]*>', '', f.get('desc') or '')[:600]}
+                    for f in getattr(pc, 'feats', [])
+                    if str(f.get('type') or '').lower() == 'reaction'
+                    or re.search(r'\btrigger\b', re.sub(r'<[^>]*>', '', f.get('desc') or ''), re.IGNORECASE)
+                ][:12],
+                'portrait_url': f"/portraits/{getattr(pc, 'portrait', '')}" if getattr(pc, 'portrait', '') else '',
+                'portrait_focus': {
+                    'x': getattr(pc, 'portrait_focus_x', 50.0),
+                    'y': getattr(pc, 'portrait_focus_y', 50.0),
+                },
             })
         tracker = _get_tracker_state()
         combatants = []
         for raw in tracker.get('combatants', []):
             combatants.append({k: copy.deepcopy(raw.get(k)) for k in (
                 'instance_id', 'name', 'is_pc', 'system', 'initiative', 'is_active',
-                'current_hp', 'max_hp', 'ac', 'conditions', 'condition_expiry',
+                'level', 'current_hp', 'max_hp', 'ac', 'base_ac', 'fort', 'ref',
+                'will', 'perception', 'speed', 'skills', 'conditions', 'condition_expiry',
                 'actions_used', 'max_actions', 'reaction_used', 'persistent_damage',
                 'persistent_damage_list', 'delaying', 'visible_to_players', 'epithet',
+                'strikes', 'actions', 'reactions', 'spell_casters', 'spellcasting',
+                'spell_attack', 'spell_dc', 'focus_pool', 'focus_current', 'hero_points',
+                'feats', 'class_name', 'ancestry', 'subclass', 'traits', 'immunities',
+                'resistances', 'weaknesses', 'tactics', 'portrait_url', 'portrait_focus',
+                'image_ref',
             )})
         turn_index = int(tracker.get('turn_index', 0) or 0)
         active = combatants[turn_index] if combatants and 0 <= turn_index < len(combatants) else None
@@ -20893,6 +21053,9 @@ def _obsidian_sync_snapshot():
                 'active_id': (active or {}).get('instance_id'),
                 'active_name': (active or {}).get('name'),
                 'session_timer_start': tracker.get('session_timer_start'),
+                'round_events': copy.deepcopy(tracker.get('round_events', [])),
+                'encounter_xp': tracker.get('encounter_xp'),
+                'difficulty': tracker.get('diff_label'),
                 'combatants': combatants,
             },
         }
@@ -20921,6 +21084,403 @@ def _obsidian_adjust_party_hp(pc_name, amount, action):
     }
 
 
+def _obsidian_actor(payload):
+    target_id = str(payload.get('target_id') or '')
+    pc_name = str(payload.get('pc_name') or '')
+    target = _find_active_combatant(target_id) if target_id else None
+    if target is None and pc_name:
+        target = next((c for c in ACTIVE_ENCOUNTER if c.is_pc and c.name == pc_name), None)
+    if target is None and pc_name:
+        target = PARTY_LIBRARY.get(pc_name)
+    if target is None:
+        raise LookupError('combatant not found')
+    return target
+
+
+def _obsidian_skill_modifier(actor, skill_name):
+    wanted = str(skill_name or '').strip().lower().replace('_', ' ')
+    aliases = {'fortitude': 'fort', 'reflex': 'ref', 'perception': 'perception', 'will': 'will'}
+    if wanted in aliases:
+        return int(getattr(actor, aliases[wanted], 0) or 0)
+    for skill in (getattr(actor, 'skills', []) or []):
+        if not isinstance(skill, dict):
+            continue
+        name = str(skill.get('name') or '').strip().lower().replace('_', ' ')
+        if name == wanted or name.replace('lore: ', '') == wanted:
+            raw = skill.get('total', skill.get('base', 0))
+            try:
+                return int(str(raw).replace('+', '').strip())
+            except (TypeError, ValueError):
+                return 0
+    raise ValueError(f'{skill_name} is not available for {getattr(actor, "name", "combatant")}')
+
+
+def _obsidian_strike(actor, strike_name):
+    wanted = str(strike_name or '').strip().lower()
+    if getattr(actor, 'is_pc', False):
+        for attack in (getattr(actor, 'attacks', []) or []):
+            if str(attack.get('name') or '').strip().lower() == wanted:
+                return attack
+    else:
+        for strike in (getattr(actor, 'strikes', []) or []):
+            if str(strike.get('name') or '').strip().lower() == wanted:
+                return strike
+    raise ValueError(f'strike not found: {strike_name}')
+
+
+def _obsidian_spell(actor, spell_name):
+    wanted = str(spell_name or '').strip().lower()
+    for caster in (getattr(actor, 'spellcasting', []) or []):
+        for spell in (caster.get('spells') or []):
+            if str(spell.get('name') or '').strip().lower() == wanted:
+                return spell
+    for caster in (getattr(actor, 'spell_casters', []) or []):
+        for level in (caster.get('levels') or []):
+            for spell in (level.get('spells') or []):
+                if str(spell.get('name') or '').strip().lower() == wanted:
+                    return spell
+    return None
+
+
+def _obsidian_record_roll(actor, label, result, visibility='gm'):
+    actor_name = getattr(actor, 'name', 'Unknown')
+    total = result.get('total')
+    detail = f"{actor_name}: {label} {result.get('formula', '')} = {total}"
+    if result.get('dc') is not None:
+        degree = str(result.get('degree') or '').replace('_', ' ').title()
+        detail += f" vs DC {result['dc']} ({degree})"
+    if visibility == 'table':
+        _combat_log(detail, 'roll')
+    else:
+        dice_values = [d.get('value') for d in (result.get('dice') or [])]
+        entry = {
+            'id': str(uuid.uuid4())[:8],
+            'time': time.strftime('%H:%M:%S'),
+            'round': ROUND_NUMBER,
+            'label': f'{actor_name}: {label}',
+            'detail': detail,
+            'total': total,
+            'rolls': dice_values,
+            'type': 'secret',
+        }
+        GM_SECRET_LOG.append(entry)
+        if len(GM_SECRET_LOG) > 100:
+            GM_SECRET_LOG.pop(0)
+        _combat_log(detail, 'roll', gm_only=True)
+    result['label'] = label
+    result['actor_id'] = getattr(actor, 'instance_id', None) or None
+    result['actor_name'] = actor_name
+    result['visibility'] = visibility
+    result['roll_id'] = str(uuid.uuid4())
+    return result
+
+
+def _obsidian_resolve_roll(payload):
+    """Resolve one normalized Obsidian roll through website-owned actor data."""
+    from services.session_ops_rolls import roll_check, roll_damage
+
+    actor = _obsidian_actor(payload)
+    kind = str(payload.get('roll_kind') or '').strip().lower()
+    visibility = str(payload.get('visibility') or ('table' if getattr(actor, 'is_pc', False) else 'gm')).lower()
+    if visibility not in ('gm', 'table'):
+        raise ValueError('visibility must be gm or table')
+    dc_raw = payload.get('dc')
+    try:
+        dc = int(dc_raw) if dc_raw not in (None, '') else None
+    except (TypeError, ValueError):
+        raise ValueError('dc must be an integer')
+    d20 = payload.get('d20')
+
+    if kind in ('initiative', 'perception', 'save', 'skill', 'attack', 'spell_attack'):
+        label = kind.replace('_', ' ').title()
+        if kind == 'initiative':
+            statistic = str(payload.get('statistic') or 'Perception')
+            modifier = _obsidian_skill_modifier(actor, statistic)
+            label = f'Initiative ({statistic})'
+        elif kind == 'perception':
+            modifier = int(getattr(actor, 'perception', 0) or 0)
+        elif kind == 'save':
+            save = str(payload.get('save') or '').strip().lower()
+            attr = {'fortitude': 'fort', 'fort': 'fort', 'reflex': 'ref', 'ref': 'ref', 'will': 'will'}.get(save)
+            if not attr:
+                raise ValueError('save must be Fortitude, Reflex, or Will')
+            modifier = int(getattr(actor, attr, 0) or 0)
+            label = {'fort': 'Fortitude Save', 'ref': 'Reflex Save', 'will': 'Will Save'}[attr]
+        elif kind == 'skill':
+            skill_name = str(payload.get('skill') or '').strip()
+            modifier = _obsidian_skill_modifier(actor, skill_name)
+            label = skill_name
+        elif kind == 'spell_attack':
+            modifier = int(getattr(actor, 'spell_attack', 0) or 0)
+            label = f"{str(payload.get('spell_name') or 'Spell').strip()} spell attack"
+        else:
+            strike = _obsidian_strike(actor, payload.get('strike_name'))
+            map_stage = max(0, min(2, int(payload.get('map_stage', 0) or 0)))
+            if getattr(actor, 'is_pc', False):
+                strike_rows = strike.get('strikes') or []
+                if not strike_rows:
+                    raise ValueError('strike has no attack modifier')
+                row = strike_rows[min(map_stage, len(strike_rows) - 1)]
+                modifier = int(row.get('mod', 0) or 0)
+            else:
+                agile = 'agile' in [str(value).lower() for value in (strike.get('traits') or [])]
+                penalties = (0, 4, 8) if agile else (0, 5, 10)
+                modifier = int(strike.get('bonus', strike.get('mod', 0)) or 0) - penalties[map_stage]
+            label = f"{strike.get('name', 'Strike')} attack" + (f' MAP {map_stage + 1}' if map_stage else '')
+        result = roll_check(modifier, dc, d20=d20)
+        if kind == 'initiative' and getattr(actor, 'instance_id', None):
+            actor.initiative = result['total']
+            _sort_encounter()
+            _persist_encounter_state()
+            _broadcast_encounter_state()
+        return _obsidian_record_roll(actor, label, result, visibility)
+
+    if kind in ('damage', 'spell_damage'):
+        label = 'Damage'
+        expression = str(payload.get('formula') or '').strip()
+        damage_type = str(payload.get('damage_type') or 'untyped').strip()[:80]
+        if kind == 'damage':
+            strike = _obsidian_strike(actor, payload.get('strike_name'))
+            expression = expression or str(strike.get('damage') or '')
+            label = f"{strike.get('name', 'Strike')} damage"
+        else:
+            spell_name = str(payload.get('spell_name') or 'Spell').strip()
+            spell = _obsidian_spell(actor, spell_name)
+            if not expression and spell and spell.get('damage'):
+                expression = str(spell['damage'][0].get('formula') or '')
+                damage_type = str(spell['damage'][0].get('type') or damage_type)
+            label = f'{spell_name} damage'
+        result = roll_damage(expression)
+        result['damage_type'] = damage_type
+        return _obsidian_record_roll(actor, label, result, visibility)
+
+    if kind == 'recovery':
+        result, error = _resolve_recovery_check(actor, d20)
+        if error:
+            raise ValueError(_RECOVERY_ERRORS.get(error, error))
+        if getattr(actor, 'is_pc', False) and actor.name in PARTY_LIBRARY:
+            PARTY_LIBRARY[actor.name].conditions['dying'] = result['dying']
+            PARTY_LIBRARY[actor.name].conditions['wounded'] = result['wounded']
+            _broadcast_pc_state(actor.name)
+            _persist_pc_combat_state(actor.name)
+        if getattr(actor, 'instance_id', None):
+            _persist_encounter_state()
+            _broadcast_encounter_state()
+        normalized = {
+            'formula': '1d20', 'dice': [{'sides': 20, 'value': result['d20']}],
+            'd20': result['d20'], 'modifier': 0, 'total': result['d20'],
+            **result,
+        }
+        normalized['degree'] = {
+            'crit_success': 'critical_success',
+            'crit_failure': 'critical_failure',
+        }.get(result['degree'], result['degree'])
+        _log_recovery_result(actor.name, result)
+        return _obsidian_record_roll(actor, 'Recovery Check', normalized, visibility)
+
+    if kind == 'persistent_damage':
+        entries = getattr(actor, 'persistent_damage', [])
+        try:
+            index = int(payload.get('persistent_index', 0) or 0)
+        except (TypeError, ValueError):
+            index = 0
+        if isinstance(entries, list):
+            if index < 0 or index >= len(entries):
+                raise ValueError('persistent damage entry not found')
+            entry = entries[index]
+            expression = str(entry.get('damage') or '')
+            damage_type = str(entry.get('type') or 'untyped')
+        else:
+            expression = str(entries or '')
+            damage_type = str(payload.get('damage_type') or 'untyped')
+        damage = roll_damage(expression)
+        old_hp = None
+        if getattr(actor, 'instance_id', None):
+            old_hp = _apply_hp_delta(actor.instance_id, damage['total'], 'damage', damage_type)
+            _maybe_auto_remove_defeated(actor.instance_id, old_hp, 'damage')
+        elif getattr(actor, 'is_pc', False) and actor.name in PARTY_LIBRARY:
+            old_hp = int(PARTY_LIBRARY[actor.name].current_hp or 0)
+            _, actor = apply_pc_delta(
+                actor.name,
+                lambda pc: _party_hp_mutate(pc, damage['total'], 'damage'),
+            )
+        flat = roll_check(0, 15)
+        ended = flat['degree'] in ('success', 'critical_success')
+        if ended:
+            if isinstance(entries, list):
+                entries.pop(index)
+                if actor.name in PARTY_LIBRARY:
+                    PARTY_LIBRARY[actor.name].persistent_damage = list(entries)
+            else:
+                actor.persistent_damage = ''
+        if getattr(actor, 'is_pc', False) and actor.name in PARTY_LIBRARY:
+            _persist_pc_combat_state(actor.name)
+            _broadcast_pc_state(actor.name)
+        _persist_encounter_state()
+        _broadcast_encounter_state()
+        result = {
+            **damage,
+            'damage_type': damage_type,
+            'flat_check': flat,
+            'ended': ended,
+            'old_hp': old_hp,
+            'new_hp': getattr(actor, 'current_hp', None),
+        }
+        return _obsidian_record_roll(actor, 'Persistent Damage', result, visibility)
+
+    raise ValueError(f'unsupported roll kind: {kind}')
+
+
+def _obsidian_launch_room_encounter(payload):
+    global TURN_INDEX, ROUND_NUMBER, ENCOUNTER_NOTES, SESSION_TIMER_START, ROUND_EVENTS
+    monsters = payload.get('monsters') or []
+    template = str(payload.get('encounter_template') or '').strip()
+    if template:
+        safe = _sanitize_encounter_name(template)
+        path = os.path.join(ENCOUNTER_DIR, f'{safe}.json')
+        if not os.path.isfile(path):
+            raise ValueError(f'encounter template not found: {template}')
+        with open(path, encoding='utf-8') as handle:
+            saved = json.load(handle)
+        if not isinstance(saved, dict) or saved.get('format') != 'stage':
+            raise ValueError('room encounter templates must be saved encounter stages')
+        monsters = saved.get('monsters') or []
+    if not isinstance(monsters, list) or not monsters:
+        raise ValueError('the room manifest has no encounter roster')
+    if len(monsters) > 100:
+        raise ValueError('encounter roster is too large')
+
+    prepared = []
+    for row in monsters:
+        if not isinstance(row, dict):
+            raise ValueError('each encounter roster entry must be an object')
+        path = str(row.get('path') or '')
+        count = max(1, min(50, int(row.get('count', 1) or 1)))
+        if row.get('is_hazard') or path.startswith('__hazard__'):
+            prepared.append((row, None, count))
+        elif path not in MONSTER_LIBRARY:
+            raise ValueError(f'creature path is not available on the website: {path}')
+        else:
+            prepared.append((row, MONSTER_LIBRARY[path], count))
+
+    ACTIVE_ENCOUNTER.clear()
+    _RECENT_DEFEATED[:] = []
+    TURN_INDEX = 0
+    ROUND_NUMBER = 1
+    ENCOUNTER_NOTES = str(payload.get('notes') or '')[:4000]
+    SESSION_TIMER_START = None
+    ROUND_EVENTS = []
+    for row, source, count in prepared:
+        for index in range(count):
+            if source is None:
+                combatant = _make_hazard_combatant(row)
+            else:
+                combatant = copy.deepcopy(source)
+                combatant.instance_id = str(uuid.uuid4())
+                adjustment = int(row.get('elite_weak', 0) or 0)
+                if adjustment and hasattr(combatant, 'apply_elite_weak'):
+                    combatant.apply_elite_weak(adjustment)
+            if count > 1:
+                combatant.name = f'{combatant.name} {index + 1}'
+            ACTIVE_ENCOUNTER.append(combatant)
+    if bool(payload.get('add_party', True)):
+        for pc in PARTY_LIBRARY.values():
+            combatant = copy.deepcopy(pc)
+            combatant.instance_id = str(uuid.uuid4())
+            ACTIVE_ENCOUNTER.append(combatant)
+    _persist_encounter_state()
+    _broadcast_encounter_state()
+    _combat_log(f"Room encounter launched: {payload.get('area_id') or template or 'Obsidian'}", 'system')
+    return {
+        'area_id': str(payload.get('area_id') or ''),
+        'encounter_template': template or None,
+        'combatant_count': len(ACTIVE_ENCOUNTER),
+        'names': [c.name for c in ACTIVE_ENCOUNTER],
+    }
+
+
+def _obsidian_sync_room_reminders(area_id, reminders):
+    global ROUND_EVENTS
+    clean = []
+    seen = set()
+    for index, row in enumerate(reminders[:100]):
+        if not isinstance(row, dict):
+            raise ValueError('each reminder must be an object')
+        reminder_id = re.sub(r'[^A-Za-z0-9._:-]', '-', str(row.get('id') or index))[:80]
+        stable_id = f'room:{area_id}:{reminder_id}'[:160]
+        if stable_id in seen:
+            raise ValueError(f'duplicate reminder id: {reminder_id}')
+        seen.add(stable_id)
+        try:
+            round_num = int(row.get('round'))
+        except (TypeError, ValueError):
+            raise ValueError(f'reminder {reminder_id} needs an integer round')
+        payload, error = _sanitize_round_event_payload(row.get('payload'))
+        if error:
+            raise ValueError(error)
+        clean.append({
+            'id': stable_id,
+            'round': max(1, round_num),
+            'repeat_every': int(row['repeat_every']) if row.get('repeat_every') not in (None, '') else None,
+            'title': str(row.get('title') or 'Room reminder')[:160],
+            'text': str(row.get('text') or '')[:2000],
+            'show_on_table': bool(row.get('show_on_table', False)),
+            'payload': payload,
+            'last_fired_round': None,
+            'source_room_id': area_id,
+        })
+    ROUND_EVENTS = [ev for ev in ROUND_EVENTS if ev.get('source_room_id') != area_id]
+    ROUND_EVENTS.extend(clean)
+    _persist_encounter_state()
+    _broadcast_encounter_state()
+    return {'area_id': area_id, 'reminder_count': len(clean), 'reminders': copy.deepcopy(clean)}
+
+
+def _obsidian_create_player_reveal(payload):
+    import base64
+    import html
+
+    image_url = ''
+    image = payload.get('image')
+    if image:
+        if not isinstance(image, dict):
+            raise ValueError('image must be an object')
+        encoded = str(image.get('base64') or '')
+        if len(encoded) > 8_000_000:
+            raise ValueError('reveal image is too large')
+        try:
+            raw = base64.b64decode(encoded, validate=True)
+        except Exception:
+            raise ValueError('reveal image is not valid base64')
+        if len(raw) > 6_000_000:
+            raise ValueError('reveal image is too large')
+        mime = str(image.get('mime') or '').lower()
+        ext = {'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif'}.get(mime)
+        if not ext:
+            raise ValueError('reveal image type is not supported')
+        os.makedirs(HANDOUTS_DIR, exist_ok=True)
+        filename = f'obsidian_{uuid.uuid4().hex[:16]}.{ext}'
+        with open(os.path.join(HANDOUTS_DIR, filename), 'wb') as handle:
+            handle.write(raw)
+        image_url = f'/handouts/{filename}'
+    content = html.escape(str(payload.get('content') or '')).replace('\n', '<br>')
+    handout = {
+        'id': str(uuid.uuid4())[:8],
+        'title': str(payload.get('title') or 'Handout')[:160],
+        'content': content,
+        'image_url': image_url,
+        'recipients': list(payload.get('recipients') or ['all']),
+        'time': time.strftime('%H:%M:%S'),
+        'from_gm': True,
+    }
+    HANDOUTS.append(handout)
+    if len(HANDOUTS) > 50:
+        HANDOUTS.pop(0)
+    _save_handouts()
+    sse_broadcast('handout', handout, player_filter=_handout_player_filter)
+    return copy.deepcopy(handout)
+
+
 from services.obsidian_sync import register_obsidian_sync as _register_obsidian_sync
 _register_obsidian_sync(app, {
     'active_campaign_id': lambda: ACTIVE_CAMPAIGN_ID,
@@ -20936,6 +21496,10 @@ _register_obsidian_sync(app, {
     'broadcast_encounter': _broadcast_encounter_state,
     'advance_turn': cycle_turn,
     'has_encounter': lambda: bool(ACTIVE_ENCOUNTER),
+    'resolve_roll': _obsidian_resolve_roll,
+    'launch_room_encounter': _obsidian_launch_room_encounter,
+    'sync_room_reminders': _obsidian_sync_room_reminders,
+    'create_player_reveal': _obsidian_create_player_reveal,
     'gm_required': gm_required,
 })
 

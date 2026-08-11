@@ -76,7 +76,25 @@ def _sync_observed_state(runtime: dict, snapshot: dict) -> bool:
     return False
 
 
-def _dispatch(adapter: dict, kind: str, payload: dict) -> dict:
+def _client_state(snapshot: dict, runtime: dict) -> dict:
+    """Merge website-owned PF2e state with integration-owned operations state."""
+    state = copy.deepcopy(snapshot)
+    state["operations"] = {
+        "active_room": copy.deepcopy(runtime.get("active_room")),
+        "player_requests": copy.deepcopy(runtime.get("player_requests", [])),
+        "reveal_history": copy.deepcopy(runtime.get("reveal_history", [])),
+    }
+    return state
+
+
+def _dispatch(
+    adapter: dict,
+    kind: str,
+    payload: dict,
+    *,
+    runtime: dict,
+    campaign_id: str,
+) -> dict:
     if kind == "adjust_hp":
         target_id = str(payload.get("target_id") or "")
         target = adapter["find_combatant"](target_id)
@@ -187,6 +205,82 @@ def _dispatch(adapter: dict, kind: str, payload: dict) -> dict:
         room_id = str(payload.get("room_id") or "")[:120] or None
         return {"text": text, "category": category, "room_id": room_id}
 
+    if kind == "roll":
+        return adapter["resolve_roll"](payload)
+
+    if kind == "set_active_room":
+        area_id = str(payload.get("area_id") or "").strip()[:160]
+        title = str(payload.get("title") or "").strip()[:240]
+        path = str(payload.get("path") or "").strip()[:500]
+        if not area_id or not title:
+            raise ValueError("area_id and title are required")
+        room = {
+            "area_id": area_id,
+            "title": title,
+            "path": path,
+            "entered_at": sync_store.utc_now(),
+            "manifest_version": int(payload.get("manifest_version", 1) or 1),
+        }
+        runtime["active_room"] = room
+        return {"active_room": copy.deepcopy(room)}
+
+    if kind == "launch_room_encounter":
+        if adapter["has_encounter"]() and not bool(payload.get("replace_active")):
+            raise ValueError("an encounter is already active; explicit replacement confirmation is required")
+        result = adapter["launch_room_encounter"](payload)
+        if not isinstance(result, dict):
+            raise ValueError("encounter launch failed")
+        return result
+
+    if kind == "sync_room_reminders":
+        area_id = str(payload.get("area_id") or "").strip()[:160]
+        reminders = payload.get("reminders") or []
+        if not area_id:
+            raise ValueError("area_id is required")
+        if not isinstance(reminders, list):
+            raise ValueError("reminders must be a list")
+        return adapter["sync_room_reminders"](area_id, reminders)
+
+    if kind == "resolve_player_request":
+        request_id = str(payload.get("request_id") or "").strip()
+        action = str(payload.get("action") or "resolve").strip().lower()
+        if action not in ("resolve", "dismiss", "reopen"):
+            raise ValueError("action must be resolve, dismiss, or reopen")
+        found = next((item for item in runtime.get("player_requests", [])
+                      if item.get("id") == request_id), None)
+        if found is None:
+            raise LookupError("player request not found")
+        found["status"] = {
+            "reopen": "open",
+            "resolve": "resolved",
+            "dismiss": "dismissed",
+        }[action]
+        found["resolved_at"] = None if action == "reopen" else sync_store.utc_now()
+        found["resolution"] = (
+            None if action == "reopen"
+            else str(payload.get("resolution") or "").strip()[:1000] or None
+        )
+        return {"player_request": copy.deepcopy(found)}
+
+    if kind == "create_player_reveal":
+        title = str(payload.get("title") or "Handout").strip()[:160]
+        content = str(payload.get("content") or "").strip()[:20000]
+        image = payload.get("image")
+        recipients = payload.get("recipients") or ["all"]
+        if not isinstance(recipients, list) or not recipients:
+            raise ValueError("recipients must be a non-empty list")
+        if not content and not image:
+            raise ValueError("reveal content or image is required")
+        reveal = adapter["create_player_reveal"]({
+            "title": title,
+            "content": content,
+            "image": image,
+            "recipients": [str(value)[:120] for value in recipients[:50]],
+            "source": str(payload.get("source") or "Obsidian")[:500],
+        })
+        sync_store.remember_reveal(runtime, reveal)
+        return {"reveal": reveal}
+
     raise ValueError(f"unsupported command type: {kind}")
 
 
@@ -195,7 +289,8 @@ def create_obsidian_sync_blueprint(adapter: dict) -> Blueprint:
         "active_campaign_id", "campaign_doc", "snapshot", "find_combatant",
         "apply_hp", "maybe_remove_defeated", "adjust_party_hp", "apply_condition",
         "sort_encounter", "persist_encounter", "broadcast_encounter",
-        "advance_turn", "has_encounter", "gm_required",
+        "advance_turn", "has_encounter", "gm_required", "resolve_roll",
+        "launch_room_encounter", "sync_room_reminders", "create_player_reveal",
     }
     missing = sorted(required - set(adapter))
     if missing:
@@ -280,8 +375,8 @@ def create_obsidian_sync_blueprint(adapter: dict) -> Blueprint:
         return jsonify({"ok": True})
 
     def current_state(campaign_id: str) -> tuple[dict, dict]:
-        snapshot = adapter["snapshot"]()
         runtime = sync_store.load_runtime(campaign_id)
+        snapshot = _client_state(adapter["snapshot"](), runtime)
         if _sync_observed_state(runtime, snapshot):
             sync_store.save_runtime(campaign_id, runtime)
         response = {
@@ -336,7 +431,7 @@ def create_obsidian_sync_blueprint(adapter: dict) -> Blueprint:
                 replay["idempotent_replay"] = True
                 return jsonify(replay)
 
-            before = adapter["snapshot"]()
+            before = _client_state(adapter["snapshot"](), runtime)
             _sync_observed_state(runtime, before)
             try:
                 expected_revision = int(body.get("expected_revision"))
@@ -384,19 +479,31 @@ def create_obsidian_sync_blueprint(adapter: dict) -> Blueprint:
                     current["ended_at"] = sync_store.utc_now()
                     result = {"session": copy.deepcopy(current)}
                 else:
-                    result = _dispatch(adapter, kind, payload)
+                    result = _dispatch(
+                        adapter,
+                        kind,
+                        payload,
+                        runtime=runtime,
+                        campaign_id=campaign_id,
+                    )
             except LookupError as exc:
                 return _json_error(str(exc), 404)
             except ValueError as exc:
                 return _json_error(str(exc), 400)
 
-            after = adapter["snapshot"]()
+            after = _client_state(adapter["snapshot"](), runtime)
             runtime["revision"] = current_revision + 1
             runtime["state_hash"] = sync_store.snapshot_hash(after)
             event_type = {
                 "start_session": "session_start",
                 "end_session": "session_end",
                 "capture_note": "table_note",
+                "roll": "roll",
+                "set_active_room": "room_entered",
+                "launch_room_encounter": "encounter_launched",
+                "sync_room_reminders": "room_reminders_synced",
+                "resolve_player_request": "player_request_resolved",
+                "create_player_reveal": "player_reveal",
             }.get(kind, "combat_command")
             active_session = runtime.get("current_session") or session_before
             event = sync_store.append_event(campaign_id, runtime, {

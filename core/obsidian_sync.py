@@ -19,9 +19,11 @@ import uuid
 from core import storage
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 TOKEN_PREFIX = "obs1"
 RECENT_COMMAND_LIMIT = 250
+PLAYER_REQUEST_LIMIT = 100
+REVEAL_HISTORY_LIMIT = 100
 
 _LOCKS: dict[str, threading.RLock] = {}
 _LOCKS_GUARD = threading.Lock()
@@ -153,6 +155,9 @@ def default_runtime() -> dict:
         "updated_at": None,
         "event_sequence": 0,
         "current_session": None,
+        "active_room": None,
+        "player_requests": [],
+        "reveal_history": [],
         "recent_commands": {},
         "recent_command_order": [],
     }
@@ -168,6 +173,10 @@ def load_runtime(campaign_id: str) -> dict:
         base["recent_commands"] = {}
     if not isinstance(base.get("recent_command_order"), list):
         base["recent_command_order"] = []
+    if not isinstance(base.get("player_requests"), list):
+        base["player_requests"] = []
+    if not isinstance(base.get("reveal_history"), list):
+        base["reveal_history"] = []
     return base
 
 
@@ -197,6 +206,53 @@ def remember_command(runtime: dict, command_id: str, response: dict) -> None:
     while len(order) > RECENT_COMMAND_LIMIT:
         expired = order.pop(0)
         commands.pop(expired, None)
+
+
+def append_player_request(campaign_id: str, request_doc: dict) -> dict:
+    """Persist one player-to-GM request for the Obsidian inbox.
+
+    The website's player authentication remains responsible for establishing
+    the sender.  This storage seam only assigns durable identifiers and keeps
+    the campaign-scoped inbox bounded.
+    """
+    with campaign_lock(campaign_id):
+        runtime = load_runtime(campaign_id)
+        item = dict(request_doc or {})
+        item.setdefault("id", "request-" + uuid.uuid4().hex[:12])
+        item.setdefault("created_at", utc_now())
+        item.setdefault("status", "open")
+        item.setdefault("resolved_at", None)
+        item.setdefault("resolution", None)
+        requests = runtime.setdefault("player_requests", [])
+        requests.append(item)
+        del requests[:-PLAYER_REQUEST_LIMIT]
+        runtime["revision"] = int(runtime.get("revision", 0) or 0) + 1
+        session = runtime.get("current_session") or {}
+        append_event(campaign_id, runtime, {
+            "type": "player_request",
+            "actor": "website_player",
+            "campaign_id": campaign_id,
+            "session_id": session.get("id"),
+            "revision": runtime["revision"],
+            "payload": {
+                "request_id": item.get("id"),
+                "kind": item.get("kind"),
+                "pc_name": item.get("pc_name"),
+                "text": item.get("text"),
+            },
+            "result": {"status": item.get("status")},
+        })
+        # Force the next state read to establish a hash containing this new
+        # runtime-owned object rather than treating it as a website-side drift.
+        runtime["state_hash"] = None
+        save_runtime(campaign_id, runtime)
+        return dict(item)
+
+
+def remember_reveal(runtime: dict, reveal: dict) -> None:
+    history = runtime.setdefault("reveal_history", [])
+    history.append(dict(reveal or {}))
+    del history[:-REVEAL_HISTORY_LIMIT]
 
 
 def append_event(campaign_id: str, runtime: dict, event: dict) -> dict:
