@@ -1,7 +1,7 @@
 {
   "id": "session-operations-sync",
   "name": "Session Operations Sync",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "minAppVersion": "1.5.0",
   "description": "Controls the campaign website's live PF2e state from Obsidian and records structured session events.",
   "author": "Evan",

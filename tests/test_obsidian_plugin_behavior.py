@@ -163,6 +163,26 @@ function makePlugin() {
     out.record_label_input = label;
   }
 
+  // (7) Condition durations reach the wire, but only where they mean something.
+  {
+    const p = makePlugin();
+    const sent = [];
+    p.sendCommand = async (type, payload) => { sent.push({ type, payload }); };
+    await p.conditionAction('t1', 'frightened', 'increase', 3);
+    await p.conditionAction('t1', 'prone', 'add', 2);
+    await p.conditionAction('t1', 'frightened', 'decrease', 3);
+    await p.conditionAction('t1', 'prone', 'remove', 3);
+    await p.conditionAction('t1', 'sickened', 'increase', 0);
+    await p.conditionAction('t1', 'sickened', 'increase', 99999);
+    out.rounds_sent_on_increase = sent[0].payload.rounds === 3;
+    out.rounds_sent_on_add = sent[1].payload.rounds === 2;
+    out.no_rounds_on_decrease = !('rounds' in sent[2].payload);
+    out.no_rounds_on_remove = !('rounds' in sent[3].payload);
+    out.no_rounds_when_zero = !('rounds' in sent[4].payload);
+    out.rounds_clamped = sent[5].payload.rounds === 1000;
+    out.command_type_unchanged = sent.every((s) => s.type === 'condition_action');
+  }
+
   process.stdout.write(JSON.stringify(out));
 })().catch((error) => {
   process.stderr.write(String(error && error.stack || error));
@@ -247,3 +267,20 @@ def test_frontmatter_survives_a_hostile_session_label(harness_output):
     assert not any(line.startswith('not_frontmatter:') for line in frontmatter), \
         'the label injected a key into the frontmatter block'
     assert len([line for line in frontmatter if line.startswith('ended_at:')]) == 1
+
+
+def test_condition_durations_are_sent_only_where_they_mean_something(harness_output):
+    """The server has always accepted a `rounds` field on condition_action and
+    fed it to the website's auto-expiry timer; the plugin never sent one, so a
+    timed condition applied from Obsidian never expired.
+
+    A duration is only meaningful when a condition goes ON. Sending one with
+    decrease/remove would set a timer on a condition being cleared.
+    """
+    assert harness_output['rounds_sent_on_increase']
+    assert harness_output['rounds_sent_on_add']
+    assert harness_output['no_rounds_on_decrease']
+    assert harness_output['no_rounds_on_remove']
+    assert harness_output['no_rounds_when_zero'], 'zero means "no timer", not "expire immediately"'
+    assert harness_output['rounds_clamped'], 'must clamp to the server ceiling of 1000'
+    assert harness_output['command_type_unchanged']

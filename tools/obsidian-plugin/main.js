@@ -67,9 +67,9 @@ function conditionLabel(value) {
   return String(value || '').replaceAll('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function activeConditions(conditions) {
+function activeConditions(conditions, exclude = []) {
   return Object.entries(conditions || {})
-    .filter(([, value]) => value && value !== 0)
+    .filter(([name, value]) => value && value !== 0 && !exclude.includes(name))
     .map(([name, value]) => typeof value === 'boolean' ? conditionLabel(name) : `${conditionLabel(name)} ${value}`)
     .join(', ');
 }
@@ -222,6 +222,8 @@ class SessionOperationsView extends ItemView {
     this.selectedId = null;
     this.selectedPartyName = null;
     this.selectedTab = 'overview';
+    // Sticky condition duration in rounds; 0 means no auto-expiry timer.
+    this.conditionRounds = 0;
   }
 
   getViewType() { return VIEW_TYPE; }
@@ -386,37 +388,69 @@ class SessionOperationsView extends ItemView {
       grid.createDiv({ cls: 'so-empty', text: 'No party members are loaded on the active website table.' });
       return;
     }
-    party.forEach((pc) => {
-      const card = grid.createDiv({ cls: 'so-party-card' });
-      if (pc.name === this.selectedPartyName) card.addClass('is-selected');
-      card.addEventListener('click', () => {
+    // Dying first. A PC at 0 HP is the most consequential state at the table and
+    // it used to be one comma-separated word among others; sorting it to the top
+    // means the GM never has to look for it.
+    const dyingValue = (pc) => Number((pc.conditions || {}).dying || 0);
+    const ordered = [...party].sort((a, b) => dyingValue(b) - dyingValue(a));
+
+    ordered.forEach((pc) => {
+      const dying = dyingValue(pc);
+      const row = grid.createDiv({ cls: 'so-party-row' });
+      if (pc.name === this.selectedPartyName) row.addClass('is-selected');
+      if (dying) row.addClass('is-dying');
+      row.addEventListener('click', () => {
         this.selectedPartyName = pc.name;
         this.selectedId = null;
         this.selectedTab = 'overview';
         this.render();
       });
-      card.createDiv({ cls: 'so-party-name', text: pc.name });
+
       const current = Number(pc.current_hp || 0);
       const maximum = Math.max(1, Number(pc.max_hp || 0));
-      const hpText = pc.temp_hp ? `${current}/${maximum} HP + ${pc.temp_hp} temp` : `${current}/${maximum} HP`;
-      card.createDiv({ cls: 'so-hp', text: hpText });
-      const bar = card.createDiv({ cls: 'so-hp-bar' });
-      const fill = bar.createDiv({ cls: 'so-hp-fill' });
       const percent = Math.max(0, Math.min(100, current / maximum * 100));
+
+      const top = row.createDiv({ cls: 'so-row-top' });
+      top.createDiv({ cls: 'so-party-name', text: pc.name });
+      top.createDiv({
+        cls: 'so-hp' + (percent <= 25 ? ' is-critical' : percent <= 50 ? ' is-wounded' : ''),
+        text: `${current}/${maximum}` + (pc.temp_hp ? ` +${pc.temp_hp}` : ''),
+      });
+
+      const bar = row.createDiv({ cls: 'so-hp-bar' });
+      const fill = bar.createDiv({ cls: 'so-hp-fill' });
       fill.style.width = `${percent}%`;
       if (percent <= 25) fill.addClass('is-critical');
       else if (percent <= 50) fill.addClass('is-wounded');
-      const conditions = activeConditions(pc.conditions);
-      card.createDiv({ cls: 'so-meta', text: conditions || 'No active conditions' });
-      const actions = card.createDiv({ cls: 'so-party-actions' });
+
+      // Everything below here was already crossing the wire and being discarded.
+      // hero_points, focus, reaction_used and persistent_damage have always been
+      // in the snapshot; the card rendered name, HP and a conditions string.
+      const chips = row.createDiv({ cls: 'so-chips' });
+      if (dying) {
+        chips.createDiv({ cls: 'so-chip is-danger', text: `DYING ${dying}` });
+        const wounded = Number((pc.conditions || {}).wounded || 0);
+        // Recovery DC is 10 + dying value, raised by wounded (Player Core).
+        chips.createDiv({ cls: 'so-chip is-danger', text: `recovery DC ${10 + dying + wounded}` });
+      }
+      if (pc.persistent_damage) {
+        const pd = Array.isArray(pc.persistent_damage) ? pc.persistent_damage.length : pc.persistent_damage;
+        if (pd) chips.createDiv({ cls: 'so-chip is-danger', text: `persistent ${pd}` });
+      }
+      if (Number(pc.hero_points)) chips.createDiv({ cls: 'so-chip is-hero', text: `hero ${pc.hero_points}` });
+      if (pc.focus_max) chips.createDiv({ cls: 'so-chip is-focus', text: `focus ${pc.focus || 0}/${pc.focus_max}` });
+      else if (Number(pc.focus)) chips.createDiv({ cls: 'so-chip is-focus', text: `focus ${pc.focus}` });
+      if (pc.reaction_used) chips.createDiv({ cls: 'so-chip is-muted', text: 'reaction spent' });
+      activeConditions(pc.conditions, ['dying'])
+        .split(', ')
+        .filter(Boolean)
+        .forEach((c) => chips.createDiv({ cls: 'so-chip', text: c }));
+
+      // No Inspect button: the row itself already opens the inspector, and the
+      // button did nothing else.
+      const actions = row.createDiv({ cls: 'so-party-actions' });
       this.button(actions, 'Damage', () => this.plugin.adjustPartyHp(pc.name, 'damage'));
       this.button(actions, 'Heal', () => this.plugin.adjustPartyHp(pc.name, 'heal'));
-      this.button(actions, 'Inspect', async () => {
-        this.selectedPartyName = pc.name;
-        this.selectedId = null;
-        this.selectedTab = 'overview';
-        this.render();
-      });
     });
   }
 
@@ -669,6 +703,24 @@ class SessionOperationsView extends ItemView {
 
   renderInspectorConditions(panel, target) {
     const targetId = target.target_id || target.instance_id;
+
+    // Duration picker. Sticky rather than per-application on purpose: at the
+    // table you set "3 rounds" once for a spell and then tap several targets.
+    // Defaults to none, so the common case costs no extra taps and behaves
+    // exactly as before.
+    const durations = panel.createDiv({ cls: 'so-duration-row' });
+    durations.createDiv({ cls: 'so-duration-label', text: 'Duration' });
+    [0, 1, 2, 3, 10].forEach((n) => {
+      const chip = durations.createDiv({
+        cls: 'so-duration-chip' + (this.conditionRounds === n ? ' is-selected' : ''),
+        text: n === 0 ? 'none' : `${n}r`,
+      });
+      chip.addEventListener('click', () => {
+        this.conditionRounds = n;
+        this.render();
+      });
+    });
+
     const conditions = panel.createDiv({ cls: 'so-condition-list' });
     const shown = [...new Set([...Object.keys(target.conditions || {}), 'frightened', 'sickened', 'stunned', 'slowed', 'prone', 'off_guard'])]
       .filter((name) => NUMERIC_CONDITIONS.includes(name) || BOOLEAN_CONDITIONS.includes(name));
@@ -678,12 +730,15 @@ class SessionOperationsView extends ItemView {
       const value = target.conditions?.[name] || 0;
       row.createDiv({ cls: 'so-condition-value', text: typeof value === 'boolean' ? (value ? 'On' : 'Off') : String(value) });
       const controls = row.createDiv({ cls: 'so-inline-controls' });
+      const rounds = this.conditionRounds || 0;
       if (targetId && BOOLEAN_CONDITIONS.includes(name)) {
-        this.button(controls, value ? 'Remove' : 'Add', () => this.plugin.conditionAction(targetId, name, value ? 'remove' : 'add'));
+        this.button(controls, value ? 'Remove' : 'Add', () => this.plugin.conditionAction(targetId, name, value ? 'remove' : 'add', rounds));
       } else if (targetId) {
         this.button(controls, '−', () => this.plugin.conditionAction(targetId, name, 'decrease'));
-        this.button(controls, '+', () => this.plugin.conditionAction(targetId, name, 'increase'));
+        this.button(controls, '+', () => this.plugin.conditionAction(targetId, name, 'increase', rounds));
       }
+      const expiry = (target.condition_expiry || {})[name];
+      if (expiry) row.createDiv({ cls: 'so-condition-expiry', text: `${expiry}r left` });
     });
     const persistent = target.persistent_damage_list || target.persistent_damage || [];
     const entries = Array.isArray(persistent)
@@ -1205,8 +1260,18 @@ module.exports = class SessionOperationsSyncPlugin extends Plugin {
     await this.sendCommand('adjust_party_hp', { pc_name: pcName, action, amount });
   }
 
-  async conditionAction(targetId, condition, action) {
-    await this.sendCommand('condition_action', { target_id: targetId, condition, action });
+  async conditionAction(targetId, condition, action, rounds = 0) {
+    // `rounds` drives the website's auto-expiry timer. It was never sent, so a
+    // "frightened 2 for 3 rounds" applied from Obsidian sat on the combatant
+    // forever and the GM had to remember to clear it. The server has always
+    // accepted and clamped the field (services/obsidian_sync.py, condition_action).
+    //
+    // Only meaningful when a condition is going ON: decrease/remove carry no
+    // duration, and sending one would set a timer on a condition being cleared.
+    const payload = { target_id: targetId, condition, action };
+    const timed = ['add', 'increase'].includes(action) && Number(rounds) > 0;
+    if (timed) payload.rounds = Math.max(1, Math.min(Math.round(Number(rounds)), 1000));
+    await this.sendCommand('condition_action', payload);
   }
 
   async setInitiative(targetId, value) {
