@@ -16316,6 +16316,23 @@ def _combatant_detail_payload(c, *, is_pc=None):
         data['attacks'] = [{'name': a['name'], 'strikes': a.get('strikes', []), 'damage': a['damage']} for a in c.attacks]
         data['skills'] = c.skills
         data['spell_casters'] = c.spell_casters
+        # Feats and derived reactions used to ride the 1 Hz snapshot: 20 feats
+        # at 600 characters plus 12 reactions at 600, per PC, re-sent every
+        # second for data that cannot change mid-fight. They live here now,
+        # fetched once when a card is opened.
+        _feats = getattr(c, 'feats', []) or []
+        _plain = lambda f: re.sub(r'<[^>]*>', '', f.get('desc') or '')
+        data['feats'] = [
+            {'name': f.get('name', ''), 'description': _plain(f)[:600],
+             'level': f.get('level'), 'type': f.get('type', '')}
+            for f in _feats[:20]
+        ]
+        data['reactions'] = [
+            {'name': f.get('name', ''), 'description': _plain(f)[:600]}
+            for f in _feats
+            if str(f.get('type') or '').lower() == 'reaction'
+            or re.search(r'\btrigger\b', _plain(f), re.IGNORECASE)
+        ][:12]
     else:
         data['attacks'] = [{'name': s.get('name', ''), 'hit': (lambda b: f"+{b}" if b >= 0 else str(b))(s.get('bonus', s.get('mod', 0))), 'damage': s.get('damage', '')} for s in c.strikes]
         data['actions'] = [{'name': a['name'], 'description': a.get('description', ''), 'actions': a.get('actions', '')} for a in c.actions]
@@ -21499,17 +21516,6 @@ def _obsidian_sync_snapshot():
                 'expended_slots': copy.deepcopy(raw.get('expended_slots', {})),
                 'spell_attack': int(getattr(pc, 'spell_attack', 0) or 0),
                 'spell_dc': int(getattr(pc, 'spell_dc', 0) or 0),
-                'feats': [
-                    {'name': f.get('name', ''), 'description': re.sub(r'<[^>]*>', '', f.get('desc') or '')[:600],
-                     'level': f.get('level'), 'type': f.get('type', '')}
-                    for f in getattr(pc, 'feats', [])[:20]
-                ],
-                'reactions': [
-                    {'name': f.get('name', ''), 'description': re.sub(r'<[^>]*>', '', f.get('desc') or '')[:600]}
-                    for f in getattr(pc, 'feats', [])
-                    if str(f.get('type') or '').lower() == 'reaction'
-                    or re.search(r'\btrigger\b', re.sub(r'<[^>]*>', '', f.get('desc') or ''), re.IGNORECASE)
-                ][:12],
                 'portrait_url': f"/portraits/{getattr(pc, 'portrait', '')}" if getattr(pc, 'portrait', '') else '',
                 'portrait_focus': {
                     'x': getattr(pc, 'portrait_focus_x', 50.0),

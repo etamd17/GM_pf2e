@@ -526,7 +526,21 @@ class SessionOperationsView extends ItemView {
     // Snapshot values win for anything volatile (HP, conditions) because those
     // are a second old at most, while the cached statblock may be much older.
     const cached = this.plugin.detailFor(target.target_id || target.instance_id || target.name);
-    if (cached) target = Object.assign({}, cached, target);
+    if (cached) {
+      // Fill gaps only. A plain Object.assign({}, cached, target) would let an
+      // EXPLICITLY undefined key on target clobber a good cached value --
+      // Object.assign copies undefined -- and the merge above sets exactly such
+      // keys (strikes, feats, reactions...) whenever the snapshot no longer
+      // carries them. Volatile values on target still win, because they are a
+      // second old at most while a cached statblock may be much older.
+      target = Object.assign({}, target);
+      Object.keys(cached).forEach((key) => {
+        const value = target[key];
+        const empty = value === undefined || value === null
+          || (Array.isArray(value) && value.length === 0);
+        if (empty) target[key] = cached[key];
+      });
+    }
     this.plugin.ensureDetail(target);
 
     const section = root.createDiv({ cls: 'so-section' });
