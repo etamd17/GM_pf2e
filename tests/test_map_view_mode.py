@@ -101,7 +101,9 @@ def test_the_table_sees_the_union_of_the_party_s_vision():
 def test_the_preview_toggle_exists_and_is_gm_only():
     assert 'id="map-preview-table"' in _HTML
     button_line = next(l for l in _HTML.splitlines() if 'map-preview-table' in l)
-    assert '{% if map_gm %}' in button_line, 'previewing is a GM affordance'
+    # Stage 6b narrowed this: previewing is a GM affordance AND meaningless on
+    # the table screen itself, which is already showing the table view.
+    assert '{% if map_gm and not table_view %}' in button_line
     assert "getElementById('map-preview-table').addEventListener" in _JS
 
 
@@ -118,7 +120,7 @@ def test_previewing_says_so():
     assert 'is-previewing' in _CSS, 'the frame is the reminder it is incomplete'
 
 
-def test_the_view_mode_defaults_by_role():
-    """Nothing but the GM can reach the map today, but the default has to be
-    right for the table route when stage 6 adds it."""
-    assert "let viewMode = cfg.isGm ? 'gm' : 'table';" in _JS
+def test_the_view_mode_defaults_correctly():
+    """Stage 6b added the table route, which is GM-authenticated but must still
+    start in table view -- so the default cannot be role alone."""
+    assert "let viewMode = (cfg.tableView || !cfg.isGm) ? 'table' : 'gm';" in _JS

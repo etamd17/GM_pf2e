@@ -29,14 +29,20 @@ python tools/check_templates.py   # Jinja parse check (CI runs this) — run aft
   `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`
 - **Verify prod-facing fixes on Railway**, not just locally — local-green has missed prod-only failures before.
 - This is a **single-GM, in-person** tool (4 players + 1 GM). Snappiness with that table + tracker↔sheet sync is the priority.
-- **Removed, do not rebuild:** the VTT map (no battle maps) and the in-app notes/Obsidian vault (the GM authors in real Obsidian; the site only keeps a read-only story-thread view + a manual session recap).
+- **Removed, do not rebuild:** the in-app notes/Obsidian vault (the GM authors in real Obsidian;
+  the site only keeps a read-only story-thread view + a manual session recap).
+- **The tactical map is BACK IN SCOPE and SHIPPED.** This line used to say the VTT map was removed
+  and must not be rebuilt. That was true until 2026-08-06 and is now badly wrong: `/map` is live,
+  GM-only, at roughly 2,500 lines across `core/scenes.py`, `services/scene_sync.py`,
+  `static/js/map.js`, `templates/map.html` and ~250 tests. It went through a full feature audit
+  (`docs/map/AUDIT.md`) and seven build stages. Anything claiming the map is gone is stale.
 
 ## Architecture
 
 - **`app.py` is a ~17k-line monolith** — all Flask routes plus the `Character` (PF2e) and `Monster` classes. Live combat state is held in **process globals** (`ACTIVE_ENCOUNTER`, `ROUND_NUMBER`, `TURN_INDEX`, `PARTY_LIBRARY`, …), flushed to `server_state.json` (`_persist_encounter_state`) and re-hydrated on boot. There is **one live campaign slot** at a time; `load_campaign(cid)` rebinds the globals.
 - **Server-rendered Jinja + vanilla JS.** No build step, no SPA framework.
 - **SSE** (`/api/events`): every page subscribes through the shared hub `window.appSSE(eventName, handler)` in `templates/_sse_hub.html` — **never** `new EventSource('/api/events')` directly (one socket per tab; the hub multiplexes + reconnects). Broadcast from the server with `sse_broadcast(event, data, player_filter=...)`: `data` goes to GMs, and `player_filter(copy)` returns the player-facing payload (or `None` to drop it for players entirely) — computed once and shared by all player subscribers.
-  - **`?audience=table` is NOT a server-side feature.** Its only use is client-side in `_sse_hub.html`: a passive table screen has no operator, so it self-reloads on a new deploy instead of showing the "New version" toast. There is no audience concept in `app.py` (grep: 0 hits) and no shared-table frame at all. (The Campaign Hub's Stage was going to build one; that project is cancelled, so a shared-table frame now has no owner.)
+  - **`?audience=table` is NOT a server-side feature.** Its only use is client-side in `_sse_hub.html`: a passive table screen has no operator, so it self-reloads on a new deploy instead of showing the "New version" toast. There is no audience concept in `app.py` (grep: 0 hits). **A shared-table frame now EXISTS** — `/map/table` (map audit stage 6b) — but it is a view mode of `map.html`, not a generic frame, and it does not use `?audience=table`. The Campaign Hub's Stage, which was going to build a generic one, is still cancelled.
 - **The Chronicle has TWO publishing lanes**, and they share storage with nothing.
   - **Vault lane** (original): `tools/chronicle_build.py` runs on the GM's machine, derives a spoiler-safe player vault from the Obsidian GM vault, hard-aborts on a surviving `[!danger]`/`[!secret]`/`[!gm]` marker, zips it and POSTs to `/api/chronicle/publish`. Whole-tree replace via `content/<hash>` + `current`/`previous` symlinks (`_chronicle_swap`).
   - **Doc lane** (`core/chronicle_docs.py`): the GM uploads a `.docx`/`.md`/`.txt` at `/chronicle/manage`, previews it, then toggles `published`. Stored at `chronicle/docs/` — a **sibling** of `content/`, never inside it, because `_chronicle_swap`'s prune deletes every content dir it doesn't point at. No symlinks, no rotation; the toggle *is* the rollback.
@@ -94,7 +100,10 @@ Stage — correct that entry when the work starts.
   and shield all scroll off together — i.e. on the phones the players actually use. `.header-hp-chip`
   is already styled (`system.css:3176`) and both mirrors already write `#header-hp-chip-cur`.
 
-**Campaign Hub / the Stage was CANCELLED (2026-08-09)** — do not resurrect it, and do not treat
+**Campaign Hub / the Stage was CANCELLED (2026-08-09)** and stays cancelled. The map's shared
+table screen (`/map/table`) is NOT that project reopening: it is one page's second view mode, GM-
+authenticated, showing one scene. Do not treat it as a mandate for a generic shared-table frame.
+Do not resurrect the Hub, and do not treat
 `api_stage_encounter()` in app.py as related (it is an unrelated pre-existing route for staging an
 encounter).
 

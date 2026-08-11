@@ -3,7 +3,7 @@
 {% block head_extra %}<link rel="stylesheet" href="{{ url_for('static', filename='css/map.css') }}">{% endblock %}
 
 {% block content %}
-<div class="map-page" data-map-role="{{ 'gm' if map_gm else 'player' }}">
+<div class="map-page{% if table_view %} is-table-screen{% endif %}" data-map-role="{{ 'gm' if map_gm else 'player' }}">
     <header class="map-header">
         <div>
             <div class="map-eyebrow">{{ 'Game Master Surface' if map_gm else 'Shared Table' }}</div>
@@ -15,14 +15,14 @@
             <span id="map-zoom-label" class="map-zoom-label">100%</span>
             <button type="button" id="map-zoom-in" class="map-btn map-btn--quiet" aria-label="Zoom in">+</button>
             <button type="button" id="map-fit" class="map-btn map-btn--quiet">Fit</button>
-            {% if map_gm %}<button type="button" id="map-preview-table" class="map-btn map-btn--quiet">Preview table view</button>{% endif %}
+            {% if map_gm and not table_view %}<button type="button" id="map-preview-table" class="map-btn map-btn--quiet">Preview table view</button>{% endif %}
             <button type="button" id="map-follow-turn" class="map-btn map-btn--quiet is-active">Follow turn</button>
             <button type="button" id="map-undo" class="map-btn map-btn--quiet" disabled>Undo move</button>
             {% if not map_gm %}<a href="{{ system_ui.player_home }}" class="map-btn map-btn--quiet">Player Hub</a>{% endif %}
         </div>
     </header>
 
-    {% if map_gm %}
+    {% if map_gm and not table_view %}
     <section class="map-create-panel{% if scene_id %} map-create-panel--compact{% endif %}">
         <form id="map-create-form" class="map-inline-form">
             <label for="map-new-name">New scene</label>
@@ -37,7 +37,7 @@
 
     {% if scene_id %}
     <div class="map-workspace">
-        {% if map_gm %}
+        {% if map_gm and not table_view %}
         <aside class="map-sidebar" aria-label="Map controls">
             <section class="map-panel">
                 <h2>Scene</h2>
@@ -284,6 +284,7 @@
 window.SCENE_MAP_CONFIG = {{ {
     'sceneId': scene_id,
     'isGm': map_gm,
+    'tableView': table_view|default(false),
     'characterId': (map_character.id if map_character else none),
     'playerName': (map_character.name if map_character else player_name or '')
 }|tojson }};

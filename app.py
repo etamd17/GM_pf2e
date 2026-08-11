@@ -7209,6 +7209,30 @@ def scene_map_home():
                            scene_summaries=[], token_candidates=[])
 
 
+@app.route('/map/table')
+@gm_required
+def scene_map_table():
+    """The shared table screen: a second window the GM drags onto the TV.
+
+    A VIEW MODE of the same page, not a second application -- which is what the
+    stage 4b split (render by view, permit by role) bought. It follows whatever
+    scene is on the table rather than taking one in the URL, so pushing a
+    different scene changes what the TV shows without touching this window.
+
+    Behind @gm_required on purpose. The GM opens it themselves on a screen they
+    control, so no player-facing auth surface is reintroduced -- and it is that
+    absence which keeps the two leaks found during the port unreachable.
+
+    Registered BEFORE /map/<scene_id> so 'table' is never parsed as a scene id.
+    """
+    cid = _active_campaign_id()
+    sid = _scenes.table_scene_id(cid)
+    scene = _scenes.load_scene(cid, sid) if sid else None
+    return render_template('map.html', scene_id=(sid if scene else None),
+                           map_gm=True, table_view=True,
+                           scene_summaries=[], token_candidates=[])
+
+
 @app.route('/map/<scene_id>')
 @gm_required
 def scene_map_gm(scene_id):
