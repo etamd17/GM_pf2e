@@ -7520,6 +7520,46 @@ def api_scene_elements(scene_id):
                 if math.hypot(wall['x2'] - wall['x1'], wall['y2'] - wall['y1']) < 4:
                     return jsonify({'error': 'wall segment is too short'}), 400
                 scene.setdefault('walls', []).append(wall)
+            elif action == 'add_walls':
+                # A chained run of segments, saved in one write.
+                #
+                # Walls were drawn one disconnected segment at a time, each its
+                # own HTTP round-trip, full scene rewrite and double broadcast.
+                # That is slow, but the real cost is that it made closed rooms
+                # tedious enough to skip -- and region fog is only as good as
+                # wall completeness, because a one-pixel gap leaks the reveal
+                # into the next room.
+                kind = 'door' if data.get('kind') == 'door' else 'wall'
+                secret = bool(data.get('secret', False)) if kind == 'door' else False
+                segments = data.get('segments')
+                if not isinstance(segments, list) or not segments:
+                    return jsonify({'error': 'no wall segments supplied'}), 400
+                if len(segments) > 200:
+                    return jsonify({'error': 'too many wall segments in one run'}), 400
+                built = []
+                for segment in segments:
+                    if not isinstance(segment, dict):
+                        return jsonify({'error': 'malformed wall segment'}), 400
+                    wall = {
+                        'id': _storage.new_id(),
+                        'x1': point(segment.get('x1'), scene['width']),
+                        'y1': point(segment.get('y1'), scene['height']),
+                        'x2': point(segment.get('x2'), scene['width']),
+                        'y2': point(segment.get('y2'), scene['height']),
+                        'kind': kind,
+                        'open': False,
+                        'secret': secret,
+                    }
+                    # Skip rather than reject: a chained run picks up zero-length
+                    # segments from a double-click or a click that did not move,
+                    # and failing the whole run for one of them would throw away
+                    # a wall the GM just spent a minute drawing.
+                    if math.hypot(wall['x2'] - wall['x1'], wall['y2'] - wall['y1']) < 4:
+                        continue
+                    built.append(wall)
+                if not built:
+                    return jsonify({'error': 'wall segments are too short'}), 400
+                scene.setdefault('walls', []).extend(built)
             elif action == 'toggle_door':
                 wall = next((item for item in scene.get('walls', [])
                              if item.get('id') == data.get('id') and item.get('kind') == 'door'), None)
