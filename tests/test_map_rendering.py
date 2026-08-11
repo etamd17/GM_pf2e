@@ -54,10 +54,14 @@ def test_call_sites_were_not_touched():
     18 call sites would have been a bigger change with more to get wrong."""
     assert len(re.findall(r'^\s*draw\(\);', _JS, re.M)) >= 15
     assert 'renderScene();' in _JS
-    # Exactly two callers, and both are deliberate: the rAF callback, and the
-    # __mapRenderNow diagnostic seam. A third would mean something started
-    # rendering synchronously again, which is the thing this stage removed.
-    assert len(re.findall(r'renderScene\(\);', _JS)) == 2
+    # Every caller must be deliberate, because an accidental one means
+    # something started rendering synchronously again -- the thing this stage
+    # removed. Three today:
+    #   1. the rAF callback in draw()
+    #   2. the __mapRenderNow diagnostic seam
+    #   3. stepAnimation, the table-only animation ticker (stage 6c)
+    assert len(re.findall(r'renderScene\(\);', _JS)) == 3
+    assert 'function stepAnimation(' in _JS
 
 
 def test_pointermove_no_longer_renders_directly():

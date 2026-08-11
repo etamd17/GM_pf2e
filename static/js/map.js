@@ -259,6 +259,7 @@
         drawTargetOverlays();
         if (!isTableView()) drawToolOverlay();
         drawTurnBanner();
+        syncAnimation();
     }
 
     function drawGrid() {
@@ -283,9 +284,29 @@
         ctx.restore();
     }
 
+    // PF2e light has two zones: BRIGHT out to the stated radius, DIM to twice
+    // it. The map drew one soft circle, so the edge of a lit area meant nothing
+    // -- you could not tell where a torch stopped being useful. The stop at
+    // 0.5 below is the bright/dim boundary, which is why it is a hard-ish step
+    // rather than a smooth ramp.
+    // Steady radii. Flicker is applied ONLY to the glow, never here.
+    //
+    // Two reasons, and the second is the load-bearing one. Visually, a revealed
+    // area that strobes with the flame is unreadable and slightly sickening.
+    // Mechanically, the vision mask is cached on a signature containing
+    // light.radius (stage 6a); if flicker moved the carve radius, the cache
+    // would either serve a stale mask or miss every single frame and drag the
+    // whole raycast back into the frame budget -- undoing 6a to make a torch
+    // wobble.
+    function lightRadii(light) {
+        const bright = Math.max(1, Number(light.radius) || 1);
+        return {bright: bright, dim: bright * 2};
+    }
+
     function drawAmbientLights() {
         for (const light of scene.lights || []) {
-            const radius = Math.max(1, Number(light.radius) || 1);
+            // The GLOW flickers; the carved vision above does not.
+            const radius = lightRadii(light).dim * flickerFactor(light);
             const gradient = ctx.createRadialGradient(light.x, light.y, 0, light.x, light.y, radius);
             // A stop is built by concatenating an alpha byte, so the colour has
             // to be exactly #rrggbb or the stop is invalid and throws inside the
@@ -294,7 +315,12 @@
             const alpha = Math.max(.05, Math.min(1, Number(light.intensity) || .75));
             // Was alpha * 90, i.e. capped at 0x5A -- about 35% -- so the
             // difference between a candle and a bonfire was nearly invisible.
-            gradient.addColorStop(0, color + Math.round(alpha * 200).toString(16).padStart(2, '0'));
+            const byte = (a) => Math.round(Math.max(0, Math.min(255, a))).toString(16).padStart(2, '0');
+            // Bright zone holds its value, then drops at the boundary and fades
+            // out through the dim zone.
+            gradient.addColorStop(0, color + byte(alpha * 200));
+            gradient.addColorStop(0.48, color + byte(alpha * 170));
+            gradient.addColorStop(0.52, color + byte(alpha * 80));
             gradient.addColorStop(1, color + '00');
             ctx.save();
             ctx.globalCompositeOperation = 'screen';
@@ -432,7 +458,11 @@
                 Math.max(0, Number(token.vision_radius) || Number(scene.settings.default_vision) || 700));
         }
         for (const light of scene.lights || []) {
-            carveVisibility(mctx, {x: Number(light.x), y: Number(light.y)}, Math.max(0, Number(light.radius) || 0));
+            // Carve to the DIM radius: a creature can see by dim light, it just
+            // sees worse. Carving only the bright zone made a torch reveal half
+            // the area it should.
+            carveVisibility(mctx, {x: Number(light.x), y: Number(light.y)},
+                Math.max(0, lightRadii(light).dim));
         }
         mctx.globalCompositeOperation = 'source-over';
         ctx.drawImage(mask, 0, 0);
@@ -452,12 +482,19 @@
         const g = gridGeometry();
         mctx.globalCompositeOperation = 'destination-out';
         mctx.fillStyle = '#000';
+        // Region reveal works in whole squares, so an explored area ends on a
+        // hard stair-stepped edge that announces the grid. A blur on the
+        // punch-out feathers the boundary into the dark instead. Applied to the
+        // MASK, not the map, so nothing else on the canvas is softened.
+        const feather = Math.max(6, g.size * 0.35);
+        mctx.filter = 'blur(' + Math.round(feather) + 'px)';
         for (const key of scene.fog.revealed_cells || []) {
             const parts = String(key).split(',');
             const col = Number(parts[0]), row = Number(parts[1]);
             if (!Number.isFinite(col) || !Number.isFinite(row)) continue;
             mctx.fillRect(g.ox + col * g.size, g.oy + row * g.size, g.size, g.size);
         }
+        mctx.filter = 'none';
         // Legacy brush strokes. Nothing writes these any more; they are replayed
         // so scenes fogged before region reveal do not suddenly go dark.
         for (const operation of scene.fog.operations || []) {
@@ -680,6 +717,58 @@
     // Whose turn it is, stated plainly on the shared screen so nobody has to
     // ask. Drawn in scene coordinates and pinned to the visible viewport, so it
     // stays put while the map pans underneath it.
+    // --- Animation -------------------------------------------------------
+    //
+    // Stage 6a made rendering event-driven: one frame, only when something
+    // changes. Animation is the opposite, so it is confined to the TABLE
+    // screen. The GM's working view stays static and cheap -- which is what was
+    // asked for, and what keeps 6a's win intact on the screen being worked on.
+    //
+    // The loop also stops dead when nothing is animating, so a table showing a
+    // lightless scene costs nothing either.
+    let animationHandle = null;
+    let animationClock = 0;
+
+    function animationsWanted() {
+        if (!isTableView() || !scene) return false;
+        return (scene.lights || []).length > 0;
+    }
+
+    function stepAnimation(timestamp) {
+        animationClock = timestamp;
+        if (!animationsWanted()) { animationHandle = null; return; }
+        renderScene();
+        animationHandle = window.requestAnimationFrame(stepAnimation);
+    }
+
+    function syncAnimation() {
+        if (animationsWanted()) {
+            if (animationHandle === null) animationHandle = window.requestAnimationFrame(stepAnimation);
+        } else if (animationHandle !== null) {
+            window.cancelAnimationFrame(animationHandle);
+            animationHandle = null;
+        }
+    }
+
+    // A stable per-light phase so two torches in the same room do not flicker
+    // in lockstep, which reads as a strobe rather than as fire.
+    function lightPhase(light) {
+        const id = String(light.id || '');
+        let hash = 0;
+        for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) % 100000;
+        return hash / 100000 * Math.PI * 2;
+    }
+
+    // Flame wanders; it does not pulse on a sine. Two detuned waves keep it
+    // from reading as a heartbeat.
+    function flickerFactor(light) {
+        if (!isTableView()) return 1;
+        const t = animationClock / 1000;
+        const phase = lightPhase(light);
+        const wander = Math.sin(t * 5.3 + phase) * 0.5 + Math.sin(t * 8.9 + phase * 1.7) * 0.5;
+        return 1 + wander * 0.06;
+    }
+
     function drawTurnBanner() {
         if (!isTableView()) return;
         const active = (scene.tokens || []).find(t => t.live && t.live.is_active
@@ -936,6 +1025,14 @@
     // still starts in 'gm' and only previews on request.
     let viewMode = (cfg.tableView || !cfg.isGm) ? 'table' : 'gm';
     function isTableView() { return viewMode === 'table'; }
+
+    // Is the GM sidebar actually in the DOM?
+    //
+    // Distinct from cfg.isGm, which only says the request was authenticated.
+    // The table screen (stage 6b) is GM-authenticated AND has no controls, so
+    // anything that reaches for a sidebar element has to ask this instead --
+    // otherwise it finds null, throws, and aborts the rest of init.
+    function hasGmChrome() { return !!cfg.isGm && !cfg.tableView; }
 
     // --- Region fog ---------------------------------------------------------
     //
@@ -1526,7 +1623,7 @@
     }
 
     async function refreshPickers() {
-        if (!cfg.isGm) return;
+        if (!hasGmChrome()) return;
         try {
             const data = await request('/api/scenes');
             tableSceneId = data.active_scene_id || null;
@@ -1575,7 +1672,7 @@
     }
 
     function updateSelectionPanel() {
-        if (!cfg.isGm) return;
+        if (!hasGmChrome()) return;
         const box = document.getElementById('map-token-actions');
         const empty = document.getElementById('map-token-empty');
         const token = selectedToken();
@@ -1711,7 +1808,7 @@
     }
 
     async function refreshTableState() {
-        if (!cfg.isGm) return;
+        if (!hasGmChrome()) return;
         try {
             const data = await request('/api/scenes');
             tableSceneId = data.active_scene_id || null;
@@ -1778,6 +1875,7 @@
         // Drawing while previewing would edit what you cannot fully see, so the
         // tools step back to Select.
         if (isTableView() && activeTool !== 'select') setActiveTool('select');
+        syncAnimation();
         document.getElementById('map-status').textContent = isTableView()
             ? 'Table preview: exactly what the players would see.'
             : 'GM view - changes are shared live';
@@ -1828,7 +1926,7 @@
     }
 
     function wireGmControls() {
-        if (!cfg.isGm) return;
+        if (!hasGmChrome()) return;
         wireCreateForm();
         const sceneSelect = document.getElementById('map-scene-select');
         // Opening a scene is not the same as showing it to the players. This
