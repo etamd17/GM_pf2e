@@ -536,6 +536,19 @@ lights is precisely what makes the current loop too slow.
 - **Update `CLAUDE.md`** — a shared table screen revives the Campaign Hub Stage, which
   that file still records as cancelled and unowned.
 
+### Stage 7 — In-depth UI audit (requested 2026-08-11)
+
+Once all six stages are built, the GM asked for a **separate in-depth UI audit** of the
+map, in the same question-driven format as this one. Deliberately *after* the
+functionality lands: several stages change what is on screen at all (the inspector's
+empty state, footprint-accurate tokens, region fog, the table view's larger nameplates),
+so auditing the current UI would be auditing something about to be replaced.
+
+Scope it against `CLAUDE.md`'s design constraints — two typefaces only (Cinzel display,
+Inter UI, via `--font-display` / `--font-ui`), and the note that standalone pages have
+historically smuggled in extra faces by hardcoding families instead of using the tokens.
+`map.html` is a standalone page and has never been through a design pass.
+
 ### Cross-cutting
 
 - **Undo across everything** [R4.4] touches stages 3–5: every action needs an inverse.
