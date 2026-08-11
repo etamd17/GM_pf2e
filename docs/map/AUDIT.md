@@ -544,6 +544,28 @@ lights is precisely what makes the current loop too slow.
 - **Update `CLAUDE.md`** — a shared table screen revives the Campaign Hub Stage, which
   that file still records as cancelled and unowned.
 
+### Corrections to earlier rounds (found while building)
+
+**Name reveal: REVERSED 2026-08-11.** Round 3 chose "PCs always named, NPCs only once
+revealed". When it came to build it, no such state existed — `visible_to_players` is
+binary and `epithet` is a boss-reveal *title*, not a name suppressor — so the GM was
+asked again with the real cost visible and chose **always show names**. Nameplates
+already default to on, so this is now a no-op: nothing to build, and the per-token
+`show_nameplate` toggle remains as a manual override. If reveal ever comes back, it was
+decided it must live **on the combatant in the tracker**, not on the map token.
+
+**Compendium token art: NOT BUILDABLE.** Round 3 chose "compendium art by default, with
+per-token upload as an override", on my framing that the automatic half would cover most
+tokens for free. That framing was wrong. Every monster JSON does carry an `img`, but
+across 2497 bestiary files **2473 of 2475 entries are the same generic Foundry default**
+(`systems/pf2e/icons/default-icons/npc.svg`), and the two exceptions are also
+Foundry-internal paths this app cannot serve. There is no monster art in this dataset.
+
+Wiring it would give every creature an identical grey silhouette — strictly worse than
+the current coloured disc with initials, which at least tells two monsters apart. So the
+automatic half is dropped. **Per-token upload is the only route to real token art**, and
+whether to build it is an open question rather than a settled decision.
+
 ### Stage 7 — In-depth UI audit (requested 2026-08-11)
 
 Once all six stages are built, the GM asked for a **separate in-depth UI audit** of the
