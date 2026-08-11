@@ -258,6 +258,7 @@
         }
         drawTargetOverlays();
         if (!isTableView()) drawToolOverlay();
+        drawTurnBanner();
     }
 
     function drawGrid() {
@@ -676,6 +677,33 @@
         ctx.restore();
     }
 
+    // Whose turn it is, stated plainly on the shared screen so nobody has to
+    // ask. Drawn in scene coordinates and pinned to the visible viewport, so it
+    // stays put while the map pans underneath it.
+    function drawTurnBanner() {
+        if (!isTableView()) return;
+        const active = (scene.tokens || []).find(t => t.live && t.live.is_active
+                                                  && t.visible_to_players !== false);
+        if (!active) return;
+        const label = (active.name || 'Unknown') + "— it's their turn";
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        const left = viewport.scrollLeft / zoom;
+        const top = viewport.scrollTop / zoom;
+        const wide = viewport.clientWidth / zoom;
+        ctx.font = '700 30px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const width = ctx.measureText(label).width + 56;
+        const cx = left + wide / 2;
+        const cy = top + 46;
+        ctx.fillStyle = 'rgba(10,10,12,.82)';
+        ctx.fillRect(cx - width / 2, cy - 26, width, 52);
+        ctx.fillStyle = '#f0d88a';
+        ctx.fillText(label, cx, cy);
+        ctx.restore();
+    }
+
     function drawToolOverlay() {
         drawMoveMeasure();
         // The wall run in progress, so the GM can see the room taking shape
@@ -804,7 +832,10 @@
 
         ctx.textAlign = 'center';
         if (token.show_nameplate !== false) {
-            ctx.font = '700 13px system-ui';
+            // The table screen is read from several feet away, so names and the
+            // health bar below are scaled up there. On the GM's own screen the
+            // smaller type keeps a crowded fight legible.
+            ctx.font = (isTableView() ? '700 22px' : '700 13px') + ' system-ui';
             ctx.textBaseline = 'bottom';
             ctx.lineWidth = 4;
             ctx.strokeStyle = 'rgba(0,0,0,.8)';
@@ -901,7 +932,9 @@
     //           tokens absent, secret doors indistinguishable from walls
     //
     // cfg.isGm still governs every EDIT. Only rendering moved.
-    let viewMode = cfg.isGm ? 'gm' : 'table';
+    // cfg.tableView is set by /map/table -- the shared screen. A GM window
+    // still starts in 'gm' and only previews on request.
+    let viewMode = (cfg.tableView || !cfg.isGm) ? 'table' : 'gm';
     function isTableView() { return viewMode === 'table'; }
 
     // --- Region fog ---------------------------------------------------------

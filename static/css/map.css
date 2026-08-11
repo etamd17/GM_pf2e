@@ -86,3 +86,11 @@
 /* Previewing renders the table's view on the GM's canvas. The frame is a
    reminder that what is on screen is deliberately incomplete. */
 .map-page.is-previewing .map-canvas { outline:3px solid rgba(224,182,90,.85); outline-offset:-3px; }
+/* The table screen is a display, not a workstation: no chrome, no controls,
+   and the map fills the window. */
+.map-page.is-table-screen .map-header-actions { display:none; }
+.map-page.is-table-screen .map-eyebrow,
+.map-page.is-table-screen #map-status,
+.map-page.is-table-screen #map-revision { display:none; }
+.map-page.is-table-screen .map-workspace { grid-template-columns:minmax(0,1fr); }
+.map-page.is-table-screen .map-header { padding-bottom:4px; }

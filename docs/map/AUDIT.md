@@ -5,11 +5,25 @@
 
 | Stage | State |
 |---|---|
-| 1 — cheap correctness | **shipped** (`316ed367`) |
-| 2a — the image is the map | **shipped** (`a438cf2d`) |
-| 2b — scene lifecycle | in review |
-| 3–6 | not started |
-| 7 — UI audit | after the build |
+| 1 — cheap correctness | **shipped** |
+| 2a — the image is the map | **shipped** |
+| 2b — scene lifecycle (prep vs push, delete) | **shipped** |
+| 3 — tokens, geometry, art | **shipped** |
+| 4a — walls as runs | **shipped** |
+| 4b — render by view mode | **shipped** |
+| 4c — region fog | **shipped** |
+| 4d — editable lights | **shipped** |
+| 5a — templates | **shipped** |
+| 5b — durations, persistent damage, move measure | **shipped** |
+| 6a — frame scheduling, mask reuse, vision cache | in review |
+| 6b — the shared table screen (`/map/table`) | in review |
+| 7 — UI audit | **next** |
+
+**Verification note for stage 7.** `requestAnimationFrame` does not fire while
+`document.hidden` is true, and the headless preview pane is permanently hidden — so
+after stage 6a the canvas does not render there on its own. Call
+`window.__mapRenderNow()` to force a frame. Without it the map appears blank and
+every visual check silently measures nothing.
 
 This doc exists so the audit could survive moving between machines. Claude's per-project
 memory lives under `~/.claude/projects/<path>/memory/` and does **not** travel, so
