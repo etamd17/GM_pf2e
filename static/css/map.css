@@ -80,6 +80,11 @@
 .map-tool-readout { margin-left:auto; flex:0 0 auto; color:var(--gilt-200); font-size:9px; }
 .map-stage-help { margin-left:auto; }
 .map-live-dot { display:inline-block; width:7px; height:7px; margin-right:5px; border-radius:50%; background:#58b37a; box-shadow:0 0 8px rgba(88,179,122,.65); }
+/* It used to be a green dot with no JS behind it at all -- permanently
+   reassuring, including while the stream was dead, which is worse than having
+   no indicator. */
+.map-live.is-dropped .map-live-dot { background:#d35d53; box-shadow:0 0 8px rgba(211,93,83,.7); }
+.map-live.is-dropped { color:#f2aaa3; }
 .map-viewport { position:relative; flex:1; min-height:560px; overflow:auto; background-color:#11100d; background-image:linear-gradient(45deg,#15130f 25%,transparent 25%),linear-gradient(-45deg,#15130f 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#15130f 75%),linear-gradient(-45deg,transparent 75%,#15130f 75%); background-size:24px 24px; background-position:0 0,0 12px,12px -12px,-12px 0; }
 #map-canvas { display:block; cursor:grab; transform-origin:top left; touch-action:none; }
 #map-canvas.is-dragging, #map-canvas.is-panning { cursor:grabbing; }
@@ -90,7 +95,10 @@
 .map-no-scene h2 { color:var(--text-on-dark); font-family:var(--font-display); }
 .map-toast { position:fixed; left:50%; bottom:24px; z-index:1000; transform:translate(-50%,16px); opacity:0; pointer-events:none; padding:9px 14px; border:1px solid var(--border-card); border-radius:8px; background:#1b1712; color:var(--text-on-dark); font-size:12px; transition:.2s ease; }
 .map-toast.is-visible { opacity:1; transform:translate(-50%,0); }
-.map-toast.is-error { border-color:rgba(211,93,83,.7); color:#f2aaa3; }
+/* A border colour was the only thing separating "saved" from "that did not
+   work". A failure now carries its own ground and a marker rail, so it reads as
+   wrong at a glance rather than on inspection. */
+.map-toast.is-error { border-color:rgba(211,93,83,.85); border-left:4px solid #d35d53; background:#2a1310; color:#ffc9c2; font-weight:700; }
 @media (max-width:900px) {
   .map-header { align-items:flex-start; flex-direction:column; }
   .map-workspace { grid-template-columns:1fr; }
@@ -102,10 +110,10 @@
 .map-table-state { margin:8px 0 4px; color:var(--text-on-dark-2); font:700 10px/1.3 var(--font-ui); text-transform:uppercase; letter-spacing:.04em; }
 .map-table-state.is-live { color:var(--gilt-100); }
 .map-btn.is-dragging { opacity:.55; }
-.map-canvas.is-drop-target { outline:2px dashed rgba(224,182,90,.7); outline-offset:-2px; }
+#map-canvas.is-drop-target { outline:2px dashed rgba(224,182,90,.7); outline-offset:-2px; }
 /* Previewing renders the table's view on the GM's canvas. The frame is a
    reminder that what is on screen is deliberately incomplete. */
-.map-page.is-previewing .map-canvas { outline:3px solid rgba(224,182,90,.85); outline-offset:-3px; }
+.map-page.is-previewing #map-canvas { outline:3px solid rgba(224,182,90,.85); outline-offset:-3px; }
 /* The table screen is a display, not a workstation: no chrome, no controls,
    and the map fills the window. */
 .map-page.is-table-screen .map-header-actions { display:none; }

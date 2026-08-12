@@ -19,8 +19,11 @@
 | 6b — the shared table screen (`/map/table`) | **shipped** |
 | 6c — two-zone light, flicker, feathered fog | **shipped** |
 | 6d — token glide, floating damage | **shipped** |
-| 6e — environmental terrain (lava/water/poison/blood) | in review |
-| 7 — UI audit | **next** |
+| 6e — environmental terrain (lava/water/poison/blood) | **shipped** |
+| 7 — UI audit | **findings recorded** |
+| 7a — table screen stripped, ping + shared ruler | **shipped** |
+| 7b — undo as a real inverse | **shipped** |
+| 7c — live indicator, dead rules, error toasts, table type, faction cue | in review |
 
 **Verification note for stage 7.** `requestAnimationFrame` does not fire while
 `document.hidden` is true, and the headless preview pane is permanently hidden — so
@@ -739,3 +742,24 @@ to Ruler; "Reset fog painting" and "Clear templates" carry the quiet style.
 - The turn banner renders "Valeros— it's their turn" — no space before the dash.
 - No keyboard path to selecting or moving a token; the only two shortcuts
   (Escape, Ctrl+Z) are undocumented in the UI.
+
+### Stage 7 build status against the findings
+
+| Finding | State |
+|---|---|
+| F1 canvas typeface | fixed in 7a — all eight sites read `--font-ui`, repaint on `fonts.ready` |
+| F2 TV chrome | fixed in 7a — 15% of the screen became 61% |
+| F3 TV opened before a scene is pushed | fixed in 7a — reloads on `scene_activated`, fenced to `cfg.tableView` |
+| F4 Ctrl+Z trap | fixed in 7b — one inverse stack, button names what it undoes |
+| F5 toolstrip overflow | fixed in 7a — build drawer, nothing hidden at 1280x800 in either state |
+| F6 dead `.map-canvas` rules | fixed in 7c — outline goes `none` to `solid`; the preview frame had never rendered |
+| F7 "Live sync" indicator | fixed in 7c — verified by stopping the server, and both directions without a reload |
+| F8 table view scaled one thing | fixed in 7c — HP bar and conditions scale through `tableType()`, conditions stack |
+| F9 faction by colour alone | fixed in 7c — PCs carry a second inset ring |
+| F10 destructive controls | fixed in 7b — danger styling and a fenced zone; no dialogs, per the GM's call |
+| Error toasts | fixed in 7c — 7s instead of 2.6s, own ground and marker rail |
+
+**Not done, and deliberately left:** the colour and radius token cleanup in
+`map.css` (`--gilt-200` hardcoded eight times, a parallel red ramp, six radii),
+the 9px/29px toolstrip sizing, and keyboard token selection. None of them change
+what the tool can do; they are the next pass if there is one.
