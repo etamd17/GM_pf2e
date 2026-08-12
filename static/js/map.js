@@ -233,7 +233,17 @@
     //
     // Deliberately not a fallback inside draw(): rendering a hidden document on
     // a timer is exactly the waste rAF exists to avoid.
-    window.__mapRenderNow = function () { frameQueued = false; renderScene(); };
+    // An optional clock renders one frame AT a chosen moment. The animation
+    // clock is only ever advanced by the rAF loop, so without this every forced
+    // frame in a headless pane is frame zero, and nothing animated -- torch
+    // flicker, a token's glide, terrain -- can be verified as MOVING rather
+    // than merely as present. Setting it here cannot disturb a live loop: in a
+    // pane where this is needed, no loop is running.
+    window.__mapRenderNow = function (clock) {
+        if (typeof clock === 'number') animationClock = clock;
+        frameQueued = false;
+        renderScene();
+    };
 
     function renderScene() {
         if (!scene) return;
@@ -241,8 +251,15 @@
         ctx.fillStyle = '#181611';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         if (background) ctx.drawImage(background, 0, 0, canvas.width, canvas.height);
+        // Terrain is ON THE FLOOR, so it goes under the grid: the GM still has
+        // to count squares across a lake, and a grid drawn under a translucent
+        // pool comes out tinted and muddy.
+        drawTerrain();
         drawGrid();
         drawAmbientLights();
+        // ...but the glow is LIGHT, so it belongs with the lights, above the
+        // grid rather than beneath it.
+        drawTerrainGlow();
         for (const template of scene.templates || []) drawTemplate(template);
         for (const template of localTemplates) drawTemplate(template);
         for (const token of scene.tokens || []) {
@@ -333,6 +350,392 @@
             ctx.beginPath();
             ctx.arc(Number(light.x), Number(light.y), radius, 0, Math.PI * 2);
             ctx.fill();
+            ctx.restore();
+        }
+    }
+
+    // --- Environmental terrain ----------------------------------------------
+    //
+    // Lava, water, poison and blood, painted a room at a time. COSMETIC BY
+    // DECISION: none of it touches damage, conditions or movement cost, and
+    // nothing downstream reads it for rules. It exists so the shared table
+    // screen reads as a place rather than as a diagram.
+    //
+    // Two costs are deliberately kept out of the frame:
+    //
+    //   * the feathered outline is built ONCE per change, not per frame. A
+    //     blur() over the painted area every frame would spend most of what
+    //     stage 6a bought.
+    //   * everything is drawn inside the layer's BOUNDING BOX. A pool is
+    //     normally one room, and compositing four full-canvas layers to paint
+    //     four rooms is most of a frame for nothing visible.
+    //
+    // Known limit of that second one, stated rather than hidden: a layer is one
+    // per KIND, not one per pool, so two blood spills at opposite corners share
+    // a bounding box that covers the whole map and the saving disappears. It
+    // degrades rather than breaks -- the buffers are half resolution, so even
+    // the worst case is a quarter of the naive cost -- and splitting layers
+    // into connected components would buy the rest. Not worth it until a real
+    // scene is slow.
+    const TERRAIN_KINDS = ['lava', 'water', 'poison', 'blood'];
+    const terrainCache = new Map();
+    // Masks and buffers are built at half resolution. Everything here is a
+    // blurred blob or a soft gradient, so there is no detail at full res to
+    // lose -- and it quarters both the fill cost and the backing store, which
+    // is what keeps a GM who floods an entire 60x40 map from allocating tens of
+    // megabytes per kind.
+    const TERRAIN_SCALE = 0.5;
+
+    function terrainLayers() {
+        const layers = [];
+        for (const layer of scene.terrain || []) {
+            if (!layer || !Array.isArray(layer.cells) || !layer.cells.length) continue;
+            if (TERRAIN_KINDS.indexOf(layer.kind) === -1) continue;
+            layers.push(layer);
+        }
+        return layers;
+    }
+
+    // Blood does not move, deliberately -- so a scene whose only terrain is a
+    // blood pool never starts the animation loop at all, and the table screen
+    // stays at stage 6a's idle cost.
+    function terrainAnimates() {
+        return terrainLayers().some(layer => layer.kind !== 'blood');
+    }
+
+    // Deterministic per-kind pseudo-randomness. Bubbles and magma cells have to
+    // sit still between frames -- Math.random() here would make the whole pool
+    // boil with static.
+    function terrainRandom(seed) {
+        const value = Math.sin(seed * 127.1 + 311.7) * 43758.5453;
+        return value - Math.floor(value);
+    }
+
+    function terrainEntry(layer) {
+        const g = gridGeometry();
+        // The grid has to be in the FAST key, not only in the slow one. The
+        // calibration drag mutates scene.grid.offset_* locally with no save and
+        // therefore no revision bump, so keying on the revision alone would
+        // leave the pool sitting where the squares used to be while the GM
+        // drags. Beyond that, scene.revision bumps on any save -- a token move
+        // included -- so it is checked first and the cell signature is only
+        // built when the revision actually moved. Otherwise every step a
+        // creature takes would rebuild four blurred masks.
+        const fast = [scene.revision, g.size, g.ox, g.oy].join(':');
+        const cached = terrainCache.get(layer.kind);
+        if (cached && cached.fast === fast) return cached;
+        const sig = [g.size, g.ox, g.oy, layer.cells.length, layer.cells.join(',')].join('|');
+        if (cached && cached.sig === sig) { cached.fast = fast; return cached; }
+
+        // Enough to lose the square edges, not enough to lose the SQUARES. At
+        // 0.42 a 42px blur spread about 120px, so two pools with a full empty
+        // row between them merged into one puddle and the gap the GM left
+        // simply vanished.
+        const feather = Math.max(5, g.size * 0.26);
+        const pad = Math.ceil(feather * 2);
+        let minC = Infinity, maxC = -Infinity, minR = Infinity, maxR = -Infinity;
+        const cells = [];
+        for (const key of layer.cells) {
+            const parts = String(key).split(',');
+            const col = Number(parts[0]), row = Number(parts[1]);
+            if (!Number.isFinite(col) || !Number.isFinite(row)) continue;
+            cells.push([col, row]);
+            if (col < minC) minC = col;
+            if (col > maxC) maxC = col;
+            if (row < minR) minR = row;
+            if (row > maxR) maxR = row;
+        }
+        if (!cells.length) return null;
+        const x = Math.floor(g.ox + minC * g.size) - pad;
+        const y = Math.floor(g.oy + minR * g.size) - pad;
+        const width = Math.max(1, Math.ceil((maxC - minC + 1) * g.size) + pad * 2);
+        const height = Math.max(1, Math.ceil((maxR - minR + 1) * g.size) + pad * 2);
+        const bw = Math.max(1, Math.round(width * TERRAIN_SCALE));
+        const bh = Math.max(1, Math.round(height * TERRAIN_SCALE));
+
+        const mask = document.createElement('canvas');
+        mask.width = bw;
+        mask.height = bh;
+        const mctx = mask.getContext('2d');
+        mctx.scale(TERRAIN_SCALE, TERRAIN_SCALE);
+        // The same trick drawFogOverlay uses, for the same reason: painting
+        // works in whole squares, so a hard edge announces the grid. Blurring
+        // the MASK gives a pool an organic shoreline without softening the
+        // battlemap underneath it.
+        mctx.filter = 'blur(' + Math.round(feather * TERRAIN_SCALE) + 'px)';
+        mctx.fillStyle = '#000';
+        for (const cell of cells) {
+            mctx.fillRect(g.ox + cell[0] * g.size - x, g.oy + cell[1] * g.size - y, g.size, g.size);
+        }
+        mctx.filter = 'none';
+        mctx.setTransform(1, 0, 0, 1, 0, 0);
+
+        const scratch = document.createElement('canvas');
+        scratch.width = bw;
+        scratch.height = bh;
+        const entry = {
+            fast: fast, sig: sig, mask: mask, scratch: scratch,
+            sctx: scratch.getContext('2d'), x: x, y: y, w: width, h: height,
+            bw: bw, bh: bh,
+            // One square, in buffer pixels. Every size below is a fraction of
+            // it rather than an absolute pixel count: a scene calibrated at 50
+            // and one at 140 have to look like the same substance, and bubbles
+            // measured in raw pixels are half a square on one map and invisible
+            // on another.
+            unit: Math.max(4, g.size * TERRAIN_SCALE),
+            glow: layer.kind === 'lava' ? terrainGlow(mask, feather) : null
+        };
+        terrainCache.set(layer.kind, entry);
+        return entry;
+    }
+
+    // Built once alongside the mask rather than blurred per frame. The pulse
+    // comes from globalAlpha at draw time, which costs nothing.
+    function terrainGlow(mask, feather) {
+        const glow = document.createElement('canvas');
+        glow.width = mask.width;
+        glow.height = mask.height;
+        const gctx = glow.getContext('2d');
+        gctx.filter = 'blur(' + Math.round(feather * 2.6 * TERRAIN_SCALE) + 'px)';
+        gctx.drawImage(mask, 0, 0);
+        gctx.filter = 'none';
+        gctx.globalCompositeOperation = 'source-in';
+        gctx.fillStyle = '#ff7a2a';
+        gctx.fillRect(0, 0, glow.width, glow.height);
+        return glow;
+    }
+
+    // --- what each substance actually looks like -----------------------------
+    //
+    // Each kind is one or two passes, and the PASS COMPOSITE carries most of the
+    // identity. Hue is the first thing a television across a room destroys --
+    // at low alpha over an arbitrary battlemap, lava and blood are both "a red
+    // patch". Luminance DIRECTION survives: lava is the only substance on the
+    // map that makes it brighter, water and blood darken it, and poison lays a
+    // haze over it. So any two of them differ by more than their colour even on
+    // a bad screen at ten feet.
+    //
+    // The map is seen from ABOVE, which decides most of the motion: a bubble
+    // does not rise up the screen, it swells and bursts in place, and anything
+    // that travels in one direction reads as a side-on view fighting the map.
+    //
+    // One dominant behavioural cue each, because that is what carries across a
+    // room when the colour does not:
+    //   lava   - dark still crust with heat breathing underneath
+    //   water  - two sets of highlights crossing and travelling
+    //   poison - discrete things: bubbles swelling and bursting
+    //   blood  - stillness, with a wet gloss
+
+    function paintLavaCrust(c, w, h) {
+        // Cooled basalt. Without it an additive orange layer is just an amber
+        // filter over the floor; the dark crust is what makes the bright parts
+        // read as incandescent rock rather than as a lighting bug.
+        c.fillStyle = '#3a2419';
+        c.fillRect(0, 0, w, h);
+    }
+
+    function paintLavaHeat(c, w, h, t, unit) {
+        // Magma breathing out of phase under a crust that does not move. The
+        // stillness is half the effect: crust that slid about would read as
+        // fog, not as stone.
+        // Dense enough that the pool comes out BRIGHTER than the floor around
+        // it. Measured, not guessed: at nine sparse spots the crust won and
+        // lava read darker than bare stone, which inverts the one thing that
+        // makes it unmistakable across a room.
+        const spots = Math.max(9, Math.min(40, Math.round((w * h) / (unit * unit * 1.4))));
+        for (let i = 0; i < spots; i++) {
+            const cx = terrainRandom(i * 3 + 1) * w;
+            const cy = terrainRandom(i * 3 + 2) * h;
+            const phase = terrainRandom(i * 7 + 5) * Math.PI * 2;
+            const beat = Math.max(0.12, 0.62 + 0.3 * Math.sin(t * 0.00105 + phase)
+                                             + 0.13 * Math.sin(t * 0.0026 + phase * 1.7));
+            const radius = unit * (0.34 + terrainRandom(i * 3 + 3) * 0.72) * (0.72 + beat * 0.42);
+            const hot = c.createRadialGradient(cx, cy, 0, cx, cy, radius);
+            hot.addColorStop(0, 'rgba(255,222,158,' + (0.82 * beat).toFixed(3) + ')');
+            hot.addColorStop(0.34, 'rgba(242,128,40,' + (0.58 * beat).toFixed(3) + ')');
+            hot.addColorStop(1, 'rgba(150,32,10,0)');
+            c.fillStyle = hot;
+            c.beginPath();
+            c.arc(cx, cy, radius, 0, Math.PI * 2);
+            c.fill();
+        }
+    }
+
+    function paintWaterBody(c, w, h) {
+        // Deliberately greener and darker than drawTemplate's blue, or a burst
+        // dropped on a lake is unreadable against it.
+        c.fillStyle = '#2f6270';
+        c.fillRect(0, 0, w, h);
+        const depth = c.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.max(w, h) * 0.7);
+        depth.addColorStop(0, 'rgba(10,34,44,.5)');
+        depth.addColorStop(1, 'rgba(10,34,44,0)');
+        c.fillStyle = depth;
+        c.fillRect(0, 0, w, h);
+    }
+
+    function paintWaterSurface(c, w, h, t, unit) {
+        // One set of drifting bands is a gradient sliding about. Two, at
+        // different angles and speeds, interfere -- and the bright knots where
+        // they cross TRAVEL across the pool, which is what the eye reads as a
+        // water surface. A standing wobble at the same frequency reads as heat
+        // haze instead.
+        const span = Math.hypot(w, h);
+        for (let pass = 0; pass < 2; pass++) {
+            const spacing = unit * (pass ? 0.44 : 0.62);
+            const speed = pass ? 0.0092 : 0.0051;
+            const peak = pass ? 0.3 : 0.42;
+            c.save();
+            c.translate(w / 2, h / 2);
+            c.rotate(pass ? -0.58 : 0.4);
+            const drift = (t * speed) % spacing;
+            // Broken into segments along the band rather than drawn as one
+            // continuous stripe. Full-width stripes came out as hard parallel
+            // diagonals -- hatching, not water. Modulating ALONG the band as
+            // well as across it leaves short bright knots that drift, which is
+            // what a lit water surface actually looks like from above.
+            const step = spacing * 1.6;
+            for (let offset = -span / 2; offset < span / 2; offset += spacing) {
+                const across = Math.max(0, Math.sin(offset / spacing * 0.9 + t * 0.0013));
+                if (across <= 0.02) continue;
+                for (let along = -span / 2; along < span / 2; along += step) {
+                    const knot = Math.max(0, Math.sin(along / step * 1.7 + offset * 0.11 + t * 0.0021));
+                    const alpha = across * knot * peak;
+                    if (alpha <= 0.015) continue;
+                    c.fillStyle = 'rgba(150,214,236,' + alpha.toFixed(3) + ')';
+                    c.fillRect(along, offset + drift, step * 0.72, spacing * 0.4);
+                }
+            }
+            c.restore();
+        }
+    }
+
+    function paintPoison(c, w, h, t, unit) {
+        c.fillStyle = 'rgba(66,102,36,.6)';
+        c.fillRect(0, 0, w, h);
+        // A slow roil so the surface between bubbles is not flat.
+        const haze = c.createRadialGradient(
+            w * (0.45 + 0.1 * Math.sin(t * 0.00035)), h * (0.5 + 0.1 * Math.cos(t * 0.00028)), 0,
+            w * 0.5, h * 0.5, Math.max(w, h) * 0.7);
+        haze.addColorStop(0, 'rgba(150,196,78,.2)');
+        haze.addColorStop(1, 'rgba(150,196,78,0)');
+        c.fillStyle = haze;
+        c.fillRect(0, 0, w, h);
+        // The strongest cue in the whole stage, because it is DISCRETE. From
+        // across a room nobody resolves yellow-green from teal, but everybody
+        // can see that small things are swelling and bursting in that patch --
+        // and nothing else on the map does that.
+        // Sized off the SQUARE, not off raw pixels. Measured at absolute sizes
+        // the bubbles changed the image barely more than canvas noise did --
+        // present in the code, invisible in the room, which is the exact
+        // failure this cue exists to avoid.
+        const count = Math.max(8, Math.min(38, Math.round((w * h) / (unit * unit * 0.9))));
+        for (let i = 0; i < count; i++) {
+            const cx = terrainRandom(i * 5 + 1) * w;
+            const cy = terrainRandom(i * 5 + 2) * h;
+            const period = 3200 + terrainRandom(i * 5 + 3) * 4400;
+            const life = ((t + terrainRandom(i * 5 + 4) * period) % period) / period;
+            const full = unit * (0.16 + terrainRandom(i * 5 + 6) * 0.2);
+            c.lineWidth = Math.max(1.2, unit * 0.07);
+            if (life < 0.82) {
+                // A RING, not a disc: a disc is a dot, a ring is a bubble.
+                const grow = life / 0.82;
+                c.strokeStyle = 'rgba(206,240,146,' + (Math.sin(Math.PI * grow) * 0.6).toFixed(3) + ')';
+                c.beginPath();
+                c.arc(cx, cy, full * (0.25 + grow * 0.85), 0, Math.PI * 2);
+                c.stroke();
+            } else {
+                const burst = (life - 0.82) / 0.18;
+                c.strokeStyle = 'rgba(214,244,164,' + ((1 - burst) * 0.45).toFixed(3) + ')';
+                c.beginPath();
+                c.arc(cx, cy, full * (1 + burst * 1.6), 0, Math.PI * 2);
+                c.stroke();
+            }
+        }
+    }
+
+    function paintBlood(c, w, h) {
+        // Blood is the still one, and that is the point rather than a saving.
+        // It must not ripple (that is water) and must not bubble (that is
+        // poison); what makes a viewer read "blood" is a dark, glossy,
+        // motionless patch. Stillness against three moving neighbours is itself
+        // the signal -- and it means a scene whose only terrain is a blood pool
+        // never starts the animation loop.
+        c.fillStyle = '#4a0a0e';
+        c.fillRect(0, 0, w, h);
+        const depth = c.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.max(w, h) * 0.62);
+        depth.addColorStop(0, 'rgba(22,2,5,.55)');
+        depth.addColorStop(1, 'rgba(22,2,5,0)');
+        c.fillStyle = depth;
+        c.fillRect(0, 0, w, h);
+        // One fixed gloss, so the pool looks wet rather than painted. It does
+        // not travel: from above, a still surface's highlight only moves if the
+        // light does.
+        const gloss = c.createLinearGradient(w * 0.2, 0, w * 0.62, h * 0.5);
+        gloss.addColorStop(0, 'rgba(196,74,64,0)');
+        gloss.addColorStop(0.5, 'rgba(226,120,102,.3)');
+        gloss.addColorStop(1, 'rgba(196,74,64,0)');
+        c.fillStyle = gloss;
+        c.fillRect(0, 0, w, h);
+    }
+
+    const TERRAIN_PASSES = {
+        lava: [{op: 'multiply', alpha: 0.45, paint: paintLavaCrust},
+               {op: 'screen', alpha: 1, paint: paintLavaHeat}],
+        water: [{op: 'multiply', alpha: 0.6, paint: paintWaterBody},
+                {op: 'screen', alpha: 0.5, paint: paintWaterSurface}],
+        poison: [{op: 'source-over', alpha: 0.62, paint: paintPoison}],
+        blood: [{op: 'multiply', alpha: 0.7, paint: paintBlood}]
+    };
+
+    function drawTerrain() {
+        const layers = terrainLayers();
+        if (!layers.length) return;
+        // Static on the GM's view. Stage 6a made rendering event-driven and 6c
+        // confined animation to the table screen; terrain still has to be
+        // VISIBLE while prepping, it just does not move. One code path with a
+        // frozen clock, the same shape as flickerFactor's early return, so the
+        // two screens can never drift apart on how terrain looks.
+        const t = isTableView() ? animationClock : 0;
+        for (const layer of layers) {
+            const entry = terrainEntry(layer);
+            if (!entry) continue;
+            const c = entry.sctx;
+            for (const pass of TERRAIN_PASSES[layer.kind] || []) {
+                c.setTransform(1, 0, 0, 1, 0, 0);
+                c.globalCompositeOperation = 'source-over';
+                c.globalAlpha = 1;
+                c.clearRect(0, 0, entry.bw, entry.bh);
+                pass.paint(c, entry.bw, entry.bh, t, entry.unit);
+                // Clip the painted substance to the feathered pool outline.
+                c.globalCompositeOperation = 'destination-in';
+                c.globalAlpha = 1;
+                c.drawImage(entry.mask, 0, 0);
+                ctx.save();
+                ctx.globalCompositeOperation = pass.op;
+                ctx.globalAlpha = pass.alpha;
+                ctx.drawImage(entry.scratch, 0, 0, entry.bw, entry.bh,
+                              entry.x, entry.y, entry.w, entry.h);
+                ctx.restore();
+            }
+        }
+    }
+
+    // Lava lights the room. It does NOT carve vision, for exactly the reason
+    // stage 6c kept flicker out of lightRadii(): the vision mask is cached on a
+    // signature, and feeding it something that moves either serves a stale mask
+    // or misses the cache every frame and drags the whole raycast back into the
+    // frame budget. A GM who wants lava to REVEAL an area places a light on it;
+    // this only makes it glow.
+    function drawTerrainGlow() {
+        for (const layer of terrainLayers()) {
+            if (layer.kind !== 'lava') continue;
+            const entry = terrainEntry(layer);
+            if (!entry || !entry.glow) continue;
+            const t = isTableView() ? animationClock : 0;
+            ctx.save();
+            ctx.globalCompositeOperation = 'screen';
+            ctx.globalAlpha = 0.3 * (0.74 + 0.26 * Math.sin(t * 0.0009));
+            ctx.drawImage(entry.glow, 0, 0, entry.bw, entry.bh, entry.x, entry.y, entry.w, entry.h);
             ctx.restore();
         }
     }
@@ -473,9 +876,33 @@
         ctx.drawImage(mask, 0, 0);
     }
 
+    let fogMaskKey = null;
+
     function drawFogOverlay() {
         if (!(scene.fog || {}).enabled) return;
+        const geometry = gridGeometry();
+        // The mask is rebuilt only when the fog, the view or the grid actually
+        // changes, and blitted otherwise.
+        //
+        // Rebuilding it every frame was free while rendering was event-driven
+        // (stage 6a): one draw, one blur, only on a change. Stage 6e breaks
+        // that assumption -- terrain keeps the table screen's animation loop
+        // running on scenes that never animated before, and a full-canvas
+        // Gaussian at 60fps would be the most expensive thing on the map by a
+        // wide margin. Same shape as the vision cache above: compare a
+        // signature, blit on a hit, rebuild on a miss.
+        //
+        // The grid belongs in the key even though fog changes bump the
+        // revision, because the calibration drag moves grid.offset_* locally
+        // with no save at all.
+        const key = [isTableView() ? 't' : 'g', scene.revision, geometry.size,
+                     geometry.ox, geometry.oy, canvas.width, canvas.height].join('|');
+        if (scratch.fog && fogMaskKey === key) {
+            ctx.drawImage(scratch.fog.canvas, 0, 0);
+            return;
+        }
         const fogScratch = scratchCanvas('fog');
+        fogMaskKey = key;
         const mask = fogScratch.canvas;
         const mctx = fogScratch.ctx;
         const darkness = isTableView() ? .97 : .30;
@@ -827,7 +1254,8 @@
 
     function animationsWanted() {
         if (!isTableView() || !scene) return false;
-        return (scene.lights || []).length > 0 || glides.size > 0 || floaters.length > 0;
+        return (scene.lights || []).length > 0 || glides.size > 0 || floaters.length > 0
+               || terrainAnimates();
     }
 
     function stepAnimation(timestamp) {
@@ -1500,6 +1928,33 @@
             }).catch(error => toast(error.message, true));
             return;
         }
+        if (activeTool.startsWith('terrain-') && cfg.isGm) {
+            // Same one-click-floods-a-room interaction as fog, for the same
+            // reason: painting a lake square by square is tedious enough that
+            // the GM would simply not do it, and an unused feature adds no
+            // atmosphere at all.
+            //
+            // Alt-click paints the single square instead. Flooding a room is
+            // right for water, poison and lava and wrong for blood, which is a
+            // spill -- and a spill wants one or two squares by the body, not
+            // the whole chamber.
+            const cell = cellAt(point);
+            const cells = event.altKey ? [cell.col + ',' + cell.row] : floodRegion(point);
+            if (!cells.length) return;
+            const kind = activeTool.slice('terrain-'.length);
+            const clearing = kind === 'clear';
+            mapElementAction({
+                action: 'paint_terrain',
+                mode: clearing ? 'clear' : 'paint',
+                kind: clearing ? '' : kind,
+                cells: cells
+            }).then(data => {
+                applyScene(data.scene);
+                toast((clearing ? 'Drained ' : 'Flooded ') + cells.length
+                      + (cells.length === 1 ? ' square.' : ' squares.'));
+            }).catch(error => toast(error.message, true));
+            return;
+        }
         if (['measure', 'burst', 'emanation', 'cone', 'line', 'wall', 'door', 'light'].includes(activeTool)) {
             interaction = {type: 'tool', tool: activeTool, start: point, end: point};
             canvas.setPointerCapture(event.pointerId);
@@ -2002,7 +2457,12 @@
         emanation: 'Click to place an emanation', cone: 'Drag to aim a cone', line: 'Drag to aim a line',
         'fog-reveal': 'Click a room to reveal it', 'fog-hide': 'Click a room to hide it again',
         wall: 'Click each corner; Esc or click the last point to finish', door: 'Click each corner to place doors, or click an existing door to open it',
-        light: 'Click to place a light source', erase: 'Click a wall, door, light, or template to remove it'
+        light: 'Click to place a light source', erase: 'Click a wall, door, light, or template to remove it',
+        'terrain-lava': 'Click a room to flood it with lava; Alt-click one square',
+        'terrain-water': 'Click a room to flood it with water; Alt-click one square',
+        'terrain-poison': 'Click a room to fill it with poison; Alt-click one square',
+        'terrain-blood': 'Alt-click a square to spill blood, or click to pool a whole room',
+        'terrain-clear': 'Click a flooded area to drain it; Alt-click one square'
     };
 
     function setActiveTool(tool) {

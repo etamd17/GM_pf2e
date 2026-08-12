@@ -15,8 +15,11 @@
 | 4d — editable lights | **shipped** |
 | 5a — templates | **shipped** |
 | 5b — durations, persistent damage, move measure | **shipped** |
-| 6a — frame scheduling, mask reuse, vision cache | in review |
-| 6b — the shared table screen (`/map/table`) | in review |
+| 6a — frame scheduling, mask reuse, vision cache | **shipped** |
+| 6b — the shared table screen (`/map/table`) | **shipped** |
+| 6c — two-zone light, flicker, feathered fog | **shipped** |
+| 6d — token glide, floating damage | **shipped** |
+| 6e — environmental terrain (lava/water/poison/blood) | in review |
 | 7 — UI audit | **next** |
 
 **Verification note for stage 7.** `requestAnimationFrame` does not fire while
@@ -24,6 +27,22 @@
 after stage 6a the canvas does not render there on its own. Call
 `window.__mapRenderNow()` to force a frame. Without it the map appears blank and
 every visual check silently measures nothing.
+
+Stage 6e extended that seam to take a timestamp: `window.__mapRenderNow(3000)`
+renders one frame **at** that point on the animation clock. The clock is only ever
+advanced by the rAF loop, so without an argument every forced frame is frame zero
+and nothing animated can be told apart from something merely present. That is how
+6e proved blood is motionless and lava is not.
+
+**Two measurement lessons from 6e, both of which cost a wrong conclusion first.**
+Sample against a *control*, not against intuition: forcing two frames at the same
+timestamp showed a noise floor of ~0.45 per-pixel, and poison's bubbles were
+initially only 1.6x that — present in the code, invisible in the room. And
+*look at the picture*, not only at the aggregates. Terrain measured correctly on
+every statistic while a full-width caustic pattern rendered as hard parallel
+hatching, and while a 0.42-square feather quietly merged two pools a full empty
+row apart. Neither was visible in any number. Rendering an amplified
+with-minus-without difference image is what exposed both.
 
 This doc exists so the audit could survive moving between machines. Claude's per-project
 memory lives under `~/.claude/projects/<path>/memory/` and does **not** travel, so
