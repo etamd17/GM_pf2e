@@ -33,6 +33,22 @@
     // the project's two-face rule forbids, and it differed between the GM's
     // laptop and the TV. It hid in JS rather than CSS, which is why every
     // previous font sweep missed it.
+    // Canvas colours have the same problem canvas fonts had: nothing inherits.
+    // Only the HP bar reads from here, because system.css documents --success
+    // and --warn as "used SPARINGLY -- only HP-full / HP-low state", and the
+    // bar is exactly that. The door markers and draft strokes further down stay
+    // literal: they are GM-only authoring affordances with no token counterpart,
+    // and painting a door with --success would break the token's stated scope.
+    const brandCache = new Map();
+    function brand(name, fallback) {
+        if (!brandCache.has(name)) {
+            const value = getComputedStyle(document.documentElement)
+                .getPropertyValue(name).trim();
+            brandCache.set(name, value || fallback);
+        }
+        return brandCache.get(name);
+    }
+
     let cachedUiFont = '';
     function uiFont() {
         if (!cachedUiFont) {
@@ -1668,13 +1684,14 @@
             const pct = Math.max(0, Math.min(1, Number(live.current_hp) / Number(live.max_hp)));
             ctx.fillStyle = 'rgba(0,0,0,.75)';
             ctx.fillRect(barLeft - 1, barTop - 1, barWidth + 2, barHeight + 2);
-            ctx.fillStyle = pct > .5 ? '#58b37a' : pct > .25 ? '#d6a24d' : '#cf554d';
+            ctx.fillStyle = pct > .5 ? brand('--success', '#4a7c2a')
+                : pct > .25 ? brand('--warn', '#8a6a14') : brand('--danger', '#a83a3a');
             ctx.fillRect(barLeft, barTop, barWidth * pct, barHeight);
         } else if (live.hp_status) {
             const dead = live.hp_status === 'Dead';
             ctx.fillStyle = 'rgba(0,0,0,.75)';
             ctx.fillRect(barLeft - 1, barTop - 1, barWidth + 2, barHeight + 2);
-            ctx.fillStyle = dead ? '#cf554d' : '#d6a24d';
+            ctx.fillStyle = dead ? brand('--danger', '#a83a3a') : brand('--warn', '#8a6a14');
             ctx.fillRect(barLeft, barTop, dead ? barWidth : barWidth * .5, barHeight);
         }
         const conditions = Object.keys(live.conditions || {});

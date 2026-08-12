@@ -156,10 +156,26 @@ def test_the_circle_and_the_squared_table_screen_are_left_alone():
     assert 'border-radius:0' in _CSS.replace(' ', '')
 
 
-def test_the_maps_own_reds_and_green_are_still_its_own():
-    """Recorded, not fixed. The map's #d35d53 family and #58b37a sit 15-98 RGB
-    away from --ruby-* and --success, so snapping them is a palette decision
-    rather than a cleanup -- and --success (#4a7c2a) is a dark olive that would
-    not read as a live-status dot on this background."""
-    for own in ('#d35d53', '#58b37a'):
-        assert own in _CSS
+def test_the_reds_and_green_come_from_the_brand_ramp():
+    """Snapped on request. Unlike the gold, this buys no multi-system fix --
+    --ruby-* and --success are identical under system-pf2e and system-cosmere --
+    so it is consistency, not a bug fix. The reds all gained contrast doing it
+    (#f2aaa3 9.29 -> --ruby-100 10.37, #d35d53 4.59 -> --ruby-200 5.23)."""
+    for gone in ('#f2aaa3', '#ffc9c2', '#d35d53', '#c2564c', '#d97b71', '#58b37a'):
+        assert gone not in _CSS, gone
+    for family in ('--ruby-50', '--ruby-100', '--ruby-200', '--ruby-300', '--success'):
+        assert 'var(%s)' % family in _CSS, family
+
+
+def test_the_hp_bar_uses_the_states_the_tokens_document_themselves_as():
+    """system.css says --success is "used SPARINGLY -- only HP-full state" and
+    --warn "only HP-low state". The map's HP bar is literally that."""
+    assert "brand('--success'" in _JS and "brand('--warn'" in _JS and "brand('--danger'" in _JS
+
+
+def test_the_gm_only_overlays_keep_their_working_colours():
+    """Door markers and draft strokes are GM-authoring affordances with no token
+    counterpart, and painting a door with --success would break that token's
+    own stated scope. Left literal, deliberately."""
+    doors = _JS[_JS.index("wall.open ? '#58b37a'"):][:200]
+    assert "'#58b37a'" in doors and "'#d6a24d'" in doors

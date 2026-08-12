@@ -759,7 +759,22 @@ to Ruler; "Reset fog painting" and "Clear templates" carry the quiet style.
 | F10 destructive controls | fixed in 7b — danger styling and a fenced zone; no dialogs, per the GM's call |
 | Error toasts | fixed in 7c — 7s instead of 2.6s, own ground and marker rail |
 
-**Not done, and deliberately left:** the colour and radius token cleanup in
-`map.css` (`--gilt-200` hardcoded eight times, a parallel red ramp, six radii),
-the 9px/29px toolstrip sizing, and keyboard token selection. None of them change
-what the tool can do; they are the next pass if there is one.
+**Token cleanup: done (7d).** The gold half was not cosmetic -- `--gilt-200` is
+redefined per system, so a Cosmere map drew a gold button beside a blue active
+tool in the same toolstrip. Radii now come from `--r-sm`/`--r-md` by role. The
+reds and green were snapped afterwards on request; unlike the gold that one is
+pure consistency, because `--ruby-*` and `--success` do not vary by system.
+
+Two measurement notes worth keeping, both of which cost a wrong answer first:
+
+- **The values in `:root` are not what the page renders.** `--gilt-200` is
+  declared twice on the same selector and again per system; `--bg-page` carries
+  an `!important` blue-grey shift. Four surface swaps looked imperceptible
+  against the base values and visibly cooled the map against the live ones.
+- **A long-lived element in the preview pane can serve a stale computed style.**
+  `#map-toast` reported none of its `.is-error` styling while a freshly created
+  element with the same classes reported all of it. Test with a fresh element
+  before concluding a rule does not apply.
+
+**Still not done:** the 9px/29px toolstrip sizing and keyboard token selection.
+Neither changes what the tool can do.

@@ -11,7 +11,7 @@
 .map-btn:disabled { opacity:.42; cursor:not-allowed; }
 .map-btn.is-active { background:color-mix(in srgb, var(--gilt-200) 32%, transparent); border-color:var(--gilt-300); color:var(--gilt-50); }
 .map-btn--quiet { background:var(--bg-card); border-color:var(--border-card); color:var(--text-on-dark-2); }
-.map-btn--danger { background:rgba(184,64,56,.15); border-color:rgba(211,93,83,.5); color:#f2aaa3; }
+.map-btn--danger { background:color-mix(in srgb, var(--ruby-300) 15%, transparent); border-color:color-mix(in srgb, var(--ruby-200) 50%, transparent); color:var(--ruby-100); }
 .map-btn--wide { width:100%; margin-top:8px; }
 .map-create-panel { padding:12px; margin-bottom:12px; border:1px solid var(--border-card); border-radius:var(--r-md); background:var(--bg-card); }
 .map-create-panel--compact { padding:8px 12px; }
@@ -44,7 +44,7 @@
 .map-token-empty[hidden] { display:none; }
 .map-token-actions h3 { margin:0; color:var(--gilt-100); font:700 12px/1.2 var(--font-display); }
 .map-token-actions .map-btn--wide { margin-top:2px; }
-.map-combat-actions { display:grid; gap:6px; margin:8px 0; padding:10px; border:1px solid rgba(211,93,83,.34); border-radius:var(--r-md); background:rgba(128,38,32,.08); }
+.map-combat-actions { display:grid; gap:6px; margin:8px 0; padding:10px; border:1px solid color-mix(in srgb, var(--ruby-200) 34%, transparent); border-radius:var(--r-md); background:color-mix(in srgb, var(--ruby-400) 8%, transparent); }
 .map-combat-actions[hidden] { display:none; }
 .map-combat-heading { display:flex; align-items:center; justify-content:space-between; color:var(--text-on-dark); font-size:11px; }
 .map-combat-heading span { color:var(--gilt-200); font-weight:700; }
@@ -72,19 +72,19 @@
    costs a keystroke every time a dead mook comes off the board, which in a big
    fight is most of them. The gap and the rule are what stop the hand landing
    on the wrong one. */
-.map-danger-zone { display:grid; gap:6px; margin-top:14px; padding-top:12px; border-top:1px solid rgba(211,93,83,.28); }
-.map-tool--danger { border-color:rgba(211,93,83,.55); color:#f2aaa3; }
-.map-tool--danger:hover { border-color:rgba(211,93,83,.9); color:#ffc9c2; }
-.map-tool--danger.is-active { background:#c2564c; border-color:#d97b71; color:#1b0f0d; }
+.map-danger-zone { display:grid; gap:6px; margin-top:14px; padding-top:12px; border-top:1px solid color-mix(in srgb, var(--ruby-200) 28%, transparent); }
+.map-tool--danger { border-color:color-mix(in srgb, var(--ruby-200) 55%, transparent); color:var(--ruby-100); }
+.map-tool--danger:hover { border-color:color-mix(in srgb, var(--ruby-200) 90%, transparent); color:var(--ruby-50); }
+.map-tool--danger.is-active { background:var(--ruby-300); border-color:var(--ruby-200); color:#1b0f0d; }
 #map-build-toggle[aria-expanded="true"] { background:color-mix(in srgb, var(--gilt-200) 20%, transparent); border-color:color-mix(in srgb, var(--gilt-200) 60%, transparent); color:var(--gilt-100); }
 .map-tool-readout { margin-left:auto; flex:0 0 auto; color:var(--gilt-200); font-size:9px; }
 .map-stage-help { margin-left:auto; }
-.map-live-dot { display:inline-block; width:7px; height:7px; margin-right:5px; border-radius:50%; background:#58b37a; box-shadow:0 0 8px rgba(88,179,122,.65); }
+.map-live-dot { display:inline-block; width:7px; height:7px; margin-right:5px; border-radius:50%; background:var(--success); box-shadow:0 0 8px color-mix(in srgb, var(--success) 65%, transparent); }
 /* It used to be a green dot with no JS behind it at all -- permanently
    reassuring, including while the stream was dead, which is worse than having
    no indicator. */
-.map-live.is-dropped .map-live-dot { background:#d35d53; box-shadow:0 0 8px rgba(211,93,83,.7); }
-.map-live.is-dropped { color:#f2aaa3; }
+.map-live.is-dropped .map-live-dot { background:var(--ruby-200); box-shadow:0 0 8px color-mix(in srgb, var(--ruby-200) 70%, transparent); }
+.map-live.is-dropped { color:var(--ruby-100); }
 .map-viewport { position:relative; flex:1; min-height:560px; overflow:auto; background-color:#11100d; background-image:linear-gradient(45deg,#15130f 25%,transparent 25%),linear-gradient(-45deg,#15130f 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#15130f 75%),linear-gradient(-45deg,transparent 75%,#15130f 75%); background-size:24px 24px; background-position:0 0,0 12px,12px -12px,-12px 0; }
 #map-canvas { display:block; cursor:grab; transform-origin:top left; touch-action:none; }
 #map-canvas.is-dragging, #map-canvas.is-panning { cursor:grabbing; }
@@ -98,7 +98,7 @@
 /* A border colour was the only thing separating "saved" from "that did not
    work". A failure now carries its own ground and a marker rail, so it reads as
    wrong at a glance rather than on inspection. */
-.map-toast.is-error { border-color:rgba(211,93,83,.85); border-left:4px solid #d35d53; background:#2a1310; color:#ffc9c2; font-weight:700; }
+.map-toast.is-error { border-color:color-mix(in srgb, var(--ruby-200) 85%, transparent); border-left:4px solid var(--ruby-200); background:color-mix(in srgb, var(--ruby-500) 55%, var(--bg-page)); color:var(--ruby-50); font-weight:700; }
 @media (max-width:900px) {
   .map-header { align-items:flex-start; flex-direction:column; }
   .map-workspace { grid-template-columns:1fr; }
