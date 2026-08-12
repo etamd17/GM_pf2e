@@ -25,6 +25,15 @@ MIN_WIDTH = 320
 MIN_HEIGHT = 240
 MAX_DIMENSION = 8000
 
+# Environmental terrain. Cosmetic only -- see the note in normalize_scene().
+# An allowlist rather than free text because each kind is a rendering recipe on
+# the client, so an unknown kind would paint nothing and look like data loss.
+TERRAIN_KINDS = ('lava', 'water', 'poison', 'blood')
+# Matches fog's own caps: a square is either terrain or it is not, so the
+# ceiling is the grid, not the session length.
+MAX_TERRAIN_CELLS_PER_REQUEST = 20000
+MAX_TERRAIN_CELLS = 40000
+
 
 def fit_scene_dimensions(image_width, image_height):
     """Scene dimensions for an uploaded background, preserving its aspect ratio.
@@ -97,6 +106,7 @@ def new_scene(cid, name='Untitled Scene', *, width=DEFAULT_WIDTH,
         'walls': [],
         'lights': [],
         'templates': [],
+        'terrain': [],
     }
 
 
@@ -124,6 +134,15 @@ def normalize_scene(scene):
     scene.setdefault('walls', [])
     scene.setdefault('lights', [])
     scene.setdefault('templates', [])
+    # Environmental terrain -- lava, water, poison, blood. Cosmetic only, and
+    # deliberately so: it exists to make the shared table screen feel like a
+    # place rather than a diagram. Nothing reads it for rules.
+    #
+    # Stored as grid CELLS per kind, like fog's revealed_cells rather than like
+    # walls, because the GM paints it with the same flood fill that stops at
+    # walls -- and because a square is either lava or it is not, which makes
+    # repainting idempotent instead of stacking another polygon.
+    scene.setdefault('terrain', [])
     for token in scene.setdefault('tokens', []):
         token.setdefault('size', 1)
         token.setdefault('color', '#4f8a62' if token.get('is_pc') else '#a84b45')

@@ -143,6 +143,10 @@ def test_a_hidden_document_can_still_be_forced_to_render():
     """
     assert 'window.__mapRenderNow' in _JS
     body = _JS[_JS.index('window.__mapRenderNow'):]
-    assert 'frameQueued = false; renderScene();' in body[:160]
+    body = body[:body.index('\n    };')]
+    # It has to bypass the coalescing flag as well as call the renderer --
+    # leaving frameQueued set would make the NEXT real draw() a no-op.
+    assert 'frameQueued = false;' in body
+    assert 'renderScene();' in body
     # ...and draw() must not have grown a timer behind our backs.
     assert 'setTimeout' not in _fn('draw')

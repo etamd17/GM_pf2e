@@ -7921,6 +7921,53 @@ def api_scene_elements(scene_id):
                 scene['templates'] = [item for item in scene.get('templates', []) if item.get('id') != data.get('id')]
             elif action == 'clear_templates':
                 scene['templates'] = []
+            elif action == 'paint_terrain':
+                # Environmental terrain: lava, water, poison, blood. COSMETIC
+                # ONLY, by decision -- it exists so the shared table screen
+                # feels like a place. Nothing here touches damage, conditions
+                # or movement, and nothing downstream reads it for rules.
+                #
+                # Same cell model and the same client-side flood fill as region
+                # fog, so "flood this room with water" is one click and the
+                # flood stops at walls.
+                mode = 'clear' if data.get('mode') == 'clear' else 'paint'
+                kind = str(data.get('kind') or '')
+                if mode == 'paint' and kind not in _scenes.TERRAIN_KINDS:
+                    return jsonify({'error': 'unknown terrain kind'}), 400
+                cells = data.get('cells')
+                if not isinstance(cells, list) or not cells:
+                    return jsonify({'error': 'no terrain cells supplied'}), 400
+                if len(cells) > _scenes.MAX_TERRAIN_CELLS_PER_REQUEST:
+                    return jsonify({'error': 'terrain region is too large'}), 400
+                clean = set()
+                for cell in cells:
+                    if not isinstance(cell, str) or cell.count(',') != 1:
+                        return jsonify({'error': 'malformed terrain cell'}), 400
+                    col, _, row = cell.partition(',')
+                    try:
+                        clean.add('%d,%d' % (int(col), int(row)))
+                    except (TypeError, ValueError):
+                        return jsonify({'error': 'malformed terrain cell'}), 400
+                # A square is one substance or none. Painting lava over water
+                # has to REMOVE the water, or the two render on top of each
+                # other and the square reads as neither.
+                terrain = scene.setdefault('terrain', [])
+                for layer in terrain:
+                    layer['cells'] = sorted(set(layer.get('cells') or []) - clean)
+                if mode == 'paint':
+                    target = next((l for l in terrain if l.get('kind') == kind), None)
+                    if target is None:
+                        target = {'kind': kind, 'cells': []}
+                        terrain.append(target)
+                    target['cells'] = sorted(set(target['cells']) | clean)
+                total = sum(len(layer.get('cells') or []) for layer in terrain)
+                if total > _scenes.MAX_TERRAIN_CELLS:
+                    return jsonify({'error': 'too many terrain squares'}), 400
+                # Drop emptied layers rather than keeping a kind with no cells,
+                # so the client can treat presence as "this scene has lava".
+                scene['terrain'] = [layer for layer in terrain if layer.get('cells')]
+            elif action == 'clear_terrain':
+                scene['terrain'] = []
             else:
                 return jsonify({'error': 'unknown map element action'}), 400
         except (TypeError, ValueError, OverflowError):
