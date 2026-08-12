@@ -400,11 +400,11 @@ def test_the_terrain_tools_are_gm_only():
 def test_one_click_floods_a_whole_room():
     """Painting a lake square by square is tedious enough that the GM would
     simply not do it, and an unused feature adds no atmosphere at all."""
-    assert 'floodRegion(point)' in _JS[_JS.index("activeTool.startsWith('terrain-')"):][:900]
+    assert 'floodRegion(point)' in _JS[_JS.index("if (activeTool.startsWith('terrain-') && cfg.isGm)"):][:1200]
 
 
 def test_alt_click_paints_a_single_square():
     """Flooding a room is right for water, poison and lava and wrong for blood,
     which is a spill."""
-    block = _JS[_JS.index("activeTool.startsWith('terrain-')"):][:1400]
+    block = _JS[_JS.index("if (activeTool.startsWith('terrain-') && cfg.isGm)"):][:1600]
     assert 'event.altKey' in block

@@ -8,10 +8,39 @@
     const viewport = document.getElementById('map-viewport');
     if (!sceneId || !canvas || !viewport) {
         wireCreateForm();
+        // A table screen opened BEFORE a scene is pushed used to stop here, and
+        // every appSSE subscription lives at the bottom of this file -- so that
+        // window subscribed to nothing and could never recover. Switching the
+        // TV on and then setting up is the natural order of operations at a
+        // table, and it left the screen dead on "No active scene" until someone
+        // walked over and reloaded it.
+        //
+        // Reloading is the honest fix rather than building the whole surface
+        // lazily: the page is server-rendered around a scene id, so there is no
+        // canvas, no sidebar and no controls to hand a scene to.
+        if (cfg.tableView && window.appSSE) {
+            window.appSSE('scene_activated', function () { window.location.reload(); });
+        }
         return;
     }
 
     const ctx = canvas.getContext('2d');
+
+    // Canvas text has to be told the family; it inherits nothing from CSS. Every
+    // ctx.font here used to hardcode 'system-ui' -- which is the FALLBACK inside
+    // --font-ui, the thing Inter exists to avoid. The canvas is the entire table
+    // screen, so that made the one typeface the players read all session the one
+    // the project's two-face rule forbids, and it differed between the GM's
+    // laptop and the TV. It hid in JS rather than CSS, which is why every
+    // previous font sweep missed it.
+    let cachedUiFont = '';
+    function uiFont() {
+        if (!cachedUiFont) {
+            cachedUiFont = getComputedStyle(document.documentElement)
+                .getPropertyValue('--font-ui').trim() || 'system-ui, sans-serif';
+        }
+        return cachedUiFont;
+    }
     const tokenImages = new Map();
     let scene = null;
     let zoom = 1;
@@ -279,6 +308,11 @@
         drawTargetOverlays();
         if (!isTableView()) drawToolOverlay();
         drawFloaters();
+        // Above the fog, like the floaters and for the same reason: a ruler the
+        // GM is holding up for the room, and a ring they are pointing with, are
+        // the two things that must not be dimmed by it.
+        drawSharedMeasure();
+        drawPings();
         drawTurnBanner();
         pruneGlides();
         syncAnimation();
@@ -1125,6 +1159,10 @@
         // Over Speed is not illegal -- it is a second action, or a Stride and a
         // Step. Flag it rather than forbid it.
         const over = speed > 0 && feet > speed;
+        // Mirror it to the table. This is the one the players asked for by
+        // name: how far they could still travel, shown on the shared screen
+        // rather than read out.
+        shareMeasure(from, to, speed > 0 ? label + ' / Speed ' + speed : label, over);
         ctx.save();
         ctx.setLineDash([8, 6]);
         ctx.strokeStyle = over ? '#e9a13b' : '#f0d88a';
@@ -1135,7 +1173,7 @@
         ctx.stroke();
         ctx.setLineDash([]);
         const text = speed > 0 ? label + '  /  Speed ' + speed + ' ft' : label;
-        ctx.font = '700 16px system-ui, sans-serif';
+        ctx.font = '700 16px ' + uiFont();
         const width = ctx.measureText(text).width + 16;
         const mx = (from.x + to.x) / 2, my = (from.y + to.y) / 2 - 18;
         ctx.fillStyle = 'rgba(10,10,12,.82)';
@@ -1176,6 +1214,136 @@
     const floaters = [];
     const FLOAT_MS = 1400;
     let lastHp = new Map();
+
+    // --- pointing at things, across two screens ---------------------------
+    //
+    // The table screen is a SEPARATE BROWSER. A ruler dragged on the GM's
+    // laptop is invisible to a window that has never heard of their pointer, so
+    // "let the players see me measure that" is a broadcast problem, not a
+    // rendering one. Both of these arrive over SSE and neither is ever stored:
+    // a ping that survived a reload would be a mystery ring nobody remembers
+    // drawing, and a ruler is only true while it is being held.
+    const pings = [];
+    const PING_MS = 1900;
+    let sharedMeasure = null;
+    const MEASURE_LINGER_MS = 4000;
+    // Throttled because this rides the single gevent worker that also serves
+    // every player's SSE. A drag fires at frame rate; the table does not need
+    // 60 updates a second to follow a line.
+    const MEASURE_MIN_GAP_MS = 90;
+    let lastMeasureSentAt = 0;
+    let lastMeasureKey = '';
+
+    function sendBeacon(payload) {
+        if (!cfg.isGm) return;
+        payload.kind = payload.kind || 'ping';
+        fetch('/api/scenes/' + encodeURIComponent(sceneId) + '/beacon', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+            body: JSON.stringify(payload)
+        }).catch(function () { /* a lost ping is not worth a toast */ });
+    }
+
+    function shareMeasure(start, end, label, over) {
+        // Only the GM's own view broadcasts, and only when the line actually
+        // changed -- otherwise a held-still pointer would stream duplicates.
+        if (!cfg.isGm || isTableView()) return;
+        const key = [Math.round(start.x), Math.round(start.y),
+                     Math.round(end.x), Math.round(end.y), label].join(',');
+        const now = Date.now();
+        if (key === lastMeasureKey) return;
+        if (now - lastMeasureSentAt < MEASURE_MIN_GAP_MS) return;
+        lastMeasureKey = key;
+        lastMeasureSentAt = now;
+        sendBeacon({kind: 'measure', x1: start.x, y1: start.y, x2: end.x, y2: end.y,
+                    label: label, over: !!over});
+    }
+
+    function clearSharedMeasure() {
+        if (!cfg.isGm || isTableView()) return;
+        if (!lastMeasureKey) return;
+        lastMeasureKey = '';
+        sendBeacon({kind: 'measure', clear: true});
+    }
+
+    function receiveBeacon(data) {
+        if (!data || (data.scene_id && data.scene_id !== sceneId)) return;
+        if (data.kind === 'ping') {
+            pings.push({x: Number(data.x), y: Number(data.y), born: animationClock});
+            // The GM's own view is event-driven, so a ping there needs the loop
+            // started explicitly rather than waiting for a scene change.
+            syncAnimation();
+        } else if (data.kind === 'measure') {
+            sharedMeasure = data.clear ? null : {
+                start: {x: Number(data.x1), y: Number(data.y1)},
+                end: {x: Number(data.x2), y: Number(data.y2)},
+                label: String(data.label || ''), over: !!data.over,
+                seen: Date.now()
+            };
+        }
+        draw();
+    }
+
+    function drawPings() {
+        if (!pings.length) return;
+        const now = animationClock;
+        for (let i = pings.length - 1; i >= 0; i--) {
+            const ping = pings[i];
+            const t = (now - ping.born) / PING_MS;
+            if (t >= 1 || t < 0) { pings.splice(i, 1); continue; }
+            // Three rings leaving at staggered times. One ring reads as a
+            // circle drawn on the map; several leaving outward read as
+            // somebody pointing.
+            ctx.save();
+            for (let ring = 0; ring < 3; ring++) {
+                const phase = t * 1.5 - ring * 0.22;
+                if (phase <= 0 || phase >= 1) continue;
+                ctx.globalAlpha = (1 - phase) * 0.85;
+                ctx.strokeStyle = '#ffd98a';
+                ctx.lineWidth = 4 - phase * 2;
+                ctx.beginPath();
+                ctx.arc(ping.x, ping.y, 12 + phase * 70, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+            ctx.globalAlpha = Math.max(0, 1 - t * 1.6);
+            ctx.fillStyle = '#ffd98a';
+            ctx.beginPath();
+            ctx.arc(ping.x, ping.y, 6, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+    }
+
+    // The GM's ruler, mirrored onto the TV. Drawn for the table only -- the GM
+    // already sees their own line locally and at full fidelity, and echoing the
+    // broadcast back over it would double-draw.
+    function drawSharedMeasure() {
+        if (!sharedMeasure || !isTableView()) return;
+        if (Date.now() - sharedMeasure.seen > MEASURE_LINGER_MS) { sharedMeasure = null; return; }
+        const {start, end, label, over} = sharedMeasure;
+        ctx.save();
+        ctx.setLineDash([10, 7]);
+        ctx.strokeStyle = over ? '#e9a13b' : '#f0d88a';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(start.x, start.y);
+        ctx.lineTo(end.x, end.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        if (label) {
+            // Sized for the room, like the nameplates, not for the GM's laptop.
+            ctx.font = '700 26px ' + uiFont();
+            const width = ctx.measureText(label).width + 20;
+            const mx = (start.x + end.x) / 2, my = (start.y + end.y) / 2;
+            ctx.fillStyle = 'rgba(12,11,9,.86)';
+            ctx.fillRect(mx - width / 2, my - 20, width, 34);
+            ctx.fillStyle = over ? '#e9a13b' : '#f4e6bb';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label, mx, my - 3);
+        }
+        ctx.restore();
+    }
 
     function noteMotionAndHealth(previous, next) {
         if (!isTableView()) { lastHp = new Map(); return; }
@@ -1231,7 +1399,7 @@
         if (!floaters.length) return;
         ctx.save();
         ctx.textAlign = 'center';
-        ctx.font = '700 26px system-ui, sans-serif';
+        ctx.font = '700 26px ' + uiFont();
         for (let i = floaters.length - 1; i >= 0; i--) {
             const f = floaters[i];
             const t = (animationClock - f.started) / FLOAT_MS;
@@ -1253,7 +1421,13 @@
     }
 
     function animationsWanted() {
-        if (!isTableView() || !scene) return false;
+        if (!scene) return false;
+        // A ping is the one animation the GM's own view runs too. It is the
+        // confirmation that the thing they pointed at actually went out, and it
+        // stops the moment the rings finish -- so 6a's event-driven idle holds
+        // everywhere except for those two seconds.
+        if (pings.length > 0) return true;
+        if (!isTableView()) return false;
         return (scene.lights || []).length > 0 || glides.size > 0 || floaters.length > 0
                || terrainAnimates();
     }
@@ -1304,7 +1478,7 @@
         const left = viewport.scrollLeft / zoom;
         const top = viewport.scrollTop / zoom;
         const wide = viewport.clientWidth / zoom;
-        ctx.font = '700 30px system-ui, sans-serif';
+        ctx.font = '700 30px ' + uiFont();
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         const width = ctx.measureText(label).width + 56;
@@ -1348,8 +1522,11 @@
             ctx.setLineDash([10, 6]);
             ctx.beginPath(); ctx.moveTo(ruler.start.x, ruler.start.y); ctx.lineTo(ruler.end.x, ruler.end.y); ctx.stroke();
             const label = pf2eDistanceLabel(ruler.start, ruler.end);
+            // The GM measuring something for the room is the point of the
+            // ruler; the table sees the same line and the same number.
+            shareMeasure(ruler.start, ruler.end, label, false);
             const mx = (ruler.start.x + ruler.end.x) / 2, my = (ruler.start.y + ruler.end.y) / 2;
-            ctx.setLineDash([]); ctx.font = '700 14px system-ui'; ctx.textAlign = 'center';
+            ctx.setLineDash([]); ctx.font = '700 14px ' + uiFont(); ctx.textAlign = 'center';
             ctx.fillStyle = 'rgba(0,0,0,.85)'; ctx.fillRect(mx - 65, my - 24, 130, 22);
             ctx.fillStyle = '#fff2bd'; ctx.fillText(label, mx, my - 8);
             ctx.restore();
@@ -1432,7 +1609,7 @@
         } else {
             const initials = String(token.name || '?').split(/\s+/).slice(0, 2).map(s => s[0] || '').join('').toUpperCase();
             ctx.fillStyle = '#fff8e7';
-            ctx.font = '700 ' + Math.max(12, radius * .48) + 'px system-ui';
+            ctx.font = '700 ' + Math.max(12, radius * .48) + 'px ' + uiFont();
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(initials, x, y);
@@ -1449,7 +1626,7 @@
             // The table screen is read from several feet away, so names and the
             // health bar below are scaled up there. On the GM's own screen the
             // smaller type keeps a crowded fight legible.
-            ctx.font = (isTableView() ? '700 22px' : '700 13px') + ' system-ui';
+            ctx.font = (isTableView() ? '700 22px' : '700 13px') + ' ' + uiFont();
             ctx.textBaseline = 'bottom';
             ctx.lineWidth = 4;
             ctx.strokeStyle = 'rgba(0,0,0,.8)';
@@ -1481,7 +1658,7 @@
         const conditions = Object.keys(live.conditions || {});
         if (conditions.length) {
             const text = conditions.slice(0, 3).map(k => k.replace(/_/g, ' ')).join(' / ');
-            ctx.font = '600 10px system-ui';
+            ctx.font = '600 10px ' + uiFont();
             ctx.textBaseline = 'top';
             ctx.strokeStyle = 'rgba(0,0,0,.85)';
             ctx.lineWidth = 3;
@@ -1502,7 +1679,7 @@
             ctx.fillStyle = 'rgba(15,13,10,.9)';
             ctx.fillRect(x + radius - 13, y - radius - 2, 22, 13);
             ctx.fillStyle = '#f0d88a';
-            ctx.font = '700 7px system-ui';
+            ctx.font = '700 7px ' + uiFont();
             ctx.textBaseline = 'middle';
             ctx.fillText('LOCK', x + radius - 2, y - radius + 5);
         }
@@ -1842,6 +2019,18 @@
                 scrollLeft: viewport.scrollLeft, scrollTop: viewport.scrollTop};
             canvas.classList.add('is-panning');
             canvas.setPointerCapture(event.pointerId);
+            return;
+        }
+        // Point at something for the room. Placed before every other branch so
+        // it works whatever tool is armed -- pointing is the thing a GM does
+        // mid-sentence, and having to disarm the wall tool first means not
+        // doing it.
+        // Terrain already claims Alt-click for "paint one square", so the
+        // shortcut stands down while a terrain tool is armed rather than
+        // silently stealing it.
+        if (activeTool === 'ping'
+            || (event.altKey && cfg.isGm && !activeTool.startsWith('terrain-'))) {
+            sendBeacon({kind: 'ping', x: point.x, y: point.y});
             return;
         }
         if (calibrationMode && cfg.isGm) {
@@ -2462,7 +2651,8 @@
         'terrain-water': 'Click a room to flood it with water; Alt-click one square',
         'terrain-poison': 'Click a room to fill it with poison; Alt-click one square',
         'terrain-blood': 'Alt-click a square to spill blood, or click to pool a whole room',
-        'terrain-clear': 'Click a flooded area to drain it; Alt-click one square'
+        'terrain-clear': 'Click a flooded area to drain it; Alt-click one square',
+        ping: 'Click to point at something on the table screen'
     };
 
     function setActiveTool(tool) {
@@ -2472,6 +2662,9 @@
         if (wallChain.length && tool !== activeTool) commitWallChain(activeTool);
         activeTool = tool || 'select';
         measurement = activeTool === 'measure' ? measurement : null;
+        // Take the line off the TV as soon as the GM puts the ruler down,
+        // rather than leaving the room staring at a stale number.
+        if (!measurement) clearSharedMeasure();
         interaction = null;
         canvas.classList.toggle('is-tool-active', activeTool !== 'select');
         document.querySelectorAll('[data-map-tool]').forEach(button => {
@@ -2831,6 +3024,22 @@
     document.querySelectorAll('[data-map-tool]').forEach(button => {
         button.addEventListener('click', () => setActiveTool(button.dataset.mapTool));
     });
+    (function wireBuildTools() {
+        const toggle = document.getElementById('map-build-toggle');
+        const group = document.getElementById('map-build-group');
+        if (!toggle || !group) return;
+        toggle.addEventListener('click', function () {
+            const open = group.hasAttribute('hidden');
+            group.toggleAttribute('hidden', !open);
+            toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            // Folding the drawer away while one of its tools is armed would
+            // leave the GM in a mode with nothing on screen naming it.
+            if (!open && activeTool !== 'select'
+                && !!group.querySelector('[data-map-tool="' + activeTool + '"]')) {
+                setActiveTool('select');
+            }
+        });
+    })();
     document.getElementById('map-clear-targets-tool').addEventListener('click', function () {
         targetIds.clear(); updateTargetPanel(); draw();
     });
@@ -2886,7 +3095,17 @@
     refreshTableState();
     updateUndoButton();
     updateFollowTurnButton();
+    // Stage 6a made rendering event-driven, so a first paint that happened
+    // before Inter finished loading would measure text in the fallback face and
+    // never repaint itself -- and measureText sizes the ruler and turn-banner
+    // backing boxes, so those would stay wrong for the session.
+    if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(function () { cachedUiFont = ''; draw(); });
+    }
     if (window.appSSE) {
+        window.appSSE('scene_beacon', function (event) {
+            try { receiveBeacon(JSON.parse(event.data)); } catch (_) {}
+        });
         window.appSSE('scene_update', function (event) {
             try { applyScene(JSON.parse(event.data)); } catch (_) {}
         });
@@ -2910,7 +3129,12 @@
     fetchScene().then(function () {
         // Restore where this scene was left; failing that, fit it. The GM used
         // to get neither and always landed at 100% in the top-left corner.
-        if (!restoreView()) fitMap();
+        //
+        // The table screen always fits instead. It has no operator to correct a
+        // restored view, and the saved one is whatever the last window left
+        // behind -- a TV that comes up scrolled into a corner stays there all
+        // session.
+        if (isTableView() || !restoreView()) fitMap();
     });
     // Persist the viewport rather than every scroll frame.
     let viewSaveTimer = null;
