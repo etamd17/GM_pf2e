@@ -166,12 +166,30 @@ def test_choosing_a_scene_opens_it_without_pushing_it():
 
 
 def test_an_activation_elsewhere_does_not_move_the_gms_view():
-    handler = _JS[_JS.index("appSSE('scene_activated'"):]
+    # There are two scene_activated handlers now, so find the working one by
+    # what it does rather than by taking whichever appears first.
+    handler = _JS[_JS.index("appSSE('scene_activated', function (event) {"):]
     handler = handler[:handler.index('});')]
     code = '\n'.join(line.split('//')[0] for line in handler.splitlines())
     assert 'location.href' not in code, (
         "the GM's window must not be yanked when a scene is pushed to the table")
     assert 'paintTableState()' in code
+
+
+def test_the_only_activation_reload_is_the_table_screens():
+    """A table screen opened before any scene is pushed subscribes from the
+    early-return path and reloads when one arrives, because the page is
+    server-rendered around a scene id and there is nothing to hand a scene to.
+
+    That reload must stay fenced behind cfg.tableView. On the GM's own window it
+    would be exactly the yank the test above exists to prevent -- and it would
+    fire mid-prep, every time they pushed a scene."""
+    early = _JS[:_JS.index("const ctx = canvas.getContext('2d');")]
+    assert 'window.location.reload();' in early
+    guard = early[early.index('wireCreateForm();'):early.index('window.location.reload();')]
+    assert 'cfg.tableView' in guard
+    # ...and it must live in the branch that runs when there is no scene at all.
+    assert early.index('if (!sceneId') < early.index('window.location.reload();')
 
 
 def test_the_sidebar_says_whether_this_scene_is_live():

@@ -7725,6 +7725,60 @@ def api_scene_combatant_action(scene_id, instance_id):
                     'scene': _scene_payload(scene)})
 
 
+@app.route('/api/scenes/<scene_id>/beacon', methods=['POST'])
+@gm_required
+def api_scene_beacon(scene_id):
+    """Ephemeral marks the table screen should show: a ping, and the ruler.
+
+    Deliberately NOT part of the scene. Nothing here is loaded, saved, or
+    revision-bumped -- a ping that survived a reload would be a mystery ring on
+    a battlemap nobody remembers making, and a ruler is only true while the GM
+    is holding it.
+
+    It has to travel at all because the table screen is a SEPARATE BROWSER. The
+    GM dragging a ruler on their laptop is invisible to a window that has never
+    heard of their pointer, so "let the players see me measure that" is a
+    broadcast problem rather than a rendering one.
+    """
+    cid = _active_campaign_id()
+    data = request.get_json(silent=True) or {}
+    kind = str(data.get('kind') or '')
+    if kind not in ('ping', 'measure'):
+        return jsonify({'error': 'unknown beacon kind'}), 400
+
+    def coordinate(value):
+        number = float(value)
+        if not math.isfinite(number):
+            raise ValueError('non-finite coordinate')
+        return max(-100000.0, min(100000.0, number))
+
+    payload = {'kind': kind, 'scene_id': scene_id}
+    try:
+        if kind == 'ping':
+            payload['x'] = coordinate(data.get('x'))
+            payload['y'] = coordinate(data.get('y'))
+        else:
+            # A measure with no line clears whatever the table is showing.
+            if data.get('clear'):
+                payload['clear'] = True
+            else:
+                payload['x1'] = coordinate(data.get('x1'))
+                payload['y1'] = coordinate(data.get('y1'))
+                payload['x2'] = coordinate(data.get('x2'))
+                payload['y2'] = coordinate(data.get('y2'))
+                payload['label'] = str(data.get('label') or '')[:24]
+                payload['over'] = bool(data.get('over'))
+    except (TypeError, ValueError, OverflowError):
+        return jsonify({'error': 'beacon coordinates must be valid numbers'}), 400
+
+    # Same payload to GMs and to the table. There is nothing to hide in a ring
+    # or a ruler -- the GM chose to point at it.
+    sse_broadcast('scene_beacon', payload,
+                  player_filter=lambda copy: copy,
+                  campaign_id=cid)
+    return jsonify({'success': True})
+
+
 @app.route('/api/scenes/<scene_id>/elements', methods=['POST'])
 @gm_required
 def api_scene_elements(scene_id):

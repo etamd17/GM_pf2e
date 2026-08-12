@@ -171,5 +171,5 @@ def test_the_viewport_is_remembered_per_scene_and_per_role():
     assert "cfg.isGm ? 'gm' : 'table'" in key[:200], (
         'the table screen is a different view of the same scene and must never '
         'inherit the GM viewport')
-    assert 'if (!restoreView()) fitMap();' in _JS, (
+    assert 'if (isTableView() || !restoreView()) fitMap();' in _JS, (
         'a first visit should fit the scene rather than land in the top-left corner')

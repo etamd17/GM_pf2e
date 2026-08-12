@@ -619,3 +619,123 @@ historically smuggled in extra faces by hardcoding families instead of using the
 - **Player projection stays untouched and tested** until stage 6 needs it. It is the
   GM↔table boundary, and rewriting a security boundary from scratch is what caused the
   `sanitize_for_player` incident.
+
+---
+
+## Stage 7 findings — the UI audit (run 2026-08-11)
+
+Method: five lenses read the files in parallel, then everything below was
+re-checked by hand against a running server. Numbers come from live measurement
+(`getComputedStyle`, `getBoundingClientRect`, forced canvas frames), not from
+reading CSS. **Anything a lens claimed that measurement contradicted was dropped**
+— including one confident but wrong claim that the table screen renders nothing.
+
+### Non-findings, recorded so nobody audits them twice
+
+- **Contrast is fine.** Every text pair measured on the live page is 6.5:1 or
+  better — tool buttons 6.61, sidebar labels and hints 6.57, buttons 8.5, danger
+  9.29, the table-state line 12.8. WCAG AA wants 4.5. There is nothing to fix.
+  (Separately, the *button face* against the strip is low contrast; that is a
+  boundary-visibility question, not a text-legibility one. See F5.)
+- **The font-token rule holds in the map's own files.** `map.css` uses
+  `var(--font-*)` ten times and contains **zero** hardcoded font declarations;
+  `map.html` has none either. CLAUDE.md predicts standalone pages smuggle in an
+  extra face — for this page that prediction is wrong, and CLAUDE.md should say
+  so. The violation is real but lives elsewhere (F1).
+- **Long names do not break the layout.** A 61-character scene name wraps the h1
+  to two lines with no horizontal page overflow.
+- **The no-background empty state is good** — "No map image yet. The grid and
+  tokens are still usable."
+
+### Verified findings
+
+**F1 — every word on the table screen is in a third typeface.** [high]
+All eight `ctx.font` assignments in `map.js` hardcode `system-ui`
+(1138, 1234, 1307, 1352, 1435, 1452, 1484, 1505); the file references the font
+tokens **zero** times. `--font-ui` is `'Inter', system-ui, …` — `system-ui` is
+the fallback Inter exists to avoid. On Windows that resolves to Segoe UI. The
+canvas is the entire table screen, so the one face the players read all session
+is the one the project's rules forbid, and it differs between the GM's laptop and
+the TV. It hid in JS, which is why every previous CSS sweep missed it.
+*Fix:* read the token once, build font strings from it. Repaint on
+`document.fonts.ready` — stage 6a made rendering event-driven, so a first paint
+before Inter loads would measure in the wrong face and never correct itself.
+
+**F2 — the shared TV is not chrome-free.** [high] Found by four lenses
+independently and confirmed by measurement at 1920x1080. `/map/table` still shows
+the site nav (GM Hub, Party, Tracker, GM Screen, Generators, Loot, Chronicle,
+Cmd-K), the scene name as an h1, the stage bar ("Live sync · Revision 162 · Drag
+tokens to move…"), and **all 18 tool buttons including Reveal fog, Wall, Erase,
+Lava, Poison and Drain**. Measured: 213px of chrome above the map, 321px of dead
+margin on each side (`.map-page` keeps `max-width:1680px`), the map viewport gets
+**42%** of the screen and the drawn map **15%**.
+*Note against myself:* stage 6b's test asserted "the table has no GM chrome" by
+counting `{% if map_gm and not table_view %}` guards. It verified what I built,
+not what a table screen needs.
+
+**F3 — a TV opened before a scene is pushed never recovers.** [high]
+`map.js:9` returns early when `sceneId` is falsy, and all five `appSSE`
+subscriptions are at lines 2890-2908, long after it. The early-return path wires
+**zero** SSE. So the natural order of operations — switch the TV on, then set up
+the scene — leaves that window subscribed to nothing: pushing a scene later does
+nothing and the TV holds "No active scene" until somebody walks over and reloads
+it. (One lens stated this as "the TV can never leave its empty state", which
+measurement contradicted for the already-pushed case. The bug is real but only on
+the empty-at-load path.)
+
+**F4 — Ctrl+Z is a trap.** [high] It is bound to `undoMovement()` — token
+movement only. Painting lava over the wrong room, revealing fog early, erasing a
+wall and placing a light have no undo, and pressing Ctrl+Z after any of them
+silently undoes the last token *move* instead, then toasts "Movement undone."
+This is the cross-cutting commitment recorded above ("every action needs an
+inverse, add each as its action lands") — stages 4a, 4c, 4d, 5a and 6e all landed
+without one.
+
+**F5 — the toolstrip overflows a laptop, and nothing says so.** [high]
+19 buttons need 1256px; the strip gets `page width − 280px sidebar`. It fits only
+at a window of roughly 1590px or wider. At 1280 five tools are off-screen, at
+1440 two — and `overflow-x:auto` gives no visible affordance, so the hidden tools
+are undiscoverable. Honest attribution: it already overflowed a 1280 laptop by
+20px before stage 6e; the five terrain buttons (268px) took it to 288px over.
+The strip is also the smallest type (9px) and shortest target (29px) on a page
+where `.map-btn` — pressed far less often — is 11px and 34px.
+
+**F6 — two CSS rules are dead because the canvas has no class.** [medium]
+The element is `<canvas id="map-canvas">` with no `class`, so
+`.map-canvas.is-drop-target` (map.css:85) and
+`.map-page.is-previewing .map-canvas` (map.css:88) match nothing, and JS never
+adds `is-drop-target` either. The preview frame is the only cue that the GM's
+canvas is deliberately showing an incomplete view, and it has never once
+rendered.
+
+**F7 — "Live sync" is an indicator that indicates nothing.** [medium]
+`.map-live-dot` is a static green dot in the markup with a hardcoded
+`background:#58b37a` and **zero** references anywhere in `map.js`. It stays green
+with the stream dead, which is worse than having no indicator.
+
+**F8 — the table view scales exactly one thing.** [medium] `map.js:1452` is the
+only `isTableView()`-aware font in the file. Condition text stays at 10px, the HP
+bar at 5px tall, the lock chip at 7px — so the room can read *who* a token is but
+not that it is Frightened or Prone, which is the reason conditions are painted
+under the token at all.
+
+**F9 — colour is the only carrier of PC/NPC.** [medium] `#4f8a62` vs `#a84b45` —
+green vs red, the single most common colourblindness axis, with nothing else
+encoding faction.
+
+**F10 — destructive actions look like safe ones.** [medium] "Remove token" has no
+confirmation and sits ~6px from "Hide from players"; Erase is styled identically
+to Ruler; "Reset fog painting" and "Clear templates" carry the quiet style.
+`.map-btn--danger` exists and is barely used.
+
+### Smaller, confirmed
+
+- Error toasts are near-identical to success toasts and both vanish on the same
+  2.6s timer, so a failure that scrolls past is gone.
+- `--gilt-200` is hardcoded as `rgba(224,182,90,X)` eight times; map.css also
+  invents a parallel red ramp and a second green rather than using `--ruby-*` /
+  `--success`.
+- Six border radii in a 97-line file, none of them the shared tokens.
+- The turn banner renders "Valeros— it's their turn" — no space before the dash.
+- No keyboard path to selecting or moving a token; the only two shortcuts
+  (Escape, Ctrl+Z) are undocumented in the UI.

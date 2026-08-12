@@ -57,6 +57,21 @@
 .map-tool:hover { color:var(--gilt-100); border-color:rgba(224,182,90,.5); }
 .map-tool.is-active { color:#16120b; background:var(--gilt-300); border-color:var(--gilt-200); }
 .map-tool-divider { flex:0 0 1px; align-self:stretch; margin:0 3px; background:var(--border-card); }
+.map-tool-group { display:contents; }
+/* Open the drawer and the strip is allowed a second row, so nothing hides
+   behind a scroll at any width. It costs height only while the GM is building,
+   which is the one time they are not running a fight with four people waiting. */
+.map-toolstrip:has(#map-build-group:not([hidden])) { flex-wrap:wrap; row-gap:5px; }
+/* [hidden] is a UA rule with the lowest possible specificity, so an author
+   display: above it wins and the element stays on screen. This file already
+   carries that scar three times over (see the note at .map-token-actions). */
+.map-tool-group[hidden] { display:none; }
+/* Erase removes a wall, door, light or template with one click and no undo. It
+   was styled identically to Ruler. */
+.map-tool--danger { border-color:rgba(211,93,83,.55); color:#f2aaa3; }
+.map-tool--danger:hover { border-color:rgba(211,93,83,.9); color:#ffc9c2; }
+.map-tool--danger.is-active { background:#c2564c; border-color:#d97b71; color:#1b0f0d; }
+#map-build-toggle[aria-expanded="true"] { background:rgba(224,182,90,.2); border-color:rgba(224,182,90,.6); color:var(--gilt-100); }
 .map-tool-readout { margin-left:auto; flex:0 0 auto; color:var(--gilt-200); font-size:9px; }
 .map-stage-help { margin-left:auto; }
 .map-live-dot { display:inline-block; width:7px; height:7px; margin-right:5px; border-radius:50%; background:#58b37a; box-shadow:0 0 8px rgba(88,179,122,.65); }
@@ -94,3 +109,27 @@
 .map-page.is-table-screen #map-revision { display:none; }
 .map-page.is-table-screen .map-workspace { grid-template-columns:minmax(0,1fr); }
 .map-page.is-table-screen .map-header { padding-bottom:4px; }
+/* Stage 7a. Measured at 1920x1080 the TV was giving the drawn map 15% of the
+   screen: 213px of chrome above it and 321px of dead margin each side, plus a
+   row of GM tools -- Reveal fog, Erase, Poison -- that nobody in the room can
+   use and that invite questions mid-scene. The map IS the table screen, so
+   everything that is not the map goes. */
+.map-page.is-table-screen .map-header,
+.map-page.is-table-screen .map-toolstrip,
+.map-page.is-table-screen .map-stage-toolbar { display:none; }
+.map-page.is-table-screen { max-width:none; margin:0; }
+.map-page.is-table-screen .map-workspace { border:0; border-radius:0; min-height:100vh; }
+.map-page.is-table-screen .map-viewport { min-height:100vh; }
+/* The site nav lives in base.html, which every page shares, so it is hidden
+   from here rather than by threading a flag through the base template. If a
+   browser does not support :has() the nav simply stays -- i.e. it degrades to
+   exactly today's behaviour rather than to something broken. */
+body:has(.map-page.is-table-screen) nav,
+body:has(.map-page.is-table-screen) footer { display:none; }
+/* base.html wraps every page in a 1280px centred container inside a 32px
+   padded scroll region. On a 1920 TV those two took 640px of width and 64px of
+   height before the map got a say. Selected by CONTAINMENT rather than by the
+   Tailwind class names, so this keeps working if those change. */
+body:has(.map-page.is-table-screen) div:has(.map-page.is-table-screen) {
+    max-width:none; margin:0; padding:0;
+}

@@ -250,25 +250,34 @@
             <div class="map-toolstrip" role="toolbar" aria-label="Map tools">
                 <button class="map-tool is-active" data-map-tool="select" type="button">Select</button>
                 <button class="map-tool" data-map-tool="target" type="button">Target</button>
-                <button class="map-tool" id="map-clear-targets-tool" type="button" disabled>Clear targets</button>
+                <button class="map-tool" id="map-clear-targets-tool" type="button" title="Clear all targets" disabled>Clear</button>
                 <button class="map-tool" data-map-tool="measure" type="button">Ruler</button>
                 <button class="map-tool" data-map-tool="burst" type="button">Burst</button>
                 <button class="map-tool" data-map-tool="emanation" type="button">Emanation</button>
                 <button class="map-tool" data-map-tool="cone" type="button">Cone</button>
                 <button class="map-tool" data-map-tool="line" type="button">Line</button>
-                {% if map_gm %}<span class="map-tool-divider"></span>
-                <button class="map-tool" data-map-tool="fog-reveal" type="button">Reveal fog</button>
-                <button class="map-tool" data-map-tool="fog-hide" type="button">Hide fog</button>
-                <button class="map-tool" data-map-tool="wall" type="button">Wall</button>
-                <button class="map-tool" data-map-tool="door" type="button">Door</button>
-                <button class="map-tool" data-map-tool="light" type="button">Light</button>
-                <button class="map-tool" data-map-tool="erase" type="button">Erase</button>
+                {% if map_gm %}<button class="map-tool" data-map-tool="ping" type="button">Ping</button>
+                {# Building a map and running a fight are different jobs, and only
+                   the second one happens with four people waiting. The build
+                   tools fold away behind one toggle so the combat row is never
+                   pushed off the end of the strip -- measured, 19 buttons needed
+                   1256px and a 1280 laptop gives the strip 968. #}
                 <span class="map-tool-divider"></span>
-                <button class="map-tool" data-map-tool="terrain-lava" type="button">Lava</button>
-                <button class="map-tool" data-map-tool="terrain-water" type="button">Water</button>
-                <button class="map-tool" data-map-tool="terrain-poison" type="button">Poison</button>
-                <button class="map-tool" data-map-tool="terrain-blood" type="button">Blood</button>
-                <button class="map-tool" data-map-tool="terrain-clear" type="button">Drain</button>{% endif %}
+                <button class="map-tool" id="map-build-toggle" type="button" title="Walls, doors, lights, fog and terrain" aria-expanded="false">Build</button>
+                <span id="map-build-group" class="map-tool-group" hidden>
+                    <button class="map-tool" data-map-tool="fog-reveal" type="button">Reveal fog</button>
+                    <button class="map-tool" data-map-tool="fog-hide" type="button">Hide fog</button>
+                    <button class="map-tool" data-map-tool="wall" type="button">Wall</button>
+                    <button class="map-tool" data-map-tool="door" type="button">Door</button>
+                    <button class="map-tool" data-map-tool="light" type="button">Light</button>
+                    <button class="map-tool map-tool--danger" data-map-tool="erase" type="button">Erase</button>
+                    <span class="map-tool-divider"></span>
+                    <button class="map-tool" data-map-tool="terrain-lava" type="button">Lava</button>
+                    <button class="map-tool" data-map-tool="terrain-water" type="button">Water</button>
+                    <button class="map-tool" data-map-tool="terrain-poison" type="button">Poison</button>
+                    <button class="map-tool" data-map-tool="terrain-blood" type="button">Blood</button>
+                    <button class="map-tool" data-map-tool="terrain-clear" type="button">Drain</button>
+                </span>{% endif %}
                 <span id="map-tool-readout" class="map-tool-readout">Select and move tokens</span>
             </div>
             <div id="map-viewport" class="map-viewport" tabindex="0" aria-label="Tactical map">
