@@ -7791,6 +7791,29 @@ def api_scene_elements(scene_id):
     def point(value, maximum):
         return float(max(0, min(maximum, float(value))))
 
+    def element_id(collection):
+        """Mint an id, or reuse the one an undo is restoring.
+
+        Undo re-adds an erased wall, light or template through this same route.
+        Without this it would come back with a NEW id, and every earlier undo
+        entry still referencing the old one would fail -- so undoing an erase
+        silently ended the GM's undo history. Restoring the identity is what
+        makes the stack survive more than one step.
+
+        Guarded rather than trusted: it has to look like an id this code mints,
+        and it cannot collide with something already in that collection.
+        """
+        wanted = data.get('restore_id')
+        if not isinstance(wanted, str) or len(wanted) != 32:
+            return _storage.new_id()
+        try:
+            int(wanted, 16)
+        except ValueError:
+            return _storage.new_id()
+        if any(item.get('id') == wanted for item in collection):
+            return _storage.new_id()
+        return wanted
+
     with _path_lock(path):
         scene = _scenes.load_scene(cid, scene_id)
         if not scene:
@@ -7799,7 +7822,7 @@ def api_scene_elements(scene_id):
             if action == 'add_wall':
                 kind = 'door' if data.get('kind') == 'door' else 'wall'
                 wall = {
-                    'id': _storage.new_id(),
+                    'id': element_id(scene.get('walls', [])),
                     'x1': point(data.get('x1'), scene['width']),
                     'y1': point(data.get('y1'), scene['height']),
                     'x2': point(data.get('x2'), scene['width']),
@@ -7864,7 +7887,7 @@ def api_scene_elements(scene_id):
                     return jsonify({'error': 'wall not found'}), 404
             elif action == 'add_light':
                 light = {
-                    'id': _storage.new_id(),
+                    'id': element_id(scene.get('lights', [])),
                     'x': point(data.get('x'), scene['width']),
                     'y': point(data.get('y'), scene['height']),
                     'radius': point(data.get('radius', 350), 5000),
@@ -7953,7 +7976,7 @@ def api_scene_elements(scene_id):
                 if kind not in ('burst', 'emanation', 'cone', 'line'):
                     return jsonify({'error': 'unknown template kind'}), 400
                 template = {
-                    'id': _storage.new_id(), 'kind': kind,
+                    'id': element_id(scene.get('templates', [])), 'kind': kind,
                     'x1': point(data.get('x1'), scene['width']),
                     'y1': point(data.get('y1'), scene['height']),
                     'x2': point(data.get('x2', data.get('x1')), scene['width']),

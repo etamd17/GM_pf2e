@@ -17,7 +17,7 @@
             <button type="button" id="map-fit" class="map-btn map-btn--quiet">Fit</button>
             {% if map_gm and not table_view %}<button type="button" id="map-preview-table" class="map-btn map-btn--quiet">Preview table view</button>{% endif %}
             <button type="button" id="map-follow-turn" class="map-btn map-btn--quiet is-active">Follow turn</button>
-            <button type="button" id="map-undo" class="map-btn map-btn--quiet" disabled>Undo move</button>
+            <button type="button" id="map-undo" class="map-btn map-btn--quiet" disabled>Undo</button>
             {% if not map_gm %}<a href="{{ system_ui.player_home }}" class="map-btn map-btn--quiet">Player Hub</a>{% endif %}
         </div>
     </header>
@@ -190,7 +190,14 @@
                         <button id="map-apply-pd" class="map-btn map-btn--wide" type="button">Apply persistent damage</button>
                     </div>
                     <button id="map-token-visibility" class="map-btn map-btn--quiet" type="button">Hide from players</button>
-                    <button id="map-delete-token" class="map-btn map-btn--danger" type="button">Remove token</button>
+                    {# Removal sat 6px below "Hide from players" -- the two things
+                       a GM reaches for in the same moment, one recoverable and
+                       one not. Pushed into its own zone rather than behind a
+                       dialog, which would cost a keystroke every time a dead
+                       mook comes off the board. #}
+                    <div class="map-danger-zone">
+                        <button id="map-delete-token" class="map-btn map-btn--danger map-btn--wide" type="button">Remove token</button>
+                    </div>
                 </div>
             </section>
 
@@ -216,8 +223,10 @@
                     <button id="map-light-save" class="map-btn map-btn--wide" type="button">Save light</button>
                     <button id="map-light-delete" class="map-btn map-btn--danger map-btn--wide" type="button">Remove light</button>
                 </div>
-                <button id="map-reset-fog" class="map-btn map-btn--quiet map-btn--wide" type="button">Reset fog painting</button>
-                <button id="map-clear-templates" class="map-btn map-btn--quiet map-btn--wide" type="button">Clear templates</button>
+                <div class="map-danger-zone">
+                    <button id="map-reset-fog" class="map-btn map-btn--danger map-btn--wide" type="button">Reset fog painting</button>
+                    <button id="map-clear-templates" class="map-btn map-btn--danger map-btn--wide" type="button">Clear templates</button>
+                </div>
                 <p class="map-hint">Door tool: draw a door, or click an existing door to open/close it. Erase tool removes walls, doors, lights, or templates.</p>
             </section>
 
