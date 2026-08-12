@@ -56,7 +56,6 @@
     let background = null;
     let backgroundKey = '';
     let toastTimer = null;
-    const movementHistory = [];
 
     function toast(message, error) {
         const el = document.getElementById('map-toast');
@@ -1902,11 +1901,160 @@
         };
     }
 
+    // --- undo -------------------------------------------------------------
+    //
+    // An INVERSE, not a restore: every entry is a list of ordinary map actions
+    // sent back through the same endpoints, so undo can never write a shape the
+    // normal path would have rejected. That is the rule this project already
+    // settled for the Obsidian pane's undo, and it holds for the same reason --
+    // a second write path is a second set of bugs.
+    //
+    // The inverse is computed by DIFFING the scene before and after, rather than
+    // from the request that was sent. Painting lava over water changes cells the
+    // request never named, and only the diff knows what was underneath.
+    const undoStack = [];
+    const UNDO_LIMIT = 40;
+    let undoing = false;
+
+    function undoSnapshot(source) {
+        const fog = source.fog || {};
+        return {
+            walls: JSON.parse(JSON.stringify(source.walls || [])),
+            lights: JSON.parse(JSON.stringify(source.lights || [])),
+            templates: JSON.parse(JSON.stringify(source.templates || [])),
+            revealed: (fog.revealed_cells || []).slice(),
+            terrain: JSON.parse(JSON.stringify(source.terrain || []))
+        };
+    }
+
+    function terrainOwners(snapshot) {
+        const owners = new Map();
+        for (const layer of snapshot.terrain) {
+            for (const cell of layer.cells || []) owners.set(cell, layer.kind);
+        }
+        return owners;
+    }
+
+    function inverseOps(before, after) {
+        const ops = [];
+        const byId = list => new Map(list.map(item => [item.id, item]));
+
+        const wallsBefore = byId(before.walls), wallsAfter = byId(after.walls);
+        for (const id of wallsAfter.keys()) {
+            if (!wallsBefore.has(id)) ops.push({action: 'delete_wall', id: id});
+        }
+        for (const [id, wall] of wallsBefore) {
+            const now = wallsAfter.get(id);
+            if (!now) {
+                // Re-adding mints a NEW id, so an erased wall comes back in the
+                // right place but not with its old identity. Harmless here; it
+                // is why a failed op clears the stack rather than trying to
+                // carry on with ids that no longer exist.
+                ops.push({action: 'add_wall', restore_id: id,
+                          x1: wall.x1, y1: wall.y1, x2: wall.x2, y2: wall.y2,
+                          kind: wall.kind, secret: !!wall.secret});
+            } else if (!!now.open !== !!wall.open) {
+                ops.push({action: 'toggle_door', id: id});
+            }
+        }
+
+        const lightsBefore = byId(before.lights), lightsAfter = byId(after.lights);
+        for (const id of lightsAfter.keys()) {
+            if (!lightsBefore.has(id)) ops.push({action: 'delete_light', id: id});
+        }
+        for (const [id, light] of lightsBefore) {
+            const now = lightsAfter.get(id);
+            if (!now) {
+                ops.push({action: 'add_light', restore_id: id,
+                          x: light.x, y: light.y, radius: light.radius,
+                          color: light.color, intensity: light.intensity,
+                          visible_to_players: light.visible_to_players !== false});
+            } else if (now.radius !== light.radius || now.color !== light.color
+                       || now.intensity !== light.intensity
+                       || now.visible_to_players !== light.visible_to_players) {
+                ops.push({action: 'update_light', id: id, radius: light.radius, color: light.color,
+                          intensity: light.intensity,
+                          visible_to_players: light.visible_to_players !== false});
+            }
+        }
+
+        const templatesBefore = byId(before.templates), templatesAfter = byId(after.templates);
+        for (const id of templatesAfter.keys()) {
+            if (!templatesBefore.has(id)) ops.push({action: 'delete_template', id: id});
+        }
+        for (const [id, item] of templatesBefore) {
+            if (templatesAfter.has(id)) continue;
+            const restore = {action: 'add_template', restore_id: id,
+                             kind: item.kind, x1: item.x1, y1: item.y1,
+                             x2: item.x2, y2: item.y2, radius: item.radius, width: item.width,
+                             visible_to_players: item.visible_to_players !== false};
+            if (item.source_token_id) restore.source_token_id = item.source_token_id;
+            ops.push(restore);
+        }
+
+        const revealedBefore = new Set(before.revealed), revealedAfter = new Set(after.revealed);
+        const toHide = [...revealedAfter].filter(cell => !revealedBefore.has(cell));
+        const toReveal = [...revealedBefore].filter(cell => !revealedAfter.has(cell));
+        if (toHide.length) ops.push({action: 'fog_region', mode: 'hide', cells: toHide});
+        if (toReveal.length) ops.push({action: 'fog_region', mode: 'reveal', cells: toReveal});
+
+        // Terrain is per CELL, not per layer: repainting a room can strip cells
+        // out of another substance, so the inverse is "put each changed square
+        // back to whatever owned it before" -- including nothing.
+        const ownersBefore = terrainOwners(before), ownersAfter = terrainOwners(after);
+        const touched = new Set([...ownersBefore.keys(), ...ownersAfter.keys()]);
+        const restoreByKind = new Map();
+        const toDrain = [];
+        for (const cell of touched) {
+            const was = ownersBefore.get(cell) || null;
+            if (was === (ownersAfter.get(cell) || null)) continue;
+            if (was === null) { toDrain.push(cell); continue; }
+            if (!restoreByKind.has(was)) restoreByKind.set(was, []);
+            restoreByKind.get(was).push(cell);
+        }
+        // Drain first: repainting a cell already claims it away from other
+        // kinds, but a cell that should end up EMPTY has to be cleared
+        // explicitly or it keeps whatever the forward action gave it.
+        if (toDrain.length) ops.push({action: 'paint_terrain', mode: 'clear', cells: toDrain});
+        for (const [kind, cells] of restoreByKind) {
+            ops.push({action: 'paint_terrain', mode: 'paint', kind: kind, cells: cells});
+        }
+        return ops;
+    }
+
+    const UNDO_LABELS = {
+        add_wall: 'wall', add_walls: 'wall run', toggle_door: 'door', delete_wall: 'erased wall',
+        add_light: 'light', update_light: 'light change', delete_light: 'erased light',
+        fog_reset: 'fog reset', add_template: 'template', delete_template: 'erased template',
+        clear_templates: 'cleared templates', clear_terrain: 'drained terrain'
+    };
+
+    function describeAction(body) {
+        if (body.action === 'fog_region') return body.mode === 'hide' ? 'hidden area' : 'revealed area';
+        if (body.action === 'paint_terrain') {
+            return body.mode === 'clear' ? 'drained squares' : ('flooded ' + body.kind);
+        }
+        return UNDO_LABELS[body.action] || body.action;
+    }
+
+    function pushUndo(label, ops) {
+        if (!ops.length) return;
+        undoStack.push({label: label, ops: ops});
+        if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+        updateUndoButton();
+    }
+
     function mapElementAction(body) {
+        const before = scene && !undoing ? undoSnapshot(scene) : null;
         return request('/api/scenes/' + encodeURIComponent(sceneId) + '/elements', {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
             body: JSON.stringify(body)
+        }).then(function (data) {
+            if (before && data && data.scene) {
+                pushUndo(describeAction(body), inverseOps(before, undoSnapshot(data.scene)));
+            }
+            return data;
         });
     }
 
@@ -2297,9 +2445,12 @@
         if (token.x === finished.fromX && token.y === finished.fromY) return;
         try {
             const data = await patchToken(token.id, {x: token.x, y: token.y});
-            movementHistory.push({tokenId: token.id, x: finished.fromX, y: finished.fromY});
-            if (movementHistory.length > 30) movementHistory.shift();
-            updateUndoButton();
+            if (!undoing) {
+                undoStack.push({label: 'move' + (token.name ? ' ' + token.name : ''),
+                                move: {tokenId: token.id, x: finished.fromX, y: finished.fromY}});
+                if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+                updateUndoButton();
+            }
             applyScene(data.scene);
         } catch (error) {
             toast(error.message, true);
@@ -3002,22 +3153,44 @@
 
     function updateUndoButton() {
         const button = document.getElementById('map-undo');
-        if (button) button.disabled = movementHistory.length === 0;
+        if (!button) return;
+        const next = undoStack[undoStack.length - 1];
+        button.disabled = !next;
+        // Say what it will actually undo. The old label read "Undo move" no
+        // matter what the GM had just done, and Ctrl+Z fired after any action
+        // -- so painting lava on the wrong room and pressing it silently moved
+        // a token back instead.
+        button.textContent = next ? 'Undo ' + next.label : 'Undo';
     }
 
-    async function undoMovement() {
-        const move = movementHistory.pop();
+    async function undoLast() {
+        const entry = undoStack.pop();
         updateUndoButton();
-        if (!move) return;
+        if (!entry) return;
+        undoing = true;
         try {
-            const data = await patchToken(move.tokenId, {x: move.x, y: move.y});
-            selectedId = move.tokenId;
-            applyScene(data.scene);
-            toast('Movement undone.');
+            if (entry.move) {
+                const data = await patchToken(entry.move.tokenId, {x: entry.move.x, y: entry.move.y});
+                selectedId = entry.move.tokenId;
+                applyScene(data.scene);
+            } else {
+                let data = null;
+                for (const op of entry.ops) data = await mapElementAction(op);
+                if (data && data.scene) applyScene(data.scene);
+            }
+            toast('Undid ' + entry.label + '.');
         } catch (error) {
-            movementHistory.push(move);
+            // Refuse honestly rather than half-apply. Restoring an erased wall
+            // mints a new id, so once one step of an inverse fails the entries
+            // beneath it are describing a scene that no longer exists -- and
+            // silently applying those would move things the GM never touched.
+            undoStack.length = 0;
             updateUndoButton();
-            toast(error.message, true);
+            toast('Could not undo ' + entry.label + ': ' + error.message
+                  + '. Undo history cleared.', true);
+        } finally {
+            undoing = false;
+            updateUndoButton();
         }
     }
 
@@ -3065,7 +3238,7 @@
     document.getElementById('map-zoom-out').addEventListener('click', () => setZoom(zoom / 1.15));
     document.getElementById('map-zoom-in').addEventListener('click', () => setZoom(zoom * 1.15));
     document.getElementById('map-fit').addEventListener('click', fitMap);
-    document.getElementById('map-undo').addEventListener('click', undoMovement);
+    document.getElementById('map-undo').addEventListener('click', undoLast);
     viewport.addEventListener('wheel', function (event) {
         event.preventDefault();
         const rect = viewport.getBoundingClientRect();
@@ -3077,7 +3250,7 @@
         if ((tag === 'input' || tag === 'select' || tag === 'textarea') || !scene) return;
         if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
             event.preventDefault();
-            undoMovement();
+            undoLast();
         }
         if (event.key === 'Escape') {
             if (wallChain.length) commitWallChain(activeTool);
