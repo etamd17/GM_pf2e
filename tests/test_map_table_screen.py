@@ -112,8 +112,12 @@ def test_the_table_screen_marks_itself_on_the_page():
 
 def test_nameplates_are_scaled_for_the_room():
     body = _JS[_JS.index('if (token.show_nameplate !== false) {'):]
-    assert "isTableView() ? '700 22px' : '700 13px'" in body[:700], (
+    # Stage 7c routed this through tableType(), which is the same 13 -> 22 the
+    # nameplate always used -- but now the health bar and condition text scale
+    # with it instead of staying pinned at laptop size.
+    assert "tableType(13)" in body[:700], (
         'the table is read from several feet away; the GM screen is not')
+    assert 'function tableType(px) { return isTableView() ? Math.round(px * 1.7) : px; }' in _JS
 
 
 def test_the_turn_indicator_is_table_only():

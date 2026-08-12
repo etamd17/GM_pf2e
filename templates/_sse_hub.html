@@ -133,7 +133,10 @@
         };
         // Escape hatch for diagnostics / a forced reconnect.
         window.__appSSE = {
-            isConnected: function () { return !!es; },
+            // OPEN, not merely constructed. Between `new EventSource` and
+            // onopen the socket exists but carries nothing, and the map's live
+            // indicator reads this to decide whether to claim it is in sync.
+            isConnected: function () { return !!es && es.readyState === 1; },
             reconnectNow: function () { try { if (es) es.close(); } catch (e) {} es = null; backoff = 2000; connect(); }
         };
 

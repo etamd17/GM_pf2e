@@ -64,7 +64,11 @@
         el.classList.toggle('is-error', !!error);
         el.classList.add('is-visible');
         clearTimeout(toastTimer);
-        toastTimer = setTimeout(() => el.classList.remove('is-visible'), 2600);
+        // A failure gets longer than a success. Both used to vanish on the same
+        // 2.6 seconds, so an error that landed while the GM was looking at the
+        // map was simply gone -- and the only difference between "saved" and
+        // "that did not work" was a border colour.
+        toastTimer = setTimeout(() => el.classList.remove('is-visible'), error ? 7000 : 2600);
     }
 
     async function request(url, options) {
@@ -1620,12 +1624,25 @@
         ctx.lineWidth = token.id === selectedId ? 4 : 3;
         ctx.stroke();
 
+        // Party members get a second, inset ring. Faction was carried by fill
+        // colour alone -- #4f8a62 against #a84b45, green against red, which is
+        // the one axis a red-green colourblind viewer cannot use at all. It
+        // marks the PCs rather than the NPCs because there are four of them and
+        // a screen full of monsters, so the map stays quiet.
+        if (token.is_pc) {
+            ctx.beginPath();
+            ctx.arc(x, y, Math.max(2, radius - 6), 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(248,240,214,.9)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+
         ctx.textAlign = 'center';
         if (token.show_nameplate !== false) {
             // The table screen is read from several feet away, so names and the
             // health bar below are scaled up there. On the GM's own screen the
             // smaller type keeps a crowded fight legible.
-            ctx.font = (isTableView() ? '700 22px' : '700 13px') + ' ' + uiFont();
+            ctx.font = '700 ' + tableType(13) + 'px ' + uiFont();
             ctx.textBaseline = 'bottom';
             ctx.lineWidth = 4;
             ctx.strokeStyle = 'rgba(0,0,0,.8)';
@@ -1638,32 +1655,47 @@
         // health the party shares). Players get no NPC numbers at all -- the
         // server strips them -- so fall back to the same coarse Wounded/Dead
         // signal the tracker gives them rather than showing nothing.
+        // The nameplate above was the ONLY thing the table view scaled, despite
+        // its comment claiming the health bar came with it. So the room could
+        // read who a token was but not that it was Frightened or Prone -- which
+        // is the entire reason conditions are painted under the token instead
+        // of left in the sidebar. Everything below the token scales together.
         const barWidth = radius * 1.7;
         const barLeft = x - barWidth / 2;
         const barTop = y + radius + 6;
+        const barHeight = tableType(5);
         if (Number(live.max_hp) > 0) {
             const pct = Math.max(0, Math.min(1, Number(live.current_hp) / Number(live.max_hp)));
             ctx.fillStyle = 'rgba(0,0,0,.75)';
-            ctx.fillRect(barLeft - 1, barTop - 1, barWidth + 2, 7);
+            ctx.fillRect(barLeft - 1, barTop - 1, barWidth + 2, barHeight + 2);
             ctx.fillStyle = pct > .5 ? '#58b37a' : pct > .25 ? '#d6a24d' : '#cf554d';
-            ctx.fillRect(barLeft, barTop, barWidth * pct, 5);
+            ctx.fillRect(barLeft, barTop, barWidth * pct, barHeight);
         } else if (live.hp_status) {
             const dead = live.hp_status === 'Dead';
             ctx.fillStyle = 'rgba(0,0,0,.75)';
-            ctx.fillRect(barLeft - 1, barTop - 1, barWidth + 2, 7);
+            ctx.fillRect(barLeft - 1, barTop - 1, barWidth + 2, barHeight + 2);
             ctx.fillStyle = dead ? '#cf554d' : '#d6a24d';
-            ctx.fillRect(barLeft, barTop, dead ? barWidth : barWidth * .5, 5);
+            ctx.fillRect(barLeft, barTop, dead ? barWidth : barWidth * .5, barHeight);
         }
         const conditions = Object.keys(live.conditions || {});
         if (conditions.length) {
-            const text = conditions.slice(0, 3).map(k => k.replace(/_/g, ' ')).join(' / ');
-            ctx.font = '600 10px ' + uiFont();
+            // Stacked rather than joined by ' / ' on the table: three condition
+            // names at 17px on one line runs wider than the token and collides
+            // with whatever is beside it.
+            const names = conditions.slice(0, 3).map(k => k.replace(/_/g, ' '));
+            const size = tableType(10);
+            ctx.font = '600 ' + size + 'px ' + uiFont();
             ctx.textBaseline = 'top';
-            ctx.strokeStyle = 'rgba(0,0,0,.85)';
             ctx.lineWidth = 3;
-            ctx.strokeText(text, x, y + radius + 15);
-            ctx.fillStyle = '#f3c6a7';
-            ctx.fillText(text, x, y + radius + 15);
+            const lines = isTableView() ? names : [names.join(' / ')];
+            let lineTop = y + radius + 9 + barHeight + 1;
+            for (const line of lines) {
+                ctx.strokeStyle = 'rgba(0,0,0,.85)';
+                ctx.strokeText(line, x, lineTop);
+                ctx.fillStyle = '#f3c6a7';
+                ctx.fillText(line, x, lineTop);
+                lineTop += size + 2;
+            }
         }
         if (!isTableView() && token.visible_to_players === false) {
             ctx.setLineDash([5, 4]);
@@ -1726,6 +1758,10 @@
     // still starts in 'gm' and only previews on request.
     let viewMode = (cfg.tableView || !cfg.isGm) ? 'table' : 'gm';
     function isTableView() { return viewMode === 'table'; }
+
+    // One place to scale canvas type for the room. 13 -> 22 is the ratio the
+    // nameplate already used, so nothing that was tuned by eye moves.
+    function tableType(px) { return isTableView() ? Math.round(px * 1.7) : px; }
 
     // Is the GM sidebar actually in the DOM?
     //
@@ -3275,6 +3311,26 @@
     if (document.fonts && document.fonts.ready) {
         document.fonts.ready.then(function () { cachedUiFont = ''; draw(); });
     }
+    // "Live sync" was a green dot with no JS behind it at all -- permanently
+    // reassuring, including while the stream was dead, which is worse than
+    // having no indicator. There is no 'disconnected' event to listen for (the
+    // hub nulls its socket and retries on a backoff), so the drop is noticed by
+    // asking. Two seconds is far below the cost of anything else on this page.
+    (function watchLiveSync() {
+        const wrap = document.getElementById('map-live');
+        const label = document.getElementById('map-live-label');
+        if (!wrap || !label) return;
+        let wasLive = true;
+        function paint() {
+            const live = !window.__appSSE || window.__appSSE.isConnected();
+            if (live === wasLive) return;
+            wasLive = live;
+            wrap.classList.toggle('is-dropped', !live);
+            label.textContent = live ? 'Live sync' : 'Reconnecting...';
+        }
+        paint();
+        setInterval(paint, 2000);
+    })();
     if (window.appSSE) {
         window.appSSE('scene_beacon', function (event) {
             try { receiveBeacon(JSON.parse(event.data)); } catch (_) {}
