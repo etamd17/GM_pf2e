@@ -286,3 +286,28 @@ def test_erase_no_longer_looks_like_ruler():
     """It removes a wall, door, light or template in one click with no undo."""
     assert 'map-tool--danger' in _HTML
     assert '.map-tool--danger' in _CSS
+
+
+# --- the TV survives a deploy -----------------------------------------------
+
+def test_the_table_screen_self_reloads_on_a_new_deploy():
+    """Railway auto-deploys main, so this happens mid-session. The hub never
+    auto-reloads an interactive page -- a GM mid-turn must not be yanked -- but
+    a passive screen has no operator, and /map/table was getting a "New version"
+    bar on the TV that nobody in the room could click."""
+    hub = open(os.path.join(_ROOT, 'templates', '_sse_hub.html'), encoding='utf-8').read()
+    block = hub[hub.index('function showUpdateToast()'):]
+    block = block[:block.index('function mount()')]
+    assert "audience') === 'table'" in block, 'the original passive screen still counts'
+    assert "querySelector('.map-page.is-table-screen')" in block
+    assert 'location.reload()' in block
+
+
+def test_the_gms_own_window_is_not_treated_as_passive():
+    """The whole point of the toast is that an interactive page asks first."""
+    hub = open(os.path.join(_ROOT, 'templates', '_sse_hub.html'), encoding='utf-8').read()
+    block = hub[hub.index('function showUpdateToast()'):]
+    block = block[:block.index('function mount()')]
+    assert 'is-table-screen' in block and '.map-page' in block, (
+        'the marker must be the TABLE view class, not the map page in general')
+    assert "querySelector('.map-page')" not in block

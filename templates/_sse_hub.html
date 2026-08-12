@@ -86,7 +86,14 @@
             if (_updateShown) return;
             _updateShown = true;
             try {
-                if (new URLSearchParams(location.search).get('audience') === 'table') {
+                // Two passive screens now: anything opting in with
+                // ?audience=table, and the map's own table view at /map/table,
+                // which is chrome-free and driven from the GM's laptop. It has
+                // no operator either, so without this a deploy left a "New
+                // version" bar on the TV that nobody in the room could click.
+                var passive = new URLSearchParams(location.search).get('audience') === 'table'
+                    || !!document.querySelector('.map-page.is-table-screen');
+                if (passive) {
                     setTimeout(function () { location.reload(); }, 4000);
                     return;
                 }

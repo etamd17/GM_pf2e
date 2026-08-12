@@ -33,18 +33,20 @@ python tools/check_templates.py   # Jinja parse check (CI runs this) — run aft
   the site only keeps a read-only story-thread view + a manual session recap). Note this is NOT the
   same thing as the Session Operations plugin, which runs the opposite direction -- Obsidian drives
   the site, the site never hosts notes. See the Obsidian bullet under Architecture.
-- **The tactical map is BACK IN SCOPE and SHIPPED.** This line used to say the VTT map was removed
-  and must not be rebuilt. That was true until 2026-08-06 and is now badly wrong: `/map` is live,
-  GM-only, at roughly 2,500 lines across `core/scenes.py`, `services/scene_sync.py`,
-  `static/js/map.js`, `templates/map.html` and ~250 tests. It went through a full feature audit
-  (`docs/map/AUDIT.md`) and seven build stages. Anything claiming the map is gone is stale.
+- **The tactical map is BACK IN SCOPE, SHIPPED, and AUDITED.** This line used to say the VTT map
+  was removed and must not be rebuilt. That was true until 2026-08-06 and is now badly wrong:
+  `/map` and `/map/table` are live and GM-only, at ~4,300 lines across `core/scenes.py`,
+  `services/scene_sync.py`, `static/js/map.js`, `templates/map.html`, `static/css/map.css` and a
+  16-route block in `app.py`, guarded by **380 tests** across 20 files. It went through a full
+  feature audit and then a separate UI audit, both recorded in `docs/map/AUDIT.md`, and every
+  build stage from 1 through 7c is merged. Anything claiming the map is gone is stale.
 
 ## Architecture
 
 - **`app.py` is a ~22k-line monolith** — all Flask routes plus the `Character` (PF2e) and `Monster` classes. Live combat state is held in **process globals** (`ACTIVE_ENCOUNTER`, `ROUND_NUMBER`, `TURN_INDEX`, `PARTY_LIBRARY`, …), flushed to `server_state.json` (`_persist_encounter_state`) and re-hydrated on boot. There is **one live campaign slot** at a time; `load_campaign(cid)` rebinds the globals.
 - **Server-rendered Jinja + vanilla JS.** No build step, no SPA framework.
 - **SSE** (`/api/events`): every page subscribes through the shared hub `window.appSSE(eventName, handler)` in `templates/_sse_hub.html` — **never** `new EventSource('/api/events')` directly (one socket per tab; the hub multiplexes + reconnects). Broadcast from the server with `sse_broadcast(event, data, player_filter=...)`: `data` goes to GMs, and `player_filter(copy)` returns the player-facing payload (or `None` to drop it for players entirely) — computed once and shared by all player subscribers.
-  - **`?audience=table` is NOT a server-side feature.** Its only use is client-side in `_sse_hub.html`: a passive table screen has no operator, so it self-reloads on a new deploy instead of showing the "New version" toast. There is no audience concept in `app.py` (the one hit is a comment). **A shared-table frame now EXISTS** — `/map/table` (map audit stage 6b) — but it is a view mode of `map.html`, not a generic frame, and it does not use `?audience=table`. The Campaign Hub's Stage, which was going to build a generic one, is still cancelled.
+  - **`?audience=table` is NOT a server-side feature.** Its only use is client-side in `_sse_hub.html`: a passive table screen has no operator, so it self-reloads on a new deploy instead of showing the "New version" toast. There is no audience concept in `app.py` (the one hit is a comment). **A shared-table frame now EXISTS** — `/map/table` (map audit stage 6b) — but it is a view mode of `map.html`, not a generic frame. It does not use `?audience=table`; instead the hub's deploy self-reload now recognises *two* passive screens, that query param and `.map-page.is-table-screen`, because the table view has no operator either and a deploy was leaving a "New version" bar on the TV that nobody in the room could click. The Campaign Hub's Stage, which was going to build a generic one, is still cancelled.
 - **The Chronicle has TWO publishing lanes**, and they share storage with nothing.
   - **Vault lane** (original): `tools/chronicle_build.py` runs on the GM's machine, derives a spoiler-safe player vault from the Obsidian GM vault, hard-aborts on a surviving `[!danger]`/`[!secret]`/`[!gm]` marker, zips it and POSTs to `/api/chronicle/publish`. Whole-tree replace via `content/<hash>` + `current`/`previous` symlinks (`_chronicle_swap`).
   - **Doc lane** (`core/chronicle_docs.py`): the GM uploads a `.docx`/`.md`/`.txt` at `/chronicle/manage`, previews it, then toggles `published`. Stored at `chronicle/docs/` — a **sibling** of `content/`, never inside it, because `_chronicle_swap`'s prune deletes every content dir it doesn't point at. No symlinks, no rotation; the toggle *is* the rollback.
@@ -119,17 +121,38 @@ name from the open note. Not yet done: **the plugin has never run a real session
 holds only `_Unassigned/`, so the session digest and `audio_sources` frontmatter are tested but have
 never executed against live play.
 
-**IN FLIGHT: the tactical-map feature audit. Start at `docs/map/AUDIT.md`.** The map is now on
-trunk, GM-only (PR #111, `d139688f`), and the next step is a paused, question-driven audit of the
-whole tool. That doc holds the settled decisions, ~23 findings verified against a running server,
-and seven rounds of questions written ready to ask. It exists because Claude's per-project memory
-does not travel between machines — the doc is the source of truth, not memory.
+**The tactical-map audit is DONE and every stage is merged. Start at `docs/map/AUDIT.md`.** That
+doc is the source of truth — it exists because Claude's per-project memory does not travel between
+machines. It now holds three things: the settled decisions, the original feature-audit findings and
+seven rounds of answered questions, and a **stage-7 UI audit** with a finding-by-finding build
+status. Stages 1–6e built the tool; 7a–7c were the design pass.
 
-Three things are already decided and must not be re-litigated: the map is **GM-only** (no
-player-facing route; `/api/scenes` is gated at the prefix), the eventual audience is **one shared
-screen at the table** rather than per-player devices, and **GM workflow** is the first priority.
-Note the shared table screen revives what this file records below as the cancelled Campaign Hub
-Stage — correct that entry when the work starts.
+Three things are decided and must not be re-litigated: the map is **GM-only** (no player-facing
+route; `/api/scenes` is gated at the prefix), the audience is **one shared screen at the table**
+rather than per-player devices, and **GM workflow** is the first priority.
+
+Four map-specific rules worth knowing before touching it:
+
+- **Animation is confined to the table screen.** Stage 6a made rendering event-driven — one frame,
+  only when something changes — and `animationsWanted()` keeps the GM's working view at that cost.
+  The one exception is a ping, which animates on both and stops when the rings finish.
+- **Nothing animated may enter the vision-mask cache signature.** Torch flicker, terrain and the
+  lava glow all move the GLOW only; a moving carve radius either serves a stale mask or misses the
+  cache every frame and drags a ~138k-segment raycast back into the frame budget.
+- **Canvas text must use `uiFont()`, never a hardcoded family.** Every `ctx.font` used to say
+  `system-ui` — the fallback inside `--font-ui` — so the one typeface the players read all session
+  was the one the two-face rule forbids. It hid in JS, which is why CSS font sweeps missed it.
+- **Undo is an inverse, not a restore**, same rule as the Obsidian pane: the stack holds ordinary
+  map actions replayed through the same endpoints, computed by diffing the scene before and after.
+  Restores reuse the original id via a guarded `restore_id`; without that, undoing one erase ended
+  the whole history. It is recorded inside `mapElementAction`, so a new action inherits undo for
+  free — add one elsewhere and it silently will not have one.
+
+**Verification note.** `requestAnimationFrame` does not fire while `document.hidden` is true, and a
+headless preview pane is permanently hidden, so the canvas never renders there on its own. Call
+`window.__mapRenderNow()` to force one frame, or `window.__mapRenderNow(3000)` to render at a
+chosen point on the animation clock — without an argument every forced frame is frame zero and
+nothing animated can be told apart from something merely present.
 
 **Do NOT work on these — deferred by the user:**
 - Player-sheet **inventory reorg** ("hold on inventory scope"). The hold is on SCOPE, not on the
@@ -148,10 +171,12 @@ Stage — correct that entry when the work starts.
 
 **Campaign Hub / the Stage was CANCELLED (2026-08-09)** and stays cancelled. The map's shared
 table screen (`/map/table`) is NOT that project reopening: it is one page's second view mode, GM-
-authenticated, showing one scene. Do not treat it as a mandate for a generic shared-table frame.
-Do not resurrect the Hub, and do not treat
-`api_stage_encounter()` in app.py as related (it is an unrelated pre-existing route for staging an
-encounter).
+authenticated, showing one scene. It is now chrome-free and fills the display (stage 7a stripped
+the nav, header, toolstrip and the base-template wrappers from it), and the GM can point at it —
+a ping and the ruler are broadcast to it as ephemeral `scene_beacon` frames that are never stored.
+None of that makes it a generic frame. Do not treat it as a mandate for one, do not resurrect the
+Hub, and do not treat `api_stage_encounter()` in app.py as related (it is an unrelated pre-existing
+route for staging an encounter).
 
 **Player-vault ingestion is SHIPPED, not parked.** It used to be listed here, citing a plan file
 that has never existed in git history. The scoping commit that deferred it (`686a2a76`, 14:18) was
