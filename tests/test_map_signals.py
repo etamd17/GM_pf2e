@@ -128,3 +128,38 @@ def test_the_cue_marks_the_party_not_the_monsters():
     keeps the map quiet."""
     assert 'if (token.is_pc) {' in _JS
     assert 'if (!token.is_pc) {' not in _JS
+
+
+# --- the map stops inventing its own gold and its own radius scale ----------
+
+def test_no_raw_gilt_triplet_survives_in_map_css():
+    """`rgba(224,182,90,a)` was the BASE value of --gilt-200, but the live token
+    is #e8b66a under system-pf2e and #9fd2f2 under system-cosmere. So a primary
+    button stayed gold on a Cosmere map while the active tool beside it turned
+    blue -- in the same toolstrip."""
+    assert '224,182,90' not in _CSS.replace(' ', '')
+    assert 'color-mix(in srgb, var(--gilt-200)' in _CSS
+
+
+def test_radii_come_from_the_shared_scale():
+    """Six radii in one file, none of them the two the rest of the app uses."""
+    import re
+    raw = re.findall(r'border-radius:\s*(\d+)px', _CSS)
+    assert not raw, 'pixel radii left in map.css: %s' % raw
+    assert 'var(--r-sm)' in _CSS and 'var(--r-md)' in _CSS
+
+
+def test_the_circle_and_the_squared_table_screen_are_left_alone():
+    """--r-sm/--r-md are a rounding scale; a dot is a circle and the table
+    screen is deliberately squared off to the edges of the TV."""
+    assert 'border-radius:50%' in _CSS.replace(' ', '')
+    assert 'border-radius:0' in _CSS.replace(' ', '')
+
+
+def test_the_maps_own_reds_and_green_are_still_its_own():
+    """Recorded, not fixed. The map's #d35d53 family and #58b37a sit 15-98 RGB
+    away from --ruby-* and --success, so snapping them is a palette decision
+    rather than a cleanup -- and --success (#4a7c2a) is a dark olive that would
+    not read as a live-status dot on this background."""
+    for own in ('#d35d53', '#58b37a'):
+        assert own in _CSS
