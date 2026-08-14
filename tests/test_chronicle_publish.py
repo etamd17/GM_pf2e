@@ -127,14 +127,14 @@ def test_validate_manifest_rejects_unsafe_slug():
     import app as A
     ok, err = A._chronicle_validate_manifest({
         "schema_version": 1,
-        "pages": [{"slug": "Bad Slug", "source": "content/x.md"}],
+        "pages": [{"slug": "Bad Slug", "section": "lore", "source": "content/x.md"}],
     })
     assert not ok
     assert 'slug' in err.lower()
-    # A safe slug with a valid source passes the manifest-shape check.
+    # A safe slug with a valid source and section passes the shape check.
     ok2, err2 = A._chronicle_validate_manifest({
         "schema_version": 1,
-        "pages": [{"slug": "good-slug", "source": "content/x.md"}],
+        "pages": [{"slug": "good-slug", "section": "lore", "source": "content/x.md"}],
     })
     assert ok2, err2
 
@@ -172,12 +172,17 @@ def test_build_manifest_output_passes_real_validator():
 
 def test_publish_happy_path_and_leak_and_zipslip():
     zb = _zip_dir_bytes(_FIX)
+    # Both variants below carry a real `section`. The manifest validator runs
+    # BEFORE the leak scan and before extraction, so a section-less page would
+    # 400 on the section and never reach the check each case is actually here
+    # to prove.
     # leaky variant: same manifest, one page carrying a forbidden marker
     lbuf = io.BytesIO()
     with zipfile.ZipFile(lbuf, 'w') as z:
         z.writestr('manifest.json', json.dumps({
             "schema_version": 1, "session_number": 3,
-            "pages": [{"slug": "leak", "source": "content/leak.md", "recipients": "all"}]}))
+            "pages": [{"slug": "leak", "section": "lore", "source": "content/leak.md",
+                       "recipients": "all"}]}))
         z.writestr('content/leak.md', '> [!danger] the mayor is the lich\n')
     lbuf.seek(0)
     lb = lbuf.read()
@@ -185,7 +190,8 @@ def test_publish_happy_path_and_leak_and_zipslip():
     sbuf = io.BytesIO()
     with zipfile.ZipFile(sbuf, 'w') as z:
         z.writestr('manifest.json', json.dumps({
-            "schema_version": 1, "pages": [{"slug": "x", "source": "content/x.md", "recipients": "all"}]}))
+            "schema_version": 1, "pages": [{"slug": "x", "section": "lore",
+                                            "source": "content/x.md", "recipients": "all"}]}))
         z.writestr('../evil.md', 'pwned')
     sbuf.seek(0)
     sb = sbuf.read()

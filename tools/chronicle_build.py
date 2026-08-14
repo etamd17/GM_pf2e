@@ -99,6 +99,13 @@ def parse_note(path):
 
 _SLUG_OK = re.compile(r"^[a-z0-9][a-z0-9-]{0,80}$")
 
+# The uploaded-documents namespace, owned by the doc lane. Mirrors
+# core.chronicle_docs.SLUG_PREFIX, which this module deliberately does not
+# import -- it is stdlib-only so it can run standalone against the GM's vault
+# on a machine that never installs the app's dependencies.
+# tests/test_chronicle_manifest_sections.py fails the build if the two drift.
+_RESERVED_SLUG_PREFIX = "d-"
+
 
 def slugify(title):
     """Turn a note title into a PR1-safe slug.
@@ -108,12 +115,22 @@ def slugify(title):
     PR1's manifest validation enforces (^[a-z0-9][a-z0-9-]{0,80}$). Falls
     back to "page" for empty, None, or all-punctuation input so a slug is
     always produced.
+
+    A result that would land in the uploaded-documents namespace is pushed
+    back out with that same "page" idiom. A note titled "D. Story So Far"
+    slugifies to 'd-story-so-far' quite honestly, and the publish endpoint now
+    refuses that prefix -- so without this, a perfectly legal note title would
+    abort the GM's whole build at the door over a namespace they have no
+    reason to know about. Rare by construction: only titles whose first word
+    reduces to a bare "d".
     """
     s = (title or "").lower()
     s = re.sub(r"[^a-z0-9]+", "-", s)
     s = s.strip("-")[:81].strip("-")
     if not s or not _SLUG_OK.match(s):
         return "page"
+    if s.startswith(_RESERVED_SLUG_PREFIX):
+        s = ("page-" + s)[:81].strip("-")
     return s
 
 

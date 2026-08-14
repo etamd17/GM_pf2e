@@ -12426,12 +12426,34 @@ _CHRONICLE_SLUG_RE = re.compile(r'^[a-z0-9][a-z0-9-]{0,80}$')
 
 def _chronicle_validate_manifest(manifest):
     """Return (ok, error). Enforce the schema_version handshake, that pages[]
-    is a non-empty list of {slug, source} entries (the render contract), and
-    that every slug is already filesystem/route-safe (Reconciliation Contract
-    §6) -- NOT just non-empty. A slug like 'Bad Slug' would still write a
-    fragment (_chronicle_safe_slug would mangle it), but the reading routes
-    key on the raw manifest slug, so an unsafe slug here would publish a page
-    the read side can never find."""
+    is a non-empty list of {slug, section, source} entries (the render
+    contract), that every slug is already filesystem/route-safe
+    (Reconciliation Contract §6) -- NOT just non-empty -- and that neither the
+    slug nor the section can strand a page where no reader will ever reach it.
+
+    A slug like 'Bad Slug' would still write a fragment (_chronicle_safe_slug
+    would mangle it), but the reading routes key on the raw manifest slug, so
+    an unsafe slug here would publish a page the read side can never find.
+
+    The section and reserved-prefix checks exist because THIS is the only door
+    bytes from outside the process come through, and it was the only one
+    refusing nothing. tools/chronicle_build.py rejects a bad section on the
+    GM's machine (_SECTIONS) and the doc lane rejects one at upload, while a
+    hand-assembled manifest POSTed here could install either of:
+
+      * a page whose section reaches no nav tab -- invisible on every tab of
+        the Chronicle, yet still counted in the page total and still OWNING
+        its slug in _chronicle_vault_slugs(). That is how a Chronicle ends up
+        blocking a document upload with a page nobody can see, which took a
+        full code trace to diagnose once.
+      * a page inside the doc lane's reserved 'd-' namespace. _chronicle_
+        fragment resolves VAULT-FIRST, so that silently serves the vault's
+        page at an uploaded document's own URL, with no error anywhere and
+        nothing in the UI to undo it.
+
+    Both are refused with the offending value named, so the GM can fix the
+    note rather than bisect a manifest.
+    """
     if not isinstance(manifest, dict):
         return False, 'manifest.json missing or not a JSON object'
     if manifest.get('schema_version') != CHRONICLE_SCHEMA_VERSION:
@@ -12442,8 +12464,17 @@ def _chronicle_validate_manifest(manifest):
     for p in pages:
         if not isinstance(p, dict) or not p.get('slug') or not p.get('source'):
             return False, 'each page requires slug + source'
-        if not _CHRONICLE_SLUG_RE.match(str(p.get('slug'))):
+        slug = str(p.get('slug'))
+        if not _CHRONICLE_SLUG_RE.match(slug):
             return False, 'invalid slug: %r' % p.get('slug')
+        if slug.startswith(_chronicle_lib.SLUG_PREFIX):
+            return False, ('slug %r is reserved for uploaded documents -- rename '
+                           'the note so it does not slugify to %s...'
+                           % (slug, _chronicle_lib.SLUG_PREFIX))
+        if p.get('section') not in _chronicle_lib.VAULT_SECTIONS:
+            return False, ('unknown section %r for slug %r -- expected one of: %s'
+                           % (p.get('section'), slug,
+                              ', '.join(_chronicle_lib.VAULT_SECTIONS)))
     return True, None
 
 
@@ -13027,6 +13058,10 @@ def chronicle_doc_api(doc_id):
             return jsonify({'ok': True, 'deleted': True})
 
         data = request.get_json(silent=True) or {}
+        # One read of the vault manifest for the whole request: the publish
+        # gate, the rename's reserved set and the response all need it, and it
+        # cannot change underneath a single PATCH.
+        vault_slugs = _chronicle_vault_slugs()
         if 'published' in data:
             # Publish is gated on the GM having opened the preview at least
             # once. This lane has no automated spoiler strip -- the GM's own
@@ -13035,6 +13070,16 @@ def chronicle_doc_api(doc_id):
             if data['published'] and not entry.get('previewed_at'):
                 return jsonify({'ok': False, 'error':
                                 'preview this document before publishing it'}), 409
+            # Nor is publishing onto an address the vault already owns, which
+            # until now was refused only by a `disabled` attribute on the
+            # switch -- the rule held for the UI and not for the API.
+            # _chronicle_doc_pages drops a shadowed doc regardless, so this was
+            # a publish that published nothing. Unpublishing stays ungated:
+            # that is the escape hatch out of exactly this state.
+            if data['published'] and entry.get('slug') in vault_slugs:
+                return jsonify({'ok': False, 'error':
+                                'the address %s is held by a vault page -- rename '
+                                'this document first' % entry.get('slug')}), 409
             entry['published'] = bool(data['published'])
         if 'section' in data:
             if data['section'] not in _chronicle_lib.SECTIONS:
@@ -13058,10 +13103,19 @@ def chronicle_doc_api(doc_id):
             # URL players may have been given, and silently moving it turns a
             # shared link into a 404. A published doc keeps its slug and just
             # changes its display name.
-            if not entry.get('published'):
+            #
+            # The shadowed case is not a hole in that rule, it IS that rule: a
+            # shadowed address does not serve this document to anyone
+            # (_chronicle_fragment resolves vault-first), so there is no
+            # working link left to protect. Without the exception, a published
+            # document the vault later shadowed had no way out at all -- the
+            # toggle was disabled so it could not be unpublished, the address
+            # was frozen so it could not be moved, and the notice on screen
+            # told the GM to rename it.
+            if not entry.get('published') or entry.get('slug') in vault_slugs:
                 desired = _chronicle_lib.slugify_title(new_title)
                 new_slug = _chronicle_lib.unique_slug(index, desired, ignore_id=doc_id,
-                                                      reserved=_chronicle_vault_slugs())
+                                                      reserved=vault_slugs)
                 if new_slug != entry.get('slug'):
                     old_frag = _chronicle_doc_fragment_path(entry.get('slug'))
                     entry['slug'] = new_slug
@@ -13072,9 +13126,9 @@ def chronicle_doc_api(doc_id):
                         os.replace(old_frag, new_frag)
         entry['updated_at'] = time.strftime('%Y-%m-%dT%H:%M:%S')
         _chronicle_lib.save_index(docs_root, index)
-        # Recompute against the live vault so the caller learns immediately
-        # whether the rename actually cleared the collision.
-        shadowed = entry.get('slug') in _chronicle_vault_slugs()
+        # Recompute against the same vault read, after any rename, so the
+        # caller learns immediately whether it actually cleared the collision.
+        shadowed = entry.get('slug') in vault_slugs
 
     sse_broadcast('chronicle_update', {'doc_id': doc_id,
                                        'published': bool(entry.get('published'))})
