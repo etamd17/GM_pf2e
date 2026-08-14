@@ -12954,7 +12954,10 @@ def chronicle_docs_api():
                 return jsonify({'ok': False, 'error':
                                 'this campaign already has %d documents; delete one first'
                                 % _CHRONICLE_DOC_MAX_COUNT}), 400
-            slug = _chronicle_lib.unique_slug(index, _chronicle_lib.slugify_title(title))
+            # reserved: the live vault owns the unprefixed namespace, and a
+            # document that lands on one of its slugs can never be published.
+            slug = _chronicle_lib.unique_slug(index, _chronicle_lib.slugify_title(title),
+                                              reserved=_chronicle_vault_slugs())
             entry = _chronicle_lib.new_entry(
                 doc_id=_storage.new_id(), slug=slug, title=title, section=section,
                 original_filename=os.path.basename(upload.filename), source_ext=ext,
@@ -13035,7 +13038,8 @@ def chronicle_doc_api(doc_id):
             # changes its display name.
             if not entry.get('published'):
                 desired = _chronicle_lib.slugify_title(new_title)
-                new_slug = _chronicle_lib.unique_slug(index, desired, ignore_id=doc_id)
+                new_slug = _chronicle_lib.unique_slug(index, desired, ignore_id=doc_id,
+                                                      reserved=_chronicle_vault_slugs())
                 if new_slug != entry.get('slug'):
                     old_frag = _chronicle_doc_fragment_path(entry.get('slug'))
                     entry['slug'] = new_slug
