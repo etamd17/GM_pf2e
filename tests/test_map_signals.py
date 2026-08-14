@@ -241,3 +241,39 @@ def test_the_fog_cache_is_not_invalidated_by_every_token_move():
         'and a content signature decides whether the blur is actually redone')
     assert body.index('fogMaskFast === fast') < body.index('fogMaskKey === key'), (
         'the cheap key must be checked before the expensive one is built')
+
+
+# --- the one syscall gevent cannot yield around -----------------------------
+
+def test_the_shared_atomic_writer_can_skip_fsync():
+    """app._atomic_write_json has had this flag and the reasoning in its
+    docstring for a long time; core/storage's copy did not, so every caller
+    under core/ fsynced unconditionally."""
+    src = open(os.path.join(_ROOT, 'core', 'storage.py'), encoding='utf-8').read()
+    assert 'def atomic_write_json(path, obj, indent=2, fsync=True):' in src, (
+        'default True so every existing caller keeps the durability it had')
+    body = src[src.index('def atomic_write_json'):]
+    body = body[:body.index('\ndef ')]
+    assert 'if fsync:' in body and 'os.fsync' in body
+
+
+def test_the_hot_scene_write_skips_it_and_scene_creation_does_not():
+    """save_scene is the map's hottest path -- every token move, wall run, fog
+    reveal, terrain paint, light and undo step. Measured at 3.7 ms of blocking
+    fsync on a 16.5 KB scene, which freezes every player's SSE. Creating a scene
+    happens once, so it stays durable."""
+    src = open(os.path.join(_ROOT, 'core', 'scenes.py'), encoding='utf-8').read()
+    save = src[src.index('def save_scene('):src.index('def create_scene(')]
+    create = src[src.index('def create_scene('):]
+    create = create[:create.index('\ndef ')]
+    assert 'fsync=False' in save
+    assert 'fsync=False' not in create
+
+
+def test_accounts_and_campaigns_keep_their_fsync():
+    """Presentation state is re-derivable; a user record is not."""
+    for module in ('auth.py', 'campaigns.py'):
+        src = open(os.path.join(_ROOT, 'core', module), encoding='utf-8').read()
+        for line in src.splitlines():
+            if 'atomic_write_json(' in line:
+                assert 'fsync=False' not in line, '%s: %s' % (module, line.strip())
