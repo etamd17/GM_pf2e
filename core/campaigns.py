@@ -31,7 +31,13 @@ _CAMPAIGN_MEMO = '_campaign_memo'
 def get_campaign(cid):
     if not cid:
         return None
-    if has_request_context():
+    # Only a real (string) id is memoized. A malformed cid -- a list or dict
+    # from a crafted request -- has to fall straight through to the path below,
+    # which rejects it. Using it as a dict key raises TypeError and turns a
+    # clean rejection into a 500; that is exactly what
+    # test_malformed_campaign_id_types_are_rejected caught.
+    memoizable = isinstance(cid, str) and has_request_context()
+    if memoizable:
         memo = getattr(g, _CAMPAIGN_MEMO, None)
         if memo is None:
             memo = {}
@@ -39,14 +45,14 @@ def get_campaign(cid):
         if cid in memo:
             return memo[cid]
     doc = storage.load_json(storage.campaign_file(cid))
-    if has_request_context():
+    if memoizable:
         getattr(g, _CAMPAIGN_MEMO)[cid] = doc
     return doc
 
 
 def save_campaign(doc):
     storage.atomic_write_json(storage.campaign_file(doc['id']), doc)
-    if has_request_context():
+    if isinstance(doc.get('id'), str) and has_request_context():
         memo = getattr(g, _CAMPAIGN_MEMO, None)
         if memo is not None:
             memo[doc['id']] = doc
