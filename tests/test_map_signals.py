@@ -277,3 +277,47 @@ def test_accounts_and_campaigns_keep_their_fsync():
         for line in src.splitlines():
             if 'atomic_write_json(' in line:
                 assert 'fsync=False' not in line, '%s: %s' % (module, line.strip())
+
+
+# --- live-state frames stop refetching a scene nobody edited ----------------
+
+def test_live_state_frames_are_coalesced_into_one_refetch():
+    """pc_update, encounter_update and connected all mean "live state moved",
+    not "the scene changed" -- the scene arrives on its own scene_update. They
+    refetch because the map paints HP and conditions from the live projection.
+
+    One area effect on four targets emits four pc_update frames plus an
+    encounter_update. Uncoalesced that was six full scene fetches, on BOTH the
+    GM page and the TV, for a scene nobody edited -- on the single worker that
+    is also serving those same SSE streams."""
+    body = _JS[_JS.index('function refetchLiveState()'):]
+    body = body[:body.index('\n        }')]
+    assert 'if (liveRefetch) return;' in body, 'a burst must collapse to one fetch'
+    assert 'fetchScene();' in body
+
+    for event in ('pc_update', 'connected'):
+        handler = _JS[_JS.index("appSSE('%s'" % event):][:80]
+        assert 'refetchLiveState' in handler, event
+
+
+def test_the_picker_rebuild_is_not_on_the_turn_advance_path():
+    """refreshPickers parses every scene file on disk. It exists to notice a
+    combatant being added or renamed, which is rare and never urgent."""
+    body = _JS[_JS.index('function refreshPickersSoon()'):]
+    body = body[:body.index('\n        }')]
+    assert 'setTimeout(refreshPickers, 2000)' in body
+
+
+def test_the_campaign_memo_never_keys_on_a_malformed_id():
+    """A crafted request can send a list or dict as a campaign id. Those used to
+    fall through and be rejected cleanly; using one as a dict key raises
+    TypeError and turns that rejection into a 500.
+
+    Caught by test_malformed_campaign_id_types_are_rejected, which a narrower
+    test filter had not been running."""
+    src = open(os.path.join(_ROOT, 'core', 'campaigns.py'), encoding='utf-8').read()
+    body = src[src.index('def get_campaign(cid):'):]
+    body = body[:body.index('\ndef ')]
+    assert 'isinstance(cid, str)' in body, 'only a real string id may be memoized'
+    assert body.index('isinstance(cid, str)') < body.index('cid in memo'), (
+        'the type check has to happen before the dict lookup')

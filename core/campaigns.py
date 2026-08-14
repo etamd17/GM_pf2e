@@ -9,7 +9,7 @@ import os
 import time
 import functools
 
-from flask import session, request, jsonify, redirect, url_for, abort
+from flask import session, request, jsonify, redirect, url_for, abort, g, has_request_context
 
 from core import storage, auth
 
@@ -21,12 +21,41 @@ def _now():
 # --------------------------------------------------------------------------
 # CRUD
 # --------------------------------------------------------------------------
+# Per-REQUEST memo, same reasoning as core.auth._load_users: _is_gm() re-enters
+# _active_campaign_id() which re-reads the campaign doc, and _is_gm() itself runs
+# twice on every GM-gated request. Keyed by cid because one request can touch
+# more than one campaign.
+_CAMPAIGN_MEMO = '_campaign_memo'
+
+
 def get_campaign(cid):
-    return storage.load_json(storage.campaign_file(cid)) if cid else None
+    if not cid:
+        return None
+    # Only a real (string) id is memoized. A malformed cid -- a list or dict
+    # from a crafted request -- has to fall straight through to the path below,
+    # which rejects it. Using it as a dict key raises TypeError and turns a
+    # clean rejection into a 500; that is exactly what
+    # test_malformed_campaign_id_types_are_rejected caught.
+    memoizable = isinstance(cid, str) and has_request_context()
+    if memoizable:
+        memo = getattr(g, _CAMPAIGN_MEMO, None)
+        if memo is None:
+            memo = {}
+            setattr(g, _CAMPAIGN_MEMO, memo)
+        if cid in memo:
+            return memo[cid]
+    doc = storage.load_json(storage.campaign_file(cid))
+    if memoizable:
+        getattr(g, _CAMPAIGN_MEMO)[cid] = doc
+    return doc
 
 
 def save_campaign(doc):
     storage.atomic_write_json(storage.campaign_file(doc['id']), doc)
+    if isinstance(doc.get('id'), str) and has_request_context():
+        memo = getattr(g, _CAMPAIGN_MEMO, None)
+        if memo is not None:
+            memo[doc['id']] = doc
     return doc
 
 

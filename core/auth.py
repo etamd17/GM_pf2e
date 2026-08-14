@@ -18,10 +18,16 @@ import time
 import secrets
 import functools
 
-from flask import session, request, jsonify, redirect, url_for
+from flask import session, request, jsonify, redirect, url_for, g, has_request_context
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from core import storage
+
+# Key for the per-REQUEST users memo. Deliberately not a module-level cache:
+# scoping it to one request means a later request, or anything that writes the
+# file from outside, is still seen. Nothing inside a single request can
+# legitimately observe users.json changing underneath it.
+_USERS_MEMO = '_auth_users_memo'
 
 INVITES_FILE = os.path.join(storage.DATA_DIR, 'invites.json')
 REMEMBER_DAYS = 60
@@ -39,11 +45,35 @@ def _now():
 # Users
 # --------------------------------------------------------------------------
 def _load_users():
-    return storage.load_json(storage.USERS_FILE, default={'users': {}}) or {'users': {}}
+    """Read users.json, at most once per request.
+
+    _is_gm() alone used to cost four reads of this file plus two of the campaign
+    doc, because _account_mode() and current_user() each re-entered it and
+    _active_campaign_id() repeated the pair. It runs twice per gated request --
+    once in the check_gm_access before_request, once in @gm_required -- so a
+    single beacon POST read users.json ten times and campaign.json five, for
+    4.46 ms of which 97% was this. During a ruler drag that is 11 of those a
+    second on the one worker that also serves every player's SSE.
+
+    Callers mutate the returned dict in place and then save it, so handing back
+    the same object is what a re-read after the save would give them anyway.
+    """
+    if has_request_context():
+        cached = g.get(_USERS_MEMO) if hasattr(g, 'get') else getattr(g, _USERS_MEMO, None)
+        if cached is not None:
+            return cached
+    data = storage.load_json(storage.USERS_FILE, default={'users': {}}) or {'users': {}}
+    if has_request_context():
+        setattr(g, _USERS_MEMO, data)
+    return data
 
 
 def _save_users(data):
     storage.atomic_write_json(storage.USERS_FILE, data)
+    # Keep the memo pointing at what is now on disk, so a read later in the
+    # same request cannot serve the pre-write copy.
+    if has_request_context():
+        setattr(g, _USERS_MEMO, data)
 
 
 def get_user(user_id):
