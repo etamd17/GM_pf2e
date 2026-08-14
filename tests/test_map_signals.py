@@ -179,3 +179,47 @@ def test_the_gm_only_overlays_keep_their_working_colours():
     own stated scope. Left literal, deliberately."""
     doors = _JS[_JS.index("wall.open ? '#58b37a'"):][:200]
     assert "'#58b37a'" in doors and "'#d6a24d'" in doors
+
+
+# --- the toolstrip stops inverting interaction frequency ---------------------
+
+def test_the_tools_match_the_buttons_they_sit_beside():
+    """Tool switching is the map's highest-frequency action in a fight, and it
+    was the SMALLEST text and SHORTEST hit target on the page -- while .map-btn,
+    pressed far less often, was 11px and 34px."""
+    import re
+    tool = _CSS[_CSS.index('.map-tool {'):]
+    tool = tool[:tool.index('}')]
+    btn = _CSS[_CSS.index('.map-btn {'):]
+    btn = btn[:btn.index('}')]
+    assert 'min-height:34px' in tool and 'min-height:34px' in btn
+    assert '700 11px/1 var(--font-ui)' in tool and '700 11px/1 var(--font-ui)' in btn
+
+
+def test_the_labels_are_not_shouted():
+    """All-caps defeats word-shape recognition, which is exactly what scanning a
+    strip of eighteen labels depends on."""
+    tool = _CSS[_CSS.index('.map-tool {'):]
+    tool = tool[:tool.index('}')]
+    assert 'text-transform' not in tool
+    assert 'letter-spacing' not in tool
+
+
+def test_the_group_dividers_are_visible_enough_to_group():
+    """--border-card is a 14%-opacity hairline; three groups separated by it
+    read as one undifferentiated stripe."""
+    divider = _CSS[_CSS.index('.map-tool-divider {'):]
+    divider = divider[:divider.index('}')]
+    assert 'var(--border-rule)' in divider
+    assert 'margin:0 6px' in divider
+
+
+def test_the_readout_yields_before_the_tools_do():
+    """It is help text. As flex:0 0 auto it pushed the strip into horizontal
+    overflow and got clipped mid-phrase at 1024 while every tool still fitted --
+    so the one thing that could safely shrink was the one thing that would not."""
+    readout = _CSS[_CSS.index('.map-tool-readout {'):]
+    readout = readout[:readout.index('}')]
+    assert 'flex:0 1 auto' in readout
+    assert 'min-width:0' in readout
+    assert 'text-overflow:ellipsis' in readout
