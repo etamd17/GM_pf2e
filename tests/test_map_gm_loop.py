@@ -107,9 +107,17 @@ def test_pickers_are_rebuilt_from_the_api_not_frozen_at_render():
         assert picker in _JS, picker
     # encounter_update is the event that means "the combatant list changed".
     encounter = _JS[_JS.index("appSSE('encounter_update'"):]
-    assert 'refreshPickers()' in encounter[:400], (
+    assert 'refreshPickersSoon()' in encounter[:400], (
         'encounter_update must refresh the pickers, otherwise adding a combatant '
         'mid-fight leaves the map list stale until a manual reload')
+    # Debounced rather than immediate, because refreshPickers parses every scene
+    # file on disk and encounter_update fires on every turn advance. The
+    # guarantee above is unchanged -- it just arrives a couple of seconds later,
+    # which is fine for "a combatant was added or renamed".
+    soon = _JS[_JS.index('function refreshPickersSoon()'):]
+    soon = soon[:soon.index('\n        }')]
+    assert 'clearTimeout(pickerRefresh)' in soon
+    assert 'setTimeout(refreshPickers, 2000)' in soon
 
 
 def test_a_rebuilt_picker_keeps_the_current_selection():

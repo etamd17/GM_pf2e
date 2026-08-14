@@ -3526,12 +3526,36 @@
                 paintTableState();
             } catch (_) {}
         });
+        // These three all mean "live state moved", not "the scene changed" --
+        // the scene arrives on its own scene_update. They refetch because the
+        // map paints HP and conditions onto tokens from the live projection.
+        //
+        // Coalesced, because they arrive in bursts and each one costs a full
+        // scene fetch on BOTH the GM page and the TV. One area effect on four
+        // targets emits four pc_update frames plus an encounter_update; that
+        // was six scene fetches for a scene nobody edited, on the single worker
+        // that is also serving those same SSE streams.
+        let liveRefetch = null;
+        function refetchLiveState() {
+            if (liveRefetch) return;
+            liveRefetch = setTimeout(function () { liveRefetch = null; fetchScene(); }, 250);
+        }
+        // refreshPickers parses every scene file on disk to rebuild the
+        // dropdowns, and exists to notice a combatant being added or renamed --
+        // which is rare, and never urgent. It gets its own slow trailing timer
+        // rather than riding every turn advance.
+        let pickerRefresh = null;
+        function refreshPickersSoon() {
+            if (!hasGmChrome()) return;
+            clearTimeout(pickerRefresh);
+            pickerRefresh = setTimeout(refreshPickers, 2000);
+        }
         window.appSSE('encounter_update', function () {
-            fetchScene();
-            refreshPickers();   // a combatant may have been added or renamed
+            refetchLiveState();
+            refreshPickersSoon();
         });
-        window.appSSE('pc_update', fetchScene);
-        window.appSSE('connected', fetchScene);
+        window.appSSE('pc_update', refetchLiveState);
+        window.appSSE('connected', refetchLiveState);
     }
     fetchScene().then(function () {
         // Restore where this scene was left; failing that, fit it. The GM used
