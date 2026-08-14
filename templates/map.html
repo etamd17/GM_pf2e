@@ -289,7 +289,8 @@
                 </span>{% endif %}
                 <span id="map-tool-readout" class="map-tool-readout">Select and move tokens</span>
             </div>
-            <div id="map-viewport" class="map-viewport" tabindex="0" aria-label="Tactical map">
+            <div id="map-viewport" class="map-viewport" tabindex="0"
+                 aria-label="Tactical map. Bracket keys select a token, arrow keys move it.">
                 <canvas id="map-canvas"></canvas>
                 <div id="map-empty" class="map-empty" hidden>No map image yet. The grid and tokens are still usable.</div>
             </div>
@@ -304,6 +305,10 @@
 </div>
 
 <div id="map-toast" class="map-toast" role="status" aria-live="polite"></div>
+{# Keyboard selection has no visible cursor of its own -- the token ring is the
+   only cue, and a screen reader cannot see it. This says what just happened
+   without putting a toast on screen for every arrow press. #}
+<div id="map-announce" class="map-visually-hidden" role="status" aria-live="polite"></div>
 <script>
 window.SCENE_MAP_CONFIG = {{ {
     'sceneId': scene_id,
