@@ -132,8 +132,22 @@ def slugify_title(title, fallback='document'):
     return (SLUG_PREFIX + base)[:70]
 
 
-def unique_slug(index, desired, ignore_id=None):
+def unique_slug(index, desired, ignore_id=None, reserved=()):
+    """A slug no other document holds -- and none that `reserved` holds either.
+
+    `reserved` is the live VAULT's slugs. Without it this only stepped around
+    other documents, so a title whose slug matched a vault page produced a
+    document that could never be published: the read side drops it rather than
+    shadow the vault, and the manage screen could only say "rename this to
+    publish it". That advice was answerable but not reliable -- the new title
+    was uniquified against documents alone, so it could land right back on
+    another vault page, and retyping the SAME title changed nothing at all.
+
+    Stepping around the vault here makes the collision resolve itself: the
+    document gets '-2' and publishes, instead of handing the GM a puzzle.
+    """
     taken = {d.get('slug') for d in index.get('docs', []) if d.get('id') != ignore_id}
+    taken |= {s for s in (reserved or ()) if s}
     if desired not in taken:
         return desired
     for n in range(2, 1000):

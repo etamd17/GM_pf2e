@@ -418,8 +418,23 @@ def test_renaming_clears_a_vault_collision(roles):
         f.write('<p>vault</p>')
     app._chronicle_repoint(os.path.join(chron, 'current'), content)
 
+    # An upload no longer LANDS on the collision: unique_slug reserves the
+    # vault's slugs, so the document steps around it and is publishable at once.
     doc = _upload(roles.gm(), title='Taken').get_json()['doc']
-    assert doc['slug'] == 'd-taken'
+    assert doc['slug'] != 'd-taken'
+    listed = roles.gm().get('/api/chronicle/docs').get_json()['docs']
+    assert next(d for d in listed if d['id'] == doc['id'])['shadowed_by_vault'] is False
+
+    # A document uploaded BEFORE that fix can still be holding a colliding
+    # slug, so the way out has to keep working. Force one into that state.
+    docs_root = app._chronicle_docs_root()
+    index = app._chronicle_lib.load_index(docs_root)
+    entry = next(d for d in index['docs'] if d['id'] == doc['id'])
+    stale_fragment = app._chronicle_doc_fragment_path(entry['slug'])
+    entry['slug'] = 'd-taken'
+    app._chronicle_lib.save_index(docs_root, index)
+    if stale_fragment and os.path.isfile(stale_fragment):
+        os.replace(stale_fragment, app._chronicle_doc_fragment_path('d-taken'))
 
     listed = roles.gm().get('/api/chronicle/docs').get_json()['docs']
     assert next(d for d in listed if d['id'] == doc['id'])['shadowed_by_vault'] is True
@@ -432,6 +447,36 @@ def test_renaming_clears_a_vault_collision(roles):
     # And it can now actually be published, which is what the message promised.
     _publish(roles, doc['id'])
     assert roles.player().get('/chronicle/page/d-not-taken').status_code == 200
+
+
+def test_retyping_the_same_title_frees_a_stuck_document(roles):
+    """The manage screen says "rename this document to publish it", so retyping
+    the same name is the first thing anyone tries. It used to regenerate the
+    identical slug and change nothing, leaving the GM stuck with no signal."""
+    chron = storage.chronicle_dir(CID)
+    content = os.path.join(chron, 'content', 'vaulthash2')
+    os.makedirs(os.path.join(content, 'html'), exist_ok=True)
+    with open(os.path.join(content, 'manifest.json'), 'w', encoding='utf-8') as f:
+        json.dump({'schema_version': app.CHRONICLE_SCHEMA_VERSION, 'pages': [
+            {'slug': 'd-story-so-far', 'source': 'content/s.md',
+             'title': 'Story So Far', 'section': 'story'}]}, f)
+    app._chronicle_repoint(os.path.join(chron, 'current'), content)
+
+    doc = _upload(roles.gm(), title='Story So Far').get_json()['doc']
+    docs_root = app._chronicle_docs_root()
+    index = app._chronicle_lib.load_index(docs_root)
+    entry = next(d for d in index['docs'] if d['id'] == doc['id'])
+    entry['slug'] = 'd-story-so-far'          # the pre-fix state
+    app._chronicle_lib.save_index(docs_root, index)
+
+    same = roles.gm().patch('/api/chronicle/docs/' + doc['id'],
+                            json={'title': 'Story So Far'}).get_json()['doc']
+    assert same['slug'] != 'd-story-so-far'
+    assert same['shadowed_by_vault'] is False
+
+    # And it is publishable at its new address.
+    _publish(roles, doc['id'])
+    assert roles.player().get('/chronicle/page/' + same['slug']).status_code == 200
 
 
 def test_a_published_doc_keeps_its_address_when_renamed(roles):
