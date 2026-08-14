@@ -4984,6 +4984,11 @@ body.system-cosmere .trk .grid-wrap::after {
     margin: var(--sp-2) 0 0; display: flex; gap: var(--sp-2);
     align-items: center; flex-wrap: wrap;
 }
+/* Any author `display` defeats the UA's [hidden] rule regardless of
+   specificity, so a class that sets one must opt back in or `hidden` becomes
+   decorative. Same bug the map hit five times (.map-token-actions et al) and
+   .chron-live-bar above. */
+.chron-card__meta[hidden] { display: none; }
 
 /* Flat tag pills — static, no glow. */
 .chron-tags { display: flex; gap: var(--sp-2); flex-wrap: wrap; margin: 0; padding: 0; }
@@ -5152,6 +5157,12 @@ body.system-cosmere .trk .grid-wrap::after {
     font-family: var(--font-ui); font-size: 12px; line-height: 1.5;
     color: var(--ruby-200);
 }
+/* See .chron-card__meta[hidden]. This one was load-bearing and silently
+   inert: the shadowed-address notice is rendered with `hidden` on every row
+   that has no collision, and repainted by setting .hidden after a rename. So
+   every document advertised a block it did not have, and the one that DID
+   have it kept saying so after the rename that cleared it. */
+.chron-notice[hidden] { display: none; }
 .chron-notice--muted { border-left-color: var(--gilt-400); color: var(--text-on-dark-2); }
 
 /* Document row — the GM console's list item. A card, not a table row: it

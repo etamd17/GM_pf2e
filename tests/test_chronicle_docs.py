@@ -479,6 +479,98 @@ def test_retyping_the_same_title_frees_a_stuck_document(roles):
     assert roles.player().get('/chronicle/page/' + same['slug']).status_code == 200
 
 
+# --- a PUBLISHED document the vault later shadows ---------------------------
+#
+# The upload path is guarded, so a collision can no longer be created by
+# uploading. It can still be created in the other order: publish a document,
+# then publish a vault page onto its address. That row used to have no way out
+# at all -- the publish switch was `disabled` so it could not be turned off,
+# the address was frozen because the doc was published so a rename did
+# nothing, and the notice on screen told the GM to rename it.
+#
+# Meanwhile _chronicle_fragment resolves vault-first, so players were being
+# served the vault's page at the document's own URL with no error anywhere.
+
+def _publish_vault_page(slug, title='Vault Page', section='lore', body='<p>vault</p>'):
+    """Put one page into the live vault manifest for CID."""
+    chron = storage.chronicle_dir(CID)
+    content = os.path.join(chron, 'content', 'vault-' + slug)
+    os.makedirs(os.path.join(content, 'html'), exist_ok=True)
+    with open(os.path.join(content, 'manifest.json'), 'w', encoding='utf-8') as f:
+        json.dump({'schema_version': app.CHRONICLE_SCHEMA_VERSION,
+                   'pages': [{'slug': slug, 'source': 'content/%s.md' % slug,
+                              'title': title, 'section': section}]}, f)
+    with open(os.path.join(content, 'html', slug + '.html'), 'w', encoding='utf-8') as f:
+        f.write(body)
+    app._chronicle_repoint(os.path.join(chron, 'current'), content)
+
+
+def _shadowed_live_doc(roles, title='Story So Far'):
+    """A published document whose address the vault took afterwards."""
+    doc = _upload(roles.gm(), title=title).get_json()['doc']
+    _publish(roles, doc['id'])
+    _publish_vault_page(doc['slug'], title=title)
+    return doc
+
+
+def test_players_are_served_the_vault_page_at_a_shadowed_address(roles):
+    """The harm, stated once so the rest of these tests have a reason. Both
+    pages are titled the same in the real report, so nobody would notice."""
+    doc = _shadowed_live_doc(roles)
+    page = roles.player().get('/chronicle/page/' + doc['slug'])
+    assert page.status_code == 200
+    assert b'vault' in page.data, 'the vault page wins the address'
+
+
+def test_a_shadowed_published_document_can_still_be_switched_off(roles):
+    """The escape hatch. Publishing is gated; UNpublishing never is."""
+    doc = _shadowed_live_doc(roles)
+    listed = roles.gm().get('/api/chronicle/docs').get_json()['docs']
+    assert next(d for d in listed if d['id'] == doc['id'])['shadowed_by_vault'] is True
+
+    off = roles.gm().patch('/api/chronicle/docs/' + doc['id'], json={'published': False})
+    assert off.status_code == 200, off.get_data(as_text=True)
+    assert off.get_json()['doc']['published'] is False
+
+
+def test_publishing_onto_a_vault_address_is_refused_by_the_api(roles):
+    """This was enforced only by a `disabled` attribute on the switch, so the
+    rule held for the UI and not for the API -- and _chronicle_doc_pages drops
+    a shadowed doc regardless, so it was a publish that published nothing."""
+    doc = _shadowed_live_doc(roles)
+    roles.gm().patch('/api/chronicle/docs/' + doc['id'], json={'published': False})
+
+    again = roles.gm().patch('/api/chronicle/docs/' + doc['id'], json={'published': True})
+    assert again.status_code == 409, again.get_data(as_text=True)
+    assert doc['slug'] in again.get_json()['error']
+
+
+def test_renaming_moves_a_published_document_off_a_shadowed_address(roles):
+    """The other way out, and the one the notice actually advises. The frozen
+    address protects a working link; a shadowed address is not one."""
+    doc = _shadowed_live_doc(roles)
+    renamed = roles.gm().patch('/api/chronicle/docs/' + doc['id'],
+                               json={'title': 'Story So Far, Retold'}).get_json()['doc']
+    assert renamed['slug'] != doc['slug'], 'a shadowed address must not be frozen'
+    assert renamed['shadowed_by_vault'] is False
+    assert renamed['published'] is True, 'it must not be quietly unpublished'
+
+    # And it serves its OWN content again, at the new address.
+    page = roles.player().get('/chronicle/page/' + renamed['slug'])
+    assert page.status_code == 200
+    assert b'vault' not in page.data
+
+
+def test_retyping_the_same_title_also_frees_a_published_document(roles):
+    """Same reasoning as the private case: the screen says rename, so retyping
+    is the first thing anyone tries."""
+    doc = _shadowed_live_doc(roles)
+    same = roles.gm().patch('/api/chronicle/docs/' + doc['id'],
+                            json={'title': 'Story So Far'}).get_json()['doc']
+    assert same['slug'] != doc['slug']
+    assert same['shadowed_by_vault'] is False
+
+
 def test_a_published_doc_keeps_its_address_when_renamed(roles):
     """A shared /chronicle/page/<slug> URL must not silently 404."""
     doc = _upload(roles.gm(), title='Public Name').get_json()['doc']

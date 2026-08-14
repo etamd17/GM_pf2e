@@ -82,26 +82,40 @@
           {# Name the page in the way. "A vault page already uses this address"
              is true but unactionable -- it does not say WHICH page, so a real
              conflict and a stale manifest look identical. #}
+          {# The advice differs by publish state and the difference is not
+             cosmetic. An UNPUBLISHED doc is blocked and renaming frees it. A
+             PUBLISHED one is already losing: _chronicle_fragment resolves
+             vault-first, so players are being handed the vault's page at this
+             document's own URL. Telling that GM to "rename it to publish it"
+             describes a state they are already past. #}
           <p class="chron-notice js-shadow-notice"{% if not d.shadowed_by_vault %} hidden{% endif %}>
-             Blocked: the address <code class="js-slug">{{ d.slug }}</code> is held by
+             <span class="js-shadow-lead">{% if d.published %}Overridden{% else %}Blocked{% endif %}</span>:
+             the address <code class="js-slug">{{ d.slug }}</code> is held by
              <span class="js-shadow-who">{% if d.shadowed_by %}the vault page
                &ldquo;{{ d.shadowed_by.title }}&rdquo;{% if d.shadowed_by.section %}
                in {{ d.shadowed_by.section }}{% endif %}{% if d.shadowed_by.source %}
                (<code>{{ d.shadowed_by.source }}</code>){% endif %}{% else %}a vault page{% endif %}</span>.
-             Rename this document to publish it &mdash; it will take the next free address.</p>
-          {% if d.published %}
-          <p class="chron-card__meta">Renaming a published document changes its
+             <span class="js-shadow-advice">{% if d.published %}Players are being
+               served that page here, not this document. Rename it to take a free
+               address, or switch it off.{% else %}Rename this document to publish
+               it &mdash; it will take the next free address.{% endif %}</span></p>
+          <p class="chron-card__meta js-frozen-note"{% if not (d.published and not d.shadowed_by_vault) %} hidden{% endif %}>
+             Renaming a published document changes its
              name only &mdash; its address stays put, so links you have already
              shared keep working.</p>
-          {% endif %}
 
           <div class="chron-doc-row__controls">
             <label class="chron-switch{% if d.published %} chron-switch--on{% endif %}{% if d.shadowed_by_vault %} chron-switch--blocked{% endif %}">
+              {# Only PUBLISHING is gated. A published document can always be
+                 switched off -- it is the way out when the vault has taken its
+                 address, and disabling it there left the row with no exit at
+                 all: the toggle was dead and the rename was frozen. #}
               <input type="checkbox" class="chron-doc-publish"
                      {% if d.published %}checked{% endif %}
-                     {% if d.shadowed_by_vault or not d.previewed_at %}disabled{% endif %}>
+                     {% if not d.published and (d.shadowed_by_vault or not d.previewed_at) %}disabled{% endif %}>
               <span class="chron-doc-publish-label">
-                {%- if d.shadowed_by_vault %}Blocked
+                {%- if d.published and d.shadowed_by_vault %}Overridden
+                {%- elif d.shadowed_by_vault %}Blocked
                 {%- elif d.published %}Published
                 {%- elif not d.previewed_at %}Preview first
                 {%- else %}Private{% endif -%}
@@ -201,15 +215,40 @@
     });
   }
 
+  // The single owner of the switch's appearance and enabled-ness. It used to
+  // share that job with the rename handler, which set box.disabled and then
+  // called this, which overwrote it -- so a rename that failed to clear a
+  // collision left the blocked row's toggle live.
   function paintPublishState(row, doc) {
     var label = row.querySelector('.chron-doc-publish-label');
     var wrap = row.querySelector('.chron-switch');
     var box = row.querySelector('.chron-doc-publish');
     var previewed = !!row.dataset.previewed;
-    label.textContent = doc.published ? 'Published' : (previewed ? 'Private' : 'Preview first');
+    // Rename responses carry shadowed_by_vault; the publish toggle's payload
+    // is only {published}, so fall back to what the row already shows.
+    var blocked = typeof doc.shadowed_by_vault === 'boolean'
+      ? doc.shadowed_by_vault
+      : wrap.classList.contains('chron-switch--blocked');
+    label.textContent = blocked
+      ? (doc.published ? 'Overridden' : 'Blocked')
+      : (doc.published ? 'Published' : (previewed ? 'Private' : 'Preview first'));
     wrap.classList.toggle('chron-switch--on', !!doc.published);
-    box.disabled = !previewed;
+    wrap.classList.toggle('chron-switch--blocked', blocked);
+    // Only publishing is gated -- switching a published document OFF is the
+    // escape hatch out of a shadowed address and must never be disabled.
+    box.disabled = !doc.published && (blocked || !previewed);
     row.classList.toggle('chron-doc-row--published', !!doc.published);
+    var advice = row.querySelector('.js-shadow-advice');
+    if (advice) {
+      advice.textContent = doc.published
+        ? 'Players are being served that page here, not this document. '
+            + 'Rename it to take a free address, or switch it off.'
+        : 'Rename this document to publish it — it will take the next free address.';
+    }
+    var lead = row.querySelector('.js-shadow-lead');
+    if (lead) lead.textContent = doc.published ? 'Overridden' : 'Blocked';
+    var frozen = row.querySelector('.js-frozen-note');
+    if (frozen) frozen.hidden = !doc.published || blocked;
   }
 
   function wireRow(row) {
@@ -245,10 +284,7 @@
                   : 'a vault page';
               }
             }
-            var box = row.querySelector('.chron-doc-publish');
-            var wrap = row.querySelector('.chron-switch');
-            if (box) box.disabled = doc.shadowed_by_vault || !row.dataset.previewed;
-            if (wrap) wrap.classList.toggle('chron-switch--blocked', !!doc.shadowed_by_vault);
+            // paintPublishState owns the switch entirely -- see its comment.
             paintPublishState(row, doc);
             say(doc.shadowed_by_vault
               ? 'Renamed, but that address is still taken.'

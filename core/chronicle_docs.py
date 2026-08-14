@@ -45,15 +45,35 @@ SCHEMA_VERSION = 1
 INDEX_NAME = 'index.json'
 
 # Slug prefix for every uploaded doc. The vault lane owns the unprefixed
-# namespace, so this makes cross-lane collisions structurally impossible
-# instead of something both pipelines have to keep checking for.
+# namespace; this keeps the two lanes out of each other's addresses.
+#
+# The reservation is only real because BOTH sides honour it, and for a while
+# neither did. It was claimed here and enforced nowhere:
+# tools/chronicle_build.py::slugify will mint 'd-story-so-far' from a note
+# titled "D. Story So Far" quite honestly, and app._chronicle_validate_manifest
+# accepted any slug matching the slug regex. So a vault publish could land on
+# an address a document already served -- and app._chronicle_fragment resolves
+# VAULT-FIRST, so players got the vault's page at the document's own URL with
+# no error anywhere. Both sides refuse it now.
 SLUG_PREFIX = 'd-'
 
-# Sections that actually reach a nav tab (app._CHRONICLE_SECTION_TO_NAV).
-# Anything else would publish successfully and then be invisible in the
-# navigation -- reachable only by direct URL -- so the upload refuses it.
+# Sections a DOCUMENT may be filed under: the ones that actually reach a nav
+# tab (app._CHRONICLE_SECTION_TO_NAV). Anything else would publish
+# successfully and then be invisible in the navigation -- reachable only by
+# direct URL -- so the upload refuses it.
 SECTIONS = ('recap', 'lore', 'cast', 'handout')
 DEFAULT_SECTION = 'lore'
+
+# Sections a VAULT manifest may declare. Deliberately WIDER than SECTIONS:
+# 'home', 'atlas' and 'fieldguide' are real vault sections that reach no nav
+# tab of their own, and refusing them would break a legitimate publish.
+#
+# Must stay in step with tools/chronicle_build.py::_SECTIONS, which rejects a
+# bad section on the GM's own machine before a zip is ever built. That tool is
+# deliberately stdlib-only (it runs standalone against the GM's vault) so it
+# cannot import this; tests/test_chronicle_manifest_sections.py fails the build
+# if the two lists drift apart.
+VAULT_SECTIONS = ('home', 'recap', 'cast', 'atlas', 'lore', 'handout', 'fieldguide')
 
 # What the GM sees. The stored values are the vault's internal enum, but the
 # player-facing tabs are named Story/Lore/Cast/Handouts -- so a GM filing

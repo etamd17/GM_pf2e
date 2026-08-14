@@ -238,7 +238,8 @@ def test_publish_rejects_marker_in_unscanned_extension_source():
     with zipfile.ZipFile(buf, 'w') as z:
         z.writestr('manifest.json', json.dumps({
             'schema_version': 1, 'session_number': 1,
-            'pages': [{'slug': 'x', 'source': 'content/x.mdx', 'recipients': 'all'}]}))
+            'pages': [{'slug': 'x', 'section': 'lore', 'source': 'content/x.mdx',
+                       'recipients': 'all'}]}))
         # .mdx is NOT in the fixed scan-extension list, so the tree walk skips it;
         # the per-source scan must still catch the marker before it renders.
         z.writestr('content/x.mdx', 'Intro\n\n> [!danger] the duke is the vampire\n')
@@ -266,7 +267,8 @@ def test_publish_rejects_oversized_decompressed_archive():
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as z:
         z.writestr('manifest.json', json.dumps({
-            'schema_version': 1, 'pages': [{'slug': 'x', 'source': 'content/x.md', 'recipients': 'all'}]}))
+            'schema_version': 1, 'pages': [{'slug': 'x', 'section': 'lore',
+                                            'source': 'content/x.md', 'recipients': 'all'}]}))
         z.writestr('content/x.md', 'ok\n')
         z.writestr('content/big.bin', b'\0' * 200000)   # compresses tiny, 200KB inflated
     zb = base64.b64encode(buf.getvalue()).decode()
@@ -290,7 +292,8 @@ def test_publish_rejects_too_many_entries():
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, 'w') as z:
         z.writestr('manifest.json', json.dumps({
-            'schema_version': 1, 'pages': [{'slug': 'x', 'source': 'content/x.md', 'recipients': 'all'}]}))
+            'schema_version': 1, 'pages': [{'slug': 'x', 'section': 'lore',
+                                            'source': 'content/x.md', 'recipients': 'all'}]}))
         z.writestr('content/x.md', 'ok\n')
         for i in range(60):
             z.writestr('assets/f%d.bin' % i, b'x')
