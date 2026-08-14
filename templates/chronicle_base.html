@@ -19,6 +19,24 @@
     <a href="/mobile" class="chron-live-bar__link">Open combat</a>
   </div>
 
+  {# A GM viewing this narrowed to a player's visibility. Loud on purpose: the
+     whole hazard of a preview is forgetting you are in one and concluding the
+     players cannot see something they can. #}
+  {% if chronicle_preview %}
+  <div class="chron-preview-bar" role="status">
+    <span class="chron-preview-bar__tag">Preview</span>
+    <span>Showing what <strong>{{ chronicle_preview.label }}</strong> sees. Pages addressed to
+      anyone else are hidden.</span>
+    <a class="chron-preview-bar__exit" href="{{ request.path }}">Back to your view</a>
+  </div>
+  {% elif chronicle_can_preview %}
+  <div class="chron-preview-pick">
+    <span>View as:</span>
+    <a href="{{ request.path }}?as=player">a player</a>
+    {% for option in chronicle_preview_options %}<a href="{{ request.path }}?as={{ option.id }}">{{ option.label }}</a>{% endfor %}
+  </div>
+  {% endif %}
+
   <header class="chron-head">
     <p class="chron-kicker">The Chronicle{% if manifest %} · As of Session {{ manifest.session_number }}{% endif %}</p>
     <nav class="chron-subnav" aria-label="Chronicle sections">
