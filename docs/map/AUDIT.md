@@ -776,5 +776,22 @@ Two measurement notes worth keeping, both of which cost a wrong answer first:
   element with the same classes reported all of it. Test with a fresh element
   before concluding a rule does not apply.
 
-**Still not done:** the 9px/29px toolstrip sizing and keyboard token selection.
-Neither changes what the tool can do.
+**Toolstrip sizing: done (7e).** Tools now match the buttons beside them at
+11px/34px, uppercase dropped. Measured at 1440/1280/1024: nothing hidden in
+either drawer state. The readout was the thing clipping at 1024 -- pinned at
+`flex:0 0 auto` while every tool still fitted -- so it now ellipsises instead.
+
+**Keyboard token selection: done (7f).** Brackets cycle in reading order, arrows
+nudge a square (Shift for one pixel), Escape clears. Deliberately NOT Tab:
+trapping Tab inside a canvas would leave a keyboard user unable to reach the
+sidebar, which is worse than the gap being fixed.
+
+That stage found a real race by measurement rather than by reading. Every token
+move broadcasts a `scene_update`, so the frame answering keypress ONE arrives
+after keypress TWO has already moved the token locally -- and lands on top of
+it. A fine nudge issued mid-flight silently did nothing. `applyScene` now holds
+a token that is being nudged, which is the position equivalent of the existing
+rule that an SSE frame must not overwrite a field being typed into.
+
+**The audit is fully discharged.** Every finding is fixed or recorded as a
+decision.

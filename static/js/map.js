@@ -125,6 +125,16 @@
         // nothing left to diff against.
         noteMotionAndHealth(scene && scene.tokens, (next || {}).tokens);
         scene = normalizeClientScene(next);
+        // Keep a token the GM is mid-nudge on. Every token move broadcasts a
+        // scene_update, so the frame answering keypress one arrives AFTER
+        // keypress two has already moved the token locally -- and without this
+        // it lands on top and that keypress is silently lost. Same rule as the
+        // one that stops an SSE frame overwriting a field being typed into;
+        // this is the position equivalent.
+        if (nudge) {
+            const held = (scene.tokens || []).find(token => token.id === nudge.tokenId);
+            if (held) { held.x = nudge.x; held.y = nudge.y; }
+        }
         canvas.width = Math.max(1, Number(scene.width) || 1400);
         canvas.height = Math.max(1, Number(scene.height) || 900);
         if (selectedId && !(scene.tokens || []).some(token => token.id === selectedId)) selectedId = null;
@@ -3298,17 +3308,147 @@
         const anchor = {x: event.clientX - rect.left, y: event.clientY - rect.top};
         setZoom(zoom * Math.exp(-event.deltaY * .0012), anchor);
     }, {passive: false});
+    // --- reaching a token without a mouse ---------------------------------
+    //
+    // The canvas is the entire interactive surface and carries no semantics, so
+    // until now there was no keyboard path to a token at all -- only Escape and
+    // Ctrl+Z existed.
+    //
+    // Deliberately NOT bound to Tab. Trapping Tab inside a canvas is a keyboard
+    // trap: it would leave someone unable to reach the sidebar at all. Brackets
+    // cycle instead, and Tab goes on meaning what it means everywhere else.
+    function announce(message) {
+        const region = document.getElementById('map-announce');
+        if (region) region.textContent = message;
+    }
+
+    function keyboardTokens() {
+        // Reading order, not array order, so "next" means the next one down the
+        // map rather than whichever happened to be added first.
+        return (scene.tokens || [])
+            .filter(token => !isTableView() || token.visible_to_players !== false)
+            .slice()
+            .sort((a, b) => (a.y - b.y) || (a.x - b.x));
+    }
+
+    function cycleSelection(step) {
+        const tokens = keyboardTokens();
+        if (!tokens.length) return;
+        const at = tokens.findIndex(token => token.id === selectedId);
+        const next = tokens[(at + step + tokens.length * 2) % tokens.length];
+        selectedId = next.id;
+        updateSelectionPanel();
+        focusToken(next);
+        draw();
+        announce(describeSelection(next));
+    }
+
+    function describeSelection(token) {
+        const g = gridGeometry();
+        const col = Math.floor((token.x - g.ox) / g.size);
+        const row = Math.floor((token.y - g.oy) / g.size);
+        const live = token.live || {};
+        const hp = (Number(live.max_hp) > 0)
+            ? ', ' + live.current_hp + ' of ' + live.max_hp + ' hit points' : '';
+        return (token.name || 'Token') + ', column ' + (col + 1) + ' row ' + (row + 1) + hp;
+    }
+
+    function focusToken(token) {
+        // Bring it into view; cycling to something off-screen is the same as
+        // selecting nothing.
+        const half = (tokenFootprint(token) * gridGeometry().size) / 2;
+        const left = token.x * zoom - viewport.clientWidth / 2;
+        const top = token.y * zoom - viewport.clientHeight / 2;
+        viewport.scrollLeft = Math.max(0, left + half);
+        viewport.scrollTop = Math.max(0, top + half);
+    }
+
+    // Nudges are collected and committed once the GM stops pressing, so holding
+    // an arrow key is one write and one undo entry rather than thirty of each --
+    // this rides the single worker that also serves every player's SSE.
+    let nudge = null;
+    const NUDGE_COMMIT_MS = 400;
+
+    function nudgeSelected(dx, dy, fine) {
+        const token = (scene.tokens || []).find(item => item.id === selectedId);
+        if (!token) return false;
+        // Locked is checked first only so it can say so; canControl() covers it
+        // too, but silently, and a key that does nothing reads as a dead map.
+        if (token.locked) { toast('That token is locked.', true); return true; }
+        if (!canControl(token)) return false;
+        const g = gridGeometry();
+        // One square is the unit the game is played in; fine is for lining up
+        // art on an unsnapped scene.
+        const step = fine ? 1 : ((scene.settings || {}).snap_to_grid ? g.size : 10);
+        if (!nudge || nudge.tokenId !== token.id) {
+            nudge = {tokenId: token.id, fromX: token.x, fromY: token.y, timer: null};
+        }
+        token.x = Math.max(0, Math.min(scene.width, token.x + dx * step));
+        token.y = Math.max(0, Math.min(scene.height, token.y + dy * step));
+        // Where the GM has keyed it to, so an SSE frame answering an earlier
+        // keypress can be reconciled against it rather than over it.
+        nudge.x = token.x;
+        nudge.y = token.y;
+        draw();
+        announce(describeSelection(token));
+        clearTimeout(nudge.timer);
+        nudge.timer = setTimeout(commitNudge, NUDGE_COMMIT_MS);
+        return true;
+    }
+
+    async function commitNudge() {
+        const pending = nudge;
+        nudge = null;
+        if (!pending) return;
+        const token = (scene.tokens || []).find(item => item.id === pending.tokenId);
+        if (!token) return;
+        if (token.x === pending.fromX && token.y === pending.fromY) return;
+        try {
+            const data = await patchToken(token.id, {x: token.x, y: token.y});
+            undoStack.push({label: 'move' + (token.name ? ' ' + token.name : ''),
+                            move: {tokenId: token.id, x: pending.fromX, y: pending.fromY}});
+            if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+            updateUndoButton();
+            // Only reconcile if no NEWER nudge started while this write was in
+            // flight. Otherwise the response -- which describes where the token
+            // was one keypress ago -- lands on top of the position the GM has
+            // since keyed, and that nudge is silently lost. Its own commit will
+            // carry the scene forward instead.
+            if (!nudge) applyScene(data.scene);
+        } catch (error) {
+            toast(error.message, true);
+            fetchScene();
+        }
+    }
+
+    const ARROWS = {ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1]};
+
     window.addEventListener('keydown', function (event) {
         const tag = String((event.target || {}).tagName || '').toLowerCase();
         if ((tag === 'input' || tag === 'select' || tag === 'textarea') || !scene) return;
         if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
             event.preventDefault();
             undoLast();
+            return;
         }
         if (event.key === 'Escape') {
             if (wallChain.length) commitWallChain(activeTool);
             else if (calibrationMode) setCalibrationMode(false);
+            else if (selectedId) { selectedId = null; updateSelectionPanel(); draw(); announce('Selection cleared.'); }
             else setActiveTool('select');
+            return;
+        }
+        if (isTableView()) return;               // the TV has no operator
+        if (event.key === '[' || event.key === ']') {
+            event.preventDefault();
+            cycleSelection(event.key === ']' ? 1 : -1);
+            return;
+        }
+        const arrow = ARROWS[event.key];
+        // Only claim the arrows when something is selected -- otherwise they go
+        // on scrolling the viewport, which is what they did before.
+        if (arrow && selectedId && nudgeSelected(arrow[0], arrow[1], event.shiftKey)) {
+            event.preventDefault();
         }
     });
     canvas.addEventListener('dblclick', function (event) {
