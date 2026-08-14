@@ -213,7 +213,21 @@ def system_content_dir(system):
 # temp file in the same dir -> fsync -> os.replace, so a crash can never leave
 # a half-written file).
 # --------------------------------------------------------------------------
-def atomic_write_json(path, obj, indent=2):
+def atomic_write_json(path, obj, indent=2, fsync=True):
+    """Write JSON to a temp file, then os.replace() it into place.
+
+    ``fsync`` defaults to True so every existing caller keeps the durability it
+    had. Pass False on a LIVE-TICK path -- the same trade app._atomic_write_json
+    already documents and takes: os.fsync is the one syscall gevent cannot yield
+    around, so on the single worker each one freezes every player's SSE for its
+    duration. Measured here at 3.7 ms on a 16.5 KB scene, and Railway's volume is
+    network-backed, so worse in production than locally.
+
+    os.replace stays atomic either way, so the file is never half-written. What
+    fsync=False gives up is only the very last write surviving a power cut --
+    acceptable for state that is re-derivable presentation data, not for
+    accounts, campaigns or character sheets.
+    """
     d = os.path.dirname(path)
     os.makedirs(d, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=d, suffix='.tmp')
@@ -221,7 +235,8 @@ def atomic_write_json(path, obj, indent=2):
         with os.fdopen(fd, 'w', encoding='utf-8') as f:
             json.dump(obj, f, indent=indent, ensure_ascii=False)
             f.flush()
-            os.fsync(f.fileno())
+            if fsync:
+                os.fsync(f.fileno())
         os.replace(tmp, path)
     except Exception:
         try:

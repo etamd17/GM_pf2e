@@ -378,10 +378,19 @@ def test_a_frame_can_be_rendered_at_a_chosen_moment():
 def test_the_fog_cache_key_holds_the_view_and_the_grid():
     """Darkness differs between the GM view and the table, and grid calibration
     moves the punched squares without a save."""
+    # Split into two keys by the perf pass: `fast` is the cheap revision check,
+    # `key` the content signature that decides whether the blur is actually
+    # redone. Both properties below still have to hold across the pair.
     body = _fn('drawFogOverlay')
-    key = body[body.index('const key = ['):body.index(".join('|');")]
+    fast = body[body.index('const fast = ['):body.index(".join('|');")]
+    key = body[body.index('const key = ['):]
+    key = key[:key.index(".join('|');")]
     for part in ("isTableView() ? 't' : 'g'", 'scene.revision', 'geometry.size', 'geometry.ox'):
-        assert part in key
+        assert part in fast, part
+    # The view and the grid must ALSO survive into the content key, or a
+    # calibration drag would serve a mask built for the old squares.
+    for part in ('geometry.size', 'geometry.ox', 'canvas.width'):
+        assert part in key, part
 
 
 # --- the GM's side of it -----------------------------------------------------

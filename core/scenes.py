@@ -198,7 +198,15 @@ def save_scene(cid, scene, *, bump_revision=True):
         scene['revision'] = int(scene.get('revision', 0)) + 1
     scene['schema_version'] = SCHEMA_VERSION
     scene['updated_at'] = _now()
-    storage.atomic_write_json(storage.scene_file(cid, scene['id']), scene, indent=2)
+    # fsync=False deliberately. A scene is presentation state, and this is the
+    # map's HOTTEST write: every token move, wall run, fog reveal, terrain
+    # paint, light and undo step. Each fsync froze every player's SSE for
+    # ~3.7 ms on a 16.5 KB scene -- it is the one syscall gevent cannot yield
+    # around. os.replace stays atomic, so the file is never half-written; the
+    # only thing given up is the last edit surviving a power cut, which is the
+    # same trade the live PC-state writes already take.
+    storage.atomic_write_json(storage.scene_file(cid, scene['id']), scene,
+                              indent=2, fsync=False)
     return scene
 
 
@@ -209,6 +217,7 @@ def create_scene(cid, name='Untitled Scene', **kwargs):
     else:
         os.makedirs(storage.scene_assets_dir(None), exist_ok=True)
     scene = new_scene(cid, name, **kwargs)
+    # Creation is once per scene, not per action, so it keeps its fsync.
     storage.atomic_write_json(storage.scene_file(cid, scene['id']), scene, indent=2)
     return scene
 
