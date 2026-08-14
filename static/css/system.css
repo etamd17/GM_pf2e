@@ -5328,3 +5328,28 @@ body.system-cosmere .trk .grid-wrap::after {
     font-family: var(--font-ui); font-size: 11px;
     color: var(--text-on-cream-3); word-break: break-all;
 }
+
+/* Chronicle: GM previewing a player's view. Deliberately loud -- the hazard of
+   a preview is forgetting you are in one and concluding the players cannot see
+   something they can. Matches .chron-live-bar's shape, gilt instead of ruby so
+   the two are not confused at a glance. */
+.chron-preview-bar {
+    display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap;
+    padding: var(--sp-2) var(--sp-4); margin-bottom: var(--sp-5);
+    background: var(--bg-card);
+    border: 1px solid var(--border-card);
+    border-left: 3px solid var(--gilt-200);
+    border-radius: var(--r-sm);
+    color: var(--text-on-dark-2); font-size: 13px;
+}
+.chron-preview-bar__tag {
+    padding: 2px 8px; border-radius: var(--r-sm);
+    background: var(--gilt-200); color: var(--ink-900);
+    font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+}
+.chron-preview-bar__exit { margin-left: auto; color: var(--gilt-100); font-weight: 700; }
+.chron-preview-pick {
+    display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap;
+    margin-bottom: var(--sp-4); color: var(--text-on-dark-3); font-size: 12px;
+}
+.chron-preview-pick a { color: var(--gilt-200); }

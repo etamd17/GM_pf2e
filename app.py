@@ -11988,14 +11988,20 @@ def _chronicle_page_visible(page_meta, *, user, is_gm):
 def _handout_visible_to_request(h):
     """Whether live handout `h` is visible to the CURRENT request's caller.
     GM sees all; 'all' is public; otherwise account-mode OWNERSHIP (recipient is
-    a pc NAME here, historically) or the legacy self-picked player_name."""
+    a pc NAME here, historically) or the legacy self-picked player_name.
+
+    Shares _chronicle_view_identity so a GM previewing as a player sees the
+    Handouts tab they would see -- otherwise the preview would hide their secret
+    PAGES but still list every secret HANDOUT, which is a worse lie than not
+    having a preview at all."""
     recips = h.get('recipients') or []
     if 'all' in recips:
         return True
-    if _is_gm():
+    preview_user, is_gm = _chronicle_view_identity()
+    if is_gm:
         return True
     if _account_mode():
-        u = _auth.current_user()
+        u = preview_user if _chronicle_preview_target() is not None else _auth.current_user()
         return bool(u) and any(_user_owns_pc(u['id'], r) for r in recips)
     pn = session.get('player_name')   # legacy-open self-picked identity
     return bool(pn) and pn in recips
@@ -18890,6 +18896,71 @@ def chronicle_asset_url(rel):
     return '/chronicle/assets/' + quote(rel) + '?v=' + (_chronicle_version() or '0')
 
 
+def _chronicle_preview_target():
+    """The identity a GM is previewing the Chronicle as, or None.
+
+    GM-ONLY, and the check runs against the REAL _is_gm() before any override is
+    applied. /chronicle is a public route, so this parameter chooses an identity
+    on a page players can reach -- a player who could set it would be choosing
+    somebody else's identity and reading their secrets. It only ever NARROWS
+    what the GM's own session shows; it never grants anything to anyone.
+
+    'player' is a generic player who owns no PC, which is what a page addressed
+    to nobody in particular looks like. A user id previews that specific
+    player, because `recipients` is per-PC and there is no single "the players'
+    view" -- four players can each be shown something different.
+    """
+    key = (request.args.get('as') or '').strip()
+    if not key or not _is_gm():
+        return None
+    if key == 'player':
+        return {'user': None, 'label': 'a player'}
+    user = _auth.get_user(key) if _account_mode() else None
+    if not user:
+        return None
+    return {'user': user, 'label': user.get('display_name') or user.get('username') or 'a player'}
+
+
+def _chronicle_preview_options():
+    """Who a GM can preview as: a generic player, plus each player in the
+    campaign by name. Empty for non-GMs so the control never renders for them,
+    and empty outside account mode where there is no per-player identity to
+    preview -- there, a non-'all' page is GM-only by design.
+    """
+    if not _is_gm():
+        return []
+    if not _account_mode():
+        # No per-player identity to preview here, but "as a generic player" is
+        # still the useful half: it answers "is this page GM-only?", which in
+        # legacy-open mode is the only question there is.
+        return []
+    doc = _active_campaign_doc() or {}
+    out = []
+    for member in doc.get('members', []):
+        if member.get('role') != 'player':
+            continue
+        user = _auth.get_user(member.get('user_id'))
+        if not user:
+            continue
+        out.append({'id': user['id'],
+                    'label': user.get('display_name') or user.get('username')})
+    out.sort(key=lambda o: (o['label'] or '').lower())
+    return out
+
+
+def _chronicle_view_identity():
+    """(user, is_gm) for every visibility decision on a Chronicle screen.
+
+    One place, because every /chronicle* route funnels through
+    _chronicle_visible_pages and _handout_visible_to_request -- the same reason
+    the two publishing lanes merge in one place.
+    """
+    preview = _chronicle_preview_target()
+    if preview is not None:
+        return preview['user'], False
+    return _chronicle_current_user(), _is_gm()
+
+
 def _chronicle_current_user():
     return _auth.current_user() if _account_mode() else None
 
@@ -18907,7 +18978,7 @@ def _chronicle_visible_pages(section=None):
     pages = list(man.get('pages', [])) + _chronicle_doc_pages()
     if not pages:
         return []
-    user, gm = _chronicle_current_user(), _is_gm()
+    user, gm = _chronicle_view_identity()
     return [p for p in pages
             if (section is None or p.get('section') == section)
             and _chronicle_page_visible(p, user=user, is_gm=gm)]
@@ -18996,8 +19067,15 @@ def _chronicle_render(template, always_render=False, **ctx):
     if not man and (always_render or _chronicle_doc_pages()):
         man = {'schema_version': CHRONICLE_SCHEMA_VERSION, 'pages': [],
                'session_number': _load_campaign_config().get('session_number', 1)}
+    # Every Chronicle screen gets the preview banner state, so a GM can never
+    # be looking at a narrowed view without being told which one.
+    preview = _chronicle_preview_target()
     return render_template(template, manifest=man,
-                           nav=_chronicle_nav_counts(), **ctx)
+                           nav=_chronicle_nav_counts(),
+                           chronicle_preview=preview,
+                           chronicle_can_preview=_is_gm(),
+                           chronicle_preview_options=_chronicle_preview_options(),
+                           **ctx)
 
 
 @app.route('/chronicle')
