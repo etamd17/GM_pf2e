@@ -79,9 +79,16 @@
           {% for w in d.warnings or [] %}
           <p class="chron-notice">{{ w }}</p>
           {% endfor %}
+          {# Name the page in the way. "A vault page already uses this address"
+             is true but unactionable -- it does not say WHICH page, so a real
+             conflict and a stale manifest look identical. #}
           <p class="chron-notice js-shadow-notice"{% if not d.shadowed_by_vault %} hidden{% endif %}>
-             Blocked: a vault page already uses the address
-             <code class="js-slug">{{ d.slug }}</code>. Rename this document to publish it.</p>
+             Blocked: the address <code class="js-slug">{{ d.slug }}</code> is held by
+             <span class="js-shadow-who">{% if d.shadowed_by %}the vault page
+               &ldquo;{{ d.shadowed_by.title }}&rdquo;{% if d.shadowed_by.section %}
+               in {{ d.shadowed_by.section }}{% endif %}{% if d.shadowed_by.source %}
+               (<code>{{ d.shadowed_by.source }}</code>){% endif %}{% else %}a vault page{% endif %}</span>.
+             Rename this document to publish it &mdash; it will take the next free address.</p>
           {% if d.published %}
           <p class="chron-card__meta">Renaming a published document changes its
              name only &mdash; its address stays put, so links you have already
@@ -215,14 +222,29 @@
       var lastTitle = titleEl.value;
       titleEl.addEventListener('change', function () {
         var next = titleEl.value.trim();
-        if (!next || next === lastTitle) { titleEl.value = lastTitle; return; }
+        // An unchanged title is normally a no-op -- EXCEPT while the document
+        // is blocked, where re-submitting is what re-derives the address off
+        // the vault. Swallowing it there made the on-screen instruction
+        // ("rename this document") look broken for the one case it exists for.
+        var blocked = row.querySelector('.chron-switch--blocked') !== null;
+        if (!next || (next === lastTitle && !blocked)) { titleEl.value = lastTitle; return; }
         patch(row, { title: next })
           .then(function (doc) {
             lastTitle = doc.title;
             titleEl.value = doc.title;
             row.querySelectorAll('.js-slug').forEach(function (el) { el.textContent = doc.slug; });
             var notice = row.querySelector('.js-shadow-notice');
-            if (notice) notice.hidden = !doc.shadowed_by_vault;
+            if (notice) {
+              notice.hidden = !doc.shadowed_by_vault;
+              var who = notice.querySelector('.js-shadow-who');
+              if (who) {
+                var by = doc.shadowed_by;
+                who.textContent = by
+                  ? 'the vault page “' + by.title + '”'
+                      + (by.section ? ' in ' + by.section : '')
+                  : 'a vault page';
+              }
+            }
             var box = row.querySelector('.chron-doc-publish');
             var wrap = row.querySelector('.chron-switch');
             if (box) box.disabled = doc.shadowed_by_vault || !row.dataset.previewed;

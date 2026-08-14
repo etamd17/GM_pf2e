@@ -12817,6 +12817,27 @@ def _chronicle_vault_slugs():
     return {p.get('slug') for p in man.get('pages', []) if p.get('slug')}
 
 
+def _chronicle_vault_page_at(slug):
+    """The vault page holding `slug`, or None.
+
+    So a blocked document can NAME what is in its way. "A vault page already
+    uses this address" is true but unactionable: it does not say which page, so
+    the GM cannot tell a real conflict from a stale manifest without reading
+    files on the server. That distinction took a code trace to make once, which
+    is once too many.
+    """
+    if not slug:
+        return None
+    man = _chronicle_manifest() or {}
+    for page in man.get('pages', []):
+        if page.get('slug') == slug:
+            return {'slug': slug,
+                    'title': page.get('title') or slug,
+                    'section': page.get('section') or '',
+                    'source': page.get('source') or ''}
+    return None
+
+
 def _chronicle_doc_pages():
     """Published docs projected into the page shape the read side expects.
 
@@ -12894,7 +12915,8 @@ def chronicle_docs_api():
         index = _chronicle_docs_index()
         taken = _chronicle_vault_slugs()
         return jsonify({'ok': True, 'docs': [
-            dict(d, shadowed_by_vault=d.get('slug') in taken)
+            dict(d, shadowed_by_vault=d.get('slug') in taken,
+                 shadowed_by=_chronicle_vault_page_at(d.get('slug')) if d.get('slug') in taken else None)
             for d in index.get('docs', [])
         ]})
 
@@ -13056,7 +13078,9 @@ def chronicle_doc_api(doc_id):
 
     sse_broadcast('chronicle_update', {'doc_id': doc_id,
                                        'published': bool(entry.get('published'))})
-    return jsonify({'ok': True, 'doc': dict(entry, shadowed_by_vault=shadowed)})
+    return jsonify({'ok': True, 'doc': dict(
+        entry, shadowed_by_vault=shadowed,
+        shadowed_by=_chronicle_vault_page_at(entry.get('slug')) if shadowed else None)})
 
 
 def _parse_damage_type_value(entry_str):
@@ -19167,6 +19191,7 @@ def chronicle_manage():
     index = _chronicle_docs_index()
     taken = _chronicle_vault_slugs()
     docs = [dict(d, shadowed_by_vault=d.get('slug') in taken,
+                 shadowed_by=_chronicle_vault_page_at(d.get('slug')) if d.get('slug') in taken else None,
                  size_label=_chronicle_lib.size_label(d.get('byte_count')))
             for d in sorted(index.get('docs', []),
                             key=lambda d: d.get('uploaded_at') or '', reverse=True)]

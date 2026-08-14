@@ -87,3 +87,50 @@ def test_both_call_sites_pass_the_vault():
     src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                             'app.py'), encoding='utf-8').read()
     assert src.count('reserved=_chronicle_vault_slugs()') == 2
+
+
+# --- the block has to name what is in the way -------------------------------
+
+def _app_src():
+    import os
+    return open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                             'app.py'), encoding='utf-8').read()
+
+
+def test_the_colliding_vault_page_is_identified():
+    """"A vault page already uses this address" is true but unactionable -- it
+    does not say WHICH page, so a real conflict and a stale manifest look
+    identical. Telling them apart took a code trace once."""
+    src = _app_src()
+    assert 'def _chronicle_vault_page_at(slug):' in src
+    body = src[src.index('def _chronicle_vault_page_at('):]
+    body = body[:body.index('\ndef ')]
+    for field in ("'title'", "'section'", "'source'"):
+        assert field in body, field
+
+
+def test_every_surface_that_reports_the_block_also_reports_the_page():
+    """The manage screen, the docs listing and the rename response. Missing one
+    means the GM sees a named conflict in one place and an anonymous one in
+    another."""
+    assert _app_src().count('shadowed_by=_chronicle_vault_page_at(') == 3
+
+
+def test_the_notice_names_it_and_the_script_repaints_it():
+    import os
+    tpl = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                            'templates', 'chronicle_manage.html'), encoding='utf-8').read()
+    assert 'js-shadow-who' in tpl
+    assert 'd.shadowed_by.title' in tpl
+    assert "who.textContent" in tpl, 'a rename must update the name, not leave the old one'
+
+
+def test_resubmitting_the_same_title_is_allowed_while_blocked():
+    """The screen says "rename this document". Retyping the same name is the
+    first thing anyone tries -- and the client used to swallow it as a no-op,
+    so the instruction looked broken for the one case it exists for."""
+    import os
+    tpl = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                            'templates', 'chronicle_manage.html'), encoding='utf-8').read()
+    assert "chron-switch--blocked') !== null" in tpl
+    assert 'next === lastTitle && !blocked' in tpl
