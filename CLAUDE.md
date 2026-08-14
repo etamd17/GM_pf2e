@@ -29,17 +29,26 @@ python tools/check_templates.py   # Jinja parse check (CI runs this) — run aft
   `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`
 - **Verify prod-facing fixes on Railway**, not just locally — local-green has missed prod-only failures before.
 - This is a **single-GM, in-person** tool (4 players + 1 GM). Snappiness with that table + tracker↔sheet sync is the priority.
+  A performance audit in 2026-08 found the map's *rendering* was never the problem — 0.7 ms per frame
+  on a 2560x1440 scene with 12 tokens, 20 walls, 4 lights, 200 terrain cells and fog on, ~24x headroom
+  at 60fps. **Every real cost was on the write and auth paths**, and each was paid on the most
+  frequent actions in a fight. If something feels slow, measure there first, and measure against a
+  control: local request latency here is dominated by a ~210 ms Windows localhost connect penalty
+  that does not exist in production, so absolute timings taken over curl are meaningless — compare
+  endpoints against `/health` instead.
 - **Removed, do not rebuild:** the in-app notes/Obsidian vault (the GM authors in real Obsidian;
   the site only keeps a read-only story-thread view + a manual session recap). Note this is NOT the
   same thing as the Session Operations plugin, which runs the opposite direction -- Obsidian drives
   the site, the site never hosts notes. See the Obsidian bullet under Architecture.
 - **The tactical map is BACK IN SCOPE, SHIPPED, and AUDITED.** This line used to say the VTT map
   was removed and must not be rebuilt. That was true until 2026-08-06 and is now badly wrong:
-  `/map` and `/map/table` are live and GM-only, at ~4,300 lines across `core/scenes.py`,
+  `/map` and `/map/table` are live and GM-only, at ~4,500 lines across `core/scenes.py`,
   `services/scene_sync.py`, `static/js/map.js`, `templates/map.html`, `static/css/map.css` and a
-  16-route block in `app.py`, guarded by **380 tests** across 20 files. It went through a full
-  feature audit and then a separate UI audit, both recorded in `docs/map/AUDIT.md`, and every
-  build stage from 1 through 7c is merged. Anything claiming the map is gone is stale.
+  17-route block in `app.py`, guarded by **421 tests** across 21 files. It went through a full
+  feature audit, then a separate UI audit, then a performance audit -- all recorded in
+  `docs/map/AUDIT.md` -- and every build stage from 1 through 7f is merged. **The audit is fully
+  discharged**: every finding is fixed or written down there as a decision. Anything claiming the
+  map is gone, or unfinished, is stale.
 
 ## Architecture
 
@@ -90,6 +99,7 @@ python tools/check_templates.py   # Jinja parse check (CI runs this) — run aft
     honestly reverse. It does not retract consequences the engine applied itself — undoing damage
     restores HP but not the dying condition that damage caused.
 - **GM auth**: a `check_gm_access` before_request gates path-prefixes in `GM_API_PREFIXES` (don't re-flag prefix-gated routes as unauthenticated); `@gm_required` is a separate per-route gate. `_is_gm()` is true for the site admin, the active campaign's GM, or legacy-open mode (no `GM_PASSWORD`). **The Obsidian prefix is NOT in that list** — it authenticates by bearer token on its own blueprint, which is why the pane cannot reuse GM-gated routes like `/api/combatant_stats`.
+- **`_is_gm()` runs TWICE on every gated request** — once in the `check_gm_access` before_request, once in `@gm_required` — and each run used to re-enter `_account_mode()` and `current_user()`, which each re-read `users.json`, while `_active_campaign_id()` repeated the pair and read the campaign doc twice. `core.auth._load_users` and `core.campaigns.get_campaign` now **memoize on `flask.g`, per request** (measured 4 → 1 `users.json` reads per request locally; more in account mode, which is what production runs). Two rules if you touch it: the memo is **request-scoped, never process-scoped**, because a later request must see writes from elsewhere; and `_save_users`/`save_campaign` update the memo so a read later in the same request cannot serve the pre-write copy. **Only a `str` campaign id is memoized** — a crafted request can send a list, which used to be rejected cleanly and became a 500 the moment it was used as a dict key (`TypeError: unhashable type`). A cache keyed on caller-supplied input inherits an assumption the uncached path never made.
 - Atomic JSON writes via `_atomic_write_json`; a global `/api/*` JSON error handler.
 - **`DATA_DIR` fails silently, so `/health` carries evidence rather than inference.** `DATA_DIR = os.environ.get('DATA_DIR', BASE_DIR)` defaults to the checkout with no warning, and the worse case is quieter still: `DATA_DIR=/data` set correctly but the volume never mounted, so writes go to the container's own `/data`. `configured` / `separate_from_repo` / `writable` all read true there — nothing observable inside one process tells it apart from a healthy mount. So `_probe_storage` keeps a boot counter (`.storage_marker.json`, gitignored) in `DATA_DIR`: `boots_observed` > 1 is the only field that proves the directory survived a restart. **Diagnostic value: "players lost their sheets on deploy" now has three distinguishable causes** — the persistence thread not running, the save/reload race, and an unmounted volume — and `/health` separates the third from the other two. The probe runs once at import (`_autostart_storage_probe`, same pytest + reloader-parent exemptions as `_autostart_persistence`); `/health` itself does no disk I/O because Railway polls it. `/health` is public, so absolute paths are GM-only.
 
@@ -101,6 +111,7 @@ python tools/check_templates.py   # Jinja parse check (CI runs this) — run aft
 - **PC state persistence: anything that must survive a restart has to be started at IMPORT time.** Production is `gunicorn app:app` (`Procfile`), which **imports** this module — `__name__` is `'app'`, so `if __name__ == '__main__':` never runs. `_start_persistence_thread()` used to be called only from there, and because both the 2-second flush loop *and* `atexit.register(_flush_pending_persistence)` live inside it, production had **neither**. Nothing drained `_PC_PERSIST_DIRTY` / `_PERSIST_DIRTY`, so HP, conditions, focus, hero points, temp HP, shield, reaction, persistent damage and active effects were marked dirty and dropped on every deploy. `_autostart_persistence()` now runs at module scope; `tests/test_pc_state_persistence.py` guards it by importing the module in a **subprocess** (an in-process assertion cannot catch this — the module is already imported, and the suite takes a deliberate pytest exemption).
   - **Two write paths, and the difference is diagnostic.** Debounced (`_persist_pc_combat_state` → dirty flag → flush loop): HP, conditions, condition timers, focus, hero points, temp HP, shield, reaction, persistent damage, exploration activity, active effects, treat-wounds immunity. Immediate (route does read-modify-write + `save_and_reload_character`): spell slots, prepared spells, inventory, XP, level-ups, portraits. **If slots survive a restart but HP doesn't, the flush loop isn't running.**
   - **Live-tick writes pass `fsync=False`.** `_atomic_write_json`'s docstring (`app.py:178`) explains why: `os.fsync` is the one syscall gevent cannot yield around, so on the single worker each one stalls every player's SSE. `os.replace` stays atomic regardless.
+  - **There are TWO atomic writers, and the second one only grew the flag in 2026-08.** `core/storage.atomic_write_json` is a separate implementation from `app._atomic_write_json`, and it fsynced unconditionally for its whole life — so every caller under `core/` blocked the worker on a disk flush. That included `core/scenes.save_scene`, i.e. **every token move, wall run, fog reveal, terrain paint, light and undo step**, measured at 3.7 ms of pure blocking per write on a 16.5 KB scene (worse on Railway, whose volume is network-backed). It now takes `fsync=True` **by default** so nothing else changed; only `save_scene` opts out. `create_scene` keeps its fsync — once per scene, not once per action. Accounts, campaigns, invites, chronicle and Obsidian tokens all stay durable. **If you add a third writer, give it the flag.**
   - **The read-modify-write race is FIXED, and the ordering is load-bearing.** Every route that reads a character file and then calls `save_and_reload_character` now calls `_flush_pc_dirty(pc_name)` **before its own read** — 28 call sites plus `require_pc_json`, which is the shared front door and flushes for its callers. The ordering cannot be relaxed: the flush must precede the read, so you *cannot* fix a new route by flushing inside `save_and_reload_character` (by then `pc_json` is already stale), and you must not stamp live state over `pc_json` after the reload either — daily prep deliberately pops `current_hp` so `Character.__init__` resets to max, and re-applying live state would hand the player back the damage they just slept off. `tests/test_pc_save_reload_race.py` walks `app.py`'s AST and fails any write-back route whose first flush comes after its first read, so a new route can't reintroduce it silently. Note the lock ordering this establishes: `_pc_spell_lock` → `ENCOUNTER_LOCK`, never the reverse.
 
 ## Rules reference
@@ -131,7 +142,7 @@ Three things are decided and must not be re-litigated: the map is **GM-only** (n
 route; `/api/scenes` is gated at the prefix), the audience is **one shared screen at the table**
 rather than per-player devices, and **GM workflow** is the first priority.
 
-Four map-specific rules worth knowing before touching it:
+Six map-specific rules worth knowing before touching it:
 
 - **Animation is confined to the table screen.** Stage 6a made rendering event-driven — one frame,
   only when something changes — and `animationsWanted()` keeps the GM's working view at that cost.
@@ -147,6 +158,17 @@ Four map-specific rules worth knowing before touching it:
   Restores reuse the original id via a guarded `restore_id`; without that, undoing one erase ended
   the whole history. It is recorded inside `mapElementAction`, so a new action inherits undo for
   free — add one elsewhere and it silently will not have one.
+- **`scene.revision` bumps on ANY save, so it cannot be a cache key on its own.** A token move
+  bumps it, so a mask keyed only on the revision is rebuilt every time a creature takes a step.
+  `terrainEntry` and `drawFogOverlay` both use a TWO-LEVEL key: the cheap revision check first, then
+  a content signature that decides whether the expensive work is actually redone. The fog mask was
+  written the naive way and cost 2.7 ms on the first frame after every move until it was fixed.
+- **SSE frames that mean "live state moved" are coalesced; `scene_update` is not.** `pc_update`,
+  `encounter_update` and `connected` refetch the scene because the map paints HP and conditions from
+  the live projection — but one area effect on four targets emits five frames, which was six full
+  scene fetches across the GM page and the TV for a scene nobody edited. They collapse behind a
+  250 ms timer. `refreshPickers` parses every scene file on disk, so it sits on its own 2 s timer
+  rather than riding every turn advance. Leave `scene_update` itself immediate.
 
 **Verification note.** `requestAnimationFrame` does not fire while `document.hidden` is true, and a
 headless preview pane is permanently hidden, so the canvas never renders there on its own. Call
