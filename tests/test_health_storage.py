@@ -121,30 +121,49 @@ def test_separate_from_repo_catches_the_silent_fallback(tmp_path):
 
 # --- the endpoint ---------------------------------------------------------
 
-def test_health_reports_storage(client, monkeypatch):
-    monkeypatch.setattr(app_module, '_is_gm', lambda: False)
-    body = client.get('/health').get_json()
-    assert body['status'] == 'healthy'
-    for key in ('configured', 'separate_from_repo', 'writable',
-                'boots_observed', 'persistence_proven'):
-        assert key in body['storage'], key
+@pytest.mark.parametrize('user', [
+    None,
+    {'id': 'ordinary-user', 'is_admin': False},
+])
+def test_health_is_status_only_for_non_admin_account_callers(
+        client, monkeypatch, user):
+    """The public orchestrator probe must not double as a diagnostics API."""
+    monkeypatch.setattr(app_module, '_account_mode', lambda: True)
+    monkeypatch.setattr(app_module._auth, 'current_user', lambda: user)
+    assert client.get('/health').get_json() == {'status': 'healthy'}
 
 
 def test_health_does_not_leak_paths_to_anonymous_callers(client, monkeypatch):
-    """Railway polls this with no session, and so can anyone else. The findings
-    are safe to publish; the filesystem layout is not."""
-    monkeypatch.setattr(app_module, '_is_gm', lambda: False)
-    storage = client.get('/health').get_json()['storage']
-    assert 'data_dir' not in storage
-    assert 'base_dir' not in storage
-    blob = json.dumps(storage)
+    """Railway polls this with no session, and so can anyone else."""
+    monkeypatch.setattr(app_module, '_account_mode', lambda: True)
+    monkeypatch.setattr(app_module._auth, 'current_user', lambda: None)
+    body = client.get('/health').get_json()
+    blob = json.dumps(body)
+    assert 'storage' not in body
+    assert 'party_count' not in body
+    assert 'monster_count' not in body
+    assert 'encounter_active' not in body
+    assert 'sse_connections' not in body
     assert app_module.DATA_DIR not in blob
     assert app_module.BASE_DIR not in blob
 
 
-def test_a_gm_gets_the_actual_paths(client, monkeypatch):
-    monkeypatch.setattr(app_module, '_is_gm', lambda: True)
-    storage = client.get('/health').get_json()['storage']
+def test_site_admin_gets_operational_diagnostics(client, monkeypatch):
+    monkeypatch.setattr(app_module, '_account_mode', lambda: True)
+    monkeypatch.setattr(
+        app_module._auth,
+        'current_user',
+        lambda: {'id': 'site-admin', 'is_admin': True},
+    )
+    body = client.get('/health').get_json()
+    assert body['status'] == 'healthy'
+    for key in ('party_count', 'monster_count', 'encounter_active',
+                'sse_connections'):
+        assert key in body, key
+    for key in ('configured', 'separate_from_repo', 'writable',
+                'boots_observed', 'persistence_proven'):
+        assert key in body['storage'], key
+    storage = body['storage']
     assert storage['data_dir'] == app_module.DATA_DIR
     assert storage['base_dir'] == app_module.BASE_DIR
 

@@ -29,6 +29,7 @@ import json
 import uuid
 import shutil
 import tempfile
+import threading
 
 # Mirror app.py's roots. BASE_DIR is the repo (this file lives in core/, so go up
 # one level); DATA_DIR is the Railway volume in prod, the repo locally.
@@ -38,6 +39,7 @@ DATA_DIR = os.environ.get('DATA_DIR', BASE_DIR)
 CAMPAIGNS_DIR = os.path.join(DATA_DIR, 'campaigns')
 USERS_FILE = os.path.join(DATA_DIR, 'users.json')
 SERVER_STATE_FILE = os.path.join(DATA_DIR, 'server_state.json')
+SERVER_STATE_LOCK = threading.RLock()
 SYSTEMS_DIR = os.path.join(DATA_DIR, 'systems')
 
 SCHEMA_VERSION = 1
@@ -347,7 +349,16 @@ def get_live_campaign_id():
     return load_server_state().get('live_campaign_id')
 
 
+def update_server_state(**updates):
+    """Atomically merge fields without losing another thread's state change."""
+    with SERVER_STATE_LOCK:
+        state = load_server_state()
+        state.update(updates)
+        atomic_write_json(SERVER_STATE_FILE, state)
+        return state
+
+
 def set_live_campaign_id(cid):
-    state = load_server_state()
-    state['live_campaign_id'] = _check_id(cid, 'campaign_id') if cid else None
-    atomic_write_json(SERVER_STATE_FILE, state)
+    return update_server_state(
+        live_campaign_id=_check_id(cid, 'campaign_id') if cid else None
+    )

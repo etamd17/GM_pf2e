@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, send_file, send_from_directory, jsonify, session, Response, abort, has_request_context
+from flask import Flask, render_template, request, redirect, url_for, send_file, send_from_directory, jsonify, session, Response, abort, has_request_context, g
 import sqlite3
 import json
 import math
@@ -109,6 +109,15 @@ app.permanent_session_lifetime = _timedelta(days=60)  # "remember me" longevity 
 # the dyno before our per-endpoint size checks run. Bumped high enough for
 # a fat tarball push (vault_data) but well under Railway's worker memory.
 app.config['MAX_CONTENT_LENGTH'] = 64 * 1024 * 1024
+_CAMPAIGN_IMPORT_MAX_UNCOMPRESSED = 256 * 1024 * 1024
+_CAMPAIGN_IMPORT_MAX_ENTRIES = 10000
+_CAMPAIGN_IMPORT_MAX_ENTRY = 128 * 1024 * 1024
+_CAMPAIGN_IMPORT_MAX_CAMPAIGN_JSON = 2 * 1024 * 1024
+_CAMPAIGN_IMPORT_MAX_CHARACTER_JSON = 4 * 1024 * 1024
+_CAMPAIGN_IMPORT_MAX_CHARACTER_TOTAL = 32 * 1024 * 1024
+_CAMPAIGN_IMPORT_MAX_CHARACTER_FILES = 500
+_CAMPAIGN_IMPORT_MAX_JSON = 4 * 1024 * 1024
+_CAMPAIGN_IMPORT_COPY_CHUNK = 1024 * 1024
 
 
 # One per-deploy version token, read once at boot. Railway injects
@@ -223,12 +232,89 @@ if GM_PASSWORD:
 # via the logged-in user's per-campaign role; with no accounts yet (tests /
 # un-bootstrapped) we fall back to the legacy GM_PASSWORD behavior below.
 from core import auth as _auth, campaigns as _campaigns, backups as _backups, scenes as _scenes
+from core import access as _access, request_context as _request_context
+from core.route_policy import (
+    CharacterOwnerSource as _CharacterOwnerSource,
+    RoutePolicy as _RoutePolicy,
+    character_owner_resolution_for as _character_owner_resolution_for,
+    policy_for as _route_policy_for,
+    requires_character_owner as _requires_character_owner,
+    requires_legacy_gm as _requires_legacy_gm,
+    requires_live_campaign_match as _requires_live_campaign_match,
+)
 from services import scene_sync as _scene_sync
 from core import chronicle_docs as _chronicle_lib
 
 
+# Temporary serialization boundary for handlers that still address the loaded
+# module-global campaign. It closes the check/use race until PR8 replaces those
+# globals with campaign-scoped repositories.
+_LIVE_CAMPAIGN_DISPATCH_LOCK = threading.RLock()
+# Scheduled and on-demand campaign archives share the same persistence
+# boundary as every live PF2e writer, so a zip cannot observe half a batch.
+_backups.SNAPSHOT_LOCK = _LIVE_CAMPAIGN_DISPATCH_LOCK
+_LIVE_CAMPAIGN_SERIALIZED_ENDPOINTS = frozenset({
+    'activate_campaign',
+    'stop_active_campaign',
+    'campaign_delete',
+    'campaign_set_system',
+    'admin_set_campaign_system',
+    # Membership changes must serialize with SSE authorization + eager
+    # registration. Otherwise a stream can pass the old membership check,
+    # pause, then register just after the mutation tried to revoke it.
+    'campaign_remove_member',
+    'campaign_set_role',
+    # Invite creation/revocation shares one JSON store with public /join.
+    # Serializing every mutation closes the revoke/consume and double-mint
+    # windows while join holds this same lock through its commit.
+    'campaign_invites',
+    'campaign_mint_invite',
+    'campaign_revoke_invite',
+})
+
+
 def _account_mode():
-    return _auth.any_users_exist()
+    # Once account mode has ever been initialized, a missing/corrupt identity
+    # store must never reopen the legacy trust model. The earliest request guard
+    # below turns that state into a 503 before any endpoint can dispatch.
+    return _auth.account_mode_initialized()
+
+
+def _account_store_unavailable_response():
+    """Stable fail-closed response without exposing filesystem details."""
+    headers = {'Retry-After': '60'}
+    if request.endpoint == 'health_check':
+        return jsonify({
+            'status': 'unhealthy',
+            'account_store': 'unavailable',
+        }), 503, headers
+    if _authorization_is_api_request():
+        return jsonify({
+            'error': 'account_store_unavailable',
+            'message': 'Account data is temporarily unavailable.',
+        }), 503, headers
+    return (
+        'Account data is temporarily unavailable. Please try again later.',
+        503,
+        headers,
+    )
+
+
+@app.before_request
+def _fail_closed_account_store():
+    """Never reinterpret initialized-but-broken account storage as legacy mode."""
+    if request.endpoint == 'static':
+        return None
+    if _auth.account_store_state() == _auth.ACCOUNT_STORE_UNAVAILABLE:
+        return _account_store_unavailable_response()
+    return None
+
+
+@app.errorhandler(_auth.AccountStoreUnavailable)
+def _handle_account_store_unavailable(_error):
+    # Covers a store/marker failure that begins during this request, after the
+    # early guard already observed a healthy state (for example first setup).
+    return _account_store_unavailable_response()
 
 
 def _active_campaign_id():
@@ -310,6 +396,8 @@ def _set_active_campaign(cid):
     it on the account, so a later fresh login resumes the same table instead of
     inheriting the server-wide live slot's system. The single place that records
     a per-user campaign choice."""
+    if session.get('active_campaign_id') != cid:
+        session.pop('player_name', None)
     session['active_campaign_id'] = cid
     session.pop('campaign_stopped', None)   # picking a table un-parks the session
     try:
@@ -346,9 +434,16 @@ def _cosmere_player_char_name():
         u = _auth.current_user()
         if not u:
             return ''
-        for d in _list_cosmere_pcs():
-            if d.get('owner_user_id') == u.get('id'):
-                return d.get('name') or ''
+        cid = _active_campaign_id()
+        if not cid:
+            return ''
+        directory = _storage.cosmere_pc_dir(cid)
+        for filename in sorted(os.listdir(directory)) if os.path.isdir(directory) else ():
+            if not filename.endswith('.json'):
+                continue
+            d = _storage.load_json(os.path.join(directory, filename))
+            if isinstance(d, dict) and d.get('owner_user_id') == u.get('id'):
+                return d.get('name') or (d.get('build') or {}).get('name') or ''
     except Exception:
         pass
     return ''
@@ -391,7 +486,7 @@ def gm_required(f):
     def decorated(*args, **kwargs):
         if _is_gm():
             return f(*args, **kwargs)
-        if request.path.startswith('/api/'):
+        if _authorization_is_api_request():
             return jsonify({"error": "GM access required"}), 403
         return redirect('/login' if _account_mode() else '/gm/login')
     return decorated
@@ -408,6 +503,35 @@ def _is_gm():
             return False
         return bool(u.get('is_admin')) or _campaigns.is_gm(_active_campaign_doc(), u['id'])
     return (not GM_PASSWORD) or session.get('gm_authenticated', False)
+
+
+def _trusted_actor_label(fallback='Player'):
+    """Return an attribution label derived from stored identity, not a cookie.
+
+    ``session.player_name`` remains a convenient selected-character pointer, but
+    in account mode it is never authority: a caller can retain or forge stale
+    session state.  Preserve the selected character label only when that account
+    owns a same-campaign character; otherwise fall back to the account's own
+    server-side display name.  Legacy mode keeps its supported self-picked name.
+    """
+    if _is_gm():
+        return 'GM'
+    if not _account_mode():
+        return (session.get('player_name') or fallback)
+    user = _auth.current_user()
+    if not user:
+        return fallback
+    selected = (session.get('player_name') or '').strip()
+    cid = _active_campaign_id()
+    if selected and cid:
+        try:
+            for record in _scene_character_records(cid).values():
+                if (record.get('name') == selected
+                        and record.get('owner_user_id') == user.get('id')):
+                    return selected
+        except Exception:
+            pass
+    return (user.get('display_name') or user.get('username') or fallback)
 
 def require_pc_self_or_gm(f):
     """Decorator: only the GM or the character's owner may mutate a PC's sheet.
@@ -517,17 +641,292 @@ GM_API_PREFIXES = (
 def _chronicle_token_ok(path):
     """A valid X-Chronicle-Token unlocks EXACTLY the /api/chronicle publish API
     for headless CLI publishing (PR0 build tool -> prod). The env token must be
-    non-empty and match the header exactly; only /api/chronicle paths are
-    eligible, so a leaked token can never reach any other GM-gated prefix.
+    non-empty and match the header exactly. No status, rollback, unpublish, or
+    document-management operation accepts this automation credential.
     Local dev (legacy-open, GM_PASSWORD='') never reaches here -- _is_gm() is
     already True there, so no token is needed."""
-    if not path.startswith('/api/chronicle'):
+    if path != '/api/chronicle/publish' or request.method != 'POST':
         return False
     expected = os.environ.get('CHRONICLE_PUBLISH_TOKEN', '')
     if not expected:
         return False
     supplied = request.headers.get('X-Chronicle-Token', '')
     return hmac.compare_digest(supplied, expected)
+
+
+_AUTHORIZATION_JSON_ENDPOINTS = frozenset({
+    # Multipart fetch: no JSON Content-Type and the existing client does not set
+    # X-Requested-With, but every success/error response is JSON.
+    'campaign_import',
+    'cosmere_import_pdf',
+})
+
+
+def _authorization_is_api_request():
+    """Whether the request uses the stable JSON denial contract."""
+    return bool(
+        request.path.startswith('/api/')
+        or request.is_json
+        or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        or request.endpoint in _AUTHORIZATION_JSON_ENDPOINTS
+    )
+
+
+def _authorization_error(code, message, status):
+    """Fail closed without turning browser denials into API redirects."""
+    if _authorization_is_api_request():
+        return jsonify({'error': code, 'message': message}), status
+    return message, status
+
+
+def _authorization_campaign_id():
+    """Resolve the campaign the endpoint addresses, never the loaded globals."""
+    route_cid = (request.view_args or {}).get('cid')
+    if isinstance(route_cid, str) and route_cid.strip():
+        return route_cid.strip()
+    return _active_campaign_id()
+
+
+def _authorization_campaign_doc(cid):
+    """Load the addressed campaign, including explicit trash lifecycle routes."""
+    if not cid:
+        return None
+    try:
+        if request.endpoint in {'campaign_restore', 'campaign_purge'}:
+            return _campaigns.get_trashed_campaign(cid)
+        return _campaigns.get_campaign(cid)
+    except (OSError, TypeError, ValueError):
+        return None
+
+
+def _authorization_character_locator(resolution):
+    """Read an untrusted locator declared by the audited route registry."""
+    source = resolution.source
+    field = resolution.field
+    value = None
+    if source in {
+        _CharacterOwnerSource.ROUTE_PC_NAME,
+        _CharacterOwnerSource.ROUTE_COSMERE_PID,
+    }:
+        value = (request.view_args or {}).get(field)
+    elif source is _CharacterOwnerSource.QUERY_COSMERE_PID:
+        value = request.args.get(field)
+    elif source in {
+        _CharacterOwnerSource.JSON_COSMERE_PID,
+        _CharacterOwnerSource.JSON_PC_NAME,
+    }:
+        payload = request.get_json(silent=True)
+        if isinstance(payload, dict):
+            value = payload.get(field)
+    elif source is _CharacterOwnerSource.SESSION_PC_NAME:
+        value = session.get(field)
+    if not isinstance(value, str) or not value.strip():
+        return None
+    return value.strip()
+
+
+def _authorization_character_context(cid, reference, source):
+    """Resolve stored ownership inside ``cid``; locators are never authority."""
+    if not cid or not reference:
+        return None
+    cosmere_sources = {
+        _CharacterOwnerSource.ROUTE_COSMERE_PID,
+        _CharacterOwnerSource.QUERY_COSMERE_PID,
+        _CharacterOwnerSource.JSON_COSMERE_PID,
+    }
+    try:
+        directory = (
+            _storage.cosmere_pc_dir(cid)
+            if source in cosmere_sources
+            else _storage.party_dir(cid)
+        )
+        matches = []
+        for filename in sorted(os.listdir(directory)) if os.path.isdir(directory) else ():
+            if not filename.endswith('.json'):
+                continue
+            doc = _storage.load_json(os.path.join(directory, filename))
+            if not isinstance(doc, dict):
+                continue
+            if source in cosmere_sources:
+                matched = doc.get('id') == reference
+            else:
+                matched = _campaigns._character_name(doc) == reference
+            if matched:
+                matches.append(doc)
+        # Duplicate names/ids are ambiguous and therefore cannot authorize.
+        if len(matches) != 1:
+            return None
+        doc = matches[0]
+        stored_cid = doc.get('campaign_id')
+        if stored_cid is not None and stored_cid != cid:
+            return None
+        character_id = doc.get('id')
+        if not isinstance(character_id, str) or not character_id.strip():
+            character_id = reference
+        owner_id = doc.get('owner_user_id')
+        if not isinstance(owner_id, str) or not owner_id.strip():
+            owner_id = None
+        raw_editors = doc.get('editor_user_ids')
+        editors = (
+            tuple(v for v in raw_editors if isinstance(v, str) and v.strip())
+            if isinstance(raw_editors, (list, tuple, set))
+            else ()
+        )
+        return _request_context.resolve_character_context(
+            campaign_id=cid,
+            character_id=character_id,
+            owner_user_id=owner_id,
+            editor_user_ids=editors,
+            legacy_ref=reference,
+        )
+    except (OSError, TypeError, ValueError):
+        return None
+
+
+@app.before_request
+def _enforce_route_policy():
+    """Authorize every inventoried account-mode route before view dispatch.
+
+    Legacy single-table installs retain their existing decorators and password
+    behavior. Account mode instead resolves one immutable campaign context and,
+    where required, a stored character owner from that same campaign. Handlers
+    that still use loaded module globals additionally fail with 409 when the
+    session campaign is not the loaded live campaign.
+    """
+    endpoint = request.endpoint
+    if endpoint is None:  # Preserve Flask's normal 404 handling.
+        return None
+    policy = _route_policy_for(endpoint, request.method)
+    if policy is None:
+        return _authorization_error(
+            'route_policy_missing',
+            'This endpoint has no reviewed access policy.',
+            500,
+        )
+    if policy is _RoutePolicy.PUBLIC:
+        return None
+    # These bearer credentials already have purpose-built validators which bind
+    # them to an explicit campaign before their views run.
+    if policy is _RoutePolicy.INTEGRATION_TOKEN:
+        # The integration blueprint verifies its own campaign-bound bearer
+        # token, but its adapters still read the process-wide live runtime.
+        # Serialize verification + dispatch with campaign rebinds so an A token
+        # cannot validate, pause, and then execute against newly loaded B state.
+        _LIVE_CAMPAIGN_DISPATCH_LOCK.acquire()
+        g._live_campaign_dispatch_lock_held = True
+        live_party_dir = _loaded_party_dir()
+        if live_party_dir:
+            _abort_if_pending_character_batch(
+                live_party_dir,
+                discover=False,
+            )
+        return None
+    if (
+        policy is _RoutePolicy.CAMPAIGN_GM_OR_PUBLISH_TOKEN
+        and _chronicle_token_ok(request.path)
+    ):
+        return None
+
+    # Serialization protects the process-wide live runtime independently of
+    # which authentication mode selected the caller. Legacy password/open-local
+    # deployments have the same greenlet and background-persistence races as
+    # account mode, so acquire this boundary before the legacy auth bypass.
+    needs_live_lock = (
+        _requires_live_campaign_match(policy)
+        or endpoint in _LIVE_CAMPAIGN_SERIALIZED_ENDPOINTS
+    )
+    if needs_live_lock:
+        _LIVE_CAMPAIGN_DISPATCH_LOCK.acquire()
+        g._live_campaign_dispatch_lock_held = True
+        live_party_dir = _loaded_party_dir()
+        if live_party_dir:
+            _abort_if_pending_character_batch(
+                live_party_dir,
+                discover=False,
+            )
+
+    # Legacy mode has no account principal to resolve, but every declarative GM
+    # policy still needs the password-backed GM session. This closes the gaps
+    # left by maintaining a separate decorator/prefix list. Open local dev
+    # remains supported because _is_gm() is true when GM_PASSWORD is unset.
+    if not _account_mode():
+        if _requires_legacy_gm(policy) and not _is_gm():
+            return _authorization_error(
+                'campaign_gm_required',
+                'Campaign GM access required.',
+                403,
+            )
+        return None
+
+    user = _auth.current_user()
+    try:
+        principal = _request_context.principal_from_user(user)
+        cid = _authorization_campaign_id()
+        campaign = _authorization_campaign_doc(cid)
+        campaign_context = _request_context.resolve_campaign_context(
+            principal,
+            campaign_id=cid,
+            campaign=campaign,
+            live_campaign_id=_loaded_campaign_id(),
+        )
+    except (TypeError, ValueError):
+        return _authorization_error(
+            'campaign_context_invalid',
+            'The request campaign context is invalid.',
+            403,
+        )
+
+    character_context = None
+    if _requires_character_owner(policy):
+        resolution = _character_owner_resolution_for(endpoint)
+        if resolution is None:
+            return _authorization_error(
+                'character_policy_invalid',
+                'The endpoint has no reviewed character resolver.',
+                500,
+            )
+        reference = _authorization_character_locator(resolution)
+        character_context = _authorization_character_context(
+            cid,
+            reference,
+            resolution.source,
+        )
+
+    g.principal = principal
+    g.campaign_context = campaign_context
+    g.character_context = character_context
+    decision = _access.decide_access(
+        policy,
+        campaign_context,
+        character=character_context,
+    )
+    if decision.allowed:
+        return None
+    target = request.full_path.rstrip('?') if request.query_string else request.path
+    return _access.flask_denial_response(
+        decision,
+        is_api=_authorization_is_api_request(),
+        request_target=target,
+        login_url='/login',
+    )
+
+
+def _release_live_campaign_dispatch_lock():
+    if getattr(g, '_live_campaign_dispatch_lock_held', False):
+        g._live_campaign_dispatch_lock_held = False
+        _LIVE_CAMPAIGN_DISPATCH_LOCK.release()
+
+
+@app.after_request
+def _release_live_campaign_lock_after_response(response):
+    _release_live_campaign_dispatch_lock()
+    return response
+
+
+@app.teardown_request
+def _release_live_campaign_lock_after_error(_error):
+    # after_request does not run for every exception path; teardown always does.
+    _release_live_campaign_dispatch_lock()
 
 
 @app.before_request
@@ -767,6 +1166,16 @@ CAMPAIGN_FILE = LOOT_LEDGER_FILE = CAMPAIGN_STATS_FILE = JOURNAL_DIR = None
 PINNED_GENERATORS_FILE = CALENDAR_FILE = STORY_THREADS_FILE = None
 HANDOUTS_FILE = COSMERE_ADVERSARIES_FILE = None
 CHRONICLE_DIR = None
+
+
+def _loaded_campaign_id():
+    """Compatibility boundary for the campaign bound to legacy live state."""
+    return ACTIVE_CAMPAIGN_ID
+
+
+def _loaded_party_dir():
+    """Compatibility boundary for the party directory bound to live state."""
+    return PARTY_DIR
 
 
 def _bind_campaign_paths(cid):
@@ -1081,14 +1490,88 @@ def _chronicle_unpublish_dir(chronicle_dir):
     return removed
 
 
+def _clear_live_encounter_roster():
+    """Clear the loaded combat roster; caller owns request/encounter locking."""
+    ACTIVE_ENCOUNTER.clear()
+
+
+def _reset_live_runtime_state():
+    """Drop every process-global value owned by the previously loaded campaign.
+
+    The caller holds ``_LIVE_CAMPAIGN_DISPATCH_LOCK`` and has already flushed
+    durable dirty state.  Timer cancellation is deliberately non-blocking: a
+    timer that already started will acquire the live lock later, observe empty
+    pending work, and return.  Never join it while holding this lock.
+    """
+    global TURN_INDEX, ROUND_NUMBER, ENCOUNTER_NOTES, SESSION_TIMER_START
+    global _TRACKER_STATE_CACHE, _TRACKER_STATE_CACHE_TIME
+    global _PARTY_DIR_LISTING_MTIME, _PERSIST_DIRTY
+    global _PC_BROADCAST_TIMER, _ENC_BROADCAST_TIMER, _ENC_BROADCAST_PENDING
+
+    with ENCOUNTER_LOCK:
+        _clear_live_encounter_roster()
+        PENDING_INITIATIVES.clear()
+        _RECENT_DEFEATED.clear()
+        ROUND_EVENTS.clear()
+        COMBAT_LOGS.clear()
+        TURN_REMINDERS.clear()
+        TURN_INDEX = 0
+        ROUND_NUMBER = 1
+        ENCOUNTER_NOTES = ''
+        SESSION_TIMER_START = None
+
+    with CHAT_LOCK:
+        CHAT_MESSAGES.clear()
+    GM_SECRET_LOG.clear()
+    ACTIVE_SKILL_CHALLENGES.clear()
+    HANDOUTS.clear()
+    with SESSION_STATE_LOCK:
+        SESSION_HEALING_LOG.clear()
+        SESSION_JOURNAL.clear()
+
+    _TRACKER_STATE_CACHE = None
+    _TRACKER_STATE_CACHE_TIME = 0.0
+    _PARTY_DIR_MTIME_CACHE.clear()
+    _PARTY_DIR_LISTING_MTIME = 0
+    _PC_FILE_CACHE.clear()
+    _PERSIST_DIRTY = False
+    _PC_PERSIST_DIRTY.clear()
+
+    with _PC_BROADCAST_LOCK:
+        if _PC_BROADCAST_TIMER is not None:
+            _PC_BROADCAST_TIMER.cancel()
+        _PC_BROADCAST_TIMER = None
+        _PC_BROADCAST_PENDING.clear()
+    with _ENC_BROADCAST_LOCK:
+        if _ENC_BROADCAST_TIMER is not None:
+            _ENC_BROADCAST_TIMER.cancel()
+        _ENC_BROADCAST_TIMER = None
+        _ENC_BROADCAST_PENDING = False
+
+
 def load_campaign(cid):
     """Switch the active campaign: re-bind paths and reload all campaign-scoped
     in-memory state. `cid` may be None to fall back to the legacy flat layout."""
-    _bind_campaign_paths(cid)
-    load_libraries()
-    _load_session_state()
-    _load_handouts()
-    return ACTIVE_CAMPAIGN_ID
+    with _LIVE_CAMPAIGN_DISPATCH_LOCK:
+        # Drain writes while the old paths and objects still agree. Otherwise a
+        # debounced campaign-A snapshot can wake after the bind and overwrite a
+        # campaign-B file with A's encounter/PC state.
+        flush = globals().get('_flush_pending_persistence')
+        if callable(flush) and flush() is False:
+            raise RuntimeError(
+                'campaign switch aborted because live state could not be persisted'
+            )
+        closer = globals().get('_close_sse_subscribers_for_other_campaign')
+        if callable(closer):
+            closer(cid)
+        resetter = globals().get('_reset_live_runtime_state')
+        if callable(resetter):
+            resetter()
+        _bind_campaign_paths(cid)
+        load_libraries()
+        _load_session_state()
+        _load_handouts()
+        return _loaded_campaign_id()
 
 
 _bind_campaign_paths(_storage.get_live_campaign_id())
@@ -1334,8 +1817,8 @@ def _persist_encounter_state():
     global _PERSIST_DIRTY
     _PERSIST_DIRTY = True
 
-def _do_persist_encounter_state():
-    """Actually write the active encounter to disk. Called by flush thread."""
+def _do_persist_encounter_state_unlocked():
+    """Write the active encounter and report whether durable state is current."""
     # Build a snapshot under lock so iteration is consistent, then release
     # before touching the filesystem (disk writes can be slow).
     with ENCOUNTER_LOCK:
@@ -1344,9 +1827,10 @@ def _do_persist_encounter_state():
             try:
                 if os.path.exists(autosave_path):
                     os.remove(autosave_path)
-            except Exception:
-                pass
-            return
+            except Exception as e:
+                print(f"[ENCOUNTER PERSIST ERROR] {e}")
+                return False
+            return True
         encounter_data = {
             "round": ROUND_NUMBER,
             "turn_index": TURN_INDEX,
@@ -1389,17 +1873,31 @@ def _do_persist_encounter_state():
         # every SSE stream on the single gevent worker.
         _atomic_write_json(os.path.join(ENCOUNTER_DIR, '_autosave.json'),
                            encounter_data, indent=2, fsync=False)
+        return True
     except Exception as e:
         print(f"[ENCOUNTER PERSIST ERROR] {e}")
+        return False
 
-def _flush_pending_persistence():
-    """Flush any dirty encounter/PC state to disk. Called by background thread and at exit."""
+
+def _do_persist_encounter_state():
+    """Persist one encounter snapshot without allowing a path rebind mid-write."""
+    with _LIVE_CAMPAIGN_DISPATCH_LOCK:
+        return _do_persist_encounter_state_unlocked()
+
+
+def _flush_pending_persistence_locked():
+    """Flush dirty state, retaining every marker whose write did not succeed."""
     global _PERSIST_DIRTY
+    succeeded = True
     if _PERSIST_DIRTY:
         _PERSIST_DIRTY = False  # clear first so concurrent mutations re-mark dirty
         try:
-            _do_persist_encounter_state()
+            if not _do_persist_encounter_state():
+                _PERSIST_DIRTY = True
+                succeeded = False
         except Exception as e:
+            _PERSIST_DIRTY = True
+            succeeded = False
             print(f"[PERSIST FLUSH] encounter: {e}")
     # Snapshot-and-swap the PC dirty set to avoid skipping additions mid-flush
     if _PC_PERSIST_DIRTY:
@@ -1408,9 +1906,20 @@ def _flush_pending_persistence():
             _PC_PERSIST_DIRTY.discard(name)
         for name in pcs:
             try:
-                _do_persist_pc_combat_state(name)
+                if not _do_persist_pc_combat_state(name):
+                    _PC_PERSIST_DIRTY.add(name)
+                    succeeded = False
             except Exception as e:
+                _PC_PERSIST_DIRTY.add(name)
+                succeeded = False
                 print(f"[PERSIST FLUSH] pc {name}: {e}")
+    return succeeded
+
+
+def _flush_pending_persistence():
+    """Claim and write all dirty state atomically with respect to campaign load."""
+    with _LIVE_CAMPAIGN_DISPATCH_LOCK:
+        return _flush_pending_persistence_locked()
 
 def _persistence_flush_loop():
     """Background thread: periodically flush dirty state to disk."""
@@ -1479,26 +1988,75 @@ def _autostart_persistence():
 _autostart_persistence()
 
 # --- SERVER-SENT EVENTS (SSE) FOR REAL-TIME SYNC ---
-# Each subscriber is a (queue.Queue, is_gm: bool, campaign_id) tuple. We tag the queue at
-# connection time so sse_broadcast() can route GM-only and player-sanitized
-# payloads without peeking at per-request Flask sessions (SSE connections
-# outlive any one request).
+# Each subscriber is a
+# (queue.Queue, is_gm: bool, campaign_id, account_user_id) tuple. We capture
+# authorization at connection time so sse_broadcast() can route GM-only and
+# player-sanitized payloads without peeking at a Flask request (SSE connections
+# outlive any one request). The user id lets membership/role changes actively
+# revoke that captured authorization instead of waiting for a browser refresh.
 _sse_subscribers = []
 _sse_lock = threading.Lock()
 _sse_last_cleanup = time.time()
+_SSE_CLOSE = object()
+_SSE_CAMPAIGN_UNSET = object()
 # Event-replay ring buffer: every broadcast gets a monotonic id, and the last
 # _SSE_BUFFER_MAX events are kept so a client that briefly dropped (tablet asleep
 # / off wifi) can reconnect with Last-Event-ID and be replayed the events it
 # missed — instead of silently showing stale HP/conditions until a manual reload.
 _sse_event_seq = 0
 _sse_buffer = []            # list of (id, gm_frame, player_frame_or_None)
-_sse_event_campaigns = {}   # id -> campaign_id; None means a global event
+_sse_event_campaigns = {}   # id -> exact campaign_id; None is legacy scope
 _SSE_BUFFER_MAX = 256
 _SSE_MAX_SUBSCRIBERS = 200  # Hard cap to prevent memory leaks. Sized for a full
 # table across several devices, each tab holding multiple EventSource
 # connections; broadcasts iterate this list so it stays bounded, but 50 was low
 # enough that reload churn could evict a live connection (see subscribe logic).
 _SSE_STALE_TIMEOUT = 120  # Seconds before a non-consuming queue is considered stale
+
+
+def _terminate_sse_entry_locked(entry):
+    """Wake one subscriber so its generator exits; caller holds ``_sse_lock``."""
+    q = entry[0]
+    try:
+        while True:
+            q.get_nowait()
+    except queue.Empty:
+        pass
+    try:
+        q.put_nowait(_SSE_CLOSE)
+    except queue.Full:
+        pass
+
+
+def _close_sse_subscribers_for_other_campaign(campaign_id):
+    """Terminate streams captured against the campaign being unloaded."""
+    with _sse_lock:
+        stale = [entry for entry in _sse_subscribers if entry[2] != campaign_id]
+        for entry in stale:
+            if entry in _sse_subscribers:
+                _sse_subscribers.remove(entry)
+            _terminate_sse_entry_locked(entry)
+    return len(stale)
+
+
+def _close_sse_subscribers_for_user(campaign_id, user_id):
+    """Revoke streams whose captured account authority has just changed.
+
+    Three-field entries are tolerated for legacy/tests; they carry no account
+    identity and therefore cannot match an account membership mutation.
+    """
+    if not campaign_id or not user_id:
+        return 0
+    with _sse_lock:
+        stale = [
+            entry for entry in _sse_subscribers
+            if len(entry) >= 4 and entry[2] == campaign_id and entry[3] == user_id
+        ]
+        for entry in stale:
+            if entry in _sse_subscribers:
+                _sse_subscribers.remove(entry)
+            _terminate_sse_entry_locked(entry)
+    return len(stale)
 
 # SSE keepalive thread — fires a real `keepalive` event every 25s so:
 #   1. Edge proxies (Railway, Cloudflare, etc.) see bytes within their
@@ -1512,26 +2070,34 @@ _SSE_STALE_TIMEOUT = 120  # Seconds before a non-consuming queue is considered s
 _SSE_KEEPALIVE_SECS = 25
 _sse_keepalive_started = False
 _sse_keepalive_lock = threading.Lock()
+
+
+def _send_sse_keepalive_once():
+    """Send one keepalive and terminate queues that can no longer consume."""
+    with _sse_lock:
+        if not _sse_subscribers:
+            return 0
+        # Bypass the player_filter logic — this is identical for GM and
+        # players, no PII risk.
+        msg = f"event: keepalive\ndata: {{\"t\":{int(time.time())}}}\n\n"
+        dead = []
+        for entry in _sse_subscribers:
+            try:
+                entry[0].put_nowait(msg)
+            except queue.Full:
+                dead.append(entry)
+        for entry in dead:
+            if entry in _sse_subscribers:
+                _sse_subscribers.remove(entry)
+            _terminate_sse_entry_locked(entry)
+        return len(dead)
+
+
 def _sse_keepalive_loop():
     while True:
         try:
             time.sleep(_SSE_KEEPALIVE_SECS)
-            with _sse_lock:
-                n = len(_sse_subscribers)
-            if n > 0:
-                # Bypass the player_filter logic — this is identical for
-                # GM and players, no PII risk.
-                msg = f"event: keepalive\ndata: {{\"t\":{int(time.time())}}}\n\n"
-                with _sse_lock:
-                    dead = []
-                    for entry in _sse_subscribers:
-                        try:
-                            entry[0].put_nowait(msg)
-                        except queue.Full:
-                            dead.append(entry)
-                    for e in dead:
-                        if e in _sse_subscribers:
-                            _sse_subscribers.remove(e)
+            _send_sse_keepalive_once()
         except Exception as e:
             print(f"[SSE keepalive] {e}")
 
@@ -1545,7 +2111,25 @@ def _ensure_sse_keepalive():
         _sse_keepalive_started = True
 
 
-def sse_broadcast(event_type, data, *, player_filter=None, campaign_id=None):
+def sse_broadcast(event_type, data, *, player_filter=None,
+                  campaign_id=_SSE_CAMPAIGN_UNSET):
+    """Emit against one stable campaign and stamp omitted scope as live."""
+    with _LIVE_CAMPAIGN_DISPATCH_LOCK:
+        resolved_campaign_id = (
+            _loaded_campaign_id()
+            if campaign_id is _SSE_CAMPAIGN_UNSET
+            else campaign_id
+        )
+        return _sse_broadcast_locked(
+            event_type,
+            data,
+            player_filter=player_filter,
+            campaign_id=resolved_campaign_id,
+        )
+
+
+def _sse_broadcast_locked(event_type, data, *, player_filter=None,
+                          campaign_id=None):
     """Push an event to all connected SSE clients.
 
     Parameters
@@ -1560,8 +2144,8 @@ def sse_broadcast(event_type, data, *, player_filter=None, campaign_id=None):
         to drop the message entirely for players (GMs still receive `data`).
         If omitted, all subscribers receive `data` unchanged.
     campaign_id : Optional[str]
-        When set, deliver and replay this frame only to subscribers currently
-        viewing that campaign. Existing unscoped events remain global.
+        Deliver and replay only to subscribers viewing this exact campaign.
+        ``None`` is the explicit legacy single-table scope, not a wildcard.
     """
     global _sse_last_cleanup
     _bump_perf('sse_emit_total')
@@ -1599,8 +2183,8 @@ def sse_broadcast(event_type, data, *, player_filter=None, campaign_id=None):
                     _sse_event_campaigns.pop(old_sid, None)
         dead = []
         for entry in _sse_subscribers:
-            q, is_gm, subscriber_cid = entry
-            if campaign_id is not None and subscriber_cid != campaign_id:
+            q, is_gm, subscriber_cid = entry[:3]
+            if subscriber_cid != campaign_id:
                 continue
             msg = gm_msg if is_gm else player_msg
             if msg is None:
@@ -1610,7 +2194,9 @@ def sse_broadcast(event_type, data, *, player_filter=None, campaign_id=None):
             except queue.Full:
                 dead.append(entry)
         for entry in dead:
-            _sse_subscribers.remove(entry)
+            if entry in _sse_subscribers:
+                _sse_subscribers.remove(entry)
+            _terminate_sse_entry_locked(entry)
 
         # Periodic stale subscriber cleanup (every 60 seconds)
         now = time.time()
@@ -1620,6 +2206,7 @@ def sse_broadcast(event_type, data, *, player_filter=None, campaign_id=None):
             stale = [entry for entry in _sse_subscribers if entry[0].qsize() > 40]
             for entry in stale:
                 _sse_subscribers.remove(entry)
+                _terminate_sse_entry_locked(entry)
             if _sse_subscribers or stale:
                 print(f"[SSE] Active: {len(_sse_subscribers)}, Cleaned: {len(stale)}")
 
@@ -1665,7 +2252,7 @@ def _bump_perf(key, delta=1):
     with _PERF_COUNTERS_LOCK:
         _PERF_COUNTERS[key] = _PERF_COUNTERS.get(key, 0) + delta
 
-def _flush_pc_broadcasts():
+def _flush_pc_broadcasts_locked():
     global _PC_BROADCAST_TIMER
     with _PC_BROADCAST_LOCK:
         pending = list(_PC_BROADCAST_PENDING)
@@ -1676,6 +2263,12 @@ def _flush_pc_broadcasts():
             _do_broadcast_pc_state(name)
         except Exception as e:
             print(f"[SSE FLUSH] pc {name}: {e}")
+
+
+def _flush_pc_broadcasts():
+    """Flush a coalesced PC frame against one stable live campaign runtime."""
+    with _LIVE_CAMPAIGN_DISPATCH_LOCK:
+        return _flush_pc_broadcasts_locked()
 
 def _broadcast_pc_state(pc_name):
     """Queue a PC-state broadcast. Coalesced inside a {_PC_BROADCAST_DELAY}s
@@ -1816,7 +2409,7 @@ def api_pc_state(pc_name):
     return jsonify(payload)
 
 
-def _flush_enc_broadcast():
+def _flush_enc_broadcast_locked():
     global _ENC_BROADCAST_TIMER, _ENC_BROADCAST_PENDING
     with _ENC_BROADCAST_LOCK:
         if not _ENC_BROADCAST_PENDING:
@@ -1828,6 +2421,12 @@ def _flush_enc_broadcast():
         _do_broadcast_encounter_state()
     except Exception as e:
         print(f"[SSE FLUSH] encounter: {e}")
+
+
+def _flush_enc_broadcast():
+    """Flush a coalesced encounter frame against one stable campaign runtime."""
+    with _LIVE_CAMPAIGN_DISPATCH_LOCK:
+        return _flush_enc_broadcast_locked()
 
 def _broadcast_encounter_state():
     """Queue an encounter-state broadcast. Coalesced inside a
@@ -2773,45 +3372,598 @@ def get_pc_file_path(pc_name):
     safe_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', pc_name)
     return os.path.join(PARTY_DIR, f"{safe_name}.json")
 
+def _actors_from_character_doc(data, file_path):
+    """Build every actor in a character file before publishing it to memory."""
+    source = os.path.basename(file_path)
+    if isinstance(data, list):
+        return [make_actor(char_data, f"{source}[{idx}]")
+                for idx, char_data in enumerate(data)]
+    return [make_actor(data, source)]
+
+
+def _publish_live_party_actors(actors):
+    """Publish validated actors into the currently loaded party map."""
+    for actor in actors:
+        PARTY_LIBRARY[actor.name] = actor
+
+
+def _discard_live_party_actor(name):
+    """Remove one actor from the currently loaded party map, if present."""
+    PARTY_LIBRARY.pop(name, None)
+
+
 def reload_single_character(file_path):
-    """Reload just one character file into PARTY_LIBRARY instead of the entire compendium."""
+    """Reload one character file and report whether memory accepted it."""
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
-        if isinstance(data, list):
-            for idx, char_data in enumerate(data):
-                pc = make_actor(char_data, f"{os.path.basename(file_path)}[{idx}]")
-                PARTY_LIBRARY[pc.name] = pc
-        else:
-            pc = make_actor(data, os.path.basename(file_path))
-            PARTY_LIBRARY[pc.name] = pc
+        actors = _actors_from_character_doc(data, file_path)
+        _publish_live_party_actors(actors)
+        return True
     except Exception as e:
         print(f"Reload Error for {file_path}: {e}")
+        return False
 
 def save_and_reload_character(pc_name, pc_json, file_path):
-    """Save a character JSON to disk and reload just that character (not the whole compendium)."""
+    """Validate, durably save, then publish one character update to memory."""
+    with _LIVE_CAMPAIGN_DISPATCH_LOCK:
+        _abort_if_pending_character_batch(os.path.dirname(file_path) or '.')
+        try:
+            with _path_lock(file_path):
+                # Construct first. If the new document cannot become an actor,
+                # the old durable file and loaded actor remain authoritative.
+                actors = _actors_from_character_doc(pc_json, file_path)
+                _atomic_write_json(file_path, pc_json, indent=4)
+                # Publish only while this file generation is still protected.
+                _PC_FILE_CACHE[pc_name] = os.path.basename(file_path)
+                _publish_live_party_actors(actors)
+            return True, None
+        except Exception as e:
+            print(f"[SAVE ERROR] {pc_name}: {e}")
+            abort(
+                503,
+                description=(
+                    'Character changes could not be saved. This character was not '
+                    'changed; please try again.'
+                ),
+            )
+
+
+_CHARACTER_BATCH_JOURNAL_SUFFIX = '.character-batch-journal'
+_CHARACTER_BATCH_PENDING_DIRECTORIES = set()
+
+
+def _character_batch_directory_key(directory):
+    if not directory:
+        return None
+    return os.path.normcase(os.path.abspath(str(directory)))
+
+
+def _fsync_directory(directory):
+    """Best-effort durability barrier for directory metadata on POSIX."""
+    if os.name == 'nt':
+        return
+    flags = os.O_RDONLY | getattr(os, 'O_DIRECTORY', 0)
     try:
-        _atomic_write_json(file_path, pc_json, indent=4)
-        # Update the cache in case the name or file changed
-        _PC_FILE_CACHE[pc_name] = os.path.basename(file_path)
-        reload_single_character(file_path)
-        return True, None
-    except OSError as e:
-        print(f"[SAVE ERROR] {pc_name}: {e}")
-        return False, str(e)
-    except Exception as e:
-        print(f"[SAVE ERROR] {pc_name}: {e}")
-        return False, str(e)
+        fd = os.open(directory, flags)
+    except OSError:
+        return
+    try:
+        try:
+            os.fsync(fd)
+        except OSError:
+            # Some mounted/network filesystems do not support directory fsync.
+            # The file journal is still fsynced; lack of this extra metadata
+            # barrier must not be mistaken for a failed commit after its state
+            # file has already been atomically replaced.
+            return
+    finally:
+        os.close(fd)
+
+
+def _write_character_batch_journal(path, state, entries):
+    """Durably record enough information to finish or undo a batch on boot."""
+    payload = {
+        'version': 1,
+        'state': state,
+        'entries': [
+            {
+                'name': entry['name'],
+                'path': entry['path'],
+                'stage': entry['stage'],
+                'backup': entry['backup'],
+            }
+            for entry in entries
+        ],
+    }
+    _atomic_write_json(path, payload, indent=2)
+    _fsync_directory(os.path.dirname(path) or '.')
+    _CHARACTER_BATCH_PENDING_DIRECTORIES.add(
+        _character_batch_directory_key(os.path.dirname(path) or '.')
+    )
+
+
+def _remove_character_batch_journal(path):
+    if path and os.path.exists(path):
+        os.remove(path)
+        _fsync_directory(os.path.dirname(path) or '.')
+    directory = (os.path.dirname(path) or '.') if path else None
+    key = _character_batch_directory_key(directory)
+    if key and not _character_batch_journal_paths(directory):
+        _CHARACTER_BATCH_PENDING_DIRECTORIES.discard(key)
+
+
+def _character_batch_journal_paths(directory):
+    if not directory:
+        return []
+    base = os.path.abspath(str(directory or ''))
+    if not base or not os.path.isdir(base):
+        return []
+    return [
+        os.path.join(base, filename)
+        for filename in sorted(os.listdir(base))
+        if filename.endswith(_CHARACTER_BATCH_JOURNAL_SUFFIX)
+    ]
+
+
+def _recover_character_batch_transactions(directory):
+    """Recover interrupted character batches before publishing disk actors.
+
+    A prepared journal means the process may have replaced only a prefix, so
+    every available hard-link backup is restored. A committed journal means
+    all replacements completed and only cleanup was interrupted.
+    """
+    if not directory:
+        return ()
+    base = os.path.abspath(str(directory or ''))
+    if not base or not os.path.isdir(base):
+        return ()
+
+    journal_paths = _character_batch_journal_paths(base)
+    if journal_paths:
+        _CHARACTER_BATCH_PENDING_DIRECTORIES.add(
+            _character_batch_directory_key(base)
+        )
+    if len(journal_paths) > 1:
+        raise RuntimeError(
+            'multiple unresolved character batch journals require operator review'
+        )
+
+    recovered_paths = []
+    for journal_path in journal_paths:
+        try:
+            with open(journal_path, 'r', encoding='utf-8') as handle:
+                journal = json.load(handle)
+            if journal.get('version') != 1:
+                raise ValueError('unsupported journal version')
+            state = journal.get('state')
+            if state not in {'prepared', 'committed'}:
+                raise ValueError('invalid journal state')
+            raw_entries = journal.get('entries')
+            if not isinstance(raw_entries, list) or not raw_entries:
+                raise ValueError('journal has no entries')
+
+            entries = []
+            seen_paths = set()
+            for raw in raw_entries:
+                if not isinstance(raw, dict):
+                    raise ValueError('invalid journal entry')
+                name = raw.get('name')
+                if not isinstance(name, str) or not name:
+                    raise ValueError('journal entry has no character name')
+                entry = {'name': name}
+                for key in ('path', 'stage', 'backup'):
+                    raw_value = raw.get(key)
+                    if not isinstance(raw_value, str) or not raw_value:
+                        raise ValueError(f'journal {key} is missing')
+                    value = os.path.abspath(raw_value)
+                    expected_suffix = {
+                        'path': '.json',
+                        'stage': '.batch-stage',
+                        'backup': '.batch-backup',
+                    }[key]
+                    if os.path.dirname(value) != base:
+                        raise ValueError(
+                            f'journal {key} escapes the character directory'
+                        )
+                    if not value.endswith(expected_suffix):
+                        raise ValueError(
+                            f'journal {key} has the wrong artifact type'
+                        )
+                    if value in seen_paths:
+                        raise ValueError('journal paths overlap')
+                    seen_paths.add(value)
+                    entry[key] = value
+                entries.append(entry)
+
+            # Validate every byte source before deleting or replacing anything.
+            # A malformed committed live file must never cause its known-good
+            # backup to be discarded.
+            for entry in entries:
+                if state == 'committed':
+                    source = entry['path']
+                else:
+                    source = (
+                        entry['backup']
+                        if os.path.exists(entry['backup'])
+                        else entry['path']
+                    )
+                if not os.path.isfile(source):
+                    raise FileNotFoundError(
+                        f'character recovery source is missing: {source}'
+                    )
+                with open(source, 'r', encoding='utf-8') as handle:
+                    document = json.load(handle)
+                _actors_from_character_doc(document, source)
+        except Exception as exc:
+            raise RuntimeError(
+                f'cannot recover character batch journal {journal_path}: {exc}'
+            ) from exc
+
+        recovery_errors = []
+        if state == 'prepared':
+            for entry in reversed(entries):
+                backup = entry['backup']
+                live_path = entry['path']
+                try:
+                    if os.path.exists(backup):
+                        os.replace(backup, live_path)
+                    elif not os.path.exists(live_path):
+                        raise FileNotFoundError(
+                            'both live character and recovery backup are missing'
+                        )
+                except Exception as exc:
+                    recovery_errors.append((live_path, backup, exc))
+
+        # If any restore failed, preserve every remaining artifact. Deleting a
+        # backup here would destroy the operator's only known-good old version.
+        if recovery_errors:
+            app.logger.critical(
+                'character batch startup recovery failed for %s: %r',
+                journal_path,
+                recovery_errors,
+            )
+            raise RuntimeError(
+                'character batch recovery failed; preserved journal at '
+                f'{journal_path}'
+            )
+
+        for entry in entries:
+            for key in ('stage', 'backup'):
+                artifact = entry[key]
+                if os.path.exists(artifact):
+                    try:
+                        os.remove(artifact)
+                    except OSError as exc:
+                        recovery_errors.append((artifact, exc))
+
+        if recovery_errors:
+            app.logger.critical(
+                'character batch startup cleanup failed for %s: %r',
+                journal_path,
+                recovery_errors,
+            )
+            raise RuntimeError(
+                'character batch cleanup failed; preserved journal at '
+                f'{journal_path}'
+            )
+
+        _remove_character_batch_journal(journal_path)
+        recovered_paths.extend(entry['path'] for entry in entries)
+        app.logger.warning(
+            'recovered interrupted character batch %s (%s)',
+            journal_path,
+            state,
+        )
+    return tuple(recovered_paths)
+
+
+def _recover_and_reload_character_batch(directory):
+    """Resolve one pending batch and align live actors to recovered disk.
+
+    Callers must hold the live-campaign serialization lock (or run during
+    single-threaded startup) so no writer can race recovery.
+    """
+    recovered_paths = _recover_character_batch_transactions(directory)
+    failed = [
+        path for path in recovered_paths
+        if not reload_single_character(path)
+    ]
+    if failed:
+        raise RuntimeError(
+            f'recovered character files could not be loaded: {failed!r}'
+        )
+    if recovered_paths:
+        _build_pc_file_cache()
+    return bool(recovered_paths)
+
+
+def _recover_pending_character_batch(directory):
+    """Resolve a pending batch without publishing a non-live campaign.
+
+    The loaded party must be rebuilt after live recovery. Explicit non-live
+    campaign paths (for example an invite target) are recovered on disk only;
+    publishing those actors would leak them into the currently loaded table.
+    """
+    if not _character_batch_journal_paths(directory):
+        key = _character_batch_directory_key(directory)
+        if key:
+            _CHARACTER_BATCH_PENDING_DIRECTORIES.discard(key)
+        return False
+    candidate = os.path.normcase(os.path.abspath(str(directory)))
+    bound_party_dir = _loaded_party_dir()
+    live_directory = (
+        os.path.normcase(os.path.abspath(str(bound_party_dir)))
+        if bound_party_dir
+        else None
+    )
+    if live_directory and candidate == live_directory:
+        return _recover_and_reload_character_batch(directory)
+    return bool(_recover_character_batch_transactions(directory))
+
+
+def _abort_if_pending_character_batch(directory, *, discover=True):
+    """Quarantine every PF2e writer until an interrupted batch is resolved.
+
+    Even successful recovery aborts the current operation. Its document may
+    have been read from the partial generation, so only a fresh request may
+    perform another mutation.
+    """
+    try:
+        key = _character_batch_directory_key(directory)
+        known_pending = bool(
+            key and key in _CHARACTER_BATCH_PENDING_DIRECTORIES
+        )
+        if not known_pending and not discover:
+            return False
+        if not known_pending and not _character_batch_journal_paths(directory):
+            return False
+        if key:
+            _CHARACTER_BATCH_PENDING_DIRECTORIES.add(key)
+        recovered = _recover_pending_character_batch(directory)
+        if not recovered:
+            return False
+    except (OSError, RuntimeError) as recovery_error:
+        app.logger.critical(
+            'pending character batch could not be recovered: %r',
+            recovery_error,
+        )
+        abort(
+            503,
+            description=(
+                'A previous character operation needs recovery. '
+                'Do not retry until the server files are checked.'
+            ),
+        )
+    abort(
+        503,
+        description=(
+            'A previous interrupted character operation was recovered. '
+            'No new changes were applied; please try again.'
+        ),
+    )
+
+
+def _save_and_reload_character_batch(updates):
+    """Serialize a whole-party commit with all other live PF2e writers."""
+    with _LIVE_CAMPAIGN_DISPATCH_LOCK:
+        return _save_and_reload_character_batch_unlocked(updates)
+
+
+def _save_and_reload_character_batch_unlocked(updates):
+    """Commit multiple character documents as one rollback-safe application batch.
+
+    Every document is actor-validated and fully staged before any live file is
+    replaced. Same-directory hard-link backups preserve the previous bytes
+    without temporarily removing the live path, allowing metadata-only rollback
+    even when staging failed due to a full disk. The in-memory party is
+    published only after every file commits.
+    """
+    from contextlib import ExitStack
+
+    entries = []
+    seen_paths = set()
+    committed = []
+    journal_path = None
+    keep_recovery_artifacts = False
+    try:
+        for pc_name, pc_json, file_path in updates:
+            if not pc_name or not file_path:
+                raise ValueError('invalid character batch target')
+            path = os.path.abspath(str(file_path))
+            if path in seen_paths:
+                raise ValueError('invalid or duplicate character batch target')
+            seen_paths.add(path)
+            entries.append({
+                'name': pc_name,
+                'doc': pc_json,
+                'path': path,
+                'actors': _actors_from_character_doc(pc_json, path),
+                'stage': None,
+                'backup': None,
+                'preserve_backup': False,
+            })
+        if not entries:
+            return []
+
+        directories = {os.path.dirname(entry['path']) or '.' for entry in entries}
+        if len(directories) != 1:
+            raise ValueError('character batch targets must share one directory')
+        batch_directory = directories.pop()
+
+        _abort_if_pending_character_batch(batch_directory)
+
+        with ExitStack() as locks:
+            for path in sorted(seen_paths):
+                locks.enter_context(_path_lock(path))
+
+            # Phase 1: all serialization, fsync, and validation completes while
+            # every authoritative file and live actor remains untouched.
+            for entry in entries:
+                directory = os.path.dirname(entry['path']) or '.'
+                fd, stage = tempfile.mkstemp(dir=directory, suffix='.batch-stage')
+                os.close(fd)
+                entry['stage'] = stage
+                _atomic_write_json(stage, entry['doc'], indent=4)
+
+            # Phase 2: retain every previous inode before changing any live path.
+            # Once the prepared journal is durable, startup recovery can restore
+            # the whole old set after a process kill at any later commit point.
+            for entry in entries:
+                fd, backup = tempfile.mkstemp(
+                    dir=batch_directory,
+                    suffix='.batch-backup',
+                )
+                os.close(fd)
+                os.remove(backup)
+                entry['backup'] = backup
+                os.link(entry['path'], backup)
+
+            journal_path = os.path.join(
+                batch_directory,
+                f'.{uuid.uuid4().hex}{_CHARACTER_BATCH_JOURNAL_SUFFIX}',
+            )
+            _write_character_batch_journal(journal_path, 'prepared', entries)
+            keep_recovery_artifacts = True
+
+            # Phase 3: atomically replace each live path. The journal remains in
+            # prepared state until every replacement succeeds, then flips to
+            # committed before any recovery artifact is removed.
+            try:
+                for entry in entries:
+                    os.replace(entry['stage'], entry['path'])
+                    committed.append(entry)
+                _write_character_batch_journal(journal_path, 'committed', entries)
+            except Exception:
+                rollback_errors = []
+                for entry in reversed(committed):
+                    try:
+                        os.replace(entry['backup'], entry['path'])
+                        entry['backup'] = None
+                    except Exception as rollback_error:
+                        # This is the only intact copy of the pre-batch file.
+                        # Never let the generic finally cleanup destroy it.
+                        entry['preserve_backup'] = True
+                        rollback_errors.append((
+                            entry['path'],
+                            entry['backup'],
+                            rollback_error,
+                        ))
+                if rollback_errors:
+                    # The disk may now contain a committed prefix and a restored
+                    # suffix. Rebuild live actors from those authoritative files
+                    # so subsequent requests cannot compound a disk/memory split.
+                    for entry in entries:
+                        if not reload_single_character(entry['path']):
+                            _discard_live_party_actor(entry['name'])
+                    app.logger.critical(
+                        'character batch rollback failed after commit error: %r',
+                        rollback_errors,
+                    )
+                    abort(
+                        503,
+                        description=(
+                            'Character changes could not be saved completely. '
+                            'Do not retry until the server files are checked.'
+                        ),
+                    )
+
+                # Every live file is back at its pre-batch version. Remove the
+                # prepared journal before surfacing the original save failure;
+                # if cleanup itself fails, leave it for harmless boot recovery.
+                try:
+                    _remove_character_batch_journal(journal_path)
+                    journal_path = None
+                    keep_recovery_artifacts = False
+                except OSError:
+                    pass
+                raise
+
+            # Publish the already-validated actors only after every durable file
+            # is present. No subscriber can observe a partially applied batch.
+            try:
+                for entry in entries:
+                    _PC_FILE_CACHE[entry['name']] = os.path.basename(entry['path'])
+                    _publish_live_party_actors(entry['actors'])
+            except Exception as publish_error:
+                # The committed journal and backups deliberately remain. Keep
+                # memory aligned to the live files and require operator review.
+                for entry in entries:
+                    if not reload_single_character(entry['path']):
+                        _discard_live_party_actor(entry['name'])
+                app.logger.critical(
+                    'character batch committed but actor publication failed: %r',
+                    publish_error,
+                )
+                abort(
+                    503,
+                    description=(
+                        'Character changes were saved but could not be loaded. '
+                        'Do not retry until the server files are checked.'
+                    ),
+                )
+
+            for entry in committed:
+                try:
+                    os.remove(entry['backup'])
+                except OSError:
+                    # A committed journal tells startup to keep the new live
+                    # files and finish deleting any leftover hard links.
+                    continue
+                entry['backup'] = None
+
+            if not any(entry.get('backup') for entry in entries):
+                try:
+                    _remove_character_batch_journal(journal_path)
+                    journal_path = None
+                    keep_recovery_artifacts = False
+                except OSError:
+                    pass
+        return [entry['name'] for entry in entries]
+    except HTTPException:
+        raise
+    except Exception as exc:
+        print(f"[BATCH SAVE ERROR] {exc}")
+        abort(
+            503,
+            description=(
+                'Character changes could not be saved. No changes were applied; '
+                'please try again.'
+            ),
+        )
+    finally:
+        for entry in entries:
+            for key in ('stage', 'backup'):
+                path = entry.get(key)
+                if path and not keep_recovery_artifacts and not (
+                    key == 'backup' and entry.get('preserve_backup')
+                ):
+                    try:
+                        os.remove(path)
+                    except OSError:
+                        pass
 
 def _persist_pc_combat_state(pc_name):
     """Mark a PC's combat state dirty. Background thread flushes to disk."""
     if pc_name in PARTY_LIBRARY:
         _PC_PERSIST_DIRTY.add(pc_name)
 
-def _do_persist_pc_combat_state(pc_name):
-    """Actually write HP/conditions/focus to disk. Called by flush thread."""
+def _do_persist_pc_combat_state_unlocked(pc_name):
+    """Write HP/conditions/focus and report whether the dirty state is saved."""
+    live_party_dir = _loaded_party_dir()
+    if live_party_dir and _character_batch_journal_paths(live_party_dir):
+        try:
+            _recover_pending_character_batch(live_party_dir)
+        except RuntimeError as recovery_error:
+            app.logger.critical(
+                'background character persistence is quarantined: %r',
+                recovery_error,
+            )
+        # Whether recovery succeeded or still needs operator attention, this
+        # flush must not write. The caller deliberately keeps the dirty marker.
+        return False
     if pc_name not in PARTY_LIBRARY:
-        return
+        return True
     # Snapshot the values under lock, then do file I/O unlocked
     with ENCOUNTER_LOCK:
         pc = PARTY_LIBRARY[pc_name]
@@ -2842,39 +3994,50 @@ def _do_persist_pc_combat_state(pc_name):
         pc_active_effects = list(getattr(pc, 'pc_active_effects', []) or [])
     file_path = get_pc_file_path(pc_name)
     if not file_path or not os.path.exists(file_path):
-        return
+        print(f"[PERSIST ERROR] {pc_name}: character file is missing")
+        return False
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            pc_json = json.load(f)
-        build = pc_json.get('build', pc_json)
-        build['current_hp'] = current_hp
-        build['current_focus'] = current_focus
-        build['hero_points'] = hero_points
-        build['temp_hp'] = temp_hp_manual
-        build['conditions'] = conditions
-        build['condition_expiry'] = condition_expiry
-        build['shield_raised'] = shield_raised
-        build['shield_hp'] = shield_hp
-        build['reaction_used'] = reaction_used
-        build['persistent_damage'] = persistent_damage
-        build['exploration_activity'] = exploration_activity
-        build['pc_active_effects'] = pc_active_effects
-        # Treat Wounds 1-hour immunity (ten-minute activities) — epoch
-        # seconds; survives restarts so a redeploy can't reset the clock.
-        build['treat_wounds_immune_until'] = treat_wounds_immune_until
-        # fsync=False: this is the high-frequency live-tick write the
-        # _atomic_write_json docstring is describing. Now that the flush loop
-        # actually runs in production (it never did -- see
-        # _start_persistence_thread), this fires every couple of seconds
-        # during combat, and os.fsync is the one syscall gevent cannot yield
-        # around: each one stalls every player's SSE on the single worker.
-        # os.replace stays atomic without it; the only thing traded away is
-        # durability against hard power loss, for a re-derivable HP value.
-        _atomic_write_json(file_path, pc_json, indent=2, fsync=False)
+        with _path_lock(file_path):
+            with open(file_path, 'r', encoding='utf-8') as f:
+                pc_json = json.load(f)
+            build = pc_json.get('build', pc_json)
+            build['current_hp'] = current_hp
+            build['current_focus'] = current_focus
+            build['hero_points'] = hero_points
+            build['temp_hp'] = temp_hp_manual
+            build['conditions'] = conditions
+            build['condition_expiry'] = condition_expiry
+            build['shield_raised'] = shield_raised
+            build['shield_hp'] = shield_hp
+            build['reaction_used'] = reaction_used
+            build['persistent_damage'] = persistent_damage
+            build['exploration_activity'] = exploration_activity
+            build['pc_active_effects'] = pc_active_effects
+            # Treat Wounds 1-hour immunity (ten-minute activities) — epoch
+            # seconds; survives restarts so a redeploy can't reset the clock.
+            build['treat_wounds_immune_until'] = treat_wounds_immune_until
+            # fsync=False: this is the high-frequency live-tick write the
+            # _atomic_write_json docstring is describing. Now that the flush loop
+            # actually runs in production (it never did -- see
+            # _start_persistence_thread), this fires every couple of seconds
+            # during combat, and os.fsync is the one syscall gevent cannot yield
+            # around: each one stalls every player's SSE on the single worker.
+            # os.replace stays atomic without it; the only thing traded away is
+            # durability against hard power loss, for a re-derivable HP value.
+            _atomic_write_json(file_path, pc_json, indent=2, fsync=False)
+        return True
     except Exception as e:
         print(f"[PERSIST ERROR] {pc_name}: {e}")
+        return False
 
-def _flush_pc_dirty(pc_name):
+
+def _do_persist_pc_combat_state(pc_name):
+    """Persist one PC snapshot without allowing a campaign path rebind."""
+    with _LIVE_CAMPAIGN_DISPATCH_LOCK:
+        return _do_persist_pc_combat_state_unlocked(pc_name)
+
+
+def _flush_pc_dirty_unlocked(pc_name):
     """Synchronously flush any debounced combat-state writes for this PC
     before a read-modify-write of its file. The debounced persistence thread
     holds HP / conditions / shield / persistent_damage / active_effects in
@@ -2884,10 +4047,33 @@ def _flush_pc_dirty(pc_name):
     lived inline in update_pc_condition."""
     try:
         if pc_name in _PC_PERSIST_DIRTY:
-            _do_persist_pc_combat_state(pc_name)
-            _PC_PERSIST_DIRTY.discard(pc_name)
+            if _do_persist_pc_combat_state(pc_name):
+                _PC_PERSIST_DIRTY.discard(pc_name)
+                return True
+            return False
     except Exception:
-        pass
+        return False
+    return True
+
+
+def _flush_pc_dirty(pc_name):
+    """Synchronously drain one PC's dirty state before a disk read-modify-write.
+
+    Every caller relies on the disk snapshot becoming at least as fresh as the
+    in-memory character.  Continuing after a failed write would let the caller
+    load stale JSON, save it, and make that stale combat state authoritative.
+    Fail the request instead; the dirty marker remains set for a later retry.
+    """
+    with _LIVE_CAMPAIGN_DISPATCH_LOCK:
+        if not _flush_pc_dirty_unlocked(pc_name):
+            abort(
+                503,
+                description=(
+                    'Character state could not be saved. No changes were applied; '
+                    'please try again.'
+                ),
+            )
+        return True
 
 # ---- UNIFIED PC STATE MUTATION ----
 # Historically every endpoint hand-rolled the four-step dance:
@@ -6197,10 +7383,15 @@ def load_libraries(restore_autosave=True):
     print(f"[STARTUP] Loaded {len(MONSTER_LIBRARY)} monsters from {len(monster_dirs)} director{'ies' if len(monster_dirs) > 1 else 'y'}")
     
     PARTY_LIBRARY.clear()
-    if not os.path.exists(PARTY_DIR): os.makedirs(PARTY_DIR) 
-    for file in os.listdir(PARTY_DIR):
+    party_dir = _loaded_party_dir()
+    if not os.path.exists(party_dir):
+        os.makedirs(party_dir)
+    # Resolve an interrupted whole-party rest/preparation before any mixed
+    # on-disk generation can become live actors.
+    _recover_character_batch_transactions(party_dir)
+    for file in os.listdir(party_dir):
         if file.endswith('.json'):
-            file_path = os.path.join(PARTY_DIR, file)
+            file_path = os.path.join(party_dir, file)
             data, err = safe_load_json_file(file_path)
             if err:
                 print(f"[LOAD ERROR] Character {file}: {err}")
@@ -6225,7 +7416,16 @@ def load_libraries(restore_autosave=True):
 
 def _restore_encounter_autosave():
     """Restore the active encounter from autosave file on startup."""
-    global ACTIVE_ENCOUNTER, TURN_INDEX, ROUND_NUMBER, ENCOUNTER_NOTES, SESSION_TIMER_START, ROUND_EVENTS
+    global TURN_INDEX, ROUND_NUMBER, ENCOUNTER_NOTES, SESSION_TIMER_START, ROUND_EVENTS
+    # A missing/corrupt target autosave means an empty encounter. Clear first;
+    # returning before this reset used to leave the previous campaign's combat
+    # live after a switch to a campaign that had never started an encounter.
+    _clear_live_encounter_roster()
+    TURN_INDEX = 0
+    ROUND_NUMBER = 1
+    ENCOUNTER_NOTES = ''
+    ROUND_EVENTS.clear()
+    SESSION_TIMER_START = None
     autosave_path = os.path.join(ENCOUNTER_DIR, '_autosave.json')
     if not os.path.exists(autosave_path):
         return
@@ -6238,7 +7438,7 @@ def _restore_encounter_autosave():
         ENCOUNTER_NOTES = raw.get('notes', '')
         ROUND_EVENTS = list(raw.get('round_events', []) or [])
         SESSION_TIMER_START = raw.get('session_timer_start', None)
-        ACTIVE_ENCOUNTER.clear()
+        _clear_live_encounter_roster()
         for item in combatants:
             new_c = None
             # Cosmere combatants rebuild from their source id (bestiary _id or
@@ -6306,22 +7506,29 @@ load_libraries(restore_autosave=False)
 def health_check():
     """Health check endpoint for Railway/container orchestration.
 
-    This route is deliberately NOT in GM_API_PREFIXES -- Railway polls it with
-    no session -- so the storage block is split. The findings (is a volume
-    configured, does it persist) are safe for anyone; the absolute paths are
-    filesystem layout and go only to a GM."""
-    storage = dict(STORAGE_HEALTH)
-    if _is_gm():
+    Railway polls this route without a session, so its public contract is only a
+    liveness bit.  Campaign activity, subscriber counts, storage topology and
+    persistence history are operational diagnostics and are returned only to a
+    site administrator (or the legacy GM in account-less compatibility mode).
+    """
+    payload = {'status': 'healthy'}
+    if _account_mode():
+        user = _auth.current_user()
+        diagnostics_allowed = bool(user and user.get('is_admin'))
+    else:
+        diagnostics_allowed = bool(_is_gm())
+    if diagnostics_allowed:
+        storage = dict(STORAGE_HEALTH)
         storage['data_dir'] = DATA_DIR
         storage['base_dir'] = BASE_DIR
-    return jsonify({
-        'status': 'healthy',
-        'party_count': len(PARTY_LIBRARY),
-        'monster_count': len(MONSTER_LIBRARY),
-        'encounter_active': len(ACTIVE_ENCOUNTER),
-        'sse_connections': sse_subscriber_count(),
-        'storage': storage,
-    })
+        payload.update({
+            'party_count': len(PARTY_LIBRARY),
+            'monster_count': len(MONSTER_LIBRARY),
+            'encounter_active': len(ACTIVE_ENCOUNTER),
+            'sse_connections': sse_subscriber_count(),
+            'storage': storage,
+        })
+    return jsonify(payload)
 
 @app.errorhandler(404)
 def page_not_found(e):
@@ -6338,7 +7545,7 @@ def handle_uncaught(e):
     The 404 handler above still wins for 404s (it is more specific).
     """
     code = e.code if isinstance(e, HTTPException) else 500
-    if request.path.startswith('/api/'):
+    if _authorization_is_api_request():
         if isinstance(e, HTTPException):
             # Intentional, developer-set message (e.g. "GM access required").
             msg = e.description or e.name
@@ -6442,15 +7649,46 @@ def _list_module_files():
         })
     return out
 
-def _load_campaign_config():
-    """Read campaign.json, falling back to defaults. Always returns the full schema."""
+def _load_campaign_config_at(path):
+    """Read one explicit campaign config, always returning the full schema."""
     cfg = dict(CAMPAIGN_DEFAULT)
-    if os.path.exists(CAMPAIGN_FILE):
-        data, err = safe_load_json_file(CAMPAIGN_FILE)
+    if path and os.path.exists(path):
+        data, err = safe_load_json_file(path)
         if data and isinstance(data, dict):
             for k in CAMPAIGN_DEFAULT:
                 if k in data and data[k] is not None:
                     cfg[k] = data[k]
+    return cfg
+
+
+def _load_campaign_config():
+    """Read the live-bound config used by legacy-global session handlers."""
+    return _load_campaign_config_at(CAMPAIGN_FILE)
+
+
+def _request_campaign_config():
+    """Config for this caller's membership-validated active campaign.
+
+    Public account-mode pages receive neutral defaults instead of inheriting the
+    server-wide live campaign.  Legacy single-table mode keeps the bound file.
+    """
+    cached = getattr(g, '_request_campaign_config', None)
+    if isinstance(cached, dict):
+        return cached
+    if not _account_mode():
+        cfg = _load_campaign_config()
+        g._request_campaign_config = cfg
+        return cfg
+    cid = _active_campaign_id()
+    if not cid:
+        cfg = dict(CAMPAIGN_DEFAULT)
+        g._request_campaign_config = cfg
+        return cfg
+    try:
+        cfg = _load_campaign_config_at(_storage.campaign_file(cid))
+    except (OSError, TypeError, ValueError):
+        cfg = dict(CAMPAIGN_DEFAULT)
+    g._request_campaign_config = cfg
     return cfg
 
 def _save_campaign_config(updates):
@@ -6504,34 +7742,37 @@ def _pf2e_set_pc_advancement(name, *, add_xp=None, ready=None):
     """Update a PF2e PC's advancement state on disk (xp / ready_to_level),
     reload it into PARTY_LIBRARY, and broadcast so the sheet badge repaints.
     XP rolls the ready flag on at 1000. Returns a small summary or None."""
-    fp = get_pc_file_path(name)
-    if not fp or not os.path.exists(fp):
-        return None
-    with _path_lock(fp):
-        doc = _storage.load_json(fp)
-        if not isinstance(doc, dict):
+    with _LIVE_CAMPAIGN_DISPATCH_LOCK:
+        _abort_if_pending_character_batch(_loaded_party_dir())
+        _flush_pc_dirty(name)
+        fp = get_pc_file_path(name)
+        if not fp or not os.path.exists(fp):
             return None
-        build = doc.get('build')
-        if not isinstance(build, dict):
-            build = doc.setdefault('build', {})
-        if add_xp is not None:
-            build['xp'] = max(0, int(build.get('xp', 0) or 0) + int(add_xp))
-            if build['xp'] >= 1000:
-                build['ready_to_level'] = True
-        if ready is not None:
-            build['ready_to_level'] = bool(ready)
-        _atomic_write_json(fp, doc, indent=2)
-        summary = {'name': name, 'xp': int(build.get('xp', 0) or 0),
-                   'ready': bool(build.get('ready_to_level'))}
-    try:
-        reload_single_character(fp)
-    except Exception:
-        pass
-    try:
-        _broadcast_pc_state(name)
-    except Exception:
-        pass
-    return summary
+        with _path_lock(fp):
+            doc = _storage.load_json(fp)
+            if not isinstance(doc, dict):
+                return None
+            build = doc.get('build')
+            if not isinstance(build, dict):
+                build = doc.setdefault('build', {})
+            if add_xp is not None:
+                build['xp'] = max(0, int(build.get('xp', 0) or 0) + int(add_xp))
+                if build['xp'] >= 1000:
+                    build['ready_to_level'] = True
+            if ready is not None:
+                build['ready_to_level'] = bool(ready)
+            _atomic_write_json(fp, doc, indent=2)
+            summary = {'name': name, 'xp': int(build.get('xp', 0) or 0),
+                       'ready': bool(build.get('ready_to_level'))}
+        try:
+            reload_single_character(fp)
+        except Exception:
+            pass
+        try:
+            _broadcast_pc_state(name)
+        except Exception:
+            pass
+        return summary
 
 
 def _pf2e_award_xp(amount):
@@ -6622,7 +7863,7 @@ def _inject_campaign_chrome():
     current scene mood (the _scene_mood overlay applies it on load). Cheap:
     one small JSON read per render."""
     try:
-        cfg = _load_campaign_config()
+        cfg = _request_campaign_config()
         mood = cfg.get('scene_mood', 'calm')
         if mood not in _VALID_MOODS:
             mood = 'calm'
@@ -6654,6 +7895,8 @@ def _inject_chronicle_ctx():
     on this (see base.html) -- they must be reachable in order to publish the
     first thing; this flag only decides whether PLAYERS see a Chronicle tab.
     """
+    if _account_mode() and not _active_campaign_id():
+        return {'chronicle_published': False}
     if _chronicle_content_dir() is not None:
         return {'chronicle_published': True}
     try:
@@ -6883,7 +8126,11 @@ def index():
 
 @app.route('/api/campaign', methods=['GET', 'POST'])
 def api_campaign():
-    """GET is public (intro screen reads it); POST is GM-only (edit form)."""
+    """Read/edit live campaign config.
+
+    The centralized policy requires live membership for GET and live GM access
+    for POST in account mode. Legacy mode keeps its public intro-screen read.
+    """
     if request.method == 'GET':
         return jsonify(_load_campaign_config())
     if not _is_gm():
@@ -7062,7 +8309,12 @@ def _scene_live_indexes(cid):
     combatants = {}
     if cid == ACTIVE_CAMPAIGN_ID:
         for index, combatant in enumerate(ACTIVE_ENCOUNTER):
-            record = by_name.get(combatant.name) if combatant.is_pc else None
+            record = None
+            if combatant.is_pc:
+                stable_id = getattr(combatant, 'restore_id', None)
+                record = (records.get(stable_id)
+                          if getattr(combatant, 'system', 'pf2e') == 'cosmere'
+                          else by_name.get(combatant.name))
             current_hp = int(getattr(combatant, 'current_hp', 0) or 0)
             max_hp = int(getattr(combatant, 'hp', 0) or 0)
             entry = {
@@ -7118,7 +8370,12 @@ def _scene_token_candidates(cid):
     candidates = []
     if cid == ACTIVE_CAMPAIGN_ID:
         for combatant in ACTIVE_ENCOUNTER:
-            linked = by_name.get(combatant.name) if combatant.is_pc else None
+            linked = None
+            if combatant.is_pc:
+                stable_id = getattr(combatant, 'restore_id', None)
+                linked = (records.get(stable_id)
+                          if getattr(combatant, 'system', 'pf2e') == 'cosmere'
+                          else by_name.get(combatant.name))
             size_name = str(getattr(combatant, 'size', '') or '').lower()
             token_size = {
                 'tiny': .5, 'small': 1, 'medium': 1,
@@ -8353,14 +9610,21 @@ def _auto_migrate_legacy(admin_user_id):
 def setup():
     """One-time bootstrap of the first (admin/GM) account. Self-disables once any
     account exists; gated by the SETUP_TOKEN env var when one is set."""
-    if _auth.any_users_exist():
+    if _auth.account_mode_initialized():
         return redirect('/login')
     if request.method == 'POST':
         if SETUP_TOKEN and request.form.get('setup_token', '') != SETUP_TOKEN:
             return render_template('setup.html', error='Wrong setup token.', need_token=True), 403
         try:
-            u = _auth.create_user(request.form.get('username', ''), request.form.get('password', ''),
-                                  display_name=request.form.get('display_name'), is_admin=True)
+            u = _auth.create_first_admin(
+                request.form.get('username', ''),
+                request.form.get('password', ''),
+                display_name=request.form.get('display_name'),
+            )
+        except _auth.AccountBootstrapComplete:
+            return redirect('/login')
+        except _auth.AccountStoreUnavailable:
+            return _account_store_unavailable_response()
         except ValueError as e:
             return render_template('setup.html', error=str(e), need_token=bool(SETUP_TOKEN)), 400
         _auth.login_user(u, remember=True)
@@ -8371,7 +9635,7 @@ def setup():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    if not _auth.any_users_exist():
+    if not _auth.account_mode_initialized():
         return redirect('/setup')
     if request.method == 'POST':
         u = _auth.verify_credentials(request.form.get('username', ''), request.form.get('password', ''))
@@ -8386,7 +9650,7 @@ def login():
 def register():
     """Open self-registration: anyone can create an account, then create + run
     their own campaigns. The very first account is still the admin via /setup."""
-    if not _auth.any_users_exist():
+    if not _auth.account_mode_initialized():
         return redirect('/setup')          # first account must be the admin
     if _auth.current_user():
         return redirect('/me')             # already signed in
@@ -8424,11 +9688,28 @@ def activate_campaign(cid):
     is_member = bool(_campaigns.user_role(camp, u['id'])) or u.get('is_admin')
     if not camp or not is_member:
         return jsonify({'error': 'not a member of that campaign'}), 403
-    _set_active_campaign(cid)
     gm = _campaigns.is_gm(camp, u['id']) or u.get('is_admin')
     if gm:
-        _storage.set_live_campaign_id(cid)
-        load_campaign(cid)
+        previous_live = _storage.get_live_campaign_id()
+        try:
+            # Rebind only after the old campaign flush succeeds. Persist the
+            # live-slot pointer last so a failed switch never advertises a
+            # campaign the process did not actually load.
+            load_campaign(cid)
+            _storage.set_live_campaign_id(cid)
+        except Exception as exc:
+            app.logger.error("campaign activation failed: %s", exc)
+            if _loaded_campaign_id() == cid and previous_live != cid:
+                try:
+                    load_campaign(previous_live)
+                except Exception:
+                    app.logger.exception("campaign activation rollback failed")
+            return _authorization_error(
+                'campaign_switch_failed',
+                'The current campaign could not be saved, so the switch was cancelled.',
+                503,
+            )
+    _set_active_campaign(cid)
     # A validated same-site `then` target (e.g. deep-link straight to the
     # player's own sheet from My Characters) wins over the default hub landing.
     then = _safe_then(request.form.get('then') or request.args.get('then'))
@@ -8451,16 +9732,27 @@ def stop_active_campaign():
     activate. Does NOT yank the live slot out from under another GM's session."""
     u = _auth.current_user()
     prev = session.get('active_campaign_id') or (u.get('last_campaign_id') if u else None)
+    if prev and _storage.get_live_campaign_id() == prev:
+        camp = _campaigns.get_campaign(prev)
+        if camp and (_campaigns.is_gm(camp, u['id']) or u.get('is_admin')):
+            try:
+                load_campaign(None)
+                _storage.set_live_campaign_id(None)
+            except Exception as exc:
+                app.logger.error("campaign stop failed: %s", exc)
+                if _loaded_campaign_id() is None:
+                    try:
+                        load_campaign(prev)
+                    except Exception:
+                        app.logger.exception("campaign stop rollback failed")
+                return _authorization_error(
+                    'campaign_switch_failed',
+                    'The current campaign could not be saved, so it remains active.',
+                    503,
+                )
     session['campaign_stopped'] = True
     session.pop('active_campaign_id', None)
-    try:
-        if prev and _storage.get_live_campaign_id() == prev:
-            camp = _campaigns.get_campaign(prev)
-            if camp and (_campaigns.is_gm(camp, u['id']) or u.get('is_admin')):
-                _storage.set_live_campaign_id(None)
-                load_campaign(None)
-    except Exception:
-        pass
+    session.pop('player_name', None)
     if _is_ajax():
         return jsonify({'ok': True})
     return redirect('/me')
@@ -8569,7 +9861,9 @@ def campaign_remove_member(cid, uid):
     u, camp = _require_campaign_gm(cid)
     if not camp:
         return jsonify({'error': 'GM only'}), 403
-    _campaigns.remove_member(cid, uid)
+    updated = _campaigns.remove_member(cid, uid)
+    if updated:
+        _close_sse_subscribers_for_user(cid, uid)
     return redirect('/campaign/%s/invites' % cid)
 
 
@@ -8581,7 +9875,12 @@ def campaign_set_role(cid, uid):
     if not camp:
         return jsonify({'error': 'GM only'}), 403
     role = 'gm' if request.form.get('role') == 'gm' else 'player'
-    _campaigns.set_member_role(cid, uid, role)
+    updated = _campaigns.set_member_role(cid, uid, role)
+    if updated:
+        # The stream cached its GM/player projection at connect time. Force a
+        # reconnect after either promotion or demotion so the new role applies
+        # before another event can be delivered.
+        _close_sse_subscribers_for_user(cid, uid)
     return redirect('/campaign/%s/invites' % cid)
 
 
@@ -8601,10 +9900,23 @@ def campaign_set_system(cid):
         return redirect('/campaign/%s/invites?system_error=1' % cid)
     old = camp.get('system') or 'pf2e'
     if old != new_system:
+        if (_storage.get_live_campaign_id() == cid
+                and _flush_pending_persistence() is False):
+            return _authorization_error(
+                'campaign_switch_failed',
+                'The live campaign could not be saved, so its system was not changed.',
+                503,
+            )
         camp['system'] = new_system
         _campaigns.save_campaign(camp)
         if _storage.get_live_campaign_id() == cid:
-            load_campaign(cid)   # rebind globals so live in-memory state matches the new system
+            try:
+                load_campaign(cid)   # rebind globals so live in-memory state matches the new system
+            except Exception:
+                camp['system'] = old
+                _campaigns.save_campaign(camp)
+                load_campaign(cid)
+                raise
     return redirect('/campaign/%s/invites?system_set=%s' % (cid, new_system))
 
 
@@ -8618,6 +9930,13 @@ def campaign_delete(cid):
         return jsonify({'error': 'GM only'}), 403
     if (request.form.get('confirm_name') or '').strip() != (camp.get('name') or '').strip():
         return redirect('/campaign/%s/invites?delete_error=1' % cid)
+    if (_storage.get_live_campaign_id() == cid
+            and _flush_pending_persistence() is False):
+        return _authorization_error(
+            'campaign_switch_failed',
+            'The live campaign could not be saved, so it was not deleted.',
+            503,
+        )
     _campaigns.delete_campaign(cid)   # soft delete -> trash (restorable ~30 days)
     if session.get('active_campaign_id') == cid:
         session.pop('active_campaign_id', None)
@@ -8658,12 +9977,19 @@ def campaign_purge(cid):
 @app.route('/api/backup_now', methods=['POST'])
 @_auth.login_required
 def backup_now():
-    """Trigger an immediate on-volume snapshot of every active campaign. Any GM
-    (or a site admin) may run it; it's their data and the op only writes backups."""
+    """Snapshot only campaigns this caller administers (all for site admin)."""
     u = _auth.current_user()
-    if not (u.get('is_admin') or _campaigns.campaigns_for_user(u['id'])):
+    if u.get('is_admin'):
+        campaign_ids = _storage.list_campaign_ids()
+    else:
+        campaign_ids = [
+            campaign['id']
+            for campaign in _campaigns.campaigns_for_user(u['id'])
+            if _campaigns.is_gm(campaign, u['id'])
+        ]
+    if not campaign_ids:
         return jsonify({'ok': False, 'error': 'not authorized'}), 403
-    n = _backups.run_backup()
+    n = _backups.run_backup(campaign_ids, record_completion=False)
     return jsonify({'ok': True, 'count': n, 'last_backup_at': _backups.last_backup_at()})
 
 
@@ -8694,15 +10020,65 @@ def campaign_export(cid):
         return jsonify({'error': 'GM only'}), 403
     cdir = _storage.campaign_dir(cid)
     buf = io.BytesIO()
-    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as z:
-        for root, _dirs, files in os.walk(cdir):
-            for f in files:
-                full = os.path.join(root, f)
-                z.write(full, os.path.relpath(full, cdir))
+    with _LIVE_CAMPAIGN_DISPATCH_LOCK:
+        _abort_if_pending_character_batch(_storage.party_dir(cid))
+        with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as z:
+            for root, _dirs, files in os.walk(cdir):
+                for f in files:
+                    full = os.path.join(root, f)
+                    if _backups.is_transaction_artifact(full):
+                        continue
+                    z.write(full, os.path.relpath(full, cdir))
     buf.seek(0)
     safe = re.sub(r'[^a-zA-Z0-9_-]+', '-', (camp.get('slug') or camp.get('name') or 'campaign')).strip('-') or 'campaign'
     return send_file(buf, mimetype='application/zip', as_attachment=True,
                      download_name='%s-backup.zip' % safe)
+
+
+def _campaign_import_is_character_json(filename):
+    normalized = str(filename or '').replace('\\', '/').casefold()
+    return normalized.endswith('.json') and normalized.startswith(
+        ('party_data/', 'cosmere_pcs/')
+    )
+
+
+def _campaign_import_entry_limit(filename):
+    """Return the decompressed byte budget for one campaign-backup member.
+
+    JSON members may be parsed fully in memory during import or activation, so
+    they need much tighter limits than opaque campaign assets.
+    """
+    # Windows extraction is case-insensitive, so classify case-insensitively on
+    # every platform. An upper-case PARTY_DATA alias must not receive the loose
+    # asset limit and then be parsed as character JSON on Windows.
+    normalized = str(filename or '').replace('\\', '/').casefold()
+    if normalized == 'campaign.json':
+        return _CAMPAIGN_IMPORT_MAX_CAMPAIGN_JSON
+    if _campaign_import_is_character_json(normalized):
+        return _CAMPAIGN_IMPORT_MAX_CHARACTER_JSON
+    # Handouts, session state, encounters, journals, Chronicle metadata, and
+    # other JSON files can all be parsed eagerly later. They are not opaque
+    # assets and must never inherit the 128 MiB binary-file allowance.
+    if normalized.endswith('.json'):
+        return _CAMPAIGN_IMPORT_MAX_JSON
+    return _CAMPAIGN_IMPORT_MAX_ENTRY
+
+
+def _campaign_import_path_is_canonical(filename):
+    """Reject archive spellings with platform-dependent extraction meaning."""
+    if not isinstance(filename, str) or not filename or '\x00' in filename:
+        return False
+    # Backslashes are separators on Windows but ordinary characters on Linux;
+    # accepting them would give one archive two different security meanings.
+    if '\\' in filename:
+        return False
+    parts = filename.split('/')
+    return bool(parts) and all(
+        part not in {'', '.', '..'}
+        and not part.endswith((' ', '.'))
+        and ':' not in part  # drive prefixes and NTFS alternate data streams
+        for part in parts
+    )
 
 
 @app.route('/campaign/import', methods=['POST'])
@@ -8710,73 +10086,414 @@ def campaign_export(cid):
 def campaign_import():
     """Restore a campaign from a .zip export into a NEW campaign (non-destructive
     -- never overwrites an existing game), owned by the importer as GM."""
-    import io, zipfile
+    import zipfile
     u = _auth.current_user()
     f = request.files.get('backup')
     if not f:
         return jsonify({'ok': False, 'error': 'no file uploaded'}), 400
+    os.makedirs(_storage.CAMPAIGNS_DIR, exist_ok=True)
+    fd, upload_path = tempfile.mkstemp(
+        dir=_storage.CAMPAIGNS_DIR,
+        suffix='.campaign-import.zip',
+    )
+    os.close(fd)
+    staging_dir = None
+    published = False
     try:
-        zf = zipfile.ZipFile(io.BytesIO(f.read()))
-    except zipfile.BadZipFile:
-        return jsonify({'ok': False, 'error': 'not a valid .zip'}), 400
-    if 'campaign.json' not in zf.namelist():
-        return jsonify({'ok': False, 'error': 'not a campaign backup (missing campaign.json)'}), 400
-    new_cid = _storage.new_id()
-    _storage.ensure_campaign_dirs(new_cid)
-    dest = _storage.campaign_dir(new_cid)
-    for n in zf.namelist():
-        if n.endswith('/'):
-            continue
-        target = os.path.normpath(os.path.join(dest, n))
-        # zip-slip guard: every extracted path must stay inside the campaign dir
-        if target != dest and not target.startswith(dest + os.sep):
-            return jsonify({'ok': False, 'error': 'unsafe path in archive'}), 400
-        os.makedirs(os.path.dirname(target), exist_ok=True)
-        with open(target, 'wb') as out:
-            out.write(zf.read(n))
-    # Re-key the campaign doc to the new id + the importer as GM owner.
-    doc = _storage.load_json(_storage.campaign_file(new_cid)) or {}
-    doc['id'] = new_cid
-    doc['created_by'] = u['id']
-    doc['members'] = [_storage.campaign_member(u['id'], 'gm')]
-    doc['name'] = (doc.get('name') or 'Campaign') + ' (restored)'
-    _campaigns.save_campaign(doc)
-    # Re-stamp character envelopes to the new campaign id.
-    for pdir in (_storage.party_dir(new_cid), _storage.cosmere_pc_dir(new_cid)):
-        if not os.path.isdir(pdir):
-            continue
-        for fn in os.listdir(pdir):
+        # Stream the compressed upload to disk instead of duplicating the
+        # request's full 64 MB allowance in worker memory.
+        f.save(upload_path)
+        try:
+            archive = zipfile.ZipFile(upload_path)
+        except zipfile.BadZipFile:
+            return jsonify({'ok': False, 'error': 'not a valid .zip'}), 400
+
+        with archive:
+            members = [info for info in archive.infolist() if not info.is_dir()]
+            if len(members) > _CAMPAIGN_IMPORT_MAX_ENTRIES:
+                return jsonify({
+                    'ok': False,
+                    'error': 'campaign backup has too many entries',
+                }), 400
+            total_uncompressed = sum(info.file_size for info in members)
+            if total_uncompressed > _CAMPAIGN_IMPORT_MAX_UNCOMPRESSED:
+                return jsonify({
+                    'ok': False,
+                    'error': 'campaign backup is too large when decompressed',
+                }), 400
+            archive_names = [info.filename for info in members]
+            if 'campaign.json' not in archive_names:
+                return jsonify({
+                    'ok': False,
+                    'error': 'not a campaign backup (missing campaign.json)',
+                }), 400
+            if any(
+                _backups.is_transaction_artifact(name)
+                for name in archive_names
+            ):
+                return jsonify({
+                    'ok': False,
+                    'error': 'campaign backup contains incomplete transaction files',
+                }), 400
+
+            new_cid = _storage.new_id()
+            final_dir = _storage.campaign_dir(new_cid)
+            staging_dir = tempfile.mkdtemp(
+                dir=_storage.CAMPAIGNS_DIR,
+                prefix=f'.campaign-import-{new_cid}-',
+            )
+            staging_root = os.path.abspath(staging_dir)
+            targets = []
+            seen_targets = set()
+            character_file_count = 0
+            character_declared_total = 0
+            for info in members:
+                if not _campaign_import_path_is_canonical(info.filename):
+                    return jsonify({
+                        'ok': False,
+                        'error': 'unsafe path in archive',
+                    }), 400
+                target = os.path.abspath(os.path.normpath(
+                    os.path.join(staging_root, info.filename)
+                ))
+                try:
+                    contained = (
+                        os.path.normcase(os.path.commonpath([staging_root, target]))
+                        == os.path.normcase(staging_root)
+                    )
+                except ValueError:
+                    contained = False
+                target_key = os.path.normcase(target)
+                if (
+                    not contained
+                    or target_key == os.path.normcase(staging_root)
+                    or target_key in seen_targets
+                ):
+                    return jsonify({
+                        'ok': False,
+                        'error': 'unsafe path in archive',
+                    }), 400
+                seen_targets.add(target_key)
+                canonical_name = os.path.relpath(target, staging_root).replace(
+                    os.sep,
+                    '/',
+                )
+                # Classify the contained extraction-relative target rather than
+                # relying on an untrusted archive spelling.
+                if info.file_size > _campaign_import_entry_limit(canonical_name):
+                    return jsonify({
+                        'ok': False,
+                        'error': 'campaign backup contains an oversized entry',
+                    }), 400
+                is_character_json = _campaign_import_is_character_json(
+                    canonical_name
+                )
+                if is_character_json:
+                    character_file_count += 1
+                    character_declared_total += info.file_size
+                    if character_file_count > _CAMPAIGN_IMPORT_MAX_CHARACTER_FILES:
+                        return jsonify({
+                            'ok': False,
+                            'error': 'campaign backup has too many character files',
+                        }), 400
+                    if (
+                        character_declared_total
+                        > _CAMPAIGN_IMPORT_MAX_CHARACTER_TOTAL
+                    ):
+                        return jsonify({
+                            'ok': False,
+                            'error': 'campaign backup contains too much character data',
+                        }), 400
+                targets.append((
+                    info,
+                    target,
+                    canonical_name,
+                    is_character_json,
+                ))
+
+            for subdir in _storage.CAMPAIGN_SUBDIRS:
+                os.makedirs(os.path.join(staging_root, subdir), exist_ok=True)
+            copied_total = 0
+            copied_character_total = 0
+            for info, target, canonical_name, is_character_json in targets:
+                os.makedirs(os.path.dirname(target), exist_ok=True)
+                with archive.open(info, 'r') as source, open(target, 'wb') as out:
+                    copied_entry = 0
+                    entry_limit = _campaign_import_entry_limit(canonical_name)
+                    while True:
+                        chunk = source.read(_CAMPAIGN_IMPORT_COPY_CHUNK)
+                        if not chunk:
+                            break
+                        copied_entry += len(chunk)
+                        copied_total += len(chunk)
+                        if is_character_json:
+                            copied_character_total += len(chunk)
+                        # Enforce actual bytes as well as ZipInfo metadata. That
+                        # keeps the bounds true even for malformed archives.
+                        if copied_entry > entry_limit:
+                            return jsonify({
+                                'ok': False,
+                                'error': 'campaign backup contains an oversized entry',
+                            }), 400
+                        if copied_total > _CAMPAIGN_IMPORT_MAX_UNCOMPRESSED:
+                            return jsonify({
+                                'ok': False,
+                                'error': 'campaign backup is too large when decompressed',
+                            }), 400
+                        if (
+                            copied_character_total
+                            > _CAMPAIGN_IMPORT_MAX_CHARACTER_TOTAL
+                        ):
+                            return jsonify({
+                                'ok': False,
+                                'error': 'campaign backup contains too much character data',
+                            }), 400
+                        out.write(chunk)
+
+        # Re-key inside the invisible staging directory. A crash at any point
+        # before the final rename cannot expose source members or a mixed tree.
+        campaign_file = os.path.join(staging_root, 'campaign.json')
+        doc = _storage.load_json(campaign_file)
+        if not isinstance(doc, dict):
+            return jsonify({
+                'ok': False,
+                'error': 'campaign backup has an invalid campaign.json',
+            }), 400
+        system = doc.get('system') or 'pf2e'
+        if system not in _storage.SUPPORTED_SYSTEMS:
+            return jsonify({
+                'ok': False,
+                'error': 'campaign backup uses an unsupported system',
+            }), 400
+        doc['id'] = new_cid
+        doc['system'] = system
+        doc['created_by'] = u['id']
+        doc['members'] = [_storage.campaign_member(u['id'], 'gm')]
+        doc.pop('_trashed_at', None)
+        doc['name'] = (doc.get('name') or 'Campaign') + ' (restored)'
+        _atomic_write_json(campaign_file, doc, indent=2)
+
+        # The restored campaign intentionally starts with only the importer as
+        # its GM. Character ownership must follow that same clean boundary:
+        # retaining source-account ids would make PF2e heroes appear claimed
+        # (with no PF2e release workflow) and could silently restore access if an
+        # old owner later joined the new campaign. Preserve stable, valid ids so
+        # scene/token references keep working, but mint ids for legacy documents
+        # that predate the campaign envelope.
+        character_ids = set()
+        character_records = []
+        for relative_dir in ('party_data', 'cosmere_pcs'):
+            character_dir = os.path.join(staging_root, relative_dir)
+            for fn in sorted(os.listdir(character_dir)):
+                if not fn.endswith('.json'):
+                    continue
+                source_path = os.path.join(character_dir, fn)
+                character_doc = _storage.load_json(source_path)
+                if not isinstance(character_doc, dict):
+                    return jsonify({
+                        'ok': False,
+                        'error': 'campaign backup has invalid character data',
+                    }), 400
+
+                character_id = character_doc.get('id')
+                if not (
+                    isinstance(character_id, str)
+                    and re.fullmatch(r'[0-9a-f]{32}', character_id)
+                ):
+                    character_id = _storage.new_id()
+                    while character_id in character_ids:
+                        character_id = _storage.new_id()
+                if character_id in character_ids:
+                    return jsonify({
+                        'ok': False,
+                        'error': 'campaign backup has duplicate character ids',
+                    }), 400
+                character_ids.add(character_id)
+
+                character_doc.pop('editor_user_ids', None)
+                if relative_dir == 'party_data':
+                    # wrap_character is deliberately used even for already
+                    # wrapped input: it overwrites every identity/scope field
+                    # while leaving native PF2e build/play data unchanged.
+                    character_doc = _storage.wrap_character(
+                        character_id,
+                        new_cid,
+                        'pf2e',
+                        character_doc,
+                        owner_user_id=None,
+                    )
+                    target_path = source_path
+                else:
+                    character_doc['id'] = character_id
+                    character_doc['campaign_id'] = new_cid
+                    character_doc['owner_user_id'] = None
+                    character_doc['system'] = 'cosmere'
+                    # Cosmere lookups address <id>.json directly. Normalize a
+                    # legacy/mismatched filename while the tree is still hidden.
+                    target_path = os.path.join(
+                        character_dir,
+                        character_id + '.json',
+                    )
+                record = {
+                    'source': source_path,
+                    'target': target_path,
+                }
+                # Normalize to an adjacent hidden stage immediately, while only
+                # this one parsed document is resident in memory. Keeping every
+                # decoded character in character_records would let many valid
+                # 16 MiB JSON files multiply into a worker-sized Python heap.
+                fd, normalized_stage = tempfile.mkstemp(
+                    dir=os.path.dirname(source_path),
+                    suffix='.restored-character-stage',
+                )
+                os.close(fd)
+                record['stage'] = normalized_stage
+                _atomic_write_json(
+                    normalized_stage,
+                    character_doc,
+                    indent=2,
+                )
+                character_records.append(record)
+
+        target_keys = [
+            os.path.normcase(os.path.abspath(record['target']))
+            for record in character_records
+        ]
+        if len(target_keys) != len(set(target_keys)):
+            return jsonify({
+                'ok': False,
+                'error': 'campaign backup has duplicate character files',
+            }), 400
+
+        # Every normalized character is staged before any extracted source is
+        # removed. This makes Cosmere filename swaps safe (A.json -> B.json
+        # while B.json -> A.json) and remains all-or-nothing because the parent
+        # staging directory is not discoverable until the final rename below.
+        for record in character_records:
+            os.remove(record['source'])
+        for record in character_records:
+            os.replace(record['stage'], record['target'])
+        for directory in {
+            os.path.dirname(record['target'])
+            for record in character_records
+        }:
+            _fsync_directory(directory)
+
+        if os.path.exists(final_dir):
+            raise RuntimeError('campaign id collision during restore')
+        os.replace(staging_root, final_dir)
+        published = True
+        staging_dir = None
+        _fsync_directory(_storage.CAMPAIGNS_DIR)
+        return jsonify({'ok': True, 'id': new_cid, 'name': doc['name']})
+    except (RuntimeError, zipfile.BadZipFile, zipfile.LargeZipFile) as exc:
+        app.logger.warning('campaign import rejected: %s', exc)
+        return jsonify({'ok': False, 'error': 'invalid campaign backup'}), 400
+    except OSError as exc:
+        app.logger.error('campaign import failed: %s', exc)
+        return jsonify({
+            'ok': False,
+            'error': 'campaign backup could not be restored',
+        }), 503
+    finally:
+        try:
+            os.remove(upload_path)
+        except OSError:
+            pass
+        if not published and staging_dir and os.path.isdir(staging_dir):
+            shutil.rmtree(staging_dir, ignore_errors=True)
+
+
+def _prepare_character_claim(cid, character_id, user_id):
+    """Resolve one unambiguous claim target before consuming an invite.
+
+    The live lock must span this preflight, membership persistence, the
+    path-locked ownership write, and invite consumption. This prevents two
+    users from spending the same one-use invite and prevents recovery from
+    partially joining an account.
+    """
+    with _LIVE_CAMPAIGN_DISPATCH_LOCK:
+        pdir = _storage.party_dir(cid)
+        _abort_if_pending_character_batch(pdir)
+        matches = []
+        for fn in sorted(os.listdir(pdir)) if os.path.isdir(pdir) else ():
             if not fn.endswith('.json'):
                 continue
-            p = os.path.join(pdir, fn)
-            cd = _storage.load_json(p)
-            if isinstance(cd, dict) and 'campaign_id' in cd:
-                cd['campaign_id'] = new_cid
-                _atomic_write_json(p, cd, indent=2)
-    return jsonify({'ok': True, 'id': new_cid, 'name': doc['name']})
+            path = os.path.join(pdir, fn)
+            with _path_lock(path):
+                doc = _storage.load_json(path)
+            if (
+                _storage.is_wrapped(doc)
+                and doc.get('id') == character_id
+                and doc.get('campaign_id') == cid
+            ):
+                matches.append(('pf2e', path, doc))
+
+        cdir = _storage.cosmere_pc_dir(cid)
+        for fn in sorted(os.listdir(cdir)) if os.path.isdir(cdir) else ():
+            if not fn.endswith('.json'):
+                continue
+            path = os.path.join(cdir, fn)
+            with _path_lock(path):
+                doc = _storage.load_json(path)
+            if (
+                isinstance(doc, dict)
+                and doc.get('id') == character_id
+                and doc.get('campaign_id') in (None, cid)
+            ):
+                matches.append(('cosmere', path, doc))
+
+        if len(matches) != 1:
+            abort(
+                409,
+                description='The invited character is no longer available.',
+            )
+        system, path, doc = matches[0]
+        owner_id = doc.get('owner_user_id')
+        if owner_id not in (None, '', user_id):
+            abort(
+                409,
+                description='The invited character is already claimed.',
+            )
+        return system, path
 
 
-def _claim_by_id(cid, character_id, user_id):
-    pdir = _storage.party_dir(cid)
-    for fn in (os.listdir(pdir) if os.path.isdir(pdir) else []):
-        if fn.endswith('.json'):
-            doc = _storage.load_json(os.path.join(pdir, fn))
-            if _storage.is_wrapped(doc) and doc.get('id') == character_id:
-                _campaigns.claim_character(cid, fn, user_id)
-                return True
-    # Cosmere PCs live in the campaign's cosmere_pcs/ store (not flat-wrapped):
-    # stamp owner_user_id directly so the player hub + 'My Characters' find it.
-    cdir = _storage.cosmere_pc_dir(cid)
-    for fn in (os.listdir(cdir) if os.path.isdir(cdir) else []):
-        if fn.endswith('.json'):
-            p = os.path.join(cdir, fn)
-            doc = _storage.load_json(p)
-            if isinstance(doc, dict) and doc.get('id') == character_id:
-                doc['owner_user_id'] = user_id
-                doc.setdefault('campaign_id', cid)
-                _atomic_write_json(p, doc, indent=2)
-                return True
-    return False
+def _claim_by_id(cid, character_id, user_id, *, prepared_target=None):
+    """Apply a preflighted character claim under live then per-file locking."""
+    with _LIVE_CAMPAIGN_DISPATCH_LOCK:
+        system, path = prepared_target or _prepare_character_claim(
+            cid,
+            character_id,
+            user_id,
+        )
+        with _path_lock(path):
+            doc = _storage.load_json(path)
+            valid = (
+                _storage.is_wrapped(doc)
+                if system == 'pf2e'
+                else isinstance(doc, dict)
+            )
+            if not valid or doc.get('id') != character_id:
+                abort(
+                    409,
+                    description='The invited character is no longer available.',
+                )
+            stored_cid = doc.get('campaign_id')
+            if stored_cid not in (None, cid):
+                abort(
+                    409,
+                    description='The invited character is no longer available.',
+                )
+            owner_id = doc.get('owner_user_id')
+            if owner_id not in (None, '', user_id):
+                abort(
+                    409,
+                    description='The invited character is already claimed.',
+                )
+            doc['owner_user_id'] = user_id
+            doc['campaign_id'] = cid
+            _atomic_write_json(path, doc, indent=2)
+        return True
 
 
 @app.route('/join', methods=['GET', 'POST'])
@@ -8798,11 +10515,57 @@ def join():
                 return render_template('join.html', error=str(e), code=code, invite=inv,
                                        campaign_name=camp_name, logged_in=False), 400
             _auth.login_user(u, remember=True)
-        _auth.consume_invite(code)
-        _campaigns.add_member(inv['campaign_id'], u['id'], inv['role'], character_id=inv.get('character_id'))
-        if inv.get('character_id'):
-            _claim_by_id(inv['campaign_id'], inv['character_id'], u['id'])
-        _set_active_campaign(inv['campaign_id'])
+        with _LIVE_CAMPAIGN_DISPATCH_LOCK:
+            # The GET-time invite may have been consumed or revoked while the
+            # account form was open. Revalidate it inside the commit lock.
+            inv = _auth.get_invite(code)
+            if not inv:
+                return render_template(
+                    'join.html',
+                    error='Invalid or expired invite code.',
+                    code=code,
+                    invite=None,
+                    logged_in=True,
+                ), 400
+            prepared_target = None
+            if inv.get('character_id'):
+                prepared_target = _prepare_character_claim(
+                    inv['campaign_id'],
+                    inv['character_id'],
+                    u['id'],
+                )
+
+            if inv.get('character_id'):
+                # Membership first is recoverable for a character-specific
+                # invite: if the character write fails, the invite remains
+                # valid and a retry idempotently repairs the claim. A recovery
+                # 503 occurs in preflight before either mutation.
+                _campaigns.add_member(
+                    inv['campaign_id'],
+                    u['id'],
+                    inv['role'],
+                    character_id=inv['character_id'],
+                )
+                _claim_by_id(
+                    inv['campaign_id'],
+                    inv['character_id'],
+                    u['id'],
+                    prepared_target=prepared_target,
+                )
+                if not _auth.consume_invite(code):
+                    abort(409, description='This invite was already used.')
+            else:
+                # Generic invites have no claimed character to make reuse
+                # self-denying. Spend first so a crash cannot grant membership
+                # while leaving a reusable co-GM/player code behind.
+                if not _auth.consume_invite(code):
+                    abort(409, description='This invite was already used.')
+                _campaigns.add_member(
+                    inv['campaign_id'],
+                    u['id'],
+                    inv['role'],
+                )
+            _set_active_campaign(inv['campaign_id'])
         return redirect('/me')
     return render_template('join.html', error=None, code=code, invite=inv,
                            campaign_name=camp_name, logged_in=bool(_auth.current_user()))
@@ -8903,14 +10666,18 @@ def _inject_account_ctx():
             u = _auth.current_user()
     except Exception:
         u = None
+    request_cfg = _request_campaign_config() if u else dict(CAMPAIGN_DEFAULT)
+    world = request_cfg.get('cosmere_world', 'stormlight')
+    world = 'mistborn' if world == 'mistborn' else 'stormlight'
+    advancement = request_cfg.get('advancement_mode') or 'milestone'
     return {
         'account_user': u,
         'active_campaign': (_active_campaign_doc() if u else None),
         'active_system': _active_system(),
-        'cosmere_world': _cosmere_world(),
+        'cosmere_world': world,
         'cosmere_player_char': _cosmere_player_char_name(),
         'system_ui': _active_system_ui(),
-        'advancement_mode': (_advancement_mode() if u else 'milestone'),
+        'advancement_mode': advancement,
         # The running deploy version, stamped into every page so the SSE hub can
         # compare it against the version reported on (re)connect and offer a reload.
         'app_version': DEPLOY_VERSION,
@@ -9017,10 +10784,23 @@ def admin_set_campaign_system(cid):
     if camp and new_system in _storage.SUPPORTED_SYSTEMS:
         old = camp.get('system') or 'pf2e'
         if old != new_system:
+            if (_storage.get_live_campaign_id() == cid
+                    and _flush_pending_persistence() is False):
+                return _authorization_error(
+                    'campaign_switch_failed',
+                    'The live campaign could not be saved, so its system was not changed.',
+                    503,
+                )
             camp['system'] = new_system
             _campaigns.save_campaign(camp)
             if _storage.get_live_campaign_id() == cid:
-                load_campaign(cid)   # rebind globals so live state matches the new system
+                try:
+                    load_campaign(cid)   # rebind globals so live state matches the new system
+                except Exception:
+                    camp['system'] = old
+                    _campaigns.save_campaign(camp)
+                    load_campaign(cid)
+                    raise
         session['_campaign_notice'] = {'name': camp.get('name') or cid, 'old': old, 'new': new_system}
     return redirect('/admin/campaigns')
 
@@ -10368,6 +12148,8 @@ def cosmere_builder():
             return jsonify({'ok': False, 'blocked': True, 'hard': hard, 'issues': issues,
                             'error': 'This build exceeds the rules. Fix the flagged limits to save.'}), 400
         existing = _load_cosmere_pc(data.get('id')) if data.get('id') else None
+        if existing is not None and not _cosmere_can_act_on(existing):
+            return jsonify({'ok': False, 'error': 'not your character'}), 403
         if existing is not None:
             owner = existing.get('owner_user_id')                  # preserve owner on edit / level-up
         else:
@@ -10401,6 +12183,8 @@ def cosmere_builder():
                         'url': url_for('cosmere_pc_sheet', pid=doc['id'])})
     # GET — new build, or edit/level an existing one
     existing = _load_cosmere_pc(request.args.get('pc')) if request.args.get('pc') else None
+    if existing is not None and not _cosmere_can_act_on(existing):
+        return ('Forbidden — not your character', 403)
     build = (_cb.CosmereBuild((existing or {}).get('build'), homebrew=_hb_store)
              if existing else _cb.CosmereBuild(homebrew=_hb_store))
     if request.args.get('levelup') and existing:
@@ -10779,6 +12563,13 @@ def api_cosmere_combat_state():
 # System-agnostic: a place for any player (or the GM) to jot down whatever they
 # want during a session. Stored next to the campaign's journals.
 def _session_notes_dir():
+    if _account_mode():
+        cid = _active_campaign_id()
+        if cid:
+            return os.path.join(
+                os.path.dirname(_storage.journal_dir(cid)),
+                'session_notes',
+            )
     return os.path.join(os.path.dirname(JOURNAL_DIR), 'session_notes')
 
 
@@ -10842,17 +12633,19 @@ def _cosmere_can_act_on(doc):
     return _is_gm() or (bool(u) and doc.get('owner_user_id') == u.get('id'))
 
 
-def _sync_cosmere_combatant_state(name, ps):
+def _sync_cosmere_combatant_state(pid, ps):
     """Mirror a Cosmere PC's saved play_state onto its LIVE tracker combatant so
     the GM screen reflects player-side changes. The combatant in ACTIVE_ENCOUNTER
     is a separate object from the saved doc (loaded when added to the encounter),
     so without this the GM tracker shows stale HP/injuries/conditions. Matches by
-    name (PC names are unique in a party). Returns True if a combatant was hit."""
-    if not name:
+    stable PC id because display names are not unique. Returns True on a hit."""
+    if not pid:
         return False
     hit = False
     for c in ACTIVE_ENCOUNTER:
-        if getattr(c, 'system', 'pf2e') == 'cosmere' and getattr(c, 'is_pc', False) and c.name == name:
+        if (getattr(c, 'system', 'pf2e') == 'cosmere'
+                and getattr(c, 'is_pc', False)
+                and getattr(c, 'restore_id', None) == pid):
             if 'health' in ps:
                 try: c.current_hp = max(0, int(ps['health']))
                 except (TypeError, ValueError): pass
@@ -10873,20 +12666,17 @@ def _sync_cosmere_pc_from_combatant(c):
     combatant's health / injuries / conditions back to its saved doc's play_state
     and broadcast cosmere_player_state, so the player's OWN sheet repaints in place
     when the GM changes them from the tracker (e.g. dealing damage). No-op for
-    non-PC or non-Cosmere combatants. Matches by name (unique in a party)."""
+    non-PC or non-Cosmere combatants. Resolves by stable ``restore_id``."""
     if not getattr(c, 'is_pc', False) or getattr(c, 'system', 'pf2e') != 'cosmere':
         return
     name = getattr(c, 'name', None)
-    if not name:
+    pid = getattr(c, 'restore_id', None)
+    if not name or not pid:
         return
-    # Find the PC id by name (cheap scan), then do the write under its file lock
-    # so it can't clobber a concurrent player-side save of the SAME doc.
-    pid = None
-    for d in _list_cosmere_pcs():
-        if (d.get('name') or (d.get('build') or {}).get('name')) == name:
-            pid = d.get('id')
-            break
-    if not pid:
+    # ``restore_id`` is the stable character id stamped when the combatant is
+    # created and persisted as ``cosmere_id`` in autosaves. Names are display
+    # data and may collide, so they must never select the saved character.
+    if not _load_cosmere_pc(pid):
         return
     ps = None
     with _path_lock(_cosmere_pc_path(pid)):
@@ -10989,7 +12779,7 @@ def cosmere_pc_state(pid):
         _save_cosmere_pc(doc, fsync=False)
     # In-memory combatant mirror + SSE happen AFTER releasing the file lock (they
     # touch ACTIVE_ENCOUNTER, not the file). The tracker still repaints instantly.
-    if _sync_cosmere_combatant_state(doc.get('name'), ps):
+    if _sync_cosmere_combatant_state(pid, ps):
         _broadcast_encounter_state()
     try:
         sse_broadcast('cosmere_player_state', {'pid': pid, 'name': doc.get('name'), 'play_state': ps})
@@ -11062,7 +12852,7 @@ def cosmere_rest():
             ps = _cosmere_apply_rest(doc, mode)
             doc['play_state'] = ps
             _save_cosmere_pc(doc, fsync=False)
-        if _sync_cosmere_combatant_state(doc.get('name'), ps):
+        if _sync_cosmere_combatant_state(pidd, ps):
             _broadcast_encounter_state()
         try:
             sse_broadcast('cosmere_player_state', {'pid': pidd, 'name': doc.get('name'), 'play_state': ps})
@@ -11093,7 +12883,7 @@ def cosmere_pc_rest(pid):
         ps = _cosmere_apply_rest(doc, mode)
         doc['play_state'] = ps
         _save_cosmere_pc(doc, fsync=False)
-    if _sync_cosmere_combatant_state(doc.get('name'), ps):
+    if _sync_cosmere_combatant_state(pid, ps):
         _broadcast_encounter_state()
     try:
         sse_broadcast('cosmere_player_state', {'pid': pid, 'name': doc.get('name'), 'play_state': ps})
@@ -11136,6 +12926,9 @@ def api_cosmere_roll():
         'degree': None,                       # Cosmere is meet-or-beat: no PF2e degree banner
         'time': datetime.now().strftime('%H:%M:%S'),
         'round': ROUND_NUMBER,
+        # SSE filtering protects only the live delivery. Persist the same
+        # secrecy label so later player polling cannot replay a GM whisper.
+        'gm_only': vis == 'gm',
     }
     COMBAT_LOGS.append(entry)
     if len(COMBAT_LOGS) > 200:
@@ -11157,14 +12950,15 @@ def api_cosmere_roll():
 
 def _my_cosmere_combatant(pid):
     """(combatant, pc_doc) for the player's OWN Cosmere PC in the active encounter
-    -- the combatant is matched by name (PC names are unique in a party). Returns
+    -- matched by its stable stored id, never its display name. Returns
     (None, doc) if not in combat, (None, None) if the PC is unknown / not theirs."""
     doc = _load_cosmere_pc(pid)
     if not doc or not _cosmere_can_act_on(doc):
         return None, None
-    name = doc.get('name')
     for c in ACTIVE_ENCOUNTER:
-        if getattr(c, 'system', 'pf2e') == 'cosmere' and getattr(c, 'is_pc', False) and c.name == name:
+        if (getattr(c, 'system', 'pf2e') == 'cosmere'
+                and getattr(c, 'is_pc', False)
+                and getattr(c, 'restore_id', None) == pid):
             return c, doc
     return None, doc
 
@@ -11290,18 +13084,18 @@ def _apply_cosmere_condition_change(instance_id, condition, action='toggle'):
         except Exception: pass
     # If the combatant is a player's PC, persist the new set + push to their sheet.
     if getattr(target, 'is_pc', False):
-        for d in _list_cosmere_pcs():
-            if d.get('name') == target.name:
-                ps = dict(d.get('play_state') or {})
-                ps['conditions'] = dict(target.conditions)
-                d['play_state'] = ps
-                _save_cosmere_pc(d, fsync=False)
-                try:
-                    sse_broadcast('cosmere_player_state',
-                                  {'pid': d.get('id'), 'name': d.get('name'), 'play_state': ps})
-                except Exception:
-                    pass
-                break
+        pid = getattr(target, 'restore_id', None)
+        d = _load_cosmere_pc(pid) if pid else None
+        if d:
+            ps = dict(d.get('play_state') or {})
+            ps['conditions'] = dict(target.conditions)
+            d['play_state'] = ps
+            _save_cosmere_pc(d, fsync=False)
+            try:
+                sse_broadcast('cosmere_player_state',
+                              {'pid': d.get('id'), 'name': d.get('name'), 'play_state': ps})
+            except Exception:
+                pass
     _persist_encounter_state()
     _broadcast_encounter_state()
     return target
@@ -11368,7 +13162,7 @@ def api_plot_die():
     """Roll the Cosmere Plot Die — a d6 side-channel when the stakes are raised."""
     import systems.cosmere.combat as _cc
     r = _cc.roll_plot_die_full()
-    who = session.get('player_name') or ('GM' if _is_gm() else 'Someone')
+    who = _trusted_actor_label('Someone')
     sev = 'critical' if r['type'] == 'complication' else 'success'
     try:
         _combat_log(f"{who} rolled the Plot Die — {r['label']}.", sev)
@@ -11686,8 +13480,10 @@ def gm_secret_roll():
     GM_SECRET_LOG.append(entry)
     if len(GM_SECRET_LOG) > 100: GM_SECRET_LOG.pop(0)
 
-    # Only broadcast to GM via SSE (with secret flag — player views filter these out)
-    sse_broadcast('gm_secret_roll', entry)
+    # The server, not each client, enforces secrecy. Omitting this filter would
+    # place the raw roll in every player's queue and replay buffer even if their
+    # current UI happened not to render the event.
+    sse_broadcast('gm_secret_roll', entry, player_filter=lambda _data: None)
 
     return jsonify({"success": True, "roll": entry})
 
@@ -11908,11 +13704,13 @@ def recall_knowledge(instance_id):
         'suggested_skill': suggested_skill.title(),
     }
 
-    # Log it as a secret GM roll (players see the degree but not the DC)
-    _combat_log(f"📖 {pc_name} Recall Knowledge ({skill_name.title()}) vs {target.name}: {degree_labels[degree]} (d20={d20}, +{skill_mod}={d20+skill_mod} vs DC {dc})", 'action')
+    # The direct response gives the requesting sheet its result. The detailed
+    # target/DC line belongs only in the GM log and must not ride the shared
+    # combat-log stream to every other player.
+    _combat_log(f"Recall Knowledge: {pc_name} ({skill_name.title()}) vs {target.name}: {degree_labels[degree]} (d20={d20}, +{skill_mod}={d20+skill_mod} vs DC {dc})", 'action', gm_only=True)
 
     # Broadcast as GM-only info
-    sse_broadcast('recall_knowledge', result)
+    sse_broadcast('recall_knowledge', result, player_filter=lambda _data: None)
 
     return jsonify({"success": True, "result": result})
 
@@ -12032,6 +13830,32 @@ def _load_handouts():
     HANDOUTS = data if isinstance(data, list) else []
 
 
+def _request_handouts():
+    """Persisted handouts for this request's authorized campaign.
+
+    Mutating live-session routes continue to use ``HANDOUTS``. Chronicle and
+    read-only handout routes can safely browse a member's selected campaign
+    even when another table occupies the process-wide live slot.
+    """
+    cached = getattr(g, '_request_handouts', None)
+    if isinstance(cached, list):
+        return cached
+    if not _account_mode():
+        return HANDOUTS
+    cid = _active_campaign_id()
+    data = _storage.load_json(_storage.handouts_file(cid), []) if cid else []
+    result = data if isinstance(data, list) else []
+    g._request_handouts = result
+    return result
+
+
+def _request_handouts_dir():
+    if _account_mode():
+        cid = _active_campaign_id()
+        return _storage.handouts_dir(cid) if cid else None
+    return HANDOUTS_DIR
+
+
 def _save_handouts():
     if not HANDOUTS_FILE:
         return
@@ -12050,9 +13874,10 @@ def get_handouts():
     sees only 'all' handouts or ones addressed to a character they OWN. The
     ?player= query param is NO LONGER trusted -- it let any client read another
     player's handouts by naming them (the pre-existing leak, design C1)."""
+    handouts = _request_handouts()
     if _is_gm():
-        return jsonify({"handouts": HANDOUTS})
-    visible = [h for h in HANDOUTS if _handout_visible_to_request(h)]
+        return jsonify({"handouts": handouts})
+    visible = [h for h in handouts if _handout_visible_to_request(h)]
     return jsonify({"handouts": visible})
 
 @app.route('/api/handouts', methods=['POST'])
@@ -12550,6 +14375,17 @@ def _chronicle_authorize_publish(cid, camp):
     return authed_camp is not None
 
 
+def _chronicle_authorize_unpublish(cid):
+    """Authorize a destructive unpublish against its explicit target.
+
+    Unlike publish, this path never considers ``X-Chronicle-Token``. Only a
+    human GM of the target campaign or a site admin may retract published
+    player content, even if automation-token scope changes elsewhere later.
+    """
+    _, authed_camp = _require_campaign_gm(cid)
+    return authed_camp is not None
+
+
 @app.route('/api/chronicle/publish', methods=['POST'])
 def chronicle_publish():
     """Ingest a player-vault zip (manifest.json + content/**.md + assets/**),
@@ -12669,7 +14505,8 @@ def chronicle_publish():
         _chronicle_swap(staging_dir, new_hash, target_dir)
         staging_dir = None  # ownership handed to _chronicle_swap; don't rmtree it
         sse_broadcast('chronicle_update', {'session_number': manifest.get('session_number'),
-                                           'campaign_id': target_cid})
+                                           'campaign_id': target_cid},
+                      campaign_id=target_cid)
         # State which campaign this landed in -- a wrong target used to look
         # exactly like success (the bug this whole fix closes), so the
         # response says so explicitly rather than leaving it implicit.
@@ -12734,7 +14571,8 @@ def chronicle_rollback():
         return jsonify({'ok': False, 'error': 'no previous publish to roll back to'}), 400
     man = _chronicle_manifest() or {}
     sse_broadcast('chronicle_update', {'session_number': man.get('session_number'),
-                                       'rolled_back': True})
+                                       'rolled_back': True},
+                  campaign_id=_active_campaign_id())
     return jsonify({'ok': True, 'session_number': man.get('session_number'),
                     'campaign_id': _active_campaign_id()})
 
@@ -12765,14 +14603,11 @@ def chronicle_unpublish():
       nuking the wrong campaign's Chronicle. A missing, unknown, or
       malformed campaign_id is rejected with a 400 and nothing is touched
       anywhere.
-    - Same authorization as publish: resolves the target the same way (a
-      real campaign or a clean rejection) and reuses
-      _chronicle_authorize_publish() UNCHANGED -- a GM of campaign A cannot
-      unpublish campaign B, and the X-Chronicle-Token headless path unlocks
-      this route exactly the way it unlocks publish (see that function's
-      docstring). GM-ness itself is already required to reach this route at
-      all, via the '/api/chronicle' GM_API_PREFIXES prefix
-      (check_gm_access).
+    - Human authorization only: a GM of campaign A cannot unpublish campaign
+      B, while a site admin may target any existing campaign. The headless
+      X-Chronicle-Token is publish-only and is never considered by this
+      destructive route. The central route policy and
+      _chronicle_authorize_unpublish() enforce those separate capabilities.
     - Confined blast radius: the actual removal only ever touches paths
       inside the TARGET campaign's own chronicle root
       (_chronicle_dir_for(cid)) -- see _chronicle_unpublish_dir's realpath
@@ -12798,13 +14633,14 @@ def chronicle_unpublish():
         return jsonify({'ok': False, 'error':
                         'campaign_id (%r) does not name an existing campaign' % (cid,)}), 400
 
-    if not _chronicle_authorize_publish(cid, camp):
+    if not _chronicle_authorize_unpublish(cid):
         return jsonify({'ok': False,
                         'error': 'not authorized to unpublish that campaign'}), 403
 
     removed = _chronicle_unpublish_dir(_chronicle_dir_for(cid))
     if removed:
-        sse_broadcast('chronicle_update', {'campaign_id': cid, 'unpublished': True})
+        sse_broadcast('chronicle_update', {'campaign_id': cid, 'unpublished': True},
+                      campaign_id=cid)
 
     return jsonify({'ok': True, 'campaign_id': cid, 'campaign_name': camp.get('name'),
                     'removed': removed})
@@ -13042,20 +14878,30 @@ def chronicle_doc_api(doc_id):
     if not docs_root:
         return jsonify({'ok': False, 'error': 'no active campaign'}), 400
 
-    with _path_lock(_chronicle_lib.index_file(docs_root)):
-        index = _chronicle_lib.load_index(docs_root)
-        entry = _chronicle_lib.find(index, doc_id)
-        if not entry:
-            return jsonify({'ok': False, 'error': 'document not found'}), 404
-
-        if request.method == 'DELETE':
+    index_path = _chronicle_lib.index_file(docs_root)
+    if request.method == 'DELETE':
+        with _path_lock(index_path):
+            index = _chronicle_lib.load_index(docs_root)
+            entry = _chronicle_lib.find(index, doc_id)
+            if not entry:
+                return jsonify({'ok': False, 'error': 'document not found'}), 404
             index['docs'] = [d for d in index['docs'] if d.get('id') != doc_id]
             _chronicle_lib.save_index(docs_root, index)
             frag = _chronicle_doc_fragment_path(entry.get('slug'))
             if frag and os.path.isfile(frag):
                 os.unlink(frag)
-            sse_broadcast('chronicle_update', {'doc_id': doc_id, 'deleted': True})
-            return jsonify({'ok': True, 'deleted': True})
+        # Never acquire the live/SSE dispatch lock while holding a document
+        # path lock; live routes consistently take those locks in the opposite
+        # order. The durable delete is complete before clients are notified.
+        sse_broadcast('chronicle_update', {'doc_id': doc_id, 'deleted': True},
+                      campaign_id=_active_campaign_id())
+        return jsonify({'ok': True, 'deleted': True})
+
+    with _path_lock(index_path):
+        index = _chronicle_lib.load_index(docs_root)
+        entry = _chronicle_lib.find(index, doc_id)
+        if not entry:
+            return jsonify({'ok': False, 'error': 'document not found'}), 404
 
         data = request.get_json(silent=True) or {}
         # One read of the vault manifest for the whole request: the publish
@@ -13131,7 +14977,8 @@ def chronicle_doc_api(doc_id):
         shadowed = entry.get('slug') in vault_slugs
 
     sse_broadcast('chronicle_update', {'doc_id': doc_id,
-                                       'published': bool(entry.get('published'))})
+                                       'published': bool(entry.get('published'))},
+                  campaign_id=_active_campaign_id())
     return jsonify({'ok': True, 'doc': dict(
         entry, shadowed_by_vault=shadowed,
         shadowed_by=_chronicle_vault_page_at(entry.get('slug')) if shadowed else None)})
@@ -13823,7 +15670,7 @@ def adjust_hero(pc_name):
 @app.route('/api/daily_prep/<pc_name>', methods=['POST'])
 @require_pc_self_or_gm
 def daily_preparations(pc_name):
-    """Daily preparations: reset spell slots, focus points, conditions, optionally heal to full."""
+    """Reset daily resources without applying a second full-night recovery."""
     pc, file_path, err = require_pc(pc_name)
     if err: return err
     
@@ -13848,13 +15695,10 @@ def daily_preparations(pc_name):
     for cond in conditions_to_clear:
         build['conditions'][cond] = False if cond in ['off_guard', 'concealed', 'hidden', 'prone'] else 0
 
-    # Conditions that *tick down* rather than clear: PF2e CRB.
-    #   Wounded & Doomed: reduce by 1 per long rest.
-    #   Drained: reduce by 1 per long rest.
-    for tick_cond in ('wounded', 'doomed', 'drained'):
-        cur = safe_int(build['conditions'].get(tick_cond, 0), 0)
-        if cur > 0:
-            build['conditions'][tick_cond] = cur - 1
+    # Doomed and Drained recover only from the full-night rest itself. Daily
+    # preparations commonly follow that rest and must not apply either rule a
+    # second time. The optional full-heal convenience can still clear Wounded
+    # because the character is explicitly restored to full HP.
 
     # Clear persistent damage (list or legacy string)
     build['persistent_damage'] = []
@@ -13872,6 +15716,7 @@ def daily_preparations(pc_name):
     # Heal to full HP if requested
     if heal_full:
         build.pop('current_hp', None)  # Removing it makes Character.__init__ default to max
+        build['conditions']['wounded'] = 0
 
     save_and_reload_character(pc_name, pc_json, file_path)
     _broadcast_pc_state(pc_name)
@@ -13883,36 +15728,47 @@ def daily_preparations_all():
     """Daily preparations for all party members at once."""
     data = request.json or {}
     heal_full = data.get('heal_full', True)
+    updates = []
     results = []
+
+    # Build and validate the complete party change-set before replacing any
+    # character file. The batch helper publishes neither files nor actors
+    # unless every staged document is valid and every replacement succeeds.
     for pc_name in list(PARTY_LIBRARY.keys()):
-        try:
-            pc_json, file_path, err = require_pc_json(pc_name)
-            if err: continue
-            build = pc_json.get('build', pc_json)
-            build['expended_slots'] = {}
-            build['prepared_spells'] = {}
-            build['cast_prep'] = {}
-            pc = PARTY_LIBRARY[pc_name]
-            build['current_focus'] = pc.focus_max
-            if 'conditions' not in build: build['conditions'] = {}
-            for cond in ['frightened', 'sickened', 'stunned', 'slowed', 'dying', 'off_guard', 'concealed', 'hidden', 'prone']:
-                build['conditions'][cond] = False if cond in ['off_guard', 'concealed', 'hidden', 'prone'] else 0
-            for tick_cond in ('wounded', 'doomed', 'drained'):
-                cur = safe_int(build['conditions'].get(tick_cond, 0), 0)
-                if cur > 0:
-                    build['conditions'][tick_cond] = cur - 1
-            build['persistent_damage'] = []
-            build['reaction_used'] = False
-            build['shield_raised'] = False
-            build['temp_hp'] = 0
-            build['hero_points'] = 1
-            if heal_full:
-                build.pop('current_hp', None)
-            save_and_reload_character(pc_name, pc_json, file_path)
-            _broadcast_pc_state(pc_name)
-            results.append(pc_name)
-        except Exception as e:
-            print(f"[DAILY PREP] Error for {pc_name}: {e}")
+        pc_json, file_path, err = require_pc_json(pc_name)
+        if err:
+            return err
+        build = pc_json.get('build', pc_json)
+        build['expended_slots'] = {}
+        build['prepared_spells'] = {}
+        build['cast_prep'] = {}
+        pc = PARTY_LIBRARY[pc_name]
+        build['current_focus'] = pc.focus_max
+        if 'conditions' not in build:
+            build['conditions'] = {}
+        for cond in [
+            'frightened', 'sickened', 'stunned', 'slowed', 'dying',
+            'off_guard', 'concealed', 'hidden', 'prone',
+        ]:
+            build['conditions'][cond] = (
+                False
+                if cond in ['off_guard', 'concealed', 'hidden', 'prone']
+                else 0
+            )
+        build['persistent_damage'] = []
+        build['reaction_used'] = False
+        build['shield_raised'] = False
+        build['temp_hp'] = 0
+        build['hero_points'] = 1
+        if heal_full:
+            build.pop('current_hp', None)
+            build['conditions']['wounded'] = 0
+        updates.append((pc_name, pc_json, file_path))
+        results.append(pc_name)
+
+    _save_and_reload_character_batch(updates)
+    for pc_name in results:
+        _broadcast_pc_state(pc_name)
     return jsonify({"success": True, "prepared": results})
 
 # =============================================================================
@@ -16458,6 +18314,8 @@ def sse_stream():
     # data or the player-sanitized view.
     is_gm = _is_gm()
     subscriber_cid = _active_campaign_id()
+    principal = getattr(g, 'principal', None)
+    subscriber_user_id = getattr(principal, 'user_id', None)
     # On reconnect the client tells us the last event it saw (the hub passes it as
     # ?last_event_id=, native EventSource as the Last-Event-ID header); we replay
     # any events it missed from the ring buffer so the sheet never shows stale data.
@@ -16466,27 +18324,29 @@ def sse_stream():
     except (TypeError, ValueError):
         last_seen = 0
 
+    # Register eagerly while centralized authorization still owns the live
+    # campaign dispatch lock. A lazy generator registration could otherwise
+    # validate for A, let B switch/close streams, then register stale A after it.
+    q = queue.Queue(maxsize=50)
+    entry = (q, is_gm, subscriber_cid, subscriber_user_id)
+    with _sse_lock:
+        if len(_sse_subscribers) >= _SSE_MAX_SUBSCRIBERS:
+            stale = [s for s in _sse_subscribers if s[0].full()]
+            for old in stale:
+                if old in _sse_subscribers:
+                    _sse_subscribers.remove(old)
+                _terminate_sse_entry_locked(old)
+        if len(_sse_subscribers) >= _SSE_MAX_SUBSCRIBERS:
+            old = _sse_subscribers.pop(0)
+            _terminate_sse_entry_locked(old)
+        _sse_subscribers.append(entry)
+        start_id = _sse_event_seq
+        replay = ([(i, gm, pl) for (i, gm, pl) in _sse_buffer
+                   if last_seen < i <= start_id
+                   and _sse_event_campaigns.get(i) == subscriber_cid]
+                  if last_seen else [])
+
     def generate():
-        q = queue.Queue(maxsize=50)
-        entry = (q, is_gm, subscriber_cid)
-        with _sse_lock:
-            # Enforce max subscriber cap. Reap dead subscribers first: a full
-            # queue means that client stopped draining (closed/asleep tab), so we
-            # evict those zombies before ever dropping a live connection. Only if
-            # we're still at the cap after reaping do we drop the oldest.
-            if len(_sse_subscribers) >= _SSE_MAX_SUBSCRIBERS:
-                _sse_subscribers[:] = [s for s in _sse_subscribers if not s[0].full()]
-            if len(_sse_subscribers) >= _SSE_MAX_SUBSCRIBERS:
-                _sse_subscribers.pop(0)
-            _sse_subscribers.append(entry)
-            # Snapshot the events to replay: everything after last_seen up to the
-            # id at subscribe time. Events newer than this arrive live via the
-            # queue (we subscribed first), so there's no gap and no duplicate.
-            start_id = _sse_event_seq
-            replay = ([(i, gm, pl) for (i, gm, pl) in _sse_buffer
-                       if last_seen < i <= start_id
-                       and _sse_event_campaigns.get(i) in (None, subscriber_cid)]
-                      if last_seen else [])
         try:
             # Carry the running deploy version so an already-open tab can detect a
             # new build after a deploy (the worker swap drops every SSE socket; the
@@ -16502,6 +18362,8 @@ def sse_stream():
             while True:
                 try:
                     msg = q.get(timeout=30)
+                    if msg is _SSE_CLOSE:
+                        break
                     yield msg
                 except queue.Empty:
                     yield ": heartbeat\n\n"  # Keep connection alive
@@ -16993,15 +18855,28 @@ def compendium_detail():
 def long_rest(pc_name):
     if pc_name in PARTY_LIBRARY:
         pc = PARTY_LIBRARY[pc_name]
+        file_path = get_pc_file_path(pc_name)
+        if not file_path or not os.path.exists(file_path):
+            abort(
+                503,
+                description=(
+                    'Character changes could not be saved. No changes were applied; '
+                    'please try again.'
+                ),
+            )
+        # Establish the persistence barrier before changing the live actor. A
+        # failed flush must leave the requested rest completely unapplied.
+        _flush_pc_dirty(pc_name)
 
         # PF2E Rest Rules (Core Rulebook p.480 "Resting"):
         # - HP regained = Con modifier (minimum 1) × level, capped at max HP.
         #   You do NOT wake with full HP. Treat Wounds / other healing is
         #   applied separately during rest; this endpoint models only the
         #   base rest-recovery rule.
-        # - Wounded: clears entirely after full night's rest
+        # - Wounded: remains unless the character reaches full HP; an 8-hour
+        #   rest then exceeds the condition's additional 10-minute requirement
         # - Drained: reduces by 1 (not cleared)
-        # - Doomed: does NOT change from rest (only specific effects remove it)
+        # - Doomed: reduces by 1 after a full night's rest
         # - Fatigued: clears after rest (explicit rule)
         # - All other short-duration conditions (stunned, slowed, stupefied,
         #   enfeebled, clumsy, frightened, sickened) expire after 8 hours —
@@ -17018,25 +18893,33 @@ def long_rest(pc_name):
         except Exception:
             con_mod = 0
         hp_per_level = max(1, con_mod)
+        drained_before = max(0, int(pc.conditions.get('drained', 0) or 0))
+        drained_val = max(0, drained_before - 1)
+        # Reducing Drained restores level HP to the character's maximum before
+        # the night's healing is capped. Otherwise a character remains short by
+        # one level of HP even when the rest recovery was large enough.
+        rested_max_hp = pc.hp + ((drained_before - drained_val) * pc.level)
         hp_before = pc.current_hp
         hp_regained = hp_per_level * pc.level
-        pc.current_hp = min(pc.hp, pc.current_hp + hp_regained)
-        hp_actually_regained = pc.current_hp - hp_before
-
-        pc.current_focus = pc.focus_max
+        rested_hp = min(rested_max_hp, pc.current_hp + hp_regained)
+        hp_actually_regained = rested_hp - hp_before
+        rested_focus = pc.focus_max
         # Temp HP always fades after a rest — clear the manual pool so it
         # doesn't linger across days. Toggle-based temp HP refreshes with
         # the toggle (no action needed here).
-        pc.temp_hp_manual = 0
-        try:
-            pc.temp_hp = pc.toggle_effects_summary.get('temp_hp', 0)
-        except Exception:
-            pc.temp_hp = 0
-        drained_val = max(0, pc.conditions.get('drained', 0) - 1)
-        doomed_val = pc.conditions.get('doomed', 0)  # Preserved
+        doomed_val = max(
+            0,
+            safe_int(pc.conditions.get('doomed', 0), 0) - 1,
+        )
+        wounded_before = max(
+            0,
+            safe_int(pc.conditions.get('wounded', 0), 0),
+        )
+        wounded_val = 0 if rested_hp >= rested_max_hp else wounded_before
 
-        pc.conditions = {
-            'frightened': 0, 'sickened': 0, 'dying': 0, 'wounded': 0,
+        rested_conditions = {
+            'frightened': 0, 'sickened': 0, 'dying': 0,
+            'wounded': wounded_val,
             'doomed': doomed_val, 'drained': drained_val,
             'fatigued': 0,
             'stunned': 0, 'slowed': 0, 'stupefied': 0,
@@ -17045,30 +18928,24 @@ def long_rest(pc_name):
             'hidden': False, 'undetected': False
         }
         
-        # Clear server-side spell slot tracking
+        # Commit the post-rest document before publishing any live mutation.
+        # save_and_reload_character validates the actor and raises 503 if the
+        # atomic write fails, so a rejected rest cannot leak into memory.
+        with open(file_path, 'r', encoding='utf-8') as f:
+            pc_json = json.load(f)
+        build = pc_json.get('build', pc_json)
+        build['expended_slots'] = {}
+        build['prepared_spells'] = {}
+        build['cast_prep'] = {}
+        build['current_hp'] = rested_hp
+        build['current_focus'] = rested_focus
+        build['temp_hp'] = 0
+        build['conditions'] = rested_conditions
+        build['reaction_used'] = bool(getattr(pc, 'reaction_used', False))
+        build['shield_raised'] = bool(getattr(pc, 'shield_raised', False))
+        save_and_reload_character(pc_name, pc_json, file_path)
+        pc = PARTY_LIBRARY[pc_name]
         pc._spell_slots_refreshed = True
-        # Snapshot post-rest values before disk roundtrip — save_and_reload_character
-        # rebuilds Character from the saved JSON, so we MUST persist the new
-        # HP/focus/temp_hp/conditions in the build dict here, otherwise the
-        # in-memory mutations get stomped by the reload and the player wakes
-        # up at their pre-rest HP.
-        file_path = get_pc_file_path(pc_name)
-        if file_path and os.path.exists(file_path):
-            _flush_pc_dirty(pc_name)
-            with open(file_path, 'r', encoding='utf-8') as f: pc_json = json.load(f)
-            build = pc_json.get('build', pc_json)
-            build['expended_slots'] = {}
-            build['prepared_spells'] = {}
-            build['cast_prep'] = {}
-            build['current_hp'] = pc.current_hp
-            build['current_focus'] = pc.current_focus
-            build['temp_hp'] = pc.temp_hp_manual
-            build['conditions'] = dict(pc.conditions)
-            build['reaction_used'] = bool(getattr(pc, 'reaction_used', False))
-            build['shield_raised'] = bool(getattr(pc, 'shield_raised', False))
-            save_and_reload_character(pc_name, pc_json, file_path)
-            # Re-fetch the rebuilt PC reference for the broadcast below.
-            pc = PARTY_LIBRARY[pc_name]
 
         # Sync to tracker
         in_encounter = False
@@ -17142,11 +19019,19 @@ def _resolve_session_state_path():
 
 _SESSION_STATE_PATH = _resolve_session_state_path()
 
+
+def _session_state_path():
+    """Persistence path for the loaded campaign, or the legacy flat layout."""
+    if _loaded_campaign_id():
+        return os.path.join(os.path.dirname(JOURNAL_DIR), 'session_state.json')
+    return _SESSION_STATE_PATH
+
 def _save_session_state():
     """Persist healing log + journal to disk. Called after any mutation
     (which are infrequent — a few per session). Cheap: ~1KB JSON.
     Silent no-op if the path probe failed at boot."""
-    if not _SESSION_STATE_PATH:
+    path = _session_state_path()
+    if not path:
         return
     try:
         with SESSION_STATE_LOCK:
@@ -17154,7 +19039,8 @@ def _save_session_state():
                 'healing_log': SESSION_HEALING_LOG[-500:],
                 'journal': {k: v[-100:] for k, v in SESSION_JOURNAL.items()},
             }
-        with open(_SESSION_STATE_PATH, 'w', encoding='utf-8') as f:
+        os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
+        with open(path, 'w', encoding='utf-8') as f:
             json.dump(payload, f)
     except Exception as e:
         print(f"[SESSION_STATE] save failed: {e}")
@@ -17163,12 +19049,16 @@ def _load_session_state():
     """Restore healing log + journal on boot. Idempotent — safe to
     call multiple times; later calls just overwrite in-memory state."""
     global SESSION_HEALING_LOG, SESSION_JOURNAL
-    if not _SESSION_STATE_PATH:
+    with SESSION_STATE_LOCK:
+        SESSION_HEALING_LOG.clear()
+        SESSION_JOURNAL.clear()
+    path = _session_state_path()
+    if not path:
         return
     try:
-        if not os.path.exists(_SESSION_STATE_PATH):
+        if not os.path.exists(path):
             return
-        with open(_SESSION_STATE_PATH, 'r', encoding='utf-8') as f:
+        with open(path, 'r', encoding='utf-8') as f:
             payload = json.load(f)
         with SESSION_STATE_LOCK:
             SESSION_HEALING_LOG[:] = payload.get('healing_log', []) or []
@@ -17985,7 +19875,13 @@ def adjust_consumable(pc_name):
 @app.route('/api/hero_nomination', methods=['POST'])
 def hero_nomination():
     data = request.json or {}
-    nominator = data.get('nominator', '').strip()
+    # A player's displayed actor is the owned character re-validated by the
+    # central policy hook. Never let client JSON impersonate a peer or the GM.
+    nominator = (
+        data.get('nominator', '').strip()
+        if _is_gm()
+        else (session.get('player_name') or '').strip()
+    )
     nominee = data.get('nominee', '').strip()
     reason = data.get('reason', '').strip() or 'No reason given'
     if not nominator or not nominee:
@@ -18693,20 +20589,27 @@ def set_focus_spells(pc_name):
 @app.route('/api/delete_character/<pc_name>', methods=['POST'])
 def delete_character(pc_name):
     """Delete a character from the party library."""
-    file_path = get_pc_file_path(pc_name)
-    if not file_path or not os.path.exists(file_path):
-        return jsonify({"error": "Character not found"}), 404
-    
-    os.remove(file_path)
-    if pc_name in PARTY_LIBRARY:
-        del PARTY_LIBRARY[pc_name]
-    
-    portraits_dir = os.path.join(PARTY_DIR, 'portraits')
-    if os.path.exists(portraits_dir):
-        safe_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', pc_name)
-        for f in os.listdir(portraits_dir):
-            if f.startswith(safe_name + '.'):
-                os.remove(os.path.join(portraits_dir, f))
+    with _LIVE_CAMPAIGN_DISPATCH_LOCK:
+        live_party_dir = _loaded_party_dir()
+        _abort_if_pending_character_batch(live_party_dir)
+        file_path = get_pc_file_path(pc_name)
+        if not file_path or not os.path.exists(file_path):
+            return jsonify({"error": "Character not found"}), 404
+
+        with _path_lock(file_path):
+            if not os.path.exists(file_path):
+                return jsonify({"error": "Character not found"}), 404
+            os.remove(file_path)
+        _discard_live_party_actor(pc_name)
+        _PC_FILE_CACHE.pop(pc_name, None)
+        _PC_PERSIST_DIRTY.discard(pc_name)
+
+        portraits_dir = os.path.join(live_party_dir, 'portraits')
+        if os.path.exists(portraits_dir):
+            safe_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', pc_name)
+            for f in os.listdir(portraits_dir):
+                if f.startswith(safe_name + '.'):
+                    os.remove(os.path.join(portraits_dir, f))
     
     return jsonify({"success": True})
 
@@ -18940,11 +20843,22 @@ def serve_campaign_asset(filename):
 
 @app.route('/handouts/<filename>')
 def serve_handout_image(filename):
-    """Serve GM-uploaded handout images from HANDOUTS_DIR (the Railway volume
-    in production, so they survive redeploys). Public — players need to view
-    handouts the GM pushed to them. send_from_directory guards against path
-    traversal; the <filename> converter already rejects slashes."""
-    return send_from_directory(HANDOUTS_DIR, filename, max_age=3600)
+    """Serve an image from this request's campaign when its handout is visible."""
+    directory = _request_handouts_dir()
+    if not directory:
+        abort(404)
+    if not _is_gm():
+        allowed = False
+        for handout in _request_handouts():
+            image_url = str(handout.get('image_url') or '').split('?', 1)[0]
+            if (image_url.startswith('/handouts/')
+                    and image_url.rsplit('/', 1)[-1] == filename
+                    and _handout_visible_to_request(handout)):
+                allowed = True
+                break
+        if not allowed:
+            abort(404)
+    return send_from_directory(directory, filename, max_age=3600)
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -19124,7 +21038,7 @@ def _chronicle_nav_counts():
         key = _CHRONICLE_SECTION_TO_NAV.get(p.get('section'))
         if key:
             counts[key] += 1
-    for h in HANDOUTS:
+    for h in _request_handouts():
         if _handout_visible_to_request(h):
             counts['handouts'] += 1
     return counts
@@ -19148,7 +21062,7 @@ def _chronicle_render(template, always_render=False, **ctx):
     man = _chronicle_manifest()
     if not man and (always_render or _chronicle_doc_pages()):
         man = {'schema_version': CHRONICLE_SCHEMA_VERSION, 'pages': [],
-               'session_number': _load_campaign_config().get('session_number', 1)}
+               'session_number': _request_campaign_config().get('session_number', 1)}
     # Every Chronicle screen gets the preview banner state, so a GM can never
     # be looking at a narrowed view without being told which one.
     preview = _chronicle_preview_target()
@@ -19206,7 +21120,7 @@ def chronicle_section(view):
                  'image_url': v['portrait_url'], 'recipient_label': v['recipient_label']}
                 for v in (_chronicle_page_view(p) for p in _chronicle_visible_pages('handout'))]
         # merge visible live handouts (image/title only in PR1; text handouts live in the vault)
-        for h in HANDOUTS:
+        for h in _request_handouts():
             if _handout_visible_to_request(h):
                 rl = None if 'all' in (h.get('recipients') or []) else ', '.join(h.get('recipients') or [])
                 rows.append({'title': h.get('title'), 'html': None,
@@ -19294,7 +21208,8 @@ def chronicle_preview(doc_id):
                 stored['previewed_at'] = time.strftime('%Y-%m-%dT%H:%M:%S')
                 _chronicle_lib.save_index(docs_root, index)
                 entry = stored
-        sse_broadcast('chronicle_update', {'doc_id': doc_id, 'previewed': True})
+        sse_broadcast('chronicle_update', {'doc_id': doc_id, 'previewed': True},
+                      campaign_id=_active_campaign_id())
 
     page = _chronicle_page_view(_chronicle_lib.as_page(entry))
     return _chronicle_render(
@@ -19641,8 +21556,10 @@ def import_pathbuilder():
         file_path = os.path.join(PARTY_DIR, f"{safe_name}.json")
         
         merged = False
+        existing_json = None
         if name in PARTY_LIBRARY and os.path.exists(file_path):
             # --- SMART MERGE: Character exists, preserve runtime state ---
+            _flush_pc_dirty(name)
             with open(file_path, 'r', encoding='utf-8') as f:
                 existing_json = json.load(f)
             existing_build = existing_json.get('build', existing_json)
@@ -19726,21 +21643,14 @@ def import_pathbuilder():
             final_json = _storage.ensure_character_envelope(
                 final_json, cid, existing=(existing_json if merged else None))
 
-        # Save to disk
-        with open(file_path, 'w', encoding='utf-8') as f:
-            json.dump(final_json, f, indent=2)
-
-        # Reload into library
-        try:
-            PARTY_LIBRARY[name] = Character(final_json, file_path)
-            _build_pc_file_cache()
-        except Exception as e:
-            return jsonify({"error": f"Character loaded but had parse issues: {str(e)}", "success": True, "name": name})
+        save_and_reload_character(name, final_json, file_path)
         
         action = "merged" if merged else "imported"
         return jsonify({"success": True, "name": name, "level": new_build.get('level', 1), "class": new_build.get('class', 'Unknown'), "action": action})
     except json.JSONDecodeError:
         return jsonify({"error": "Invalid JSON format"}), 400
+    except HTTPException:
+        raise
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -21156,10 +23066,7 @@ def api_chat_send():
     text = (data.get('text') or '').strip()
     if not text or len(text) > 500:
         return jsonify({'error': 'Message must be 1-500 characters'}), 400
-    if _is_gm():
-        sender = 'GM'
-    else:
-        sender = session.get('player_name') or 'Anonymous'
+    sender = _trusted_actor_label('Anonymous')
     from datetime import datetime
     msg = {
         'sender': sender,
@@ -21563,44 +23470,86 @@ def api_rest_apply():
     rest_type = data.get('type', 'long')
     refocus = data.get('refocus', [])
     results = []
-    for name, pc in PARTY_LIBRARY.items():
+    updates = []
+
+    # Preflight every target before mutating the first one. If PC N cannot
+    # flush, PC 1 must not already have rested and later persist that rejected
+    # partial batch.
+    targets = []
+    for name, pc in list(PARTY_LIBRARY.items()):
+        file_path = get_pc_file_path(name)
+        if not file_path or not os.path.exists(file_path):
+            abort(
+                503,
+                description=(
+                    'Character changes could not be saved. No changes were applied; '
+                    'please try again.'
+                ),
+            )
+        targets.append((name, pc, file_path))
+    for name, _pc, _file_path in targets:
+        _flush_pc_dirty(name)
+
+    for name, pc, file_path in targets:
         changes = {'name': name}
+        rested_hp = pc.current_hp
+        rested_focus = pc.current_focus
+        rested_temp_hp = getattr(pc, 'temp_hp_manual', 0)
+        rested_conditions = dict(pc.conditions)
         if rest_type == 'long':
             con_mod = int(getattr(pc, 'mods', {}).get('con', 0) or 0)
+            drained_before = max(0, int(pc.conditions.get('drained', 0) or 0))
+            drained_val = max(0, drained_before - 1)
+            rested_max_hp = pc.hp + ((drained_before - drained_val) * pc.level)
             hp_before = pc.current_hp
-            pc.current_hp = min(pc.hp, pc.current_hp + max(1, con_mod) * pc.level)
-            changes['hp_regained'] = pc.current_hp - hp_before
-            changes['new_hp'] = pc.current_hp
-            drained_val = max(0, pc.conditions.get('drained', 0) - 1)
-            doomed_val = pc.conditions.get('doomed', 0)
-            pc.conditions = {'frightened': 0, 'sickened': 0, 'dying': 0, 'wounded': 0,
+            rested_hp = min(
+                rested_max_hp,
+                pc.current_hp + max(1, con_mod) * pc.level,
+            )
+            changes['hp_regained'] = rested_hp - hp_before
+            changes['new_hp'] = rested_hp
+            doomed_val = max(
+                0,
+                safe_int(pc.conditions.get('doomed', 0), 0) - 1,
+            )
+            wounded_before = max(
+                0,
+                safe_int(pc.conditions.get('wounded', 0), 0),
+            )
+            wounded_val = (
+                0 if rested_hp >= rested_max_hp else wounded_before
+            )
+            rested_conditions = {'frightened': 0, 'sickened': 0, 'dying': 0,
+                'wounded': wounded_val,
                 'doomed': doomed_val, 'drained': drained_val, 'fatigued': 0,
                 'stunned': 0, 'slowed': 0, 'stupefied': 0, 'enfeebled': 0, 'clumsy': 0,
                 'prone': False, 'off_guard': False, 'concealed': False,
                 'hidden': False, 'undetected': False}
             changes['conditions_cleared'] = True
-            pc.current_focus = pc.focus_max
-            changes['focus'] = pc.current_focus
-            pc.temp_hp_manual = 0
-            try: pc.temp_hp = pc.toggle_effects_summary.get('temp_hp', 0)
-            except Exception: pc.temp_hp = 0
+            rested_focus = pc.focus_max
+            rested_temp_hp = 0
+            changes['focus'] = rested_focus
         if name in refocus and rest_type == 'short':
-            pc.current_focus = min(pc.focus_max, pc.current_focus + 1)
+            rested_focus = min(pc.focus_max, pc.current_focus + 1)
             changes['focus_regained'] = True
-            changes['focus'] = pc.current_focus
-        file_path = get_pc_file_path(name)
-        if file_path and os.path.exists(file_path):
-            _flush_pc_dirty(name)
-            with open(file_path, 'r', encoding='utf-8') as f: pc_json = json.load(f)
-            build = pc_json.get('build', pc_json)
-            build['current_hp'] = pc.current_hp
-            build['current_focus'] = pc.current_focus
-            build['conditions'] = dict(pc.conditions)
-            if rest_type == 'long':
-                build['expended_slots'] = {}; build['prepared_spells'] = {}; build['cast_prep'] = {}
-            save_and_reload_character(name, pc_json, file_path)
-        _broadcast_pc_state(name)
+            changes['focus'] = rested_focus
+        with open(file_path, 'r', encoding='utf-8') as f:
+            pc_json = json.load(f)
+        build = pc_json.get('build', pc_json)
+        build['current_hp'] = rested_hp
+        build['current_focus'] = rested_focus
+        build['temp_hp'] = rested_temp_hp
+        build['conditions'] = rested_conditions
+        if rest_type == 'long':
+            build['expended_slots'] = {}
+            build['prepared_spells'] = {}
+            build['cast_prep'] = {}
+        updates.append((name, pc_json, file_path))
         results.append(changes)
+
+    _save_and_reload_character_batch(updates)
+    for name, _pc, _file_path in targets:
+        _broadcast_pc_state(name)
     return jsonify({'success': True, 'results': results})
 
 # -- Quick Status Board -----------------------------------------------

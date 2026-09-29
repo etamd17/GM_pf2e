@@ -14,11 +14,12 @@ import app
 from systems.cosmere.actor import CosmereActor
 
 
-def _combatant(name, spd=3):
+def _combatant(name, spd=3, *, restore_id=None):
     a = CosmereActor({'name': name, 'system': 'cosmere',
                       'system_data': {'system': {'attributes': {'spd': {'value': spd}}},
                                       'type': 'character', 'name': name}})
     a.instance_id = name + '-1'
+    a.restore_id = restore_id
     a.system = 'cosmere'
     a.is_pc = True
     return a
@@ -36,7 +37,7 @@ def pc(tmp_path, monkeypatch):
            'build': {'name': 'Kaladin', 'level': 3, 'path': 'warrior',
                      'attributes': {'str': 3, 'spd': 3, 'wil': 1}, 'skills': {'hwp': 2}}}
     app._atomic_write_json(app._cosmere_pc_path(pid), doc, indent=2)
-    app.ACTIVE_ENCOUNTER[:] = [_combatant('Kaladin')]
+    app.ACTIVE_ENCOUNTER[:] = [_combatant('Kaladin', restore_id=pid)]
     app.TURN_INDEX = 0
     yield pid
     app.ACTIVE_ENCOUNTER[:] = []

@@ -22,7 +22,7 @@
 ## Reconciliation notes (parallel-drafted slices; these govern conflicts)
 - **Execution order:** Part A1 → A2 → A3 (build `tools/chronicle_build.py` bottom-up) → Part B (auth token, independent) → Part C (skill + scaffold + smoke test, depends on the CLI existing).
 - **One module, three drafting slices:** A1/A2/A3 all build `tools/chronicle_build.py` and share one `tests/test_chronicle_build.py` (append per task). All slices use the exact contract signatures (`parse_note`, `slugify`, `strip_gm_content`, `select_entities`, `resolve_wikilinks`, `build_backlinks`, `build_manifest`, `collect_assets`, `leak_check`, `build_player_vault`, `make_zip`, `publish`, `main`).
-- **Auth:** the `X-Chronicle-Token` header + `CHRONICLE_PUBLISH_TOKEN` env, scoped to the `/api/chronicle` prefix in `check_gm_access`. Local legacy-open dev needs no token; prod (GM_PASSWORD set) uses it.
+- **Auth:** the `X-Chronicle-Token` header + `CHRONICLE_PUBLISH_TOKEN` env, scoped to exactly `POST /api/chronicle/publish` in `check_gm_access`. Local legacy-open dev needs no token; prod (GM_PASSWORD set) uses it.
 - **AI enrichment (Part C skill) runs ABOVE the deterministic firewall** — any AI-drafted epithet/recap still passes `leak_check` before publish, and AI drafts are `status: draft` for GM review. The deterministic core (Parts A) produces a valid, spoiler-safe vault with NO AI.
 
 ---
@@ -2050,18 +2050,18 @@ Slice A (`tools/chronicle_build.py`) is drafted separately; this slice makes the
 - Test: `/Users/evananderson/GM_pf2e/.claude/worktrees/player-campaign-hub-4d7448/tests/test_chronicle_auth.py` (append)
 
 **Interfaces:**
-- Consumes: `request.path`, `request.headers['X-Chronicle-Token']`, `os.environ['CHRONICLE_PUBLISH_TOKEN']`, existing `_is_gm()`.
-- Produces: `_chronicle_token_ok(path: str) -> bool`; behavioral change to the `check_gm_access` before_request — a valid token returns `None` (allow) instead of `403` for `/api/chronicle*` only.
+- Consumes: `request.path`, `request.method`, `request.headers['X-Chronicle-Token']`, `os.environ['CHRONICLE_PUBLISH_TOKEN']`, existing `_is_gm()`.
+- Produces: `_chronicle_token_ok(path: str) -> bool`; behavioral change to the `check_gm_access` before_request — a valid token returns `None` (allow) instead of `403` only for `POST /api/chronicle/publish`.
 
-**Contract note / firewall placement:** the token bypass must be scoped to `path.startswith('/api/chronicle')` and must NOT weaken any other GM prefix; it only applies after `_is_gm()` is already False (so the legacy-open and GM-session paths are untouched — they return earlier).
+**Contract note / firewall placement:** the token bypass must require both the exact path `/api/chronicle/publish` and method `POST`; it must not authorize status, rollback, unpublish, document management, or any other GM route. It only applies after `_is_gm()` is already False (so the legacy-open and GM-session paths are untouched — they return earlier).
 
 - [ ] **Step: Write the failing test** (subprocess-with-throwaway-DATA_DIR style, matching this file's existing tests). Append to `tests/test_chronicle_auth.py`:
 
 ```python
 def test_chronicle_publish_token_unlocks_only_chronicle():
     # GM_PASSWORD set + no GM session => a plain caller is a non-GM. The
-    # CHRONICLE_PUBLISH_TOKEN header must unlock EXACTLY /api/chronicle*, and
-    # nothing else, and only when the env token is non-empty and matches.
+    # CHRONICLE_PUBLISH_TOKEN header must unlock exactly POST
+    # /api/chronicle/publish, and only when the env token is non-empty and matches.
     r = _run('''
         import tempfile, os
         os.environ['DATA_DIR'] = tempfile.mkdtemp()
@@ -2082,6 +2082,13 @@ def test_chronicle_publish_token_unlocks_only_chronicle():
         rv = c.post('/api/chronicle/publish',
                     headers={'X-Chronicle-Token': 'tok-abc123'})
         assert rv.status_code != 403, rv.status_code
+
+        # The publish credential cannot read or mutate other Chronicle APIs.
+        headers = {'X-Chronicle-Token': 'tok-abc123'}
+        assert c.get('/api/chronicle/status', headers=headers).status_code == 403
+        assert c.post('/api/chronicle/rollback', headers=headers).status_code == 403
+        assert c.post('/api/chronicle/unpublish',
+                      json={'campaign_id': 'a' * 32}, headers=headers).status_code == 403
 
         # The token does NOT unlock any OTHER GM prefix (scope check).
         assert c.post('/api/clear_encounter',
@@ -2120,11 +2127,11 @@ def test_chronicle_publish_token_inert_when_env_unset():
 def _chronicle_token_ok(path):
     """A valid X-Chronicle-Token unlocks EXACTLY the /api/chronicle publish API
     for headless CLI publishing (PR0 build tool -> prod). The env token must be
-    non-empty and match the header exactly; only /api/chronicle paths are
-    eligible, so a leaked token can never reach any other GM-gated prefix.
+    non-empty and match the header exactly. No status, rollback, unpublish, or
+    document-management operation accepts this automation credential.
     Local dev (legacy-open, GM_PASSWORD='') never reaches here -- _is_gm() is
     already True there, so no token is needed."""
-    if not path.startswith('/api/chronicle'):
+    if path != '/api/chronicle/publish' or request.method != 'POST':
         return False
     expected = os.environ.get('CHRONICLE_PUBLISH_TOKEN', '')
     if not expected:
@@ -2154,9 +2161,10 @@ def check_gm_access():
   git commit -am "Chronicle PR0: scope X-Chronicle-Token to the /api/chronicle publish API
 
   A non-empty CHRONICLE_PUBLISH_TOKEN env + matching X-Chronicle-Token header
-  lets the headless PR0 build tool POST to /api/chronicle* without a GM session.
-  Constant-time compare; scoped so a leaked token unlocks nothing else; inert
-  when the env var is unset. Legacy-open dev is unaffected (already _is_gm()).
+  lets the headless PR0 build tool POST only to /api/chronicle/publish without
+  a GM session. Constant-time compare; status, rollback, unpublish, and document
+  management remain human-GM-only; inert when the env var is unset. Legacy-open
+  dev is unaffected (already _is_gm()).
 
   Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
   ```

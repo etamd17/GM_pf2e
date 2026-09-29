@@ -74,6 +74,35 @@ def test_gm_roll_is_filtered_from_players(pc, monkeypatch):
     assert len(app.COMBAT_LOGS) == before + 1
 
 
+def test_gm_roll_is_filtered_from_player_combat_log_polling(pc, monkeypatch):
+    _capture(monkeypatch)
+    original_log = list(app.COMBAT_LOGS)
+    try:
+        response = _post(
+            pc,
+            'gm',
+            action='SECRET GM LORE ACTION',
+            result='SECRET GM RESULT',
+            detail='SECRET GM DETAIL',
+        )
+        assert response.get_json()['ok']
+        stored = app.COMBAT_LOGS[-1]
+        assert stored['gm_only'] is True
+
+        # Reproduce the account-mode player's polling view. The route is
+        # intentionally member-readable, so secrecy depends on the stored flag,
+        # not just the one-time SSE filter used above.
+        monkeypatch.setattr(app, '_is_gm', lambda: False)
+        polled = app.app.test_client().get('/api/combat_log')
+        assert polled.status_code == 200
+        serialized = str(polled.get_json())
+        assert 'SECRET GM LORE ACTION' not in serialized
+        assert 'SECRET GM RESULT' not in serialized
+        assert 'SECRET GM DETAIL' not in serialized
+    finally:
+        app.COMBAT_LOGS[:] = original_log
+
+
 def test_private_roll_is_not_sent_or_logged(pc, monkeypatch):
     calls = _capture(monkeypatch)
     before = len(app.COMBAT_LOGS)

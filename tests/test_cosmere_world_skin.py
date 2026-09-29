@@ -37,10 +37,18 @@ def test_world_toggle_route_exists():
     assert '/api/cosmere/world' in rules
 
 
-def test_world_injected_into_template_context():
-    # The context processor must expose cosmere_world so base.html can class the body.
-    src = _read('app.py')
-    assert "'cosmere_world': _cosmere_world()" in src
+def test_world_injected_into_template_context(monkeypatch):
+    # The context processor must expose a clamped world so base.html can class
+    # the body. Test behavior rather than requiring one obsolete helper call:
+    # account-mode requests now read their own campaign-scoped config.
+    monkeypatch.setattr(A, '_account_mode', lambda: False)
+    monkeypatch.setattr(A, '_active_campaign_doc', lambda: None)
+    monkeypatch.setattr(A, '_active_system', lambda: 'cosmere')
+    monkeypatch.setattr(A, '_cosmere_player_char_name', lambda: None)
+    monkeypatch.setattr(A, '_active_system_ui', lambda: {})
+    with A.app.test_request_context('/'):
+        context = A._inject_account_ctx()
+    assert context['cosmere_world'] == 'stormlight'
 
 
 def test_base_html_sets_world_body_class_and_loads_fonts():

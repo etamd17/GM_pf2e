@@ -1,18 +1,19 @@
 """Declarative access-policy inventory for the Flask application.
 
-This module is deliberately descriptive. Importing it does not register a
-Flask hook, decorate a view, inspect a session, or enforce authorization. The
-first remediation PR needs a reviewable map of the current route surface before
-later PRs can safely centralize enforcement.
+This module stays framework-neutral: importing it does not register a Flask
+hook, inspect a session, or perform authorization by itself. ``app.py`` consumes
+the inventory from its central ``before_request`` boundary, while
+``core.access`` evaluates the selected policy against an explicit request
+context.
 
 Policies are keyed by Flask endpoint name rather than URL text. Endpoint names
 survive route aliases (``/m`` and ``/mobile`` both use ``mobile_combat``) and are
 what Flask resolves before dispatch. A small method-override table handles the
 few views whose read and write methods intentionally need different policies.
 
-The registry describes the target minimum policy identified by the security
-audit, not a claim that every route already enforces it correctly. That gap is
-the work of subsequent remediation PRs.
+The registry is therefore both the reviewed minimum-policy map and the runtime
+source of truth. Coverage tests fail closed when a Flask endpoint is added
+without a declaration.
 """
 
 from __future__ import annotations
@@ -35,14 +36,96 @@ class RoutePolicy(str, Enum):
     CAMPAIGN_MEMBER = "campaign_member"
     CAMPAIGN_GM = "campaign_gm"
     CHARACTER_OWNER_OR_GM = "character_owner_or_gm"
+    LIVE_CHARACTER_OWNER_OR_GM = "live_character_owner_or_gm"
     LIVE_CAMPAIGN_MEMBER = "live_campaign_member"
     LIVE_CAMPAIGN_GM = "live_campaign_gm"
     INTEGRATION_TOKEN = "integration_token"
-    LIVE_CAMPAIGN_GM_OR_PUBLISH_TOKEN = "live_campaign_gm_or_publish_token"
+    CAMPAIGN_GM_OR_PUBLISH_TOKEN = "campaign_gm_or_publish_token"
+    CAMPAIGN_GM_OR_SITE_ADMIN = "campaign_gm_or_site_admin"
+
+
+class CharacterOwnerSource(str, Enum):
+    """Where an untrusted character locator is carried by a request.
+
+    A locator never establishes ownership by itself. Runtime enforcement must
+    use it to load the character from the already-verified campaign scope and
+    compare the stored ``owner_user_id`` with the authenticated user. A GM may
+    bypass that final owner comparison only after GM authority is established
+    for the same campaign.
+    """
+
+    ROUTE_PC_NAME = "route_pc_name"
+    ROUTE_COSMERE_PID = "route_cosmere_pid"
+    QUERY_COSMERE_PID = "query_cosmere_pid"
+    JSON_COSMERE_PID = "json_cosmere_pid"
+    SESSION_PC_NAME = "session_pc_name"
+    JSON_PC_NAME = "json_pc_name"
+
+
+@dataclass(frozen=True)
+class CharacterOwnerResolution:
+    """Declarative locator needed to resolve a character-owner policy."""
+
+    source: CharacterOwnerSource
+    field: str
+
+
+CHARACTER_OWNER_POLICIES: frozenset[RoutePolicy] = frozenset(
+    {
+        RoutePolicy.CHARACTER_OWNER_OR_GM,
+        RoutePolicy.LIVE_CHARACTER_OWNER_OR_GM,
+    }
+)
+
+# These policies always require the authenticated session's selected campaign
+# to equal the process-wide loaded campaign before a view may touch live state.
+# The two explicit-target Chronicle policies are intentionally absent:
+# Chronicle resolves request/manifest campaign storage directly and does not
+# touch the live slot.
+SESSION_LIVE_CAMPAIGN_POLICIES: frozenset[RoutePolicy] = frozenset(
+    {
+        RoutePolicy.LIVE_CAMPAIGN_MEMBER,
+        RoutePolicy.LIVE_CAMPAIGN_GM,
+        RoutePolicy.LIVE_CHARACTER_OWNER_OR_GM,
+    }
+)
+
+# Account mode resolves these policies through campaign membership. Legacy
+# password deployments have no account principal to resolve, but they still
+# need the same GM boundary. The central request guard uses this exhaustive set
+# so adding an endpoint no longer depends on also remembering a decorator or
+# URL-prefix entry.
+LEGACY_GM_POLICIES: frozenset[RoutePolicy] = frozenset(
+    {
+        RoutePolicy.CAMPAIGN_GM,
+        RoutePolicy.LIVE_CAMPAIGN_GM,
+        RoutePolicy.CAMPAIGN_GM_OR_PUBLISH_TOKEN,
+        RoutePolicy.CAMPAIGN_GM_OR_SITE_ADMIN,
+    }
+)
+
+
+def requires_character_owner(policy: RoutePolicy | None) -> bool:
+    """Return whether ``policy`` needs character ownership or a GM bypass."""
+
+    return policy in CHARACTER_OWNER_POLICIES
+
+
+def requires_live_campaign_match(policy: RoutePolicy | None) -> bool:
+    """Return whether every branch requires the session/live campaign match."""
+
+    return policy in SESSION_LIVE_CAMPAIGN_POLICIES
+
+
+def requires_legacy_gm(policy: RoutePolicy | None) -> bool:
+    """Return whether legacy password mode must require its GM session."""
+
+    return policy in LEGACY_GM_POLICIES
 
 
 PolicyGroup = tuple[RoutePolicy, Iterable[str]]
 EndpointMethod = tuple[str, str]
+CharacterResolutionGroup = tuple[CharacterOwnerSource, str, Iterable[str]]
 
 
 def build_policy_registry(groups: Iterable[PolicyGroup]) -> Mapping[str, RoutePolicy]:
@@ -64,92 +147,33 @@ def build_policy_registry(groups: Iterable[PolicyGroup]) -> Mapping[str, RoutePo
     return MappingProxyType(registry)
 
 
-# Grouping keeps the endpoint declarations reviewable while the builder still
-# guarantees that every endpoint has exactly one default policy.
-_POLICY_GROUPS: tuple[PolicyGroup, ...] = (
+def build_character_owner_resolution_registry(
+    groups: Iterable[CharacterResolutionGroup],
+) -> Mapping[str, CharacterOwnerResolution]:
+    """Build immutable resolver metadata and reject ambiguous declarations."""
+
+    registry: dict[str, CharacterOwnerResolution] = {}
+    for source, field, endpoints in groups:
+        if not isinstance(source, CharacterOwnerSource):
+            raise TypeError(f"invalid character owner source: {source!r}")
+        if not isinstance(field, str) or not field:
+            raise ValueError(f"invalid character locator field: {field!r}")
+        resolution = CharacterOwnerResolution(source=source, field=field)
+        for endpoint in endpoints:
+            if not isinstance(endpoint, str) or not endpoint:
+                raise ValueError(f"invalid Flask endpoint name: {endpoint!r}")
+            if endpoint in registry:
+                raise ValueError(
+                    f"duplicate character owner resolution for {endpoint!r}"
+                )
+            registry[endpoint] = resolution
+    return MappingProxyType(registry)
+
+
+_CHARACTER_OWNER_RESOLUTION_GROUPS: tuple[CharacterResolutionGroup, ...] = (
     (
-        RoutePolicy.PUBLIC,
-        (
-            "api_campaign",  # GET is public; POST has a method override below.
-            "gm_login",
-            "gm_logout",
-            "health_check",
-            "index",
-            "join",
-            "login",
-            "logout",
-            "register",
-            "service_worker",
-            "setup",
-            "static",
-            "web_manifest",
-        ),
-    ),
-    (
-        RoutePolicy.AUTHENTICATED,
-        (
-            "account_home",
-            "api_active_system",
-            "api_my_campaigns",
-            "campaign_import",
-            "change_my_password",
-            "new_campaign",
-            "stop_active_campaign",
-        ),
-    ),
-    (
-        RoutePolicy.SITE_ADMIN,
-        (
-            "admin_campaigns",
-            "admin_reset_password",
-            "admin_set_campaign_system",
-            "admin_users",
-            "perf_metrics",
-        ),
-    ),
-    (RoutePolicy.CAMPAIGN_MEMBER, ("activate_campaign",)),
-    (
-        RoutePolicy.CAMPAIGN_GM,
-        (
-            "backup_now",
-            "campaign_backup_latest",
-            "campaign_delete",
-            "campaign_export",
-            "campaign_invites",
-            "campaign_mint_invite",
-            "campaign_purge",
-            "campaign_remove_member",
-            "campaign_restore",
-            "campaign_revoke_invite",
-            "campaign_set_role",
-            "campaign_set_system",
-        ),
-    ),
-    (
-        RoutePolicy.INTEGRATION_TOKEN,
-        (
-            "obsidian_sync.combatant_detail",
-            "obsidian_sync.commands",
-            "obsidian_sync.end_session",
-            "obsidian_sync.events",
-            "obsidian_sync.start_session",
-            "obsidian_sync.state",
-            "obsidian_sync.status",
-        ),
-    ),
-    (
-        RoutePolicy.LIVE_CAMPAIGN_GM_OR_PUBLISH_TOKEN,
-        (
-            "chronicle_doc_api",
-            "chronicle_docs_api",
-            "chronicle_publish",
-            "chronicle_rollback",
-            "chronicle_status",
-            "chronicle_unpublish",
-        ),
-    ),
-    (
-        RoutePolicy.CHARACTER_OWNER_OR_GM,
+        CharacterOwnerSource.ROUTE_PC_NAME,
+        "pc_name",
         (
             "add_item",
             "add_pc_effect",
@@ -160,21 +184,8 @@ _POLICY_GROUPS: tuple[PolicyGroup, ...] = (
             "adjust_hero",
             "adjust_party_hp",
             "adjust_temp_hp",
-            "api_cosmere_my_combat",
-            "api_cosmere_my_initiative",
-            "api_cosmere_my_speed",
-            "api_cosmere_roll",
-            "api_journal_append",
-            "api_journal_delete",
-            "api_journal_get",
-            "api_notes",
             "api_pc_state",
             "cast_spell",
-            "cosmere_pc_delete",
-            "cosmere_pc_notes",
-            "cosmere_pc_rest",
-            "cosmere_pc_sheet",
-            "cosmere_pc_state",
             "daily_preparations",
             "delete_session_note",
             "delete_weapon",
@@ -185,8 +196,6 @@ _POLICY_GROUPS: tuple[PolicyGroup, ...] = (
             "learn_spell",
             "levelup_validate",
             "list_pc_effects",
-            "log_roll",
-            "log_spell_cast",
             "long_rest",
             "pc_recovery_check",
             "pc_treat_wounds",
@@ -196,7 +205,6 @@ _POLICY_GROUPS: tuple[PolicyGroup, ...] = (
             "player_levelup",
             "player_sheet",
             "player_whisper",
-            "recall_knowledge",
             "refocus",
             "remove_item",
             "remove_pc_effect",
@@ -207,8 +215,6 @@ _POLICY_GROUPS: tuple[PolicyGroup, ...] = (
             "save_session_note",
             "send_initiative",
             "session_journal_add",
-            "session_journal_get",
-            "session_notes_page",
             "set_exploration_activity",
             "set_focus_spells",
             "set_reaction",
@@ -229,23 +235,189 @@ _POLICY_GROUPS: tuple[PolicyGroup, ...] = (
         ),
     ),
     (
-        RoutePolicy.LIVE_CAMPAIGN_MEMBER,
+        CharacterOwnerSource.ROUTE_COSMERE_PID,
+        "pid",
         (
-            "api_chat_get",
-            "api_chat_send",
-            "api_cosmere_combat_state",
-            "api_exploration_activities",
-            "api_join_campaign",
-            "api_leave_campaign",
-            "api_safety",
-            "api_safety_xcard",
-            "api_plot_die",
+            "cosmere_pc_delete",
+            "cosmere_pc_notes",
+            "cosmere_pc_rest",
+            "cosmere_pc_sheet",
+            "cosmere_pc_state",
+        ),
+    ),
+    (
+        CharacterOwnerSource.QUERY_COSMERE_PID,
+        "pid",
+        ("api_cosmere_my_combat",),
+    ),
+    (
+        CharacterOwnerSource.JSON_COSMERE_PID,
+        "pid",
+        (
+            "api_cosmere_my_initiative",
+            "api_cosmere_my_speed",
+            "api_cosmere_roll",
+        ),
+    ),
+    (
+        CharacterOwnerSource.SESSION_PC_NAME,
+        "player_name",
+        (
+            "api_journal_append",
+            "api_journal_delete",
+            "api_journal_get",
+            "hero_nomination",
+            "log_roll",
+            "log_spell_cast",
+            "mobile_combat",
+        ),
+    ),
+    (
+        CharacterOwnerSource.JSON_PC_NAME,
+        "pc_name",
+        ("recall_knowledge",),
+    ),
+    (
+        CharacterOwnerSource.JSON_PC_NAME,
+        "name",
+        ("api_join_campaign",),
+    ),
+)
 
+
+CHARACTER_OWNER_RESOLUTIONS = build_character_owner_resolution_registry(
+    _CHARACTER_OWNER_RESOLUTION_GROUPS
+)
+
+
+def character_owner_resolution_for(
+    endpoint: str,
+) -> CharacterOwnerResolution | None:
+    """Return locator metadata for a character-scoped endpoint, if declared."""
+
+    return CHARACTER_OWNER_RESOLUTIONS.get(endpoint)
+
+
+# Grouping keeps the endpoint declarations reviewable while the builder still
+# guarantees that every endpoint has exactly one default policy.
+_POLICY_GROUPS: tuple[PolicyGroup, ...] = (
+    (
+        RoutePolicy.PUBLIC,
+        (
+            "gm_login",
+            "gm_logout",
+            "health_check",
+            "index",
+            "join",
+            "login",
+            "logout",
+            "register",
+            "service_worker",
+            "setup",
+            "static",
+            "web_manifest",
+        ),
+    ),
+    (
+        RoutePolicy.AUTHENTICATED,
+        (
+            "account_home",
+            "api_active_system",
+            "api_my_campaigns",
+            "backup_now",
+            "campaign_import",
+            "change_my_password",
+            "new_campaign",
+            "stop_active_campaign",
+        ),
+    ),
+    (
+        RoutePolicy.SITE_ADMIN,
+        (
+            "admin_campaigns",
+            "admin_reset_password",
+            "admin_set_campaign_system",
+            "admin_users",
+            "perf_metrics",
+        ),
+    ),
+    (
+        RoutePolicy.CAMPAIGN_MEMBER,
+        (
+            "activate_campaign",
+            "api_notes",
             "chronicle_asset",
             "chronicle_home",
             "chronicle_journal",
             "chronicle_page",
             "chronicle_section",
+            "get_handouts",
+            "serve_handout_image",
+            "session_notes_page",
+        ),
+    ),
+    (
+        RoutePolicy.CAMPAIGN_GM,
+        (
+            "campaign_backup_latest",
+            "campaign_delete",
+            "campaign_export",
+            "campaign_invites",
+            "campaign_mint_invite",
+            "campaign_purge",
+            "campaign_remove_member",
+            "campaign_restore",
+            "campaign_revoke_invite",
+            "campaign_set_role",
+            "campaign_set_system",
+            "chronicle_doc_api",
+            "chronicle_docs_api",
+            "chronicle_manage",
+            "chronicle_preview",
+            "chronicle_rollback",
+            "chronicle_status",
+        ),
+    ),
+    (
+        RoutePolicy.INTEGRATION_TOKEN,
+        (
+            "obsidian_sync.combatant_detail",
+            "obsidian_sync.commands",
+            "obsidian_sync.end_session",
+            "obsidian_sync.events",
+            "obsidian_sync.start_session",
+            "obsidian_sync.state",
+            "obsidian_sync.status",
+        ),
+    ),
+    (
+        RoutePolicy.CAMPAIGN_GM_OR_PUBLISH_TOKEN,
+        ("chronicle_publish",),
+    ),
+    (
+        RoutePolicy.CAMPAIGN_GM_OR_SITE_ADMIN,
+        # Unpublish resolves its explicit JSON-body target in the view. Site
+        # admins therefore need not select that campaign first, while the
+        # publish automation credential remains categorically ineligible.
+        ("chronicle_unpublish",),
+    ),
+    (
+        RoutePolicy.LIVE_CHARACTER_OWNER_OR_GM,
+        tuple(CHARACTER_OWNER_RESOLUTIONS),
+    ),
+    (
+        RoutePolicy.LIVE_CAMPAIGN_MEMBER,
+        (
+            "api_campaign",  # POST has a stricter method override below.
+            "api_chat_get",
+            "api_chat_send",
+            "api_cosmere_combat_state",
+            "api_exploration_activities",
+            "api_leave_campaign",
+            "api_safety",
+            "api_safety_xcard",
+            "api_plot_die",
+
             "compendium_detail",
             "compendium_search",
             "condition_info",
@@ -256,12 +428,8 @@ _POLICY_GROUPS: tuple[PolicyGroup, ...] = (
             "cosmere_pcs",
             "cosmere_player_hub",
             "get_combat_log",
-            "get_handouts",
             "get_logs",
-            "healing_log_get",
-            "hero_nomination",
             "item_bulk",
-            "mobile_combat",
             "pack_detail",
             "party_list",
             "party_view",
@@ -270,7 +438,6 @@ _POLICY_GROUPS: tuple[PolicyGroup, ...] = (
             "player_view",
             "recall_knowledge_info",
             "serve_campaign_asset",
-            "serve_handout_image",
             "serve_portrait",
             "sse_stream",
             "status_board",
@@ -332,8 +499,6 @@ _POLICY_GROUPS: tuple[PolicyGroup, ...] = (
             "api_treat_wounds",
             "api_unpin_generator",
             "approve_hero_nomination",
-            "chronicle_manage",
-            "chronicle_preview",
             "clear_combat_log",
             "clear_encounter",
             "clear_gm_secret_log",
@@ -378,6 +543,7 @@ _POLICY_GROUPS: tuple[PolicyGroup, ...] = (
             "gm_stats",
             "gm_threads",
             "hazard_disable",
+            "healing_log_get",
             "hazard_reset",
             "hazard_trigger",
             "import_monster",
@@ -418,6 +584,7 @@ _POLICY_GROUPS: tuple[PolicyGroup, ...] = (
             "scene_map_home",
             "scene_map_table",
             "send_loot_to_player",
+            "session_journal_get",
             "session_timer",
             "set_combatant_epithet",
             "set_combatant_tactics",
@@ -444,6 +611,7 @@ ROUTE_POLICIES = build_policy_registry(_POLICY_GROUPS)
 METHOD_POLICY_OVERRIDES: Mapping[EndpointMethod, RoutePolicy] = MappingProxyType(
     {
         ("api_campaign", "POST"): RoutePolicy.LIVE_CAMPAIGN_GM,
+        ("api_safety", "POST"): RoutePolicy.LIVE_CAMPAIGN_GM,
     }
 )
 
@@ -453,18 +621,19 @@ METHOD_POLICY_OVERRIDES: Mapping[EndpointMethod, RoutePolicy] = MappingProxyType
 # runtime code consumes them.
 POLICY_NOTES: Mapping[str, str] = MappingProxyType(
     {
-        "api_campaign": "GET is intentionally public; POST requires the live campaign GM.",
+        "api_campaign": (
+            "GET requires live campaign membership in account mode; legacy mode keeps "
+            "the public intro read. POST requires the live campaign GM."
+        ),
         "backup_now": (
-            "The current route has no campaign id and snapshots every campaign; future "
-            "enforcement must add explicit scope rather than trust any membership."
+            "The route has no single campaign target. Central policy requires an "
+            "authenticated account; the view snapshots every campaign for a site admin "
+            "and only campaigns where a non-admin caller is a GM."
         ),
-        "chronicle_doc_api": (
-            "The current publish-token prefix accepts more than publish itself; a later "
-            "PR should narrow token capabilities per operation."
-        ),
-        "chronicle_docs_api": (
-            "The current publish-token prefix accepts document management operations; "
-            "review whether headless publishing needs this breadth."
+        "chronicle_publish": (
+            "The environment secret is accepted only for POST publish, but remains "
+            "deploy-wide; the view validates the requested campaign target. Migrate it "
+            "to a campaign-scoped credential."
         ),
         "cosmere_builder": (
             "Campaign membership is the route baseline; editing an existing pc/id also "

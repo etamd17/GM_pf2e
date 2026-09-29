@@ -316,7 +316,9 @@ def test_the_campaign_memo_never_keys_on_a_malformed_id():
     Caught by test_malformed_campaign_id_types_are_rejected, which a narrower
     test filter had not been running."""
     src = open(os.path.join(_ROOT, 'core', 'campaigns.py'), encoding='utf-8').read()
-    body = src[src.index('def get_campaign(cid):'):]
+    # Optional keyword controls (for example refresh=True during a locked RMW)
+    # must not make this guard depend on the function's exact signature.
+    body = src[src.index('def get_campaign('):]
     body = body[:body.index('\ndef ')]
     assert 'isinstance(cid, str)' in body, 'only a real string id may be memoized'
     assert body.index('isinstance(cid, str)') < body.index('cid in memo'), (
