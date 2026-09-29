@@ -107,6 +107,239 @@ def test_the_flush_clears_the_dirty_flag(pc, client):
     assert character.name not in app_module._PC_PERSIST_DIRTY
 
 
+def test_failed_flush_aborts_rmw_without_overwriting_live_or_disk_state(
+        pc, client, monkeypatch):
+    """A persistence failure is a 503 barrier, never permission to read stale JSON."""
+    character, pc_file = pc
+    original_disk = pc_file.read_bytes()
+    starting_hp = character.current_hp
+    character.current_hp = starting_hp - 30
+    app_module._persist_pc_combat_state(character.name)
+    monkeypatch.setattr(
+        app_module,
+        '_do_persist_pc_combat_state',
+        lambda _name: False,
+    )
+
+    response = client.post(
+        f'/api/save_notes/{character.name}',
+        json={'notes': 'must not land'},
+    )
+
+    assert response.status_code == 503
+    assert response.get_json()['success'] is False
+    assert 'No changes were applied' in response.get_json()['error']
+    assert pc_file.read_bytes() == original_disk
+    assert app_module.PARTY_LIBRARY[character.name] is character
+    assert character.current_hp == starting_hp - 30
+    assert character.name in app_module._PC_PERSIST_DIRTY
+
+
+def test_atomic_save_failure_returns_503_without_reload_or_success_broadcast(
+        pc, client, monkeypatch):
+    character, pc_file = pc
+    original_disk = pc_file.read_bytes()
+    broadcasts = []
+    monkeypatch.setattr(
+        app_module,
+        '_atomic_write_json',
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError('disk full')),
+    )
+    monkeypatch.setattr(
+        app_module,
+        '_broadcast_pc_state',
+        lambda name: broadcasts.append(name),
+    )
+
+    response = client.post(
+        f'/api/save_notes/{character.name}',
+        json={'notes': 'must not land'},
+    )
+
+    assert response.status_code == 503
+    assert response.get_json()['success'] is False
+    assert 'This character was not changed' in response.get_json()['error']
+    assert pc_file.read_bytes() == original_disk
+    assert app_module.PARTY_LIBRARY[character.name] is character
+    assert broadcasts == []
+
+
+def test_failed_long_rest_preflight_does_not_mutate_or_broadcast(
+        pc, client, monkeypatch):
+    character, pc_file = pc
+    character.current_hp = max(1, character.current_hp - 30)
+    character.current_focus = 0
+    character.temp_hp_manual = 7
+    character.conditions = {'frightened': 2, 'drained': 1, 'doomed': 1}
+    before = (
+        character.current_hp,
+        character.current_focus,
+        character.temp_hp_manual,
+        dict(character.conditions),
+    )
+    original_disk = pc_file.read_bytes()
+    broadcasts = []
+    app_module._persist_pc_combat_state(character.name)
+    monkeypatch.setattr(
+        app_module,
+        '_do_persist_pc_combat_state',
+        lambda _name: False,
+    )
+    monkeypatch.setattr(
+        app_module,
+        '_broadcast_pc_state',
+        lambda name: broadcasts.append(name),
+    )
+
+    response = client.post(f'/api/long_rest/{character.name}', json={})
+
+    assert response.status_code == 503
+    assert app_module.PARTY_LIBRARY[character.name] is character
+    assert (
+        character.current_hp,
+        character.current_focus,
+        character.temp_hp_manual,
+        dict(character.conditions),
+    ) == before
+    assert pc_file.read_bytes() == original_disk
+    assert character.name in app_module._PC_PERSIST_DIRTY
+    assert broadcasts == []
+
+
+def test_long_rest_publishes_only_the_durable_reloaded_state(pc, client):
+    character, pc_file = pc
+    character.current_focus = 0
+    character.temp_hp_manual = 7
+    character.conditions = {'frightened': 2, 'drained': 2, 'doomed': 1}
+    character.hp -= 2 * character.level
+    character.current_hp = max(1, character.hp - 30)
+    app_module._persist_pc_combat_state(character.name)
+    con_mod = int(character.mods.get('con', 0))
+    expected_max_hp = character.hp + character.level
+    expected_hp = min(
+        expected_max_hp,
+        character.current_hp + max(1, con_mod) * character.level,
+    )
+
+    response = client.post(f'/api/long_rest/{character.name}', json={})
+
+    assert response.status_code == 200
+    stored = _stored(pc_file)
+    reloaded = app_module.PARTY_LIBRARY[character.name]
+    assert stored['current_hp'] == expected_hp == reloaded.current_hp
+    assert reloaded.hp == expected_max_hp
+    assert stored['current_focus'] == reloaded.focus_max == reloaded.current_focus
+    assert stored['temp_hp'] == 0 == reloaded.temp_hp_manual
+    assert stored['conditions']['frightened'] == 0
+    assert stored['conditions']['drained'] == 1
+    assert stored['conditions']['doomed'] == 0
+    assert reloaded.conditions['drained'] == 1
+    assert reloaded.conditions.get('doomed', 0) == 0
+
+
+def test_batch_rest_preflights_every_pc_before_mutating_first(
+        pc, client, tmp_path, monkeypatch):
+    first, first_file = pc
+    raw = json.loads(_FIX.read_text(encoding='utf-8'))
+    raw.get('build', raw)['name'] = 'Second Hero'
+    second_file = tmp_path / 'Second_Hero.json'
+    second_file.write_text(json.dumps(raw), encoding='utf-8')
+    second = app_module.Character(raw, file_path=str(second_file))
+    party = {first.name: first, second.name: second}
+    paths = {first.name: str(first_file), second.name: str(second_file)}
+    monkeypatch.setattr(app_module, 'PARTY_LIBRARY', party)
+    monkeypatch.setattr(app_module, 'get_pc_file_path', lambda name: paths[name])
+    monkeypatch.setattr(
+        app_module,
+        '_PC_PERSIST_DIRTY',
+        {first.name, second.name},
+    )
+    flush_order = []
+
+    def persist(name):
+        flush_order.append(name)
+        return name != second.name
+
+    monkeypatch.setattr(app_module, '_do_persist_pc_combat_state', persist)
+    saves = []
+    broadcasts = []
+    monkeypatch.setattr(
+        app_module,
+        '_save_and_reload_character_batch',
+        lambda updates: saves.extend(name for name, _doc, _path in updates),
+    )
+    monkeypatch.setattr(
+        app_module,
+        '_broadcast_pc_state',
+        lambda name: broadcasts.append(name),
+    )
+    before = {
+        name: (actor.current_hp, actor.current_focus, dict(actor.conditions))
+        for name, actor in party.items()
+    }
+
+    response = client.post('/api/rest/apply', json={'type': 'long'})
+
+    assert response.status_code == 503
+    assert flush_order == [first.name, second.name]
+    assert saves == []
+    assert broadcasts == []
+    assert {
+        name: (actor.current_hp, actor.current_focus, dict(actor.conditions))
+        for name, actor in party.items()
+    } == before
+    assert second.name in app_module._PC_PERSIST_DIRTY
+
+
+def test_batch_rest_second_stage_failure_is_atomic(
+        pc, client, tmp_path, monkeypatch):
+    first, first_file = pc
+    raw = json.loads(_FIX.read_text(encoding='utf-8'))
+    raw.get('build', raw)['name'] = 'Second Hero'
+    second_file = tmp_path / 'Second_Hero.json'
+    second_file.write_text(json.dumps(raw), encoding='utf-8')
+    second = app_module.Character(raw, file_path=str(second_file))
+    first.current_hp = max(1, first.hp - 30)
+    second.current_hp = max(1, second.hp - 30)
+    party = {first.name: first, second.name: second}
+    paths = {first.name: str(first_file), second.name: str(second_file)}
+    monkeypatch.setattr(app_module, 'PARTY_LIBRARY', party)
+    monkeypatch.setattr(app_module, 'get_pc_file_path', lambda name: paths[name])
+    monkeypatch.setattr(app_module, '_PC_PERSIST_DIRTY', set())
+    broadcasts = []
+    monkeypatch.setattr(
+        app_module,
+        '_broadcast_pc_state',
+        lambda name: broadcasts.append(name),
+    )
+    original_atomic_write = app_module._atomic_write_json
+    write_count = 0
+
+    def fail_second_write(*args, **kwargs):
+        nonlocal write_count
+        write_count += 1
+        if write_count == 2:
+            raise OSError('second character disk failure')
+        return original_atomic_write(*args, **kwargs)
+
+    monkeypatch.setattr(app_module, '_atomic_write_json', fail_second_write)
+    first_disk_before = first_file.read_bytes()
+    second_disk_before = second_file.read_bytes()
+
+    response = client.post('/api/rest/apply', json={'type': 'long'})
+
+    payload = response.get_json()
+    assert response.status_code == 503
+    assert payload['success'] is False
+    assert 'No changes were applied' in payload['error']
+    assert 'partial' not in payload
+    assert broadcasts == []
+    assert first_file.read_bytes() == first_disk_before
+    assert second_file.read_bytes() == second_disk_before
+    assert app_module.PARTY_LIBRARY[first.name] is first
+    assert app_module.PARTY_LIBRARY[second.name] is second
+
+
 def test_daily_prep_still_resets_hp_despite_the_flush(pc, client):
     """The reason this is flush-then-read and not stamp-after-reload.
 
@@ -157,7 +390,10 @@ def _write_back_functions():
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         calls = _called_names(node)
-        if any(n == 'save_and_reload_character' for n, _ in calls):
+        if any(n in {
+            'save_and_reload_character',
+            '_save_and_reload_character_batch',
+        } for n, _ in calls):
             yield node.name, calls
 
 

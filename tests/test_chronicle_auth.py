@@ -212,8 +212,8 @@ def test_handout_recipients_ownership_account_mode():
 
 def test_chronicle_publish_token_unlocks_only_chronicle():
     # GM_PASSWORD set + no GM session => a plain caller is a non-GM. The
-    # CHRONICLE_PUBLISH_TOKEN header must unlock EXACTLY /api/chronicle*, and
-    # nothing else, and only when the env token is non-empty and matches.
+    # CHRONICLE_PUBLISH_TOKEN must unlock exactly POST /api/chronicle/publish,
+    # and only when the env token is non-empty and matches.
     r = _run('''
         import tempfile, os
         os.environ['DATA_DIR'] = tempfile.mkdtemp()
@@ -234,6 +234,14 @@ def test_chronicle_publish_token_unlocks_only_chronicle():
         rv = c.post('/api/chronicle/publish',
                     headers={'X-Chronicle-Token': 'tok-abc123'})
         assert rv.status_code != 403, rv.status_code
+
+        # The publish credential cannot read status or perform destructive
+        # Chronicle management operations.
+        headers = {'X-Chronicle-Token': 'tok-abc123'}
+        assert c.get('/api/chronicle/status', headers=headers).status_code == 403
+        assert c.post('/api/chronicle/rollback', headers=headers).status_code == 403
+        assert c.post('/api/chronicle/unpublish',
+                      json={'campaign_id': 'a' * 32}, headers=headers).status_code == 403
 
         # The token does NOT unlock any OTHER GM prefix (scope check).
         assert c.post('/api/clear_encounter',

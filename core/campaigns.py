@@ -8,6 +8,7 @@ campaign membership.
 import os
 import time
 import functools
+import threading
 
 from flask import session, request, jsonify, redirect, url_for, abort, g, has_request_context
 
@@ -26,9 +27,10 @@ def _now():
 # twice on every GM-gated request. Keyed by cid because one request can touch
 # more than one campaign.
 _CAMPAIGN_MEMO = '_campaign_memo'
+_CAMPAIGN_STORE_LOCK = threading.RLock()
 
 
-def get_campaign(cid):
+def get_campaign(cid, *, refresh=False):
     if not cid:
         return None
     # Only a real (string) id is memoized. A malformed cid -- a list or dict
@@ -42,7 +44,7 @@ def get_campaign(cid):
         if memo is None:
             memo = {}
             setattr(g, _CAMPAIGN_MEMO, memo)
-        if cid in memo:
+        if not refresh and cid in memo:
             return memo[cid]
     doc = storage.load_json(storage.campaign_file(cid))
     if memoizable:
@@ -51,7 +53,8 @@ def get_campaign(cid):
 
 
 def save_campaign(doc):
-    storage.atomic_write_json(storage.campaign_file(doc['id']), doc)
+    with _CAMPAIGN_STORE_LOCK:
+        storage.atomic_write_json(storage.campaign_file(doc['id']), doc)
     if isinstance(doc.get('id'), str) and has_request_context():
         memo = getattr(g, _CAMPAIGN_MEMO, None)
         if memo is not None:
@@ -146,19 +149,33 @@ def is_gm(campaign, user_id):
 
 
 def add_member(cid, user_id, role, character_id=None):
+    """Add membership or raise its privilege; never demote an existing GM.
+
+    Invite redemption is the only caller. A GM may legitimately follow a
+    player or character-specific invite while testing onboarding, and that
+    action must not bypass the explicit last-GM safeguards in
+    ``set_member_role`` by silently lowering their stored role.
+    """
     assert role in ('gm', 'player'), role
-    doc = get_campaign(cid)
-    if not doc:
-        raise ValueError('no such campaign')
-    members = doc.setdefault('members', [])
-    existing = next((m for m in members if m.get('user_id') == user_id), None)
-    if existing:
-        existing['role'] = role
-        if character_id is not None:
-            existing['character_id'] = character_id
-    else:
-        members.append(storage.campaign_member(user_id, role, character_id))
-    return save_campaign(doc)
+    with _CAMPAIGN_STORE_LOCK:
+        # A join request may have memoized the campaign while validating its
+        # invite, before the live-dispatch lock was acquired. Reload inside the
+        # read/modify/write lock so a second concurrent invite cannot overwrite
+        # the first member with that stale request-local document.
+        doc = get_campaign(cid, refresh=True)
+        if not doc:
+            raise ValueError('no such campaign')
+        members = doc.setdefault('members', [])
+        existing = next((m for m in members if m.get('user_id') == user_id), None)
+        if existing:
+            existing['role'] = (
+                'gm' if 'gm' in (existing.get('role'), role) else 'player'
+            )
+            if character_id is not None:
+                existing['character_id'] = character_id
+        else:
+            members.append(storage.campaign_member(user_id, role, character_id))
+        return save_campaign(doc)
 
 
 def gm_count(campaign):
@@ -168,31 +185,33 @@ def gm_count(campaign):
 def remove_member(cid, user_id):
     """Remove a member from a campaign. Refuses to remove the last GM (a campaign
     must always keep a GM). Returns the updated doc, or None if not removed."""
-    doc = get_campaign(cid)
-    if not doc:
-        raise ValueError('no such campaign')
-    target = next((m for m in doc.get('members', []) if m.get('user_id') == user_id), None)
-    if not target:
-        return None
-    if target.get('role') == 'gm' and gm_count(doc) <= 1:
-        return None   # never strand a campaign without a GM
-    doc['members'] = [m for m in doc['members'] if m.get('user_id') != user_id]
-    return save_campaign(doc)
+    with _CAMPAIGN_STORE_LOCK:
+        doc = get_campaign(cid, refresh=True)
+        if not doc:
+            raise ValueError('no such campaign')
+        target = next((m for m in doc.get('members', []) if m.get('user_id') == user_id), None)
+        if not target:
+            return None
+        if target.get('role') == 'gm' and gm_count(doc) <= 1:
+            return None   # never strand a campaign without a GM
+        doc['members'] = [m for m in doc['members'] if m.get('user_id') != user_id]
+        return save_campaign(doc)
 
 
 def set_member_role(cid, user_id, role):
     """Change a member's role (gm/player). Refuses to demote the last GM."""
     assert role in ('gm', 'player'), role
-    doc = get_campaign(cid)
-    if not doc:
-        raise ValueError('no such campaign')
-    target = next((m for m in doc.get('members', []) if m.get('user_id') == user_id), None)
-    if not target:
-        return None
-    if target.get('role') == 'gm' and role == 'player' and gm_count(doc) <= 1:
-        return None   # don't demote the only GM
-    target['role'] = role
-    return save_campaign(doc)
+    with _CAMPAIGN_STORE_LOCK:
+        doc = get_campaign(cid, refresh=True)
+        if not doc:
+            raise ValueError('no such campaign')
+        target = next((m for m in doc.get('members', []) if m.get('user_id') == user_id), None)
+        if not target:
+            return None
+        if target.get('role') == 'gm' and role == 'player' and gm_count(doc) <= 1:
+            return None   # don't demote the only GM
+        target['role'] = role
+        return save_campaign(doc)
 
 
 def campaigns_for_user(user_id):
@@ -245,17 +264,6 @@ def characters_for_user(user_id):
                         'name': doc.get('name') or (doc.get('build') or {}).get('name') or '?',
                     })
     return out
-
-
-def claim_character(cid, file_name, user_id):
-    """Set owner_user_id on a campaign character file (invite-code claim flow)."""
-    path = os.path.join(storage.party_dir(cid), os.path.basename(file_name))
-    doc = storage.load_json(path)
-    if not storage.is_wrapped(doc):
-        raise ValueError('character not found')
-    doc['owner_user_id'] = user_id
-    storage.atomic_write_json(path, doc, indent=4)
-    return doc
 
 
 def can_act_on_character(user, campaign, char_doc):

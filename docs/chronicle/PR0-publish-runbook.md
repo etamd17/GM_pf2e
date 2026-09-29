@@ -81,8 +81,9 @@ python tools/chronicle_build.py \
 - **Local dev** (`GM_PASSWORD=''`, legacy-open): no token needed; the app treats everyone as GM.
 - **Prod** (Railway, `GM_PASSWORD` set): set `CHRONICLE_PUBLISH_TOKEN` in the app's environment
   (a long, high-entropy secret). The tool sends it as the `X-Chronicle-Token` header; the app's
-  `check_gm_access` allows it for `/api/chronicle*` ONLY (it unlocks nothing else). A wrong/absent
-  token, or an unset server env, still 403s.
+  authorization boundary accepts it only for `POST /api/chronicle/publish`. It cannot read status,
+  roll back, unpublish, or manage uploaded documents. A wrong/absent token, or an unset server env,
+  still 403s.
 
 **Pass it via the environment, not `--token`.** The CLI reads the same
 `CHRONICLE_PUBLISH_TOKEN` variable the server does, so you export one value and both ends agree.

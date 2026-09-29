@@ -120,6 +120,23 @@ def test_viewing_a_sheet_does_not_change_the_session_actor():
         player = auth.create_user("player", "secret2", display_name="Player")
         campaign = campaigns.create_campaign("Identity test", "pf2e", admin["id"])
         campaigns.add_member(campaign["id"], player["id"], "player")
+        application._storage.set_live_campaign_id(campaign["id"])
+        application.load_campaign(campaign["id"])
+
+        # Give the player a real persisted ownership record. The centralized
+        # character policy correctly rejects display names that have no stored
+        # owner, even if a same-named object is injected into PARTY_LIBRARY.
+        party_dir = application._storage.party_dir(campaign["id"])
+        os.makedirs(party_dir, exist_ok=True)
+        application._atomic_write_json(
+            os.path.join(party_dir, "viewed-character.json"),
+            {
+                "id": "viewed-character-id",
+                "campaign_id": campaign["id"],
+                "owner_user_id": player["id"],
+                "build": {"name": "Viewed Character"},
+            },
+        )
 
         client = application.app.test_client()
         response = client.post("/login", data={"username": "player", "password": "secret2"})

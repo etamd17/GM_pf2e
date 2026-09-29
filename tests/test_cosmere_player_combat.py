@@ -14,12 +14,13 @@ import app
 from systems.cosmere.actor import CosmereActor
 
 
-def _combatant(name, spd=3):
-    """A Cosmere PC combatant in the encounter, matched to the sheet by name."""
+def _combatant(name, spd=3, *, restore_id=None):
+    """A Cosmere combatant carrying the same stable id production assigns."""
     a = CosmereActor({'name': name, 'system': 'cosmere',
                       'system_data': {'system': {'attributes': {'spd': {'value': spd}}},
                                       'type': 'character', 'name': name}})
     a.instance_id = name + '-1'
+    a.restore_id = restore_id
     a.system = 'cosmere'
     a.is_pc = True
     a.speed_choice = 'slow'
@@ -46,7 +47,10 @@ def pc(tmp_path, monkeypatch):
                      'attributes': {'str': 3, 'spd': 3, 'wil': 1},
                      'skills': {'hwp': 2, 'ath': 1}}}
     app._atomic_write_json(app._cosmere_pc_path(pid), doc, indent=2)
-    app.ACTIVE_ENCOUNTER[:] = [_combatant('Kaladin'), _combatant('Adolin', spd=2)]
+    app.ACTIVE_ENCOUNTER[:] = [
+        _combatant('Kaladin', restore_id=pid),
+        _combatant('Adolin', spd=2),
+    ]
     app.TURN_INDEX = 0
     app.ROUND_NUMBER = 2
     app._save_campaign_config({'cosmere_initiative': 'phases'})

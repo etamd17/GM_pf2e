@@ -372,27 +372,36 @@ print("MALFORMED_TYPES_REJECTED_OK")
 def test_chronicle_token_does_not_unlock_other_gm_api():
     # A valid X-Chronicle-Token exists solely to let the headless PR0 build
     # tool hit /api/chronicle/publish without a real login. It must unlock
-    # ONLY /api/chronicle* -- confirm it is refused on an unrelated GM-gated
-    # API prefix (/api/tracker_state), even though the header carries a
-    # token that is genuinely valid.
+    # ONLY POST /api/chronicle/publish -- confirm it is refused both on other
+    # Chronicle management APIs and an unrelated GM API.
     r = _run(_BOOT + '''
 os.environ["CHRONICLE_PUBLISH_TOKEN"] = "sekret-token-value-xyz"
 headers = {"X-Chronicle-Token": "sekret-token-value-xyz"}
 anon = A.app.test_client()   # no login/session at all -- the token is the
                               # only credential in play here
 
-# Sanity: the token really does unlock the chronicle API it exists for.
+# Sanity: the token reaches the publish view (which then rejects the missing
+# archive as a request error, not an authorization error).
+pub = anon.post("/api/chronicle/publish", headers=headers)
+assert pub.status_code not in (401, 403), (pub.status_code, pub.data)
+
+# It cannot read Chronicle status or trigger management operations.
 st = anon.get("/api/chronicle/status", headers=headers)
-assert st.status_code == 200, (st.status_code, st.data)
+assert st.status_code == 401, (st.status_code, st.data)
+rb = anon.post("/api/chronicle/rollback", headers=headers)
+assert rb.status_code == 401, (rb.status_code, rb.data)
+unpub = anon.post("/api/chronicle/unpublish",
+                  json={"campaign_id": cid_a}, headers=headers)
+assert unpub.status_code == 401, (unpub.status_code, unpub.data)
 
 # It must NOT unlock an unrelated GM-only API prefix.
 tr = anon.get("/api/tracker_state", headers=headers)
-assert tr.status_code == 403, (tr.status_code, tr.data)
+assert tr.status_code == 401, (tr.status_code, tr.data)
 
-# The wrong token is refused even on the chronicle route -- confirms the 200
-# above really came from the token match, not some other bypass.
-bad = anon.get("/api/chronicle/status", headers={"X-Chronicle-Token": "not-the-token"})
-assert bad.status_code == 403, (bad.status_code, bad.data)
+# The wrong token leaves this anonymous client unauthenticated on publish.
+bad = anon.post("/api/chronicle/publish",
+                headers={"X-Chronicle-Token": "not-the-token"})
+assert bad.status_code == 401, (bad.status_code, bad.data)
 print("TOKEN_CONFINEMENT_OK")
 ''')
     assert 'TOKEN_CONFINEMENT_OK' in r.stdout, r.stdout + r.stderr
