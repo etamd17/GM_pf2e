@@ -21,12 +21,19 @@ backup of the persistent volume.
 - Railway installs the hash-locked `requirements.txt`. Direct dependency intent
   lives in `requirements.in`; never hand-edit generated lock files.
 
-`railway.toml` now uses Railpack. Railway's newer project-level configuration
-format requires live project, service, and volume identities, so migrate it only
-with `railway config pull` from the production project and review the generated
-`.railway/railway.ts`; do not invent those identifiers in source control.
-Do not add a Railpack version pin until that exact version has been validated
-against the live Railway project.
+`railway.toml` keeps the established service on Nixpacks. Two controlled
+production releases using Railpack failed before application startup while the
+last Nixpacks image remained healthy, so treat a future builder migration as a
+separate staging change with build-log access. Railway's newer project-level
+configuration format requires live project, service, and volume identities, so
+migrate it only with `railway config pull` from the production project and review
+the generated `.railway/railway.ts`; do not invent those identifiers in source
+control.
+
+Nixpacks reads `runtime.txt` as a Python major/minor selector. `nixpacks.toml`
+therefore pins a cache-backed Nixpkgs snapshot whose `python311` package is
+3.11.16, keeping the production patch release aligned with CI. Update and verify
+that snapshot whenever `runtime.txt` changes.
 
 ## Required production configuration
 
@@ -111,7 +118,7 @@ SSE event, and requires Gunicorn to exit cleanly on `SIGTERM`. Gunicorn does not
 run natively on Windows, so Windows development relies on WSL or the Linux CI
 gate. The temporary data is discarded and no external service is contacted.
 
-This smoke validates the application server boundary, not Railpack itself, the
+This smoke validates the application server boundary, not the image builder,
 Railway proxy, or volume attachment. Keep the staging checks below.
 
 ## Pre-deploy checklist
