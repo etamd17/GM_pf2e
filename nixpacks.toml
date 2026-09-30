@@ -1,6 +1,0 @@
-# Nixpacks selects only the major/minor family from runtime.txt. Pin a
-# cache-backed nixos-unstable snapshot whose python311 package is 3.11.16 so
-# production remains aligned with CI while this service uses the recovery
-# builder.
-[phases.setup]
-nixpkgsArchive = "b4fd65b198c599cbe814fcb9f42d25d021595ec9"
