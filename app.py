@@ -1,4 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, send_file, send_from_directory, jsonify, session, Response, abort, has_request_context, g
+import html
+import ipaddress
 import sqlite3
 import json
 import math
@@ -61,13 +63,53 @@ def _load_dotenv_file():
 
 _load_dotenv_file()
 
+from core import security as _security
+
+_PRODUCTION_MODE = _security.is_production_mode(os.environ)
+_RAILWAY_RUNTIME = any(
+    (os.environ.get(name) or '').strip()
+    for name in (
+        'RAILWAY_DEPLOYMENT_ID',
+        'RAILWAY_ENVIRONMENT_ID',
+        'RAILWAY_PROJECT_ID',
+        'RAILWAY_SERVICE_ID',
+        'RAILWAY_GIT_COMMIT_SHA',
+    )
+)
+
+
+def _configured_proxy_hops():
+    """Return the exact trusted proxy depth, failing safe on invalid input."""
+    if _RAILWAY_RUNTIME:
+        # Railway supplies one authoritative Host/Proto hop and an independent
+        # X-Real-IP. X-Forwarded-For may contain a longer CDN/proxy chain, so it
+        # must not share this count.
+        return 1
+    try:
+        return _security.parse_trust_proxy_hops(
+            os.environ.get('TRUST_PROXY_HOPS'),
+            default=0,
+        )
+    except ValueError:
+        return 0
+
+
 app = Flask(__name__)
-# Behind Railway's TLS-terminating proxy the app sees the proxy->app hop as plain
-# HTTP. Trust one hop of X-Forwarded-Proto/Host/For so request.scheme/host reflect
-# the real HTTPS origin the browser used -- otherwise request.host_url is http://...
-# and the same-origin CSRF check, secure cookies, and external URLs all break.
+# Railway has one TLS-terminating proxy hop. Direct/local deployments trust no
+# forwarded headers unless TRUST_PROXY_HOPS explicitly names their topology.
+# Host and Origin are still checked against an exact allowlist after ProxyFix.
 from werkzeug.middleware.proxy_fix import ProxyFix as _ProxyFix
-app.wsgi_app = _ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+_PROXY_HOPS = _configured_proxy_hops()
+app.wsgi_app = _ProxyFix(
+    app.wsgi_app,
+    x_for=0 if _RAILWAY_RUNTIME else _PROXY_HOPS,
+    x_proto=_PROXY_HOPS,
+    x_host=_PROXY_HOPS,
+    x_port=_PROXY_HOPS,
+)
+_SECRET_KEY_PERSISTED = False
+
+
 def _stable_secret_key():
     """A secret key that SURVIVES restarts/deploys. A random key per boot (the old
     behavior) re-signed the session cookie on every Railway restart, silently
@@ -75,6 +117,7 @@ def _stable_secret_key():
     dropped back to their last-remembered campaign) the moment a deploy landed
     mid-game. Prefer an explicit SECRET_KEY env var; otherwise persist a generated
     key on the data volume so it's stable across restarts."""
+    global _SECRET_KEY_PERSISTED
     env = os.environ.get('SECRET_KEY')
     if env:
         return env
@@ -86,6 +129,7 @@ def _stable_secret_key():
             with open(keyfile, 'r', encoding='utf-8') as f:
                 k = (f.read() or '').strip()
             if k:
+                _SECRET_KEY_PERSISTED = True
                 return k
         k = _secrets.token_hex(32)
         os.makedirs(_dd, exist_ok=True)
@@ -95,6 +139,7 @@ def _stable_secret_key():
             os.chmod(keyfile, 0o600)
         except OSError:
             pass
+        _SECRET_KEY_PERSISTED = True
         return k
     except OSError:
         # Read-only FS (shouldn't happen on Railway's writable volume): fall back
@@ -219,14 +264,12 @@ GM_PASSWORD = os.environ.get('GM_PASSWORD', '')  # Set in Railway env vars
 
 # Session-cookie hardening. HttpOnly always; SameSite=Lax so the GM can
 # still follow an emailed link and stay logged in, but cross-site POSTs
-# don't carry the cookie. Secure flag is enabled in production (= when a
-# GM_PASSWORD is configured, which is the Railway deploy signal); in
-# local dev over http://localhost we leave it off so the session cookie
-# can still round-trip.
+# don't carry the cookie. Secure remains enabled for explicitly classified
+# production and for legacy GM_PASSWORD deployments (the pre-PR3 behavior).
+# Local development without either signal can still use http://localhost.
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-if GM_PASSWORD:
-    app.config['SESSION_COOKIE_SECURE'] = True
+app.config['SESSION_COOKIE_SECURE'] = _PRODUCTION_MODE or bool(GM_PASSWORD)
 
 # Account-based auth (multi-campaign). When any user account exists we authorize
 # via the logged-in user's per-campaign role; with no accounts yet (tests /
@@ -244,6 +287,229 @@ from core.route_policy import (
 )
 from services import scene_sync as _scene_sync
 from core import chronicle_docs as _chronicle_lib
+
+
+@app.before_request
+def _assign_request_id():
+    """Give every response and server-side error one opaque correlation id."""
+    g.request_id = uuid.uuid4().hex
+
+
+_AUTH_FORM_ENDPOINTS = frozenset({
+    'gm_login',
+    'setup',
+    'login',
+    'register',
+    'join',
+    'change_my_password',
+})
+_AUTH_FORM_MAX_BYTES = 64 * 1024
+
+
+@app.before_request
+def _limit_auth_form_body():
+    """Bound credential-bearing forms before CSRF or view code parses them.
+
+    New credentials have tight field limits, while login still accepts longer
+    values created before those limits existed.  This request-level ceiling
+    preserves that compatibility without exposing password hashing or username
+    normalization to the application's global 64 MiB upload limit.
+    """
+    if request.method != 'POST' or request.endpoint not in _AUTH_FORM_ENDPOINTS:
+        return None
+    request.max_content_length = _AUTH_FORM_MAX_BYTES
+    if request.content_length is not None and request.content_length > _AUTH_FORM_MAX_BYTES:
+        abort(413)
+    return None
+
+
+def _production_configuration_issues():
+    """Evaluate deploy invariants without exposing secret or filesystem values."""
+    state = _auth.account_store_state()
+    return _security.validate_production_config(
+        os.environ,
+        base_dir=BASE_DIR,
+        bootstrap_pristine=(state == _auth.ACCOUNT_STORE_UNINITIALIZED),
+        data_dir=DATA_DIR,
+        data_dir_writable=bool(STORAGE_HEALTH.get('writable')),
+        persisted_secret_key=(app.secret_key if _SECRET_KEY_PERSISTED else None),
+    )
+
+
+def _configured_public_origin():
+    raw = _security.resolve_public_base_url(os.environ)
+    if not raw:
+        return None
+    try:
+        return _security.public_origin_policy(
+            raw,
+            require_https=_PRODUCTION_MODE,
+        ).origin
+    except ValueError:
+        return None
+
+
+@app.template_global('csrf_token')
+def _template_csrf_token():
+    return _auth.csrf_token()
+
+
+@app.template_global('public_url_for')
+def _public_url_for(endpoint, **values):
+    """Build public links from configured origin, never an untrusted Host."""
+    relative = url_for(endpoint, **values)
+    public = _configured_public_origin()
+    if public is not None:
+        return public.value.rstrip('/') + relative
+    return url_for(endpoint, _external=True, **values)
+
+
+@app.template_global('public_base_url')
+def _public_base_url():
+    public = _configured_public_origin()
+    return public.value if public is not None else request.host_url.rstrip('/')
+
+
+def _configured_allowed_hosts():
+    values = []
+    raw_public = _security.resolve_public_base_url(os.environ)
+    if raw_public:
+        try:
+            policy = _security.public_origin_policy(
+                raw_public,
+                require_https=_PRODUCTION_MODE,
+            )
+            values.extend(str(host) for host in policy.allowed_hosts)
+        except ValueError:
+            pass
+    values.extend(
+        value for value in (
+            os.environ.get('RAILWAY_PUBLIC_DOMAIN'),
+            os.environ.get('RAILWAY_PRIVATE_DOMAIN'),
+        ) if value
+    )
+    values.extend(
+        part.strip() for part in (os.environ.get('ALLOWED_HOSTS') or '').split(',')
+        if part.strip()
+    )
+    try:
+        return _security.parse_allowed_hosts(values)
+    except ValueError:
+        return frozenset()
+
+
+_PUBLIC_PROBE_ENDPOINTS = frozenset({'live_check', 'ready_check', 'health_check'})
+_RAILWAY_PROBE_HOSTS = frozenset({'healthcheck.railway.app'})
+
+
+def _is_railway_probe_request():
+    """Admit Railway's fixed healthcheck Host only to generic probe routes."""
+    if request.endpoint not in _PUBLIC_PROBE_ENDPOINTS:
+        return False
+    try:
+        return _security.host_is_allowed(
+            request.host,
+            _RAILWAY_PROBE_HOSTS,
+            scheme=request.scheme,
+        )
+    except ValueError:
+        return False
+
+
+def _service_not_ready_response():
+    headers = {'Retry-After': '60'}
+    if _authorization_is_api_request() or request.endpoint in {'ready_check', 'health_check'}:
+        return jsonify({
+            'status': 'unhealthy',
+            'error': 'service_not_ready',
+        }), 503, headers
+    return 'Service configuration is incomplete.', 503, headers
+
+
+_AUTH_RATE_LIMITERS = {
+    'login_ip': _security.SlidingWindowLimiter(60, 300, max_keys=2048),
+    'login_identity': _security.SlidingWindowLimiter(8, 300, max_keys=4096),
+    'setup_ip': _security.SlidingWindowLimiter(10, 900, max_keys=512),
+    'register_ip': _security.SlidingWindowLimiter(10, 3600, max_keys=2048),
+    'join_ip': _security.SlidingWindowLimiter(30, 600, max_keys=2048),
+    'reauth_ip': _security.SlidingWindowLimiter(30, 300, max_keys=2048),
+    'reauth_identity': _security.SlidingWindowLimiter(8, 300, max_keys=4096),
+}
+
+
+def _auth_rate_key(action, identity=''):
+    remote = _auth_client_ip()
+    normalized = str(identity or '').strip().casefold()[:256]
+    digest = hashlib.sha256(normalized.encode('utf-8')).hexdigest()[:20] if normalized else '-'
+    if action.endswith('_ip'):
+        return action, remote
+    if action.endswith('_identity'):
+        return action, digest
+    raise KeyError(f'unsupported auth rate-limit key: {action}')
+
+
+def _auth_client_ip():
+    """Return one canonical client address from the configured trust boundary."""
+    raw = request.headers.get('X-Real-IP') if _RAILWAY_RUNTIME else request.remote_addr
+    try:
+        return ipaddress.ip_address((raw or '').strip()).compressed.lower()
+    except ValueError:
+        return 'unknown'
+
+
+def _consume_auth_limit(name, identity=''):
+    decision = _AUTH_RATE_LIMITERS[name].consume(_auth_rate_key(name, identity))
+    if decision.allowed:
+        return None
+    headers = {'Retry-After': str(decision.retry_after)}
+    if _authorization_is_api_request():
+        return jsonify({
+            'error': 'rate_limited',
+            'message': 'Too many attempts. Please try again later.',
+        }), 429, headers
+    return 'Too many attempts. Please try again later.', 429, headers
+
+
+def _reset_auth_limit(name, identity=''):
+    _AUTH_RATE_LIMITERS[name].reset(_auth_rate_key(name, identity))
+
+
+@app.before_request
+def _enforce_production_boundary():
+    """Reject unsafe deploy configuration and Host spoofing before dispatch."""
+    allowed_hosts = _configured_allowed_hosts()
+    if allowed_hosts:
+        try:
+            host_ok = _security.host_is_allowed(
+                request.host,
+                allowed_hosts,
+                scheme=request.scheme,
+            )
+        except ValueError:
+            host_ok = False
+        if not host_ok and not _is_railway_probe_request():
+            return jsonify({'error': 'invalid_host'}), 400
+    elif _PRODUCTION_MODE and request.endpoint not in _PUBLIC_PROBE_ENDPOINTS:
+        return _service_not_ready_response()
+
+    # Host validation still applies, but static files need no account-store I/O
+    # and probes own their minimal/dynamic health checks in the view itself.
+    if request.endpoint == 'static' or request.endpoint in _PUBLIC_PROBE_ENDPOINTS:
+        return None
+
+    if not _PRODUCTION_MODE:
+        return None
+    issues = _production_configuration_issues()
+    if issues:
+        return _service_not_ready_response()
+
+    # Before first-admin bootstrap, production exposes setup and probes only.
+    # This removes the legacy-open authority that previously made every GM API
+    # writable when GM_PASSWORD happened to be empty.
+    if _auth.account_store_state() == _auth.ACCOUNT_STORE_UNINITIALIZED:
+        if request.endpoint not in {'setup', 'login', 'live_check', 'ready_check', 'health_check', 'static'}:
+            return _service_not_ready_response()
+    return None
 
 
 # Temporary serialization boundary for handlers that still address the loaded
@@ -283,7 +549,7 @@ def _account_mode():
 def _account_store_unavailable_response():
     """Stable fail-closed response without exposing filesystem details."""
     headers = {'Retry-After': '60'}
-    if request.endpoint == 'health_check':
+    if request.endpoint in {'health_check', 'ready_check'}:
         return jsonify({
             'status': 'unhealthy',
             'account_store': 'unavailable',
@@ -303,9 +569,15 @@ def _account_store_unavailable_response():
 @app.before_request
 def _fail_closed_account_store():
     """Never reinterpret initialized-but-broken account storage as legacy mode."""
-    if request.endpoint == 'static':
+    if request.endpoint in {'static', 'live_check'}:
         return None
     if _auth.account_store_state() == _auth.ACCOUNT_STORE_UNAVAILABLE:
+        # Long-lived streams captured their authority at connect time and do
+        # not pass through request hooks again.  Revoke them as part of the
+        # same fail-closed transition observed by ordinary HTTP requests.
+        closer = globals().get('_close_account_sse_subscribers')
+        if closer is not None:
+            closer()
         return _account_store_unavailable_response()
     return None
 
@@ -491,6 +763,14 @@ def gm_required(f):
         return redirect('/login' if _account_mode() else '/gm/login')
     return decorated
 
+
+def _legacy_auth_epoch():
+    if not GM_PASSWORD:
+        return ''
+    key = str(app.secret_key or '').encode('utf-8')
+    return hmac.new(key, GM_PASSWORD.encode('utf-8'), hashlib.sha256).hexdigest()
+
+
 def _is_gm():
     """True if the caller is effectively the GM of the active campaign.
 
@@ -502,7 +782,16 @@ def _is_gm():
         if not u:
             return False
         return bool(u.get('is_admin')) or _campaigns.is_gm(_active_campaign_doc(), u['id'])
-    return (not GM_PASSWORD) or session.get('gm_authenticated', False)
+    if _PRODUCTION_MODE and not GM_PASSWORD:
+        return False
+    if not GM_PASSWORD:
+        return True
+    stored_epoch = session.get('gm_auth_epoch', '')
+    return bool(
+        session.get('gm_authenticated')
+        and stored_epoch
+        and hmac.compare_digest(stored_epoch, _legacy_auth_epoch())
+    )
 
 
 def _trusted_actor_label(fallback='Player'):
@@ -942,31 +1231,52 @@ def check_gm_access():
         return jsonify({"error": "GM access required"}), 403
 
 
-# CSRF defense for the account/admin state-changing routes: reject cross-origin
-# POSTs (with SameSite=Lax cookies as the backstop). A classic CSRF auto-submit
-# from another site carries that site's Origin and is blocked; same-origin form
-# posts carry a matching Origin/Referer. The game's existing fetch mutations are
-# out of scope here -- they rely on SameSite + per-campaign authorization.
-_CSRF_GUARD_PREFIXES = ('/setup', '/login', '/register', '/join', '/me/password',
-                        '/campaigns/', '/campaign/', '/admin/')
+_CSRF_UNSAFE_METHODS = frozenset({'POST', 'PUT', 'PATCH', 'DELETE'})
+
+
+def _csrf_machine_credential_exempt():
+    """Whether this route is authenticated exclusively by a non-cookie token."""
+    endpoint = request.endpoint
+    if endpoint is None:
+        return False
+    policy = _route_policy_for(endpoint, request.method)
+    if policy is _RoutePolicy.INTEGRATION_TOKEN:
+        # The Obsidian blueprint performs campaign-bound bearer verification
+        # before any command dispatch. It never uses an ambient browser session.
+        return True
+    return bool(
+        policy is _RoutePolicy.CAMPAIGN_GM_OR_PUBLISH_TOKEN
+        and _chronicle_token_ok(request.path)
+    )
 
 
 @app.before_request
 def _csrf_guard():
-    if request.method != 'POST':
-        return
-    if not any(request.path.startswith(p) for p in _CSRF_GUARD_PREFIXES):
-        return
-    origin = request.headers.get('Origin') or request.headers.get('Referer') or ''
-    if not origin:
-        return  # no Origin/Referer -> rely on the SameSite=Lax cookie backstop
-    # Compare HOSTS, not full URLs: scheme can legitimately differ behind a
-    # TLS-terminating proxy (browser https, forwarded header may vary), but a
-    # genuine cross-site CSRF post carries a different host.
-    from urllib.parse import urlparse as _urlparse
-    origin_host = _urlparse(origin).netloc
-    if origin_host and origin_host != request.host:
-        return ('Cross-origin request blocked.', 400)
+    if request.method not in _CSRF_UNSAFE_METHODS or _csrf_machine_credential_exempt():
+        return None
+
+    token_ok = _auth.check_csrf()
+    public_origin = _configured_public_origin()
+    decision = _security.validate_request_origin(
+        request_scheme=request.scheme,
+        request_host=request.host,
+        origin_header=request.headers.get('Origin'),
+        referer_header=request.headers.get('Referer'),
+        sec_fetch_site=request.headers.get('Sec-Fetch-Site'),
+        allowed_hosts=_configured_allowed_hosts() or None,
+        allowed_origins=(public_origin,) if public_origin is not None else (),
+        # Production fails closed. Local single-table development keeps the
+        # historical no-header test/CLI workflow, while still rejecting any
+        # explicitly cross-origin or same-site-sibling browser provenance.
+        allow_missing=(token_ok or not _PRODUCTION_MODE),
+    )
+    if decision.allowed:
+        return None
+    return _authorization_error(
+        'csrf_failed',
+        'Cross-origin request blocked.',
+        400,
+    )
 
 
 # Player-scope gate for the Chronicle reading hub (/chronicle*). No such gate
@@ -1047,10 +1357,60 @@ def _gzip_response(response):
     # own headers (this never touches campaign or live-combat state).
     try:
         if response.mimetype == 'text/html':
-            response.headers['Cache-Control'] = 'no-store, must-revalidate'
-            response.headers['Pragma'] = 'no-cache'
+            if 'no-store' not in response.headers.get('Cache-Control', '').lower():
+                response.headers['Cache-Control'] = 'no-store, must-revalidate'
+            response.headers.setdefault('Pragma', 'no-cache')
     except Exception:
         pass
+    return response
+
+
+def _response_is_sensitive():
+    """Whether this response depends on identity, campaign, or recipient state."""
+    if request.endpoint in {'static', 'service_worker', 'web_manifest'}:
+        return False
+    # Any session value makes the representation recipient-specific. Public auth
+    # pages now carry a per-session CSRF secret even before identity is present.
+    if session:
+        return True
+    endpoint = request.endpoint
+    if endpoint is None:
+        return False
+    method = 'GET' if request.method == 'HEAD' else request.method
+    try:
+        policy = _route_policy_for(endpoint, method)
+    except Exception:
+        return True
+    return policy is not None and policy is not _RoutePolicy.PUBLIC
+
+
+@app.after_request
+def _harden_response(response):
+    """Apply browser, cache, and correlation headers from one reviewed seam."""
+    sensitive = _response_is_sensitive()
+    headers = _security.build_security_headers(
+        production=_PRODUCTION_MODE,
+        request_is_secure=request.is_secure,
+        sensitive=False,
+    )
+    for name, value in headers.items():
+        response.headers.setdefault(name, value)
+
+    if sensitive:
+        response.headers['Cache-Control'] = 'private, no-store, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.vary.add('Cookie')
+    elif request.path in {'/live', '/ready', '/health'}:
+        response.headers['Cache-Control'] = 'no-store, max-age=0'
+
+    if request.path == '/api/events':
+        response.headers['Cache-Control'] = (
+            'private, no-store, max-age=0, no-transform'
+            if sensitive else 'no-store, max-age=0, no-transform'
+        )
+        response.headers['X-Accel-Buffering'] = 'no'
+
+    response.headers['X-Request-ID'] = getattr(g, 'request_id', uuid.uuid4().hex)
     return response
 
 
@@ -2044,13 +2404,53 @@ def _close_sse_subscribers_for_user(campaign_id, user_id):
 
     Three-field entries are tolerated for legacy/tests; they carry no account
     identity and therefore cannot match an account membership mutation.
+
+    ``campaign_id=None`` revokes that identity across every campaign, which is
+    required when a password change invalidates the account session itself.
     """
-    if not campaign_id or not user_id:
+    if not user_id:
         return 0
     with _sse_lock:
         stale = [
             entry for entry in _sse_subscribers
-            if len(entry) >= 4 and entry[2] == campaign_id and entry[3] == user_id
+            if len(entry) >= 4
+            and entry[3] == user_id
+            and (campaign_id is None or entry[2] == campaign_id)
+        ]
+        for entry in stale:
+            if entry in _sse_subscribers:
+                _sse_subscribers.remove(entry)
+            _terminate_sse_entry_locked(entry)
+    return len(stale)
+
+
+def _close_legacy_gm_sse_subscribers():
+    """Revoke streams authenticated only by the shared legacy GM session.
+
+    Legacy sessions have no stable per-user identifier, so a logout must close
+    every legacy GM stream.  Account-backed GM streams carry a user id in the
+    fourth tuple field and are deliberately left alone.
+    """
+    with _sse_lock:
+        stale = [
+            entry for entry in _sse_subscribers
+            if len(entry) >= 2
+            and bool(entry[1])
+            and (len(entry) < 4 or entry[3] is None)
+        ]
+        for entry in stale:
+            if entry in _sse_subscribers:
+                _sse_subscribers.remove(entry)
+            _terminate_sse_entry_locked(entry)
+    return len(stale)
+
+
+def _close_account_sse_subscribers():
+    """Revoke every stream whose authority depends on the account store."""
+    with _sse_lock:
+        stale = [
+            entry for entry in _sse_subscribers
+            if len(entry) >= 4 and bool(entry[3])
         ]
         for entry in stale:
             if entry in _sse_subscribers:
@@ -2073,10 +2473,32 @@ _sse_keepalive_lock = threading.Lock()
 
 
 def _send_sse_keepalive_once():
-    """Send one keepalive and terminate queues that can no longer consume."""
+    """Send one keepalive and terminate streams that no longer have authority."""
+    with _sse_lock:
+        has_account_subscribers = any(
+            len(entry) >= 4 and bool(entry[3])
+            for entry in _sse_subscribers
+        )
+    revoked = 0
+    account_store_unavailable = False
+    if has_account_subscribers:
+        try:
+            account_store_unavailable = (
+                _auth.account_store_state() == _auth.ACCOUNT_STORE_UNAVAILABLE
+            )
+        except Exception:
+            # A stream must fail closed if authority storage cannot even be
+            # classified.  The outer loop keeps running so healthy reconnects
+            # can resume once storage is repaired.
+            app.logger.exception('account-store SSE revalidation failed')
+            account_store_unavailable = True
+    if account_store_unavailable:
+        # This periodic check closes streams even when an account-store outage
+        # begins while the table is idle and no new HTTP request arrives.
+        revoked = _close_account_sse_subscribers()
     with _sse_lock:
         if not _sse_subscribers:
-            return 0
+            return revoked
         # Bypass the player_filter logic — this is identical for GM and
         # players, no PII risk.
         msg = f"event: keepalive\ndata: {{\"t\":{int(time.time())}}}\n\n"
@@ -2090,7 +2512,7 @@ def _send_sse_keepalive_once():
             if entry in _sse_subscribers:
                 _sse_subscribers.remove(entry)
             _terminate_sse_entry_locked(entry)
-        return len(dead)
+        return revoked + len(dead)
 
 
 def _sse_keepalive_loop():
@@ -7502,6 +7924,21 @@ def _restore_encounter_autosave():
 # Cosmere fight was wiped on every restart).
 load_libraries(restore_autosave=False)
 
+@app.route('/live')
+def live_check():
+    """Process liveness only; safe even while configuration is incomplete."""
+    return jsonify({'status': 'alive'})
+
+
+@app.route('/ready')
+def ready_check():
+    """Fail-closed deployment readiness without exposing paths or secrets."""
+    issues = _production_configuration_issues()
+    if issues or _auth.account_store_state() == _auth.ACCOUNT_STORE_UNAVAILABLE:
+        return jsonify({'status': 'unhealthy'}), 503, {'Retry-After': '60'}
+    return jsonify({'status': 'ready'})
+
+
 @app.route('/health')
 def health_check():
     """Health check endpoint for Railway/container orchestration.
@@ -7511,7 +7948,8 @@ def health_check():
     persistence history are operational diagnostics and are returned only to a
     site administrator (or the legacy GM in account-less compatibility mode).
     """
-    payload = {'status': 'healthy'}
+    issues = _production_configuration_issues()
+    payload = {'status': 'unhealthy' if issues else 'healthy'}
     if _account_mode():
         user = _auth.current_user()
         diagnostics_allowed = bool(user and user.get('is_admin'))
@@ -7527,7 +7965,10 @@ def health_check():
             'encounter_active': len(ACTIVE_ENCOUNTER),
             'sse_connections': sse_subscriber_count(),
             'storage': storage,
+            'configuration_issues': [issue.code for issue in issues],
         })
+    if issues:
+        return jsonify(payload), 503, {'Retry-After': '60'}
     return jsonify(payload)
 
 @app.errorhandler(404)
@@ -7553,12 +7994,24 @@ def handle_uncaught(e):
             # NEVER surface raw exception text to the client: a FileNotFoundError
             # etc. carries absolute server paths. Log it server-side, return a
             # generic message.
-            app.logger.exception('Unhandled error on %s', request.path)
+            app.logger.exception(
+                'Unhandled error on %s request_id=%s',
+                request.path,
+                getattr(g, 'request_id', '-'),
+            )
             msg = 'Internal server error'
-        return jsonify(success=False, error=msg), code
+        return jsonify(
+            success=False,
+            error=msg,
+            request_id=getattr(g, 'request_id', None),
+        ), code
     if isinstance(e, HTTPException):
         return e
-    app.logger.exception('Unhandled error on %s', request.path)
+    app.logger.exception(
+        'Unhandled error on %s request_id=%s',
+        request.path,
+        getattr(g, 'request_id', '-'),
+    )
     return 'Internal Server Error', 500
 
 @app.route('/api/perf')
@@ -9531,10 +9984,24 @@ def api_scene_background(scene_id):
 
 @app.route('/gm/login', methods=['GET', 'POST'])
 def gm_login():
+    if _account_mode():
+        return redirect(url_for('login', next=_safe_next('/gm')))
+    csrf_field = (
+        '<input type="hidden" name="_csrf" value="'
+        + html.escape(_auth.csrf_token(), quote=True)
+        + '">'
+    )
     if request.method == 'POST':
         pw = request.form.get('password', '')
-        if pw == GM_PASSWORD:
+        limited = (_consume_auth_limit('login_ip')
+                   or _consume_auth_limit('login_identity', 'legacy-gm'))
+        if limited:
+            return limited
+        if hmac.compare_digest(pw, GM_PASSWORD):
+            _reset_auth_limit('login_identity', 'legacy-gm')
+            session.clear()
             session['gm_authenticated'] = True
+            session['gm_auth_epoch'] = _legacy_auth_epoch()
             # Reject open-redirects: `next` must be a relative same-origin
             # path (starts with `/` and not `//`), otherwise an attacker
             # could craft /gm/login?next=https://evil.com/phish and land
@@ -9555,8 +10022,8 @@ def gm_login():
             button:hover{background:#4A9696;}
             </style></head>
             <body><div class="box"><h1>Wrong Password</h1><p>Try again.</p>
-            <form method="POST"><input type="password" name="password" placeholder="GM Password" autofocus>
-            <button type="submit">Sign In</button></form></div></body></html>'''
+            <form method="POST">''' + csrf_field + '''<input type="password" name="password" placeholder="GM Password" autofocus>
+            <button type="submit">Sign In</button></form></div></body></html>''', 401
     return '''<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
         <title>GM Login</title><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Cinzel:wght@600&display=swap" rel="stylesheet">
         <style>body{font-family:'Inter',system-ui,sans-serif;background:#0d0d12;color:#e8e8f0;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;}
@@ -9569,12 +10036,20 @@ def gm_login():
         button:hover{background:#4A9696;}
         </style></head>
         <body><div class="box"><h1>GM Access</h1><p>This area is restricted to the Game Master.</p>
-        <form method="POST"><input type="password" name="password" placeholder="GM Password" autofocus>
+        <form method="POST">''' + csrf_field + '''<input type="password" name="password" placeholder="GM Password" autofocus>
         <button type="submit">Sign In</button></form></div></body></html>'''
 
 @app.route('/gm/logout')
 def gm_logout():
+    valid_legacy_gm = (
+        not _account_mode()
+        and bool(GM_PASSWORD)
+        and _is_gm()
+    )
+    if valid_legacy_gm:
+        _close_legacy_gm_sse_subscribers()
     session.pop('gm_authenticated', None)
+    session.pop('gm_auth_epoch', None)
     return redirect('/player')
 
 
@@ -9613,7 +10088,13 @@ def setup():
     if _auth.account_mode_initialized():
         return redirect('/login')
     if request.method == 'POST':
-        if SETUP_TOKEN and request.form.get('setup_token', '') != SETUP_TOKEN:
+        limited = _consume_auth_limit('setup_ip')
+        if limited:
+            return limited
+        supplied_setup_token = request.form.get('setup_token', '')
+        if (_PRODUCTION_MODE and not SETUP_TOKEN):
+            return _service_not_ready_response()
+        if (SETUP_TOKEN and not hmac.compare_digest(supplied_setup_token, SETUP_TOKEN)):
             return render_template('setup.html', error='Wrong setup token.', need_token=True), 403
         try:
             u = _auth.create_first_admin(
@@ -9626,11 +10107,11 @@ def setup():
         except _auth.AccountStoreUnavailable:
             return _account_store_unavailable_response()
         except ValueError as e:
-            return render_template('setup.html', error=str(e), need_token=bool(SETUP_TOKEN)), 400
+            return render_template('setup.html', error=str(e), need_token=bool(SETUP_TOKEN or _PRODUCTION_MODE)), 400
         _auth.login_user(u, remember=True)
         _auto_migrate_legacy(u['id'])
         return redirect('/me')
-    return render_template('setup.html', error=None, need_token=bool(SETUP_TOKEN))
+    return render_template('setup.html', error=None, need_token=bool(SETUP_TOKEN or _PRODUCTION_MODE))
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -9638,9 +10119,18 @@ def login():
     if not _auth.account_mode_initialized():
         return redirect('/setup')
     if request.method == 'POST':
-        u = _auth.verify_credentials(request.form.get('username', ''), request.form.get('password', ''))
+        previous_user_id = session.get('user_id')
+        username = request.form.get('username', '')
+        limited = (_consume_auth_limit('login_ip')
+                   or _consume_auth_limit('login_identity', username))
+        if limited:
+            return limited
+        u = _auth.verify_credentials(username, request.form.get('password', ''))
         if not u:
             return render_template('login.html', error='Wrong username or password.'), 401
+        _reset_auth_limit('login_identity', username)
+        if previous_user_id and previous_user_id != u.get('id'):
+            _close_sse_subscribers_for_user(None, previous_user_id)
         _auth.login_user(u, remember=True)
         return redirect(_safe_next('/me'))
     return render_template('login.html', error=None)
@@ -9655,6 +10145,9 @@ def register():
     if _auth.current_user():
         return redirect('/me')             # already signed in
     if request.method == 'POST':
+        limited = _consume_auth_limit('register_ip')
+        if limited:
+            return limited
         try:
             u = _auth.create_user(
                 request.form.get('username', ''), request.form.get('password', ''),
@@ -9668,7 +10161,19 @@ def register():
 
 @app.route('/logout')
 def logout():
-    _auth.logout_user()
+    previous_user_id = session.get('user_id')
+    valid_legacy_gm = (
+        not _account_mode()
+        and bool(GM_PASSWORD)
+        and _is_gm()
+    )
+    try:
+        if previous_user_id:
+            _close_sse_subscribers_for_user(None, previous_user_id)
+        elif valid_legacy_gm:
+            _close_legacy_gm_sse_subscribers()
+    finally:
+        _auth.logout_user()
     return redirect('/login')
 
 
@@ -10500,6 +11005,10 @@ def _claim_by_id(cid, character_id, user_id, *, prepared_target=None):
 def join():
     """Invite-code claim: create/sign-in an account, join the campaign, claim a PC."""
     code = (request.values.get('code') or '').strip()
+    if request.method == 'POST':
+        limited = _consume_auth_limit('join_ip')
+        if limited:
+            return limited
     inv = _auth.get_invite(code) if code else None
     camp_name = (_campaigns.get_campaign(inv['campaign_id']) or {}).get('name') if inv else None
     if request.method == 'POST':
@@ -10714,10 +11223,17 @@ def new_campaign():
 @_auth.login_required
 def change_my_password():
     u = _auth.current_user()
+    limited = (_consume_auth_limit('reauth_ip')
+               or _consume_auth_limit('reauth_identity', u['id']))
+    if limited:
+        return limited
     if not _auth.verify_credentials(u['username'], request.form.get('current_password', '')):
         return _me_render(pw_error='Current password is incorrect.'), 400
+    _reset_auth_limit('reauth_identity', u['id'])
     try:
         _auth.set_password(u['id'], request.form.get('new_password', ''))
+        _auth.refresh_session_version(u['id'])
+        _close_sse_subscribers_for_user(None, u['id'])
     except ValueError as e:
         return _me_render(pw_error=str(e)), 400
     return _me_render(pw_msg='Password updated.')
@@ -10735,13 +11251,19 @@ def admin_users():
 @app.route('/admin/users/<uid>/reset', methods=['POST'])
 @_auth.login_required
 def admin_reset_password(uid):
-    if not _auth.current_user().get('is_admin'):
+    admin = _auth.current_user()
+    if not admin.get('is_admin'):
         return jsonify({'error': 'admin only'}), 403
     target = _auth.get_user(uid)
     if target:
         import secrets as _secrets
-        temp = _secrets.token_urlsafe(6)
+        temp = _secrets.token_urlsafe(12)
         _auth.set_password(uid, temp)
+        if uid == admin['id']:
+            # Preserve the existing self-reset workflow long enough to display
+            # its one-time password; every other browser session remains stale.
+            _auth.refresh_session_version(uid)
+        _close_sse_subscribers_for_user(None, uid)
         session['_pw_reset_notice'] = {'username': target['username'], 'temp': temp}
     return redirect('/admin/users')
 
@@ -12125,8 +12647,15 @@ def cosmere_import_pdf():
             created.append({'id': doc['id'], 'name': doc['name'],
                             'url': url_for('cosmere_pc_sheet', pid=doc['id'])})
         except Exception as e:
-            print(f'[PDF IMPORT] {getattr(f, "filename", "?")}: {e}')
-            errors.append({'file': getattr(f, 'filename', '?'), 'error': str(e)[:200]})
+            app.logger.exception(
+                'Cosmere PDF import failed request_id=%s filename=%r',
+                getattr(g, 'request_id', '-'),
+                getattr(f, 'filename', '?'),
+            )
+            errors.append({
+                'file': getattr(f, 'filename', '?'),
+                'error': 'That PDF could not be parsed.',
+            })
     return jsonify({'ok': bool(created), 'created': created, 'errors': errors})
 
 
@@ -18803,7 +19332,11 @@ def compendium_search():
                     'desc': desc
                 })
     except Exception as e:
-        return jsonify({"results": [], "error": str(e)})
+        app.logger.exception(
+            'Compendium search failed request_id=%s',
+            getattr(g, 'request_id', '-'),
+        )
+        return jsonify({"results": [], "error": "Compendium search failed."}), 500
     finally:
         c.close()
 
@@ -21651,8 +22184,12 @@ def import_pathbuilder():
         return jsonify({"error": "Invalid JSON format"}), 400
     except HTTPException:
         raise
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        app.logger.exception(
+            'Pathbuilder import failed request_id=%s',
+            getattr(g, 'request_id', '-'),
+        )
+        return jsonify({"error": "Character import failed."}), 500
 
 def _validate_new_character_feats(data):
     """Levelup-parity soft validation for character creation (spec 2026-07-03).
@@ -22732,8 +23269,12 @@ def export_pdf(pc_name):
         return send_file(buf, mimetype='application/pdf', as_attachment=True, download_name=f"{safe_name}_character_sheet.pdf")
     except ImportError:
         return jsonify({"error": "reportlab not installed. Add to requirements.txt."}), 500
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        app.logger.exception(
+            'Character PDF export failed request_id=%s',
+            getattr(g, 'request_id', '-'),
+        )
+        return jsonify({"error": "Character PDF export failed."}), 500
 
 # =============================================================================
 # MONSTER IMPORT
@@ -22770,12 +23311,25 @@ def import_monster():
             m = Monster(data, f"{safe_name}.json")
             MONSTER_LIBRARY[f"{safe_name}.json"] = m
             return jsonify({"success": True, "name": name, "level": m.level})
-        except Exception as e:
-            return jsonify({"success": True, "name": name, "warning": f"Saved but parse error: {e}"})
+        except Exception:
+            app.logger.exception(
+                'Imported monster parse failed request_id=%s filename=%r',
+                getattr(g, 'request_id', '-'),
+                f"{safe_name}.json",
+            )
+            return jsonify({
+                "success": True,
+                "name": name,
+                "warning": "Saved, but the monster could not be loaded.",
+            })
     except json.JSONDecodeError:
         return jsonify({"error": "Invalid JSON"}), 400
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        app.logger.exception(
+            'Monster import failed request_id=%s',
+            getattr(g, 'request_id', '-'),
+        )
+        return jsonify({"error": "Monster import failed."}), 500
 
 def _save_custom_monster(monster_json, name):
     """Persist a GM-authored monster to the bestiary (atomic write) and register
