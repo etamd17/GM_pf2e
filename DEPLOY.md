@@ -60,6 +60,89 @@ After deploying PR3, legacy single-table GMs must sign in once again. Cookies
 issued before the password-derived session epoch existed are intentionally
 rejected so rotating `GM_PASSWORD` reliably revokes every older GM session.
 
+## Transactional store staging (PR4A)
+
+PR4A adds an additive PostgreSQL schema and migration toolchain, but it does
+not cut application reads or writes over to SQL. JSON under `DATA_DIR` remains
+the only runtime authority for accounts, campaign access, character ownership,
+and invitations until the separately reviewed PR4B cutover. The web process
+must continue to start and pass `/ready` when `DATABASE_URL` is unset.
+Do not configure production to use SQL authority in PR4A or attach
+`DATABASE_URL` to the long-running web process merely because the schema is
+available; use it only for an explicit operator command or isolated validation.
+
+Schema migrations are an explicit operator action. Application startup never
+runs Alembic, creates tables, or changes schema. This avoids two replicas racing
+through DDL and prevents an image rollback from silently encountering a schema
+it did not expect.
+
+### Provision and migrate
+
+1. Provision an isolated Railway PostgreSQL service for staging. Do not expose
+   its public port, reuse production credentials, or attach a preview service to
+   the production database.
+2. Back up the JSON volume and take a PostgreSQL snapshot before every migration
+   attempt. For a production rehearsal, pause mutations while planning,
+   importing, and verifying so all checks describe one source snapshot.
+3. Set `DATABASE_URL` only in the operator shell or isolated validation process
+   that needs SQL. The tools accept Railway-style `postgres://` and
+   `postgresql://` URLs and normalize them to the installed Psycopg 3 driver;
+   the explicit SQLAlchemy form is
+   `postgresql+psycopg://USER:PASSWORD@HOST:PORT/DATABASE`.
+4. Apply the reviewed schema explicitly, then inspect the current revision:
+
+   ```bash
+   python -m alembic upgrade head
+   python -m alembic check
+   python -m alembic current
+   ```
+
+5. Generate and retain a deterministic plan before importing. The import
+   requires the plan's `source_digest`, so it fails closed if source data
+   changed after review:
+
+   ```bash
+   python tools/migrate_transactional_store.py plan --source "$DATA_DIR" --output migration-plan.json
+   export PLAN_SOURCE_DIGEST="<source_digest from migration-plan.json>"
+   python tools/migrate_transactional_store.py import --source "$DATA_DIR" --expect-digest "$PLAN_SOURCE_DIGEST"
+   python tools/migrate_transactional_store.py verify --source "$DATA_DIR"
+   ```
+
+   `plan` is read-only. Import is idempotent, records its migration run, and
+   must complete before verification is accepted. Treat duplicate identifiers,
+   missing references, ownership conflicts, a campaign with no GM, count
+   mismatches, or checksum mismatches as blockers; never repair them by guessing
+   an owner.
+
+6. Exercise reverse export into a new or empty directory and compare the report
+   before any authority cutover:
+
+   ```bash
+   export EXPORT_DIR="/path/to/new-empty-export-directory"
+   python tools/migrate_transactional_store.py export --source "$DATA_DIR" --output-dir "$EXPORT_DIR"
+   ```
+
+   Export refuses a populated destination, checksum-verifies source character
+   payloads, and never edits `DATA_DIR`. Preserve the plan, import, verify, and
+   export reports with the deployment record. The export reconstructs only the
+   PR4A transactional subset: users, campaign documents and memberships,
+   invites, and recognized character JSON. It does not include scenes, maps,
+   handouts, uploads, `server_state.json`, or the rest of `DATA_DIR`, so it is
+   not a full backup or volume-restore artifact. The separate JSON volume backup
+   remains required. A successful PR4A rehearsal is evidence that this
+   transactional subset can round-trip; it does not enable SQL authority or
+   dual writes.
+
+### Transactional-store rollback
+
+Because PR4A does not change runtime authority, rolling the application image
+back requires no JSON conversion. Leave the JSON volume untouched. If a schema
+migration or import fails, stop, preserve its reports and database snapshot,
+and investigate before retrying; do not drop tables or run a destructive
+downgrade against the only copy. A disposable staging database may be recreated
+from its recorded preflight inputs after the failed instance is retained for
+diagnosis.
+
 ## Health and monitoring contract
 
 - `GET /live` is a minimal public process-liveness probe. It returns success
@@ -103,6 +186,14 @@ CI regenerates over temporary copies of the committed lock files, so its
 freshness check preserves existing transitive pins instead of silently resolving
 the newest packages on every run.
 
+The normal CI job deliberately has no `DATABASE_URL` and runs every test except
+those marked `postgresql`, preserving the no-database startup contract. A
+separate job starts PostgreSQL, installs the same hash-locked development
+environment, runs `pip check`, applies `alembic upgrade head`, proves the
+migrated schema matches the models with `alembic check`, and then runs the marked
+persistence suite. A selected PostgreSQL test must fail, not skip, when its
+database URL is missing.
+
 ## Production runtime smoke
 
 After installing `requirements.txt` into a clean virtual environment, run this
@@ -131,7 +222,8 @@ Railway proxy, or volume attachment. Keep the staging checks below.
 
 1. Confirm CI passed: lock-freshness and hash-locked install checks, `pip check`,
    `pip-audit`, deployment invariant checks, the production runtime smoke,
-   template parse, and the full test suite.
+   template parse, the full non-PostgreSQL test suite, and the isolated
+   PostgreSQL migration/concurrency job.
 2. Confirm the target is staging, with its own `/data` volume and credentials.
 3. Confirm staging uses one replica and that its variables match the table above.
 4. Back up the production volume and record how to restore that backup.

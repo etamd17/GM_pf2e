@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "slug": "abomination-vaults",
+  "name": "Abomination Vaults",
+  "system": "pf2e",
+  "created_by": "11111111111111111111111111111111",
+  "created_at": "2026-01-01T12:30:00",
+  "session_number": 7,
+  "members": [
+    {
+      "user_id": "11111111111111111111111111111111",
+      "role": "gm"
+    },
+    {
+      "user_id": "22222222222222222222222222222222",
+      "role": "player",
+      "character_id": "cccccccccccccccccccccccccccccccc"
+    }
+  ],
+  "system_config": {
+    "free_archetype": true
+  },
+  "tagline": "The lighthouse calls."
+}

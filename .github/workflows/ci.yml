@@ -15,7 +15,7 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       PYTHONHASHSEED: "0"
       PYTHONDONTWRITEBYTECODE: "1"
@@ -71,6 +71,8 @@ jobs:
           assert config["deploy"]["healthcheckTimeout"] == 120
           assert config["deploy"]["overlapSeconds"] == 0
           assert "--workers 1" in command
+          assert "alembic" not in command.lower()
+          assert "migrate_transactional_store" not in command
           assert (root / "Procfile").read_text(encoding="utf-8").strip() == f"web: {command}"
           assert (root / "runtime.txt").read_text(encoding="utf-8").strip() == "python-3.11.16"
 
@@ -89,4 +91,67 @@ jobs:
         run: python tools/check_templates.py
 
       - name: Run tests
-        run: python -m pytest -q
+        run: python -m pytest -q -m "not postgresql" --strict-markers
+
+  postgresql:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: postgresql+psycopg://gm_pf2e:gm_pf2e_ci@127.0.0.1:5432/gm_pf2e_test
+      PYTHONHASHSEED: "0"
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: gm_pf2e_test
+          POSTGRES_PASSWORD: gm_pf2e_ci
+          POSTGRES_USER: gm_pf2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gm_pf2e -d gm_pf2e_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11.16"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+          pip-version: "26.2.1"
+
+      - name: Install locked dependencies
+        run: python -m pip install --require-hashes -r requirements-dev.txt
+
+      - name: Verify installed dependency consistency
+        run: python -m pip check
+
+      - name: Verify PostgreSQL connection
+        run: |
+          python - <<'PY'
+          import os
+
+          from sqlalchemy import create_engine, text
+
+          engine = create_engine(os.environ["DATABASE_URL"])
+          with engine.connect() as connection:
+              assert connection.execute(text("SELECT 1")).scalar_one() == 1
+          engine.dispose()
+          PY
+
+      - name: Apply transactional schema migrations
+        run: |
+          python -m alembic upgrade head
+          python -m alembic check
+
+      - name: Run PostgreSQL persistence tests
+        run: python -m pytest -q tests/persistence -m postgresql --strict-markers
