@@ -28,7 +28,7 @@
             </div>
             <div>
                 <span class="sync-label">Website URL</span>
-                <code id="website-url">{{ public_base_url() }}</code>
+                <code id="website-url">{{ request.host_url.rstrip('/') }}</code>
             </div>
         </div>
         <p class="sync-help">Enter the Website URL, Campaign ID, and generated token in Obsidian under Settings &rarr; Session Operations Sync. The token is shown only once.</p>

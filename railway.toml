@@ -1,12 +1,7 @@
 [build]
-builder = "NIXPACKS"
-nixpacksVersion = "1.41.0"
+builder = "nixpacks"
 
 [deploy]
 startCommand = "gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --worker-class gevent --worker-connections 1000 --timeout 120"
-healthcheckPath = "/ready"
-healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
-overlapSeconds = 0
-drainingSeconds = 30

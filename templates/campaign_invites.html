@@ -52,7 +52,7 @@
 {% if open_invites %}
 <ul class="list invite-list">
   {% for inv in open_invites %}
-  {% set link = public_url_for('join', code=inv.code) %}
+  {% set link = url_for('join', code=inv.code, _external=True) %}
   <li class="row invite-row">
     <div class="invite-main">
       <div class="qr">{{ qr_svg(link) | safe }}</div>
@@ -87,7 +87,7 @@
     </form>
     {% endif %}
     {% else %}
-    {% set link = public_url_for('join', code=r.code) %}
+    {% set link = url_for('join', code=r.code, _external=True) %}
     <div class="invite-main">
       <div class="qr">{{ qr_svg(link) | safe }}</div>
       <div class="invite-body">
