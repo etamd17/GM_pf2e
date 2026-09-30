@@ -26,7 +26,6 @@ def _run_isolated(
         "GM_PASSWORD", "FLASK_DEBUG", "TRUST_PROXY_HOPS",
         "RAILWAY_DEPLOYMENT_ID", "RAILWAY_ENVIRONMENT_ID",
         "RAILWAY_PROJECT_ID", "RAILWAY_SERVICE_ID", "RAILWAY_GIT_COMMIT_SHA",
-        "RAILWAY_PUBLIC_DOMAIN", "RAILWAY_PRIVATE_DOMAIN",
     ):
         env.pop(name, None)
     env.update({
@@ -201,100 +200,6 @@ def test_valid_production_bootstrap_cookie_host_csrf_and_headers(tmp_path):
     assert result["hsts"].startswith("max-age=")
     assert result["nosniff"] == "nosniff"
     assert len(result["request_id"]) == 32
-
-
-def test_railway_domain_keeps_readiness_and_public_origin_consistent(tmp_path):
-    result = _run_isolated(
-        r'''
-        import json
-        import app as application
-
-        client = application.app.test_client()
-        forwarded = {
-            "X-Forwarded-Host": "tableview.up.railway.app",
-            "X-Forwarded-Proto": "https",
-        }
-        ready = client.get(
-            "/ready",
-            base_url="http://healthcheck.railway.app",
-        )
-        setup = client.get(
-            "/setup",
-            base_url="https://tableview.up.railway.app",
-            headers=forwarded,
-        )
-        result = {
-            "ready": ready.status_code,
-            "setup": setup.status_code,
-            "origin": application._configured_public_origin().value,
-            "issues": [
-                issue.code for issue in application._production_configuration_issues()
-            ],
-        }
-        print("PR3_BOUNDARY_RESULT=" + json.dumps(result, sort_keys=True))
-        ''',
-        data_dir=tmp_path,
-        valid_config=True,
-        overrides={
-            "PUBLIC_BASE_URL": "",
-            "RAILWAY_DEPLOYMENT_ID": "deploy-1",
-            "RAILWAY_PUBLIC_DOMAIN": "tableview.up.railway.app",
-        },
-    )
-    assert result == {
-        "issues": [],
-        "origin": "https://tableview.up.railway.app",
-        "ready": 200,
-        "setup": 200,
-    }
-
-
-def test_volume_backed_secret_keeps_existing_railway_deployment_ready(tmp_path):
-    persisted_key = "a83f10d692c74be58130f9a268c54d7ea83f10d692c74be58130f9a268c54d7e"
-    (tmp_path / ".secret_key").write_text(persisted_key, encoding="utf-8")
-    result = _run_isolated(
-        r'''
-        import json
-        import os
-        import app as application
-
-        client = application.app.test_client()
-        ready = client.get(
-            "/ready",
-            base_url="http://healthcheck.railway.app",
-        )
-        result = {
-            "ready": ready.status_code,
-            "persisted": application._SECRET_KEY_PERSISTED,
-            "reused": application.app.secret_key == (
-                "a83f10d692c74be58130f9a268c54d7e"
-                "a83f10d692c74be58130f9a268c54d7e"
-            ),
-            "key_file": os.path.isfile(
-                os.path.join(os.environ["DATA_DIR"], ".secret_key")
-            ),
-            "issues": [
-                issue.code for issue in application._production_configuration_issues()
-            ],
-        }
-        print("PR3_BOUNDARY_RESULT=" + json.dumps(result, sort_keys=True))
-        ''',
-        data_dir=tmp_path,
-        valid_config=True,
-        overrides={
-            "SECRET_KEY": "",
-            "PUBLIC_BASE_URL": "",
-            "RAILWAY_DEPLOYMENT_ID": "deploy-1",
-            "RAILWAY_PUBLIC_DOMAIN": "tableview.up.railway.app",
-        },
-    )
-    assert result == {
-        "issues": [],
-        "key_file": True,
-        "persisted": True,
-        "ready": 200,
-        "reused": True,
-    }
 
 
 def test_unload_autosaves_use_csrf_aware_keepalive_fetch():

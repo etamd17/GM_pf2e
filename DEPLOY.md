@@ -33,10 +33,10 @@ against the live Railway project.
 | Setting | Required value |
 | --- | --- |
 | `DATA_DIR` | `/data`, backed by the mounted production volume |
-| `SECRET_KEY` | Stable, random secret of at least 32 bytes; never a checked-in value. Recommended on new deployments; when unset, the app verifies and reuses the generated `.secret_key` on the mounted `DATA_DIR` volume |
+| `SECRET_KEY` | Stable, random secret of at least 32 bytes; never a checked-in value |
 | `SETUP_TOKEN` | Separate random secret of at least 24 bytes while first-admin setup is available; remove or rotate it after bootstrap |
 | `FLASK_DEBUG` | `false` |
-| `PUBLIC_BASE_URL` | Exact public HTTPS origin (no path, query, fragment, or credentials). On Railway this defaults to `https://$RAILWAY_PUBLIC_DOMAIN`; set it explicitly when a custom domain must be canonical |
+| `PUBLIC_BASE_URL` | Exact public HTTPS origin, for example `https://tableview.up.railway.app` (no path, query, fragment, or credentials) |
 | `TRUST_PROXY_HOPS` | Leave unset on Railway: its one Host/Proto hop and injected `X-Real-IP` are handled separately. For a custom reverse proxy, set the exact known hop depth from `0` through `3`; direct deployments default to `0` |
 | `GM_PASSWORD` | Unset after account-based access is enabled |
 | Railway replicas | `1` |
@@ -62,8 +62,6 @@ rejected so rotating `GM_PASSWORD` reliably revokes every older GM session.
   available. Its response is intentionally generic. Railway sends this probe
   with `Host: healthcheck.railway.app`; the application admits that exact Host
   only to `/live`, `/ready`, and `/health`, never to normal application routes.
-- Railway allows 120 seconds for cold-start data loading before rejecting a new
-  deployment; an unhealthy `/ready` response still prevents traffic promotion.
 - Detailed storage diagnostics remain authenticated and GM-only; do not put
   absolute paths, exception strings, or configuration values in a public probe.
 

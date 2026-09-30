@@ -107,9 +107,6 @@ app.wsgi_app = _ProxyFix(
     x_host=_PROXY_HOPS,
     x_port=_PROXY_HOPS,
 )
-_SECRET_KEY_PERSISTED = False
-
-
 def _stable_secret_key():
     """A secret key that SURVIVES restarts/deploys. A random key per boot (the old
     behavior) re-signed the session cookie on every Railway restart, silently
@@ -117,7 +114,6 @@ def _stable_secret_key():
     dropped back to their last-remembered campaign) the moment a deploy landed
     mid-game. Prefer an explicit SECRET_KEY env var; otherwise persist a generated
     key on the data volume so it's stable across restarts."""
-    global _SECRET_KEY_PERSISTED
     env = os.environ.get('SECRET_KEY')
     if env:
         return env
@@ -129,7 +125,6 @@ def _stable_secret_key():
             with open(keyfile, 'r', encoding='utf-8') as f:
                 k = (f.read() or '').strip()
             if k:
-                _SECRET_KEY_PERSISTED = True
                 return k
         k = _secrets.token_hex(32)
         os.makedirs(_dd, exist_ok=True)
@@ -139,7 +134,6 @@ def _stable_secret_key():
             os.chmod(keyfile, 0o600)
         except OSError:
             pass
-        _SECRET_KEY_PERSISTED = True
         return k
     except OSError:
         # Read-only FS (shouldn't happen on Railway's writable volume): fall back
@@ -332,12 +326,11 @@ def _production_configuration_issues():
         bootstrap_pristine=(state == _auth.ACCOUNT_STORE_UNINITIALIZED),
         data_dir=DATA_DIR,
         data_dir_writable=bool(STORAGE_HEALTH.get('writable')),
-        persisted_secret_key=(app.secret_key if _SECRET_KEY_PERSISTED else None),
     )
 
 
 def _configured_public_origin():
-    raw = _security.resolve_public_base_url(os.environ)
+    raw = (os.environ.get('PUBLIC_BASE_URL') or '').strip()
     if not raw:
         return None
     try:
@@ -372,7 +365,7 @@ def _public_base_url():
 
 def _configured_allowed_hosts():
     values = []
-    raw_public = _security.resolve_public_base_url(os.environ)
+    raw_public = (os.environ.get('PUBLIC_BASE_URL') or '').strip()
     if raw_public:
         try:
             policy = _security.public_origin_policy(

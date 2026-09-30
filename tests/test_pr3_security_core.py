@@ -22,7 +22,6 @@ from core.security import (
     parse_trust_proxy_hops,
     public_origin_policy,
     require_production_config,
-    resolve_public_base_url,
     validate_production_config,
     validate_request_origin,
 )
@@ -78,131 +77,6 @@ def test_valid_production_configuration_passes(tmp_path):
         base_dir=base,
         bootstrap_pristine=True,
     )
-
-
-def test_railway_public_domain_supplies_public_origin(tmp_path):
-    base = tmp_path / "checkout"
-    data = tmp_path / "volume"
-    base.mkdir()
-    data.mkdir()
-    env = _valid_env(data)
-    env.pop("PUBLIC_BASE_URL")
-    env.update({
-        "RAILWAY_DEPLOYMENT_ID": "deploy-1",
-        "RAILWAY_PUBLIC_DOMAIN": "tableview.up.railway.app",
-    })
-
-    assert resolve_public_base_url(env) == "https://tableview.up.railway.app"
-    assert validate_production_config(
-        env,
-        base_dir=base,
-        bootstrap_pristine=True,
-    ) == ()
-
-
-def test_strong_persisted_secret_can_back_existing_production(tmp_path):
-    base = tmp_path / "checkout"
-    data = tmp_path / "volume"
-    base.mkdir()
-    data.mkdir()
-    env = _valid_env(data)
-    env.pop("SECRET_KEY")
-
-    assert validate_production_config(
-        env,
-        base_dir=base,
-        bootstrap_pristine=True,
-        persisted_secret_key=GOOD_SECRET,
-    ) == ()
-
-
-def test_persisted_secret_must_be_present_and_strong(tmp_path):
-    base = tmp_path / "checkout"
-    data = tmp_path / "volume"
-    base.mkdir()
-    data.mkdir()
-    env = _valid_env(data)
-    env.pop("SECRET_KEY")
-
-    missing = validate_production_config(
-        env,
-        base_dir=base,
-        bootstrap_pristine=False,
-    )
-    weak = validate_production_config(
-        env,
-        base_dir=base,
-        bootstrap_pristine=False,
-        persisted_secret_key="short",
-    )
-    assert {issue.code for issue in missing} == {"secret_key_missing"}
-    assert {issue.code for issue in weak} == {"secret_key_weak"}
-
-
-def test_explicit_weak_secret_is_not_replaced_by_persisted_secret(tmp_path):
-    base = tmp_path / "checkout"
-    data = tmp_path / "volume"
-    base.mkdir()
-    data.mkdir()
-    env = _valid_env(data, SECRET_KEY="short")
-
-    issues = validate_production_config(
-        env,
-        base_dir=base,
-        bootstrap_pristine=False,
-        persisted_secret_key=GOOD_SECRET,
-    )
-    assert {issue.code for issue in issues} == {"secret_key_weak"}
-
-
-def test_railway_domain_fallback_requires_runtime_marker(tmp_path):
-    base = tmp_path / "checkout"
-    data = tmp_path / "volume"
-    base.mkdir()
-    data.mkdir()
-    env = _valid_env(data)
-    env.pop("PUBLIC_BASE_URL")
-    env["RAILWAY_PUBLIC_DOMAIN"] = "tableview.up.railway.app"
-
-    assert resolve_public_base_url(env) == ""
-    issues = validate_production_config(
-        env,
-        base_dir=base,
-        bootstrap_pristine=False,
-    )
-    assert {issue.code for issue in issues} == {"public_base_url_missing"}
-
-
-def test_explicit_invalid_public_origin_is_not_replaced_by_railway_domain(tmp_path):
-    base = tmp_path / "checkout"
-    data = tmp_path / "volume"
-    base.mkdir()
-    data.mkdir()
-    env = _valid_env(
-        data,
-        PUBLIC_BASE_URL="not-a-url",
-        RAILWAY_DEPLOYMENT_ID="deploy-1",
-        RAILWAY_PUBLIC_DOMAIN="tableview.up.railway.app",
-    )
-
-    assert resolve_public_base_url(env) == "not-a-url"
-    issues = validate_production_config(
-        env,
-        base_dir=base,
-        bootstrap_pristine=False,
-    )
-    assert {issue.code for issue in issues} == {"public_base_url_invalid"}
-
-
-def test_explicit_custom_public_origin_wins_over_railway_domain(tmp_path):
-    env = _valid_env(
-        tmp_path,
-        PUBLIC_BASE_URL="https://custom.example",
-        RAILWAY_DEPLOYMENT_ID="deploy-1",
-        RAILWAY_PUBLIC_DOMAIN="tableview.up.railway.app",
-    )
-
-    assert resolve_public_base_url(env) == "https://custom.example"
 
 
 def test_invalid_production_configuration_reports_every_problem(tmp_path):
