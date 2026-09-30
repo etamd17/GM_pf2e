@@ -8,7 +8,8 @@ require_owner_or_gm) lives in core.campaigns, which knows campaign membership.
 Stores:
     users.json     {"users": {user_id: {id, username, display_name,
                                          password_hash, is_admin,
-                                         created_at, last_login}}}
+                                         created_at, last_login,
+                                         session_version?}}}
     invites.json   {"invites": {CODE: {code, campaign_id, role, character_id,
                                        creates_account, uses_left, created_by,
                                        expires_at}}}
@@ -45,6 +46,13 @@ ACCOUNT_STORE_UNAVAILABLE = 'unavailable'
 # protecting any future direct internal save.
 _USERS_LOCK = threading.RLock()
 
+# invites.json is also a single security-bearing document.  Atomic replacement
+# prevents torn JSON, but it does not make a read-modify-write transaction
+# atomic: without one lock, a creator can save a stale snapshot after another
+# thread consumed or revoked a code and silently resurrect it.  Every mutation
+# below holds this RLock from the fresh disk read through the atomic save.
+_INVITES_LOCK = threading.RLock()
+
 
 class AccountStoreUnavailable(RuntimeError):
     """The deploy was initialized for accounts but its identity store is unsafe."""
@@ -59,6 +67,14 @@ REMEMBER_DAYS = 60
 # uses hashlib.pbkdf2_hmac, which always is. check_password_hash auto-detects.
 _PW_METHOD = 'pbkdf2:sha256'
 _CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'   # no ambiguous 0/O/1/I
+_USER_SESSION_VERSION_FIELD = 'session_version'
+_SESSION_VERSION_KEY = 'auth_session_version'
+_USERNAME_MAX = 64
+_PASSWORD_MAX = 256
+_DUMMY_PASSWORD_HASH = generate_password_hash(
+    secrets.token_urlsafe(32),
+    method=_PW_METHOD,
+)
 
 
 def _now():
@@ -128,6 +144,16 @@ def _validate_users_document(data):
             raise AccountStoreUnavailable('users store has an invalid username')
         if not isinstance(password_hash, str) or not password_hash:
             raise AccountStoreUnavailable('users store has an invalid password hash')
+        # Optional for compatibility with every users.json written before
+        # session invalidation was introduced.  A missing field means version
+        # zero; once a password changes the explicit counter is persisted.
+        session_version = user.get(_USER_SESSION_VERSION_FIELD, 0)
+        if (
+            not isinstance(session_version, int)
+            or isinstance(session_version, bool)
+            or session_version < 0
+        ):
+            raise AccountStoreUnavailable('users store has an invalid session version')
         normalized = username.strip().lower()
         if normalized in usernames:
             raise AccountStoreUnavailable('users store has duplicate usernames')
@@ -142,7 +168,10 @@ def _read_users_document():
             data = json.load(handle)
     except FileNotFoundError:
         return None
-    except (OSError, json.JSONDecodeError) as exc:
+    # ValueError includes JSONDecodeError, Unicode decoding failures, and
+    # interpreter safety limits such as an overlong integer literal.  None of
+    # those may be reinterpreted as an empty/pristine account store.
+    except (OSError, ValueError) as exc:
         raise AccountStoreUnavailable('users store is unavailable') from exc
     return _validate_users_document(data)
 
@@ -292,8 +321,12 @@ def create_user(username, password, display_name=None, is_admin=False):
     username = (username or '').strip()
     if not username or not password:
         raise ValueError('username and password are required')
+    if len(username) > _USERNAME_MAX:
+        raise ValueError('username must be 64 characters or fewer')
     if len(password) < 6:
         raise ValueError('password must be at least 6 characters')
+    if len(password) > _PASSWORD_MAX:
+        raise ValueError('password must be 256 characters or fewer')
     password_hash = generate_password_hash(password, method=_PW_METHOD)
     with _USERS_LOCK:
         data = _load_users_for_update()
@@ -309,6 +342,7 @@ def create_user(username, password, display_name=None, is_admin=False):
             'is_admin': bool(is_admin),
             'created_at': _now(),
             'last_login': None,
+            _USER_SESSION_VERSION_FIELD: 0,
         }
         _save_users(data)
         return data['users'][uid]
@@ -324,8 +358,12 @@ def create_first_admin(username, password, display_name=None):
     username = (username or '').strip()
     if not username or not password:
         raise ValueError('username and password are required')
+    if len(username) > _USERNAME_MAX:
+        raise ValueError('username must be 64 characters or fewer')
     if len(password) < 6:
         raise ValueError('password must be at least 6 characters')
+    if len(password) > _PASSWORD_MAX:
+        raise ValueError('password must be 256 characters or fewer')
     password_hash = generate_password_hash(password, method=_PW_METHOD)
     with _USERS_LOCK:
         marker = _marker_exists()
@@ -344,14 +382,19 @@ def create_first_admin(username, password, display_name=None):
             'is_admin': True,
             'created_at': _now(),
             'last_login': None,
+            _USER_SESSION_VERSION_FIELD: 0,
         }
         _save_users(data)
         return data['users'][uid]
 
 
 def verify_credentials(username, password):
+    username = str(username or '')
+    password = str(password or '')
     u = get_user_by_username(username)
-    if u and password and check_password_hash(u['password_hash'], password):
+    candidate_hash = u['password_hash'] if u else _DUMMY_PASSWORD_HASH
+    valid = check_password_hash(candidate_hash, password)
+    if u and password and valid:
         return u
     return None
 
@@ -359,6 +402,8 @@ def verify_credentials(username, password):
 def set_password(user_id, new_password):
     if not new_password or len(new_password) < 6:
         raise ValueError('password must be at least 6 characters')
+    if len(new_password) > _PASSWORD_MAX:
+        raise ValueError('password must be 256 characters or fewer')
     password_hash = generate_password_hash(new_password, method=_PW_METHOD)
     with _USERS_LOCK:
         data = _load_users_for_update()
@@ -366,7 +411,13 @@ def set_password(user_id, new_password):
         if not u:
             raise ValueError('no such user')
         u['password_hash'] = password_hash
+        # Every previously issued session stores the prior value and becomes
+        # invalid immediately.  Missing on a legacy user means zero, so their
+        # first password change upgrades the record to version one without a
+        # migration or blanket logout at deploy time.
+        u[_USER_SESSION_VERSION_FIELD] = _user_session_version(u) + 1
         _save_users(data)
+        return u[_USER_SESSION_VERSION_FIELD]
 
 
 def _touch_login(user_id):
@@ -393,24 +444,70 @@ def set_last_campaign(user_id, cid):
 # --------------------------------------------------------------------------
 # Session
 # --------------------------------------------------------------------------
+def _user_session_version(user):
+    """Effective version for a validated user, including legacy records."""
+    return user.get(_USER_SESSION_VERSION_FIELD, 0)
+
+
+def session_matches_user(user):
+    """Whether the signed browser session is current for ``user``.
+
+    Cookies issued before this feature have no version key.  Treating that
+    absence as zero keeps them valid for legacy/version-zero records while a
+    later password change (version one or greater) still revokes them.
+    """
+    if not user or session.get('user_id') != user.get('id'):
+        return False
+    stored = session.get(_SESSION_VERSION_KEY, 0)
+    if not isinstance(stored, int) or isinstance(stored, bool) or stored < 0:
+        return False
+    return secrets.compare_digest(str(stored), str(_user_session_version(user)))
+
+
 def login_user(user, remember=True):
-    # Actor/campaign selections belong to one authenticated identity. A shared
-    # browser signing in as someone else must not inherit the prior user's PC.
-    if session.get('user_id') != user['id']:
-        for key in ('active_campaign_id', 'campaign_stopped', 'player_name'):
-            session.pop(key, None)
+    # Rotate every identity-bound value on authentication. Flask's session is a
+    # signed client cookie rather than a server id, so clearing it is the
+    # session-fixation boundary and also prevents a shared browser inheriting a
+    # previous user's campaign, actor, or CSRF token.
+    session.clear()
     session['user_id'] = user['id']
+    session[_SESSION_VERSION_KEY] = _user_session_version(user)
     session.permanent = bool(remember)
     _touch_login(user['id'])
 
 
 def logout_user():
-    for k in ('user_id', 'active_campaign_id', 'campaign_stopped', 'player_name'):
-        session.pop(k, None)
+    session.clear()
 
 
 def current_user():
-    return get_user(session.get('user_id'))
+    user = get_user(session.get('user_id'))
+    if user is None:
+        return None
+    if not session_matches_user(user):
+        # Clear identity-bound campaign/actor state with the stale credential.
+        # The normal login flow can then establish a new versioned session.
+        logout_user()
+        return None
+    return user
+
+
+def refresh_session_version(user_id=None):
+    """Keep the current browser signed in after changing its own password.
+
+    ``set_password`` deliberately invalidates every existing session, including
+    the request that performed the change.  A self-service password route may
+    call this immediately afterwards to adopt the new version for this one
+    already-authenticated browser; admin resets should not call it.
+    """
+    active_user_id = session.get('user_id')
+    if not active_user_id or (user_id is not None and user_id != active_user_id):
+        return False
+    user = get_user(active_user_id)
+    if not user:
+        return False
+    session[_SESSION_VERSION_KEY] = _user_session_version(user)
+    return True
 
 
 def login_required(fn):
@@ -432,7 +529,8 @@ def _load_invites():
 
 
 def _save_invites(data):
-    storage.atomic_write_json(INVITES_FILE, data)
+    with _INVITES_LOCK:
+        storage.atomic_write_json(INVITES_FILE, data)
 
 
 def _gen_code():
@@ -444,22 +542,25 @@ def _gen_code():
 def create_invite(campaign_id, role, *, character_id=None, created_by=None,
                   uses=1, ttl_days=14, creates_account=True):
     assert role in ('gm', 'player'), role
-    data = _load_invites()
-    code = _gen_code()
-    while code in data['invites']:
+    with _INVITES_LOCK:
+        # Fresh disk read inside the transaction; no request memo or snapshot
+        # from a pre-lock existence check may be used as the mutation base.
+        data = _load_invites()
         code = _gen_code()
-    data['invites'][code] = {
-        'code': code,
-        'campaign_id': campaign_id,
-        'role': role,
-        'character_id': character_id,
-        'creates_account': bool(creates_account),
-        'uses_left': int(uses),
-        'created_by': created_by,
-        'expires_at': time.time() + ttl_days * 86400,
-    }
-    _save_invites(data)
-    return code
+        while code in data['invites']:
+            code = _gen_code()
+        data['invites'][code] = {
+            'code': code,
+            'campaign_id': campaign_id,
+            'role': role,
+            'character_id': character_id,
+            'creates_account': bool(creates_account),
+            'uses_left': int(uses),
+            'created_by': created_by,
+            'expires_at': time.time() + ttl_days * 86400,
+        }
+        _save_invites(data)
+        return code
 
 
 def get_invite(code):
@@ -476,15 +577,16 @@ def get_invite(code):
 
 def consume_invite(code):
     """Decrement an invite's remaining uses; returns the invite or None."""
-    data = _load_invites()
-    inv = data['invites'].get((code or '').strip().upper())
-    if not inv or inv['uses_left'] <= 0:
-        return None
-    if inv.get('expires_at') and time.time() > inv['expires_at']:
-        return None
-    inv['uses_left'] -= 1
-    _save_invites(data)
-    return inv
+    with _INVITES_LOCK:
+        data = _load_invites()
+        inv = data['invites'].get((code or '').strip().upper())
+        if not inv or inv['uses_left'] <= 0:
+            return None
+        if inv.get('expires_at') and time.time() > inv['expires_at']:
+            return None
+        inv['uses_left'] -= 1
+        _save_invites(data)
+        return inv
 
 
 def active_invite_for_character(campaign_id, character_id):
@@ -509,12 +611,14 @@ def list_active_invites(campaign_id):
 
 def revoke_invite(code):
     """Delete an invite outright (a GM cancelling an open code)."""
-    data = _load_invites()
-    if (code or '').strip().upper() in data['invites']:
-        del data['invites'][(code or '').strip().upper()]
-        _save_invites(data)
-        return True
-    return False
+    with _INVITES_LOCK:
+        data = _load_invites()
+        normalized = (code or '').strip().upper()
+        if normalized in data['invites']:
+            del data['invites'][normalized]
+            _save_invites(data)
+            return True
+        return False
 
 
 # --------------------------------------------------------------------------

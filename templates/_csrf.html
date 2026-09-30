@@ -1,0 +1,61 @@
+{#
+  Non-visual browser CSRF transport. The server still validates Origin,
+  Referer, and Fetch Metadata; this token covers privacy clients that omit
+  those headers and gives fetch/form mutations an explicit session secret.
+#}
+<meta name="csrf-token" content="{{ csrf_token() }}">
+<script>
+(function () {
+    'use strict';
+    var meta = document.querySelector('meta[name="csrf-token"]');
+    var token = meta ? meta.getAttribute('content') : '';
+    if (!token) return;
+
+    var unsafe = {POST: true, PUT: true, PATCH: true, DELETE: true};
+    var nativeFetch = window.fetch.bind(window);
+
+    window.fetch = function (input, init) {
+        var requestObject = (typeof Request !== 'undefined' && input instanceof Request) ? input : null;
+        var options = init ? Object.assign({}, init) : {};
+        var method = String(options.method || (requestObject && requestObject.method) || 'GET').toUpperCase();
+        var rawUrl = requestObject ? requestObject.url : input;
+        var target;
+        try {
+            target = new URL(String(rawUrl), document.baseURI);
+        } catch (_) {
+            return nativeFetch(input, options);
+        }
+        if (unsafe[method] && target.origin === window.location.origin) {
+            var headers = new Headers(options.headers || (requestObject && requestObject.headers) || undefined);
+            if (!headers.has('X-CSRF-Token')) headers.set('X-CSRF-Token', token);
+            options.headers = headers;
+        }
+        return nativeFetch(input, options);
+    };
+
+    function protectForm(form) {
+        if (!form || form.nodeName !== 'FORM') return;
+        var method = String(form.getAttribute('method') || 'GET').toUpperCase();
+        if (!unsafe[method]) return;
+        var target;
+        try {
+            target = new URL(form.getAttribute('action') || window.location.href, document.baseURI);
+        } catch (_) {
+            return;
+        }
+        if (target.origin !== window.location.origin || form.querySelector('input[name="_csrf"]')) return;
+        var field = document.createElement('input');
+        field.type = 'hidden';
+        field.name = '_csrf';
+        field.value = token;
+        form.appendChild(field);
+    }
+
+    document.addEventListener('submit', function (event) {
+        protectForm(event.target);
+    }, true);
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('form').forEach(protectForm);
+    });
+})();
+</script>
