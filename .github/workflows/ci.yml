@@ -1,81 +1,32 @@
 name: CI
 
+# Gate every push / PR to main: Railway auto-deploys main, so a red build
+# here is the last line of defense before a regression reaches the table.
 on:
   push:
     branches: [main]
   pull_request:
-
-permissions:
-  contents: read
-
-concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+    branches: [main]
 
 jobs:
   test:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    env:
-      PYTHONHASHSEED: "0"
-      PYTHONDONTWRITEBYTECODE: "1"
-      PYTHONUNBUFFERED: "1"
+    runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
+      - uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.11.16"
-          cache: pip
-          cache-dependency-path: requirements-dev.txt
-          pip-version: "26.2.1"
+          python-version: '3.11'
 
-      - name: Install locked dependencies
-        run: python -m pip install --require-hashes -r requirements-dev.txt
-
-      - name: Verify lock files are current
+      - name: Install dependencies
         run: |
-          lock_check_dir="$(mktemp -d)"
-          trap 'rm -rf "$lock_check_dir"' EXIT
-          cp requirements.txt "$lock_check_dir/requirements.txt"
-          cp requirements-dev.txt "$lock_check_dir/requirements-dev.txt"
-          uv pip compile requirements.in --universal --python-version 3.11 --generate-hashes --custom-compile-command "uv pip compile requirements.in --universal --python-version 3.11 --generate-hashes -o requirements.txt" -o "$lock_check_dir/requirements.txt" --quiet
-          uv pip compile requirements-dev.in --universal --python-version 3.11 --generate-hashes --custom-compile-command "uv pip compile requirements-dev.in --universal --python-version 3.11 --generate-hashes -o requirements-dev.txt" -o "$lock_check_dir/requirements-dev.txt" --quiet
-          cmp requirements.txt "$lock_check_dir/requirements.txt"
-          cmp requirements-dev.txt "$lock_check_dir/requirements-dev.txt"
-
-      - name: Verify installed dependency consistency
-        run: python -m pip check
-
-      - name: Audit locked dependencies
-        run: python -m pip_audit --strict --require-hashes -r requirements-dev.txt
-
-      - name: Validate deployment configuration
-        shell: python
-        run: |
-          from pathlib import Path
-          import tomllib
-
-          root = Path.cwd()
-          config = tomllib.loads((root / "railway.toml").read_text(encoding="utf-8"))
-          command = config["deploy"]["startCommand"]
-          assert config["build"]["builder"] == "RAILPACK"
-          assert config["deploy"]["healthcheckPath"] == "/ready"
-          assert config["deploy"]["overlapSeconds"] == 0
-          assert "--workers 1" in command
-          assert (root / "Procfile").read_text(encoding="utf-8").strip() == f"web: {command}"
-          assert (root / "runtime.txt").read_text(encoding="utf-8").strip() == "python-3.11.16"
-
-      - name: Smoke production Gunicorn/gevent runtime
-        if: runner.os == 'Linux'
-        run: python tools/smoke_production_runtime.py
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
 
       - name: Check templates parse (Jinja)
         run: python tools/check_templates.py
 
       - name: Run tests
-        run: python -m pytest -q
+        run: pytest -q

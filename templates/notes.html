@@ -34,8 +34,8 @@ function save(){
 }
 area.addEventListener('input',()=>{ status.textContent='Editing…'; clearTimeout(timer); timer=setTimeout(save,800); });
 window.addEventListener('beforeunload',()=>{
-  if(area.value!==last)
-    void fetch('/api/notes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:area.value}),keepalive:true});
+  if(area.value!==last && navigator.sendBeacon)
+    navigator.sendBeacon('/api/notes', new Blob([JSON.stringify({text:area.value})],{type:'application/json'}));
 });
 </script>
 {% endblock %}
