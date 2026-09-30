@@ -83,6 +83,10 @@ def _env_value(environ: Mapping[str, object], name: str) -> str:
     return value if isinstance(value, str) else str(value or "")
 
 
+def _is_railway_runtime(environ: Mapping[str, object]) -> bool:
+    return any(_env_value(environ, name).strip() for name in _RAILWAY_MARKERS)
+
+
 def is_production_mode(environ: Mapping[str, object] | None = None) -> bool:
     """Return whether ``environ`` identifies a production-like deployment.
 
@@ -96,13 +100,33 @@ def is_production_mode(environ: Mapping[str, object] | None = None) -> bool:
     """
 
     source = os.environ if environ is None else environ
-    if any(_env_value(source, name).strip() for name in _RAILWAY_MARKERS):
+    if _is_railway_runtime(source):
         return True
     environment_values = (
         _env_value(source, "APP_ENV"),
         _env_value(source, "ENVIRONMENT"),
     )
     return any(value.strip().lower() in _PRODUCTION_NAMES for value in environment_values)
+
+
+def resolve_public_base_url(environ: Mapping[str, object] | None = None) -> str:
+    """Resolve the configured public origin candidate without trusting a request.
+
+    An explicit ``PUBLIC_BASE_URL`` always wins, including when it is invalid so
+    validation fails closed instead of silently replacing a typo. Railway
+    supplies the service's exact public host as ``RAILWAY_PUBLIC_DOMAIN``; use
+    that host with HTTPS only when independent Railway runtime markers prove
+    this is actually a Railway deployment.
+    """
+
+    source = os.environ if environ is None else environ
+    explicit = _env_value(source, "PUBLIC_BASE_URL").strip()
+    if explicit:
+        return explicit
+    railway_domain = _env_value(source, "RAILWAY_PUBLIC_DOMAIN").strip()
+    if railway_domain and _is_railway_runtime(source):
+        return f"https://{railway_domain}"
+    return ""
 
 
 def _secret_is_strong(value: str, *, minimum_length: int) -> bool:
@@ -158,6 +182,7 @@ def validate_production_config(
     bootstrap_pristine: bool,
     data_dir: str | os.PathLike[str] | None = None,
     data_dir_writable: bool | None = None,
+    persisted_secret_key: str | None = None,
 ) -> tuple[ConfigurationIssue, ...]:
     """Return every unsafe production setting; local development returns ``()``.
 
@@ -167,6 +192,12 @@ def validate_production_config(
 
     ``data_dir_writable`` can consume the application's existing boot probe.  If
     omitted, this helper performs a non-mutating directory/access check.
+
+    ``persisted_secret_key`` is an effective key the caller has already proved
+    was read from or written to durable storage. It preserves established
+    volume-backed deployments without accepting an in-memory per-boot fallback.
+    A non-empty configured ``SECRET_KEY`` always wins, including when it is
+    weak; an empty value is treated as unset, matching application startup.
     """
 
     source = os.environ if environ is None else environ
@@ -175,7 +206,8 @@ def validate_production_config(
 
     issues: list[ConfigurationIssue] = []
 
-    secret_key = _env_value(source, "SECRET_KEY")
+    configured_secret_key = _env_value(source, "SECRET_KEY")
+    secret_key = configured_secret_key or str(persisted_secret_key or "")
     if not secret_key:
         issues.append(
             ConfigurationIssue(
@@ -231,7 +263,7 @@ def validate_production_config(
             )
         )
 
-    public_base_url = _env_value(source, "PUBLIC_BASE_URL").strip()
+    public_base_url = resolve_public_base_url(source)
     if not public_base_url:
         issues.append(
             ConfigurationIssue(

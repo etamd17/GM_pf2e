@@ -65,6 +65,7 @@ jobs:
           command = config["deploy"]["startCommand"]
           assert config["build"]["builder"] == "RAILPACK"
           assert config["deploy"]["healthcheckPath"] == "/ready"
+          assert config["deploy"]["healthcheckTimeout"] == 120
           assert config["deploy"]["overlapSeconds"] == 0
           assert "--workers 1" in command
           assert (root / "Procfile").read_text(encoding="utf-8").strip() == f"web: {command}"
