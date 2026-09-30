@@ -7,7 +7,7 @@ packaging==26.3
 SQLAlchemy==2.1.1
 alembic==1.20.0
 psycopg[binary]==3.3.6
-Markdown==3.10.3
+Markdown==3.11
 PyYAML==6.0.3
 MarkupSafe==3.0.3
 reportlab==4.5.1
