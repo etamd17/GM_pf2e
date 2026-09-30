@@ -105,18 +105,23 @@ the newest packages on every run.
 
 ## Production runtime smoke
 
-After installing `requirements-dev.txt`, run this on Linux or in WSL:
+After installing `requirements.txt` into a clean virtual environment, run this
+on Linux or in WSL with that environment first on `PATH`:
 
 ```bash
 python tools/smoke_production_runtime.py
 ```
 
-CI runs the same command. It launches the exact `railway.toml` start command in
+CI creates that production-only environment from the hash-locked
+`requirements.txt`, runs `pip check`, imports Gunicorn's gevent worker, and then
+runs the same command. Keeping development tooling out of this environment
+prevents its transitive dependencies from masking a missing production runtime
+dependency. The smoke launches the exact `railway.toml` start command in
 production mode with a temporary `DATA_DIR`, bootstraps an admin, creates and
 activates a campaign, opens an authenticated SSE stream, proves `/ready` can run
-concurrently through the Railway probe Host, triggers a GM mutation, observes its
-SSE event, and requires Gunicorn to exit cleanly on `SIGTERM`. Gunicorn does not
-run natively on Windows, so Windows development relies on WSL or the Linux CI
+concurrently through the Railway probe Host, triggers a GM mutation, observes
+its SSE event, and requires Gunicorn to exit cleanly on `SIGTERM`. Gunicorn does
+not run natively on Windows, so Windows development relies on WSL or the Linux CI
 gate. The temporary data is discarded and no external service is contacted.
 
 This smoke validates the application server boundary, not the image builder,

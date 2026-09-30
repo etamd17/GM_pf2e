@@ -74,9 +74,16 @@ jobs:
           assert (root / "Procfile").read_text(encoding="utf-8").strip() == f"web: {command}"
           assert (root / "runtime.txt").read_text(encoding="utf-8").strip() == "python-3.11.16"
 
-      - name: Smoke production Gunicorn/gevent runtime
+      - name: Smoke production lock and Gunicorn/gevent runtime
         if: runner.os == 'Linux'
-        run: python tools/smoke_production_runtime.py
+        run: |
+          production_venv="$(mktemp -d)"
+          trap 'rm -rf "$production_venv"' EXIT
+          python -m venv "$production_venv"
+          "$production_venv/bin/python" -m pip install --require-hashes -r requirements.txt
+          "$production_venv/bin/python" -m pip check
+          "$production_venv/bin/python" -c "from gunicorn.workers.ggevent import GeventWorker"
+          PATH="$production_venv/bin:$PATH" "$production_venv/bin/python" tools/smoke_production_runtime.py
 
       - name: Check templates parse (Jinja)
         run: python tools/check_templates.py
