@@ -65,6 +65,7 @@ jobs:
           nixpacks = tomllib.loads((root / "nixpacks.toml").read_text(encoding="utf-8"))
           command = config["deploy"]["startCommand"]
           assert config["build"]["builder"] == "NIXPACKS"
+          assert config["build"]["nixpacksVersion"] == "1.41.0"
           assert nixpacks["phases"]["setup"]["nixpkgsArchive"] == "b4fd65b198c599cbe814fcb9f42d25d021595ec9"
           assert config["deploy"]["healthcheckPath"] == "/ready"
           assert config["deploy"]["healthcheckTimeout"] == 120

@@ -21,7 +21,7 @@ backup of the persistent volume.
 - Railway installs the hash-locked `requirements.txt`. Direct dependency intent
   lives in `requirements.in`; never hand-edit generated lock files.
 
-`railway.toml` keeps the established service on Nixpacks. Two controlled
+`railway.toml` keeps the established service on Nixpacks 1.41.0. Two controlled
 production releases using Railpack failed before application startup while the
 last Nixpacks image remained healthy, so treat a future builder migration as a
 separate staging change with build-log access. Railway's newer project-level
@@ -30,10 +30,11 @@ migrate it only with `railway config pull` from the production project and revie
 the generated `.railway/railway.ts`; do not invent those identifiers in source
 control.
 
-Nixpacks reads `runtime.txt` as a Python major/minor selector. `nixpacks.toml`
-therefore pins a cache-backed Nixpkgs snapshot whose `python311` package is
-3.11.16, keeping the production patch release aligned with CI. Update and verify
-that snapshot whenever `runtime.txt` changes.
+The builder version is pinned in `railway.toml`. Nixpacks reads `runtime.txt` as
+a Python major/minor selector, so `nixpacks.toml` also pins a cache-backed
+Nixpkgs snapshot whose `python311` package is 3.11.16, keeping the production
+patch release aligned with CI. Update and verify both pins when changing the
+builder or `runtime.txt`.
 
 ## Required production configuration
 
