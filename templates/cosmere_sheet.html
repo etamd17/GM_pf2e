@@ -831,7 +831,7 @@
       fetch('/cosmere/pc/{{ actor_id }}/notes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:a.value})})
         .then(r=>r.json()).then(()=>{ last=a.value; s.textContent='Saved'; }).catch(()=>s.textContent='Save failed'); }
     a.addEventListener('input',()=>{ s.textContent='Editing…'; clearTimeout(t); t=setTimeout(save,800); });
-    window.addEventListener('beforeunload',()=>{ if(a.value!==last && navigator.sendBeacon) navigator.sendBeacon('/cosmere/pc/{{ actor_id }}/notes', new Blob([JSON.stringify({text:a.value})],{type:'application/json'})); });
+    window.addEventListener('beforeunload',()=>{ if(a.value!==last) void fetch('/cosmere/pc/{{ actor_id }}/notes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:a.value}),keepalive:true}); });
   })();
   </script>
 

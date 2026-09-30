@@ -148,7 +148,7 @@ def test_chronicle_gate_legacy_password_mode():
         assert c.get('/chronicle').status_code == 200
         # the GM (authenticated) always passes.
         with c.session_transaction() as s:
-            s.clear(); s['gm_authenticated'] = True
+            s.clear(); s['gm_authenticated'] = True; s['gm_auth_epoch'] = A._legacy_auth_epoch()
         assert c.get('/chronicle').status_code == 200
         print('GATE_LEGACY_OK')
     ''')

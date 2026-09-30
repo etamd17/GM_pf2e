@@ -45,8 +45,13 @@
   });
 
   window.addEventListener('beforeunload', function () {
-    if (ta.value !== last && navigator.sendBeacon) {
-      navigator.sendBeacon('/api/notes', new Blob([JSON.stringify({ text: ta.value })], { type: 'application/json' }));
+    if (ta.value !== last) {
+      void fetch('/api/notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: ta.value }),
+        keepalive: true
+      });
     }
   });
 })();
