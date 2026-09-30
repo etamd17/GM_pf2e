@@ -36,6 +36,11 @@ campaigns_trash/
 # GM-authored campaign intro metadata — local content, not repo state.
 campaign.json
 
+# Sanitized migration fixtures intentionally exercise the ignored runtime
+# layout. Keep this narrow exception after all runtime-data patterns above.
+!tests/persistence/fixtures/
+!tests/persistence/fixtures/**
+
 # Obsidian vault sync state — populated on the server's persistent
 # volume by tools/push_vault.py; never committed.
 vault_data/

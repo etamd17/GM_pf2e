@@ -1,0 +1,15 @@
+{
+  "invites": {
+    "ABCD-EFGH": {
+      "code": "ABCD-EFGH",
+      "campaign_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "role": "player",
+      "character_id": null,
+      "creates_account": true,
+      "uses_left": 1,
+      "created_by": "11111111111111111111111111111111",
+      "expires_at": 1893456000.0,
+      "note": "table invite"
+    }
+  }
+}
