@@ -87,6 +87,7 @@ def test_legacy_password_mode_centrally_gates_gm_policy_routes(
 
     with client.session_transaction() as legacy_session:
         legacy_session["gm_authenticated"] = True
+        legacy_session["gm_auth_epoch"] = app._legacy_auth_epoch()
 
     authorized = client.open(path, method=method)
     assert authorized.status_code == 200

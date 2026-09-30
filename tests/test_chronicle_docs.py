@@ -197,12 +197,14 @@ class _Roles:
     def gm(self):
         with self.client.session_transaction() as sess:
             sess['gm_authenticated'] = True
+            sess['gm_auth_epoch'] = app._legacy_auth_epoch()
             sess.pop('player_name', None)
         return self.client
 
     def player(self):
         with self.client.session_transaction() as sess:
             sess.pop('gm_authenticated', None)
+            sess.pop('gm_auth_epoch', None)
             sess['player_name'] = 'Kyle'
         return self.client
 

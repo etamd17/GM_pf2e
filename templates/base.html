@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <meta charset="UTF-8">
+    {% include "_csrf.html" %}
     <script>
         // Single design system — collapse any legacy theme value to "dark"
         // so the parchment / hi-contrast / light variants from earlier
@@ -15,7 +17,6 @@
        runs. Standalone pages (player sheet/view, mobile combat) include this
        same partial in their own <head>. #}
     {% include "_sse_hub.html" %}
-    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}PF2E Dashboard{% endblock %}</title>
 
