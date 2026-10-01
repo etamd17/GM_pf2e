@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from dataclasses import dataclass
 from datetime import datetime
 from sqlalchemy import func, select
@@ -86,15 +87,34 @@ class TransactionalStore:
         code: str,
         user_id: str,
         now: datetime | None = None,
+        session: Session | None = None,
     ) -> InviteRedemptionResult:
         normalized_code = normalize_invite_code(code)
         timestamp = now or utc_now()
         now_epoch = timestamp.timestamp()
 
-        with self._session_factory.begin() as session:
+        # A signup caller supplies its transaction so the new account is
+        # rolled back together with every grant if redemption fails.
+        transaction = (
+            nullcontext(session)
+            if session is not None
+            else self._session_factory.begin()
+        )
+        with transaction as session:
+            locator = session.get(Invitation, normalized_code)
+            if locator is None:
+                raise InviteUnavailableError("invite does not exist")
+            campaign = session.scalar(
+                select(Campaign)
+                .where(Campaign.id == locator.campaign_id)
+                .with_for_update()
+            )
+            if campaign is None or campaign.trashed_at is not None:
+                raise InviteUnavailableError("campaign is unavailable")
             invitation = session.scalar(
                 select(Invitation)
                 .where(Invitation.code == normalized_code)
+                .execution_options(populate_existing=True)
                 .with_for_update()
             )
             if invitation is None:
@@ -130,14 +150,6 @@ class TransactionalStore:
                 raise InviteUnavailableError("invite has expired")
             if session.get(User, user_id) is None:
                 raise RecordNotFoundError("user does not exist")
-
-            campaign = session.scalar(
-                select(Campaign)
-                .where(Campaign.id == invitation.campaign_id)
-                .with_for_update()
-            )
-            if campaign is None:
-                raise RecordNotFoundError("campaign does not exist")
 
             character = None
             if invitation.character_id is not None:
@@ -231,6 +243,7 @@ class TransactionalStore:
         *,
         character_id: str,
         user_id: str,
+        campaign_id: str | None = None,
         now: datetime | None = None,
     ) -> CharacterClaimResult:
         timestamp = now or utc_now()
@@ -240,13 +253,15 @@ class TransactionalStore:
             locator = session.get(Character, character_id)
             if locator is None:
                 raise RecordNotFoundError("character does not exist")
+            if campaign_id is not None and locator.campaign_id != campaign_id:
+                raise RecordNotFoundError("character does not exist in this campaign")
             campaign_id = locator.campaign_id
             campaign = session.scalar(
                 select(Campaign)
                 .where(Campaign.id == campaign_id)
                 .with_for_update()
             )
-            if campaign is None:
+            if campaign is None or campaign.trashed_at is not None:
                 raise RecordNotFoundError("campaign does not exist")
             character = session.scalar(
                 select(Character)

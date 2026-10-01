@@ -143,6 +143,14 @@ downgrade against the only copy. A disposable staging database may be recreated
 from its recorded preflight inputs after the failed instance is retained for
 diagnosis.
 
+### Optional PR4B SQL runtime
+
+The website now supports explicit `OWNERSHIP_BACKEND=json|shadow|sql` selection.
+The default is still `json`; deploying this code alone does not switch authority.
+For staged activation, current-state rollback export, and remaining file-storage
+boundaries, follow [the PR4B runbook](docs/remediation/pr4b-runtime-cutover.md).
+Only enable `sql` after the existing PR4A import/verification and staging gates.
+
 ## Health and monitoring contract
 
 - `GET /live` is a minimal public process-liveness probe. It returns success
