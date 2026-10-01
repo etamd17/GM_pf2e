@@ -25,6 +25,7 @@ from flask import session, request, jsonify, redirect, url_for, g, has_request_c
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from core import storage
+from core.persistence import runtime as _persistence_runtime
 
 # Key for the per-REQUEST users memo. Deliberately not a module-level cache:
 # scoping it to one request means a later request, or anything that writes the
@@ -54,8 +55,8 @@ _USERS_LOCK = threading.RLock()
 _INVITES_LOCK = threading.RLock()
 
 
-class AccountStoreUnavailable(RuntimeError):
-    """The deploy was initialized for accounts but its identity store is unsafe."""
+# Keep the application's existing handler authoritative for either backend.
+AccountStoreUnavailable = _persistence_runtime.StoreUnavailable
 
 
 class AccountBootstrapComplete(RuntimeError):
@@ -202,7 +203,13 @@ def account_store_state():
 
     try:
         marker = _marker_exists()
-        data = _read_users_document()
+        if _persistence_runtime.sql_enabled():
+            from core.persistence import identity
+            data = identity.load_users()
+        else:
+            data = _read_users_document()
+            from core.persistence import identity
+            identity.compare_users_shadow(data)
         if data is not None and data['users']:
             if not marker:
                 _write_account_mode_marker()
@@ -251,7 +258,11 @@ def _load_users():
     cached = _request_memo_get(_USERS_MEMO)
     if cached is not None:
         return cached
-    data = _read_users_document() or {'users': {}}
+    if _persistence_runtime.sql_enabled():
+        from core.persistence import identity
+        data = identity.load_users()
+    else:
+        data = _read_users_document() or {'users': {}}
     _request_memo_set(_USERS_MEMO, data)
     return data
 
@@ -317,7 +328,12 @@ def list_users():
     return list(_load_users()['users'].values())
 
 
-def create_user(username, password, display_name=None, is_admin=False):
+def _invalidate_sql_user_memo():
+    _request_memo_set(_USERS_MEMO, None)
+    _request_memo_set(_ACCOUNT_STORE_STATE_MEMO, None)
+
+
+def _validate_new_user_credentials(username, password):
     username = (username or '').strip()
     if not username or not password:
         raise ValueError('username and password are required')
@@ -327,7 +343,18 @@ def create_user(username, password, display_name=None, is_admin=False):
         raise ValueError('password must be at least 6 characters')
     if len(password) > _PASSWORD_MAX:
         raise ValueError('password must be 256 characters or fewer')
+    return username
+
+
+def create_user(username, password, display_name=None, is_admin=False):
+    username = _validate_new_user_credentials(username, password)
     password_hash = generate_password_hash(password, method=_PW_METHOD)
+    if _persistence_runtime.sql_enabled():
+        from core.persistence import identity
+        user = identity.create_user(username, password_hash, display_name, is_admin)
+        _invalidate_sql_user_memo()
+        _write_account_mode_marker()
+        return user
     with _USERS_LOCK:
         data = _load_users_for_update()
         normalized = username.lower()
@@ -355,16 +382,14 @@ def create_first_admin(username, password, display_name=None):
     requests can both pass it before either commits, so bootstrap authority must
     be decided again from fresh durable state while holding the users-store lock.
     """
-    username = (username or '').strip()
-    if not username or not password:
-        raise ValueError('username and password are required')
-    if len(username) > _USERNAME_MAX:
-        raise ValueError('username must be 64 characters or fewer')
-    if len(password) < 6:
-        raise ValueError('password must be at least 6 characters')
-    if len(password) > _PASSWORD_MAX:
-        raise ValueError('password must be 256 characters or fewer')
+    username = _validate_new_user_credentials(username, password)
     password_hash = generate_password_hash(password, method=_PW_METHOD)
+    if _persistence_runtime.sql_enabled():
+        from core.persistence import identity
+        user = identity.create_user(username, password_hash, display_name, True, first_admin=True)
+        _invalidate_sql_user_memo()
+        _write_account_mode_marker()
+        return user
     with _USERS_LOCK:
         marker = _marker_exists()
         data = _read_users_document()
@@ -405,6 +430,11 @@ def set_password(user_id, new_password):
     if len(new_password) > _PASSWORD_MAX:
         raise ValueError('password must be 256 characters or fewer')
     password_hash = generate_password_hash(new_password, method=_PW_METHOD)
+    if _persistence_runtime.sql_enabled():
+        from core.persistence import identity
+        version = identity.set_password(user_id, password_hash)
+        _invalidate_sql_user_memo()
+        return version
     with _USERS_LOCK:
         data = _load_users_for_update()
         u = data['users'].get(user_id)
@@ -421,6 +451,11 @@ def set_password(user_id, new_password):
 
 
 def _touch_login(user_id):
+    if _persistence_runtime.sql_enabled():
+        from core.persistence import identity
+        identity.touch_login(user_id)
+        _invalidate_sql_user_memo()
+        return
     with _USERS_LOCK:
         data = _load_users_for_update()
         u = data['users'].get(user_id)
@@ -433,6 +468,11 @@ def set_last_campaign(user_id, cid):
     """Remember the user's most-recently-selected campaign on their account, so a
     fresh login resumes THEIR table rather than inheriting whatever campaign holds
     the server-wide live slot. Persisted; replaced only by selecting another."""
+    if _persistence_runtime.sql_enabled():
+        from core.persistence import identity
+        identity.set_last_campaign(user_id, cid)
+        _invalidate_sql_user_memo()
+        return
     with _USERS_LOCK:
         data = _load_users_for_update()
         u = data['users'].get(user_id)
@@ -525,7 +565,11 @@ def login_required(fn):
 # Invite codes
 # --------------------------------------------------------------------------
 def _load_invites():
-    return storage.load_json(INVITES_FILE, default={'invites': {}}) or {'invites': {}}
+    from core.persistence import identity
+    if _persistence_runtime.sql_enabled():
+        return identity.load_invites()
+    data = storage.load_json(INVITES_FILE, default={'invites': {}}) or {'invites': {}}
+    return identity.compare_invites_shadow(data)
 
 
 def _save_invites(data):
@@ -539,9 +583,27 @@ def _gen_code():
     )
 
 
+def _sql_invite_actor(created_by=None):
+    """HTTP mutations must carry the authenticated actor into the SQL lock."""
+    if not has_request_context():
+        return created_by
+    from core.persistence.campaign_runtime import CampaignPermissionDenied
+    user = current_user()
+    if not user or (created_by is not None and created_by != user['id']):
+        raise CampaignPermissionDenied('a valid authenticated actor is required')
+    return user['id']
+
+
 def create_invite(campaign_id, role, *, character_id=None, created_by=None,
                   uses=1, ttl_days=14, creates_account=True):
     assert role in ('gm', 'player'), role
+    if _persistence_runtime.sql_enabled():
+        from core.persistence import identity
+        return identity.create_invite(
+            campaign_id, role, character_id=character_id,
+            created_by=_sql_invite_actor(created_by),
+            uses=uses, ttl_days=ttl_days, creates_account=creates_account,
+        )
     with _INVITES_LOCK:
         # Fresh disk read inside the transaction; no request memo or snapshot
         # from a pre-lock existence check may be used as the mutation base.
@@ -577,6 +639,9 @@ def get_invite(code):
 
 def consume_invite(code):
     """Decrement an invite's remaining uses; returns the invite or None."""
+    if _persistence_runtime.sql_enabled():
+        from core.persistence import identity
+        return identity.consume_invite(code)
     with _INVITES_LOCK:
         data = _load_invites()
         inv = data['invites'].get((code or '').strip().upper())
@@ -611,6 +676,9 @@ def list_active_invites(campaign_id):
 
 def revoke_invite(code):
     """Delete an invite outright (a GM cancelling an open code)."""
+    if _persistence_runtime.sql_enabled():
+        from core.persistence import identity
+        return identity.revoke_invite(code, actor_user_id=_sql_invite_actor())
     with _INVITES_LOCK:
         data = _load_invites()
         normalized = (code or '').strip().upper()

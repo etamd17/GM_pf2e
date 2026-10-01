@@ -236,7 +236,8 @@ def test_claim_reports_character_deleted_before_authoritative_locked_read():
         def scalar(self, _statement):
             self.scalar_calls += 1
             if self.scalar_calls == 1:
-                return object()  # Campaign row acquired and locked.
+                # Campaign row acquired and locked, still active.
+                return type("LockedCampaign", (), {"trashed_at": None})()
             if self.scalar_calls == 2:
                 return None  # Character disappeared before its locked re-read.
             raise AssertionError("claim queried past the missing character")

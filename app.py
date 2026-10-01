@@ -64,6 +64,8 @@ def _load_dotenv_file():
 _load_dotenv_file()
 
 from core import security as _security
+from core.persistence import runtime as _persistence_runtime
+from core.persistence import character_files as _character_files
 
 _PRODUCTION_MODE = _security.is_production_mode(os.environ)
 _RAILWAY_RUNTIME = any(
@@ -224,6 +226,21 @@ def _static_cache_bust(endpoint, values):
 
 
 def _atomic_write_json(path, obj, indent=2, fsync=True):
+    owner = None
+    if (_persistence_runtime.sql_enabled()
+            and _character_files.locator(path) is not None
+            and has_request_context()):
+        user = _auth.current_user()
+        if user and not _is_gm():
+            owner = user['id']
+    return _character_files.write_document(
+        path, obj,
+        lambda document: _atomic_write_json_file(path, document, indent, fsync),
+        owner_user_id=owner,
+    )
+
+
+def _atomic_write_json_file(path, obj, indent=2, fsync=True):
     """Write JSON to a temp file then atomically os.replace() it into place.
 
     A plain open(path, 'w') truncates immediately, so if the process is killed
@@ -571,6 +588,18 @@ def _fail_closed_account_store():
     """Never reinterpret initialized-but-broken account storage as legacy mode."""
     if request.endpoint in {'static', 'live_check'}:
         return None
+    try:
+        # Probes validate every required table; normal requests perform their
+        # own authoritative queries without adding a schema scan to each poll.
+        if request.endpoint in {'ready_check', 'health_check'}:
+            _persistence_runtime.require_ready()
+        else:
+            _persistence_runtime.backend()
+    except _persistence_runtime.StoreUnavailable:
+        closer = globals().get('_close_account_sse_subscribers')
+        if closer is not None:
+            closer()
+        return _account_store_unavailable_response()
     if _auth.account_store_state() == _auth.ACCOUNT_STORE_UNAVAILABLE:
         # Long-lived streams captured their authority at connect time and do
         # not pass through request hooks again.  Revoke them as part of the
@@ -587,6 +616,39 @@ def _handle_account_store_unavailable(_error):
     # Covers a store/marker failure that begins during this request, after the
     # early guard already observed a healthy state (for example first setup).
     return _account_store_unavailable_response()
+
+
+from core.persistence.campaign_runtime import (
+    CampaignPermissionDenied as _CampaignPermissionDenied,
+    UnsupportedCampaignOperation as _UnsupportedCampaignOperation,
+)
+from sqlalchemy.exc import DataError as _SQLDataError, IntegrityError as _SQLIntegrityError
+
+
+@app.errorhandler(_SQLIntegrityError)
+@app.errorhandler(_SQLDataError)
+def _handle_persistence_conflict(_error):
+    # SQLAlchemy exceptions contain bound parameters, including password hashes.
+    # Expected constraint/data conflicts must never reach the traceback logger.
+    return _authorization_error(
+        'persistence_conflict',
+        'The requested change conflicts with saved data. Please refresh and try again.',
+        409,
+    )
+
+
+@app.errorhandler(_CampaignPermissionDenied)
+def _handle_campaign_permission_changed(_error):
+    return _authorization_error('campaign_gm_required', 'Campaign GM access required.', 403)
+
+
+@app.errorhandler(_UnsupportedCampaignOperation)
+def _handle_unsupported_campaign_operation(_error):
+    return _authorization_error(
+        'campaign_operation_unavailable',
+        'Permanent deletion is unavailable while database-backed campaigns retain file assets.',
+        409,
+    )
 
 
 def _active_campaign_id():
@@ -646,6 +708,28 @@ def _pc_sheet_url(system, name, pid):
     return '/player/sheet/' + quote(str(name or ''), safe='')
 
 
+def _load_character_document(path):
+    return _character_files.authoritative_document(path, _storage.load_json(path))
+
+
+def _delete_character_document(path):
+    location = _character_files.locator(path) if _persistence_runtime.sql_enabled() else None
+    if location is None:
+        os.remove(path)
+        return
+    from core.persistence import ownership
+    cid, store, filename = location
+    doc = ownership.authoritative_document(
+        cid, _storage.load_json(path), legacy_storage=store,
+        filename=filename, require_identity=True,
+    )
+    user = _auth.current_user()
+    ownership.delete_character(
+        cid, doc['id'], user['id'] if user else None,
+        delete_document=lambda: os.remove(path),
+    )
+
+
 def _my_pc_names(user_id):
     """PF2e PC names in the active campaign owned by user_id (account mode)."""
     cid = _active_campaign_id()
@@ -657,7 +741,7 @@ def _my_pc_names(user_id):
         for fn in os.listdir(pdir):
             if not fn.endswith('.json'):
                 continue
-            doc = _storage.load_json(os.path.join(pdir, fn))
+            doc = _load_character_document(os.path.join(pdir, fn))
             if _storage.is_wrapped(doc) and doc.get('owner_user_id') == user_id:
                 names.append(_campaigns._character_name(doc))
     return names
@@ -713,7 +797,7 @@ def _cosmere_player_char_name():
         for filename in sorted(os.listdir(directory)) if os.path.isdir(directory) else ():
             if not filename.endswith('.json'):
                 continue
-            d = _storage.load_json(os.path.join(directory, filename))
+            d = _load_character_document(os.path.join(directory, filename))
             if isinstance(d, dict) and d.get('owner_user_id') == u.get('id'):
                 return d.get('name') or (d.get('build') or {}).get('name') or ''
     except Exception:
@@ -833,7 +917,7 @@ def require_pc_self_or_gm(f):
         pc_name = kwargs.get('pc_name')
         if _account_mode():
             u = _auth.current_user()
-            if u and pc_name and _user_owns_pc(u['id'], pc_name):
+            if u and pc_name and _user_can_edit_pc(u['id'], pc_name):
                 return f(*args, **kwargs)
             return jsonify({"error": "forbidden — not your character"}), 403
         if not GM_PASSWORD:
@@ -855,10 +939,20 @@ def _user_owns_pc(user_id, pc_name):
     for fn in os.listdir(pdir):
         if not fn.endswith('.json'):
             continue
-        doc = _storage.load_json(os.path.join(pdir, fn))
+        doc = _load_character_document(os.path.join(pdir, fn))
         if _storage.is_wrapped(doc) and _campaigns._character_name(doc) == pc_name:
             return doc.get('owner_user_id') == user_id
     return False
+
+
+def _user_can_edit_pc(user_id, pc_name):
+    if not _persistence_runtime.sql_enabled():
+        return _user_owns_pc(user_id, pc_name)
+    context = _authorization_character_context(
+        _active_campaign_id(), pc_name, _CharacterOwnerSource.ROUTE_PC_NAME,
+    )
+    return bool(context and (context.owner_user_id == user_id
+                             or user_id in context.editor_user_ids))
 
 # GM-only API prefixes — these are encounter/tracker/vault APIs that players shouldn't access
 GM_API_PREFIXES = (
@@ -1033,7 +1127,7 @@ def _authorization_character_context(cid, reference, source):
         for filename in sorted(os.listdir(directory)) if os.path.isdir(directory) else ():
             if not filename.endswith('.json'):
                 continue
-            doc = _storage.load_json(os.path.join(directory, filename))
+            doc = _load_character_document(os.path.join(directory, filename))
             if not isinstance(doc, dict):
                 continue
             if source in cosmere_sources:
@@ -4173,6 +4267,26 @@ def _save_and_reload_character_batch(updates):
 
 
 def _save_and_reload_character_batch_unlocked(updates):
+    if not _persistence_runtime.sql_enabled():
+        return _save_and_reload_character_batch_files(updates)
+    from core.persistence import ownership
+    updates = list(updates)
+    entries = []
+    for _name, document, path in updates:
+        location = _character_files.locator(path)
+        if location is None:
+            raise _persistence_runtime.StoreUnavailable('Character batch is not campaign scoped')
+        entries.append((*location, document))
+    return ownership.write_character_batch(
+        entries,
+        write_documents=lambda documents: _save_and_reload_character_batch_files([
+            (name, document, path)
+            for (name, _old_document, path), document in zip(updates, documents)
+        ]),
+    )
+
+
+def _save_and_reload_character_batch_files(updates):
     """Commit multiple character documents as one rollback-safe application batch.
 
     Every document is actor-validated and fully staged before any live file is
@@ -8105,6 +8219,13 @@ def _list_module_files():
 def _load_campaign_config_at(path):
     """Read one explicit campaign config, always returning the full schema."""
     cfg = dict(CAMPAIGN_DEFAULT)
+    if _persistence_runtime.sql_enabled() and path:
+        cid = os.path.basename(os.path.dirname(path))
+        if re.fullmatch(r'[0-9a-f]{32}', cid):
+            data = _campaigns.get_campaign(cid) or {}
+            cfg.update({key: data[key] for key in CAMPAIGN_DEFAULT
+                        if data.get(key) is not None})
+            return cfg
     if path and os.path.exists(path):
         data, err = safe_load_json_file(path)
         if data and isinstance(data, dict):
@@ -8151,6 +8272,19 @@ def _save_campaign_config(updates):
     keys -- id / slug / system / members / system_config -- survive a config
     write (campaign.json is the same file the campaign doc lives in). Returns
     the merged config view."""
+    if _persistence_runtime.sql_enabled():
+        cid = _loaded_campaign_id()
+        if not cid:
+            raise _persistence_runtime.StoreUnavailable('No campaign is selected')
+        full = _campaigns.get_campaign(cid, refresh=True)
+        if not full:
+            raise _persistence_runtime.StoreUnavailable('Campaign is unavailable')
+        full.update({key: updates[key] for key in CAMPAIGN_DEFAULT
+                     if updates.get(key) is not None})
+        if 'session_number' in full:
+            full['session_number'] = max(1, safe_int(full['session_number'], 1))
+        _campaigns.save_campaign(full)
+        return _load_campaign_config()
     # Locked load-merge-save: a recap save racing a session-number bump (or two
     # GMs/devices) would otherwise read-modify-write the same file and lose one
     # update -- and this file IS the campaign doc (id/system/members live here).
@@ -8697,7 +8831,7 @@ def _scene_character_records(cid):
         for filename in os.listdir(pdir):
             if not filename.endswith('.json'):
                 continue
-            doc = _storage.load_json(os.path.join(pdir, filename))
+            doc = _load_character_document(os.path.join(pdir, filename))
             if not isinstance(doc, dict):
                 continue
             char_id = doc.get('id')
@@ -8721,7 +8855,7 @@ def _scene_character_records(cid):
         for filename in os.listdir(cdir):
             if not filename.endswith('.json'):
                 continue
-            doc = _storage.load_json(os.path.join(cdir, filename))
+            doc = _load_character_document(os.path.join(cdir, filename))
             if not isinstance(doc, dict) or not doc.get('id'):
                 continue
             char_name = doc.get('name') or (doc.get('build') or {}).get('name') or '?'
@@ -10066,6 +10200,9 @@ def _auto_migrate_legacy(admin_user_id):
     """First-run convenience: if a legacy flat game exists and nothing is migrated
     yet, copy it into Campaign #1 (owned by the new admin) and go live. Safe -- the
     migration copies and preserves the originals as backup."""
+    if _persistence_runtime.sql_enabled():
+        # Legacy imports require the reviewed SQL preflight/import/verify flow.
+        return
     try:
         if _campaigns.list_campaigns():
             return
@@ -10276,7 +10413,7 @@ def campaign_invites(cid):
     for fn in (sorted(os.listdir(pdir)) if os.path.isdir(pdir) else []):
         if not fn.endswith('.json'):
             continue
-        doc = _storage.load_json(os.path.join(pdir, fn))
+        doc = _load_character_document(os.path.join(pdir, fn))
         if not _storage.is_wrapped(doc):
             continue
         claimed = bool(doc.get('owner_user_id'))
@@ -10291,7 +10428,7 @@ def campaign_invites(cid):
     for fn in (sorted(os.listdir(cdir)) if os.path.isdir(cdir) else []):
         if not fn.endswith('.json'):
             continue
-        doc = _storage.load_json(os.path.join(cdir, fn))
+        doc = _load_character_document(os.path.join(cdir, fn))
         if not isinstance(doc, dict) or not doc.get('id'):
             continue
         owner_id = doc.get('owner_user_id')
@@ -10528,12 +10665,16 @@ def campaign_export(cid):
     with _LIVE_CAMPAIGN_DISPATCH_LOCK:
         _abort_if_pending_character_batch(_storage.party_dir(cid))
         with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as z:
-            for root, _dirs, files in os.walk(cdir):
-                for f in files:
-                    full = os.path.join(root, f)
-                    if _backups.is_transaction_artifact(full):
-                        continue
-                    z.write(full, os.path.relpath(full, cdir))
+            if _persistence_runtime.sql_enabled():
+                if not _backups.write_campaign_archive(z, cid, include_chronicle=True):
+                    abort(404)
+            else:
+                for root, _dirs, files in os.walk(cdir):
+                    for f in files:
+                        full = os.path.join(root, f)
+                        if _backups.is_transaction_artifact(full):
+                            continue
+                        z.write(full, os.path.relpath(full, cdir))
     buf.seek(0)
     safe = re.sub(r'[^a-zA-Z0-9_-]+', '-', (camp.get('slug') or camp.get('name') or 'campaign')).strip('-') or 'campaign'
     return send_file(buf, mimetype='application/zip', as_attachment=True,
@@ -10886,12 +11027,19 @@ def campaign_import():
 
         if os.path.exists(final_dir):
             raise RuntimeError('campaign id collision during restore')
-        os.replace(staging_root, final_dir)
+        if _persistence_runtime.sql_enabled():
+            from core.persistence.campaign_import import import_staged_campaign
+            import_staged_campaign(staging_root, final_dir, doc, u['id'])
+        else:
+            os.replace(staging_root, final_dir)
         published = True
         staging_dir = None
         _fsync_directory(_storage.CAMPAIGNS_DIR)
         return jsonify({'ok': True, 'id': new_cid, 'name': doc['name']})
-    except (RuntimeError, zipfile.BadZipFile, zipfile.LargeZipFile) as exc:
+    except _persistence_runtime.StoreUnavailable:
+        # The account-store handler provides the stable, sanitized 503 contract.
+        raise
+    except (RuntimeError, ValueError, zipfile.BadZipFile, zipfile.LargeZipFile) as exc:
         app.logger.warning('campaign import rejected: %s', exc)
         return jsonify({'ok': False, 'error': 'invalid campaign backup'}), 400
     except OSError as exc:
@@ -10965,6 +11113,13 @@ def _prepare_character_claim(cid, character_id, user_id):
 
 def _claim_by_id(cid, character_id, user_id, *, prepared_target=None):
     """Apply a preflighted character claim under live then per-file locking."""
+    if _persistence_runtime.sql_enabled():
+        from core.persistence import TransactionalStore
+        _persistence_runtime.store_call(
+            TransactionalStore(_persistence_runtime.database().session_factory).claim_character,
+            campaign_id=cid, character_id=character_id, user_id=user_id,
+        )
+        return True
     with _LIVE_CAMPAIGN_DISPATCH_LOCK:
         system, path = prepared_target or _prepare_character_claim(
             cid,
@@ -11012,10 +11167,28 @@ def join():
     inv = _auth.get_invite(code) if code else None
     camp_name = (_campaigns.get_campaign(inv['campaign_id']) or {}).get('name') if inv else None
     if request.method == 'POST':
-        if not inv:
+        if not inv and not (_persistence_runtime.sql_enabled() and _auth.current_user()):
             return render_template('join.html', error='Invalid or expired invite code.', code=code,
                                    invite=None, logged_in=bool(_auth.current_user())), 400
         u = _auth.current_user()
+        if _persistence_runtime.sql_enabled():
+            from core.persistence import identity, TransactionalStoreError
+            try:
+                with _LIVE_CAMPAIGN_DISPATCH_LOCK:
+                    u, redemption = identity.redeem_invite(
+                        code, u['id'] if u else None,
+                        username=request.form.get('username', ''),
+                        password=request.form.get('password', ''),
+                        display_name=request.form.get('display_name'),
+                    )
+                    _auth.login_user(u, remember=True)
+                    _set_active_campaign(redemption.campaign_id)
+            except (ValueError, TransactionalStoreError):
+                return render_template(
+                    'join.html', error='The invite or account details are no longer valid.',
+                    code=code, invite=inv, campaign_name=camp_name, logged_in=bool(u),
+                ), 400
+            return redirect('/me')
         if not u:
             try:
                 u = _auth.create_user(request.form.get('username', ''), request.form.get('password', ''),
@@ -12228,16 +12401,17 @@ def _load_cosmere_pc(pid):
         return None
     try:
         with open(p, encoding='utf-8') as f:
-            return json.load(f)
-    except Exception:
+            document = json.load(f)
+    except (OSError, ValueError):
         return None
+    return _character_files.authoritative_document(p, document)
 
 
 def _delete_cosmere_pc(pid):
     """Remove a Cosmere PC file from the active campaign's store (no-op if gone)."""
     p = _cosmere_pc_path(pid)
     if p and os.path.isfile(p):
-        os.remove(p)
+        _delete_character_document(p)
         return True
     return False
 
@@ -12825,8 +12999,8 @@ def cosmere_pc_sheet(pid):
     _u = _auth.current_user()
     # The owner (or the GM) gets the INTERACTIVE sheet: tap-to-roll skills/strikes
     # + live Health/Focus/Investiture steppers. Everyone else sees it read-only.
-    interactive = (bool(_u) and doc.get('owner_user_id') == _u.get('id')) or _is_gm()
-    can_delete = interactive
+    interactive = _cosmere_can_act_on(doc)
+    can_delete = (bool(_u) and doc.get('owner_user_id') == _u.get('id')) or _is_gm()
     ps = doc.get('play_state') if isinstance(doc.get('play_state'), dict) else {}
     def _ps(key, default):
         try:
@@ -12983,7 +13157,7 @@ def cosmere_player_hub():
     mine = [d for d in all_pcs if u and d.get('owner_user_id') == u.get('id')] if u else []
     # Fall back to the campaign membership's assigned character if ownership
     # wasn't stamped (e.g. a GM-built PC handed off without a claim).
-    if u and not mine:
+    if u and not mine and not _persistence_runtime.sql_enabled():
         camp = _active_campaign_doc()
         cid_char = None
         for m in (camp or {}).get('members', []):
@@ -13159,7 +13333,14 @@ def cosmere_pc_notes(pid):
 def _cosmere_can_act_on(doc):
     """The PC's owner, or the GM, may roll/spend on it."""
     u = _auth.current_user()
-    return _is_gm() or (bool(u) and doc.get('owner_user_id') == u.get('id'))
+    if _is_gm():
+        return True
+    if not u:
+        return False
+    if doc.get('owner_user_id') == u.get('id'):
+        return True
+    return (_persistence_runtime.sql_enabled()
+            and u['id'] in doc.get('editor_user_ids', []))
 
 
 def _sync_cosmere_combatant_state(pid, ps):
@@ -13662,9 +13843,14 @@ def cosmere_pc_release(pid):
     doc = _load_cosmere_pc(pid)
     if not doc:
         return ('Unknown Cosmere character', 404)
-    doc['owner_user_id'] = None
-    _save_cosmere_pc(doc)
     cid = ACTIVE_CAMPAIGN_ID or doc.get('campaign_id')
+    if _persistence_runtime.sql_enabled():
+        from core.persistence import ownership
+        ownership.release_character(cid, pid, _auth.current_user()['id'])
+        _close_sse_subscribers_for_user(cid, doc.get('owner_user_id'))
+    else:
+        doc['owner_user_id'] = None
+        _save_cosmere_pc(doc)
     if request.is_json:
         return jsonify({'ok': True})
     return redirect('/campaign/%s/invites' % cid if cid else '/cosmere/pcs')
@@ -14287,7 +14473,7 @@ def _chronicle_owned_pc_slugs(user_id):
         for fn in os.listdir(pdir):
             if not fn.endswith('.json'):
                 continue
-            doc = _storage.load_json(os.path.join(pdir, fn))
+            doc = _load_character_document(os.path.join(pdir, fn))
             if isinstance(doc, dict) and doc.get('owner_user_id') == user_id:
                 slugs.add(_storage.slugify(_campaigns._character_name(doc)))
     return slugs
@@ -21132,7 +21318,7 @@ def delete_character(pc_name):
         with _path_lock(file_path):
             if not os.path.exists(file_path):
                 return jsonify({"error": "Character not found"}), 404
-            os.remove(file_path)
+            _delete_character_document(file_path)
         _discard_live_party_actor(pc_name)
         _PC_FILE_CACHE.pop(pc_name, None)
         _PC_PERSIST_DIRTY.discard(pc_name)

@@ -12,11 +12,16 @@ durability needs object-storage credentials; when those are provided, an upload
 step can hook into run_backup() (the snapshot path is returned for exactly that).
 """
 import os
+import json
 import time
 import zipfile
 import threading
 
-from core import storage
+from sqlalchemy import select
+
+from core import campaigns, storage
+from core.persistence import campaign_runtime, ownership, runtime
+from core.persistence.models import Campaign
 
 BACKUPS_DIR = os.path.join(storage.DATA_DIR, 'backups')
 KEEP_PER_CAMPAIGN = 7          # most-recent snapshots kept per campaign
@@ -56,13 +61,81 @@ def _campaign_backup_dir(cid):
     return os.path.join(BACKUPS_DIR, storage._check_id(cid, 'campaign_id'))
 
 
-def snapshot_campaign(cid, stamp=None):
-    """Zip one campaign's data dir into its backup folder. Returns the zip path
-    (or None if the campaign dir is missing)."""
+def _active_campaign_ids():
+    if runtime.sql_enabled():
+        return tuple(campaign['id'] for campaign in campaigns.list_campaigns())
+    return storage.list_campaign_ids()
+
+
+def _write_archive_files(archive, src, *, include_chronicle, campaign=None,
+                         character_document=None):
+    if campaign is not None:
+        archive.writestr('campaign.json', json.dumps(campaign, ensure_ascii=False,
+                                                    allow_nan=False))
+    for root, dirs, files in os.walk(src):
+        if root == src and not include_chronicle:
+            dirs[:] = [d for d in dirs if d not in _BACKUP_EXCLUDE_DIRS]
+        relative_dir = os.path.relpath(root, src)
+        for filename in files:
+            full = os.path.join(root, filename)
+            if is_transaction_artifact(full):
+                continue
+            if campaign is not None and root == src and filename == 'campaign.json':
+                continue
+            member = os.path.relpath(full, src)
+            if (character_document is not None
+                    and relative_dir in {'party_data', 'cosmere_pcs'}
+                    and filename.endswith('.json')):
+                with open(full, encoding='utf-8') as source:
+                    document = json.load(source)
+                document = character_document(document, relative_dir, filename)
+                archive.writestr(member, json.dumps(document, ensure_ascii=False,
+                                                     allow_nan=False))
+            else:
+                archive.write(full, member)
+
+
+def _write_sql_archive(archive, cid, src, *, include_chronicle):
+    with runtime.database().transaction() as session:
+        campaign = session.scalar(select(Campaign).where(
+            Campaign.id == cid,
+        ).with_for_update())
+        if campaign is None or campaign.trashed_at is not None:
+            return False
+
+        def character_document(document, folder, filename):
+            if not isinstance(document, dict):
+                raise ValueError('character document must be an object')
+            character = ownership._resolve_identity(session, cid, document, folder, filename)
+            # Preserve orphaned sheet data for recovery without granting any
+            # of its untrusted file permissions to a restored character.
+            if character is None:
+                return ownership._no_grants(document)
+            return ownership._overlay(session, character, document)
+
+        # Reuse session-bound adapters so metadata and grants share a campaign
+        # row lock with SQL membership/ownership writers, without nested
+        # sessions or inconsistent reads from separate transactions.
+        _write_archive_files(
+            archive, src, include_chronicle=include_chronicle,
+            campaign=campaign_runtime._document(session, campaign),
+            character_document=character_document,
+        )
+        return True
+
+
+def write_campaign_archive(archive, cid, *, include_chronicle=False):
+    """Write active campaign data to an open zip, returning whether it exists.
+
+    SQL archives overlay current relational metadata and character grants; JSON
+    and shadow archives preserve legacy bytes. Callers must discard the archive
+    on error. The SQL row lock coordinates authority changes across processes;
+    the existing snapshot lock coordinates local character-file writes.
+    """
     with SNAPSHOT_LOCK:
         src = storage.campaign_dir(cid)
         if not os.path.isdir(src):
-            return None
+            return False
         party_dir = storage.party_dir(cid)
         if os.path.isdir(party_dir) and any(
             name.endswith('.character-batch-journal')
@@ -71,24 +144,32 @@ def snapshot_campaign(cid, stamp=None):
             raise RuntimeError(
                 'campaign snapshot blocked by an unresolved character batch'
             )
+        if runtime.sql_enabled():
+            return runtime.store_call(
+                _write_sql_archive, archive, cid, src,
+                include_chronicle=include_chronicle,
+            )
+        _write_archive_files(archive, src, include_chronicle=include_chronicle)
+        return True
+
+
+def snapshot_campaign(cid, stamp=None):
+    """Zip one campaign's data dir into its backup folder. Returns the zip path
+    (or None if the campaign dir is missing)."""
+    with SNAPSHOT_LOCK:
+        src = storage.campaign_dir(cid)
+        if not os.path.isdir(src):
+            return None
         out_dir = _campaign_backup_dir(cid)
         os.makedirs(out_dir, exist_ok=True)
         path = os.path.join(out_dir, (stamp or _stamp()) + '.zip')
         temporary_path = path + '.tmp'
         try:
             with zipfile.ZipFile(temporary_path, 'w', zipfile.ZIP_DEFLATED) as z:
-                for root, dirs, files in os.walk(src):
-                    # Prune excluded top-level dirs in place so os.walk never
-                    # descends into large, regenerable Chronicle output.
-                    if root == src:
-                        dirs[:] = [
-                            d for d in dirs if d not in _BACKUP_EXCLUDE_DIRS
-                        ]
-                    for f in files:
-                        full = os.path.join(root, f)
-                        if is_transaction_artifact(full):
-                            continue
-                        z.write(full, os.path.relpath(full, src))
+                archived = write_campaign_archive(z, cid)
+            if not archived:
+                os.remove(temporary_path)
+                return None
             os.replace(temporary_path, path)
         except Exception:
             try:
@@ -158,7 +239,7 @@ def _automatic_backup_due_ids(now=None):
     raw_completed = state.get(_CAMPAIGN_COMPLETION_KEY)
     completed = raw_completed if isinstance(raw_completed, dict) else {}
     due = []
-    for cid in storage.list_campaign_ids():
+    for cid in _active_campaign_ids():
         try:
             campaign_completed = float(completed.get(cid, global_completed) or 0)
         except (TypeError, ValueError):
@@ -179,11 +260,13 @@ def run_backup(campaign_ids=None, *, record_completion=True):
     n = 0
     all_succeeded = True
     successful_ids = []
-    ids = storage.list_campaign_ids() if campaign_ids is None else tuple(campaign_ids)
+    ids = _active_campaign_ids() if campaign_ids is None else tuple(campaign_ids)
     for cid in ids:
         try:
-            if snapshot_campaign(cid, stamp):
-                n += 1
+            if not snapshot_campaign(cid, stamp):
+                all_succeeded = False
+                continue
+            n += 1
             prune_campaign(cid)
             successful_ids.append(cid)
         except Exception as e:                  # one bad campaign shouldn't abort the rest
