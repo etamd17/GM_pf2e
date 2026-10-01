@@ -84,11 +84,17 @@ An unresolved character batch journal blocks export until recovery.
 Treat the result as sensitive backup data: it includes password hashes and
 invitations. On POSIX, output directories/files use owner-only permissions. On
 Windows, choose a destination whose inherited ACLs restrict access to the
-operator; POSIX mode bits do not enforce Windows ACL privacy. A private history
-sidecar retains SQL audit, redemption, draft, and
-migration records. The legacy application and PR4A importer do not replay that
-sidecar; retain the SQL backup and plan an explicit reconciliation before a
-later return to SQL.
+operator; POSIX mode bits do not enforce Windows ACL privacy. With PR5, supported
+personal drafts and independent workflow receipts also export as resumable
+records under `character_drafts/`; the forward importer includes them. Pending
+publications, unresolved JSON workflow journals, unknown versions, and invalid
+live draft membership/target links block transfer. Historical receipts do not
+recreate removed grants or characters.
+
+A private history sidecar still retains SQL audit, redemption, migration, and
+pre-PR5 non-resumable draft history. The application/importer do not replay that
+unrelated history; retain the SQL backup and plan explicit reconciliation before
+a later return to SQL. The resumable-record support does not change this limit.
 
 This exports the transactional subset, not scenes, audio, uploads, or the entire
 volume. Restore those from the matching full volume backup. Never simply change

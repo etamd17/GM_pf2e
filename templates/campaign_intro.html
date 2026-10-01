@@ -264,7 +264,7 @@
                 <div class="text-base-100 text-sm font-medium">Playing as <strong style="color:#e0b050;">{{ current_player }}</strong></div>
             </div>
             <div class="flex items-center gap-2">
-                <a href="/player/sheet/{{ current_player|urlencode }}" class="btn-gold">Open Sheet</a>
+                <a href="{{ character_sheet_url(current_player) }}" class="btn-gold">Open Sheet</a>
                 <a href="/player" class="btn-ghost">Player Hub</a>
                 <button onclick="leaveCampaign()" class="btn-ghost">Switch Character</button>
             </div>
@@ -421,7 +421,7 @@
             try { localStorage.setItem('pf2e_my_char', name); } catch(_) {}
             // Also let the map's player view skip its name-prompt.
             try { localStorage.setItem('pf2e_player_name', name); } catch(_) {}
-            location.href = '/player/sheet/' + encodeURIComponent(name);
+            location.href = data.url || '/player/sheet/' + encodeURIComponent(name);
         } catch (e) {
             showToast('Network error', 'error');
         }

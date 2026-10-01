@@ -152,6 +152,7 @@ def authoritative_document(cid, doc: dict, *, legacy_storage=None, filename=None
 
 def characters_for_user(user_id) -> list[dict]:
     """Read owned character cards exclusively through active SQL membership."""
+    from core.character_workflows.recovery import pending_for
     def read():
         with runtime.database().session() as session:
             rows = session.execute(
@@ -172,7 +173,8 @@ def characters_for_user(user_id) -> list[dict]:
             return [{"campaign_id": campaign.id, "campaign_name": campaign.name,
                      "system": character.system, "file": character.legacy_file,
                      "id": character.id, "name": character.display_name or "?"}
-                    for character, campaign in rows]
+                    for character, campaign in rows
+                    if not pending_for(campaign.id, character_id=character.id)]
     return runtime.store_call(read)
 
 
@@ -235,50 +237,62 @@ def register_character(cid, legacy_storage, filename, doc: dict, *,
 
     def register():
         with runtime.database().transaction() as session:
-            campaign = _lock_campaign(session, cid)
-            character = _resolve_identity(session, cid, doc, legacy_storage, filename)
-            by_locator = session.scalar(select(Character).where(
-                Character.campaign_id == cid, Character.legacy_storage == legacy_storage,
-                Character.legacy_file == filename,
-            ).with_for_update())
-            if by_locator is not None and character is None:
-                raise ValueError("character identity conflicts with the existing locator")
-            created = character is None
-            if created:
-                expected_system = "pf2e" if legacy_storage == "party_data" else "cosmere"
-                system = doc.get("system") or campaign.system
-                if system != campaign.system or system != expected_system:
-                    raise ValueError("character system does not match campaign and storage")
-                character = Character(
-                    id=doc.get("id") or new_id(), campaign_id=cid, system=system,
-                    legacy_storage=legacy_storage, legacy_file=filename,
-                    content_checksum="0" * 64,
-                )
-                session.add(character)
-                session.flush()
-                if owner_user_id is not None:
-                    membership = session.scalar(select(CampaignMembership).where(
-                        CampaignMembership.campaign_id == cid,
-                        CampaignMembership.user_id == owner_user_id,
-                    ).with_for_update())
-                    if membership is None:
-                        raise ValueError("campaign membership is required for the owner")
-                    session.add(CharacterAssignment(
-                        campaign_id=cid, character_id=character.id,
-                        user_id=owner_user_id, role="owner",
-                    ))
-                    membership.character_id = character.id
-                _audit(session, cid, character.id, "character.created", owner_user_id)
-            else:
-                character = _lock_character(session, cid, character.id)
-            session.flush()
-            result = _overlay(session, character, doc)
-            _set_payload_metadata(character, result)
+            result = register_character_in_session(
+                session, cid, legacy_storage, filename, doc, owner_user_id=owner_user_id)
             if write_document is not None:
                 write_document(result)
             session.flush()
             return result
     return runtime.store_call(register)
+
+
+def register_character_in_session(session, cid, legacy_storage, filename, doc: dict, *,
+                                  owner_user_id=None) -> dict:
+    """Register metadata in the caller's transaction; never write or commit."""
+    _validate_locator(legacy_storage, filename)
+    if not isinstance(doc, dict):
+        raise ValueError("character document must be an object")
+    campaign = _lock_campaign(session, cid)
+    character = _resolve_identity(session, cid, doc, legacy_storage, filename)
+    by_locator = session.scalar(select(Character).where(
+        Character.campaign_id == cid, Character.legacy_storage == legacy_storage,
+        Character.legacy_file == filename,
+    ).with_for_update())
+    if by_locator is not None and character is None:
+        raise ValueError("character identity conflicts with the existing locator")
+    created = character is None
+    if created:
+        expected_system = "pf2e" if legacy_storage == "party_data" else "cosmere"
+        system = doc.get("system") or campaign.system
+        if system != campaign.system or system != expected_system:
+            raise ValueError("character system does not match campaign and storage")
+        character = Character(
+            id=doc.get("id") or new_id(), campaign_id=cid, system=system,
+            legacy_storage=legacy_storage, legacy_file=filename,
+            content_checksum="0" * 64,
+        )
+        session.add(character)
+        session.flush()
+        if owner_user_id is not None:
+            membership = session.scalar(select(CampaignMembership).where(
+                CampaignMembership.campaign_id == cid,
+                CampaignMembership.user_id == owner_user_id,
+            ).with_for_update())
+            if membership is None:
+                raise ValueError("campaign membership is required for the owner")
+            session.add(CharacterAssignment(
+                campaign_id=cid, character_id=character.id,
+                user_id=owner_user_id, role="owner",
+            ))
+            membership.character_id = character.id
+        _audit(session, cid, character.id, "character.created", owner_user_id)
+    else:
+        character = _lock_character(session, cid, character.id)
+    session.flush()
+    result = _overlay(session, character, doc)
+    _set_payload_metadata(character, result)
+    session.flush()
+    return result
 
 
 def write_character_batch(entries, *, write_documents):
@@ -366,6 +380,9 @@ def delete_character(cid, character_id, actor_user_id, *,
             ))
             if owner is None and not _actor_is_gm(session, cid, actor_user_id):
                 raise ValueError("not allowed to delete this character")
+            from core.character_workflows.lifecycle import invalidate_target, sql_transaction
+            tx = sql_transaction(session, cid)
+            invalidate_target(tx.context, character_id, transaction=tx)
             for membership in session.scalars(select(CampaignMembership).where(
                 CampaignMembership.campaign_id == cid,
                 CampaignMembership.character_id == character_id,

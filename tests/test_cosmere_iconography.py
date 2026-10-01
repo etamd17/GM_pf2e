@@ -73,8 +73,12 @@ def test_sheet_template_renders_crest_and_surges():
 
 
 def test_house_metal_persisted_by_builder():
-    src = _read('app.py')
-    assert "doc['house_metal'] = _hm" in src
+    # Assert the extracted serializer's behavior, not its local variable name.
+    doc = A._build_cosmere_document(
+        {'build': {'name': 'Metal crest', 'level': 1}, 'house_metal': 'StEeL'}, None)
+    assert doc['house_metal'] == 'steel'
+    updated = A._build_cosmere_document({'build': {'name': 'Metal crest', 'level': 2}}, doc)
+    assert updated['house_metal'] == 'steel'
 
 
 # ── PR-C: hub reference panels ───────────────────────────────────────────────

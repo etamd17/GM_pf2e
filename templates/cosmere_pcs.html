@@ -42,13 +42,14 @@
   <span style="display:flex; gap:.6rem;">
     {% if is_gm and active_cid %}<a class="cb-new" href="/campaign/{{ active_cid }}/invites" style="background:rgba(255,255,255,.05); color:var(--text-on-dark-2);" title="Player join links + hand off a character">Invites</a>{% endif %}
     <a class="cb-new" href="/cosmere/bestiary" style="background:rgba(255,255,255,.05); color:var(--text-on-dark-2);">Bestiary</a>
-    <label class="cb-new" style="cursor:pointer;" title="Upload filled Cosmere character-sheet PDF(s); auto-creates usable characters in this campaign">
-      + Import PDF<input id="cos-pdf-input" type="file" accept="application/pdf,.pdf" multiple style="display:none;" onchange="importCosmerePdfs(this)">
-    </label>
+    {% if not account_user or is_gm %}<label class="cb-new" style="cursor:pointer;" title="Upload filled Cosmere character-sheet PDF(s); auto-creates usable characters in this campaign">
+      {{ 'GM quick import PDFs' if account_user else '+ Import PDF' }}<input id="cos-pdf-input" type="file" accept="application/pdf,.pdf" multiple style="display:none;" onchange="importCosmerePdfs(this)">
+    </label>{% endif %}
     <a class="cb-new" href="/cosmere/builder">+ New Character</a>
   </span>
 </div>
 <div id="cos-pdf-status" style="display:none; margin:0 0 1rem; padding:.7rem .9rem; border-radius:8px; font-size:13px; border:1px solid var(--border-card); background:var(--bg-card); color:var(--text-on-dark);"></div>
+{% include '_character_draft_list.html' %}
 <script>
   async function importCosmerePdfs(input) {
     const files = [...(input.files || [])];
@@ -83,11 +84,13 @@
 {% if pcs %}
 <div class="pc-grid">
   {% for pc in pcs %}
-  <a class="pc-card" href="/cosmere/pc/{{ pc.id }}" style="--accent:{{ pc.accent }};" aria-label="Open {{ pc.name }}'s character sheet">
+  {% set access = workflow_access.get(pc.id, {}) %}
+  <a class="pc-card" {% if not account_user or access.get('view') %}href="{{ character_sheet_url(pc.name, 'cosmere', pc.id) }}"{% else %}aria-disabled="true"{% endif %} style="--accent:{{ pc.accent }};" aria-label="{{ pc.name }}'s character">
     <div class="pc-top">
       <span class="pc-name">{{ pc.name }}</span>
       <span class="pc-lv">Lv {{ pc.level }} &middot; T{{ pc.tier }}</span>
     </div>
+    {% if account_user %}<p>{{ access.get('label', 'No sheet access') }}</p>{% endif %}
     <div class="pc-sub">
       {% if pc.is_radiant and pc.order %}{{ pc.order }}{% if pc.spren %} <span class="spren">&middot; {{ pc.spren }}</span>{% endif %}
       {% elif pc.path %}{{ pc.path|capitalize }}{% else %}Cosmere{% endif %}

@@ -428,6 +428,37 @@ class Draft(Base):
     )
 
 
+class CharacterWorkflowReceipt(Base):
+    """Durable deduplication/recovery evidence, independent of deletable rows."""
+
+    __tablename__ = 'character_workflow_receipts'
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    campaign_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    author_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    draft_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    target_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    operation: Mapped[str] = mapped_column(String(32), nullable=False)
+    key_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    request_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    state: Mapped[str] = mapped_column(String(32), nullable=False)
+    details: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict,
+                                                  server_default=text("'{}'"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False,
+                                               default=utc_now, onupdate=utc_now)
+
+    __table_args__ = (
+        UniqueConstraint('campaign_id', 'author_id', 'operation', 'key_hash',
+                         name='uq_character_workflow_receipts_request'),
+        CheckConstraint(
+            "(operation = 'create_draft' AND state IN ('committed', 'invalidated')) OR "
+            "(operation = 'publish' AND state IN ('publishing', 'committed', 'failed', 'invalidated')) OR "
+            "(operation IN ('discard', 'invalidate_member', 'invalidate_target') AND state = 'committed')",
+            name='operation_state'),
+    )
+
+
 class AuditEvent(Base):
     __tablename__ = "audit_events"
 

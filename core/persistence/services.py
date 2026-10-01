@@ -364,6 +364,9 @@ class TransactionalStore:
                 return False
             if membership.role == "gm":
                 self._reject_if_last_gm(session, campaign_id)
+            from core.character_workflows.lifecycle import invalidate_member, sql_transaction
+            tx = sql_transaction(session, campaign_id)
+            invalidate_member(tx.context, user_id, transaction=tx)
             session.delete(membership)
             session.add(
                 AuditEvent(

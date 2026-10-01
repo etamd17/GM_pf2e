@@ -146,7 +146,8 @@ def test_viewing_a_sheet_does_not_change_the_session_actor():
             session.pop("player_name", None)
 
         # Isolate the route's identity behavior from the very large sheet render.
-        application.PARTY_LIBRARY["Viewed Character"] = object()
+        from types import SimpleNamespace
+        application.PARTY_LIBRARY["Viewed Character"] = SimpleNamespace(name="Viewed Character")
         application.render_template = lambda *args, **kwargs: "sheet"
         response = client.get("/player/sheet/Viewed%20Character")
         assert response.status_code == 200, response.status_code

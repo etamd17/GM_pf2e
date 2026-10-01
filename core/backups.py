@@ -136,6 +136,8 @@ def write_campaign_archive(archive, cid, *, include_chronicle=False):
         src = storage.campaign_dir(cid)
         if not os.path.isdir(src):
             return False
+        from core.character_workflows.recovery import assert_no_pending_workflows
+        assert_no_pending_workflows(cid)
         party_dir = storage.party_dir(cid)
         if os.path.isdir(party_dir) and any(
             name.endswith('.character-batch-journal')

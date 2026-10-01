@@ -55,7 +55,7 @@ assert len(camps) == 1 and camps[0]['role'] == 'GM' and camps[0]['is_live'] is T
 
 # 2) owner-aware /player: gm owns exactly one PC -> deep-link to its sheet
 r2 = c.get('/player')
-assert r2.status_code == 302 and '/player/sheet/' in r2.headers['Location'], (r2.status_code, r2.headers.get('Location'))
+assert r2.status_code == 302 and r2.headers['Location'] == '/characters/' + doc['id'], (r2.status_code, r2.headers.get('Location'))
 
 # 3) activate honors a validated same-site `then` target
 r3 = c.post('/campaign/%s/activate' % cid, data={'then': '/player/sheet/Kyle'})

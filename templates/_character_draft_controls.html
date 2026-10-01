@@ -1,0 +1,14 @@
+{% if workflow.enabled %}
+<section class="character-draft-controls" aria-label="Private character draft" style="padding:12px;border:1px solid var(--border-card,#57534e);border-radius:8px;margin:8px;overflow-wrap:anywhere;">
+  <p style="margin:0 0 8px;">{% if workflow.recovering %}Saved publication — pending confirmation{% else %}Private draft{% if workflow.targetName %} — updating {{ workflow.targetName }}{% else %} — new character{% endif %}{% endif %}</p>
+  <p id="draft-status" role="status" aria-live="polite" tabindex="-1" style="margin:0 0 8px;">Loading draft…</p>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;">
+    <button type="button" id="draft-save">Save draft</button>
+    <button type="button" id="draft-copy" hidden>Save a copy</button>
+    <button type="button" id="draft-reload" hidden>Reload saved draft</button>
+    <button type="button" id="draft-discard">Discard</button>
+    <a href="{{ workflow.cancelUrl }}">Resume drafts</a>
+  </div>
+</section>
+<script src="{{ url_for('static', filename='js/character_drafts.js') }}"></script>
+{% endif %}

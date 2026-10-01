@@ -61,6 +61,7 @@ ENTITY_NAMES = (
     "invites",
     "invite_redemptions",
     "character_drafts",
+    "character_workflow_receipts",
     "audit_events",
 )
 ASSIGNMENT_ROLES = ("owner", "editor", "viewer")
@@ -233,6 +234,8 @@ def _snapshot_files(root: Path) -> list[dict[str, Any]]:
                         and not item.is_symlink()
                         and item.suffix == ".json"
                     )
+    from tools.workflow_transfer import private_files
+    candidates.update(private_files(root)[0])
     snapshot = []
     for path in sorted(candidates, key=lambda item: _relative_posix(item, root)):
         payload = path.read_bytes()
@@ -1626,6 +1629,8 @@ def inspect_source(source: os.PathLike[str] | str) -> SourceBundle:
                 ),
             )
 
+    from tools.workflow_transfer import inspect_private
+    inspect_private(root, records, conflicts)
     sort_keys: dict[str, Any] = {
         "users": lambda row: row["id"],
         "campaigns": lambda row: row["id"],
@@ -1640,6 +1645,7 @@ def inspect_source(source: os.PathLike[str] | str) -> SourceBundle:
         "invites": lambda row: row["code"],
         "invite_redemptions": lambda row: str(row.get("id", "")),
         "character_drafts": lambda row: str(row.get("id", "")),
+        "character_workflow_receipts": lambda row: str(row.get("id", "")),
         "audit_events": lambda row: str(row.get("id", "")),
     }
     normalized_records: dict[str, tuple[dict[str, Any], ...]] = {}
@@ -1740,6 +1746,7 @@ def _persistence_api():
             CampaignMembership,
             Character,
             CharacterAssignment,
+            CharacterWorkflowReceipt,
             Draft,
             Invitation,
             InviteRedemption,
@@ -1768,6 +1775,7 @@ def _persistence_api():
         "CampaignMembership": CampaignMembership,
         "Character": Character,
         "CharacterAssignment": CharacterAssignment,
+        "CharacterWorkflowReceipt": CharacterWorkflowReceipt,
         "Invitation": Invitation,
         "InviteRedemption": InviteRedemption,
         "Draft": Draft,
@@ -1919,6 +1927,14 @@ def _database_records(session: Any) -> dict[str, tuple[dict[str, Any], ...]]:
 
     drafts = session.scalars(select(api["Draft"]).order_by(api["Draft"].id)).all()
     for draft in drafts:
+        payload = _json_safe(draft.payload or {})
+        if 'workflow_version' in payload:
+            # Match the runtime store's authority overlay, never stale fields
+            # embedded in a client-editable or historical payload envelope.
+            payload.update(id=draft.id, campaign_id=draft.campaign_id,
+                author_id=draft.user_id, target_id=draft.character_id,
+                revision=draft.revision, state=draft.state,
+                created_at=_datetime_json(draft.created_at), updated_at=_datetime_json(draft.updated_at))
         rows["character_drafts"].append(
             {
                 "id": draft.id,
@@ -1928,13 +1944,22 @@ def _database_records(session: Any) -> dict[str, tuple[dict[str, Any], ...]]:
                 "kind": draft.kind,
                 "state": draft.state,
                 "revision": draft.revision,
-                "payload": _json_safe(draft.payload or {}),
+                "payload": payload,
                 "source_checksum": draft.source_checksum,
                 "created_at": _datetime_json(draft.created_at),
                 "updated_at": _datetime_json(draft.updated_at),
                 "expires_at": _datetime_json(draft.expires_at),
             }
         )
+
+    for receipt in session.scalars(select(api["CharacterWorkflowReceipt"]).order_by(api["CharacterWorkflowReceipt"].id)):
+        rows['character_workflow_receipts'].append({
+            'id': receipt.id, 'campaign_id': receipt.campaign_id, 'author_id': receipt.author_id,
+            'draft_id': receipt.draft_id, 'target_id': receipt.target_id,
+            'operation': receipt.operation, 'key_hash': receipt.key_hash,
+            'request_digest': receipt.request_digest, 'state': receipt.state,
+            'metadata': _json_safe(receipt.details or {}),
+        })
 
     audit_events = session.scalars(
         select(api["AuditEvent"]).order_by(api["AuditEvent"].id)
@@ -2070,6 +2095,9 @@ def _ensure_importable(bundle: SourceBundle, expected_digest: str) -> None:
 
 
 def _assert_source_snapshot_current(bundle: SourceBundle) -> None:
+    from tools.workflow_transfer import private_files
+    if private_files(bundle.source_root)[1]:
+        raise SourceDigestMismatch('Private workflow source contains a symbolic link')
     if _snapshot_files(bundle.source_root) != bundle.report["snapshot"]["files"]:
         raise SourceDigestMismatch(
             "recognized source files changed after the canonical scan; retry while writes are quiesced"
@@ -2088,6 +2116,7 @@ def _target_has_rows(session: Any, api: Mapping[str, Any]) -> bool:
         api["Invitation"],
         api["InviteRedemption"],
         api["Draft"],
+        api["CharacterWorkflowReceipt"],
         api["AuditEvent"],
     )
     return any(
@@ -2248,6 +2277,16 @@ def import_store(
                     source_checksum=row["source_checksum"],
                 )
 
+            for row in bundle.records['character_drafts']:
+                values = dict(row)
+                for name in ('created_at', 'updated_at', 'expires_at'):
+                    values[name] = _parse_datetime(values[name])
+                session.add(api['Draft'](**values))
+            for row in bundle.records['character_workflow_receipts']:
+                values = dict(row)
+                values['details'] = values.pop('metadata')
+                session.add(api['CharacterWorkflowReceipt'](**values))
+            session.flush()
             _assert_source_snapshot_current(bundle)
             verification = _verify_session(bundle, session)
             if not verification["verified"]:
@@ -2477,6 +2516,9 @@ def export_store(
                     "entity_counts": bundle.report["entity_counts"],
                 },
             )
+
+            from tools.workflow_transfer import write_private
+            write_private(staging, _database_records(session))
 
         exported_plan = build_plan(staging)
         if exported_plan["blocking_conflicts"]:

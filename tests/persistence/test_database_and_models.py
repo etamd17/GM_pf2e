@@ -138,6 +138,7 @@ def test_schema_exposes_the_approved_additive_tables():
         "campaigns",
         "character_assignments",
         "character_drafts",
+        "character_workflow_receipts",
         "characters",
         "invite_redemptions",
         "invites",

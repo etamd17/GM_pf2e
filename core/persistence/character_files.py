@@ -31,9 +31,16 @@ def locator(path):
 
 
 def authoritative_document(path, document):
+    location = locator(path)
+    if location is not None:
+        from core.character_workflows.recovery import pending_for, repair_required
+        pending = pending_for(location[0], store=location[1], filename=location[2])
+        if pending is not None:
+            if pending.metadata.get('created'):
+                return None
+            raise repair_required()
     if runtime.backend() == 'json' or not isinstance(document, dict):
         return document
-    location = locator(path)
     if location is None:
         if runtime.sql_enabled():
             result = dict(document)
@@ -49,6 +56,20 @@ def authoritative_document(path, document):
     )
 
 
+def pending_publication(path):
+    location = locator(path)
+    if location is None:
+        return None
+    from core.character_workflows.recovery import pending_for
+    return pending_for(location[0], store=location[1], filename=location[2])
+
+
+def assert_available(path):
+    if pending_publication(path):
+        from core.character_workflows.recovery import repair_required
+        raise repair_required()
+
+
 def write_document(path, document, writer, *, owner_user_id=None):
     """Write file content under a transaction that registers its SQL identity.
 
@@ -56,10 +77,14 @@ def write_document(path, document, writer, *, owner_user_id=None):
     leave an unregistered file; SQL authorization then denies it until an
     explicit retry/reconciliation. This is not a distributed transaction.
     """
+    location = locator(path)
+    if location is not None:
+        from core.character_workflows.recovery import pending_for, repair_required
+        if pending_for(location[0], store=location[1], filename=location[2]):
+            raise repair_required()
     if not runtime.sql_enabled():
         writer(document)
         return
-    location = locator(path)
     if location is None:
         writer(document)
         return

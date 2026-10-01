@@ -319,7 +319,7 @@ def test_account_mode_enforces_nonmember_member_and_gm_policies(
     member_player = observed["member"]["/player"]
     assert member_player["status"] in {200, 302}, member_player
     if member_player["status"] == 302:
-        assert member_player["location"].startswith("/player/sheet/"), member_player
+        assert member_player["location"].startswith("/characters/"), member_player
     assert observed["member"]["/api/player_state"]["status"] == 200
     _assert_json_denial(observed["member"]["/api/gm_party_state"], 403)
     member_events = observed["member"]["/api/events"]
@@ -709,7 +709,10 @@ def test_player_cannot_select_view_or_mutate_another_players_character(
     assert observed["actor_after_mutation"] == "ALPHA OWNER", observed
     assert observed["peer_file_unchanged"] is True, observed
     assert observed["peer_hp_unchanged"] is True, observed
-    assert observed["other_builder_view"]["status"] == 403, observed
+    # This fixture's selected campaign is PF2e. Account draft builders now
+    # reject the wrong system before resolving any private target.
+    assert observed["other_builder_view"]["status"] == 422, observed
+    assert observed["other_builder_view"]["json"]["error"] == "unsupported_system", observed
     assert observed["other_builder_mutation"]["status"] == 403, observed
     assert observed["peer_cosmere_unchanged"] is True, observed
 

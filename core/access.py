@@ -105,6 +105,7 @@ _CAMPAIGN_POLICIES = frozenset(
         RoutePolicy.CAMPAIGN_GM,
         RoutePolicy.CHARACTER_OWNER_OR_GM,
         RoutePolicy.LIVE_CHARACTER_OWNER_OR_GM,
+        RoutePolicy.LIVE_CHARACTER_VIEW,
         RoutePolicy.LIVE_CAMPAIGN_MEMBER,
         RoutePolicy.LIVE_CAMPAIGN_GM,
         RoutePolicy.CAMPAIGN_GM_OR_PUBLISH_TOKEN,
@@ -332,12 +333,18 @@ def decide_access(
     if policy is RoutePolicy.CHARACTER_OWNER_OR_GM:
         return _character_access(context, character, legacy_open=legacy_open)
 
-    if policy is RoutePolicy.LIVE_CHARACTER_OWNER_OR_GM:
+    if policy in (RoutePolicy.LIVE_CHARACTER_OWNER_OR_GM, RoutePolicy.LIVE_CHARACTER_VIEW):
         character_decision = _character_access(
             context,
             character,
             legacy_open=legacy_open,
         )
+        if (policy is RoutePolicy.LIVE_CHARACTER_VIEW and not character_decision.allowed
+                and context.system == 'pf2e' and context.is_member and character is not None
+                and character.campaign_id == context.campaign_id
+                and principal.kind is PrincipalKind.USER
+                and principal.user_id in character.viewer_user_ids):
+            character_decision = _allow('character_viewer')
         # Ownership/role denial comes first so the live slot cannot be used as
         # a campaign-existence oracle by an unauthorized caller.
         if not character_decision.allowed:
