@@ -147,11 +147,13 @@ def test_policy_families_distinguish_live_character_scope():
     assert CHARACTER_OWNER_POLICIES == {
         RoutePolicy.CHARACTER_OWNER_OR_GM,
         RoutePolicy.LIVE_CHARACTER_OWNER_OR_GM,
+        RoutePolicy.LIVE_CHARACTER_VIEW,
     }
     assert SESSION_LIVE_CAMPAIGN_POLICIES == {
         RoutePolicy.LIVE_CAMPAIGN_MEMBER,
         RoutePolicy.LIVE_CAMPAIGN_GM,
         RoutePolicy.LIVE_CHARACTER_OWNER_OR_GM,
+        RoutePolicy.LIVE_CHARACTER_VIEW,
     }
     assert requires_character_owner(RoutePolicy.CHARACTER_OWNER_OR_GM)
     assert requires_character_owner(RoutePolicy.LIVE_CHARACTER_OWNER_OR_GM)
@@ -194,7 +196,7 @@ def test_character_owner_resolution_metadata_is_exhaustive():
     assert set(CHARACTER_OWNER_RESOLUTIONS) == character_endpoints
     assert {
         ROUTE_POLICIES[endpoint] for endpoint in character_endpoints
-    } == {RoutePolicy.LIVE_CHARACTER_OWNER_OR_GM}
+    } == {RoutePolicy.LIVE_CHARACTER_OWNER_OR_GM, RoutePolicy.LIVE_CHARACTER_VIEW}
 
 
 def test_route_character_locators_name_real_route_arguments():

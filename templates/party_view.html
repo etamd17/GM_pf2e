@@ -751,7 +751,7 @@
                     {% endif %}
                 </div>
                 <div class="min-w-0">
-                    <a href="/player/sheet/{{ pc.name | urlencode }}" target="_blank"
+                    <a href="{{ character_sheet_url(pc.name) }}" target="_blank"
                        class="font-display text-base text-base-100 hover:text-accent-300 transition-colors leading-tight truncate block">
                         {{ pc.name }} <span class="text-[10px] text-base-500">&#8599;</span>
                     </a>

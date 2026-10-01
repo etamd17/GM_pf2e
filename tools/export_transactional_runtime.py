@@ -15,10 +15,11 @@ rollback. The output contains password hashes and must remain private.
 On Windows, use an output parent with restrictive ACLs already configured;
 Unix-style mode bits do not establish or verify Windows access permissions.
 
-The JSON tree is checked with the existing migration planner. SQL-only history is
-retained in a private sidecar; the legacy application and PR4A importer do not
-replay that sidecar. Returning to SQL therefore requires a separate reviewed
-history reconciliation or retaining/restoring the database backup.
+The JSON tree is checked with the migration planner. PR5 drafts and independent
+workflow receipts are resumable private records. Unrelated SQL-only history is
+retained in a private sidecar; the application/importer do not replay that
+sidecar. Returning to SQL still requires separate history reconciliation or a
+retained/restored database backup for that history.
 """
 
 from __future__ import annotations
@@ -42,6 +43,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
 from core.persistence import Database, Invitation, MigrationRun
+from core.character_workflows.types import WorkflowError
 from tools import migrate_transactional_store as migration
 
 
@@ -206,6 +208,8 @@ def _write_legacy_tree(staging, root, records, envelopes, invitation_state):
         document["uses_left"] = 0 if revoked else row["remaining_uses"]
         invites[row["code"]] = document
     _private_json(staging / "invites.json", {**envelopes["invites"], "invites": invites})
+    from tools.workflow_transfer import write_private
+    write_private(staging, records)
     return payload_fingerprints
 
 
@@ -235,6 +239,11 @@ def _verify_authority(staging, records, invitation_state) -> None:
     )} for row in exported["characters"]]
     if expected_locators != actual_locators:
         raise RuntimeExportError("Character registry changed during export validation")
+    for entity in ('character_drafts', 'character_workflow_receipts'):
+        expected = [row for row in records[entity] if entity != 'character_drafts'
+                    or 'workflow_version' in row['payload']]
+        if expected != list(exported[entity]):
+            raise RuntimeExportError('Private workflows changed during export validation')
 
 
 def export_runtime(
@@ -259,6 +268,8 @@ def export_runtime(
         with database.session() as session:
             migration._configure_repeatable_read(session)
             records = migration._database_records(session)
+            from tools.workflow_transfer import assert_quiescent
+            assert_quiescent(records)
             _reject_pending_batches(root, records["campaigns"])
             envelopes = _envelopes(session)
             invitation_state = {
@@ -286,6 +297,12 @@ def export_runtime(
         if plan["blocking_conflicts"]:
             raise RuntimeExportError("Current SQL state cannot form a valid legacy rollback tree")
         _verify_authority(staging, records, invitation_state)
+        # The operator's quiescence acknowledgment is required, but also catch
+        # an accidental writer which changed SQL while files were staged.
+        with database.session() as current_session:
+            current_records = migration._database_records(current_session)
+            if current_records != records:
+                raise RuntimeExportError('SQL state changed during export; keep writers quiesced')
         _reject_pending_batches(root, records["campaigns"])
         for path, expected in fingerprints.items():
             current = root
@@ -336,8 +353,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.source, migration._database_url(args.database_url),
             args.output_dir, quiesced=args.quiesced,
         )
-    except (migration.MigrationToolError, SQLAlchemyError, OSError, ValueError, ImportError) as error:
-        message = str(error) if isinstance(error, migration.MigrationToolError) else "Runtime export failed"
+    except (migration.MigrationToolError, WorkflowError, SQLAlchemyError, OSError, ValueError, ImportError) as error:
+        message = str(error) if isinstance(error, (migration.MigrationToolError, WorkflowError)) else "Runtime export failed"
         print("error: " + message, file=sys.stderr)
         return 2
     migration._emit(report)

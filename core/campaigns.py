@@ -105,13 +105,16 @@ def delete_campaign(cid):
     location; JSON moves them to trash, restorable for TRASH_TTL_DAYS."""
     if _runtime.sql_enabled():
         return _runtime.store_call(_sql_campaigns.delete_campaign, cid, actor_user_id=_sql_actor_id())
-    if storage.get_live_campaign_id() == cid:
-        storage.set_live_campaign_id(None)
-    doc = get_campaign(cid)
-    if doc:
-        doc['_trashed_at'] = _now()
-        save_campaign(doc)
-    storage.trash_campaign_dir(cid)
+    with _CAMPAIGN_STORE_LOCK:
+        from core.character_workflows.recovery import assert_no_pending_workflows
+        assert_no_pending_workflows(cid)
+        if storage.get_live_campaign_id() == cid:
+            storage.set_live_campaign_id(None)
+        doc = get_campaign(cid)
+        if doc:
+            doc['_trashed_at'] = _now()
+            save_campaign(doc)
+        storage.trash_campaign_dir(cid)
 
 
 def get_trashed_campaign(cid):
@@ -148,7 +151,11 @@ def purge_campaign(cid):
     """Permanently delete a TRASHED campaign and all its data."""
     if _runtime.sql_enabled():
         return _runtime.store_call(_sql_campaigns.purge_campaign, cid)
-    storage.purge_campaign_dir(cid)
+    with _CAMPAIGN_STORE_LOCK:
+        from core.character_workflows.lifecycle import purge_private_workflows
+        from core.character_workflows.recovery import default_store
+        purge_private_workflows(cid, store=default_store())
+        storage.purge_campaign_dir(cid)
 
 
 def purge_expired_trash(ttl_days=TRASH_TTL_DAYS):
@@ -164,7 +171,7 @@ def purge_expired_trash(ttl_days=TRASH_TTL_DAYS):
     for cid in storage.list_trashed_campaign_ids():
         mt = storage.trashed_dir_mtime(cid)
         if mt and mt < cutoff:
-            storage.purge_campaign_dir(cid)
+            purge_campaign(cid)
             n += 1
     return n
 
@@ -247,6 +254,11 @@ def remove_member(cid, user_id):
             return None
         if target.get('role') == 'gm' and gm_count(doc) <= 1:
             return None   # never strand a campaign without a GM
+        from core.character_workflows.lifecycle import invalidate_member, lifecycle_context
+        from core.character_workflows.recovery import default_store
+        context = lifecycle_context(cid)
+        with default_store().transaction(context) as tx:
+            invalidate_member(context, user_id, transaction=tx)
         doc['members'] = [m for m in doc['members'] if m.get('user_id') != user_id]
         return save_campaign(doc)
 
@@ -289,6 +301,7 @@ def _character_name(doc):
 
 
 def characters_for_user(user_id):
+    from core.persistence.character_files import pending_publication
     if _runtime.sql_enabled():
         from core.persistence import ownership
         return ownership.characters_for_user(user_id)
@@ -300,6 +313,8 @@ def characters_for_user(user_id):
         if os.path.isdir(pdir):
             for fn in os.listdir(pdir):
                 if not fn.endswith('.json'):
+                    continue
+                if pending_publication(os.path.join(pdir, fn)):
                     continue
                 doc = storage.load_json(os.path.join(pdir, fn))
                 if storage.is_wrapped(doc) and doc.get('owner_user_id') == user_id:
@@ -316,6 +331,8 @@ def characters_for_user(user_id):
         if os.path.isdir(cdir):
             for fn in os.listdir(cdir):
                 if not fn.endswith('.json'):
+                    continue
+                if pending_publication(os.path.join(cdir, fn)):
                     continue
                 doc = storage.load_json(os.path.join(cdir, fn))
                 if isinstance(doc, dict) and doc.get('owner_user_id') == user_id:

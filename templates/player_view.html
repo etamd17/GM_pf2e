@@ -212,22 +212,25 @@
 
     <div class="flex justify-center gap-3 mb-8">
         <a href="/" class="btn-ghost">&larr; Home</a>
-        <button onclick="document.getElementById('import-modal').classList.remove('hidden')" class="btn-ghost">Import Pathbuilder</button>
+        {% if not account_user %}<button onclick="document.getElementById('import-modal').classList.remove('hidden')" class="btn-ghost">Import Pathbuilder</button>{% endif %}
         <a href="/player/builder" class="btn-primary">+ New Character</a>
     </div>
 
     {# Discoverability nudge for the "claim my PC" flow — hidden by default,
        revealed by loadMyChar() only when no character is claimed yet. #}
-    <div id="claim-hint" class="claim-hint hidden">Tap the <span class="star">&#9733;</span> on your character below to mark it as yours &mdash; it'll be highlighted and one tap from your sheet each session.</div>
+    {% include '_character_draft_list.html' %}
+    {% if not account_user %}<div id="claim-hint" class="claim-hint hidden">Tap the <span class="star">&#9733;</span> to bookmark a character on this device. A bookmark does not assign ownership.</div>{% endif %}
 
     <!-- CHARACTERS — `is-current` decoration uses the server-rendered
          session.player_name so the card a player joined as glows gold
          even before localStorage kicks in. -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-10">
         {% for pc in party %}
+        {% set access = workflow_access.get(pc.name, {}) %}
         <div class="card p-5 block relative{% if current_player == pc.name %} is-current{% endif %}" data-char-name="{{ pc.name }}">
-            <a href="/player/sheet/{{ pc.name|urlencode }}" class="absolute inset-0 z-0" aria-label="Open {{ pc.name }}'s character sheet"></a>
-            <button onclick='event.preventDefault(); event.stopPropagation(); setMyChar({{ pc.name|tojson }})' class="absolute top-2 left-2 z-10 w-6 h-6 rounded-full flex items-center justify-center text-xs transition-opacity text-accent-400" style="opacity:0.55;" title="Set as my character (highlights it on the roster)" aria-label="Set {{ pc.name }} as my character" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=localStorage.getItem('pf2e_my_char')==={{ pc.name|tojson|forceescape }}?1:0.55">&#9733;</button>
+            {% if not account_user or access.get('view') %}<a href="{{ character_sheet_url(pc.name) }}" class="absolute inset-0 z-0" aria-label="Open {{ pc.name }}'s character sheet"></a>{% endif %}
+            {% if not account_user %}<button onclick='event.preventDefault(); event.stopPropagation(); setMyChar({{ pc.name|tojson }})' class="absolute top-2 left-2 z-10 w-6 h-6 rounded-full flex items-center justify-center text-xs transition-opacity text-accent-400" style="opacity:0.55;" title="Bookmark this character" aria-label="Bookmark {{ pc.name }}" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=localStorage.getItem('pf2e_my_char')==={{ pc.name|tojson|forceescape }}?1:0.55">&#9733;</button>{% endif %}
+            {% if account_user %}<p>{{ access.get('label', 'No sheet access') }}</p>{% endif %}
             {% if is_gm %}<button onclick='event.preventDefault(); event.stopPropagation(); deleteChar({{ pc.name|tojson }})' class="absolute top-2 right-2 z-10 w-6 h-6 rounded-full flex items-center justify-center text-xs transition-opacity" style="background:rgba(239,68,68,0.1); color:#fca5a5; border:1px solid rgba(239,68,68,0.15); opacity:0.3;" title="Delete character" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.3">&times;</button>{% endif %}
             <div class="flex items-start gap-3 relative z-1 pointer-events-none">
                 <div class="hp-ring shrink-0">
@@ -300,7 +303,7 @@
         {% for pc in party %}
         <div class="flex items-center gap-3 px-4 py-3" {% if not loop.last %}style="border-bottom:1px solid rgba(255,255,255,0.04)"{% endif %}>
             <!-- Name (linked) -->
-            <a href="/player/sheet/{{ pc.name|urlencode }}" class="font-medium text-sm text-base-100 hover:text-accent-300 transition-colors truncate" style="min-width:90px; max-width:140px;">{{ pc.name }}</a>
+            <a {% if not account_user or workflow_access.get(pc.name, {}).get('view') %}href="{{ character_sheet_url(pc.name) }}"{% endif %} class="font-medium text-sm text-base-100 hover:text-accent-300 transition-colors truncate" style="min-width:90px; max-width:140px;">{{ pc.name }}</a>
 
             <!-- Mini HP bar -->
             {% set hp_pct = (pc.current_hp / pc.hp * 100) if pc.hp > 0 else 0 %}
@@ -367,12 +370,12 @@
             if (data.success) window.location.reload();
         } catch(e) { alert('Error deleting character.'); }
     }
-    function setMyChar(name) { localStorage.setItem('pf2e_my_char', name); loadMyChar(); }
+    function setMyChar(name) { if({{ (account_user is not none)|tojson }}) return; localStorage.setItem('pf2e_my_char', name); loadMyChar(); }
     // Strip the "mine" decoration from every card + reset the claim stars.
     function _clearMineHighlight() {
         document.querySelectorAll('.card.is-mine').forEach(c => c.classList.remove('is-mine'));
         document.querySelectorAll('.mine-badge').forEach(b => b.remove());
-        document.querySelectorAll('.card [title^="Set as my character"]').forEach(s => { s.style.opacity = '0.55'; });
+        document.querySelectorAll('.card [title^="Bookmark"]').forEach(s => { s.style.opacity = '0.55'; });
     }
     // Glow the claimed card, drop a "Mine" ribbon on it, and light its star.
     function _applyMineHighlight(name) {
@@ -382,12 +385,12 @@
         });
         if (!card) return;
         card.classList.add('is-mine');
-        const star = card.querySelector('[title^="Set as my character"]');
+        const star = card.querySelector('[title^="Bookmark"]');
         if (star) star.style.opacity = '1';
         if (!card.querySelector('.mine-badge')) {
             const badge = document.createElement('span');
             badge.className = 'mine-badge';
-            badge.textContent = 'Mine';
+            badge.textContent = 'Bookmarked';
             card.appendChild(badge);
         }
     }
@@ -398,6 +401,7 @@
         loadMyChar();
     }
     function loadMyChar() {
+        if({{ (account_user is not none)|tojson }}) return;
         _clearMineHighlight();
         const roster = [...document.querySelectorAll('[data-char-name]')]
             .map(el => el.getAttribute('data-char-name'));
@@ -427,7 +431,10 @@
         if (hint) hint.classList.add('hidden');
         document.getElementById('my-char-bar').classList.remove('hidden');
         document.getElementById('my-char-name').textContent = name;
-        document.getElementById('my-char-link').href = '/player/sheet/' + encodeURIComponent(name);
+        const sheetUrls = new Map([
+            {% for pc in party %}[{{ pc.name|tojson }}, {{ character_sheet_url(pc.name)|tojson }}],{% endfor %}
+        ]);
+        document.getElementById('my-char-link').href = sheetUrls.get(name) || '#';
         _applyMineHighlight(name);
     }
     loadMyChar();

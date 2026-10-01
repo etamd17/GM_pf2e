@@ -31,7 +31,7 @@ if SYSTEM == 'pf2e':
     response = client.post('/api/import_pathbuilder', json={'build': {
         'name': 'Hero', 'class': 'Fighter', 'ancestry': 'Human', 'level': 1}})
     assert response.status_code == 200, response.data
-    path = Path(storage.party_dir(cid)) / 'Hero.json'
+    path = Path(application.get_pc_file_path('Hero'))
     document = json.loads(path.read_text(encoding='utf-8'))
     route = '/api/save_notes/Hero'
     request_field = 'notes'

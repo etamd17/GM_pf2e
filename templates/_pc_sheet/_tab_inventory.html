@@ -144,6 +144,7 @@
                     </div>
                 </div>
 
+                {% if owner_private is not defined or owner_private %}
                 <div class="panel-card flex flex-col">
                     <div class="flex justify-between items-center mb-4 pb-2" style="border-bottom:2px solid var(--accent-gold);">
                         <h3 class="section-header" style="border:none; margin:0; padding:0;">Campaign Notes</h3>
@@ -191,5 +192,6 @@
                         {% endfor %}
                     </div>
                 </div>
+                {% endif %}
             </div>
         </div>

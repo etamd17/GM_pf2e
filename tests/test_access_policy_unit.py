@@ -377,6 +377,7 @@ def test_all_route_policies_have_a_decision_and_unknown_values_raise_clearly():
         RoutePolicy.CAMPAIGN_GM,
         RoutePolicy.CHARACTER_OWNER_OR_GM,
         RoutePolicy.LIVE_CHARACTER_OWNER_OR_GM,
+        RoutePolicy.LIVE_CHARACTER_VIEW,
         RoutePolicy.LIVE_CAMPAIGN_MEMBER,
         RoutePolicy.LIVE_CAMPAIGN_GM,
         RoutePolicy.INTEGRATION_TOKEN,
@@ -387,6 +388,16 @@ def test_all_route_policies_have_a_decision_and_unknown_values_raise_clearly():
         assert decide_access(policy, anonymous).code
     with pytest.raises(ValueError, match="unknown route policy"):
         decide_access("future_policy", anonymous)
+
+
+def test_canonical_viewer_policy_never_grants_mutation_or_cosmere_access():
+    viewer = _context(Principal.user('editor-1'))
+    character = resolve_character_context(campaign_id=CAMPAIGN_ID, character_id='character-1',
+        owner_user_id='player-1', viewer_user_ids=('editor-1',))
+    assert decide_access(RoutePolicy.LIVE_CHARACTER_VIEW, viewer, character=character).allowed
+    assert not decide_access(RoutePolicy.LIVE_CHARACTER_OWNER_OR_GM, viewer, character=character).allowed
+    cosmere = _context(Principal.user('editor-1'), campaign={**CAMPAIGN, 'system': 'cosmere'})
+    assert not decide_access(RoutePolicy.LIVE_CHARACTER_VIEW, cosmere, character=character).allowed
 
 
 def test_api_and_browser_denial_contracts_are_distinct_and_safe():

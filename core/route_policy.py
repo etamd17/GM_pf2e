@@ -37,6 +37,7 @@ class RoutePolicy(str, Enum):
     CAMPAIGN_GM = "campaign_gm"
     CHARACTER_OWNER_OR_GM = "character_owner_or_gm"
     LIVE_CHARACTER_OWNER_OR_GM = "live_character_owner_or_gm"
+    LIVE_CHARACTER_VIEW = "live_character_view"
     LIVE_CAMPAIGN_MEMBER = "live_campaign_member"
     LIVE_CAMPAIGN_GM = "live_campaign_gm"
     INTEGRATION_TOKEN = "integration_token"
@@ -55,6 +56,7 @@ class CharacterOwnerSource(str, Enum):
     """
 
     ROUTE_PC_NAME = "route_pc_name"
+    ROUTE_CHARACTER_ID = "route_character_id"
     ROUTE_COSMERE_PID = "route_cosmere_pid"
     QUERY_COSMERE_PID = "query_cosmere_pid"
     JSON_COSMERE_PID = "json_cosmere_pid"
@@ -74,6 +76,7 @@ CHARACTER_OWNER_POLICIES: frozenset[RoutePolicy] = frozenset(
     {
         RoutePolicy.CHARACTER_OWNER_OR_GM,
         RoutePolicy.LIVE_CHARACTER_OWNER_OR_GM,
+        RoutePolicy.LIVE_CHARACTER_VIEW,
     }
 )
 
@@ -87,6 +90,7 @@ SESSION_LIVE_CAMPAIGN_POLICIES: frozenset[RoutePolicy] = frozenset(
         RoutePolicy.LIVE_CAMPAIGN_MEMBER,
         RoutePolicy.LIVE_CAMPAIGN_GM,
         RoutePolicy.LIVE_CHARACTER_OWNER_OR_GM,
+        RoutePolicy.LIVE_CHARACTER_VIEW,
     }
 )
 
@@ -171,6 +175,7 @@ def build_character_owner_resolution_registry(
 
 
 _CHARACTER_OWNER_RESOLUTION_GROUPS: tuple[CharacterResolutionGroup, ...] = (
+    (CharacterOwnerSource.ROUTE_CHARACTER_ID, 'character_id', ('character_workflows.character_sheet',)),
     (
         CharacterOwnerSource.ROUTE_PC_NAME,
         "pc_name",
@@ -405,11 +410,20 @@ _POLICY_GROUPS: tuple[PolicyGroup, ...] = (
     ),
     (
         RoutePolicy.LIVE_CHARACTER_OWNER_OR_GM,
-        tuple(CHARACTER_OWNER_RESOLUTIONS),
+        tuple(e for e in CHARACTER_OWNER_RESOLUTIONS if e != 'character_workflows.character_sheet'),
     ),
+    (RoutePolicy.LIVE_CHARACTER_VIEW, ('character_workflows.character_sheet',)),
     (
         RoutePolicy.LIVE_CAMPAIGN_MEMBER,
         (
+            'character_workflows.draft_list',
+            'character_workflows.draft_create',
+            'character_workflows.draft_get',
+            'character_workflows.draft_save',
+            'character_workflows.draft_discard',
+            'character_workflows.draft_copy',
+            'character_workflows.draft_publish',
+            'character_workflows.import_prepare',
             "api_campaign",  # POST has a stricter method override below.
             "api_chat_get",
             "api_chat_send",

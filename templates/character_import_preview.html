@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block title %}Confirm character import{% endblock %}
+{% block content %}
+<main style="max-width:760px;margin:auto;padding:16px;overflow-wrap:anywhere;">
+  <h1>Confirm character import</h1>
+  <p>This is a private preview. Nothing has been published yet.</p>
+  {% set source = workflow.initialDraft.inputs.submission %}
+  {% set build = source.get('build', source) %}
+  <h2>{{ build.get('name', 'Imported character') }}</h2>
+  <p>Level {{ build.get('level', 1) }} · {{ build.get('class', build.get('path', '')) }}</p>
+  {% if workflow.targetId %}<p>Update {{ workflow.targetName }}. Existing ownership and live play state are preserved.</p>
+  {% else %}<p>Create a new character{% if not is_gm %} owned by you{% endif %}.</p>{% endif %}
+  <details><summary>Review imported build</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere;">{{ build|tojson(indent=2) }}</pre></details>
+  {% include '_character_draft_controls.html' %}
+  <div data-workflow-editor>
+    {% if workflow.canOverride %}<label><input id="import-force" type="checkbox"> GM override rules warnings</label>{% endif %}
+    <button type="button" id="import-confirm" data-workflow-finish>Confirm and publish</button>
+  </div>
+</main>
+<script>
+const importWorkflow={{ workflow|tojson }};
+let importInputs=importWorkflow.initialDraft.inputs;
+const importDraftController=CharacterDrafts.mount(importWorkflow,()=>importInputs,async inputs=>{importInputs=inputs;});
+document.getElementById('import-confirm').onclick=async()=>{
+  try {await importDraftController.finish({force:!!document.getElementById('import-force')?.checked});}
+  catch (_) {document.getElementById('draft-status').focus();}
+};
+</script>
+{% endblock %}

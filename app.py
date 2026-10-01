@@ -623,6 +623,16 @@ from core.persistence.campaign_runtime import (
     UnsupportedCampaignOperation as _UnsupportedCampaignOperation,
 )
 from sqlalchemy.exc import DataError as _SQLDataError, IntegrityError as _SQLIntegrityError
+from core.character_workflows.types import WorkflowError as _WorkflowError
+
+
+@app.errorhandler(_WorkflowError)
+def _handle_character_workflow_error(error):
+    if (request.endpoint or '').startswith('character_workflows.'):
+        from services.character_workflows import error_response
+        return error_response(error)
+    return jsonify(ok=False, error=error.code, message=error.message,
+                   issues=list(error.issues)), error.status
 
 
 @app.errorhandler(_SQLIntegrityError)
@@ -703,6 +713,8 @@ def _safe_then(target):
 def _pc_sheet_url(system, name, pid):
     """The deep-link to a character's own sheet, per system."""
     from urllib.parse import quote
+    if pid and _account_mode():
+        return url_for('character_workflows.character_sheet', character_id=pid)
     if (system or 'pf2e') == 'cosmere':
         return '/cosmere/pc/' + quote(str(pid or ''), safe='')
     return '/player/sheet/' + quote(str(name or ''), safe='')
@@ -712,10 +724,120 @@ def _load_character_document(path):
     return _character_files.authoritative_document(path, _storage.load_json(path))
 
 
+@app.template_global('character_sheet_url')
+def _character_sheet_url(name, system='pf2e', pid=None):
+    if pid or system == 'cosmere' or not _account_mode():
+        return _pc_sheet_url(system, name, pid)
+    urls = getattr(g, '_character_sheet_urls', None)
+    if urls is None:
+        urls = g._character_sheet_urls = {}
+    if name not in urls:
+        from core.character_workflows.identity import resolve_legacy_name
+        try:
+            record = resolve_legacy_name(_active_campaign_id(), name)
+            urls[name] = _pc_sheet_url(system, name, record.character_id if record else None)
+        except _WorkflowError:
+            urls[name] = '#'  # An ambiguous/pending record is not an actionable alias.
+    return urls[name]
+
+
+class _WorkflowCharacterFiles:
+    """PR5 file boundary: prepare first, raw durable write, publish after commit."""
+
+    def __init__(self):
+        self._prepared = {}
+
+    def _path(self, record):
+        from core.character_workflows.types import WorkflowError
+        from core.persistence.ownership import _validate_locator
+        _validate_locator(record.storage, record.filename)
+        if _loaded_campaign_id() != record.campaign_id:
+            raise WorkflowError('campaign_not_live', 'The live campaign changed.', 409)
+        path = os.path.join(_storage.campaign_dir(record.campaign_id), record.storage, record.filename)
+        if _character_files.locator(path) != (record.campaign_id, record.storage, record.filename):
+            raise WorkflowError('character_storage_unavailable', 'Character storage is unavailable.', 503)
+        return path
+
+    def lock(self, record):
+        from contextlib import contextmanager
+        @contextmanager
+        def locked():
+            if record is None:
+                with _LIVE_CAMPAIGN_DISPATCH_LOCK:
+                    yield
+                return
+            path = self._path(record)
+            if record.system == 'pf2e':
+                doc = self.read(record) or record.document
+                name = (doc.get('build') or doc).get('name') or record.character_id
+                with _pc_spell_lock(name):
+                    # Only pre-intent reads drain legacy dirty state. During
+                    # recovery the quarantined file must be inspected unchanged.
+                    if not _character_files.pending_publication(path):
+                        _flush_pc_dirty(name)
+                    yield
+            else:
+                with _path_lock(path):
+                    yield
+        return locked()
+
+    def read(self, record):
+        path = self._path(record)
+        try:
+            with open(path, encoding='utf-8') as handle:
+                return json.load(handle)
+        except FileNotFoundError:
+            return None
+
+    def prepare(self, record, document):
+        from core.character_workflows.types import WorkflowError
+        prepared = copy.deepcopy(document)
+        try:
+            actors = _actors_from_character_doc(prepared, self._path(record))
+        except (TypeError, ValueError, AttributeError, KeyError, IndexError, OverflowError):
+            raise WorkflowError('invalid_character_input', 'This character could not be loaded. Check its build fields.', 422) from None
+        self._prepared[record.character_id] = actors
+        return prepared
+
+    def write(self, record, document):
+        # Caller holds the live/per-character lock. Do not enter the legacy
+        # writer, which would register/commit SQL independently of the receipt.
+        _atomic_write_json_file(self._path(record), document, indent=2, fsync=True)
+
+    def refresh(self, record):
+        global _PARTY_DIR_LISTING_MTIME
+        if record.system == 'pf2e':
+            actors = self._prepared.pop(record.character_id, None)
+            if actors is None:
+                actors = _actors_from_character_doc(copy.deepcopy(record.document), self._path(record))
+            _publish_live_party_actors(actors)
+            for actor in actors:
+                _PC_FILE_CACHE[actor.name] = record.filename
+            _PARTY_DIR_MTIME_CACHE.pop(record.filename, None)
+            _PARTY_DIR_LISTING_MTIME = 0
+
+    def notify(self, record):
+        if record.system == 'pf2e':
+            _broadcast_pc_state(record.document['build']['name'])
+        else:
+            sse_broadcast('cosmere_player_state', {'pid': record.character_id,
+                'name': record.document.get('name'), 'play_state': record.document.get('play_state', {})})
+
+
 def _delete_character_document(path):
-    location = _character_files.locator(path) if _persistence_runtime.sql_enabled() else None
-    if location is None:
-        os.remove(path)
+    location = _character_files.locator(path)
+    if location is None or not _persistence_runtime.sql_enabled():
+        with _campaigns._CAMPAIGN_STORE_LOCK:
+            _character_files.assert_available(path)
+            if location is not None:
+                from core.character_workflows.lifecycle import invalidate_target, lifecycle_context
+                from core.character_workflows.recovery import default_store
+                doc = _storage.load_json(path)
+                if isinstance(doc, dict) and doc.get('id'):
+                    context = lifecycle_context(location[0])
+                    with default_store().transaction(context) as tx:
+                        invalidate_target(context, doc['id'], transaction=tx)
+            os.remove(path)
         return
     from core.persistence import ownership
     cid, store, filename = location
@@ -1057,6 +1179,9 @@ def _authorization_is_api_request():
 
 def _authorization_error(code, message, status):
     """Fail closed without turning browser denials into API redirects."""
+    if (request.endpoint or '').startswith('character_workflows.'):
+        from services.character_workflows import error_response
+        return error_response(_WorkflowError(code, message, status))
     if _authorization_is_api_request():
         return jsonify({'error': code, 'message': message}), status
     return message, status
@@ -1089,6 +1214,7 @@ def _authorization_character_locator(resolution):
     value = None
     if source in {
         _CharacterOwnerSource.ROUTE_PC_NAME,
+        _CharacterOwnerSource.ROUTE_CHARACTER_ID,
         _CharacterOwnerSource.ROUTE_COSMERE_PID,
     }:
         value = (request.view_args or {}).get(field)
@@ -1112,6 +1238,12 @@ def _authorization_character_context(cid, reference, source):
     """Resolve stored ownership inside ``cid``; locators are never authority."""
     if not cid or not reference:
         return None
+    if source is _CharacterOwnerSource.ROUTE_CHARACTER_ID:
+        from core.character_workflows.identity import resolve_character
+        record = resolve_character(cid, reference)
+        return _request_context.resolve_character_context(campaign_id=cid,
+            character_id=record.character_id, owner_user_id=record.owner_id,
+            editor_user_ids=record.editor_ids, viewer_user_ids=record.viewer_ids)
     cosmere_sources = {
         _CharacterOwnerSource.ROUTE_COSMERE_PID,
         _CharacterOwnerSource.QUERY_COSMERE_PID,
@@ -1126,6 +1258,16 @@ def _authorization_character_context(cid, reference, source):
         matches = []
         for filename in sorted(os.listdir(directory)) if os.path.isdir(directory) else ():
             if not filename.endswith('.json'):
+                continue
+            pending = _character_files.pending_publication(os.path.join(directory, filename))
+            if pending:
+                from core.character_workflows.drafts import digest
+                if not pending.metadata.get('created') and (
+                    pending.target_id == reference if source in cosmere_sources
+                    else pending.metadata.get('name_hash') == digest(reference)
+                ):
+                    from core.character_workflows.recovery import repair_required
+                    raise repair_required()
                 continue
             doc = _load_character_document(os.path.join(directory, filename))
             if not isinstance(doc, dict):
@@ -1144,6 +1286,11 @@ def _authorization_character_context(cid, reference, source):
         if stored_cid is not None and stored_cid != cid:
             return None
         character_id = doc.get('id')
+        if source not in cosmere_sources and isinstance(character_id, str) and character_id.strip():
+            # A name that appears once can still share a forged/duplicate ID
+            # with a differently named file. Every alias must resolve uniquely.
+            from core.character_workflows.identity import resolve_character
+            resolve_character(cid, character_id)
         if not isinstance(character_id, str) or not character_id.strip():
             character_id = reference
         owner_id = doc.get('owner_user_id')
@@ -1239,6 +1386,7 @@ def _enforce_route_policy():
                 'Campaign GM access required.',
                 403,
             )
+        _workflow_preflight_request()
         return None
 
     user = _auth.current_user()
@@ -1284,7 +1432,10 @@ def _enforce_route_policy():
         character=character_context,
     )
     if decision.allowed:
+        _workflow_preflight_request()
         return None
+    if (endpoint or '').startswith('character_workflows.'):
+        return _authorization_error(decision.code, decision.message, decision.status_code)
     target = request.full_path.rstrip('?') if request.query_string else request.path
     return _access.flask_denial_response(
         decision,
@@ -1630,6 +1781,16 @@ def _loaded_campaign_id():
 def _loaded_party_dir():
     """Compatibility boundary for the party directory bound to live state."""
     return PARTY_DIR
+
+
+def _loaded_party_snapshot():
+    """Read-only map snapshot for compatibility adapters under live dispatch."""
+    return dict(PARTY_LIBRARY)
+
+
+def _loaded_encounter_snapshot():
+    """Stable roster snapshot; actors remain the live lock-protected objects."""
+    return tuple(ACTIVE_ENCOUNTER)
 
 
 def _bind_campaign_paths(cid):
@@ -3860,10 +4021,17 @@ def get_rarity(sys_data, row, traits_list, default="common"):
 
 def _build_pc_file_cache():
     """Rebuild the name->filename mapping so we don't re-parse every JSON on every API call."""
+    previous = dict(_PC_FILE_CACHE)
     _PC_FILE_CACHE.clear()
     if not os.path.exists(PARTY_DIR): return
     for f in os.listdir(PARTY_DIR):
         if not f.endswith('.json'): continue
+        pending = _character_files.pending_publication(os.path.join(_loaded_party_dir(), f))
+        if pending:
+            if not pending.metadata.get('created'):
+                _PC_FILE_CACHE.update({name: filename for name, filename in previous.items()
+                                       if filename == f})
+            continue
         try:
             with open(os.path.join(PARTY_DIR, f), 'r', encoding='utf-8') as fh:
                 data = json.load(fh)
@@ -3880,6 +4048,16 @@ def get_pc_file_path(pc_name):
     """Get the file path for a character by name using the cache. Falls back to safe-name."""
     if pc_name in _PC_FILE_CACHE:
         return os.path.join(PARTY_DIR, _PC_FILE_CACHE[pc_name])
+    # An unresolved ID-file update must not fall back to a new name-based
+    # filename merely because its actor/cache was quarantined on restart.
+    location = _character_files.locator(os.path.join(_loaded_party_dir(), '_index.json'))
+    if location:
+        from core.character_workflows.drafts import digest
+        from core.character_workflows.recovery import pending_receipts
+        for pending in pending_receipts(location[0]):
+            if (pending.metadata.get('storage') == 'party_data'
+                    and pending.metadata.get('name_hash') == digest(pc_name)):
+                return os.path.join(_loaded_party_dir(), pending.metadata['filename'])
     # Cache miss - rebuild and retry
     _build_pc_file_cache()
     if pc_name in _PC_FILE_CACHE:
@@ -3911,6 +4089,7 @@ def _discard_live_party_actor(name):
 def reload_single_character(file_path):
     """Reload one character file and report whether memory accepted it."""
     try:
+        _character_files.assert_available(file_path)
         with open(file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
         actors = _actors_from_character_doc(data, file_path)
@@ -3923,6 +4102,7 @@ def reload_single_character(file_path):
 def save_and_reload_character(pc_name, pc_json, file_path):
     """Validate, durably save, then publish one character update to memory."""
     with _LIVE_CAMPAIGN_DISPATCH_LOCK:
+        _character_files.assert_available(file_path)
         _abort_if_pending_character_batch(os.path.dirname(file_path) or '.')
         try:
             with _path_lock(file_path):
@@ -4267,6 +4447,9 @@ def _save_and_reload_character_batch(updates):
 
 
 def _save_and_reload_character_batch_unlocked(updates):
+    updates = list(updates)
+    for _name, _document, path in updates:
+        _character_files.assert_available(path)
     if not _persistence_runtime.sql_enabled():
         return _save_and_reload_character_batch_files(updates)
     from core.persistence import ownership
@@ -4486,6 +4669,12 @@ def _persist_pc_combat_state(pc_name):
 
 def _do_persist_pc_combat_state_unlocked(pc_name):
     """Write HP/conditions/focus and report whether the dirty state is saved."""
+    # Never discard a dirty marker for a quarantined character, even if its
+    # provisional actor was excluded while rebuilding the library on restart.
+    try:
+        _character_files.assert_available(get_pc_file_path(pc_name))
+    except Exception:
+        return False
     live_party_dir = _loaded_party_dir()
     if live_party_dir and _character_batch_journal_paths(live_party_dir):
         try:
@@ -4661,6 +4850,7 @@ def apply_pc_delta(pc_name, mutator, *, sync_conditions=True,
 
     Returns (result, pc) or (None, None) if the PC doesn't exist.
     """
+    _character_files.assert_available(get_pc_file_path(pc_name))
     if pc_name not in PARTY_LIBRARY:
         return None, None
     pc_in_encounter = False
@@ -7928,6 +8118,8 @@ def load_libraries(restore_autosave=True):
     for file in os.listdir(party_dir):
         if file.endswith('.json'):
             file_path = os.path.join(party_dir, file)
+            if _character_files.pending_publication(file_path):
+                continue
             data, err = safe_load_json_file(file_path)
             if err:
                 print(f"[LOAD ERROR] Character {file}: {err}")
@@ -8739,7 +8931,7 @@ def api_join_campaign():
     if name not in PARTY_LIBRARY:
         return jsonify({'success': False, 'error': 'Unknown character'}), 404
     session['player_name'] = name
-    return jsonify({'success': True, 'name': name})
+    return jsonify({'success': True, 'name': name, 'url': _character_sheet_url(name)})
 
 @app.route('/api/leave_campaign', methods=['POST'])
 def api_leave_campaign():
@@ -8848,7 +9040,7 @@ def _scene_character_records(cid):
                 'is_pc': True,
                 'image': ('/portraits/' + urllib.parse.quote(str(portrait))) if portrait else None,
                 'image_focus': build.get('portrait_focus') or {'x': 50, 'y': 50},
-                'sheet_url': '/player/sheet/' + urllib.parse.quote(char_name, safe=''),
+                'sheet_url': _pc_sheet_url('pf2e', char_name, char_id),
             }
     cdir = _storage.cosmere_pc_dir(cid) if cid else COSMERE_PC_DIR
     if os.path.isdir(cdir):
@@ -8867,7 +9059,7 @@ def _scene_character_records(cid):
                 'is_pc': True,
                 'image': None,
                 'image_focus': {'x': 50, 'y': 50},
-                'sheet_url': '/cosmere/pc/' + urllib.parse.quote(str(doc['id']), safe=''),
+                'sheet_url': _pc_sheet_url('cosmere', char_name, doc['id']),
             }
     return records
 
@@ -9916,6 +10108,8 @@ def api_scene_bulk_combat(scene_id):
     if not combatant_ids:
         return jsonify({'error': 'no selected combatants are linked to this scene'}), 400
     action = str(data.get('action') or '')
+    if action in ('damage', 'heal', 'condition'):
+        _workflow_preflight_targets(combatant_ids)
     results = []
     if action in ('damage', 'heal'):
         try:
@@ -11316,6 +11510,7 @@ def _me_render(**extra):
                live_campaign_id=live_id, last_campaign=last,
                trashed_campaigns=trashed, trash_ttl_days=_campaigns.TRASH_TTL_DAYS,
                last_backup_at=_backups.last_backup_at())
+    ctx.update(_workflow_landing_context())
     ctx.update(extra)
     return render_template('account_home.html', **ctx)
 
@@ -12421,6 +12616,8 @@ def _list_cosmere_pcs():
     if os.path.isdir(COSMERE_PC_DIR):
         for fn in sorted(os.listdir(COSMERE_PC_DIR)):
             if fn.endswith('.json'):
+                if _character_files.pending_publication(os.path.join(COSMERE_PC_DIR, fn)):
+                    continue
                 d = _load_cosmere_pc(fn[:-5])
                 if d:
                     out.append(d)
@@ -12761,7 +12958,8 @@ def cosmere_pcs():
         })
     cards.sort(key=lambda c: c['name'].lower())
     return render_template('cosmere_pcs.html', pcs=cards,
-                           is_gm=_is_gm(), active_cid=ACTIVE_CAMPAIGN_ID)
+                           is_gm=_is_gm(), active_cid=_loaded_campaign_id(),
+                           **_workflow_landing_context())
 
 
 @app.route('/cosmere/gm/vitals')
@@ -12819,7 +13017,7 @@ def cosmere_import_pdf():
             }
             _save_cosmere_pc(doc)
             created.append({'id': doc['id'], 'name': doc['name'],
-                            'url': url_for('cosmere_pc_sheet', pid=doc['id'])})
+                            'url': _pc_sheet_url('cosmere', doc['name'], doc['id'])})
         except Exception as e:
             app.logger.exception(
                 'Cosmere PDF import failed request_id=%s filename=%r',
@@ -12831,6 +13029,30 @@ def cosmere_import_pdf():
                 'error': 'That PDF could not be parsed.',
             })
     return jsonify({'ok': bool(created), 'created': created, 'errors': errors})
+
+
+def _build_cosmere_document(data: dict, existing: dict | None) -> dict:
+    """Serialize a Cosmere build while retaining the latest live state.
+
+    ``force`` must be supplied by an authorized caller, never trusted directly
+    from a workflow's saved submission. Identity remains the caller's concern.
+    """
+    from core.character_workflows.types import WorkflowError
+    from systems.cosmere.build import CosmereBuild
+    from systems.cosmere import lore
+    build = CosmereBuild(data.get('build') or data, homebrew=_cosmere_homebrew_store())
+    hard = build.hard_violations()
+    if hard and not data.get('force'):
+        raise WorkflowError('rules_violation', 'This build exceeds the rules.', 422,
+                            tuple(hard))
+    doc = {'system': 'cosmere', 'name': build.name, 'build': build.to_dict()}
+    for key in ('wallet', 'play_state'):
+        if existing and isinstance(existing.get(key), dict):
+            doc[key] = copy.deepcopy(existing[key])
+    metal = (data.get('house_metal') or (existing or {}).get('house_metal') or '').lower()
+    if metal in lore.METALS:
+        doc['house_metal'] = metal
+    return doc
 
 
 @app.route('/cosmere/builder', methods=['GET', 'POST'])
@@ -12859,33 +13081,25 @@ def cosmere_builder():
             # A GM building the party leaves PCs UNCLAIMED (assignable via a join
             # link); a player building their own character owns it immediately.
             owner = None if _is_gm() else session.get('user_id')
-        doc = {
-            'id': (existing or {}).get('id') or uuid.uuid4().hex,
-            'system': 'cosmere', 'name': build.name,
-            'owner_user_id': owner,
-            'build': build.to_dict(),
-        }
+        doc = _build_cosmere_document({**data, 'force': bool(data.get('force')) and _is_gm()}, existing)
+        doc.update(id=(existing or {}).get('id') or uuid.uuid4().hex,
+                   owner_user_id=owner)
         if existing and existing.get('campaign_id'):
             doc['campaign_id'] = existing['campaign_id']
-        # Carry forward live state the builder rebuild would otherwise drop:
-        # the GM-awarded wallet (Tier 3) and the player's play_state (HP /
-        # conditions / focus). A level-up resets HP to max on next sheet load
-        # anyway, but silently wiping awarded spheres/items is data loss.
-        if existing and isinstance(existing.get('wallet'), dict):
-            doc['wallet'] = existing['wallet']
-        if existing and isinstance(existing.get('play_state'), dict):
-            doc['play_state'] = existing['play_state']
-        # Cosmetic Mistborn "house metal" (theming) — purely visual, preserved
-        # across rebuilds. Accept it from the POST or carry the existing value.
-        import systems.cosmere.lore as _lore
-        _hm = (data.get('house_metal') or (existing or {}).get('house_metal') or '').lower()
-        if _hm in _lore.METALS:
-            doc['house_metal'] = _hm
         _save_cosmere_pc(doc)
         return jsonify({'ok': True, 'id': doc['id'], 'issues': issues,
-                        'url': url_for('cosmere_pc_sheet', pid=doc['id'])})
+                        'url': _pc_sheet_url('cosmere', doc['name'], doc['id'])})
     # GET — new build, or edit/level an existing one
+    workflow, trusted_target = _workflow_builder_bootstrap('cosmere')
+    if workflow.get('redirectUrl'):
+        return redirect(workflow['redirectUrl'])
+    if workflow.get('recovering'):
+        return render_template('character_publication_recovery.html', workflow=workflow)
+    if workflow.get('initialDraft') and workflow['initialDraft']['inputs']['kind'].endswith('_import'):
+        return render_template('character_import_preview.html', workflow=workflow)
     existing = _load_cosmere_pc(request.args.get('pc')) if request.args.get('pc') else None
+    if workflow['enabled']:
+        existing = trusted_target
     if existing is not None and not _cosmere_can_act_on(existing):
         return ('Forbidden — not your character', 403)
     build = (_cb.CosmereBuild((existing or {}).get('build'), homebrew=_hb_store)
@@ -12893,7 +13107,7 @@ def cosmere_builder():
     if request.args.get('levelup') and existing:
         build.level += 1     # pre-bump for the leveler flow; the player allocates, then saves
     ctx = _cosmere_builder_context(build, _hb_store)
-    return render_template('cosmere_builder.html', pid=(existing or {}).get('id', ''), **ctx)
+    return render_template('cosmere_builder.html', pid=(existing or {}).get('id', ''), workflow=workflow, **ctx)
 
 
 @app.route('/cosmere/builder/preview', methods=['POST'])
@@ -12990,17 +13204,28 @@ def cosmere_homebrew_delete(eid):
 
 @app.route('/cosmere/pc/<pid>')
 def cosmere_pc_sheet(pid):
-    import systems.cosmere.build as _cb
     doc = _load_cosmere_pc(pid)
     if not doc:
         return ('Unknown Cosmere character', 404)
+    return _render_cosmere_pc_sheet(doc)
+
+
+def _render_cosmere_pc_sheet(doc, capabilities=None):
+    import systems.cosmere.build as _cb
+    pid = doc['id']
+    if capabilities is not None and not capabilities.owner_private:
+        doc = copy.deepcopy(doc)
+        doc.get('build', {}).pop('notes', None)
     build = _cb.CosmereBuild(doc.get('build'), homebrew=_cosmere_homebrew_store())
     actor = systems.cosmere.CosmereActor(build.to_actor_doc())
     _u = _auth.current_user()
     # The owner (or the GM) gets the INTERACTIVE sheet: tap-to-roll skills/strikes
     # + live Health/Focus/Investiture steppers. Everyone else sees it read-only.
-    interactive = _cosmere_can_act_on(doc)
-    can_delete = (bool(_u) and doc.get('owner_user_id') == _u.get('id')) or _is_gm()
+    interactive = capabilities.edit if capabilities is not None else _cosmere_can_act_on(doc)
+    can_delete = (capabilities.delete if capabilities is not None else
+                  (bool(_u) and doc.get('owner_user_id') == _u.get('id')) or _is_gm())
+    owner_private = (capabilities.owner_private if capabilities is not None else
+                     (bool(_u) and doc.get('owner_user_id') == _u.get('id')) or _is_gm())
     ps = doc.get('play_state') if isinstance(doc.get('play_state'), dict) else {}
     def _ps(key, default):
         try:
@@ -13079,6 +13304,7 @@ def cosmere_pc_sheet(pid):
         crest_glyph, crest_color = '', ''
     return render_template(
         'cosmere_sheet.html', a=actor.to_summary(), actor_id=pid, can_delete=can_delete,
+        owner_private=owner_private,
         crest_glyph=crest_glyph, crest_color=crest_color, house_metal=_hm,
         ideal_states=build.ideal_states(), derived=build.derived_stats(),
         interactive=interactive, cur=cur, tier=actor.tier,
@@ -13759,6 +13985,7 @@ def _apply_cosmere_condition_change(instance_id, condition, action='toggle'):
                    and getattr(c, 'system', 'pf2e') == 'cosmere'), None)
     if target is None:
         return None
+    _workflow_assert_actor_mutable(target)
     if not isinstance(getattr(target, 'conditions', None), dict):
         target.conditions = {}
     if cond in systems.cosmere._VALUED:
@@ -15850,6 +16077,159 @@ def _cosmere_adjust_hp(c, amount, action, damage_type):
     _combat_log(note, 'critical')
 
 
+def _workflow_assert_actor_mutable(actor):
+    """Cheap trusted-locator check before any live PC mutation or broadcast."""
+    if actor is None or not getattr(actor, 'is_pc', False):
+        return
+    if getattr(actor, 'system', 'pf2e') == 'cosmere':
+        pid = getattr(actor, 'restore_id', None)
+        path = _cosmere_pc_path(pid) if pid else None
+    else:
+        source = str(getattr(actor, 'file_path', '')).split('[', 1)[0]
+        path = os.path.join(_loaded_party_dir(), source) if source else get_pc_file_path(actor.name)
+    if path:
+        _character_files.assert_available(path)
+
+
+def _workflow_assert_combatant_mutable(instance_id):
+    for actor in _loaded_encounter_snapshot():
+        if actor.instance_id == instance_id:
+            _workflow_assert_actor_mutable(actor)
+            return
+
+
+def _workflow_preflight_targets(instance_ids):
+    for instance_id in instance_ids:
+        _workflow_assert_combatant_mutable(instance_id)
+
+
+def _workflow_preflight_request():
+    """After authorization, before any partial mutation/ledger write/SSE."""
+    if request.method in ('GET', 'HEAD', 'OPTIONS'):
+        return
+    from core.character_workflows.legacy import (
+        PC_NAME_WRITES, COMBATANT_WRITES, COSMERE_PID_WRITES, PARTY_WRITES,
+    )
+    from core.character_workflows.recovery import pending_receipts, repair_required
+    from core.character_workflows.drafts import digest
+    endpoint, args = request.endpoint, request.view_args or {}
+    body = request.get_json(silent=True)
+    data = body if isinstance(body, dict) else request.form
+
+    def pc(name):
+        if not isinstance(name, str) or not name:
+            return
+        path = get_pc_file_path(name)
+        if path:
+            _character_files.assert_available(path)
+
+    def cosmere(pid):
+        path = _cosmere_pc_path(pid) if isinstance(pid, str) else None
+        if path:
+            _character_files.assert_available(path)
+
+    def party(system):
+        # Includes targets currently hidden from loader lists, so a group write
+        # cannot quietly commit just the available subset of a party.
+        if any(r.metadata.get('system') == system for r in pending_receipts(_loaded_campaign_id())):
+            raise repair_required()
+        if system == 'pf2e':
+            for actor in _loaded_party_snapshot().values():
+                _workflow_assert_actor_mutable(actor)
+
+    if endpoint in PC_NAME_WRITES:
+        pc(args.get('pc_name'))
+    elif endpoint in COMBATANT_WRITES:
+        _workflow_assert_combatant_mutable(args.get('instance_id'))
+    elif endpoint in COSMERE_PID_WRITES:
+        cosmere(args.get('pid'))
+    elif endpoint in PARTY_WRITES:
+        party('pf2e')
+    elif endpoint in {'api_mark_ready', 'add_cosmere_party'}:
+        party(_active_system() if endpoint == 'api_mark_ready' else 'cosmere')
+    elif endpoint == 'roll_all_initiative':
+        for actor in _loaded_encounter_snapshot():
+            _workflow_assert_actor_mutable(actor)
+    elif endpoint in {'api_treat_wounds', 'pc_treat_wounds'}:
+        name = data.get('target') or args.get('pc_name')
+        pc(name.strip() if isinstance(name, str) else name)
+    elif endpoint in {'approve_hero_nomination', 'send_loot_to_player'}:
+        pc(data.get('nominee' if endpoint == 'approve_hero_nomination' else 'target'))
+    elif endpoint == 'api_loot_ledger_award':
+        entry = next((e for e in _load_loot_ledger().get('entries', [])
+                      if e.get('id') == args.get('entry_id')), {})
+        name = data.get('target') or entry.get('recipient')
+        pc(name.strip() if isinstance(name, str) else name)
+    elif endpoint == 'api_cosmere_loot_add':
+        recipient = data.get('recipient')
+        if isinstance(recipient, str) and any(
+            r.metadata.get('system') == 'cosmere' and not r.metadata.get('created')
+            and digest(recipient.strip()) in (r.metadata.get('name_hash'), r.metadata.get('before_name_hash'))
+            for r in pending_receipts(_loaded_campaign_id())
+        ):
+            raise repair_required()
+    elif endpoint in {'api_cosmere_my_speed', 'api_cosmere_my_initiative'}:
+        cosmere(data.get('pid'))
+    elif endpoint == 'cosmere_builder':
+        cosmere(data.get('id'))
+    elif endpoint == 'cosmere_rest':
+        cosmere(data['pid']) if data.get('pid') else party('cosmere')
+    elif endpoint == 'add_combatant':
+        if data.get('type') == 'pc':
+            pc(data.get('path'))
+        elif data.get('type') == 'cosmere':
+            cosmere(data.get('path'))
+
+
+def _workflow_preflight_round_events(new_round):
+    for event in ROUND_EVENTS:
+        if not _round_event_should_fire(event, new_round):
+            continue
+        payload = event.get('payload')
+        if not isinstance(payload, dict):
+            continue
+        for kind in ('conditions', 'damage'):
+            for row in payload.get(kind) or []:
+                if isinstance(row, dict):
+                    for actor in _round_event_resolve_targets(row.get('target_ids')):
+                        _workflow_assert_actor_mutable(actor)
+
+
+def _workflow_preflight_effect_expiry(round_number):
+    for actor in _loaded_party_snapshot().values():
+        effects = list(getattr(actor, 'pc_active_effects', []) or [])
+        if effects and effects_service.expire_round_effects(effects, round_number)[1]:
+            _workflow_assert_actor_mutable(actor)
+
+
+def _workflow_preflight_turn(*, delay_id=None):
+    """Project existing turn rules without changing counters, timers or logs."""
+    encounter = _loaded_encounter_snapshot()
+    if not encounter:
+        return
+    outgoing = encounter[TURN_INDEX]
+    if delay_id is not None:
+        _workflow_assert_combatant_mutable(delay_id)
+        if outgoing.instance_id != delay_id:
+            return
+    _workflow_assert_actor_mutable(outgoing)
+    projected_index, projected_round = TURN_INDEX, ROUND_NUMBER
+    old_index = projected_index
+    for _ in range(len(encounter)):
+        projected_index = (projected_index + 1) % len(encounter)
+        if projected_index <= old_index:
+            projected_round += 1
+        candidate = encounter[projected_index]
+        if not (getattr(candidate, 'delaying', False) or candidate.instance_id == delay_id):
+            break
+        old_index = projected_index
+    _workflow_assert_actor_mutable(encounter[projected_index])
+    if projected_round > ROUND_NUMBER:
+        _workflow_preflight_round_events(projected_round)
+    if delay_id is None:
+        _workflow_preflight_effect_expiry(projected_round)
+
+
 def _apply_hp_delta(instance_id, amount, action, damage_type='untyped'):
     """Core HP-mutation logic shared by the `/api/adjust_hp` route and the
     round-events payload engine (feature 7): PC temp-HP/dying math, Cosmere
@@ -15859,6 +16239,7 @@ def _apply_hp_delta(instance_id, amount, action, damage_type='untyped'):
     damage_type from request.form; round-events calls it directly.
     Returns old_hp (the combatant's HP before the change) or None if no
     combatant with this instance_id is in the live encounter."""
+    _workflow_assert_combatant_mutable(instance_id)
     old_hp = None
     damage_type = (damage_type or 'untyped').strip()
     try:
@@ -16794,6 +17175,7 @@ def _apply_condition_change(instance_id, condition, action, rounds=0):
     only the ACTIVE ones. A bare [] read then raised KeyError on `prone` or
     `sickened` -- supported conditions, crashing mid-combat with a generic
     'Internal server error' toast while the real cause sat in the Railway log."""
+    _workflow_assert_combatant_mutable(instance_id)
     if condition not in APPLICABLE_CONDITIONS:
         # Refuse rather than fall through. Falling through skipped both arms but
         # still logged "Grabbed -> 0", still bumped the stat, still persisted and
@@ -17297,6 +17679,7 @@ def _apply_start_of_turn(new_c):
     cycle_turn only, so a creature reached via Delay skipped all of it --
     stale action pips, no Slowed/Stunned math, un-rolled persistent damage,
     stale PC reaction / raised shield)."""
+    _workflow_assert_actor_mutable(new_c)
     # PC turn refresh: (1) get your reaction back, (2) Raise a Shield
     # expires (PF2e CRB: "until the start of your next turn"). We do this
     # before applying new start-of-turn effects so conditions that hit
@@ -17380,6 +17763,7 @@ def cycle_turn(direction):
     global TURN_INDEX, ACTIVE_ENCOUNTER, ROUND_NUMBER, TURN_REMINDERS
     if not ACTIVE_ENCOUNTER: return redirect(url_for('tracker_view'))
     if direction == 'next':
+        _workflow_preflight_turn()
         # === END OF CURRENT TURN: auto-tick conditions (PF2E Remaster) ===
         current_c = ACTIVE_ENCOUNTER[TURN_INDEX]
 
@@ -17599,6 +17983,7 @@ def _fire_round_events(new_round):
     naming the event, broadcasts SSE `round_event`, and advances
     last_fired_round (which only ever advances -- backward turn-cycling
     never re-fires or un-fires an event)."""
+    _workflow_preflight_round_events(new_round)
     for ev in ROUND_EVENTS:
         if not _round_event_should_fire(ev, new_round):
             continue
@@ -17941,6 +18326,7 @@ def _generate_turn_reminders():
 def delay_turn(instance_id):
     """Mark a combatant as delaying — they'll be skipped in turn order."""
     global TURN_INDEX, ROUND_NUMBER
+    _workflow_preflight_turn(delay_id=instance_id)
     for i, c in enumerate(ACTIVE_ENCOUNTER):
         if c.instance_id == instance_id:
             c.delaying = True
@@ -18777,13 +19163,12 @@ def player_view():
     # Owner-aware landing (account mode): a player who owns exactly one PC in this
     # campaign goes straight to their sheet instead of a 4-tile party picker --
     # parity with the Cosmere player hub.
-    if _account_mode():
+    if _account_mode() and request.args.get('roster') != '1':
         _u = _auth.current_user()
         if _u:
             mine = _my_pc_names(_u['id'])
             if len(mine) == 1:
-                from urllib.parse import quote
-                return redirect('/player/sheet/' + quote(mine[0]))
+                return redirect(_character_sheet_url(mine[0]))
     # Sync from disk to catch any characters added outside this process
     _sync_party_from_disk()
     # Pass the campaign config so the hub can render the same hero band
@@ -18795,10 +19180,12 @@ def player_view():
         party=list(PARTY_LIBRARY.values()),
         campaign=_load_campaign_config(),
         current_player=session.get('player_name'),
+        **_workflow_landing_context(),
     )
 
 _PARTY_DIR_MTIME_CACHE = {}  # filename -> last-seen mtime
 _PARTY_DIR_LISTING_MTIME = 0  # mtime of PARTY_DIR itself, to skip listdir
+_PARTY_WORKFLOW_PENDING_SIGNATURE = None
 
 def _sync_party_from_disk():
     """Ensure PARTY_LIBRARY matches what's on disk. Adds missing characters,
@@ -18810,8 +19197,32 @@ def _sync_party_from_disk():
     own mtime gates the listdir so the common 'no churn' case is a single
     stat() call.
     """
-    global _PARTY_DIR_LISTING_MTIME
+    global _PARTY_DIR_LISTING_MTIME, _PARTY_WORKFLOW_PENDING_SIGNATURE
     if not os.path.exists(PARTY_DIR): return
+
+    location = _character_files.locator(os.path.join(_loaded_party_dir(), '_index.json'))
+    if location:
+        from core.character_workflows.recovery import pending_receipts
+        pending = pending_receipts(location[0])
+        signature = (_loaded_party_dir(), tuple(sorted((r.target_id, r.metadata.get('filename'),
+                     r.metadata.get('created')) for r in pending)))
+        if signature != _PARTY_WORKFLOW_PENDING_SIGNATURE:
+            # Only a visibility transition invalidates the mtime shortcut.
+            # The receipt index is cached; steady-state sync performs no scan.
+            for receipt in pending:
+                if receipt.metadata.get('storage') != 'party_data':
+                    continue
+                filename = receipt.metadata['filename']
+                _PARTY_DIR_MTIME_CACHE.pop(filename, None)
+                if receipt.metadata.get('created'):
+                    for name, actor in list(PARTY_LIBRARY.items()):
+                        if str(getattr(actor, 'file_path', '')).split('[', 1)[0] == filename:
+                            PARTY_LIBRARY.pop(name, None)
+                    for name, cached in list(_PC_FILE_CACHE.items()):
+                        if cached == filename:
+                            _PC_FILE_CACHE.pop(name, None)
+            _PARTY_DIR_LISTING_MTIME = 0
+            _PARTY_WORKFLOW_PENDING_SIGNATURE = signature
 
     try:
         dir_mtime = os.stat(PARTY_DIR).st_mtime
@@ -18835,6 +19246,12 @@ def _sync_party_from_disk():
 
     for f in disk_files:
         file_path = os.path.join(PARTY_DIR, f)
+        pending = _character_files.pending_publication(file_path)
+        if pending is not None:
+            if not pending.metadata.get('created'):
+                disk_names.update(name for name, pc in PARTY_LIBRARY.items()
+                                  if getattr(pc, 'file_path', None) == f)
+            continue
         try:
             file_mtime = os.stat(file_path).st_mtime
         except OSError:
@@ -18893,15 +19310,36 @@ def _sync_party_from_disk():
 @app.route('/player/sheet/<pc_name>')
 def player_sheet(pc_name):
     if pc_name in PARTY_LIBRARY:
-        # Claim this character for the browser session so rolls broadcast
-        # under the PC's name instead of the generic "Player" fallback in
-        # /api/log_roll. Mirrors /api/register_player's validation (only a
-        # real party member, never "GM"/NPC). GMs keep their own identity —
-        # they roll as whoever they pick in the tracker.
-        if not _is_gm():
-            session['player_name'] = pc_name
-        return render_template('player_sheet.html', pc=PARTY_LIBRARY[pc_name], weapons_json=json.dumps(BUILDER_WEAPONS), builder_armor=BUILDER_ARMOR, armor_json=json.dumps(BUILDER_ARMOR), spells_json=json.dumps([{'name': s['name'], 'level': s['level'], 'traditions': s['traditions']} for s in BUILDER_SPELLS]), party_names=list(PARTY_LIBRARY.keys()))
+        capabilities = None
+        if _account_mode():
+            from core.character_workflows.identity import resolve_legacy_name
+            from core.character_workflows.capabilities import capabilities_for
+            record = resolve_legacy_name(_active_campaign_id(), pc_name)
+            if record is None:
+                abort(404)
+            capabilities = capabilities_for(_character_workflow_context(), record)
+        return _render_pf2e_sheet(PARTY_LIBRARY[pc_name], capabilities)
     return redirect(url_for('player_view'))
+
+
+def _render_pf2e_sheet(actor, capabilities=None):
+    """Read-only capabilities never select an acting character."""
+    interactive = capabilities is None or capabilities.edit
+    owner_private = capabilities is None or capabilities.owner_private
+    if interactive and not _is_gm():
+        session['player_name'] = actor.name
+    if not owner_private:
+        actor = copy.deepcopy(actor)
+        actor.notes, actor.session_notes = '', []
+    if not interactive:
+        # The legacy sheet performs spell-state migrations on startup. A
+        # read-only render deliberately includes none of its mutation scripts.
+        return render_template('player_sheet_readonly.html', pc=actor)
+    return render_template('player_sheet.html', pc=actor, owner_private=owner_private,
+        weapons_json=json.dumps(BUILDER_WEAPONS), builder_armor=BUILDER_ARMOR,
+        armor_json=json.dumps(BUILDER_ARMOR), spells_json=json.dumps([
+            {'name': s['name'], 'level': s['level'], 'traditions': s['traditions']} for s in BUILDER_SPELLS]),
+        party_names=list(PARTY_LIBRARY.keys()))
 
 @app.route('/api/player_state')
 def player_state():
@@ -20805,6 +21243,13 @@ def pack_detail(kind, key):
 
 @app.route('/player/builder')
 def player_builder():
+    workflow, _ = _workflow_builder_bootstrap('pf2e')
+    if workflow.get('redirectUrl'):
+        return redirect(workflow['redirectUrl'])
+    if workflow.get('recovering'):
+        return render_template('character_publication_recovery.html', workflow=workflow)
+    if workflow.get('initialDraft') and workflow['initialDraft']['inputs']['kind'].endswith('_import'):
+        return render_template('character_import_preview.html', workflow=workflow)
     # Filter weapons/armor to level 0-1 items for starting gear
     starting_weapons = [w for w in BUILDER_WEAPONS if w.get('level', 0) <= 1 and w.get('category') in ('simple', 'martial', None)]
     starting_armor = [a for a in BUILDER_ARMOR if a.get('level', 0) <= 1]
@@ -20818,7 +21263,7 @@ def player_builder():
         subclass_descriptions=SUBCLASS_DESCRIPTIONS,
         weapons=starting_weapons,
         armor=starting_armor,
-        skill_feat_prereqs=SKILL_FEAT_PREREQS
+        skill_feat_prereqs=SKILL_FEAT_PREREQS, workflow=workflow
     )
 
 @app.route('/api/toggle_feature/<pc_name>/<feature_name>', methods=['POST'])
@@ -22273,79 +22718,24 @@ def import_pathbuilder():
         
         safe_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', name)
         file_path = os.path.join(PARTY_DIR, f"{safe_name}.json")
+        account_record = None
+        if _account_mode():
+            from core.character_workflows.identity import resolve_legacy_name
+            from core.character_workflows.systems import _strip_authority
+            pc_json = _strip_authority(pc_json)
+            account_record = resolve_legacy_name(_active_campaign_id(), name)
+            if account_record is not None:
+                file_path = os.path.join(_storage.party_dir(account_record.campaign_id), account_record.filename)
         
         merged = False
         existing_json = None
-        if name in PARTY_LIBRARY and os.path.exists(file_path):
+        if (account_record is not None or (not _account_mode() and name in PARTY_LIBRARY)) and os.path.exists(file_path):
             # --- SMART MERGE: Character exists, preserve runtime state ---
             _flush_pc_dirty(name)
             with open(file_path, 'r', encoding='utf-8') as f:
                 existing_json = json.load(f)
-            existing_build = existing_json.get('build', existing_json)
-            
-            # Fields to IMPORT from Pathbuilder (game rules data)
-            PB_IMPORT_KEYS = [
-                'name', 'class', 'dualClass', 'level', 'xp', 'ancestry', 'heritage',
-                'background', 'alignment', 'gender', 'age', 'deity', 'size', 'sizeName',
-                'keyability', 'languages', 'rituals', 'resistances', 'inventorMods',
-                'abilities', 'attributes', 'proficiencies', 'mods', 'feats', 'specials',
-                'lores', 'specificProficiencies', 'armor', 'spellCasters', 'focusPoints',
-                'focus', 'formula', 'acTotal', 'pets', 'familiars',
-            ]
-            
-            # Fields to PRESERVE from existing (runtime/custom data)
-            PRESERVE_KEYS = [
-                'current_hp', 'conditions', 'current_focus', 'hero_points',
-                'notes', 'session_notes', 'portrait', 'portrait_focus', 'active_toggles',
-                'shield_raised', 'shield_hp', 'shield_max_hp', 'shield_hardness', 'shield_bt', 'shield_ac_bonus',
-                'expended_slots', 'signature_spells', 'active_effects',
-                'weapons',  # Preserve custom weapons added in-app
-                'pets_custom',  # Preserve custom pets
-                'level_history', 'monk_paths', 'half_boosts',
-                'persistent_damage',
-            ]
-            
-            # Start with existing build as base
-            merged_build = dict(existing_build)
-            
-            # Overlay Pathbuilder data for rules fields
-            for key in PB_IMPORT_KEYS:
-                if key in new_build:
-                    merged_build[key] = new_build[key]
-            
-            # Merge weapons: keep custom weapons (those with no PB equivalent), add PB weapons
-            existing_weapons = existing_build.get('weapons') or []
-            pb_weapons = new_build.get('weapons') or []
-            # Custom weapons = those that don't match any PB weapon name
-            pb_weapon_names = {(w.get('name','') if isinstance(w, dict) else '').lower() for w in pb_weapons}
-            custom_weapons = [w for w in existing_weapons if isinstance(w, dict) and w.get('name','').lower() not in pb_weapon_names and w.get('name','') != 'Fist']
-            merged_build['weapons'] = pb_weapons + custom_weapons
-            
-            # Merge equipment: Pathbuilder's equipment list takes precedence, but append custom items
-            pb_equipment = new_build.get('equipment') or []
-            existing_equipment = existing_build.get('equipment') or []
-            pb_eq_names = set()
-            for eq in pb_equipment:
-                if isinstance(eq, list) and len(eq) >= 1: pb_eq_names.add(str(eq[0]).lower())
-                elif isinstance(eq, dict): pb_eq_names.add(str(eq.get('name','')).lower())
-            custom_eq = []
-            for eq in existing_equipment:
-                eq_name = ''
-                if isinstance(eq, list) and len(eq) >= 1: eq_name = str(eq[0]).lower()
-                elif isinstance(eq, dict): eq_name = str(eq.get('name','')).lower()
-                if eq_name and eq_name not in pb_eq_names:
-                    custom_eq.append(eq)
-            merged_build['equipment'] = pb_equipment + custom_eq
-            
-            # Restore preserved fields from existing
-            for key in PRESERVE_KEYS:
-                if key in existing_build and key not in ['weapons']:
-                    merged_build[key] = existing_build[key]
-            
-            # Cap current_hp to new max (level might have changed)
-            # Don't set current_hp if it wasn't previously saved (let Character.__init__ default to max)
-            
-            final_json = {"success": True, "build": merged_build}
+            existing_json = _character_files.authoritative_document(file_path, existing_json)
+            final_json = _merge_pf2e_import(existing_json, pc_json)
             merged = True
         else:
             # --- FRESH IMPORT: No existing character ---
@@ -22361,6 +22751,8 @@ def import_pathbuilder():
         if cid:
             final_json = _storage.ensure_character_envelope(
                 final_json, cid, existing=(existing_json if merged else None))
+            if _account_mode() and account_record is None:
+                file_path = os.path.join(_storage.party_dir(_active_campaign_id()), final_json['id'] + '.json')
 
         save_and_reload_character(name, final_json, file_path)
         
@@ -22368,7 +22760,7 @@ def import_pathbuilder():
         return jsonify({"success": True, "name": name, "level": new_build.get('level', 1), "class": new_build.get('class', 'Unknown'), "action": action})
     except json.JSONDecodeError:
         return jsonify({"error": "Invalid JSON format"}), 400
-    except HTTPException:
+    except (HTTPException, _WorkflowError):
         raise
     except Exception:
         app.logger.exception(
@@ -22376,6 +22768,77 @@ def import_pathbuilder():
             getattr(g, 'request_id', '-'),
         )
         return jsonify({"error": "Character import failed."}), 500
+
+def _merge_pf2e_import(existing: dict, imported: dict) -> dict:
+    """Existing Pathbuilder smart merge, without target selection or file I/O."""
+    existing_json = copy.deepcopy(existing)
+    new_build = copy.deepcopy(imported.get('build', imported))
+    existing_build = existing_json.get('build', existing_json)
+
+    # Fields to IMPORT from Pathbuilder (game rules data)
+    PB_IMPORT_KEYS = [
+        'name', 'class', 'dualClass', 'level', 'xp', 'ancestry', 'heritage',
+        'background', 'alignment', 'gender', 'age', 'deity', 'size', 'sizeName',
+        'keyability', 'languages', 'rituals', 'resistances', 'inventorMods',
+        'abilities', 'attributes', 'proficiencies', 'mods', 'feats', 'specials',
+        'lores', 'specificProficiencies', 'armor', 'spellCasters', 'focusPoints',
+        'focus', 'formula', 'acTotal', 'pets', 'familiars',
+    ]
+
+    # Fields to PRESERVE from existing (runtime/custom data)
+    PRESERVE_KEYS = [
+        'current_hp', 'conditions', 'current_focus', 'hero_points',
+        'notes', 'session_notes', 'portrait', 'portrait_focus', 'active_toggles',
+        'shield_raised', 'shield_hp', 'shield_max_hp', 'shield_hardness', 'shield_bt', 'shield_ac_bonus',
+        'expended_slots', 'signature_spells', 'active_effects',
+        'weapons',  # Preserve custom weapons added in-app
+        'pets_custom',  # Preserve custom pets
+        'level_history', 'monk_paths', 'half_boosts',
+        'persistent_damage',
+    ]
+
+    # Start with existing build as base
+    merged_build = dict(existing_build)
+
+    # Overlay Pathbuilder data for rules fields
+    for key in PB_IMPORT_KEYS:
+        if key in new_build:
+            merged_build[key] = new_build[key]
+
+    # Merge weapons: keep custom weapons (those with no PB equivalent), add PB weapons
+    existing_weapons = existing_build.get('weapons') or []
+    pb_weapons = new_build.get('weapons') or []
+    # Custom weapons = those that don't match any PB weapon name
+    pb_weapon_names = {(w.get('name','') if isinstance(w, dict) else '').lower() for w in pb_weapons}
+    custom_weapons = [w for w in existing_weapons if isinstance(w, dict) and w.get('name','').lower() not in pb_weapon_names and w.get('name','') != 'Fist']
+    merged_build['weapons'] = pb_weapons + custom_weapons
+
+    # Merge equipment: Pathbuilder's equipment list takes precedence, but append custom items
+    pb_equipment = new_build.get('equipment') or []
+    existing_equipment = existing_build.get('equipment') or []
+    pb_eq_names = set()
+    for eq in pb_equipment:
+        if isinstance(eq, list) and len(eq) >= 1: pb_eq_names.add(str(eq[0]).lower())
+        elif isinstance(eq, dict): pb_eq_names.add(str(eq.get('name','')).lower())
+    custom_eq = []
+    for eq in existing_equipment:
+        eq_name = ''
+        if isinstance(eq, list) and len(eq) >= 1: eq_name = str(eq[0]).lower()
+        elif isinstance(eq, dict): eq_name = str(eq.get('name','')).lower()
+        if eq_name and eq_name not in pb_eq_names:
+            custom_eq.append(eq)
+    merged_build['equipment'] = pb_equipment + custom_eq
+
+    # Restore preserved fields from existing
+    for key in PRESERVE_KEYS:
+        if key in existing_build and key not in ['weapons']:
+            merged_build[key] = existing_build[key]
+
+    # Cap current_hp to new max (level might have changed)
+    # Don't set current_hp if it wasn't previously saved (let Character.__init__ default to max)
+
+    return {"success": True, "build": merged_build}
+
 
 def _validate_new_character_feats(data):
     """Levelup-parity soft validation for character creation (spec 2026-07-03).
@@ -22453,19 +22916,10 @@ def _validate_new_character_feats(data):
     return violations
 
 
-@app.route('/api/save_new_character', methods=['POST'])
-def save_new_character():
-    data = request.json
-    # Soft backstop, mirroring the levelup flow's validate + force pattern:
-    # violations block with a warning payload unless the GM-override force
-    # flag is set; a clean build proceeds through the UNCHANGED save path.
-    if not (data.get('force') or data.get('force_save')):
-        _violations = _validate_new_character_feats(data)
-        if _violations:
-            return jsonify({'success': False, 'needs_force': True,
-                            'violations': _violations}), 409
+def _build_new_pf2e_document(data: dict) -> dict:
+    """Existing builder serialization, without persistence or authority."""
+    data = copy.deepcopy(data)
     char_name = data.get('name', 'Unknown')
-    safe_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', char_name)
     
     abilities = data.get('abilities', {"str": 0, "dex": 0, "con": 0, "int": 0, "wis": 0, "cha": 0})
     class_name = data.get('class_name', '')
@@ -22695,6 +23149,21 @@ def save_new_character():
             "lores": data.get('customLores', []),
         }
     }
+    return new_char_json
+
+
+@app.route('/api/save_new_character', methods=['POST'])
+def save_new_character():
+    data = request.json
+    # Retain the legacy GM-only route's soft validation response.
+    if not (data.get('force') or data.get('force_save')):
+        _violations = _validate_new_character_feats(data)
+        if _violations:
+            return jsonify({'success': False, 'needs_force': True,
+                            'violations': _violations}), 409
+    char_name = data.get('name', 'Unknown')
+    safe_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', char_name)
+    new_char_json = _build_new_pf2e_document(data)
     file_path = os.path.join(PARTY_DIR, f"{safe_name}.json")
     # In account/campaign mode, stamp the campaign envelope so this PC is
     # invitable/claimable and shows up in My Characters (re-save preserves any
@@ -22702,8 +23171,17 @@ def save_new_character():
     # unchanged.
     cid = _active_campaign_id()
     if cid:
-        existing = _storage.load_json(file_path) if os.path.exists(file_path) else None
+        if _account_mode():
+            from core.character_workflows.identity import resolve_legacy_name
+            record = resolve_legacy_name(cid, char_name)
+            existing = record.document if record is not None else None
+            if record is not None:
+                file_path = os.path.join(_storage.party_dir(record.campaign_id), record.filename)
+        else:
+            existing = _storage.load_json(file_path) if os.path.exists(file_path) else None
         new_char_json = _storage.ensure_character_envelope(new_char_json, cid, existing=existing)
+        if _account_mode() and existing is None:
+            file_path = os.path.join(_storage.party_dir(_active_campaign_id()), new_char_json['id'] + '.json')
     save_and_reload_character(char_name, new_char_json, file_path)
     return jsonify({"success": True, "message": "Character saved successfully!"})
 
@@ -23686,6 +24164,7 @@ def _expire_token_effects_for_round():
     after it should have ended, with no way to clear it but manually
     clicking ×.
     """
+    _workflow_preflight_effect_expiry(ROUND_NUMBER)
     expired_log = []
     # Sheet-side expiry — track which PCs changed so we broadcast only those.
     changed_pcs = set()
@@ -25090,6 +25569,158 @@ def _obsidian_create_player_reveal(payload):
     return copy.deepcopy(handout)
 
 
+def _workflow_builder_bootstrap(system):
+    """GET validates private resume/explicit intent without creating a draft."""
+    from dataclasses import asdict
+    from core.character_workflows.capabilities import capabilities_for
+    from core.character_workflows.drafts import authorize_personal
+    from core.character_workflows.identity import resolve_character
+    workflow = {'enabled': _account_mode(), 'initialDraft': None, 'targetId': None,
+                'canOverride': _is_gm(),
+                'cancelUrl': '/player?roster=1' if system == 'pf2e' else '/cosmere/pcs'}
+    if not workflow['enabled']:
+        return workflow, None
+    context = _character_workflow_context()
+    authorize_personal(context)
+    if context.system != system:
+        raise _WorkflowError('unsupported_system', 'Open the builder for this campaign system.', 422)
+    draft_id, pc, target_id = (request.args.get(key) for key in ('draft_id', 'pc', 'target_id'))
+    if (draft_id and (pc or target_id)) or (pc and target_id and pc != target_id):
+        raise _WorkflowError('draft_target_conflict', 'Resume the draft without another character target.', 409)
+    if draft_id:
+        snapshot = _character_workflow_service().drafts.get(context, draft_id)
+        workflow['initialDraft'] = asdict(snapshot)
+        target_id = snapshot.target_id
+        if snapshot.state == 'committed':
+            result = resolve_character(context.campaign_id, snapshot.result['character_id'])
+            if not capabilities_for(context, result).view:
+                raise _WorkflowError('character_not_found', 'Character not found.', 404)
+            workflow['redirectUrl'] = url_for('character_workflows.character_sheet',
+                                             character_id=result.character_id)
+            return workflow, None
+        if snapshot.state == 'publishing':
+            # The author may recover their private intent while its target is
+            # quarantined. Do not read or render that provisional character.
+            # The publish service rechecks target/force authority on Retry.
+            workflow.update(recovering=True, targetId=target_id, canOverride=False)
+            return workflow, None
+    else:
+        target_id = target_id or pc
+    record = resolve_character(context.campaign_id, target_id) if target_id else None
+    caps = capabilities_for(context, record)
+    if record and not caps.edit:
+        raise _WorkflowError('character_not_found', 'Character not found.', 404)
+    if record and system == 'pf2e' and not draft_id:
+        raise _WorkflowError('unsupported_update', 'Use an import draft to update this PF2e character.', 422)
+    workflow.update(targetId=target_id, canOverride=caps.override,
+                    targetName=(record.document.get('build', {}).get('name') or record.document.get('name')) if record else None)
+    return workflow, record.document if record else None
+
+
+def _workflow_landing_context():
+    """Only the selected live campaign's author-private summaries and grants."""
+    from core.character_workflows.capabilities import capabilities_for
+    from core.character_workflows.identity import resolve_character
+    result = {'workflow_enabled': False, 'workflow_drafts': [], 'workflow_targets': [],
+              'workflow_access': {}, 'workflow_error': None}
+    if not _account_mode():
+        return result
+    context = _character_workflow_context()
+    if not (context.is_member and context.is_live):
+        return result
+    result['workflow_enabled'] = True
+    builder = '/player/builder' if context.system == 'pf2e' else '/cosmere/builder'
+    try:
+        for draft in _character_workflow_service().drafts.list(context):
+            form = draft.inputs.form if draft.inputs else {}
+            build = form.get('build') if isinstance(form.get('build'), dict) else form
+            result['workflow_drafts'].append({'id': draft.id,
+                'name': build.get('name') or 'Untitled character', 'state': draft.state,
+                'url': builder + '?draft_id=' + draft.id})
+        directory = (_storage.party_dir(context.campaign_id) if context.system == 'pf2e'
+                     else _storage.cosmere_pc_dir(context.campaign_id))
+        for filename in sorted(os.listdir(directory)) if os.path.isdir(directory) else ():
+            if not filename.endswith('.json'):
+                continue
+            try:
+                document = _load_character_document(os.path.join(directory, filename))
+                if not isinstance(document, dict) or not document.get('id'):
+                    continue
+                record = resolve_character(context.campaign_id, document['id'])
+                caps = capabilities_for(context, record)
+                name = _campaigns._character_name(record.document)
+                label = ('Owned' if record.owner_id == context.principal.user_id else
+                         'Editable' if caps.edit else 'Read-only' if caps.view else 'No sheet access')
+                item = {'id': record.character_id, 'name': name, 'label': label,
+                        'view': caps.view, 'edit': caps.edit, 'delete': caps.delete,
+                        'url': _pc_sheet_url(context.system, name, record.character_id)}
+                result['workflow_access'][name if context.system == 'pf2e' else record.character_id] = item
+                if caps.edit:
+                    result['workflow_targets'].append(item)
+            except _WorkflowError:
+                continue  # Ambiguous/provisional identities offer no action.
+    except _WorkflowError as error:
+        result['workflow_error'] = error.message
+    return result
+
+
+def _character_workflow_context():
+    context = getattr(g, 'campaign_context', None)
+    if context is not None:
+        return context
+    cid = _active_campaign_id()
+    return _request_context.resolve_campaign_context(
+        _request_context.principal_from_user(_auth.current_user()),
+        campaign_id=cid, campaign=_authorization_campaign_doc(cid),
+        live_campaign_id=_loaded_campaign_id())
+
+
+def _character_workflow_service():
+    service = getattr(g, '_character_workflow_service', None)
+    if service is None:
+        from core.character_workflows.drafts import DraftService
+        from core.character_workflows.publication import WorkflowService
+        from core.character_workflows.recovery import default_store
+        from core.character_workflows.systems import build_system_adapters
+        from pf2e_pdf_import import build_from_pdf as pf_pdf
+        from systems.cosmere.pdf_import import build_from_pdf as cos_pdf
+        adapters = build_system_adapters(
+            pf2e_build=_build_new_pf2e_document, pf2e_validate=_validate_new_character_feats,
+            pf2e_merge=_merge_pf2e_import,
+            pf2e_pdf=lambda content: pf_pdf(content, character_factory=Character),
+            cosmere_build=_build_cosmere_document,
+            cosmere_pdf=lambda content: cos_pdf(content, homebrew=_cosmere_homebrew_store()))
+        store = default_store()
+        drafts = DraftService(store, adapters)
+        service = WorkflowService(drafts, store, adapters, _WorkflowCharacterFiles())
+        g._character_workflow_service = service
+    return service
+
+
+def _render_workflow_character(record, capabilities):
+    if record.system == 'cosmere':
+        return _render_cosmere_pc_sheet(record.document, capabilities)
+    name = record.document['build']['name']
+    # PF2e's live cache and legacy sheet mutations remain name-keyed. An ID
+    # alone cannot make a duplicate-name runtime safe to render interactively.
+    from core.character_workflows.identity import resolve_legacy_name
+    alias = resolve_legacy_name(record.campaign_id, name)
+    if alias is None or alias.character_id != record.character_id:
+        raise _WorkflowError('character_identity_conflict', 'Character identity is ambiguous or inconsistent.', 409)
+    actor = _loaded_party_snapshot().get(name)
+    if actor is None or os.path.basename(getattr(actor, 'file_path', '')) != record.filename:
+        actor = Character(copy.deepcopy(record.document), record.filename)
+    return _render_pf2e_sheet(actor, capabilities)
+
+
+from services.character_workflows import create_blueprint as _create_workflow_blueprint
+from werkzeug.local import LocalProxy as _LocalProxy
+app.register_blueprint(_create_workflow_blueprint(
+    drafts=_LocalProxy(lambda: _character_workflow_service().drafts),
+    workflows=_LocalProxy(_character_workflow_service),
+    resolve_context=_character_workflow_context, render_sheet=_render_workflow_character))
+
+
 from services.obsidian_sync import register_obsidian_sync as _register_obsidian_sync
 _register_obsidian_sync(app, {
     'active_campaign_id': lambda: ACTIVE_CAMPAIGN_ID,
@@ -25098,6 +25729,7 @@ _register_obsidian_sync(app, {
     'combatant_detail': _obsidian_combatant_detail,
     'find_combatant': _find_active_combatant,
     'apply_hp': _apply_hp_delta,
+    'preflight_targets': _workflow_preflight_targets,
     'maybe_remove_defeated': _maybe_auto_remove_defeated,
     'adjust_party_hp': _obsidian_adjust_party_hp,
     'apply_condition': _apply_condition_change,

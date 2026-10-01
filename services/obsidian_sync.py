@@ -147,6 +147,11 @@ def _undo_last(adapter: dict, campaign_id: str, runtime: dict) -> dict:
     if kind == "adjust_hp" and result.get("targets"):
         # Multi-target: reverse every target, each by its own recorded delta,
         # because resistances mean the same fireball landed differently on each.
+        preflight = adapter.get("preflight_targets")
+        if preflight:
+            preflight([str(entry.get("target_id") or "") for entry in result["targets"]
+                       if int(entry.get("old_hp", 0)) != int(entry.get("new_hp", 0))
+                       and adapter["find_combatant"](str(entry.get("target_id") or "")) is not None])
         reversed_targets = []
         for entry in result["targets"]:
             delta = int(entry.get("old_hp", 0)) - int(entry.get("new_hp", 0))
@@ -265,6 +270,9 @@ def _dispatch(
                 # All-or-nothing: applying to some and reporting failure would
                 # leave the GM unsure which half landed.
                 raise LookupError(f"combatant not found: {missing[0]}")
+            preflight = adapter.get("preflight_targets")
+            if preflight:
+                preflight(ids)
             applied = []
             for target_id in ids:
                 old_hp = adapter["apply_hp"](target_id, amount, action, damage_type)

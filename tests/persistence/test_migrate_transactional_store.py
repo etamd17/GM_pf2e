@@ -87,6 +87,7 @@ def test_plan_is_read_only_deterministic_and_complete(tmp_path):
         "invites": 1,
         "invite_redemptions": 0,
         "character_drafts": 0,
+        "character_workflow_receipts": 0,
         "audit_events": 0,
     }
     assert len(first["source_digest"]) == 64

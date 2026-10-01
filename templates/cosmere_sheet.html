@@ -819,6 +819,7 @@
   </div>
   {% else %}<div style="color:var(--text-on-dark-3); font-size:12px;">Empty</div>{% endif %}
 
+  {% if owner_private is not defined or owner_private %}
   <div class="cs-section-h cs-foldable">Session Notes</div>
   <textarea id="pc-notes" placeholder="Jot down anything during the session — saves automatically."
             style="width:100%; min-height:140px; background:var(--bg-sunken,#131922); color:#e8eef5; border:1px solid var(--border-card); border-radius:9px; padding:.75rem; font-size:13px; line-height:1.6; resize:vertical;">{{ build.notes }}</textarea>
@@ -835,6 +836,7 @@
   })();
   </script>
 
+  {% endif %}
   {# Collapsible reference sections (combat-first): fold the non-combat sections
      away; the choice persists per character in localStorage. #}
   <script>

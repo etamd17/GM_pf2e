@@ -6,6 +6,29 @@ backup of the persistent volume.
 
 ## Production invariants
 
+### Character workflow development checks (PR5)
+
+Browser tests are development-only; Railway still installs `requirements.txt`.
+Install `requirements-browser.txt` with `python -m pip install --require-hashes -r
+requirements-browser.txt`, then `python -m playwright install --with-deps chromium`.
+The cloud workspace can instead use its verified `/usr/bin/chromium`; set
+`PLAYWRIGHT_CHROMIUM_EXECUTABLE` explicitly if another binary is needed.
+
+Run `python -m pytest -q tests/browser -m browser --strict-markers` for the PF2e and
+Cosmere journeys, both JSON/SQL and phone/desktop viewports. Missing Playwright or
+Chromium fails this gate; it is not a passing skip. Fixtures create disposable
+accounts/files and migrate fresh isolated SQLite databases. Normal unit CI uses
+`-m 'not postgresql and not browser'`. PostgreSQL concurrency remains a separate
+mandatory gate with a disposable database URL and unique test schemas.
+
+Regenerate the separate browser lock with the repository-pinned `uv`:
+`uv pip compile requirements-browser.in --universal --python-version 3.11
+--generate-hashes -o requirements-browser.txt`. Its constraints retain existing
+development dependency versions. Browser failure artifacts contain synthetic
+screenshots only, not cookies, request headers or real account data.
+
+### Runtime requirements
+
 - Run exactly one Railway replica and one Gunicorn gevent worker. SSE fan-out,
   rate limiting, session revocation, setup coordination, and several caches are
   process-local. More workers or replicas can split clients and bypass those
@@ -150,6 +173,32 @@ The default is still `json`; deploying this code alone does not switch authority
 For staged activation, current-state rollback export, and remaining file-storage
 boundaries, follow [the PR4B runbook](docs/remediation/pr4b-runtime-cutover.md).
 Only enable `sql` after the existing PR4A import/verification and staging gates.
+
+### PR5 private drafts and backup boundaries
+
+Personal drafts and workflow receipts live under `DATA_DIR/character_drafts/`
+in JSON/shadow mode, outside each campaign directory. SQL mode stores them in
+`character_drafts` and `character_workflow_receipts` tables. Normal scheduled
+campaign ZIPs, portable campaign exports, and character downloads intentionally
+exclude this private information; they are not full-site backups. An unresolved
+publication blocks a campaign archive so provisional character files cannot leak.
+
+Before migration, rollback, or destructive maintenance, stop all writers and
+take an access-controlled full-volume snapshot of the **entire DATA_DIR root**
+(including `character_drafts/`, account files, assets, and recovery journals),
+plus a matching SQL snapshot when SQL is used. Test restoring both together to
+an isolated environment. On-volume campaign ZIPs do not protect against volume
+loss; retain the operator-managed off-volume copy. Do not put private snapshots
+in portable player downloads or public storage. Use owner-only permissions on
+POSIX and restrictive inherited parent ACLs on Windows.
+
+PR5 migration and runtime rollback export preserve supported draft inputs,
+revisions, committed results, and independent receipts. Resolve pending
+publications before transfer; do not erase journals to bypass a refusal. A
+rollback after drafts exist requires verified backups and draft-capable code;
+deploying an older image alone is not a validated data rollback. SQL-only audit
+and redemption history still needs the separate reconciliation described in
+the PR4B runbook. SQL permanent campaign purge remains unavailable.
 
 ## Health and monitoring contract
 

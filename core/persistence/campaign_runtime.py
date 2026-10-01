@@ -285,6 +285,9 @@ def _change_membership(cid, user_id, *, role=None, remove=False, actor_user_id=N
                 return None
         previous = member.role
         if remove:
+            from core.character_workflows.lifecycle import invalidate_member, sql_transaction
+            tx = sql_transaction(session, cid)
+            invalidate_member(tx.context, user_id, transaction=tx)
             session.delete(member)
         else:
             member.role = role
@@ -314,6 +317,8 @@ def delete_campaign(cid, *, actor_user_id=None):
     with runtime.database().transaction() as session:
         campaign = _locked_campaign(session, cid)
         _require_actor(session, cid, actor_user_id)
+        from core.character_workflows.lifecycle import assert_no_pending, sql_transaction
+        assert_no_pending(sql_transaction(session, cid))
         campaign.trashed_at = utc_now()
         session.add(AuditEvent(actor_user_id=actor_user_id, campaign_id=cid, action="campaign.trashed",
                               target_type="campaign", target_id=cid, details={}))

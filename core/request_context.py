@@ -325,6 +325,7 @@ class CharacterContext:
     owner_user_id: str | None = None
     editor_user_ids: frozenset[str] = frozenset()
     legacy_ref: str | None = None
+    viewer_user_ids: frozenset[str] = frozenset()
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -357,6 +358,16 @@ class CharacterContext:
         except TypeError as exc:
             raise ValueError("editor_user_ids must be an iterable of user ids") from exc
         object.__setattr__(self, "editor_user_ids", editors)
+        if isinstance(self.viewer_user_ids, (str, bytes)):
+            raise ValueError("viewer_user_ids must be an iterable of user ids")
+        try:
+            viewers = frozenset(
+                _identifier(value, "viewer_user_id", required=True)
+                for value in self.viewer_user_ids
+            )
+        except TypeError as exc:
+            raise ValueError("viewer_user_ids must be an iterable of user ids") from exc
+        object.__setattr__(self, "viewer_user_ids", viewers)
 
 
 def resolve_character_context(
@@ -366,6 +377,7 @@ def resolve_character_context(
     owner_user_id: str | None = None,
     editor_user_ids: Iterable[str] = (),
     legacy_ref: str | None = None,
+    viewer_user_ids: Iterable[str] = (),
 ) -> CharacterContext:
     """Build character authorization metadata from an already-loaded record."""
 
@@ -375,4 +387,5 @@ def resolve_character_context(
         owner_user_id=owner_user_id,
         editor_user_ids=frozenset(editor_user_ids),
         legacy_ref=legacy_ref,
+        viewer_user_ids=viewer_user_ids,
     )

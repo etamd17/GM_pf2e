@@ -121,7 +121,7 @@
             <a href="/player" class="text-xs text-gray-500 hover:text-white transition-colors mb-2 block uppercase tracking-wider font-bold">← Back to Roster</a>
             <h1 class="text-2xl font-header text-amber-500 leading-none">Character Forge</h1>
         </div>
-        <div class="flex-1 overflow-y-auto py-4 space-y-1 builder-nav-list">
+        <div data-workflow-editor class="flex-1 overflow-y-auto py-4 space-y-1 builder-nav-list">
             <button onclick="navTo('start')" id="nav-start" class="nav-item active w-full text-left px-6 py-4 font-bold text-gray-400 hover:text-gray-200 transition-colors flex justify-between items-center">
                 <span>1. Identity</span> <span id="chk-start" class="text-xs"></span>
             </button>
@@ -147,20 +147,21 @@
         {# GM override — same vocabulary as the levelup rail's switch: arms
            window.ignorePrereqs for the shared picker AND the save's force
            flag. Amber = the app's established warning styling. #}
-        <div class="px-6 py-3 border-t border-gray-800">
+        {% include '_character_draft_controls.html' %}
+        {% if workflow.canOverride %}<div data-workflow-editor class="px-6 py-3 border-t border-gray-800">
             <label id="gm-override-switch" for="chk-gm-override" style="display:flex; align-items:center; gap:6px; cursor:pointer; user-select:none; font-size:10.5px; letter-spacing:0.04em; color:#78716c; padding:3px 8px; border-radius:999px; border:1px solid #44403c; transition: background .2s, border-color .2s, color .2s;">
                 <input type="checkbox" id="chk-gm-override" onchange="toggleGmOverride(this.checked)" style="accent-color:#f59e0b; margin:0;">
                 <span>GM override: ignore prerequisites</span>
             </label>
-        </div>
-        <div class="p-6 border-t border-gray-800 bg-gray-900">
-            <button id="btn-finish" onclick="finalizeCharacter()" class="w-full bg-gray-700 text-gray-400 py-3 rounded font-bold transition-colors cursor-not-allowed" disabled>
+        </div>{% endif %}
+        <div data-workflow-editor class="p-6 border-t border-gray-800 bg-gray-900">
+            <button id="btn-finish" data-workflow-finish onclick="finalizeCharacter()" class="w-full bg-gray-700 text-gray-400 py-3 rounded font-bold transition-colors cursor-not-allowed" disabled>
                 Incomplete Setup
             </button>
         </div>
     </div>
 
-    <div class="flex-1 bg-gray-900 overflow-y-auto custom-scrollbar relative flex flex-col">
+    <div data-workflow-editor class="flex-1 bg-gray-900 overflow-y-auto custom-scrollbar relative flex flex-col">
         
         <div id="step-start" class="step-panel active w-full max-w-4xl mx-auto p-8 lg:p-12">
             <h2 class="text-3xl font-bold text-white mb-2">Character Identity</h2>
@@ -453,7 +454,7 @@
         </div>
     </div>
 
-    {% include "_choice_picker.html" %}
+    <div data-workflow-editor style="display:contents">{% include "_choice_picker.html" %}</div>
 
     <script>
         const dbClasses = {{ classes | tojson | safe }};
@@ -478,6 +479,9 @@
             selectedWeapon: '', selectedArmor: '', adventurerPack: true,
             guided: {}
         };
+        const pfDraftDefaults = JSON.parse(JSON.stringify(state));
+        const workflowConfig = {{ workflow|tojson }};
+        let draftController = null, draftRestoring = false, pfDraftStep = 'start';
 
         /* Builder picker cache — feat / spell lists are inlined as JSON but
            the per-class / per-tradition filter still runs each time the
@@ -605,6 +609,7 @@
         }
 
         function navTo(stepId) {
+            pfDraftStep = stepId;
             document.querySelectorAll('.step-panel').forEach(p => p.classList.remove('active'));
             document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
             document.getElementById(`step-${stepId}`).classList.add('active');
@@ -1418,6 +1423,7 @@
 
         function runValidation() {
             state.name = document.getElementById('inp-name').value;
+            if (draftController && !draftRestoring) draftController.changed();
             
             if(state.name) { document.getElementById('chk-start').innerText = ""; document.getElementById('chk-start').className = "text-green-400 text-xl font-bold leading-none"; }
             else { document.getElementById('chk-start').innerText = "!"; document.getElementById('chk-start').className = "text-red-500 font-bold"; }
@@ -1761,9 +1767,7 @@
         
         function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-        async function finalizeCharacter() {
-            const btn = document.getElementById('btn-finish'); btn.innerText = "Forging Data..."; btn.disabled = true;
-            
+        function collectPf2eSubmission() {
             let finalStats = {str:10, dex:10, con:10, int:10, wis:10, cha:10};
             [...state.ancBoosts, ...state.bgBoosts, state.keyStat, ...state.freeBoosts].forEach(b => {if(b) finalStats[b]+=2});
             let safeFlaws = (state.ancestry && dbAncestries[state.ancestry]) ? dbAncestries[state.ancestry].flaws : [];
@@ -1827,7 +1831,7 @@
 
             const payload = {
                 name: state.name, deity: document.getElementById('inp-deity').value, sanctification: state.sanctification,
-                ancestry: state.ancestry, heritage: state.heritage, background: state.background, class_name: state.cls.charAt(0).toUpperCase()+state.cls.slice(1), subclass: state.subclass,
+                ancestry: state.ancestry, heritage: state.heritage, background: state.background, class_name: state.cls ? state.cls.charAt(0).toUpperCase()+state.cls.slice(1) : '', subclass: state.subclass,
                 abilities: finalStats, skills: [...new Set(allSkills)], feats: finalFeats, spellCasters: spellData,
                 languages: [...state.languages, ...state.customLanguages],
                 customLores: state.customLores.map(l => [l, 2]),
@@ -1838,6 +1842,17 @@
                 // doesn't yet read this field — defaults to 1 for new characters.
                 starting_level: parseInt(state.level || 1, 10)
             };
+            return payload;
+        }
+
+        async function finalizeCharacter() {
+            if (draftController) {
+                try { await draftController.finish({force:workflowConfig.canOverride && !!window.ignorePrereqs}); }
+                catch (_) { document.getElementById('draft-status').focus(); }
+                return;
+            }
+            const btn = document.getElementById('btn-finish'); btn.innerText = "Forging Data..."; btn.disabled = true;
+            const payload = collectPf2eSubmission();
 
             try {
                 // Armed GM override pre-authorizes the force flag (mirrors
@@ -1864,6 +1879,62 @@
                 }
                 btn.innerText = "Error"; btn.disabled = false;
             } catch(e) { btn.innerText = "Error"; btn.disabled = false; }
+        }
+        // DRAFT ADAPTER START
+        function collectPf2eDraft() {
+            return JSON.parse(JSON.stringify({kind:'pf2e_builder',payload_version:1,
+                form:state,ui:{deity:document.getElementById('inp-deity').value,
+                    name:document.getElementById('inp-name').value,
+                    level:document.getElementById('inp-level').value,
+                    ancestryMethod:document.getElementById('sel-anc-method').value,step:pfDraftStep},
+                submission:collectPf2eSubmission()}));
+        }
+        async function restorePf2eDraft(inputs) {
+            draftRestoring=true;
+            try {
+                const saved=JSON.parse(JSON.stringify({...pfDraftDefaults,...inputs.form}));
+                const ui=inputs.ui || {};
+                state=JSON.parse(JSON.stringify(saved));
+                document.getElementById('inp-name').value=ui.name ?? saved.name ?? '';
+                document.getElementById('inp-deity').value=ui.deity ?? saved.deity ?? '';
+                document.getElementById('inp-level').value=ui.level ?? saved.level ?? 1;
+                document.getElementById('sel-anc-method').value=ui.ancestryMethod || 'standard';
+                repaintPf2eDraft(saved);
+                state=JSON.parse(JSON.stringify(saved));
+                navTo(['start','ancestry','background','class','abilities','skills','review'].includes(ui.step)?ui.step:'start');
+                state=JSON.parse(JSON.stringify(saved));
+                runValidation();
+            } finally {draftRestoring=false;}
+        }
+        // DRAFT ADAPTER END
+        function repaintPf2eDraft(saved) {
+            const oldModal=mCtx;
+            for(const [type,name] of [['ancestry',saved.ancestry],['background',saved.background],['class',saved.cls]]) {
+                if(name) {mCtx={type,active:{name},meta:{}};lockModal();}
+            }
+            mCtx=oldModal;
+            state=JSON.parse(JSON.stringify(saved));
+            if(state.ancestry) renderAncBoosts();
+            if(state.background) renderBgBoosts();
+            state=JSON.parse(JSON.stringify(saved));
+            for(const [id,value] of [['card-heritage',state.heritage],['card-anc-feat',state.ancFeat?.name],['card-subclass',state.subclass]]) {
+                if(value) document.getElementById(id).textContent=value;
+            }
+            state.ancBoosts.forEach(key=>document.getElementById('anc-fb-'+key)?.classList.add('selected'));
+            if(state.bgBoosts[0]) document.getElementById('bg-spec-'+state.bgBoosts[0])?.classList.add('selected');
+            if(state.bgBoosts[1]) document.getElementById('bg-free-'+state.bgBoosts[1])?.classList.add('selected');
+            if(state.keyStat) document.getElementById('key-'+state.keyStat)?.classList.add('selected');
+            if(state.tradition) document.getElementById('sel-tradition').value=state.tradition;
+            generateClassFeatUI();
+            if((bData.classes[state.cls] || {}).spellcasting) renderSpellList();
+            buildAbilitiesUI();buildSkillsUI();
+            renderLanguageUI();populateEquipment();renderGuidedExtras();setSanct(saved.sanctification);
+        }
+        if(workflowConfig.enabled) {
+            draftController=CharacterDrafts.mount(workflowConfig,collectPf2eDraft,restorePf2eDraft);
+            ['input','change'].forEach(event=>document.addEventListener(event,()=>{
+                if(!draftRestoring) draftController.changed();
+            }));
         }
     </script>
 </body>

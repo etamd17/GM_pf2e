@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block title %}Recover character publication{% endblock %}
+{% block content %}
+<main style="max-width:760px;margin:auto;padding:16px;overflow-wrap:anywhere;">
+  <h1>Publication needs recovery</h1>
+  <p>Your saved draft is preserved. Retry publication to check whether it completed before making further changes.</p>
+  {% include '_character_draft_controls.html' %}
+</main>
+<script>
+const recoveryWorkflow={{ workflow|tojson }};
+let recoveryInputs=recoveryWorkflow.initialDraft.inputs;
+CharacterDrafts.mount(recoveryWorkflow,()=>recoveryInputs,async inputs=>{recoveryInputs=inputs;});
+</script>
+{% endblock %}

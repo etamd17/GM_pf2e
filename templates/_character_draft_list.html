@@ -1,0 +1,29 @@
+{% if workflow_enabled %}
+<section aria-label="Your private drafts" style="margin:16px 0;padding:16px;border:1px solid var(--border-card,#57534e);border-radius:8px;overflow-wrap:anywhere;">
+  <h2>Resume drafts</h2>
+  <p>Only you can see these drafts in the selected live campaign.</p>
+  {% if workflow_error %}<p role="alert">{{ workflow_error }}</p>{% endif %}
+  <ul>{% for draft in workflow_drafts %}<li><a href="{{ draft.url }}">{{ draft.name }}</a> — {{ 'Publication needs retry' if draft.state == 'publishing' else 'Private draft' }}</li>
+  {% else %}<li>No saved drafts yet.</li>{% endfor %}</ul>
+  <p><a href="{{ '/cosmere/builder' if active_system == 'cosmere' else '/player/builder' }}">New character</a> ·
+    <a href="{{ '/cosmere/pcs' if active_system == 'cosmere' else '/player?roster=1' }}">Character roster</a></p>
+  <details id="workflow-import">
+    <summary>Import a character</summary>
+    <p>Preview a private draft before publishing. Choose a target explicitly to update an existing character.</p>
+    <label for="workflow-import-target">Import destination</label>
+    <select id="workflow-import-target" style="display:block;max-width:100%;margin:8px 0;">
+      <option value="">Create a new character</option>
+      {% for target in workflow_targets %}<option value="{{ target.id }}">Update {{ target.name }} — {{ target.label }}</option>{% endfor %}
+    </select>
+    <label for="workflow-import-file">{{ 'Cosmere PDF' if active_system == 'cosmere' else 'Pathbuilder JSON or character PDF' }}</label>
+    <input id="workflow-import-file" type="file" accept="{{ '.pdf,application/pdf' if active_system == 'cosmere' else '.json,.pdf,application/json,application/pdf' }}" style="display:block;max-width:100%;margin:8px 0;">
+    {% if active_system != 'cosmere' %}<label for="workflow-import-paste">Or paste Pathbuilder JSON</label>
+    <textarea id="workflow-import-paste" rows="5" style="display:block;width:100%;box-sizing:border-box;"></textarea>{% endif %}
+    <button id="workflow-import-prepare" type="button">Preview import</button>
+    <p id="workflow-import-status" role="status" aria-live="polite" tabindex="-1"></p>
+  </details>
+</section>
+<script src="{{ url_for('static', filename='js/character_drafts.js') }}"></script>
+<script src="{{ url_for('static', filename='js/character_imports.js') }}"></script>
+<script>CharacterImports.mount({{ ('/cosmere/builder' if active_system == 'cosmere' else '/player/builder')|tojson }});</script>
+{% endif %}
