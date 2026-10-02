@@ -6,7 +6,7 @@ from tests.persistence.test_runtime_http import run_sql
 
 
 def adapter(name):
-    source = (ROOT / 'templates' / name).read_text()
+    source = (ROOT / 'templates' / name).read_text(encoding='utf-8')
     assert '// DRAFT ADAPTER START' in source
     return source.split('// DRAFT ADAPTER START', 1)[1].split('// DRAFT ADAPTER END', 1)[0]
 
