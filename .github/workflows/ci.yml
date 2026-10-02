@@ -90,6 +90,9 @@ jobs:
       - name: Check templates parse (Jinja)
         run: python tools/check_templates.py
 
+      - name: Verify deterministic PF2e package contracts
+        run: python -m pytest -q tests/pf2e_rules --strict-markers
+
       - name: Run tests
         run: python -m pytest -q -m "not postgresql and not browser" --strict-markers
 

@@ -1,0 +1,106 @@
+{
+  "manifest": {
+    "system": "pf2e",
+    "ruleset_id": "pf2e-test-fixture-0.1.0",
+    "content_version": "0.1.0",
+    "schema_version": 1,
+    "effective_date": "2026-10-01",
+    "publication_date": null,
+    "publication_status": "draft",
+    "base_package": null,
+    "overlays": [],
+    "source_ids": [
+      "pf2e.source.synthetic"
+    ],
+    "errata_ids": [],
+    "supported_classes": [
+      "pf2e.class.example"
+    ],
+    "exclusions": [],
+    "required_migrations": [],
+    "license_family": "test-only",
+    "notices": [
+      "Synthetic fixture only; not Pathfinder rules."
+    ],
+    "created_at": "2026-10-01T00:00:00Z",
+    "reviews": {
+      "rules": null,
+      "license": null
+    }
+  },
+  "sources": [
+    {
+      "id": "pf2e.source.synthetic",
+      "publisher": "GM_pf2e tests",
+      "product": "Synthetic reference data",
+      "product_id": "test-fixture-1",
+      "edition": "Test fixture",
+      "publication_date": "2026-10-01",
+      "verification_date": "2026-10-01",
+      "scope": "test",
+      "rights": "test_only",
+      "license_family": "test-only",
+      "notices": [
+        "Synthetic fixture only; not Pathfinder rules."
+      ],
+      "url": "https://example.invalid/synthetic",
+      "errata_ids": []
+    }
+  ],
+  "records": [
+    {
+      "id": "pf2e.class.example",
+      "kind": "class",
+      "name": "Example class",
+      "automation": "reference_only",
+      "level": 1,
+      "traits": [
+        "test"
+      ],
+      "sources": [
+        {
+          "source_id": "pf2e.source.synthetic",
+          "page": "1"
+        }
+      ],
+      "references": [],
+      "prerequisite": null,
+      "state": "enabled",
+      "quarantine_reason": null
+    },
+    {
+      "id": "pf2e.feat.example",
+      "kind": "feat",
+      "name": "Example prerequisite",
+      "automation": "gm_adjudicated",
+      "level": 2,
+      "traits": [
+        "test"
+      ],
+      "sources": [
+        {
+          "source_id": "pf2e.source.synthetic",
+          "page": "2"
+        }
+      ],
+      "references": [
+        "pf2e.class.example"
+      ],
+      "prerequisite": {
+        "op": "all",
+        "children": [
+          {
+            "op": "level",
+            "min": 2
+          },
+          {
+            "op": "class",
+            "id": "pf2e.class.example"
+          }
+        ]
+      },
+      "state": "enabled",
+      "quarantine_reason": null
+    }
+  ]
+}
