@@ -10,6 +10,7 @@ import stat
 from .validation import RulesValidationError, bounded_json, require
 
 COMPILER_VERSION = "pf2e-rules-1"
+COMPILER_VERSIONS = {1: COMPILER_VERSION, 2: "pf2e-rules-2"}
 MAX_FILE_BYTES = 16 * 1024 * 1024
 PACKAGE_FILES = frozenset({"authoring.json", "sources.json", "records.json", "manifest.json"})
 

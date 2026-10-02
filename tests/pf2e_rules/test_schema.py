@@ -21,7 +21,7 @@ def test_normalizes_without_mutating_inputs(authoring):
 
 @pytest.mark.parametrize("path,value,code", [
     (("manifest", "schema_version"), True, "invalid_type"),
-    (("manifest", "schema_version"), 2, "unsupported_version"),
+    (("manifest", "schema_version"), 3, "unsupported_version"),
     (("manifest", "system"), "cosmere", "invalid_value"),
     (("manifest", "ruleset_id"), "../escape", "invalid_id"),
     (("manifest", "content_version"), "current", "invalid_value"),

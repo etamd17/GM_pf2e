@@ -27,6 +27,7 @@ class RuleRecord:
     prerequisite: Mapping | None
     state: str
     quarantine_reason: str | None
+    mechanics: Mapping | None = None
 
 
 @dataclass(frozen=True, slots=True)
