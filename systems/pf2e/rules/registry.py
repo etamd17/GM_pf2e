@@ -5,7 +5,7 @@ from pathlib import Path
 from types import MappingProxyType
 
 from .ingestion.compile_pack import compile_package
-from .manifest import COMPILER_VERSION, PACKAGE_FILES, read_file, read_json, reject_links
+from .manifest import COMPILER_VERSIONS, PACKAGE_FILES, read_file, read_json, reject_links
 from .models import RulePackage, RuleRecord, freeze
 from .validation import require, text
 
@@ -19,7 +19,10 @@ def load_package(path: Path, *, expected_hash: str | None = None) -> RulePackage
     files = {name: read_file(path / name) for name in sorted(PACKAGE_FILES)}
     manifest = read_json(files["manifest.json"])
     require(type(manifest) is dict, "invalid_type", "$.manifest")
-    require(manifest.get("compiler_version") == COMPILER_VERSION,
+    version = manifest.get("schema_version")
+    require(type(version) is int, "invalid_type", "$.manifest.schema_version")
+    require(version in COMPILER_VERSIONS, "unsupported_version", "$.manifest.schema_version")
+    require(manifest.get("compiler_version") == COMPILER_VERSIONS[version],
             "unsupported_version", "$.manifest.compiler_version")
     authoring = read_json(files["authoring.json"])
     expected = compile_package(authoring)

@@ -6,7 +6,7 @@ from pathlib import Path
 import shutil
 import tempfile
 
-from ..manifest import COMPILER_VERSION, canonical_json, digest, read_json, reject_links
+from ..manifest import COMPILER_VERSIONS, canonical_json, digest, read_json, reject_links
 from ..schema import normalize_authoring
 from ..validation import RulesValidationError, require
 
@@ -16,7 +16,8 @@ def compile_package(authoring: dict) -> dict[str, bytes]:
     files = {"authoring.json": canonical_json(value),
              "sources.json": canonical_json(value["sources"]),
              "records.json": canonical_json(value["records"])}
-    manifest = {**value["manifest"], "compiler_version": COMPILER_VERSION,
+    manifest = {**value["manifest"],
+                "compiler_version": COMPILER_VERSIONS[value["manifest"]["schema_version"]],
                 "inputs": {"authoring.json": digest(files["authoring.json"])},
                 "outputs": {name: digest(files[name]) for name in ("sources.json", "records.json")}}
     # Hash scope excludes only this field; it includes metadata and all other file digests.
