@@ -1,13 +1,18 @@
 """Synthetic mechanics contracts; these do not assert Pathfinder rule content."""
 
 from copy import deepcopy
+from hashlib import sha256
 import importlib
 import json
+from pathlib import Path
 
 import pytest
 
 
 V1_PACKAGE_HASH = "e573e78d00642c63ea1b9ee4fe5aa9436ab7c20ee593bf0e7dabe888f7aec002"
+SYNTHETIC_SOURCE_SHA256 = sha256(
+    (Path(__file__).parent / "fixtures" / "synthetic-source.bin").read_bytes()
+).hexdigest()
 
 
 def _compiler():
@@ -27,6 +32,11 @@ def _v2_authoring(authoring):
     value = deepcopy(authoring)
     value["manifest"]["schema_version"] = 2
     value["manifest"]["ruleset_id"] = "pf2e-test-mechanics-0.1.0"
+    value["sources"][0].update(
+        artifact_sha256=SYNTHETIC_SOURCE_SHA256,
+        printing={"status": "not_applicable", "designation": None},
+        revision={"status": "not_applicable", "designation": None},
+    )
     for record in value["records"]:
         record["mechanics"] = None
     fighter = next(record for record in value["records"] if record["kind"] == "class")

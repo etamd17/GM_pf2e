@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import re
 
 from .predicates import validate_predicate
 from .validation import (
@@ -30,7 +31,6 @@ def _manifest(value: dict) -> dict:
          pattern=r"pf2e-[a-z0-9]+(?:[.-][a-z0-9]+)*")
     require(len(value["ruleset_id"]) <= 100, "invalid_id", p + ".ruleset_id")
     version = text(value["content_version"], p + ".content_version")
-    import re
     require(re.fullmatch(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", version)
             is not None, "invalid_value", p + ".content_version")
     require(type(value["schema_version"]) is int, "invalid_type", p + ".schema_version")
@@ -75,9 +75,24 @@ def _manifest(value: dict) -> dict:
     return value
 
 
-def _source(value: dict, p: str) -> dict:
-    shape(value, "id publisher product product_id edition publication_date verification_date "
-          "scope rights license_family notices url errata_ids", p)
+def _source_status(value: dict, p: str) -> dict:
+    shape(value, "status designation", p)
+    status = choice(value["status"], {"verified", "unverified", "not_applicable"},
+                    p + ".status")
+    if status == "verified":
+        require(value["designation"] is not None, "invalid_value", p + ".designation")
+        text(value["designation"], p + ".designation")
+    else:
+        require(value["designation"] is None, "invalid_value", p + ".designation")
+    return value
+
+
+def _source(value: dict, p: str, schema_version: int) -> dict:
+    fields = ("id publisher product product_id edition publication_date verification_date "
+              "scope rights license_family notices url errata_ids")
+    if schema_version == 2:
+        fields += " artifact_sha256 printing revision"
+    shape(value, fields, p)
     text(value["id"], p + ".id", pattern=SOURCE_ID)
     for field in ("publisher", "product", "product_id", "edition", "license_family"):
         text(value[field], p + "." + field)
@@ -85,11 +100,24 @@ def _source(value: dict, p: str) -> dict:
     iso_date(value["verification_date"], p + ".verification_date", nullable=True)
     if value["verification_date"] is not None:
         require(value["verification_date"] >= value["publication_date"], "invalid_date", p)
-    choice(value["scope"], {"base", "optional_sourcebook", "campaign_policy", "test"}, p + ".scope")
+    scopes = {"base", "optional_sourcebook", "campaign_policy", "test"}
+    if schema_version == 2:
+        scopes.add("errata")
+    scope = choice(value["scope"], scopes, p + ".scope")
+    if schema_version == 2:
+        require(value["id"].startswith("pf2e.errata.") == (scope == "errata"),
+                "invalid_source_scope", p + ".scope")
     choice(value["rights"], {"unknown", "reviewed_redistributable", "test_only"}, p + ".rights")
     value["notices"] = strings(value["notices"], p + ".notices")
     https_url(value["url"], p + ".url")
     value["errata_ids"] = strings(value["errata_ids"], p + ".errata_ids", pattern=SOURCE_ID)
+    if schema_version == 2:
+        if value["artifact_sha256"] is not None:
+            artifact = text(value["artifact_sha256"], p + ".artifact_sha256")
+            require(re.fullmatch(r"[0-9a-f]{64}", artifact) is not None,
+                    "invalid_value", p + ".artifact_sha256")
+        _source_status(value["printing"], p + ".printing")
+        _source_status(value["revision"], p + ".revision")
     return value
 
 
@@ -181,12 +209,13 @@ def normalize_authoring(authoring: dict) -> dict:
     value = deepcopy(authoring)
     shape(value, "manifest sources records", "$")
     manifest = _manifest(value["manifest"])
-    sources, records, references = {}, {}, {}
+    sources, source_paths, records, references = {}, {}, {}, {}
     for i, source in enumerate(sequence(value["sources"], "$.sources")):
         p = f"$.sources[{i}]"
-        source = _source(source, p)
+        source = _source(source, p, manifest["schema_version"])
         require(source["id"] not in sources, "duplicate_id", p)
         sources[source["id"]] = source
+        source_paths[source["id"]] = p
     for i, record in enumerate(sequence(value["records"], "$.records")):
         p = f"$.records[{i}]"
         record, refs = _record(record, p, manifest["schema_version"])
@@ -223,9 +252,30 @@ def normalize_authoring(authoring: dict) -> dict:
                     continue
                 visited.add(sid)
                 cited = sources[sid]
+                cited_path = source_paths[sid]
                 pending.extend(cited["errata_ids"])
                 require(cited["rights"] != "unknown" and cited["verification_date"] is not None,
                         "unverified_source", p + ".sources")
+                if manifest["schema_version"] == 2:
+                    require(cited["artifact_sha256"] is not None,
+                            "unverified_source_artifact", cited_path + ".artifact_sha256")
+                    printing = cited["printing"]["status"]
+                    revision = cited["revision"]["status"]
+                    if cited["scope"] == "test":
+                        require(printing != "unverified", "unverified_source_artifact",
+                                cited_path + ".printing.status")
+                        require(revision != "unverified", "unverified_source_artifact",
+                                cited_path + ".revision.status")
+                    elif cited["scope"] in {"errata", "campaign_policy"}:
+                        require(printing != "unverified", "unverified_source_artifact",
+                                cited_path + ".printing.status")
+                        require(revision == "verified", "unverified_source_artifact",
+                                cited_path + ".revision.status")
+                    else:
+                        require(printing == "verified", "unverified_source_artifact",
+                                cited_path + ".printing.status")
+                        require(revision == "verified", "unverified_source_artifact",
+                                cited_path + ".revision.status")
                 require(bool(cited["notices"]), "missing_notice", p + ".sources")
                 require(cited["license_family"] == manifest["license_family"]
                         and set(cited["notices"]) <= set(manifest["notices"]),

@@ -1,12 +1,30 @@
 """Rejecting bad authoring here prevents invalid content reaching a future engine."""
 from copy import deepcopy
+from hashlib import sha256
 import importlib
+from pathlib import Path
 
 import pytest
 
 
+# SHA-256 of fixtures/synthetic-source.bin, a binary-marked evidence artifact.
+SYNTHETIC_SOURCE_SHA256 = "cd480e2b76e30f4ec48ac410e0aef2bf1b56ae210618323703237aa4549e4d23"
+
+
 def normalize(value):
     return importlib.import_module("systems.pf2e.rules.schema").normalize_authoring(value)
+
+
+def v2_authoring(authoring):
+    authoring["manifest"]["schema_version"] = 2
+    authoring["sources"][0].update(
+        artifact_sha256=SYNTHETIC_SOURCE_SHA256,
+        printing={"status": "not_applicable", "designation": None},
+        revision={"status": "not_applicable", "designation": None},
+    )
+    for record in authoring["records"]:
+        record["mechanics"] = None
+    return authoring
 
 
 def test_normalizes_without_mutating_inputs(authoring):
@@ -17,6 +35,171 @@ def test_normalizes_without_mutating_inputs(authoring):
     assert authoring["records"][0] == original["records"][1]
     result["records"][0]["traits"].append("new")
     assert authoring["records"][1]["traits"] == ["test"]
+
+
+def test_synthetic_source_hash_matches_raw_artifact_bytes():
+    artifact = Path(__file__).parent / "fixtures" / "synthetic-source.bin"
+
+    assert sha256(artifact.read_bytes()).hexdigest() == SYNTHETIC_SOURCE_SHA256
+
+
+def test_v2_preserves_source_artifact_evidence(authoring):
+    value = v2_authoring(authoring)
+
+    normalized = normalize(value)
+
+    assert normalized["sources"][0]["artifact_sha256"] == SYNTHETIC_SOURCE_SHA256
+    assert normalized["sources"][0]["printing"] == {
+        "status": "not_applicable", "designation": None,
+    }
+    assert normalized["sources"][0]["revision"] == {
+        "status": "not_applicable", "designation": None,
+    }
+
+
+@pytest.mark.parametrize("field", ["printing", "revision"])
+@pytest.mark.parametrize("evidence,code", [
+    ({"status": "not_applicable"}, "missing_field"),
+    ({"status": "not_applicable", "designation": None, "guess": True}, "unknown_field"),
+])
+def test_v2_source_evidence_shape_is_closed(authoring, field, evidence, code):
+    package = v2_authoring(authoring)
+    package["sources"][0][field] = evidence
+
+    with pytest.raises(ValueError) as error:
+        normalize(package)
+
+    assert error.value.code == code
+    assert error.value.path == f"$.sources[0].{field}"
+
+
+@pytest.mark.parametrize("artifact_sha256,code", [
+    ("abc", "invalid_value"),
+    ("F5F3DE91F99E579F9F6ACFC4CF4E5D3988DEB63DDB42DF4B1537075D0CAE44C8",
+     "invalid_value"),
+    ("g" * 64, "invalid_value"),
+    (True, "invalid_type"),
+])
+def test_v2_rejects_invalid_artifact_sha256(authoring, artifact_sha256, code):
+    package = v2_authoring(authoring)
+    package["sources"][0]["artifact_sha256"] = artifact_sha256
+
+    with pytest.raises(ValueError) as error:
+        normalize(package)
+
+    assert error.value.code == code
+    assert error.value.path == "$.sources[0].artifact_sha256"
+
+
+@pytest.mark.parametrize("evidence,path", [
+    ({"status": "verified", "designation": None}, "designation"),
+    ({"status": "unverified", "designation": "First printing"}, "designation"),
+    ({"status": "not_applicable", "designation": "N/A"}, "designation"),
+    ({"status": "assumed", "designation": None}, "status"),
+])
+def test_v2_rejects_inconsistent_source_status_designations(authoring, evidence, path):
+    package = v2_authoring(authoring)
+    package["sources"][0]["printing"] = evidence
+
+    with pytest.raises(ValueError) as error:
+        normalize(package)
+
+    assert error.value.code == "invalid_value"
+    assert error.value.path == f"$.sources[0].printing.{path}"
+
+
+@pytest.mark.parametrize("field,value,path", [
+    ("artifact_sha256", None, "$.sources[0].artifact_sha256"),
+    ("printing", {"status": "unverified", "designation": None},
+     "$.sources[0].printing.status"),
+    ("revision", {"status": "unverified", "designation": None},
+     "$.sources[0].revision.status"),
+])
+def test_v2_enabled_sources_require_complete_artifact_evidence(authoring, field, value, path):
+    package = v2_authoring(authoring)
+    package["sources"][0][field] = value
+
+    with pytest.raises(ValueError) as error:
+        normalize(package)
+
+    assert error.value.code == "unverified_source_artifact"
+    assert error.value.path == path
+
+
+def test_v2_enabled_sources_accept_verified_artifact_evidence(authoring):
+    package = v2_authoring(authoring)
+    package["sources"][0].update(
+        printing={"status": "verified", "designation": "Synthetic printing"},
+        revision={"status": "verified", "designation": "Synthetic revision"},
+    )
+
+    assert normalize(package)["sources"][0]["printing"]["status"] == "verified"
+
+
+@pytest.mark.parametrize("field", ["printing", "revision"])
+def test_v2_base_sources_cannot_claim_artifact_status_not_applicable(authoring, field):
+    package = v2_authoring(authoring)
+    package["sources"][0].update(
+        scope="base",
+        printing={"status": "verified", "designation": "Synthetic printing"},
+        revision={"status": "verified", "designation": "Synthetic revision"},
+    )
+    package["sources"][0][field] = {"status": "not_applicable", "designation": None}
+
+    with pytest.raises(ValueError) as error:
+        normalize(package)
+
+    assert error.value.code == "unverified_source_artifact"
+    assert error.value.path == f"$.sources[0].{field}.status"
+
+
+@pytest.mark.parametrize("source_id,scope", [
+    ("pf2e.errata.disguised-book", "optional_sourcebook"),
+    ("pf2e.source.disguised-errata", "errata"),
+])
+def test_v2_requires_errata_id_and_scope_to_match(authoring, source_id, scope):
+    package = v2_authoring(authoring)
+    package["sources"][0].update(id=source_id, scope=scope)
+    package["manifest"].update(
+        source_ids=[source_id],
+        errata_ids=[source_id] if source_id.startswith("pf2e.errata.") else [],
+    )
+    for record in package["records"]:
+        for citation in record["sources"]:
+            citation["source_id"] = source_id
+
+    with pytest.raises(ValueError) as error:
+        normalize(package)
+
+    assert error.value.code == "invalid_source_scope"
+    assert error.value.path == "$.sources[0].scope"
+
+
+@pytest.mark.parametrize("field", ["artifact_sha256", "printing", "revision"])
+def test_v2_requires_source_artifact_fields(authoring, field):
+    package = v2_authoring(authoring)
+    del package["sources"][0][field]
+
+    with pytest.raises(ValueError) as error:
+        normalize(package)
+
+    assert error.value.code == "missing_field"
+    assert error.value.path == "$.sources[0]"
+
+
+@pytest.mark.parametrize("field,value", [
+    ("artifact_sha256", SYNTHETIC_SOURCE_SHA256),
+    ("printing", {"status": "not_applicable", "designation": None}),
+    ("revision", {"status": "not_applicable", "designation": None}),
+])
+def test_v1_rejects_source_artifact_fields(authoring, field, value):
+    authoring["sources"][0][field] = value
+
+    with pytest.raises(ValueError) as error:
+        normalize(authoring)
+
+    assert error.value.code == "unknown_field"
+    assert error.value.path == "$.sources[0]"
 
 
 @pytest.mark.parametrize("path,value,code", [
@@ -89,6 +272,7 @@ def test_quarantine_requires_explicit_exclusion(authoring):
 
 
 def test_publication_requires_real_reviewed_sources_and_named_reviews(authoring):
+    authoring = v2_authoring(authoring)
     manifest = authoring["manifest"]
     manifest.update(publication_status="published", publication_date="2026-10-01")
     with pytest.raises(ValueError) as error:
@@ -102,7 +286,13 @@ def test_publication_requires_real_reviewed_sources_and_named_reviews(authoring)
         normalize(authoring)
     assert error.value.code == "test_source_publication"
     source = authoring["sources"][0]
-    source.update(rights="reviewed_redistributable", scope="base", license_family="fixture-license")
+    source.update(
+        rights="reviewed_redistributable",
+        scope="base",
+        license_family="fixture-license",
+        printing={"status": "verified", "designation": "Synthetic printing"},
+        revision={"status": "verified", "designation": "Synthetic revision"},
+    )
     manifest["license_family"] = "fixture-license"
     assert normalize(authoring)["manifest"]["publication_status"] == "published"
 
@@ -164,3 +354,44 @@ def test_transitive_errata_cannot_bypass_publication_provenance(authoring, chang
         normalize(authoring)
     assert error.value.code in {"unverified_source", "missing_notice", "license_mismatch",
                                 "test_source_publication"}
+
+
+@pytest.mark.parametrize("cycle", [False, True])
+@pytest.mark.parametrize("field,value,path", [
+    ("artifact_sha256", None, "artifact_sha256"),
+    ("printing", {"status": "unverified", "designation": None}, "printing.status"),
+    ("revision", {"status": "unverified", "designation": None}, "revision.status"),
+])
+def test_v2_transitive_errata_require_complete_artifact_evidence(
+        authoring, field, value, path, cycle):
+    package = v2_authoring(authoring)
+    source = package["sources"][0]
+    first = deepcopy(source)
+    first.update(
+        id="pf2e.errata.first",
+        scope="errata",
+        rights="reviewed_redistributable",
+        printing={"status": "not_applicable", "designation": None},
+        revision={"status": "verified", "designation": "First errata revision"},
+    )
+    second = deepcopy(first)
+    second.update(
+        id="pf2e.errata.second",
+        revision={"status": "verified", "designation": "Second errata revision"},
+    )
+    source["errata_ids"] = [first["id"]]
+    first["errata_ids"] = [second["id"]]
+    if cycle:
+        second["errata_ids"] = [first["id"]]
+    second[field] = value
+    package["sources"].extend([first, second])
+    package["manifest"].update(
+        source_ids=[item["id"] for item in package["sources"]],
+        errata_ids=[first["id"], second["id"]],
+    )
+
+    with pytest.raises(ValueError) as error:
+        normalize(package)
+
+    assert error.value.code == "unverified_source_artifact"
+    assert error.value.path == f"$.sources[2].{path}"

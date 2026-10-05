@@ -13,6 +13,13 @@ load these facts during play.
   cannot claim derived class proficiency behavior.
 - Keep normalization deterministic; reject duplicate grants, unknown fields,
   unsupported automation combinations and malformed levels/ranks.
+- Require schema-v2 sources to declare a captured-artifact SHA-256 and
+  independent printing and revision status. Enabled records fail structurally
+  closed when any directly or transitively cited source omits the hash or leaves
+  either status unresolved. Base and optional-sourcebook sources cannot use
+  `not_applicable`; the review process still validates all asserted statuses.
+  Schema v1 remains byte-compatible and loadable, but cannot publish a new
+  package through the operator-owned store.
 - Provide a pure `derive_class_proficiencies` function whose input contract is
   an immutable package returned by `load_package`. It returns immutable ranks and rejects
   levels absent from that record's explicit supported set. This function
@@ -30,7 +37,7 @@ approved mockups before implementation.
 ## Local verification
 
 The synthetic derivation tests first failed against the PR6A schema. After
-implementation, all 92 focused package tests pass on Windows/Python 3.11,
+implementation, all 127 focused package tests pass on Windows/Python 3.11,
 including v1's exact package hash and a later supported-level upgrade. The
 new modules compile and `git diff --check` passes. The application has no
 imports of this derivation path. The pushed PR's CI is the full-suite gate;

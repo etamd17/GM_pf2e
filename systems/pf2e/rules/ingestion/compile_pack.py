@@ -7,7 +7,7 @@ import shutil
 import tempfile
 
 from ..manifest import COMPILER_VERSIONS, canonical_json, digest, read_json, reject_links
-from ..schema import normalize_authoring
+from ..schema import SCHEMA_VERSION, normalize_authoring
 from ..validation import RulesValidationError, require
 
 
@@ -29,8 +29,12 @@ def compile_package(authoring: dict) -> dict[str, bytes]:
 def write_package(authoring: dict, store: Path) -> Path:
     """Publish in an operator-owned store. A stale lock requires operator review."""
     files = compile_package(authoring)
+    manifest = read_json(files["manifest.json"])
+    require(manifest["publication_status"] != "published"
+            or manifest["schema_version"] == SCHEMA_VERSION,
+            "legacy_schema_publication", "$.manifest.schema_version")
     # Use the validated snapshot, even if a caller later changes shared input.
-    target_name = read_json(files["manifest.json"])["ruleset_id"]
+    target_name = manifest["ruleset_id"]
     store = Path(store).absolute()
     reject_links(store)
     store.mkdir(parents=True, exist_ok=True)
