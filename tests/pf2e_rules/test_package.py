@@ -107,6 +107,28 @@ def test_existing_package_cannot_be_overwritten_even_with_identical_content(auth
     assert {p.name: p.read_bytes() for p in path.iterdir()} == before
 
 
+def test_new_published_package_requires_current_schema(authoring, tmp_path):
+    manifest = authoring["manifest"]
+    manifest.update(
+        publication_status="published",
+        publication_date="2026-10-01",
+        license_family="fixture-license",
+        reviews={
+            key: {"reviewer": "Fixture reviewer", "reviewed_at": "2026-10-01T00:00:00Z"}
+            for key in ("rules", "license")
+        },
+    )
+    authoring["sources"][0].update(
+        rights="reviewed_redistributable", scope="base", license_family="fixture-license",
+    )
+
+    with pytest.raises(ValueError) as error:
+        compiler().write_package(authoring, tmp_path)
+
+    assert error.value.code == "legacy_schema_publication"
+    assert error.value.path == "$.manifest.schema_version"
+
+
 def test_concurrent_publication_has_one_winner(authoring, tmp_path):
     def publish():
         try:
