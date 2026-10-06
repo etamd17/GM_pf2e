@@ -231,3 +231,216 @@ def normalize_evidence_ledger(document: dict) -> dict:
             rule_ids.add(entry["rule_id"])
     entries.sort(key=lambda item: _identity_key(item["identity"]))
     return value
+
+
+def _identity_label(identity: dict) -> str:
+    return f"{identity['page_family']}:{identity['numeric_id']}"
+
+
+def _empty_coverage_bucket() -> dict[str, int]:
+    return {"excluded": 0, "mapped": 0, "missing": 0, "pending": 0, "observed": 0}
+
+
+def audit_evidence_inventory(census: dict, ledger: dict) -> dict:
+    """Compare independent evidence and disposition artifacts for completeness."""
+    observed = normalize_aon_census(census)
+    reviewed = normalize_evidence_ledger(ledger)
+    require(observed["authority"] == reviewed["authority"],
+            "census_mismatch", "$.ledger.authority")
+    require(observed["captured_at"] == reviewed["census_captured_at"],
+            "census_mismatch", "$.ledger.census_captured_at")
+
+    observed_by_key = {
+        _identity_key(record["identity"]): record for record in observed["records"]
+    }
+    ledger_by_key = {
+        _identity_key(entry["identity"]): entry for entry in reviewed["entries"]
+    }
+    ledger_indexes = {
+        _identity_key(entry["identity"]): index
+        for index, entry in enumerate(reviewed["entries"])
+    }
+    for key, entry in ledger_by_key.items():
+        if key not in observed_by_key:
+            code = "stale_exclusion" if entry["disposition"] == "excluded" else "stale_identity"
+            raise RulesValidationError(code, f"$.ledger.entries[{ledger_indexes[key]}]")
+
+    by_kind: dict[str, dict[str, int]] = {}
+    by_rules_era: dict[str, dict[str, int]] = {}
+    by_disposition = {"excluded": 0, "mapped": 0, "missing": 0, "pending": 0}
+    by_review = {"pending": 0, "reviewed": 0, "missing": 0}
+    missing, combined = [], []
+    for key, record in observed_by_key.items():
+        identity_label = _identity_label(record["identity"])
+        kind_counts = by_kind.setdefault(record["kind"], _empty_coverage_bucket())
+        era_counts = by_rules_era.setdefault(record["rules_era"], _empty_coverage_bucket())
+        kind_counts["observed"] += 1
+        era_counts["observed"] += 1
+        entry = ledger_by_key.get(key)
+        if entry is None:
+            missing.append(identity_label)
+            by_disposition["missing"] += 1
+            by_review["missing"] += 1
+            kind_counts["missing"] += 1
+            era_counts["missing"] += 1
+            continue
+        disposition = entry["disposition"]
+        review_status = entry["review"]["status"]
+        by_disposition[disposition] += 1
+        by_review[review_status] += 1
+        kind_counts[disposition] += 1
+        era_counts[disposition] += 1
+        combined.append({
+            **deepcopy(record),
+            "identity_key": identity_label,
+            "disposition": disposition,
+            "rule_id": entry["rule_id"],
+            "reason": entry["reason"],
+            "review": deepcopy(entry["review"]),
+        })
+
+    combined.sort(key=lambda item: item["identity_key"])
+    missing.sort()
+    return {
+        "schema_version": EVIDENCE_SCHEMA_VERSION,
+        "authority": observed["authority"],
+        "inventory_id": reviewed["inventory_id"],
+        "census_captured_at": observed["captured_at"],
+        "ledger_created_at": reviewed["created_at"],
+        "site_update_date": observed["site_update_date"],
+        "site_update_url": observed["site_update_url"],
+        "complete": not missing,
+        "missing": missing,
+        "coverage": {
+            "by_disposition": by_disposition,
+            "by_kind": {key: by_kind[key] for key in sorted(by_kind)},
+            "by_rules_era": {key: by_rules_era[key] for key in sorted(by_rules_era)},
+            "by_review": by_review,
+        },
+        "records": combined,
+    }
+
+
+def _validate_audit_report(value: dict, path: str) -> dict:
+    """Validate the report boundary consumed by offline diff tooling."""
+    bounded_json(value)
+    shape(
+        value,
+        "schema_version authority inventory_id census_captured_at ledger_created_at "
+        "site_update_date site_update_url complete missing coverage records",
+        path,
+    )
+    require(value["schema_version"] == EVIDENCE_SCHEMA_VERSION,
+            "unsupported_version", path + ".schema_version")
+    choice(value["authority"], {AON_AUTHORITY}, path + ".authority")
+    text(value["inventory_id"], path + ".inventory_id")
+    timestamp(value["census_captured_at"], path + ".census_captured_at")
+    timestamp(value["ledger_created_at"], path + ".ledger_created_at")
+    iso_date(value["site_update_date"], path + ".site_update_date")
+    require(value["site_update_url"] == f"https://{AON_HOST}/",
+            "invalid_url", path + ".site_update_url")
+    require(type(value["complete"]) is bool, "invalid_type", path + ".complete")
+    require(type(value["missing"]) is list and all(type(item) is str for item in value["missing"]),
+            "invalid_type", path + ".missing")
+    require(type(value["coverage"]) is dict, "invalid_type", path + ".coverage")
+    records = sequence(value["records"], path + ".records")
+    seen = set()
+    for index, record in enumerate(records):
+        record_path = f"{path}.records[{index}]"
+        shape(
+            record,
+            "identity canonical_url name kind rules_era source_refs evidence_sha256 fingerprint "
+            "identity_key disposition rule_id reason review",
+            record_path,
+        )
+        census_record = {key: deepcopy(record[key]) for key in (
+            "identity", "canonical_url", "name", "kind", "rules_era", "source_refs",
+            "evidence_sha256", "fingerprint",
+        )}
+        _normalize_census_record(census_record, record_path, verify_fingerprint=True)
+        record.update(census_record)
+        require(record["identity_key"] == _identity_label(record["identity"]),
+                "invalid_identity", record_path + ".identity_key")
+        ledger_entry = {key: deepcopy(record[key]) for key in (
+            "identity", "disposition", "rule_id", "reason", "review",
+        )}
+        _ledger_entry(ledger_entry, record_path)
+        record.update({key: ledger_entry[key] for key in (
+            "disposition", "rule_id", "reason", "review",
+        )})
+        require(record["identity_key"] not in seen,
+                "duplicate_identity", record_path + ".identity")
+        seen.add(record["identity_key"])
+    require(value["missing"] == sorted(set(value["missing"])),
+            "invalid_value", path + ".missing")
+    require(value["complete"] == (not value["missing"]),
+            "invalid_value", path + ".complete")
+    records.sort(key=lambda item: item["identity_key"])
+    return value
+
+
+def diff_evidence_inventories(before: dict, after: dict) -> dict:
+    """Return mutually exclusive identity drift between two audited snapshots."""
+    before_value = _validate_audit_report(deepcopy(before), "$.before")
+    after_value = _validate_audit_report(deepcopy(after), "$.after")
+    require(before_value["complete"] and after_value["complete"],
+            "incomplete_inventory", "$")
+    require(before_value["authority"] == after_value["authority"],
+            "census_mismatch", "$.after.authority")
+
+    before_records = {record["identity_key"]: record for record in before_value["records"]}
+    after_records = {record["identity_key"]: record for record in after_value["records"]}
+    before_ids = {
+        record["rule_id"]: key for key, record in before_records.items()
+        if record["rule_id"] is not None
+    }
+    after_ids = {
+        record["rule_id"]: key for key, record in after_records.items()
+        if record["rule_id"] is not None
+    }
+    for rule_id in before_ids.keys() & after_ids.keys():
+        if before_ids[rule_id] != after_ids[rule_id]:
+            key = after_ids[rule_id]
+            raise RulesValidationError(
+                "unstable_id", f"$.after.records[{key}].rule_id"
+            )
+    for key in before_records.keys() & after_records.keys():
+        before_id = before_records[key]["rule_id"]
+        after_id = after_records[key]["rule_id"]
+        if before_id is not None and after_id is not None and before_id != after_id:
+            raise RulesValidationError(
+                "unstable_id", f"$.after.records[{key}].rule_id"
+            )
+
+    result = {
+        "before_census": before_value["census_captured_at"],
+        "after_census": after_value["census_captured_at"],
+        "added": sorted(after_records.keys() - before_records.keys()),
+        "removed": sorted(before_records.keys() - after_records.keys()),
+        "evidence_changed": [],
+        "newly_excluded": [],
+        "restored": [],
+        "exclusion_changed": [],
+        "disposition_changed": [],
+        "review_changed": [],
+    }
+    for key in sorted(before_records.keys() & after_records.keys()):
+        old, new = before_records[key], after_records[key]
+        if old["disposition"] != "excluded" and new["disposition"] == "excluded":
+            category = "newly_excluded"
+        elif old["disposition"] == "excluded" and new["disposition"] != "excluded":
+            category = "restored"
+        elif (old["disposition"] == new["disposition"] == "excluded"
+              and old["reason"] != new["reason"]):
+            category = "exclusion_changed"
+        elif old["fingerprint"] != new["fingerprint"]:
+            category = "evidence_changed"
+        elif (old["disposition"], old["rule_id"], old["reason"]) != (
+                new["disposition"], new["rule_id"], new["reason"]):
+            category = "disposition_changed"
+        elif old["review"] != new["review"]:
+            category = "review_changed"
+        else:
+            continue
+        result[category].append(key)
+    return result
