@@ -8,6 +8,7 @@ from __future__ import annotations
 from copy import deepcopy
 import json
 import math
+import os
 from pathlib import Path
 import re
 import stat
@@ -43,6 +44,11 @@ EVIDENCE_RULE_ID = re.compile(
     r"pf2e\.(?:" + "|".join(sorted(EVIDENCE_KINDS))
     + r")\.[a-z0-9]+(?:-[a-z0-9]+)*"
 )
+MAX_CORPUS_FILES = 50_000
+MAX_CORPUS_ENTRIES = 100_000
+MAX_CORPUS_DIRECTORIES = 10_000
+MAX_CORPUS_DEPTH = 32
+MAX_CORPUS_BYTES = 256 * 1024 * 1024
 
 
 def _sha256(value, path: str) -> str:
@@ -194,6 +200,7 @@ def _ledger_entry(value, path: str) -> dict:
     )
     if disposition == "mapped":
         require(type(value["rule_id"]) is str
+                and len(value["rule_id"]) <= 4096
                 and EVIDENCE_RULE_ID.fullmatch(value["rule_id"]) is not None,
                 "invalid_disposition", path)
         require(value["reason"] is None, "invalid_disposition", path)
@@ -243,6 +250,80 @@ def _identity_label(identity: dict) -> str:
 
 def _empty_coverage_bucket() -> dict[str, int]:
     return {"excluded": 0, "mapped": 0, "missing": 0, "pending": 0, "observed": 0}
+
+
+def _validate_coverage_counts(value: dict, fields: str, path: str) -> None:
+    shape(value, fields, path)
+    for field in fields.split():
+        integer(value[field], 0, 50_000, path + "." + field)
+
+
+def _validate_coverage_dimension(value: dict, expected: dict[str, dict[str, int]],
+                                 missing_count: int, allowed: set[str] | frozenset[str],
+                                 path: str) -> None:
+    require(type(value) is dict, "invalid_type", path)
+    require(len(value) <= len(allowed), "limit_exceeded", path)
+    for key in sorted(value):
+        choice(key, allowed, path)
+        bucket_path = path + "." + key
+        bucket = value[key]
+        _validate_coverage_counts(
+            bucket, "excluded mapped missing pending observed", bucket_path
+        )
+        known = expected.get(key, _empty_coverage_bucket())
+        for disposition in ("excluded", "mapped", "pending"):
+            require(bucket[disposition] == known[disposition],
+                    "invalid_value", bucket_path + "." + disposition)
+        require(bucket["observed"] == sum(
+            bucket[field] for field in ("excluded", "mapped", "missing", "pending")
+        ), "invalid_value", bucket_path + ".observed")
+        require(bucket["observed"] > 0, "invalid_value", bucket_path + ".observed")
+    require(expected.keys() <= value.keys(), "invalid_value", path)
+    require(sum(bucket["missing"] for bucket in value.values()) == missing_count,
+            "invalid_value", path)
+    require(sum(bucket["observed"] for bucket in value.values())
+            == sum(bucket["observed"] for bucket in expected.values()) + missing_count,
+            "invalid_value", path)
+
+
+def _validate_coverage(value: dict, records: list[dict], missing: list[str], path: str) -> None:
+    shape(value, "by_disposition by_kind by_rules_era by_review", path)
+    expected_disposition = {"excluded": 0, "mapped": 0, "missing": len(missing), "pending": 0}
+    expected_review = {"missing": len(missing), "pending": 0, "reviewed": 0}
+    by_kind: dict[str, dict[str, int]] = {}
+    by_rules_era: dict[str, dict[str, int]] = {}
+    for record in records:
+        disposition = record["disposition"]
+        expected_disposition[disposition] += 1
+        expected_review[record["review"]["status"]] += 1
+        for key, target in ((record["kind"], by_kind),
+                            (record["rules_era"], by_rules_era)):
+            bucket = target.setdefault(key, _empty_coverage_bucket())
+            bucket["observed"] += 1
+            bucket[disposition] += 1
+
+    _validate_coverage_counts(
+        value["by_disposition"], "excluded mapped missing pending",
+        path + ".by_disposition",
+    )
+    for field, expected in expected_disposition.items():
+        require(value["by_disposition"][field] == expected,
+                "invalid_value", path + ".by_disposition." + field)
+    _validate_coverage_counts(
+        value["by_review"], "missing pending reviewed", path + ".by_review"
+    )
+    for field, expected in expected_review.items():
+        require(value["by_review"][field] == expected,
+                "invalid_value", path + ".by_review." + field)
+    _validate_coverage_dimension(
+        value["by_kind"], by_kind, len(missing), EVIDENCE_KINDS,
+        path + ".by_kind",
+    )
+    _validate_coverage_dimension(
+        value["by_rules_era"], by_rules_era, len(missing),
+        {"remaster", "legacy", "mixed", "not-applicable"},
+        path + ".by_rules_era",
+    )
 
 
 def audit_evidence_inventory(census: dict, ledger: dict) -> dict:
@@ -334,21 +415,26 @@ def _validate_audit_report(value: dict, path: str) -> dict:
         "site_update_date site_update_url complete missing coverage records",
         path,
     )
+    require(type(value["schema_version"]) is int,
+            "invalid_type", path + ".schema_version")
     require(value["schema_version"] == EVIDENCE_SCHEMA_VERSION,
             "unsupported_version", path + ".schema_version")
     choice(value["authority"], {AON_AUTHORITY}, path + ".authority")
-    text(value["inventory_id"], path + ".inventory_id")
+    text(value["inventory_id"], path + ".inventory_id",
+         pattern=r"pf2e-[a-z0-9]+(?:[.-][a-z0-9]+)*")
     timestamp(value["census_captured_at"], path + ".census_captured_at")
     timestamp(value["ledger_created_at"], path + ".ledger_created_at")
     iso_date(value["site_update_date"], path + ".site_update_date")
     require(value["site_update_url"] == f"https://{AON_HOST}/",
             "invalid_url", path + ".site_update_url")
     require(type(value["complete"]) is bool, "invalid_type", path + ".complete")
-    require(type(value["missing"]) is list and all(type(item) is str for item in value["missing"]),
-            "invalid_type", path + ".missing")
+    missing = sequence(value["missing"], path + ".missing")
+    for index, identity_label in enumerate(missing):
+        text(identity_label, f"{path}.missing[{index}]",
+             pattern=PAGE_FAMILY + r":[1-9][0-9]{0,7}")
     require(type(value["coverage"]) is dict, "invalid_type", path + ".coverage")
     records = sequence(value["records"], path + ".records")
-    seen = set()
+    seen, rule_ids = set(), set()
     for index, record in enumerate(records):
         record_path = f"{path}.records[{index}]"
         shape(
@@ -375,16 +461,25 @@ def _validate_audit_report(value: dict, path: str) -> dict:
         require(record["identity_key"] not in seen,
                 "duplicate_identity", record_path + ".identity")
         seen.add(record["identity_key"])
+        if record["rule_id"] is not None:
+            require(record["rule_id"] not in rule_ids,
+                    "duplicate_id", record_path + ".rule_id")
+            rule_ids.add(record["rule_id"])
     require(value["missing"] == sorted(set(value["missing"])),
             "invalid_value", path + ".missing")
+    require(not (seen & set(value["missing"])),
+            "duplicate_identity", path + ".missing")
     require(value["complete"] == (not value["missing"]),
             "invalid_value", path + ".complete")
+    _validate_coverage(value["coverage"], records, missing, path + ".coverage")
     records.sort(key=lambda item: item["identity_key"])
     return value
 
 
 def diff_evidence_inventories(before: dict, after: dict) -> dict:
     """Return mutually exclusive identity drift between two audited snapshots."""
+    bounded_json(before)
+    bounded_json(after)
     before_value = _validate_audit_report(deepcopy(before), "$.before")
     after_value = _validate_audit_report(deepcopy(after), "$.after")
     require(before_value["complete"] and after_value["complete"],
@@ -402,13 +497,13 @@ def diff_evidence_inventories(before: dict, after: dict) -> dict:
         record["rule_id"]: key for key, record in after_records.items()
         if record["rule_id"] is not None
     }
-    for rule_id in before_ids.keys() & after_ids.keys():
+    for rule_id in sorted(before_ids.keys() & after_ids.keys()):
         if before_ids[rule_id] != after_ids[rule_id]:
             key = after_ids[rule_id]
             raise RulesValidationError(
                 "unstable_id", f"$.after.records[{key}].rule_id"
             )
-    for key in before_records.keys() & after_records.keys():
+    for key in sorted(before_records.keys() & after_records.keys()):
         before_id = before_records[key]["rule_id"]
         after_id = after_records[key]["rule_id"]
         if before_id is not None and after_id is not None and before_id != after_id:
@@ -508,21 +603,34 @@ def _corpus_paths(root: Path) -> list[Path]:
         require(root.is_dir(), "invalid_package_layout", "$files")
     except (OSError, RulesValidationError):
         raise RulesValidationError("invalid_package_layout", "$files") from None
-    paths, pending = [], [root]
+    paths, pending = [], [(root, 0)]
+    entries_seen = 0
+    directories_seen = 1
+    apparent_bytes = 0
     while pending:
-        directory = pending.pop()
+        directory, depth = pending.pop()
         try:
-            children = sorted(directory.iterdir(), key=lambda item: item.name)
+            children = []
+            with os.scandir(directory) as iterator:
+                for entry in iterator:
+                    entries_seen += 1
+                    require(entries_seen <= MAX_CORPUS_ENTRIES,
+                            "limit_exceeded", "$files")
+                    child = Path(entry.path)
+                    relative = child.relative_to(root).as_posix()
+                    path = "$files/" + relative
+                    try:
+                        info = entry.stat(follow_symlinks=False)
+                    except OSError:
+                        raise RulesValidationError("io_error", path) from None
+                    children.append((entry.name, child, info))
+            children.sort(key=lambda item: item[0])
         except OSError:
             raise RulesValidationError("io_error", "$files") from None
-        child_directories = []
-        for child in children:
+        child_directories: list[tuple[Path, int]] = []
+        for _name, child, info in children:
             relative = child.relative_to(root).as_posix()
             path = "$files/" + relative
-            try:
-                info = child.lstat()
-            except OSError:
-                raise RulesValidationError("io_error", path) from None
             require(
                 not stat.S_ISLNK(info.st_mode)
                 and not (getattr(info, "st_file_attributes", 0)
@@ -531,9 +639,18 @@ def _corpus_paths(root: Path) -> list[Path]:
                 path,
             )
             if stat.S_ISDIR(info.st_mode):
-                child_directories.append(child)
+                child_depth = depth + 1
+                require(child_depth <= MAX_CORPUS_DEPTH,
+                        "limit_exceeded", path)
+                directories_seen += 1
+                require(directories_seen <= MAX_CORPUS_DIRECTORIES,
+                        "limit_exceeded", path)
+                child_directories.append((child, child_depth))
             elif stat.S_ISREG(info.st_mode) and child.suffix.lower() == ".json":
                 paths.append(child)
+                require(len(paths) <= MAX_CORPUS_FILES, "limit_exceeded", path)
+                apparent_bytes += info.st_size
+                require(apparent_bytes <= MAX_CORPUS_BYTES, "limit_exceeded", path)
         pending.extend(reversed(child_directories))
     return sorted(paths, key=lambda item: item.relative_to(root).as_posix())
 
@@ -618,6 +735,7 @@ def scan_corpus(root: Path) -> dict:
     by_pack: dict[str, int] = {}
     by_rules_era: dict[str, int] = {}
     by_scope: dict[str, int] = {}
+    processed_bytes = 0
 
     for source_path in json_paths:
         relative = source_path.relative_to(root).as_posix()
@@ -626,6 +744,8 @@ def scan_corpus(root: Path) -> dict:
             data = read_file(source_path)
         except RulesValidationError as error:
             raise RulesValidationError(error.code, path) from None
+        processed_bytes += len(data)
+        require(processed_bytes <= MAX_CORPUS_BYTES, "limit_exceeded", path)
         value = _corpus_json(data, path)
         content_sha256 = digest(data)
         if source_path.name == "_folders.json":

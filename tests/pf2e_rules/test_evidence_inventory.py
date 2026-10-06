@@ -140,6 +140,17 @@ def test_ledger_rejects_conflicting_dispositions_and_reviews(mutate, code, path)
     assert error.value.path == path
 
 
+def test_ledger_rejects_overlong_mapped_rule_id():
+    document = load(LEDGER_PATH)
+    document["entries"][0]["rule_id"] = "pf2e.class." + "x" * 4097
+
+    with pytest.raises(ValueError) as error:
+        evidence().normalize_evidence_ledger(document)
+
+    assert error.value.code == "invalid_disposition"
+    assert error.value.path == "$.entries[0]"
+
+
 def test_normalization_is_hash_seed_independent():
     script = """
 import json

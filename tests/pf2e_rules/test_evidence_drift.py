@@ -2,7 +2,10 @@
 from copy import deepcopy
 import importlib
 import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 
 import pytest
 
@@ -219,3 +222,96 @@ def test_external_identity_cannot_change_stable_rule_id():
 
     assert error.value.code == "unstable_id"
     assert error.value.path == "$.after.records[Classes.aspx:7].rule_id"
+
+
+def test_saved_report_rejects_duplicate_stable_rule_ids():
+    census, ledger = documents()
+    report = snapshot(census, ledger)
+    report["records"][1].update(
+        disposition="mapped",
+        rule_id=report["records"][0]["rule_id"],
+        reason=None,
+    )
+
+    with pytest.raises(ValueError) as error:
+        evidence().diff_evidence_inventories(report, report)
+
+    assert error.value.code == "duplicate_id"
+    assert error.value.path == "$.before.records[1].rule_id"
+
+
+def test_saved_report_rejects_forged_completeness_and_coverage():
+    census, ledger = documents()
+    ledger["entries"].pop(1)
+    report = snapshot(census, ledger)
+    report["complete"] = True
+    report["missing"] = []
+
+    with pytest.raises(ValueError) as error:
+        evidence().diff_evidence_inventories(report, report)
+
+    assert error.value.code == "invalid_value"
+    assert error.value.path == "$.before.coverage.by_disposition.missing"
+
+
+@pytest.mark.parametrize(("field", "value", "code", "path"), [
+    ("schema_version", True, "invalid_type", "$.before.schema_version"),
+    ("inventory_id", "not-an-id", "invalid_id", "$.before.inventory_id"),
+])
+def test_saved_report_revalidates_scalar_contracts(field, value, code, path):
+    census, ledger = documents()
+    report = snapshot(census, ledger)
+    report[field] = value
+
+    with pytest.raises(ValueError) as error:
+        evidence().diff_evidence_inventories(report, report)
+
+    assert error.value.code == code
+    assert error.value.path == path
+
+
+def test_diff_applies_bounds_before_deep_copy():
+    value = {}
+    cursor = value
+    for _ in range(1500):
+        child = {}
+        cursor["nested"] = child
+        cursor = child
+
+    with pytest.raises(ValueError) as error:
+        evidence().diff_evidence_inventories(value, value)
+
+    assert error.value.code == "limit_exceeded"
+    assert error.value.path == "$"
+
+
+def test_unstable_id_error_is_hash_seed_independent():
+    script = """
+import json
+from pathlib import Path
+from systems.pf2e.rules.ingestion.evidence_inventory import audit_evidence_inventory, diff_evidence_inventories
+root = Path('tests/pf2e_rules/fixtures')
+census = json.loads((root / 'synthetic-aon-census.json').read_text(encoding='utf-8'))
+ledger = json.loads((root / 'synthetic-evidence-ledger.json').read_text(encoding='utf-8'))
+ids = ['pf2e.class.alpha', 'pf2e.feat.beta', 'pf2e.spell.gamma']
+for entry, rule_id in zip(ledger['entries'], ids):
+    entry.update(disposition='mapped', rule_id=rule_id, reason=None)
+before = audit_evidence_inventory(census, ledger)
+for entry, rule_id in zip(ledger['entries'], ids[1:] + ids[:1]):
+    entry['rule_id'] = rule_id
+after = audit_evidence_inventory(census, ledger)
+try:
+    diff_evidence_inventories(before, after)
+except ValueError as error:
+    print(error.path)
+"""
+    outputs = []
+    for seed in ("1", "2", "417"):
+        result = subprocess.run(
+            [sys.executable, "-c", script], cwd=ROOT,
+            env={**os.environ, "PYTHONHASHSEED": seed}, capture_output=True,
+            text=True, encoding="utf-8", check=True,
+        )
+        outputs.append(result.stdout)
+
+    assert outputs == ["$.after.records[Spells.aspx:11].rule_id\n"] * 3

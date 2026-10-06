@@ -245,3 +245,34 @@ raise SystemExit(main(['evidence-audit', {str(CENSUS)!r}, {str(LEDGER)!r}]))
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)["complete"] is True
     assert list(data_dir.iterdir()) == []
+
+
+def test_cli_refuses_to_emit_a_result_larger_than_its_readback_budget(
+        monkeypatch, capsys):
+    import tools.pf2e_rules as command
+
+    monkeypatch.setattr(command, "MAX_FILE_BYTES", 32, raising=False)
+
+    with pytest.raises(ValueError) as error:
+        command._render_result({"value": "x" * 64})
+
+    assert error.value.code == "limit_exceeded"
+    assert error.value.path == "$"
+
+    code = command.main(["evidence-audit", str(CENSUS), str(LEDGER)])
+    output = capsys.readouterr()
+    assert code == 2
+    assert output.out == ""
+    assert json.loads(output.err) == {"error": "limit_exceeded", "path": "$"}
+
+
+def test_audit_result_must_fit_the_strict_readback_node_budget():
+    import tools.pf2e_rules as command
+
+    result = {"rows": [None] * 500_000}
+
+    with pytest.raises(ValueError) as error:
+        command._render_result(result, require_readback=True)
+
+    assert error.value.code == "limit_exceeded"
+    assert error.value.path == "$"

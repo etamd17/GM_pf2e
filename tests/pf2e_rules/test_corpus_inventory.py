@@ -242,3 +242,65 @@ def test_scan_rejects_symlinked_json(tmp_path):
 
     assert error.value.code == "invalid_package_layout"
     assert error.value.path == "$files/classes/linked.json"
+
+
+@pytest.mark.parametrize(("limit_name", "limit", "expected_path"), [
+    ("MAX_CORPUS_FILES", 1, "$files/classes/two.json"),
+    ("MAX_CORPUS_BYTES", 1, "$files/classes/one.json"),
+])
+def test_scan_enforces_file_and_aggregate_byte_budgets(
+        tmp_path, monkeypatch, limit_name, limit, expected_path):
+    write_json(tmp_path, "classes/one.json",
+               document("AAAAAAAAAAAAAAAA", "One", "class"))
+    write_json(tmp_path, "classes/two.json",
+               document("BBBBBBBBBBBBBBBB", "Two", "class"))
+    monkeypatch.setattr(evidence(), limit_name, limit)
+
+    with pytest.raises(ValueError) as error:
+        evidence().scan_corpus(tmp_path)
+
+    assert error.value.code == "limit_exceeded"
+    assert error.value.path == expected_path
+
+
+def test_scan_enforces_directory_depth_budget(tmp_path, monkeypatch):
+    write_json(
+        tmp_path, "classes/one/two/example.json",
+        document("AAAAAAAAAAAAAAAA", "Deep", "class"),
+    )
+    monkeypatch.setattr(evidence(), "MAX_CORPUS_DEPTH", 2)
+
+    with pytest.raises(ValueError) as error:
+        evidence().scan_corpus(tmp_path)
+
+    assert error.value.code == "limit_exceeded"
+    assert error.value.path == "$files/classes/one/two"
+
+
+@pytest.mark.parametrize(("limit_name", "expected_path"), [
+    ("MAX_CORPUS_ENTRIES", "$files"),
+    ("MAX_CORPUS_DIRECTORIES", "$files/classes"),
+])
+def test_scan_enforces_traversal_entry_and_directory_budgets(
+        tmp_path, monkeypatch, limit_name, expected_path):
+    write_json(tmp_path, "classes/example.json",
+               document("AAAAAAAAAAAAAAAA", "Example", "class"))
+    monkeypatch.setattr(evidence(), limit_name, 1)
+
+    with pytest.raises(ValueError) as error:
+        evidence().scan_corpus(tmp_path)
+
+    assert error.value.code == "limit_exceeded"
+    assert error.value.path == expected_path
+
+
+def test_scan_uses_streaming_directory_enumeration(tmp_path, monkeypatch):
+    write_json(tmp_path, "classes/example.json",
+               document("AAAAAAAAAAAAAAAA", "Example", "class"))
+
+    def unbounded_iterdir(_path):
+        raise AssertionError("Path.iterdir materializes an unbounded os.listdir result")
+
+    monkeypatch.setattr(Path, "iterdir", unbounded_iterdir)
+
+    assert evidence().scan_corpus(tmp_path)["coverage"]["records"] == 1

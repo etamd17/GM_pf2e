@@ -139,6 +139,9 @@ trait; those sets overlap and must not be added together.
 - JSON duplicate keys, non-finite values, excessive nesting, symlinks, and
   Windows reparse points fail closed. Finite floats are accepted only by the
   local Foundry-corpus parser.
+- Corpus traversal is bounded to 50,000 JSON files, 100,000 filesystem entries,
+  10,000 directories, depth 32, and 256 MiB of JSON input. The current 18,482
+  files occupy about 55.4 MB and remain comfortably inside those limits.
 - Local content hashes cover exact raw bytes. AoN evidence fingerprints use a
   documented canonical projection and exclude their own claimed fingerprint.
 - Every timestamp and review identity is supplied evidence; the tool does not
@@ -155,6 +158,9 @@ trait; those sets overlap and must not be added together.
   Legacy. License family and rules era therefore remain independent fields.
 - No command writes an output file. An operator may explicitly redirect stdout
   into a new review artifact and then place that artifact under normal review.
+- Successful CLI JSON is capped at the same 16 MiB boundary used when reading a
+  saved report, so `evidence-audit` cannot emit a result that `evidence-diff`
+  subsequently refuses solely because of size.
 - The existing CI PF2e job already executes this suite; no workflow expansion
   or production deployment behavior is required for PR6B3A.
 
