@@ -1,0 +1,83 @@
+{
+  "manifest": {
+    "system": "pf2e",
+    "ruleset_id": "pf2e-player-core-fighter-unverified-0.1.0",
+    "content_version": "0.1.0",
+    "schema_version": 2,
+    "effective_date": "2023-11-15",
+    "publication_date": null,
+    "publication_status": "draft",
+    "base_package": null,
+    "overlays": [],
+    "source_ids": [
+      "pf2e.source.player-core"
+    ],
+    "errata_ids": [],
+    "supported_classes": [],
+    "exclusions": [
+      {
+        "id": "pf2e.class.fighter",
+        "reason": "Printing, complete errata, rules normalization, and license review remain unresolved."
+      }
+    ],
+    "required_migrations": [],
+    "license_family": "orc-review-pending",
+    "notices": [
+      "ORC Notice: printed 463; PDF 464; project-specific review pending."
+    ],
+    "created_at": "2026-10-04T00:00:00Z",
+    "reviews": {
+      "rules": null,
+      "license": null
+    }
+  },
+  "sources": [
+    {
+      "id": "pf2e.source.player-core",
+      "publisher": "Paizo Inc.",
+      "product": "Pathfinder Player Core",
+      "product_id": "PZO12001E",
+      "edition": "Second Edition; publisher printing and errata chain unverified",
+      "publication_date": "2023-11-15",
+      "verification_date": null,
+      "scope": "base",
+      "rights": "unknown",
+      "license_family": "orc-review-pending",
+      "notices": [
+        "ORC Notice: printed 463; PDF 464; project-specific review pending."
+      ],
+      "url": "https://store.paizo.com/pathfinder-player-core-pdf/",
+      "errata_ids": [],
+      "artifact_sha256": "494c61daebe6d721137263b934065040d28121c57850eed3d19e97a7a3c613c9",
+      "printing": {
+        "status": "unverified",
+        "designation": null
+      },
+      "revision": {
+        "status": "unverified",
+        "designation": null
+      }
+    }
+  ],
+  "records": [
+    {
+      "id": "pf2e.class.fighter",
+      "kind": "class",
+      "name": "Fighter",
+      "automation": "reference_only",
+      "level": 1,
+      "traits": [],
+      "sources": [
+        {
+          "source_id": "pf2e.source.player-core",
+          "page": "printed 137; PDF 138"
+        }
+      ],
+      "references": [],
+      "prerequisite": null,
+      "state": "quarantined",
+      "quarantine_reason": "Printing, complete errata, rules normalization, and license review remain unresolved.",
+      "mechanics": null
+    }
+  ]
+}

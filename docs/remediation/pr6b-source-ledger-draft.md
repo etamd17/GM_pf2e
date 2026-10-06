@@ -1,6 +1,6 @@
 # PR6B source ledger: review draft
 
-Research snapshot: 2026-10-01. This ledger is a review queue for the accepted
+Research snapshot: 2026-10-04. This ledger is a review queue for the accepted
 ADR-0003, not a published Pathfinder rules package or a license determination.
 Source IDs below are proposed stable identifiers; none is enabled in a package.
 
@@ -8,7 +8,7 @@ Source IDs below are proposed stable identifiers; none is enabled in a package.
 
 | Proposed ID | Work and scope | Evidence available | Review still needed |
 | --- | --- | --- | --- |
-| `pf2e.source.player-core` | [Player Core](https://store.paizo.com/pathfinder-player-core/), product `PZO12001-HC`; Remaster ancestry/background creation, Fighter, Wizard and core spells | Paizo product page; release listed as 2023-11-15. User-supplied PDF: Fighter initial proficiencies on printed p. 137 (PDF p. 138); ORC Notice on printed p. 463 (PDF p. 464). | Exact printing/PDF revision, applicable errata, attribution/distribution review, independently approved mechanical transcription |
+| `pf2e.source.player-core` | [Player Core PDF](https://store.paizo.com/pathfinder-player-core-pdf/), digital product `PZO12001E`; Remaster ancestry/background creation, Fighter, Wizard and core spells. The artifact cover also carries hardcover code `PZO12001-HC`; neither code establishes its printing. | Paizo's PDF page identifies digital SKU `PZO12001E`; the [hardcover page](https://store.paizo.com/pathfinder-player-core/) lists the work's 2023-11-15 release. User-supplied PDF: Fighter initial proficiencies on printed p. 137 (PDF p. 138); ORC Notice on printed p. 463 (PDF p. 464). | Exact printing/PDF revision, applicable errata, attribution/distribution review, independently approved mechanical transcription |
 | `pf2e.source.dark-archive-remastered` | [Dark Archive (Remastered)](https://store.paizo.com/pathfinder-dark-archive-remastered/), product `PZO12012-HC`; current Psychic candidate | Paizo product page | Publication date and exact printing/PDF revision, Psychic pages, book notices, first-printing content review |
 | `pf2e.source.impossible-magic` | [Impossible Magic](https://store.paizo.com/pathfinder-impossible-magic/), product `PZO12014-HC`; current Magus/Summoner candidate | Paizo product page; release listed as 2026-07-30 | Exact printing/PDF revision, class and Eidolon pages, book notices, first-printing content review |
 
@@ -27,11 +27,12 @@ application to the selected printing need to be recorded during review:
 
 The user-supplied *Pathfinder Player Core* PDF has SHA-256
 `494c61daebe6d721137263b934065040d28121c57850eed3d19e97a7a3c613c9`.
-The book identifies itself as Second Edition and carries a 2023 Paizo copyright,
-but the inspected cover, notice and PDF metadata do not establish its
-printing or whether later errata have been incorporated. File timestamps are not
-printing evidence. Keep the proposed source unverified until its revision and
-applicable errata are established.
+The book identifies itself as Second Edition and carries a 2023 Paizo copyright.
+Independent inspection on 2026-10-04 found 466 PDF pages, metadata title
+`PZO12001E.pdf`, a 2023-07-12 creation timestamp and a 2023-11-01 modification
+timestamp. Those fields, the cover code and filesystem timestamps do not
+establish a publisher printing or PDF revision. Keep the proposed source
+unverified until its designation and complete applicable errata are established.
 
 Schema v2 records exact source evidence as `artifact_sha256` plus independent
 `printing` and `revision` status/designation objects. Any source directly or
@@ -39,10 +40,10 @@ transitively cited by an enabled record must declare a captured artifact hash.
 Base and optional-sourcebook sources must declare both statuses verified;
 limited non-book scopes may use a reviewer-attested `not_applicable` status.
 The schema validates the declaration's shape, not the external artifact or the
-reviewer's conclusion. The current Player Core candidate would use the hash
-above with both statuses `unverified` and both designations null. It remains in
-this research ledger, not a package's source inventory, and cannot support an
-enabled Fighter record.
+reviewer's conclusion. The retained Player Core draft candidate uses the hash
+above with both statuses `unverified` and both designations null. It appears only
+in the quarantined evidence-shell authoring file; it is not an enabled or
+published source inventory and cannot support an enabled Fighter record.
 
 The Fighter initial-proficiencies section on printed p. 137 (PDF p. 138) supports
 these **candidate fixed level-1 grants** for the v2 derivation contract:
@@ -75,14 +76,18 @@ artifact or a named license review declaration.
 Keep actual Player Core mechanics out of enabled package records until those
 gates are satisfied; do not relabel them as `test_only` synthetic facts.
 
-Search-indexed text from Paizo's official
-[Player Core FAQ and errata](https://paizo.com/pathfinder/faq) surfaced at least
-two Fighter corrections: Aggressive Block (Fall 2023, p. 141) and Sudden Leap
-(Spring 2025, p. 147), neither on the level-1 pages above.
-[Paizo's Spring 2026 errata announcement](https://paizo.com/blog/spring-errata-2026)
-also reports Player Core reprint updates. Direct access to the complete FAQ was
-unavailable during this review, so absence of a p. 137-138 correction is **not**
-certified; applicability to this unidentified PDF printing remains open.
+Paizo's official
+[Player Core FAQ and errata](https://paizo.com/pathfinder/faq) identifies, among
+other entries, corrections to Aggressive Block (Fall 2023, p. 141), Sudden Leap
+and wizard spellbook advancement (Spring 2025, pp. 147 and 195), and ancestry
+trait guidance (Spring 2026, p. 41). The supplied artifact retains the earlier
+form at all four inspected locations. It therefore does not incorporate at least
+those corrections, although this still does not establish the artifact's exact
+publisher printing. [Paizo's Spring 2026 errata announcement](https://paizo.com/blog/spring-errata-2026)
+also says that Player Core reprint pages were published before that errata
+release. The complete FAQ/errata chain has not been frozen in this repository,
+so absence of a p. 137-138 correction is **not** certified and applicability to
+this unidentified PDF printing remains open.
 
 The separately supplied pre-Remaster *Core Rulebook* (copyright 2019) is an
 OGL 1.0a legacy source:
