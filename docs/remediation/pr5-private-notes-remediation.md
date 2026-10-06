@@ -3,11 +3,11 @@
 Date: 2026-10-05
 Last locally verified: 2026-10-06
 
-Status: implementation and all supported local verification are complete;
-independent review found no Critical or Important defect. PostgreSQL-only tests
-remain a required CI gate because no disposable PostgreSQL runtime is available
-locally. Production acceptance remains blocked until this remediation is
-merged, deployed, and the complete eight-gate sequence is rerun from gate 1.
+Status: the remediation was merged in GitHub PR #166 and deployed from revision
+`6514fc162d9f69bb0f0aa0c68da169eeec44c871`. The complete 2026-10-06
+production rerun passed gates 1 through 5, recorded gate 6 as a justified N/A
+under the active JSON ownership backend, and passed gates 7 and 8. PR5
+production acceptance is complete.
 
 ## Security contract
 
@@ -122,6 +122,31 @@ gate; unavailable database prerequisites are not treated as a passing skip.
 | 6. Viewer/editor authorization | Active backend; editor gameplay success; private endpoint 403s; PF2e viewer read-only/no notes; Cosmere viewer denial. |
 | 7. Backup and controlled restart | Backup/snapshot references, post-restart health, incremented boot count, and exact-once persistence for draft, two characters, and private marker. |
 | 8. Cleanup and record | Named artifacts removed or an explicit list of safe leftovers. |
+
+### 2026-10-06 rerun record
+
+The complete sanitized evidence is in
+[the acceptance record](pr5-acceptance-2026-10-01.md). Production stayed on
+JSON authority; it was not switched to SQL merely to exercise assignments.
+
+- Gates 1–5 passed against deployed revision
+  `6514fc162d9f69bb0f0aa0c68da169eeec44c871`, including two normal-player
+  workflows and cross-account draft, sheet, note, and raw-JSON denials.
+- Gate 6 was N/A by configured backend. Forged JSON grants and SQL assignment
+  boundaries remained covered by the green focused and PostgreSQL CI suites.
+- Gate 7 passed with full backup `pr5-data-20261006T165629Z`, a controlled
+  non-game restart of Railway deployment
+  `8f341ce8-4b1b-49c1-8bae-a9410db7952d`, healthy post-restart readiness and
+  storage, `persistence_proven=true`, and `boots_observed` increasing from 47
+  to 48. The private draft, both canonical characters, and the opaque private
+  marker all persisted.
+- Gate 8 discarded only the named unpublished privacy draft. The two published
+  synthetic characters, temporary Player B test account/campaign membership,
+  one unused test invitation, and the opaque marker on the retained builder
+  character remain
+  because broader production deletion was not authorized.
+- Final disposition: **ACCEPTED — all eight production gates completed on
+  2026-10-06.**
 
 ## Stop and rollback rules
 
