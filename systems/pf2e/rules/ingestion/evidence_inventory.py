@@ -6,10 +6,14 @@ records identities and review evidence, never rules prose or executable data.
 from __future__ import annotations
 
 from copy import deepcopy
+import json
+import math
+from pathlib import Path
 import re
+import stat
 from urllib.parse import parse_qsl, urlsplit
 
-from ..manifest import canonical_json, digest
+from ..manifest import canonical_json, digest, read_file, reject_links
 from ..validation import (
     RulesValidationError,
     bounded_json,
@@ -444,3 +448,268 @@ def diff_evidence_inventories(before: dict, after: dict) -> dict:
             continue
         result[category].append(key)
     return result
+
+
+def _corpus_json(data: bytes, path: str):
+    def pairs(items):
+        value = {}
+        for key, item in items:
+            require(key not in value, "duplicate_key", path)
+            value[key] = item
+        return value
+
+    def forbidden(_):
+        raise RulesValidationError("invalid_json", path)
+
+    def finite_float(value):
+        number = float(value)
+        require(math.isfinite(number), "invalid_json", path)
+        return number
+
+    try:
+        value = json.loads(
+            data.decode("utf-8"), object_pairs_hook=pairs,
+            parse_constant=forbidden, parse_float=finite_float,
+        )
+    except RulesValidationError:
+        raise
+    except (ValueError, UnicodeError, RecursionError, OverflowError):
+        raise RulesValidationError("invalid_json", path) from None
+    pending, count = [(value, 0)], 0
+    while pending:
+        item, depth = pending.pop()
+        count += 1
+        require(depth <= 64 and count <= 1_000_000, "limit_exceeded", path)
+        if type(item) is dict:
+            require(all(type(key) is str for key in item), "invalid_type", path)
+            pending.extend((child, depth + 1) for child in item.values())
+        elif type(item) is list:
+            pending.extend((child, depth + 1) for child in item)
+        else:
+            require(item is None or type(item) in (str, bool, int, float),
+                    "invalid_type", path)
+            if type(item) is float:
+                require(math.isfinite(item), "invalid_json", path)
+    return value
+
+
+def _corpus_text(value, path: str) -> str:
+    """Validate source evidence without silently trimming its irregularities."""
+    require(type(value) is str, "invalid_type", path)
+    require(0 < len(value) <= 4096, "invalid_value", path)
+    require(not any(ord(character) < 32 or 0xD800 <= ord(character) <= 0xDFFF
+                    for character in value), "invalid_value", path)
+    return value
+
+
+def _corpus_paths(root: Path) -> list[Path]:
+    try:
+        reject_links(root)
+        require(root.is_dir(), "invalid_package_layout", "$files")
+    except (OSError, RulesValidationError):
+        raise RulesValidationError("invalid_package_layout", "$files") from None
+    paths, pending = [], [root]
+    while pending:
+        directory = pending.pop()
+        try:
+            children = sorted(directory.iterdir(), key=lambda item: item.name)
+        except OSError:
+            raise RulesValidationError("io_error", "$files") from None
+        child_directories = []
+        for child in children:
+            relative = child.relative_to(root).as_posix()
+            path = "$files/" + relative
+            try:
+                info = child.lstat()
+            except OSError:
+                raise RulesValidationError("io_error", path) from None
+            require(
+                not stat.S_ISLNK(info.st_mode)
+                and not (getattr(info, "st_file_attributes", 0)
+                         & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 1024)),
+                "invalid_package_layout",
+                path,
+            )
+            if stat.S_ISDIR(info.st_mode):
+                child_directories.append(child)
+            elif stat.S_ISREG(info.st_mode) and child.suffix.lower() == ".json":
+                paths.append(child)
+        pending.extend(reversed(child_directories))
+    return sorted(paths, key=lambda item: item.relative_to(root).as_posix())
+
+
+def _publication(system: dict, path: str) -> tuple[dict, str]:
+    publication = system.get("publication")
+    if publication is None:
+        return {"title": None, "license": None, "remaster": None}, "unknown"
+    require(type(publication) is dict, "invalid_type", path + ".system.publication")
+    normalized = {}
+    for field in ("title", "license"):
+        value = publication.get(field)
+        if value in (None, ""):
+            normalized[field] = None
+        else:
+            normalized[field] = _corpus_text(
+                value, path + ".system.publication." + field
+            )
+    remaster = publication.get("remaster")
+    require(remaster is None or type(remaster) is bool,
+            "invalid_type", path + ".system.publication.remaster")
+    normalized["remaster"] = remaster
+    rules_era = "unknown" if remaster is None else ("remaster" if remaster else "legacy")
+    return normalized, rules_era
+
+
+def _traits(system: dict) -> list[str]:
+    traits = system.get("traits")
+    if type(traits) is not dict or type(traits.get("value")) is not list:
+        return []
+    result = [item for item in traits["value"] if type(item) is str and item]
+    return sorted(set(result))
+
+
+def _semantic_kind(pack: str, declared_type: str) -> str:
+    if pack == "class-features":
+        return "class-feature"
+    if pack == "ancestry-features":
+        return "ancestry-feature"
+    if pack == "equipment":
+        return "equipment"
+    return declared_type.replace("_", "-")
+
+
+def _subcategory(pack: str, kind: str, declared_type: str, system: dict,
+                 traits: list[str]) -> str | None:
+    if pack == "equipment":
+        return declared_type
+    if kind == "feat":
+        if "dedication" in traits:
+            return "dedication"
+        if "archetype" in traits:
+            return "archetype"
+        category = system.get("category")
+        return category if type(category) is str and category else None
+    category = system.get("category")
+    return category if kind == "action" and type(category) is str and category else None
+
+
+def _scope(pack: str) -> str:
+    if pack == "adventure-specific-actions":
+        return "adventure"
+    if pack == "campaign-effects":
+        return "campaign"
+    if pack == "iconics":
+        return "example"
+    return "global"
+
+
+def _increment(counts: dict[str, int], key: str) -> None:
+    counts[key] = counts.get(key, 0) + 1
+
+
+def scan_corpus(root: Path) -> dict:
+    """Inventory every local JSON artifact without inferring AoN identity."""
+    root = Path(root).absolute()
+    json_paths = _corpus_paths(root)
+    records, structural, generated = [], [], []
+    identities = set()
+    by_kind: dict[str, int] = {}
+    by_license: dict[str, int] = {}
+    by_pack: dict[str, int] = {}
+    by_rules_era: dict[str, int] = {}
+    by_scope: dict[str, int] = {}
+
+    for source_path in json_paths:
+        relative = source_path.relative_to(root).as_posix()
+        path = "$files/" + relative
+        try:
+            data = read_file(source_path)
+        except RulesValidationError as error:
+            raise RulesValidationError(error.code, path) from None
+        value = _corpus_json(data, path)
+        content_sha256 = digest(data)
+        if source_path.name == "_folders.json":
+            require(type(value) is list, "invalid_type", path)
+            structural.append({
+                "relative_path": relative,
+                "kind": "folder-metadata",
+                "entry_count": len(value),
+                "content_sha256": content_sha256,
+            })
+            continue
+        if relative == "spells/master_spells.json":
+            require(type(value) is list, "invalid_type", path)
+            generated.append({
+                "relative_path": relative,
+                "kind": "spell-projection",
+                "entry_count": len(value),
+                "content_sha256": content_sha256,
+            })
+            continue
+
+        require(type(value) is dict, "invalid_type", path)
+        require(all(field in value for field in ("_id", "name", "type", "system")),
+                "missing_field", path)
+        foundry_id = text(value["_id"], path + "._id")
+        require(re.fullmatch(r"[A-Za-z0-9]{16}", foundry_id) is not None,
+                "invalid_id", path + "._id")
+        name = text(value["name"], path + ".name")
+        declared_type = text(value["type"], path + ".type")
+        require(re.fullmatch(r"[a-z][a-z0-9-]*", declared_type) is not None,
+                "invalid_value", path + ".type")
+        system = value["system"]
+        require(type(system) is dict, "invalid_type", path + ".system")
+        pack = relative.split("/", 1)[0]
+        identity = pack, declared_type, foundry_id
+        require(identity not in identities, "duplicate_identity", path)
+        identities.add(identity)
+        publication, rules_era = _publication(system, path)
+        traits = _traits(system)
+        kind = _semantic_kind(pack, declared_type)
+        scope = _scope(pack)
+        record = {
+            "local_identity": {
+                "pack": pack,
+                "declared_type": declared_type,
+                "foundry_id": foundry_id,
+            },
+            "relative_path": relative,
+            "name": name,
+            "kind": kind,
+            "subcategory": _subcategory(pack, kind, declared_type, system, traits),
+            "scope": scope,
+            "publication": publication,
+            "rules_era": rules_era,
+            "traits": traits,
+            "content_sha256": content_sha256,
+        }
+        records.append(record)
+        _increment(by_kind, kind)
+        _increment(by_license, publication["license"] or "unknown")
+        _increment(by_pack, pack)
+        _increment(by_rules_era, rules_era)
+        _increment(by_scope, scope)
+
+    records.sort(key=lambda item: item["relative_path"])
+    structural.sort(key=lambda item: item["relative_path"])
+    generated.sort(key=lambda item: item["relative_path"])
+    coverage = {
+        "files": len(json_paths),
+        "records": len(records),
+        "structural_files": len(structural),
+        "structural_entries": sum(item["entry_count"] for item in structural),
+        "generated_files": len(generated),
+        "generated_entries": sum(item["entry_count"] for item in generated),
+        "by_kind": {key: by_kind[key] for key in sorted(by_kind)},
+        "by_license": {key: by_license[key] for key in sorted(by_license)},
+        "by_pack": {key: by_pack[key] for key in sorted(by_pack)},
+        "by_rules_era": {key: by_rules_era[key] for key in sorted(by_rules_era)},
+        "by_scope": {key: by_scope[key] for key in sorted(by_scope)},
+    }
+    return {
+        "schema_version": EVIDENCE_SCHEMA_VERSION,
+        "records": records,
+        "structural": structural,
+        "generated": generated,
+        "coverage": coverage,
+    }
