@@ -41,6 +41,10 @@ authority was not changed merely for acceptance. PR5 is accepted. See
 [the acceptance record](pr5-acceptance-2026-10-01.md) and
 [the remediation runbook](pr5-private-notes-remediation.md).
 
+PR6B3A establishes the offline accounting boundary for the comprehensive rules
+program. See [the evidence inventory and measured corpus report](pr6b3a-aon-evidence.md).
+It deliberately makes no rule-correctness or distribution-rights claim.
+
 ## Pull-request gate
 
 Every implementation pull request must include the applicable subset of:

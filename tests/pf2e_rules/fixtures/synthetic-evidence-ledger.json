@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "inventory_id": "pf2e-current-2026-09-evidence",
+  "authority": "archives-of-nethys",
+  "census_captured_at": "2026-10-06T00:00:00Z",
+  "created_at": "2026-10-06T01:00:00Z",
+  "entries": [
+    {
+      "identity": {
+        "page_family": "Classes.aspx",
+        "numeric_id": 7
+      },
+      "disposition": "mapped",
+      "rule_id": "pf2e.class.shared-example",
+      "reason": null,
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "reviewed_at": null
+      }
+    },
+    {
+      "identity": {
+        "page_family": "Feats.aspx",
+        "numeric_id": 7
+      },
+      "disposition": "pending",
+      "rule_id": null,
+      "reason": "Awaiting normalized mechanical review.",
+      "review": {
+        "status": "pending",
+        "reviewer": null,
+        "reviewed_at": null
+      }
+    },
+    {
+      "identity": {
+        "page_family": "Spells.aspx",
+        "numeric_id": 11
+      },
+      "disposition": "excluded",
+      "rule_id": null,
+      "reason": "Synthetic exclusion for contract coverage.",
+      "review": {
+        "status": "reviewed",
+        "reviewer": "Synthetic Reviewer",
+        "reviewed_at": "2026-10-06T00:30:00Z"
+      }
+    }
+  ]
+}
