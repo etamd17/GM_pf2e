@@ -9,6 +9,7 @@ from core import auth
 from core.character_workflows.capabilities import capabilities_for
 from core.character_workflows.drafts import authorize_personal, key_hash
 from core.character_workflows.identity import resolve_character
+from core.character_workflows.privacy import draft_client_payload
 from core.character_workflows.types import DraftInput, WorkflowError
 
 
@@ -51,7 +52,7 @@ def create_blueprint(*, drafts, workflows, resolve_context, render_sheet):
 
     @bp.get('/api/character-workflows/drafts')
     def draft_list():
-        return jsonify(drafts=[asdict(d) for d in drafts.list(resolve_context())])
+        return jsonify(drafts=[draft_client_payload(d) for d in drafts.list(resolve_context())])
 
     @bp.post('/api/character-workflows/drafts')
     def draft_create():
@@ -59,16 +60,16 @@ def create_blueprint(*, drafts, workflows, resolve_context, render_sheet):
         status = creation_status(context, body.get('request_key'))
         draft = drafts.create(context, _inputs(body.get('inputs')),
                               request_key=body.get('request_key'), target_id=body.get('target_id'))
-        return jsonify(draft=asdict(draft)), status
+        return jsonify(draft=draft_client_payload(draft)), status
 
     @bp.get('/api/character-workflows/drafts/<draft_id>')
     def draft_get(draft_id):
-        return jsonify(draft=asdict(drafts.get(resolve_context(), draft_id)))
+        return jsonify(draft=draft_client_payload(drafts.get(resolve_context(), draft_id)))
 
     @bp.patch('/api/character-workflows/drafts/<draft_id>')
     def draft_save(draft_id):
         body = _body()
-        return jsonify(draft=asdict(drafts.save(resolve_context(), draft_id,
+        return jsonify(draft=draft_client_payload(drafts.save(resolve_context(), draft_id,
             _inputs(body.get('inputs')), expected_revision=body.get('expected_revision'))))
 
     @bp.post('/api/character-workflows/drafts/<draft_id>/discard')
@@ -82,7 +83,7 @@ def create_blueprint(*, drafts, workflows, resolve_context, render_sheet):
         status = creation_status(context, body.get('request_key'))
         draft = drafts.copy(context, draft_id, _inputs(body.get('inputs')),
                             request_key=body.get('request_key'))
-        return jsonify(draft=asdict(draft)), status
+        return jsonify(draft=draft_client_payload(draft)), status
 
     @bp.post('/api/character-workflows/drafts/<draft_id>/publish')
     def draft_publish(draft_id):
@@ -112,7 +113,7 @@ def create_blueprint(*, drafts, workflows, resolve_context, render_sheet):
         status = creation_status(context, body.get('request_key'))
         draft = drafts.prepare_import(context, content, filename,
             request_key=body.get('request_key'), target_id=body.get('target_id') or None)
-        return jsonify(draft=asdict(draft)), status
+        return jsonify(draft=draft_client_payload(draft)), status
 
     @bp.get('/characters/<character_id>')
     def character_sheet(character_id):

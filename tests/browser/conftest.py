@@ -17,6 +17,31 @@ from tools.smoke_production_runtime import _free_port, _stop_server
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def _server_command(port):
+    if os.name == 'nt':
+        return [sys.executable, '-m', 'flask', '--app', 'app', 'run',
+                '--host', '127.0.0.1', '--port', str(port),
+                '--no-debugger', '--no-reload']
+    return [sys.executable, '-m', 'gunicorn', '--workers', '1',
+            '--worker-class', 'gevent', '--bind', '127.0.0.1:' + str(port),
+            '--no-control-socket', '--graceful-timeout', '2', '--timeout', '60',
+            'app:app']
+
+
+def _stop_test_server(process):
+    if os.name != 'nt':
+        _stop_server(process)
+        return
+    if process.poll() is not None:
+        return
+    process.terminate()
+    try:
+        process.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=5)
+
+
 @pytest.fixture(scope='session')
 def browser():
     # Normal unit collection neither imports nor installs Playwright.
@@ -62,6 +87,7 @@ print('BROWSER_RESULT=' + json.dumps({'cid':campaign['id'],'users':{k:v['id'] fo
 ''')
         self.cid, self.users = seeded['cid'], seeded['users']
         self.process = None
+        self.log = None
         self.start()
 
     def python(self, source):
@@ -73,27 +99,34 @@ print('BROWSER_RESULT=' + json.dumps({'cid':campaign['id'],'users':{k:v['id'] fo
 
     def start(self):
         self.log = (self.root / 'server.log').open('ab')
-        self.process = subprocess.Popen([sys.executable, '-m', 'gunicorn', '--workers', '1',
-            '--worker-class', 'gevent', '--bind', '127.0.0.1:' + str(self.port),
-            '--no-control-socket', '--graceful-timeout', '2', '--timeout', '60', 'app:app'],
-            cwd=ROOT, env=self.env, stdout=self.log, stderr=subprocess.STDOUT, start_new_session=True)
-        deadline = time.monotonic() + 45
-        while time.monotonic() < deadline:
-            assert self.process.poll() is None, (self.root / 'server.log').read_text()[-3000:]
-            try:
-                with urllib.request.urlopen(self.url + '/ready', timeout=1) as response:
-                    if json.load(response) == {'status':'ready'}:
-                        return
-            except (OSError, ValueError):
-                pass
-            time.sleep(.1)
-        raise AssertionError('Disposable browser server did not become ready')
+        try:
+            self.process = subprocess.Popen(_server_command(self.port),
+                cwd=ROOT, env=self.env, stdout=self.log, stderr=subprocess.STDOUT,
+                start_new_session=True)
+            deadline = time.monotonic() + (120 if os.name == 'nt' else 45)
+            while time.monotonic() < deadline:
+                assert self.process.poll() is None, (self.root / 'server.log').read_text()[-3000:]
+                try:
+                    with urllib.request.urlopen(self.url + '/ready', timeout=1) as response:
+                        if json.load(response) == {'status':'ready'}:
+                            return
+                except (OSError, ValueError):
+                    pass
+                time.sleep(.1)
+            raise AssertionError('Disposable browser server did not become ready')
+        except BaseException:
+            self.stop()
+            raise
 
     def stop(self):
-        if self.process:
-            _stop_server(self.process)
-            self.log.close()
+        try:
+            if self.process:
+                _stop_test_server(self.process)
+        finally:
+            if self.log and not self.log.closed:
+                self.log.close()
             self.process = None
+            self.log = None
 
     def restart(self):
         self.stop()

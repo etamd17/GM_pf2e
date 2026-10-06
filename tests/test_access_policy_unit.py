@@ -172,6 +172,46 @@ def test_character_owner_editor_gm_and_admin_are_allowed(principal, reason):
     assert decision.code == reason
 
 
+@pytest.mark.parametrize(
+    ("principal", "allowed", "code"),
+    [
+        (Principal.user("player-1"), True, "character_owner"),
+        (Principal.user("gm-1"), True, "campaign_gm"),
+        (Principal.user("admin", is_admin=True), True, "campaign_gm"),
+        (Principal.user("editor-1"), False, "character_owner_private_access_required"),
+        (Principal.user("viewer-1"), False, "character_owner_private_access_required"),
+        (Principal.user("member-1"), False, "character_owner_private_access_required"),
+        (Principal.user("outsider"), False, "campaign_membership_required"),
+    ],
+)
+def test_live_character_owner_private_excludes_nonowners(principal, allowed, code):
+    campaign = {
+        **CAMPAIGN,
+        "members": [
+            *CAMPAIGN["members"],
+            {"user_id": "viewer-1", "role": "player"},
+            {"user_id": "member-1", "role": "player"},
+        ],
+    }
+    character = resolve_character_context(
+        campaign_id=CAMPAIGN_ID,
+        character_id="character-1",
+        owner_user_id="player-1",
+        editor_user_ids=("editor-1",),
+        viewer_user_ids=("viewer-1",),
+        legacy_ref="Amiri",
+    )
+
+    decision = decide_access(
+        RoutePolicy.LIVE_CHARACTER_OWNER_PRIVATE,
+        _context(principal, campaign=campaign),
+        character=character,
+    )
+
+    assert decision.allowed is allowed
+    assert decision.code == code
+
+
 def test_character_access_requires_membership_and_matching_campaign():
     # Ownership/editor metadata alone cannot survive removal from a campaign.
     removed_owner_campaign = {
@@ -248,6 +288,16 @@ def test_live_character_policy_authorizes_resource_before_live_guard():
     assert (wrong_resource.status_code, wrong_resource.code) == (
         403,
         "character_campaign_mismatch",
+    )
+
+    stale_private = decide_access(
+        RoutePolicy.LIVE_CHARACTER_OWNER_PRIVATE,
+        stale_owner,
+        character=_character(),
+    )
+    assert (stale_private.status_code, stale_private.code) == (
+        409,
+        "campaign_not_live",
     )
 
 
@@ -377,6 +427,7 @@ def test_all_route_policies_have_a_decision_and_unknown_values_raise_clearly():
         RoutePolicy.CAMPAIGN_GM,
         RoutePolicy.CHARACTER_OWNER_OR_GM,
         RoutePolicy.LIVE_CHARACTER_OWNER_OR_GM,
+        RoutePolicy.LIVE_CHARACTER_OWNER_PRIVATE,
         RoutePolicy.LIVE_CHARACTER_VIEW,
         RoutePolicy.LIVE_CAMPAIGN_MEMBER,
         RoutePolicy.LIVE_CAMPAIGN_GM,

@@ -16,6 +16,7 @@ from core.character_workflows.types import WorkflowError
 
 ID = re.compile(r'^[0-9a-f]{32}$')
 HASH = re.compile(r'^[0-9a-f]{64}$')
+FINGERPRINT = re.compile(r'^(?:v2:)?[0-9a-f]{64}$')
 
 
 def private_files(root):
@@ -70,7 +71,8 @@ def _draft_row(payload, records):
         target = characters.get(draft.target_id)
         if not target or (target['campaign_id'], target['system']) != (draft.campaign_id, draft.system):
             raise ValueError('draft target')
-    if draft.base_fingerprint is not None and not HASH.fullmatch(draft.base_fingerprint):
+    if (draft.base_fingerprint is not None
+            and not FINGERPRINT.fullmatch(draft.base_fingerprint)):
         raise ValueError('fingerprint')
     if draft.result is not None and not isinstance(draft.result, dict):
         raise ValueError('result')

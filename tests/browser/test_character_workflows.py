@@ -241,6 +241,8 @@ directory = storage.party_dir(cid) if system == 'pf2e' else storage.cosmere_pc_d
 path = Path(directory) / (chid + '.json')
 document = json.loads(path.read_text())
 document['build']['notes'] = 'BROWSER OWNER PRIVATE NOTE'
+document['build']['session_notes'] = [
+    {'date': 'BROWSER PRIVATE DATE', 'text': 'BROWSER OWNER PRIVATE SESSION'}]
 storage.atomic_write_json(str(path), document)
 if runtime.sql_enabled():
     with runtime.database().transaction() as db:
@@ -254,6 +256,36 @@ if runtime.sql_enabled():
         response = member.goto(site.url + result['url'])
         permitted = site.backend == 'sql' and (role == 'editor' or site.system == 'pf2e')
         assert response.status == (200 if permitted else 403)
-        assert 'BROWSER OWNER PRIVATE NOTE' not in member.locator('body').inner_text()
+        rendered = member.locator('body').text_content()
+        assert 'BROWSER OWNER PRIVATE NOTE' not in rendered
+        assert 'BROWSER OWNER PRIVATE SESSION' not in rendered
         if permitted and role == 'viewer':
             assert 'Read-only character sheet' in member.locator('body').inner_text()
+        if permitted:
+            assert member.locator('#pc-notes').count() == 0
+        if role == 'editor':
+            statuses = member.evaluate('''async target => {
+              const encoded = encodeURIComponent(target.name);
+              const calls = target.system === 'pf2e' ? [
+                ['/api/export_character/' + encoded, {method:'GET'}],
+                ['/api/save_notes/' + encoded, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({notes:'FORGED'})}],
+                ['/api/save_session_note/' + encoded, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:'FORGED'})}],
+                ['/api/delete_session_note/' + encoded + '/0', {method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}],
+              ] : [
+                ['/cosmere/pc/' + target.id + '/notes', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:'FORGED'})}],
+              ];
+              const result = [];
+              for (const [url, options] of calls) result.push((await fetch(url, options)).status);
+              return result;
+            }''', {'system':site.system, 'id':result['character_id'], 'name':name})
+            assert statuses and set(statuses) == {403}, statuses
+    owner = pages()
+    owner.goto(site.url + result['url'])
+    assert owner.locator('#pc-notes').input_value() == 'BROWSER OWNER PRIVATE NOTE'
+    if site.system == 'pf2e':
+        assert 'BROWSER OWNER PRIVATE SESSION' in owner.locator('.journal-page').text_content()
+        owner.evaluate("PC_CONDITIONS.frightened = 2")
+        owner.evaluate("_refreshConditionStrip()")
+        assert not owner.evaluate(
+            "Object.prototype.hasOwnProperty.call(PC_CONDITIONS, 'frightened')"
+        )

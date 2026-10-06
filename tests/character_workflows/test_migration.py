@@ -58,14 +58,18 @@ def test_private_drafts_resume_after_json_sql_json_round_trip(migration_env, tmp
     workflow, drafts, files = setup_workflow(env)
     active = drafts.create(env.context(), partial(), request_key='active')
     active = drafts.save(env.context(), active.id, partial('Private saved choice'), expected_revision=0)
+    versioned = drafts.create(
+        env.context(), imported('Hero'), request_key='versioned', target_id='c' * 32
+    )
+    assert versioned.base_fingerprint.startswith('v2:')
     discarded = drafts.create(env.context(), partial('Discard me'), request_key='discarded')
     drafts.discard(env.context(), discarded.id, expected_revision=0)
     committed = drafts.create(env.context(), imported(), request_key='committed')
     published = workflow.publish(env.context(), committed.id, expected_revision=0, request_key='publish')
     before = {p: p.read_bytes() for p in env.source.rglob('*') if p.is_file()}
     plan = import_current(env)
-    assert plan['entity_counts']['character_drafts'] == 3
-    assert plan['entity_counts']['character_workflow_receipts'] == 5
+    assert plan['entity_counts']['character_drafts'] == 4
+    assert plan['entity_counts']['character_workflow_receipts'] == 6
     assert {p: p.read_bytes() for p in before} == before
     assert 'Private saved choice' not in json.dumps(plan)
     from core.persistence.workflow_store import SqlWorkflowStore
@@ -86,13 +90,14 @@ def test_private_drafts_resume_after_json_sql_json_round_trip(migration_env, tmp
     env.make_store = lambda: JsonWorkflowStore(output / 'character_drafts')
     resumed = service(env)
     assert resumed.get(env.context(), active.id) == active
+    assert resumed.get(env.context(), versioned.id) == versioned
     with pytest.raises(WorkflowError) as exc:
         resumed.get(env.context(), discarded.id)
     assert exc.value.status == 404
     with resumed.store.transaction(env.context()) as tx:
         assert tx.get_draft(discarded.id).inputs is None
     assert resumed.get(env.context(), committed.id).result['character_id'] == published.character_id
-    assert resumed.list(env.context()) == [active]
+    assert {draft.id for draft in resumed.list(env.context())} == {active.id, versioned.id}
     reimport = Database('sqlite+pysqlite:///' + str(tmp_path / 'reimport.sqlite'))
     reimport.create_schema()
     try:

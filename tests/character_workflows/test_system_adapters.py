@@ -1,6 +1,7 @@
 """Real builder/parser contracts: authority, rules parity, and live-state safety."""
 
 from copy import deepcopy
+from hashlib import sha256
 import json
 from pathlib import Path
 
@@ -68,17 +69,21 @@ def test_extracted_builder_matches_legacy_document(tmp_path, monkeypatch):
 
 def test_import_preserves_runtime_fields():
     current = {'build': {'name': 'Hero', 'level': 1, 'current_hp': 3,
-        'conditions': {'frightened': 2}, 'notes': 'Private', 'hero_points': 2,
+        'conditions': {'frightened': 2}, 'notes': 'Private',
+        'session_notes': [{'date': 'today', 'text': 'Private session'}],
+        'hero_points': 2,
         'money': {'gp': 98}, 'expended_slots': {'1': 2},
         'weapons': [{'name': 'Custom Sword'}, {'name': 'Fist'}],
         'equipment': [['Custom Rope', 2]]}}
     imported = {'build': {'name': 'Hero', 'class': 'Fighter', 'ancestry': 'Human',
         'level': 2, 'current_hp': 999, 'conditions': {}, 'notes': 'Replace?',
+        'session_notes': [{'date': 'forged', 'text': 'Replace?'}],
         'weapons': [{'name': 'Longsword'}], 'equipment': [['Pack', 1]]}}
     before = deepcopy(current)
     merged = adapters()['pf2e'].normalize(inputs('pf2e_import', imported),
                                          current, override=False)
-    for field in ('current_hp', 'conditions', 'notes', 'hero_points', 'money', 'expended_slots'):
+    for field in ('current_hp', 'conditions', 'notes', 'session_notes', 'hero_points',
+                  'money', 'expended_slots'):
         assert merged['build'][field] == current['build'][field]
     assert merged['build']['level'] == 2
     assert merged['build']['weapons'] == [{'name': 'Longsword'}, {'name': 'Custom Sword'}]
@@ -102,6 +107,60 @@ def test_cosmere_edit_preserves_wallet_and_play_state():
     assert 'id' not in result and 'owner_user_id' not in result
 
 
+@pytest.mark.parametrize(
+    'submitted_private',
+    [
+        {},
+        {'notes': 'FORGED NOTE',
+         'session_notes': [{'date': 'forged', 'text': 'FORGED SESSION'}]},
+    ],
+)
+def test_cosmere_edit_preserves_owner_private_fields(submitted_private):
+    current_build = deepcopy(cos_payload()['build'])
+    current_build.update(
+        notes='OWNER NOTE',
+        session_notes=[{'date': 'today', 'text': 'OWNER SESSION'}],
+    )
+    current = {
+        'id': 'trusted',
+        'owner_user_id': 'owner',
+        'campaign_id': 'campaign',
+        'build': current_build,
+    }
+    data = cos_payload()
+    data['build'].update(submitted_private)
+
+    result = adapters()['cosmere'].normalize(
+        inputs('cosmere_builder', data), current, override=False
+    )
+
+    assert result['build']['notes'] == 'OWNER NOTE'
+    assert result['build']['session_notes'] == [
+        {'date': 'today', 'text': 'OWNER SESSION'}
+    ]
+
+
+def test_cosmere_edit_cannot_create_owner_private_fields():
+    current = {
+        'id': 'trusted',
+        'owner_user_id': 'owner',
+        'campaign_id': 'campaign',
+        'build': deepcopy(cos_payload()['build']),
+    }
+    data = cos_payload()
+    data['build'].update(
+        notes='FORGED NOTE',
+        session_notes=[{'date': 'forged', 'text': 'FORGED SESSION'}],
+    )
+
+    result = adapters()['cosmere'].normalize(
+        inputs('cosmere_builder', data), current, override=False
+    )
+
+    assert 'notes' not in result['build']
+    assert 'session_notes' not in result['build']
+
+
 @pytest.mark.parametrize('system,kind', [('pf2e', 'pf2e_import'), ('cosmere', 'cosmere_builder')])
 def test_fingerprint_ignores_hp_but_detects_build_changes(system, kind):
     adapter = adapters()[system]
@@ -115,8 +174,62 @@ def test_fingerprint_ignores_hp_but_detects_build_changes(system, kind):
         hp_changed['build']['current_hp'] = 10
     feat_changed = deepcopy(original)
     feat_changed['build']['feats'] = [['New feat']]
+    private_changed = deepcopy(original)
+    private_changed['build']['notes'] = 'Owner changed a private note'
+    private_changed['build']['session_notes'] = [
+        {'date': 'today', 'text': 'Owner changed a private session note'}
+    ]
     assert adapter.fingerprint(kind, hp_changed) == adapter.fingerprint(kind, original)
+    assert adapter.fingerprint(kind, private_changed) == adapter.fingerprint(kind, original)
     assert adapter.fingerprint(kind, feat_changed) != adapter.fingerprint(kind, original)
+
+
+def test_versioned_fingerprint_matches_legacy_cosmere_hash_without_weakening_conflicts():
+    adapter = adapters()['cosmere']
+    document = deepcopy(cos_payload())
+    document['build']['notes'] = 'Legacy private note'
+    document['build']['session_notes'] = [
+        {'date': 'today', 'text': 'Legacy private session'}
+    ]
+    projection = {key: document.get(key) for key in ('build', 'name', 'house_metal')}
+    legacy = sha256(json.dumps(
+        projection, sort_keys=True, separators=(',', ':'),
+        ensure_ascii=False, allow_nan=False,
+    ).encode('utf-8')).hexdigest()
+
+    current = adapter.fingerprint('cosmere_builder', document)
+
+    assert current.startswith('v2:') and len(current) == 67
+    assert adapter.matches_fingerprint('cosmere_builder', document, current)
+    assert adapter.matches_fingerprint('cosmere_builder', document, legacy)
+    assert not adapter.matches_fingerprint('cosmere_builder', document, 'v3:' + legacy)
+    assert not adapter.matches_fingerprint('cosmere_builder', document, 'malformed')
+    changed = deepcopy(document)
+    changed['build']['level'] = 2
+    assert not adapter.matches_fingerprint('cosmere_builder', changed, legacy)
+
+
+def test_versioned_fingerprint_matches_legacy_pf2e_hash():
+    adapter = adapters()['pf2e']
+    document = {'build': {
+        'name': 'Hero', 'class': 'Fighter', 'ancestry': 'Human', 'level': 1,
+        'notes': 'Legacy private note',
+        'session_notes': [{'date': 'today', 'text': 'Legacy private session'}],
+    }}
+    projection = app._merge_pf2e_import({}, deepcopy(document))
+    legacy = sha256(json.dumps(
+        projection, sort_keys=True, separators=(',', ':'),
+        ensure_ascii=False, allow_nan=False,
+    ).encode('utf-8')).hexdigest()
+
+    current = adapter.fingerprint('pf2e_import', document)
+
+    assert current.startswith('v2:') and len(current) == 67
+    assert adapter.matches_fingerprint('pf2e_import', document, current)
+    assert adapter.matches_fingerprint('pf2e_import', document, legacy)
+    changed = deepcopy(document)
+    changed['build']['level'] = 2
+    assert not adapter.matches_fingerprint('pf2e_import', changed, legacy)
 
 
 def test_import_discards_authority_envelope():

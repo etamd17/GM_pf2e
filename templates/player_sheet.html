@@ -3848,7 +3848,7 @@
             }
             // Pinned vitals bar. Hooked HERE because this is the only condition
             // painter the pc_update SSE frame actually calls -- _refreshConditionStrip
-            // re-fetches /api/export_character and is not on the SSE path, and
+            // re-fetches /api/pc_state and is not on the SSE path, and
             // applyConditionUpdate only toggles visibility. Getting this wrong is
             // how the header's static "Debuffed -N" chip went permanently stale.
             _paintHpPinConds(conds || {});
@@ -4242,10 +4242,9 @@
         async function _refreshConditionStrip() {
             // Fetch current state and update condition badges without reloading
             try {
-                const res = await fetch(`/api/export_character/${pcNameEncoded}`);
-                const charData = await res.json();
-                const build = charData.build || charData;
-                const conds = build.conditions || {};
+                const res = await fetch(`/api/pc_state/${pcNameEncoded}`);
+                const data = await res.json();
+                const conds = data.conditions || {};
                 
                 // Update numeric condition badges
                 ['frightened', 'sickened', 'enfeebled', 'clumsy', 'drained', 'stupefied', 'dying', 'wounded', 'doomed', 'stunned', 'slowed'].forEach(c => {
@@ -4288,6 +4287,7 @@
                 }
                 // Update PC_CONDITIONS for inline penalty annotations
                 if (typeof PC_CONDITIONS !== 'undefined') {
+                    Object.keys(PC_CONDITIONS).forEach(key => delete PC_CONDITIONS[key]);
                     Object.assign(PC_CONDITIONS, conds);
                 }
             } catch(e) {

@@ -3,15 +3,20 @@
 from copy import deepcopy
 from dataclasses import dataclass
 from hashlib import sha256
+from hmac import compare_digest
 import json
+import re
 from typing import Callable
 
+from .privacy import without_owner_private_build_fields
 from .types import DraftInput, DraftKind, JSON, WorkflowError
 
 
 AUTHORITY_KEYS = frozenset({'id', 'campaign_id', 'owner_user_id', 'owner_user_ids',
                            'editor_user_ids', 'viewer_user_ids', 'schema_version',
                            'system', 'target_id', 'base_fingerprint'})
+RAW_FINGERPRINT = re.compile(r'^[0-9a-f]{64}$')
+V2_FINGERPRINT = re.compile(r'^v2:[0-9a-f]{64}$')
 
 
 def _invalid():
@@ -152,17 +157,40 @@ class SystemAdapter:
             raise WorkflowError('invalid_import', 'That character file could not be parsed.', 422) from None
         return DraftInput(f'{self.system}_import', 1, deepcopy(data), {}, deepcopy(data))
 
-    def fingerprint(self, kind: DraftKind, document: JSON) -> str:
+    def _fingerprint_digest(self, kind: DraftKind, document: JSON, *, legacy: bool) -> str:
         if kind not in (f'{self.system}_builder', f'{self.system}_import'):
             raise _invalid()
         if self.system == 'pf2e':
             # Project through the same import key policy: HP/notes/currency do
             # not enter a build fingerprint, so live ticks cannot stale a draft.
-            projection = self.merge({}, _strip_authority(document))
+            source = _strip_authority(document)
+            if not legacy:
+                source = without_owner_private_build_fields(source)
+            projection = self.merge({}, source)
         else:
-            projection = {key: document.get(key) for key in ('build', 'name', 'house_metal')}
+            # V1 Cosmere fingerprints used this projection directly from the
+            # stored document, including private build fields and any nested
+            # authority keys. Preserve that exact algorithm for active drafts
+            # created before versioned fingerprints were introduced.
+            source = (document if legacy else
+                      without_owner_private_build_fields(_strip_authority(document)))
+            projection = {key: source.get(key) for key in ('build', 'name', 'house_metal')}
         return sha256(json.dumps(projection, sort_keys=True, separators=(',', ':'),
                                  ensure_ascii=False, allow_nan=False).encode('utf-8')).hexdigest()
+
+    def fingerprint(self, kind: DraftKind, document: JSON) -> str:
+        return 'v2:' + self._fingerprint_digest(kind, document, legacy=False)
+
+    def matches_fingerprint(self, kind: DraftKind, document: JSON, expected: str) -> bool:
+        if not isinstance(expected, str):
+            return False
+        if V2_FINGERPRINT.fullmatch(expected):
+            actual = self.fingerprint(kind, document)
+        elif RAW_FINGERPRINT.fullmatch(expected):
+            actual = self._fingerprint_digest(kind, document, legacy=True)
+        else:
+            return False
+        return compare_digest(actual, expected)
 
 
 def build_system_adapters(*, pf2e_build: Callable, pf2e_validate: Callable,

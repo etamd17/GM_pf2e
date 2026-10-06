@@ -13038,6 +13038,7 @@ def _build_cosmere_document(data: dict, existing: dict | None) -> dict:
     from a workflow's saved submission. Identity remains the caller's concern.
     """
     from core.character_workflows.types import WorkflowError
+    from core.character_workflows.privacy import preserve_owner_private_build_fields
     from systems.cosmere.build import CosmereBuild
     from systems.cosmere import lore
     build = CosmereBuild(data.get('build') or data, homebrew=_cosmere_homebrew_store())
@@ -13049,6 +13050,8 @@ def _build_cosmere_document(data: dict, existing: dict | None) -> dict:
     for key in ('wallet', 'play_state'):
         if existing and isinstance(existing.get(key), dict):
             doc[key] = copy.deepcopy(existing[key])
+    if existing is not None:
+        doc = preserve_owner_private_build_fields(existing, doc)
     metal = (data.get('house_metal') or (existing or {}).get('house_metal') or '').lower()
     if metal in lore.METALS:
         doc['house_metal'] = metal
@@ -25571,10 +25574,11 @@ def _obsidian_create_player_reveal(payload):
 
 def _workflow_builder_bootstrap(system):
     """GET validates private resume/explicit intent without creating a draft."""
-    from dataclasses import asdict
     from core.character_workflows.capabilities import capabilities_for
     from core.character_workflows.drafts import authorize_personal
     from core.character_workflows.identity import resolve_character
+    from core.character_workflows.privacy import (draft_client_payload,
+                                                   without_owner_private_build_fields)
     workflow = {'enabled': _account_mode(), 'initialDraft': None, 'targetId': None,
                 'canOverride': _is_gm(),
                 'cancelUrl': '/player?roster=1' if system == 'pf2e' else '/cosmere/pcs'}
@@ -25589,7 +25593,7 @@ def _workflow_builder_bootstrap(system):
         raise _WorkflowError('draft_target_conflict', 'Resume the draft without another character target.', 409)
     if draft_id:
         snapshot = _character_workflow_service().drafts.get(context, draft_id)
-        workflow['initialDraft'] = asdict(snapshot)
+        workflow['initialDraft'] = draft_client_payload(snapshot)
         target_id = snapshot.target_id
         if snapshot.state == 'committed':
             result = resolve_character(context.campaign_id, snapshot.result['character_id'])
@@ -25614,7 +25618,10 @@ def _workflow_builder_bootstrap(system):
         raise _WorkflowError('unsupported_update', 'Use an import draft to update this PF2e character.', 422)
     workflow.update(targetId=target_id, canOverride=caps.override,
                     targetName=(record.document.get('build', {}).get('name') or record.document.get('name')) if record else None)
-    return workflow, record.document if record else None
+    document = record.document if record else None
+    if document is not None and not caps.owner_private:
+        document = without_owner_private_build_fields(document)
+    return workflow, document
 
 
 def _workflow_landing_context():

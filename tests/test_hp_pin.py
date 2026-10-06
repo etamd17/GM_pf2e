@@ -66,7 +66,7 @@ def test_the_bar_is_not_a_child_of_the_header(sheet):
 def test_conditions_hook_the_only_painter_the_sse_frame_calls(sheet):
     """_paintMetaQuickConds is the one condition painter applyPcUpdate calls.
 
-    _refreshConditionStrip re-fetches /api/export_character and reloads the
+    _refreshConditionStrip re-fetches /api/pc_state and reloads the
     page on failure, and applyConditionUpdate only toggles visibility. Hooking
     either of those is how the header's static "Debuffed -N" chip went
     permanently stale.

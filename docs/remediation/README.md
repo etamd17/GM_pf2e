@@ -34,6 +34,10 @@ decisions are indexed in [the ADR directory](../adr/README.md).
 | 9 | Shared UI system, responsive migration, accessibility, and browser testing | Core journeys meet the documented viewport, keyboard, and WCAG gates. |
 | 10+ | Product-completeness vertical slices | Each workflow is end-to-end, source-backed where rules-sensitive, and independently releasable. |
 
+PR5 production acceptance is currently blocked by the private-notes authorization
+finding. See [the acceptance record](pr5-acceptance-2026-10-01.md) and
+[the remediation runbook](pr5-private-notes-remediation.md).
+
 ## Pull-request gate
 
 Every implementation pull request must include the applicable subset of:
