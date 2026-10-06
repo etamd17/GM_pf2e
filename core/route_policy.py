@@ -37,6 +37,7 @@ class RoutePolicy(str, Enum):
     CAMPAIGN_GM = "campaign_gm"
     CHARACTER_OWNER_OR_GM = "character_owner_or_gm"
     LIVE_CHARACTER_OWNER_OR_GM = "live_character_owner_or_gm"
+    LIVE_CHARACTER_OWNER_PRIVATE = "live_character_owner_private"
     LIVE_CHARACTER_VIEW = "live_character_view"
     LIVE_CAMPAIGN_MEMBER = "live_campaign_member"
     LIVE_CAMPAIGN_GM = "live_campaign_gm"
@@ -76,6 +77,7 @@ CHARACTER_OWNER_POLICIES: frozenset[RoutePolicy] = frozenset(
     {
         RoutePolicy.CHARACTER_OWNER_OR_GM,
         RoutePolicy.LIVE_CHARACTER_OWNER_OR_GM,
+        RoutePolicy.LIVE_CHARACTER_OWNER_PRIVATE,
         RoutePolicy.LIVE_CHARACTER_VIEW,
     }
 )
@@ -90,6 +92,7 @@ SESSION_LIVE_CAMPAIGN_POLICIES: frozenset[RoutePolicy] = frozenset(
         RoutePolicy.LIVE_CAMPAIGN_MEMBER,
         RoutePolicy.LIVE_CAMPAIGN_GM,
         RoutePolicy.LIVE_CHARACTER_OWNER_OR_GM,
+        RoutePolicy.LIVE_CHARACTER_OWNER_PRIVATE,
         RoutePolicy.LIVE_CHARACTER_VIEW,
     }
 )
@@ -409,8 +412,30 @@ _POLICY_GROUPS: tuple[PolicyGroup, ...] = (
         ("chronicle_unpublish",),
     ),
     (
+        RoutePolicy.LIVE_CHARACTER_OWNER_PRIVATE,
+        (
+            "cosmere_pc_notes",
+            "delete_session_note",
+            "export_character",
+            "save_notes",
+            "save_session_note",
+        ),
+    ),
+    (
         RoutePolicy.LIVE_CHARACTER_OWNER_OR_GM,
-        tuple(e for e in CHARACTER_OWNER_RESOLUTIONS if e != 'character_workflows.character_sheet'),
+        tuple(
+            endpoint
+            for endpoint in CHARACTER_OWNER_RESOLUTIONS
+            if endpoint
+            not in {
+                "character_workflows.character_sheet",
+                "cosmere_pc_notes",
+                "delete_session_note",
+                "export_character",
+                "save_notes",
+                "save_session_note",
+            }
+        ),
     ),
     (RoutePolicy.LIVE_CHARACTER_VIEW, ('character_workflows.character_sheet',)),
     (

@@ -53,3 +53,13 @@ def test_sheet_refetches_full_state_on_reconnect():
     assert 'window.applyPcUpdate' in html
     # the hub's reconnect/wake event triggers the full refetch
     assert "appSSE('connected'" in html and 'refetchPcState()' in html
+
+
+def test_condition_refresh_uses_note_free_pc_state_projection():
+    html = _SHEET.read_text(encoding='utf-8')
+    body = html[html.index('async function _refreshConditionStrip'):]
+    body = body[:body.index('\n        function ', 10)]
+
+    assert '/api/pc_state/${pcNameEncoded}' in body
+    assert '/api/export_character/' not in body
+    assert 'const conds = data.conditions || {}' in body

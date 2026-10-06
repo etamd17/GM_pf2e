@@ -88,7 +88,8 @@ class WorkflowService:
                     current = self.files.read(target)
                     if current is None:
                         raise WorkflowError('character_not_found', 'Character not found.', 404)
-                    if self.adapters[fresh.system].fingerprint(draft.inputs.kind, current) != draft.base_fingerprint:
+                    if not self.adapters[fresh.system].matches_fingerprint(
+                            draft.inputs.kind, current, draft.base_fingerprint):
                         raise WorkflowError('character_build_conflict', 'This character build changed. Reload before publishing.', 409)
                     if tx.session is not None:
                         from core.persistence.models import Character

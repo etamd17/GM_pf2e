@@ -82,6 +82,11 @@ CHARACTER_ACCESS_REQUIRED = _deny(
     "character_access_required",
     "Character owner, editor, or campaign GM access required.",
 )
+CHARACTER_OWNER_PRIVATE_ACCESS_REQUIRED = _deny(
+    403,
+    "character_owner_private_access_required",
+    "Character owner or campaign GM access required for private character data.",
+)
 CAMPAIGN_NOT_LIVE = _deny(
     409,
     "campaign_not_live",
@@ -105,6 +110,7 @@ _CAMPAIGN_POLICIES = frozenset(
         RoutePolicy.CAMPAIGN_GM,
         RoutePolicy.CHARACTER_OWNER_OR_GM,
         RoutePolicy.LIVE_CHARACTER_OWNER_OR_GM,
+        RoutePolicy.LIVE_CHARACTER_OWNER_PRIVATE,
         RoutePolicy.LIVE_CHARACTER_VIEW,
         RoutePolicy.LIVE_CAMPAIGN_MEMBER,
         RoutePolicy.LIVE_CAMPAIGN_GM,
@@ -204,6 +210,7 @@ def _character_access(
     character: CharacterContext | None,
     *,
     legacy_open: bool,
+    allow_editor: bool = True,
 ) -> AccessDecision:
     is_gm = _is_campaign_gm(context, legacy_open=legacy_open)
     if not is_gm and not _is_campaign_member(context, legacy_open=legacy_open):
@@ -219,7 +226,7 @@ def _character_access(
     if principal.kind is PrincipalKind.USER and principal.user_id:
         if principal.user_id == character.owner_user_id:
             return _allow("character_owner")
-        if principal.user_id in character.editor_user_ids:
+        if allow_editor and principal.user_id in character.editor_user_ids:
             return _allow("character_editor")
     if (
         principal.kind is PrincipalKind.LEGACY_PLAYER
@@ -228,7 +235,11 @@ def _character_access(
         and principal.character_ref == character.legacy_ref
     ):
         return _allow("legacy_character")
-    return CHARACTER_ACCESS_REQUIRED
+    return (
+        CHARACTER_ACCESS_REQUIRED
+        if allow_editor
+        else CHARACTER_OWNER_PRIVATE_ACCESS_REQUIRED
+    )
 
 
 def decide_access(
@@ -333,11 +344,16 @@ def decide_access(
     if policy is RoutePolicy.CHARACTER_OWNER_OR_GM:
         return _character_access(context, character, legacy_open=legacy_open)
 
-    if policy in (RoutePolicy.LIVE_CHARACTER_OWNER_OR_GM, RoutePolicy.LIVE_CHARACTER_VIEW):
+    if policy in (
+        RoutePolicy.LIVE_CHARACTER_OWNER_OR_GM,
+        RoutePolicy.LIVE_CHARACTER_OWNER_PRIVATE,
+        RoutePolicy.LIVE_CHARACTER_VIEW,
+    ):
         character_decision = _character_access(
             context,
             character,
             legacy_open=legacy_open,
+            allow_editor=policy is not RoutePolicy.LIVE_CHARACTER_OWNER_PRIVATE,
         )
         if (policy is RoutePolicy.LIVE_CHARACTER_VIEW and not character_decision.allowed
                 and context.system == 'pf2e' and context.is_member and character is not None

@@ -19,7 +19,7 @@ const clone = x => JSON.parse(JSON.stringify(x));
 const reply = (data, status=200) => ({ok:status<400,status,json:async()=>data});
 const input = n => ({kind:'pf2e_builder',payload_version:1,form:{name:n},ui:{step:2},submission:{name:n}});
 let local=input('first'), states=[], published=[];
-const initial = {id:'draft',revision:0,inputs:input('saved'),target_id:'target',base_fingerprint:'original',state:'active'};
+const initial = {id:'draft',revision:0,inputs:input('saved'),target_id:'target',state:'active'};
 const options = {apiBase:'/api/character-workflows',initialDraft:null,
  collect:()=>clone(local),restore:async i=>{local=clone(i)},
  renderStatus:(s,detail)=>states.push([s,detail]),onPublished:r=>published.push(r)};
@@ -54,7 +54,7 @@ assert.equal(published.length,1); assert.equal(states.at(-1)[0],'committed'); c.
 ''')
 
 
-def test_conflict_copy_preserves_base():
+def test_conflict_copy_preserves_target_without_server_fingerprint():
     node(r'''
 let calls=[];
 global.fetch=async(url,opts)=>{
@@ -68,7 +68,7 @@ await tick(); local=input('local conflict'); c.changed();
 await assert.rejects(c.saveNow()); assert.equal(states.at(-1)[0],'conflict');
 c.changed(); await tick(); assert.equal(calls.length,1);
 await c.copy(); assert.equal(local.form.name,'local conflict');
-assert.equal(states.at(-1)[1].draft.base_fingerprint,'original');
+assert.equal('base_fingerprint' in states.at(-1)[1].draft,false);
 assert.equal(states.at(-1)[1].draft.target_id,'target'); c.destroy();
 ''')
 

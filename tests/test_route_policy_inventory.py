@@ -143,22 +143,49 @@ def test_critical_resource_policies_are_not_public():
     assert policy_for("admin_users", "GET") is RoutePolicy.SITE_ADMIN
 
 
+def test_owner_private_character_endpoints_use_the_strict_policy():
+    expected = {
+        "export_character",
+        "save_notes",
+        "save_session_note",
+        "delete_session_note",
+        "cosmere_pc_notes",
+    }
+    assert {
+        endpoint
+        for endpoint, policy in ROUTE_POLICIES.items()
+        if policy is RoutePolicy.LIVE_CHARACTER_OWNER_PRIVATE
+    } == expected
+    for endpoint in expected:
+        assert character_owner_resolution_for(endpoint) is not None
+
+    assert policy_for("api_pc_state", "GET") is RoutePolicy.LIVE_CHARACTER_OWNER_OR_GM
+    assert policy_for("cosmere_pc_state", "POST") is RoutePolicy.LIVE_CHARACTER_OWNER_OR_GM
+    assert policy_for("export_pdf", "GET") is RoutePolicy.LIVE_CHARACTER_OWNER_OR_GM
+    assert policy_for("api_notes", "GET") is RoutePolicy.CAMPAIGN_MEMBER
+    assert policy_for("session_notes_page", "GET") is RoutePolicy.CAMPAIGN_MEMBER
+
+
 def test_policy_families_distinguish_live_character_scope():
     assert CHARACTER_OWNER_POLICIES == {
         RoutePolicy.CHARACTER_OWNER_OR_GM,
         RoutePolicy.LIVE_CHARACTER_OWNER_OR_GM,
+        RoutePolicy.LIVE_CHARACTER_OWNER_PRIVATE,
         RoutePolicy.LIVE_CHARACTER_VIEW,
     }
     assert SESSION_LIVE_CAMPAIGN_POLICIES == {
         RoutePolicy.LIVE_CAMPAIGN_MEMBER,
         RoutePolicy.LIVE_CAMPAIGN_GM,
         RoutePolicy.LIVE_CHARACTER_OWNER_OR_GM,
+        RoutePolicy.LIVE_CHARACTER_OWNER_PRIVATE,
         RoutePolicy.LIVE_CHARACTER_VIEW,
     }
     assert requires_character_owner(RoutePolicy.CHARACTER_OWNER_OR_GM)
     assert requires_character_owner(RoutePolicy.LIVE_CHARACTER_OWNER_OR_GM)
+    assert requires_character_owner(RoutePolicy.LIVE_CHARACTER_OWNER_PRIVATE)
     assert not requires_character_owner(RoutePolicy.LIVE_CAMPAIGN_MEMBER)
     assert requires_live_campaign_match(RoutePolicy.LIVE_CHARACTER_OWNER_OR_GM)
+    assert requires_live_campaign_match(RoutePolicy.LIVE_CHARACTER_OWNER_PRIVATE)
     assert not requires_live_campaign_match(RoutePolicy.CHARACTER_OWNER_OR_GM)
     # A publish-token request has no browser session to compare; runtime must
     # validate that alternative credential on its own branch.
@@ -196,7 +223,11 @@ def test_character_owner_resolution_metadata_is_exhaustive():
     assert set(CHARACTER_OWNER_RESOLUTIONS) == character_endpoints
     assert {
         ROUTE_POLICIES[endpoint] for endpoint in character_endpoints
-    } == {RoutePolicy.LIVE_CHARACTER_OWNER_OR_GM, RoutePolicy.LIVE_CHARACTER_VIEW}
+    } == {
+        RoutePolicy.LIVE_CHARACTER_OWNER_OR_GM,
+        RoutePolicy.LIVE_CHARACTER_OWNER_PRIVATE,
+        RoutePolicy.LIVE_CHARACTER_VIEW,
+    }
 
 
 def test_route_character_locators_name_real_route_arguments():
