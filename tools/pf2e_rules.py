@@ -11,6 +11,11 @@ if __package__ in (None, ""):
 
 from systems.pf2e.rules.ingestion.compile_pack import write_package
 from systems.pf2e.rules.ingestion.diff_pack import diff_packages
+from systems.pf2e.rules.ingestion.evidence_inventory import (
+    audit_evidence_inventory,
+    diff_evidence_inventories,
+    scan_corpus,
+)
 from systems.pf2e.rules.manifest import read_file, read_json
 from systems.pf2e.rules.registry import load_package
 from systems.pf2e.rules.validation import RulesValidationError
@@ -28,9 +33,51 @@ def main(argv: list[str] | None = None) -> int:
     diff_cmd = commands.add_parser("diff", help="Compare two verified packages")
     diff_cmd.add_argument("before", type=Path)
     diff_cmd.add_argument("after", type=Path)
+    scan_cmd = commands.add_parser(
+        "evidence-scan", help="Inventory a local PF2e JSON corpus offline"
+    )
+    scan_cmd.add_argument("root", type=Path)
+    scan_cmd.add_argument(
+        "--summary", action="store_true", help="Print coverage totals without record rows"
+    )
+    audit_cmd = commands.add_parser(
+        "evidence-audit", help="Compare an AoN census with a reviewed ledger"
+    )
+    audit_cmd.add_argument("census", type=Path)
+    audit_cmd.add_argument("ledger", type=Path)
+    evidence_diff_cmd = commands.add_parser(
+        "evidence-diff", help="Compare two complete audited evidence reports"
+    )
+    evidence_diff_cmd.add_argument("before", type=Path)
+    evidence_diff_cmd.add_argument("after", type=Path)
     args = parser.parse_args(argv)
     try:
-        if args.command == "diff":
+        exit_code = 0
+        if args.command == "evidence-scan":
+            result = scan_corpus(args.root)
+            if args.summary:
+                result = {
+                    "schema_version": result["schema_version"],
+                    "coverage": result["coverage"],
+                }
+        elif args.command == "evidence-audit":
+            result = audit_evidence_inventory(
+                read_json(read_file(args.census)),
+                read_json(read_file(args.ledger)),
+            )
+            exit_code = 0 if result["complete"] else 1
+        elif args.command == "evidence-diff":
+            result = diff_evidence_inventories(
+                read_json(read_file(args.before)),
+                read_json(read_file(args.after)),
+            )
+            drift_fields = (
+                "added", "removed", "evidence_changed", "newly_excluded",
+                "restored", "exclusion_changed", "disposition_changed",
+                "review_changed",
+            )
+            exit_code = 1 if any(result[field] for field in drift_fields) else 0
+        elif args.command == "diff":
             result = diff_packages(load_package(args.before), load_package(args.after))
         else:
             if args.command == "compile":
@@ -46,7 +93,7 @@ def main(argv: list[str] | None = None) -> int:
                       "quarantined_records": sum(r.state == "quarantined" for r in package.records.values())}
         # ASCII-safe JSON keeps Windows console encodings from corrupting diagnostics.
         print(json.dumps(result, sort_keys=True, ensure_ascii=True))
-        return 0
+        return exit_code
     except RulesValidationError as error:
         print(json.dumps({"error": error.code, "path": error.path}), file=sys.stderr)
     except OSError:
