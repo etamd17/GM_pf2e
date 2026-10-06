@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "authority": "archives-of-nethys",
+  "captured_at": "2026-10-06T00:00:00Z",
+  "site_update_date": "2026-09-02",
+  "site_update_url": "https://2e.aonprd.com/",
+  "records": [
+    {
+      "identity": {
+        "page_family": "Classes.aspx",
+        "numeric_id": 7
+      },
+      "canonical_url": "https://2e.aonprd.com/Classes.aspx?ID=7&Redirected=1",
+      "name": "Shared Example",
+      "kind": "class",
+      "rules_era": "remaster",
+      "source_refs": [
+        {
+          "title": "Synthetic Core",
+          "locator": "p. 1"
+        }
+      ],
+      "evidence_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "fingerprint": "0b1b31cb6a4958d41b7c4020fd7f62df55152ba36a5875b46ab8a266a7d99638"
+    },
+    {
+      "identity": {
+        "page_family": "Feats.aspx",
+        "numeric_id": 7
+      },
+      "canonical_url": "https://2e.aonprd.com/Feats.aspx?ID=7",
+      "name": "Shared Example",
+      "kind": "feat",
+      "rules_era": "legacy",
+      "source_refs": [
+        {
+          "title": "Synthetic Legacy",
+          "locator": "p. 2"
+        }
+      ],
+      "evidence_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "fingerprint": "32aea61449fc2e4c8b651bfec6c9a4632b19448c12f40313946cd70a9ae4de9e"
+    },
+    {
+      "identity": {
+        "page_family": "Spells.aspx",
+        "numeric_id": 11
+      },
+      "canonical_url": "https://2e.aonprd.com/Spells.aspx?ID=11",
+      "name": "Excluded Example",
+      "kind": "spell",
+      "rules_era": "remaster",
+      "source_refs": [
+        {
+          "title": "Synthetic Core",
+          "locator": "p. 3"
+        }
+      ],
+      "evidence_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "fingerprint": "112ade0048232c184487f8d81372561dbf9a5c869fe7eea8ad9a711364cc5795"
+    }
+  ]
+}
