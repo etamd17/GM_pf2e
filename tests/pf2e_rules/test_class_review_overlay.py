@@ -1,11 +1,15 @@
 """Strict contracts for immutable PF2e class-review authoring data."""
+from concurrent.futures import ThreadPoolExecutor
 from collections import Counter
 from copy import deepcopy
 import hashlib
 import importlib
 import json
+import os
 from pathlib import Path
 import shutil
+import subprocess
+import sys
 
 import pytest
 
@@ -435,6 +439,61 @@ def _current_class_ledger():
             encoding="utf-8"
         )
     )
+
+
+def _class_review_compile_fixture(tmp_path):
+    manifest_path, _ = _class_snapshot_tree(tmp_path / "evidence")
+    authoring = _bound_authoring(manifest_path)
+    corpus_root = tmp_path / "corpus"
+    _write_local_class(
+        corpus_root,
+        "second-class",
+        foundry_id="AAAAAAAAAAAAAAAA",
+        name="Second Class",
+    )
+    _write_local_class(
+        corpus_root,
+        "synthetic-class",
+        foundry_id="BBBBBBBBBBBBBBBB",
+        name="Synthetic Class",
+    )
+    return authoring, manifest_path, corpus_root
+
+
+def _compile_fixture(tmp_path):
+    authoring, manifest_path, corpus_root = _class_review_compile_fixture(tmp_path)
+    files = overlay()._compile_class_review_overlay(
+        authoring,
+        manifest_path,
+        corpus_root,
+        fixture_mode=True,
+    )
+    return files, authoring, manifest_path, corpus_root
+
+
+def _write_fixture(tmp_path, *, store_name="store"):
+    authoring, manifest_path, corpus_root = _class_review_compile_fixture(tmp_path)
+    target = overlay()._write_class_review_overlay(
+        authoring,
+        manifest_path,
+        corpus_root,
+        tmp_path / store_name,
+        fixture_mode=True,
+    )
+    return target, authoring, manifest_path, corpus_root
+
+
+def _test_canonical_json(value):
+    return (
+        json.dumps(
+            value,
+            sort_keys=True,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            allow_nan=False,
+        )
+        + "\n"
+    ).encode("utf-8")
 
 
 def _assert_error(document, code, path):
@@ -1895,3 +1954,1080 @@ def test_current_overlay_application_preserves_snapshot_bytes_and_zero_activatio
     assert {entry["review"]["status"] for entry in effective_entries} == {
         "pending"
     }
+
+
+def test_class_review_compiler_is_deterministic_canonical_and_nonmutating(tmp_path):
+    authoring, manifest_path, corpus_root = _class_review_compile_fixture(tmp_path)
+    authoring_before = deepcopy(authoring)
+    snapshot_before = _snapshot_bytes(manifest_path.parent)
+    corpus_before = _snapshot_bytes(corpus_root)
+
+    first = overlay()._compile_class_review_overlay(
+        authoring, manifest_path, corpus_root, fixture_mode=True
+    )
+    reordered = deepcopy(authoring)
+    reordered["records"].reverse()
+    second = overlay()._compile_class_review_overlay(
+        reordered, manifest_path, corpus_root, fixture_mode=True
+    )
+
+    assert first == second
+    assert authoring == authoring_before
+    assert _snapshot_bytes(manifest_path.parent) == snapshot_before
+    assert _snapshot_bytes(corpus_root) == corpus_before
+    assert set(first) == {
+        "authoring.json",
+        "sources.json",
+        "records.json",
+        "manifest.json",
+    }
+    for data in first.values():
+        assert data.endswith(b"\n")
+        assert b"\r" not in data
+        assert _test_canonical_json(json.loads(data)) == data
+
+
+def test_class_review_compiler_emits_exact_public_schemas_and_counts(tmp_path):
+    files, _authoring, _manifest_path, _corpus_root = _compile_fixture(tmp_path)
+    authoring = json.loads(files["authoring.json"])
+    sources = json.loads(files["sources.json"])
+    records = json.loads(files["records.json"])
+    manifest = json.loads(files["manifest.json"])
+
+    assert set(authoring) == {"manifest", "sources", "records"}
+    assert sources == authoring["sources"]
+    assert set(sources[0]) == {
+        "source_id",
+        "title",
+        "source_review",
+        "license_review",
+    }
+    assert [record["identity"]["numeric_id"] for record in records] == [35, 36]
+    assert all(
+        set(record)
+        == {
+            "identity",
+            "name",
+            "canonical_url",
+            "fingerprint",
+            "evidence_sha256",
+            "disposition",
+            "rule_id",
+            "source_id",
+            "source_ref",
+            "local",
+            "reconciliation",
+            "rules_review",
+        }
+        for record in records
+    )
+    assert all(
+        set(record["local"])
+        == {
+            "status",
+            "relative_path",
+            "foundry_id",
+            "content_sha256",
+            "local_key",
+        }
+        for record in records
+    )
+    assert not any("publication_title" in record["local"] for record in records)
+    assert set(manifest) == {
+        "schema_version",
+        "overlay_id",
+        "created_at",
+        "authority",
+        "kind",
+        "snapshot_id",
+        "snapshot_manifest_sha256",
+        "base_category",
+        "activation",
+        "parent_overlay_id",
+        "parent_overlay_hash",
+        "compiler_version",
+        "inputs",
+        "outputs",
+        "counts",
+        "overlay_hash",
+    }
+    assert manifest["compiler_version"] == "pf2e-class-review-1"
+    assert manifest["counts"] == {
+        "sources": 1,
+        "records": 2,
+        "local_records": 2,
+        "reconciliation": {
+            "aligned": 2,
+            "source-drift": 0,
+            "missing-local": 0,
+        },
+        "effective_dispositions": {
+            "excluded": 0,
+            "mapped": 2,
+            "pending": 1,
+        },
+        "base_reviews": {"pending": 3, "reviewed": 0},
+        "overlay_gates": {
+            "sources": 1,
+            "licenses": 1,
+            "rules": 2,
+            "total": 4,
+            "by_status": {"pending": 4, "approved": 0, "rejected": 0},
+        },
+        "enabled_mechanics": 0,
+    }
+
+
+def test_class_review_manifest_hash_scopes_exclude_only_the_manifest_itself(tmp_path):
+    files, _authoring, _manifest_path, _corpus_root = _compile_fixture(tmp_path)
+    manifest = json.loads(files["manifest.json"])
+
+    assert manifest["inputs"] == {
+        "authoring.json": hashlib.sha256(files["authoring.json"]).hexdigest()
+    }
+    assert manifest["outputs"] == {
+        name: hashlib.sha256(files[name]).hexdigest()
+        for name in ("sources.json", "records.json")
+    }
+    without_hash = deepcopy(manifest)
+    overlay_hash = without_hash.pop("overlay_hash")
+    assert overlay_hash == hashlib.sha256(
+        _test_canonical_json(without_hash)
+    ).hexdigest()
+    assert "manifest.json" not in manifest["inputs"] | manifest["outputs"]
+
+
+@pytest.mark.parametrize(
+    ("gate", "path"),
+    [
+        ("source", "$.sources[0].source_review"),
+        ("license", "$.sources[0].license_review"),
+        ("rules", "$.records[0].rules_review"),
+    ],
+)
+def test_class_review_compiler_requires_every_v1_gate_pending(tmp_path, gate, path):
+    authoring, manifest_path, corpus_root = _class_review_compile_fixture(tmp_path)
+    review = _overlay_review("approved", "f")
+    if gate == "rules":
+        next(
+            record
+            for record in authoring["records"]
+            if record["identity"]["numeric_id"] == 35
+        )["rules_review"] = review
+    else:
+        authoring["sources"][0][f"{gate}_review"] = review
+
+    with pytest.raises(ValueError) as error:
+        overlay()._compile_class_review_overlay(
+            authoring, manifest_path, corpus_root, fixture_mode=True
+        )
+
+    assert error.value.code == "lifecycle_mismatch"
+    assert error.value.path == path
+
+
+def test_class_review_writer_publishes_exact_create_only_package(tmp_path):
+    target, _authoring, _manifest_path, _corpus_root = _write_fixture(tmp_path)
+
+    assert target.name == "pf2e-class-identities-2026-10-07.1"
+    assert {path.name for path in target.iterdir()} == {
+        "authoring.json",
+        "sources.json",
+        "records.json",
+        "manifest.json",
+    }
+    assert not list(target.parent.glob(".*.lock"))
+    assert not list(target.parent.glob(".*.tmp"))
+
+
+def test_class_review_writer_never_overwrites_existing_target(tmp_path):
+    target, authoring, manifest_path, corpus_root = _write_fixture(tmp_path)
+    before = {path.name: path.read_bytes() for path in target.iterdir()}
+
+    with pytest.raises(ValueError) as error:
+        overlay()._write_class_review_overlay(
+            authoring,
+            manifest_path,
+            corpus_root,
+            target.parent,
+            fixture_mode=True,
+        )
+
+    assert error.value.code == "overlay_exists"
+    assert error.value.path == "$.manifest.overlay_id"
+    assert {path.name: path.read_bytes() for path in target.iterdir()} == before
+
+
+def test_class_review_writer_preserves_stale_lock_for_operator_review(tmp_path):
+    authoring, manifest_path, corpus_root = _class_review_compile_fixture(tmp_path)
+    store = tmp_path / "store"
+    store.mkdir()
+    lock = store / ".pf2e-class-identities-2026-10-07.1.lock"
+    lock.write_bytes(b"stale operator evidence")
+
+    with pytest.raises(ValueError) as error:
+        overlay()._write_class_review_overlay(
+            authoring,
+            manifest_path,
+            corpus_root,
+            store,
+            fixture_mode=True,
+        )
+
+    assert error.value.code == "publication_locked"
+    assert error.value.path == "$.manifest.overlay_id"
+    assert lock.read_bytes() == b"stale operator evidence"
+
+
+def test_class_review_writer_has_one_concurrent_winner(tmp_path):
+    authoring, manifest_path, corpus_root = _class_review_compile_fixture(tmp_path)
+    store = tmp_path / "store"
+
+    def publish():
+        try:
+            return overlay()._write_class_review_overlay(
+                authoring,
+                manifest_path,
+                corpus_root,
+                store,
+                fixture_mode=True,
+            )
+        except ValueError as error:
+            assert error.code in {"overlay_exists", "publication_locked"}
+            return None
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda _index: publish(), range(2)))
+
+    assert sum(result is not None for result in results) == 1
+
+
+@pytest.mark.parametrize("relationship", ["store-under-snapshot", "store-over-snapshot", "store-under-corpus", "store-over-corpus", "snapshot-over-corpus"])
+def test_class_review_writer_requires_pairwise_disjoint_trees(tmp_path, relationship):
+    authoring, manifest_path, corpus_root = _class_review_compile_fixture(tmp_path)
+    store = tmp_path / "store"
+    if relationship == "store-under-snapshot":
+        store = manifest_path.parent / "store"
+    elif relationship == "store-over-snapshot":
+        store = manifest_path.parent.parent
+    elif relationship == "store-under-corpus":
+        store = corpus_root / "store"
+    elif relationship == "store-over-corpus":
+        store = corpus_root.parent
+    else:
+        corpus_root = manifest_path.parent
+
+    with pytest.raises(ValueError) as error:
+        overlay()._write_class_review_overlay(
+            authoring,
+            manifest_path,
+            corpus_root,
+            store,
+            fixture_mode=True,
+        )
+
+    assert error.value.code == "path_overlap"
+    assert error.value.path == "$.paths"
+
+
+def test_class_review_writer_treats_broken_link_target_as_existing(tmp_path):
+    authoring, manifest_path, corpus_root = _class_review_compile_fixture(tmp_path)
+    store = tmp_path / "store"
+    store.mkdir()
+    target = store / authoring["manifest"]["overlay_id"]
+    try:
+        target.symlink_to(tmp_path / "missing-target", target_is_directory=True)
+    except OSError as error:
+        pytest.skip(f"Host does not permit symlink creation: {error}")
+
+    with pytest.raises(ValueError) as error:
+        overlay()._write_class_review_overlay(
+            authoring,
+            manifest_path,
+            corpus_root,
+            store,
+            fixture_mode=True,
+        )
+
+    assert error.value.code == "overlay_exists"
+    assert os.path.lexists(target)
+
+
+@pytest.mark.parametrize(
+    "failure_stage", ["open", "write", "flush", "fsync", "rename"]
+)
+def test_class_review_writer_cleans_its_partial_state_after_io_failure(
+    tmp_path, monkeypatch, failure_stage
+):
+    authoring, manifest_path, corpus_root = _class_review_compile_fixture(tmp_path)
+    store = tmp_path / "store"
+    store.mkdir()
+    unrelated = store / ".unrelated.tmp"
+    unrelated.mkdir()
+    marker = unrelated / "operator-evidence"
+    marker.write_bytes(b"preserve")
+    module = overlay()
+
+    def fail(*_args, **_kwargs):
+        raise OSError(f"injected {failure_stage} failure")
+
+    monkeypatch.setattr(
+        module,
+        {
+            "open": "_open_overlay_file",
+            "write": "_write_overlay_bytes",
+            "flush": "_flush_overlay_file",
+            "fsync": "_fsync_overlay_file",
+            "rename": "_rename_overlay_directory",
+        }[failure_stage],
+        fail,
+    )
+
+    with pytest.raises(OSError, match=f"injected {failure_stage} failure"):
+        module._write_class_review_overlay(
+            authoring,
+            manifest_path,
+            corpus_root,
+            store,
+            fixture_mode=True,
+        )
+
+    overlay_id = authoring["manifest"]["overlay_id"]
+    assert not os.path.lexists(store / overlay_id)
+    assert not os.path.lexists(store / f".{overlay_id}.lock")
+    assert not list(store.glob(f".{overlay_id}.*.tmp"))
+    assert marker.read_bytes() == b"preserve"
+
+
+def test_class_review_writer_rejects_short_write_and_cleans_partial_state(
+    tmp_path, monkeypatch
+):
+    authoring, manifest_path, corpus_root = _class_review_compile_fixture(tmp_path)
+    store = tmp_path / "store"
+    module = overlay()
+
+    def short_write(handle, data):
+        return handle.write(data[:-1])
+
+    monkeypatch.setattr(module, "_write_overlay_bytes", short_write)
+
+    with pytest.raises(ValueError) as error:
+        module._write_class_review_overlay(
+            authoring,
+            manifest_path,
+            corpus_root,
+            store,
+            fixture_mode=True,
+        )
+
+    overlay_id = authoring["manifest"]["overlay_id"]
+    assert error.value.code == "io_error"
+    assert not os.path.lexists(store / overlay_id)
+    assert not os.path.lexists(store / f".{overlay_id}.lock")
+    assert not list(store.glob(f".{overlay_id}.*.tmp"))
+
+
+def test_class_review_writer_preserves_replacement_staging_object(
+    tmp_path, monkeypatch
+):
+    authoring, manifest_path, corpus_root = _class_review_compile_fixture(tmp_path)
+    store = tmp_path / "store"
+    replacement = {}
+    module = overlay()
+
+    def replace_then_fail(staging, _target):
+        moved = staging.with_name(staging.name + ".owned-moved")
+        staging.rename(moved)
+        staging.mkdir()
+        marker = staging / "replacement-marker"
+        marker.write_bytes(b"not owned")
+        replacement.update(path=staging, marker=marker, moved=moved)
+        raise OSError("injected replacement race")
+
+    monkeypatch.setattr(module, "_rename_overlay_directory", replace_then_fail)
+
+    with pytest.raises(OSError, match="injected replacement race"):
+        module._write_class_review_overlay(
+            authoring,
+            manifest_path,
+            corpus_root,
+            store,
+            fixture_mode=True,
+        )
+
+    assert replacement["marker"].read_bytes() == b"not owned"
+    assert replacement["moved"].is_dir()
+
+
+def test_class_review_writer_never_publishes_staging_replaced_after_readback(
+    tmp_path, monkeypatch
+):
+    authoring, manifest_path, corpus_root = _class_review_compile_fixture(tmp_path)
+    store = tmp_path / "store"
+    replacement = {}
+    module = overlay()
+    real_publish = module._rename_overlay_directory
+
+    def replace_then_publish(staging, target):
+        moved = staging.with_name(staging.name + ".validated-moved")
+        staging.rename(moved)
+        staging.mkdir()
+        marker = staging / "unverified-marker"
+        marker.write_bytes(b"not validated")
+        replacement.update(marker=marker, moved=moved)
+        real_publish(staging, target)
+
+    monkeypatch.setattr(module, "_rename_overlay_directory", replace_then_publish)
+
+    with pytest.raises(ValueError) as error:
+        module._write_class_review_overlay(
+            authoring,
+            manifest_path,
+            corpus_root,
+            store,
+            fixture_mode=True,
+        )
+
+    target = store / authoring["manifest"]["overlay_id"]
+    assert error.value.code == "integrity_mismatch"
+    assert error.value.path == "$.paths.staging"
+    assert not os.path.lexists(target)
+    assert replacement["moved"].is_dir()
+    assert any(
+        path.read_bytes() == b"not validated"
+        for path in store.rglob("unverified-marker")
+    )
+
+
+def test_class_review_writer_reports_rejected_publication_quarantine_failure(
+    tmp_path, monkeypatch
+):
+    authoring, manifest_path, corpus_root = _class_review_compile_fixture(tmp_path)
+    store = tmp_path / "store"
+    module = overlay()
+    real_publish = module._rename_overlay_directory
+    real_no_replace = module._rename_path_no_replace
+
+    def replace_then_publish(staging, target):
+        staging.rename(staging.with_name(staging.name + ".validated-moved"))
+        staging.mkdir()
+        (staging / "unverified-marker").write_bytes(b"not validated")
+        real_publish(staging, target)
+
+    def fail_rejected_quarantine(source, target):
+        if target.name.startswith(".rejected-publication-"):
+            raise OSError("injected quarantine failure")
+        return real_no_replace(source, target)
+
+    monkeypatch.setattr(module, "_rename_overlay_directory", replace_then_publish)
+    monkeypatch.setattr(module, "_rename_path_no_replace", fail_rejected_quarantine)
+
+    with pytest.raises(ValueError) as error:
+        module._write_class_review_overlay(
+            authoring,
+            manifest_path,
+            corpus_root,
+            store,
+            fixture_mode=True,
+        )
+
+    target = store / authoring["manifest"]["overlay_id"]
+    assert error.value.code == "quarantine_failed"
+    assert error.value.path == "$.manifest.overlay_id"
+    assert (target / "unverified-marker").read_bytes() == b"not validated"
+
+
+def test_owned_lock_cleanup_preserves_replacement_object(tmp_path):
+    lock = tmp_path / ".overlay.lock"
+    lock.write_bytes(b"owned")
+    info = lock.lstat()
+    identity = (info.st_dev, info.st_ino)
+    lock.unlink()
+    lock.write_bytes(b"replacement")
+
+    overlay()._unlink_owned_file(lock, identity)
+
+    assert lock.read_bytes() == b"replacement"
+
+
+def test_owned_lock_cleanup_preserves_swap_after_identity_check(
+    tmp_path, monkeypatch
+):
+    lock = tmp_path / ".overlay.lock"
+    lock.write_bytes(b"owned")
+    info = lock.lstat()
+    identity = (info.st_dev, info.st_ino)
+    moved = tmp_path / ".overlay.owned-moved"
+    module = overlay()
+    real_owned_path_info = module._owned_path_info
+
+    def swap_after_check(path, expected_identity):
+        result = real_owned_path_info(path, expected_identity)
+        if path == lock and result is not None:
+            path.rename(moved)
+            path.write_bytes(b"replacement")
+        return result
+
+    monkeypatch.setattr(module, "_owned_path_info", swap_after_check)
+
+    module._unlink_owned_file(lock, identity)
+
+    assert lock.read_bytes() == b"replacement"
+    assert moved.read_bytes() == b"owned"
+
+
+def test_owned_tree_cleanup_preserves_swap_after_identity_check(
+    tmp_path, monkeypatch
+):
+    staging = tmp_path / ".overlay.tmp"
+    staging.mkdir()
+    (staging / "owned-marker").write_bytes(b"owned")
+    info = staging.lstat()
+    identity = (info.st_dev, info.st_ino)
+    moved = tmp_path / ".overlay.owned-moved"
+    module = overlay()
+    real_owned_path_info = module._owned_path_info
+
+    def swap_after_check(path, expected_identity):
+        result = real_owned_path_info(path, expected_identity)
+        if path == staging and result is not None:
+            path.rename(moved)
+            path.mkdir()
+            (path / "replacement-marker").write_bytes(b"replacement")
+        return result
+
+    monkeypatch.setattr(module, "_owned_path_info", swap_after_check)
+
+    module._remove_owned_tree(staging, identity)
+
+    assert (staging / "replacement-marker").read_bytes() == b"replacement"
+    assert (moved / "owned-marker").read_bytes() == b"owned"
+
+
+def test_owned_lock_cleanup_preserves_claimed_path_swap_after_verification(
+    tmp_path, monkeypatch
+):
+    lock = tmp_path / ".overlay.lock"
+    lock.write_bytes(b"owned")
+    info = lock.lstat()
+    identity = (info.st_dev, info.st_ino)
+    state = {"claimed_checks": 0}
+    module = overlay()
+    real_owned_path_info = module._owned_path_info
+
+    def swap_claimed_after_final_check(path, expected_identity):
+        result = real_owned_path_info(path, expected_identity)
+        if path.name.startswith(".cleanup-") and result is not None:
+            state["claimed_checks"] += 1
+            if state["claimed_checks"] == 2:
+                moved = path.with_name(path.name + ".owned-moved")
+                path.rename(moved)
+                path.write_bytes(b"replacement")
+                state.update(moved=moved, replacement=path)
+        return result
+
+    monkeypatch.setattr(module, "_owned_path_info", swap_claimed_after_final_check)
+
+    module._unlink_owned_file(lock, identity)
+
+    assert state["replacement"].read_bytes() == b"replacement"
+    assert state["moved"].read_bytes() == b"owned"
+
+
+def test_owned_tree_cleanup_preserves_claimed_path_swap_after_verification(
+    tmp_path, monkeypatch
+):
+    staging = tmp_path / ".overlay.tmp"
+    staging.mkdir()
+    (staging / "owned-marker").write_bytes(b"owned")
+    info = staging.lstat()
+    identity = (info.st_dev, info.st_ino)
+    state = {"claimed_checks": 0}
+    module = overlay()
+    real_owned_path_info = module._owned_path_info
+
+    def swap_claimed_after_final_check(path, expected_identity):
+        result = real_owned_path_info(path, expected_identity)
+        if path.name.startswith(".cleanup-") and result is not None:
+            state["claimed_checks"] += 1
+            if state["claimed_checks"] == 2:
+                moved = path.with_name(path.name + ".owned-moved")
+                path.rename(moved)
+                path.mkdir()
+                (path / "replacement-marker").write_bytes(b"replacement")
+                state.update(moved=moved, replacement=path)
+        return result
+
+    monkeypatch.setattr(module, "_owned_path_info", swap_claimed_after_final_check)
+
+    module._remove_owned_tree(staging, identity)
+
+    assert (state["replacement"] / "replacement-marker").read_bytes() == b"replacement"
+    assert (state["moved"] / "owned-marker").read_bytes() == b"owned"
+
+
+def test_class_review_writer_preserves_replacement_lock_object(
+    tmp_path, monkeypatch
+):
+    authoring, manifest_path, corpus_root = _class_review_compile_fixture(tmp_path)
+    store = tmp_path / "store"
+    overlay_id = authoring["manifest"]["overlay_id"]
+    lock = store / f".{overlay_id}.lock"
+    module = overlay()
+    real_remove = module._remove_owned_tree
+
+    def fail_publish(_staging, _target):
+        raise OSError("injected publication failure")
+
+    def replace_lock_after_staging_cleanup(path, identity):
+        real_remove(path, identity)
+        lock.unlink()
+        lock.write_bytes(b"replacement lock")
+
+    monkeypatch.setattr(module, "_rename_overlay_directory", fail_publish)
+    monkeypatch.setattr(
+        module, "_remove_owned_tree", replace_lock_after_staging_cleanup
+    )
+
+    with pytest.raises(OSError, match="injected publication failure"):
+        module._write_class_review_overlay(
+            authoring,
+            manifest_path,
+            corpus_root,
+            store,
+            fixture_mode=True,
+        )
+
+    assert lock.read_bytes() == b"replacement lock"
+
+
+def test_class_review_writer_refuses_injected_staging_layout(tmp_path, monkeypatch):
+    authoring, manifest_path, corpus_root = _class_review_compile_fixture(tmp_path)
+    store = tmp_path / "store"
+    module = overlay()
+    real_reader = module._read_class_review_overlay_files
+
+    def inject_extra(staging):
+        (staging / "extra.json").write_bytes(b"{}\n")
+        return real_reader(staging)
+
+    monkeypatch.setattr(module, "_read_class_review_overlay_files", inject_extra)
+
+    with pytest.raises(ValueError) as error:
+        module._write_class_review_overlay(
+            authoring,
+            manifest_path,
+            corpus_root,
+            store,
+            fixture_mode=True,
+        )
+
+    overlay_id = authoring["manifest"]["overlay_id"]
+    assert error.value.code == "invalid_package_layout"
+    assert not os.path.lexists(store / overlay_id)
+    assert not list(store.glob(f".{overlay_id}.*.tmp"))
+
+
+def test_class_review_writer_refuses_injected_staging_link(tmp_path, monkeypatch):
+    authoring, manifest_path, corpus_root = _class_review_compile_fixture(tmp_path)
+    store = tmp_path / "store"
+    outside = tmp_path / "outside.json"
+    outside.write_bytes(b"operator evidence")
+    module = overlay()
+    real_reader = module._read_class_review_overlay_files
+
+    def inject_link(staging):
+        try:
+            (staging / "extra.json").symlink_to(outside)
+        except OSError as error:
+            pytest.skip(f"Host does not permit symlink creation: {error}")
+        return real_reader(staging)
+
+    monkeypatch.setattr(module, "_read_class_review_overlay_files", inject_link)
+
+    with pytest.raises(ValueError) as error:
+        module._write_class_review_overlay(
+            authoring,
+            manifest_path,
+            corpus_root,
+            store,
+            fixture_mode=True,
+        )
+
+    assert error.value.code == "invalid_package_layout"
+    assert outside.read_bytes() == b"operator evidence"
+
+
+def test_class_review_writer_atomic_publish_never_replaces_racing_target(
+    tmp_path, monkeypatch
+):
+    authoring, manifest_path, corpus_root = _class_review_compile_fixture(tmp_path)
+    store = tmp_path / "store"
+    module = overlay()
+    real_rename = module._rename_overlay_directory
+    raced = {}
+
+    def create_target_then_publish(staging, target):
+        target.mkdir()
+        info = target.lstat()
+        raced["identity"] = (info.st_dev, info.st_ino)
+        real_rename(staging, target)
+
+    monkeypatch.setattr(
+        module, "_rename_overlay_directory", create_target_then_publish
+    )
+
+    with pytest.raises(ValueError) as error:
+        module._write_class_review_overlay(
+            authoring,
+            manifest_path,
+            corpus_root,
+            store,
+            fixture_mode=True,
+        )
+
+    target = store / authoring["manifest"]["overlay_id"]
+    current = target.lstat()
+    assert error.value.code == "overlay_exists"
+    assert (current.st_dev, current.st_ino) == raced["identity"]
+
+
+@pytest.mark.parametrize("relationship", ["equal", "corpus-under-snapshot", "snapshot-under-corpus"])
+def test_class_review_compiler_requires_disjoint_snapshot_and_corpus(
+    tmp_path, relationship
+):
+    authoring, manifest_path, corpus_root = _class_review_compile_fixture(tmp_path)
+    if relationship == "equal":
+        corpus_root = manifest_path.parent
+    elif relationship == "corpus-under-snapshot":
+        corpus_root = manifest_path.parent / "nested-corpus"
+    else:
+        corpus_root = manifest_path.parent.parent
+
+    with pytest.raises(ValueError) as error:
+        overlay()._compile_class_review_overlay(
+            authoring,
+            manifest_path,
+            corpus_root,
+            fixture_mode=True,
+        )
+
+    assert error.value.code == "path_overlap"
+    assert error.value.path == "$.paths"
+
+
+def test_class_review_verifier_returns_compact_verified_summary(tmp_path):
+    target, _authoring, manifest_path, corpus_root = _write_fixture(tmp_path)
+    manifest = json.loads((target / "manifest.json").read_bytes())
+
+    result = overlay()._verify_class_review_overlay(
+        target,
+        manifest_path,
+        corpus_root,
+        expected_hash=manifest["overlay_hash"],
+        fixture_mode=True,
+    )
+
+    assert result == {
+        "overlay_id": "pf2e-class-identities-2026-10-07.1",
+        "overlay_hash": manifest["overlay_hash"],
+        "activation": "none",
+        "counts": manifest["counts"],
+    }
+
+
+@pytest.mark.parametrize("mutation", ["extra", "missing", "directory", "wrong-case"])
+def test_class_review_verifier_requires_exact_four_file_layout(tmp_path, mutation):
+    target, _authoring, manifest_path, corpus_root = _write_fixture(tmp_path)
+    if mutation == "extra":
+        (target / "extra.json").write_bytes(b"{}\n")
+    elif mutation == "missing":
+        (target / "sources.json").unlink()
+    elif mutation == "directory":
+        (target / "sources.json").unlink()
+        (target / "sources.json").mkdir()
+    else:
+        (target / "records.json").rename(target / "Records.json")
+
+    with pytest.raises(ValueError) as error:
+        overlay()._verify_class_review_overlay(
+            target, manifest_path, corpus_root, fixture_mode=True
+        )
+
+    assert error.value.code == "invalid_package_layout"
+    assert error.value.path == "$files"
+
+
+def test_class_review_verifier_refuses_linked_file(tmp_path):
+    target, _authoring, manifest_path, corpus_root = _write_fixture(tmp_path)
+    record_path = target / "records.json"
+    outside = tmp_path / "outside.json"
+    outside.write_bytes(record_path.read_bytes())
+    record_path.unlink()
+    try:
+        record_path.symlink_to(outside)
+    except OSError as error:
+        pytest.skip(f"Host does not permit symlink creation: {error}")
+
+    with pytest.raises(ValueError) as error:
+        overlay()._verify_class_review_overlay(
+            target, manifest_path, corpus_root, fixture_mode=True
+        )
+
+    assert error.value.code == "invalid_package_layout"
+    assert outside.exists()
+
+
+@pytest.mark.parametrize(
+    "filename",
+    ["authoring.json", "sources.json", "records.json", "manifest.json"],
+)
+def test_class_review_verifier_rejects_noncanonical_bytes(tmp_path, filename):
+    target, _authoring, manifest_path, corpus_root = _write_fixture(tmp_path)
+    path = target / filename
+    path.write_bytes(json.dumps(json.loads(path.read_bytes()), indent=2).encode())
+
+    with pytest.raises(ValueError) as error:
+        overlay()._verify_class_review_overlay(
+            target, manifest_path, corpus_root, fixture_mode=True
+        )
+
+    assert error.value.code == "noncanonical_bytes"
+    assert error.value.path == f"$.files.{filename}"
+
+
+@pytest.mark.parametrize(
+    ("filename", "field"),
+    [
+        ("authoring.json", "created_at"),
+        ("sources.json", "title"),
+        ("records.json", "name"),
+        ("manifest.json", "compiler_version"),
+    ],
+)
+def test_class_review_verifier_rejects_canonical_tampering(
+    tmp_path, filename, field
+):
+    target, _authoring, manifest_path, corpus_root = _write_fixture(tmp_path)
+    path = target / filename
+    document = json.loads(path.read_bytes())
+    if filename == "authoring.json":
+        document["manifest"][field] = "2026-10-07T12:34:57Z"
+    elif filename == "sources.json":
+        document[0][field] = "Altered Source"
+    elif filename == "records.json":
+        document[0][field] = "Altered Class"
+    else:
+        document[field] = "altered-compiler"
+    path.write_bytes(_test_canonical_json(document))
+
+    with pytest.raises(ValueError) as error:
+        overlay()._verify_class_review_overlay(
+            target, manifest_path, corpus_root, fixture_mode=True
+        )
+
+    assert error.value.code == "integrity_mismatch"
+    assert error.value.path == f"$.files.{filename}"
+
+
+def test_class_review_verifier_requires_directory_name_to_match_overlay_id(tmp_path):
+    target, _authoring, manifest_path, corpus_root = _write_fixture(tmp_path)
+    renamed = target.with_name("wrong-overlay-name")
+    target.rename(renamed)
+
+    with pytest.raises(ValueError) as error:
+        overlay()._verify_class_review_overlay(
+            renamed, manifest_path, corpus_root, fixture_mode=True
+        )
+
+    assert error.value.code == "invalid_package_layout"
+    assert error.value.path == "$.manifest.overlay_id"
+
+
+def test_class_review_verifier_rejects_snapshot_drift(tmp_path):
+    target, _authoring, manifest_path, corpus_root = _write_fixture(tmp_path)
+    manifest_path.write_bytes(manifest_path.read_bytes() + b" ")
+
+    with pytest.raises(ValueError) as error:
+        overlay()._verify_class_review_overlay(
+            target, manifest_path, corpus_root, fixture_mode=True
+        )
+
+    assert error.value.code == "hash_mismatch"
+    assert error.value.path == "$.manifest.snapshot_manifest_sha256"
+
+
+def test_class_review_verifier_rejects_local_corpus_drift(tmp_path):
+    target, _authoring, manifest_path, corpus_root = _write_fixture(tmp_path)
+    local_path = corpus_root / "classes" / "synthetic-class.json"
+    local_path.write_bytes(local_path.read_bytes().replace(b'  "name"', b'   "name"'))
+
+    with pytest.raises(ValueError) as error:
+        overlay()._verify_class_review_overlay(
+            target, manifest_path, corpus_root, fixture_mode=True
+        )
+
+    assert error.value.code == "integrity_mismatch"
+    assert error.value.path == "$.files.records.json"
+
+
+@pytest.mark.parametrize(
+    ("expected_hash", "code"),
+    [("0" * 64, "binding_mismatch"), ("not-a-hash", "invalid_id")],
+)
+def test_class_review_verifier_enforces_optional_trusted_hash(
+    tmp_path, expected_hash, code
+):
+    target, _authoring, manifest_path, corpus_root = _write_fixture(tmp_path)
+
+    with pytest.raises(ValueError) as error:
+        overlay()._verify_class_review_overlay(
+            target,
+            manifest_path,
+            corpus_root,
+            expected_hash=expected_hash,
+            fixture_mode=True,
+        )
+
+    assert error.value.code == code
+    assert error.value.path == "$.binding.overlay_hash"
+
+
+def test_class_review_verifier_trusted_hash_rejects_self_consistent_replacement(
+    tmp_path,
+):
+    first, authoring, manifest_path, corpus_root = _write_fixture(
+        tmp_path / "first", store_name="store"
+    )
+    trusted = json.loads((first / "manifest.json").read_bytes())["overlay_hash"]
+    changed = deepcopy(authoring)
+    changed["manifest"]["created_at"] = "2026-10-07T12:34:57Z"
+    second_store = tmp_path / "replacement-store"
+    second = overlay()._write_class_review_overlay(
+        changed,
+        manifest_path,
+        corpus_root,
+        second_store,
+        fixture_mode=True,
+    )
+
+    overlay()._verify_class_review_overlay(
+        second, manifest_path, corpus_root, fixture_mode=True
+    )
+    with pytest.raises(ValueError) as error:
+        overlay()._verify_class_review_overlay(
+            second,
+            manifest_path,
+            corpus_root,
+            expected_hash=trusted,
+            fixture_mode=True,
+        )
+
+    assert error.value.code == "binding_mismatch"
+    assert error.value.path == "$.binding.overlay_hash"
+
+
+def test_class_review_verifier_stops_layout_scan_at_fifth_entry(
+    tmp_path, monkeypatch
+):
+    target, _authoring, manifest_path, corpus_root = _write_fixture(tmp_path)
+    for index in range(20):
+        (target / f"extra-{index:02d}.json").write_bytes(b"{}\n")
+    module = overlay()
+    real_scandir = os.scandir
+    calls = 0
+
+    class BoundedScandir:
+        def __init__(self, path):
+            self._iterator = real_scandir(path)
+
+        def __enter__(self):
+            self._iterator.__enter__()
+            return self
+
+        def __exit__(self, *args):
+            return self._iterator.__exit__(*args)
+
+        def __iter__(self):
+            return self
+
+        def __next__(self):
+            nonlocal calls
+            calls += 1
+            if calls > 5:
+                raise AssertionError("overlay layout scan exceeded five entries")
+            return next(self._iterator)
+
+    monkeypatch.setattr(module.os, "scandir", BoundedScandir)
+
+    with pytest.raises(ValueError) as error:
+        module._verify_class_review_overlay(
+            target, manifest_path, corpus_root, fixture_mode=True
+        )
+
+    assert error.value.code == "invalid_package_layout"
+    assert calls == 5
+
+
+@pytest.mark.parametrize("relationship", ["store-under-snapshot", "store-over-corpus"])
+def test_class_review_verifier_requires_disjoint_store_snapshot_and_corpus(
+    tmp_path, relationship
+):
+    target, _authoring, manifest_path, corpus_root = _write_fixture(tmp_path)
+    if relationship == "store-under-snapshot":
+        nested = manifest_path.parent / "nested-store" / target.name
+        nested.parent.mkdir()
+    else:
+        nested = corpus_root.parent / "nested-store" / target.name
+        nested.parent.mkdir()
+        corpus_root = nested.parent / "corpus"
+        shutil.copytree(tmp_path / "corpus", corpus_root)
+    shutil.copytree(target, nested)
+
+    with pytest.raises(ValueError) as error:
+        overlay()._verify_class_review_overlay(
+            nested, manifest_path, corpus_root, fixture_mode=True
+        )
+
+    assert error.value.code == "path_overlap"
+    assert error.value.path == "$.paths"
+
+
+def test_class_review_compiler_bytes_ignore_python_hash_seed(tmp_path):
+    authoring, manifest_path, corpus_root = _class_review_compile_fixture(tmp_path)
+    authoring_path = tmp_path / "authoring-input.json"
+    authoring_path.write_bytes(_test_canonical_json(authoring))
+    script = """
+import json
+import sys
+from pathlib import Path
+from systems.pf2e.rules.ingestion.class_review_overlay import _compile_class_review_overlay
+
+authoring = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+files = _compile_class_review_overlay(
+    authoring, Path(sys.argv[2]), Path(sys.argv[3]), fixture_mode=True
+)
+print(json.dumps({name: data.hex() for name, data in sorted(files.items())}, sort_keys=True))
+"""
+    outputs = []
+    for seed in ("1", "417"):
+        environment = os.environ.copy()
+        environment["PYTHONHASHSEED"] = seed
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                script,
+                str(authoring_path),
+                str(manifest_path),
+                str(corpus_root),
+            ],
+            cwd=ROOT,
+            env=environment,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        outputs.append(result.stdout)
+
+    assert outputs[0] == outputs[1]

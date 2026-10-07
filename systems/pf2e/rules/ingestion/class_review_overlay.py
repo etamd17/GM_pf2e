@@ -2,13 +2,27 @@
 from __future__ import annotations
 
 from collections import Counter
+from contextlib import contextmanager
 from copy import deepcopy
+import ctypes
+import errno
 import os
 from pathlib import Path, PurePosixPath
 import re
+import secrets
+import shutil
 import stat
+import sys
+import tempfile
 
-from ..manifest import MAX_FILE_BYTES, digest, read_file, read_json, reject_links
+from ..manifest import (
+    MAX_FILE_BYTES,
+    canonical_json,
+    digest,
+    read_file,
+    read_json,
+    reject_links,
+)
 from ..validation import (
     RulesValidationError,
     bounded_json,
@@ -36,6 +50,7 @@ from .evidence_snapshot import (
 
 
 CLASS_REVIEW_SCHEMA_VERSION = 1
+CLASS_REVIEW_COMPILER_VERSION = "pf2e-class-review-1"
 SHA256 = r"[0-9a-f]{64}"
 OVERLAY_ID = r"pf2e-[a-z0-9]+(?:[.-][a-z0-9]+)*"
 SNAPSHOT_ID = r"pf2e-aon-[a-z0-9]+(?:-[a-z0-9]+)*"
@@ -44,6 +59,9 @@ MAX_CLASS_SOURCES = 8
 MAX_CLASS_RECORDS = 29
 MAX_LOCAL_CLASS_FILES = 27
 MAX_CLASS_CORPUS_BYTES = 32 * 1024 * 1024
+CLASS_REVIEW_FILES = frozenset(
+    {"authoring.json", "sources.json", "records.json", "manifest.json"}
+)
 LOCAL_CLASS_FILE = r"[a-z0-9]+(?:-[a-z0-9]+)*\.json"
 LOCAL_FOUNDRY_ID = r"[A-Za-z0-9]{16}"
 WINDOWS_RESERVED_NAMES = frozenset(
@@ -309,9 +327,15 @@ def _resolve_class_snapshot(
     snapshot_manifest_path: Path,
     *,
     fixture_mode: bool = False,
+    include_base_ledger: bool = False,
 ) -> dict:
     """Resolve verified class evidence into a detached compilation intermediate."""
     require(type(fixture_mode) is bool, "invalid_type", "$.fixture_mode")
+    require(
+        type(include_base_ledger) is bool,
+        "invalid_type",
+        "$.include_base_ledger",
+    )
     value = normalize_class_review_authoring(authoring)
     if not fixture_mode:
         require(
@@ -459,7 +483,7 @@ def _resolve_class_snapshot(
         "count_mismatch",
         "$.snapshot.class",
     )
-    return {
+    result = {
         "manifest": value["manifest"],
         "sources": value["sources"],
         "records": records,
@@ -471,6 +495,9 @@ def _resolve_class_snapshot(
             "base_reviews": deepcopy(snapshot_summary["reviews"]),
         },
     }
+    if include_base_ledger:
+        result["_base_class_ledger"] = deepcopy(ledger)
+    return result
 
 
 def repository_text_sha256(data: bytes, path: str = "$") -> str:
@@ -761,8 +788,14 @@ def _reconcile_class_corpus(
     return value
 
 
-def _apply_class_review_overlay(base_class_ledger: dict, reconciled: dict) -> dict:
+def _apply_class_review_overlay(
+    base_class_ledger: dict,
+    reconciled: dict,
+    *,
+    fixture_mode: bool = False,
+) -> dict:
     """Return a detached effective class ledger and zero-activation summary."""
+    require(type(fixture_mode) is bool, "invalid_type", "$.fixture_mode")
     bounded_json(reconciled)
     value = deepcopy(reconciled)
     effective_ledger = normalize_evidence_ledger(base_class_ledger)
@@ -922,7 +955,7 @@ def _apply_class_review_overlay(base_class_ledger: dict, reconciled: dict) -> di
         },
     }
 
-    if manifest.get("snapshot_id") == PRODUCTION_SNAPSHOT_ID:
+    if manifest.get("snapshot_id") == PRODUCTION_SNAPSHOT_ID and not fixture_mode:
         require(
             manifest.get("snapshot_manifest_sha256")
             == PRODUCTION_SNAPSHOT_MANIFEST_SHA256,
@@ -948,3 +981,698 @@ def _apply_class_review_overlay(base_class_ledger: dict, reconciled: dict) -> di
         "effective_class_ledger": effective_ledger,
         "summary": summary,
     }
+
+
+def _require_pending_overlay_reviews(authoring: dict) -> None:
+    for index, source in enumerate(authoring["sources"]):
+        for field in ("source_review", "license_review"):
+            require(
+                source[field]["status"] == "pending",
+                "lifecycle_mismatch",
+                f"$.sources[{index}].{field}",
+            )
+    for index, record in enumerate(authoring["records"]):
+        require(
+            record["rules_review"]["status"] == "pending",
+            "lifecycle_mismatch",
+            f"$.records[{index}].rules_review",
+        )
+
+
+def _compile_class_review_overlay(
+    authoring: dict,
+    snapshot_manifest_path: Path,
+    corpus_root: Path,
+    *,
+    fixture_mode: bool = False,
+) -> dict[str, bytes]:
+    """Compile canonical sidecars from verified evidence without publishing."""
+    require(type(fixture_mode) is bool, "invalid_type", "$.fixture_mode")
+    manifest_path = Path(snapshot_manifest_path).absolute()
+    corpus = Path(corpus_root).absolute()
+    _require_disjoint_trees(
+        (
+            ("$.paths.snapshot", manifest_path.parent),
+            ("$.paths.corpus", corpus),
+        )
+    )
+    resolved = _resolve_class_snapshot(
+        authoring,
+        manifest_path,
+        fixture_mode=fixture_mode,
+        include_base_ledger=True,
+    )
+    normalized_authoring = {
+        "manifest": deepcopy(resolved["manifest"]),
+        "sources": deepcopy(resolved["sources"]),
+        "records": [
+            {
+                "identity": deepcopy(record["identity"]),
+                "rule_id": record["rule_id"],
+                "source_id": record["source_id"],
+                "rules_review": deepcopy(record["rules_review"]),
+            }
+            for record in resolved["records"]
+        ],
+    }
+    _require_pending_overlay_reviews(normalized_authoring)
+    reconciled = _reconcile_class_corpus(
+        resolved,
+        corpus,
+        fixture_mode=fixture_mode,
+    )
+    applied = _apply_class_review_overlay(
+        reconciled["_base_class_ledger"],
+        reconciled,
+        fixture_mode=fixture_mode,
+    )
+    records = [
+        {
+            field: deepcopy(record[field])
+            for field in (
+                "identity",
+                "name",
+                "canonical_url",
+                "fingerprint",
+                "evidence_sha256",
+                "disposition",
+                "rule_id",
+                "source_id",
+                "source_ref",
+                "local",
+                "reconciliation",
+                "rules_review",
+            )
+        }
+        for record in reconciled["records"]
+    ]
+    files = {
+        "authoring.json": canonical_json(normalized_authoring),
+        "sources.json": canonical_json(normalized_authoring["sources"]),
+        "records.json": canonical_json(records),
+    }
+    summary = applied["summary"]
+    manifest = {
+        **deepcopy(normalized_authoring["manifest"]),
+        "compiler_version": CLASS_REVIEW_COMPILER_VERSION,
+        "inputs": {"authoring.json": digest(files["authoring.json"])},
+        "outputs": {
+            name: digest(files[name])
+            for name in ("sources.json", "records.json")
+        },
+        "counts": {
+            "sources": len(normalized_authoring["sources"]),
+            "records": len(records),
+            "local_records": reconciled["counts"]["local_class_records"],
+            "reconciliation": {
+                "aligned": reconciled["counts"]["aligned_records"],
+                "source-drift": reconciled["counts"]["source_drift_records"],
+                "missing-local": reconciled["counts"]["missing_local_records"],
+            },
+            "effective_dispositions": deepcopy(
+                summary["effective_dispositions"]
+            ),
+            "base_reviews": deepcopy(summary["base_reviews"]),
+            "overlay_gates": deepcopy(summary["overlay_gates"]),
+            "enabled_mechanics": summary["enabled_mechanics"],
+        },
+    }
+    manifest["overlay_hash"] = digest(canonical_json(manifest))
+    files["manifest.json"] = canonical_json(manifest)
+    require(set(files) == CLASS_REVIEW_FILES, "invalid_package_layout", "$files")
+    return files
+
+
+def compile_class_review_overlay(
+    authoring: dict,
+    snapshot_manifest_path: Path,
+    corpus_root: Path,
+) -> dict[str, bytes]:
+    """Compile the frozen production class-review overlay."""
+    return _compile_class_review_overlay(
+        authoring,
+        snapshot_manifest_path,
+        corpus_root,
+    )
+
+
+def _resolved_tree(path: Path, field: str) -> Path:
+    candidate = Path(path).absolute()
+    try:
+        reject_links(candidate)
+    except (OSError, RulesValidationError):
+        raise RulesValidationError("invalid_package_layout", field) from None
+    return candidate.resolve(strict=False)
+
+
+def _require_disjoint_trees(paths: tuple[tuple[str, Path], ...]) -> None:
+    resolved = [(_field, _resolved_tree(path, _field)) for _field, path in paths]
+    for index, (_left_field, left) in enumerate(resolved):
+        for _right_field, right in resolved[index + 1 :]:
+            require(
+                left != right and left not in right.parents and right not in left.parents,
+                "path_overlap",
+                "$.paths",
+            )
+
+
+def _open_overlay_file(path: Path):
+    return path.open("xb")
+
+
+def _write_overlay_bytes(handle, data: bytes) -> int:
+    return handle.write(data)
+
+
+def _flush_overlay_file(handle) -> None:
+    handle.flush()
+
+
+def _fsync_overlay_file(handle) -> None:
+    os.fsync(handle.fileno())
+
+
+def _rename_path_no_replace(source: Path, target: Path) -> None:
+    """Atomically move one path without replacing an existing target."""
+    if os.name == "nt":
+        os.rename(source, target)
+        return
+
+    source_bytes = os.fsencode(source)
+    target_bytes = os.fsencode(target)
+    library = ctypes.CDLL(None, use_errno=True)
+    if sys.platform.startswith("linux"):
+        rename_no_replace = getattr(library, "renameat2", None)
+        require(
+            rename_no_replace is not None,
+            "unsupported_platform",
+            "$.paths.store",
+        )
+        rename_no_replace.argtypes = (
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_uint,
+        )
+        rename_no_replace.restype = ctypes.c_int
+        result = rename_no_replace(
+            -100,
+            source_bytes,
+            -100,
+            target_bytes,
+            1,
+        )
+    elif sys.platform == "darwin":
+        rename_no_replace = getattr(library, "renamex_np", None)
+        require(
+            rename_no_replace is not None,
+            "unsupported_platform",
+            "$.paths.store",
+        )
+        rename_no_replace.argtypes = (
+            ctypes.c_char_p,
+            ctypes.c_char_p,
+            ctypes.c_uint,
+        )
+        rename_no_replace.restype = ctypes.c_int
+        result = rename_no_replace(source_bytes, target_bytes, 4)
+    else:
+        raise RulesValidationError("unsupported_platform", "$.paths.store")
+    if result == 0:
+        return
+    error_number = ctypes.get_errno()
+    if error_number in {errno.EEXIST, errno.ENOTEMPTY}:
+        raise FileExistsError(error_number, os.strerror(error_number), target)
+    raise OSError(error_number, os.strerror(error_number), target)
+
+
+def _rename_overlay_directory(staging: Path, target: Path) -> None:
+    """Atomically publish a directory without replacing an existing target."""
+    _rename_path_no_replace(staging, target)
+
+
+def _file_identity(info) -> tuple[int, int]:
+    return info.st_dev, info.st_ino
+
+
+def _owned_path_info(path: Path, identity: tuple[int, int]):
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return None
+    if (
+        _file_identity(info) != identity
+        or stat.S_ISLNK(info.st_mode)
+        or (
+            getattr(info, "st_file_attributes", 0)
+            & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 1024)
+        )
+    ):
+        return None
+    return info
+
+
+def _unlink_owned_file(path: Path, identity: tuple[int, int]) -> None:
+    claimed = _claim_owned_path(path, identity, stat.S_ISREG)
+    if claimed is not None:
+        info = _owned_path_info(claimed, identity)
+        if info is not None and stat.S_ISREG(info.st_mode):
+            with _bound_owned_path(claimed, identity, stat.S_ISREG) as owned:
+                if owned:
+                    claimed.unlink()
+
+
+def _remove_owned_tree(path: Path, identity: tuple[int, int]) -> None:
+    claimed = _claim_owned_path(path, identity, stat.S_ISDIR)
+    if claimed is not None:
+        info = _owned_path_info(claimed, identity)
+        if info is not None and stat.S_ISDIR(info.st_mode):
+            with _bound_owned_path(claimed, identity, stat.S_ISDIR) as owned:
+                if owned:
+                    shutil.rmtree(claimed)
+
+
+def _private_sibling(path: Path, purpose: str) -> Path:
+    return path.with_name(f".{purpose}-{secrets.token_hex(16)}")
+
+
+@contextmanager
+def _bound_owned_path(path: Path, identity: tuple[int, int], kind):
+    """Bind cleanup to a private claim and fail safe on any observed swap.
+
+    POSIX keeps a no-follow descriptor open across deletion. Windows cannot
+    portably delete a directory by handle, so the atomic private claim plus a
+    final direct identity check is the boundary there. Same-account code that
+    discovers and replaces the random claim after that final binding is outside
+    the portable filesystem guarantee; every observable swap is preserved.
+    """
+    handle = None
+    owned = False
+    try:
+        if os.name == "nt":
+            opened = path.lstat()
+        else:
+            flags = (
+                os.O_RDONLY
+                | getattr(os, "O_BINARY", 0)
+                | getattr(os, "O_NOFOLLOW", 0)
+                | (getattr(os, "O_DIRECTORY", 0) if kind is stat.S_ISDIR else 0)
+            )
+            handle = os.open(path, flags)
+            opened = os.fstat(handle)
+        current = path.lstat()
+        owned = (
+            _file_identity(opened) == identity
+            and _file_identity(current) == identity
+            and kind(opened.st_mode)
+            and kind(current.st_mode)
+        )
+    except OSError:
+        owned = False
+    try:
+        yield owned
+    finally:
+        if handle is not None:
+            os.close(handle)
+
+
+def _restore_unowned_claim(claimed: Path, original: Path) -> None:
+    try:
+        _rename_path_no_replace(claimed, original)
+    except (FileExistsError, FileNotFoundError, OSError):
+        return
+
+
+def _claim_owned_path(path: Path, identity: tuple[int, int], kind) -> Path | None:
+    """Isolate a matching path before deletion; preserve any raced replacement."""
+    info = _owned_path_info(path, identity)
+    if info is None or not kind(info.st_mode):
+        return None
+    for _attempt in range(16):
+        claimed = _private_sibling(path, "cleanup")
+        try:
+            _rename_path_no_replace(path, claimed)
+        except FileExistsError:
+            continue
+        except FileNotFoundError:
+            return None
+        moved = _owned_path_info(claimed, identity)
+        if moved is not None and kind(moved.st_mode):
+            return claimed
+        _restore_unowned_claim(claimed, path)
+        return None
+    raise RulesValidationError("io_error", "$.paths.store")
+
+
+def _preserve_rejected_publication(target: Path) -> None:
+    """Move an unverified publication away from its reserved target name."""
+    for _attempt in range(16):
+        rejected = _private_sibling(target, "rejected-publication")
+        try:
+            _rename_path_no_replace(target, rejected)
+            require(
+                not os.path.lexists(target),
+                "quarantine_failed",
+                "$.manifest.overlay_id",
+            )
+            return
+        except FileExistsError:
+            continue
+        except FileNotFoundError:
+            return
+        except OSError:
+            raise RulesValidationError(
+                "quarantine_failed", "$.manifest.overlay_id"
+            ) from None
+    raise RulesValidationError("quarantine_failed", "$.manifest.overlay_id")
+
+
+def _write_class_review_overlay(
+    authoring: dict,
+    snapshot_manifest_path: Path,
+    corpus_root: Path,
+    store_root: Path,
+    *,
+    fixture_mode: bool = False,
+) -> Path:
+    """Atomically publish one immutable overlay under an exclusive owned lock."""
+    require(type(fixture_mode) is bool, "invalid_type", "$.fixture_mode")
+    manifest_path = Path(snapshot_manifest_path).absolute()
+    corpus = Path(corpus_root).absolute()
+    store = Path(store_root).absolute()
+    _require_disjoint_trees(
+        (
+            ("$.paths.snapshot", manifest_path.parent),
+            ("$.paths.corpus", corpus),
+            ("$.paths.store", store),
+        )
+    )
+    files = _compile_class_review_overlay(
+        authoring,
+        manifest_path,
+        corpus,
+        fixture_mode=fixture_mode,
+    )
+    manifest = read_json(files["manifest.json"])
+    overlay_id = manifest["overlay_id"]
+
+    try:
+        store.mkdir(parents=True, exist_ok=True)
+        reject_links(store)
+        require(store.is_dir(), "invalid_package_layout", "$.paths.store")
+        _require_disjoint_trees(
+            (
+                ("$.paths.snapshot", manifest_path.parent),
+                ("$.paths.corpus", corpus),
+                ("$.paths.store", store),
+            )
+        )
+    except RulesValidationError:
+        raise
+    except OSError:
+        raise RulesValidationError(
+            "invalid_package_layout", "$.paths.store"
+        ) from None
+
+    target = store / overlay_id
+    require(
+        not os.path.lexists(target),
+        "overlay_exists",
+        "$.manifest.overlay_id",
+    )
+    lock = store / f".{overlay_id}.lock"
+    try:
+        lock_handle = lock.open("xb")
+    except FileExistsError:
+        raise RulesValidationError(
+            "publication_locked", "$.manifest.overlay_id"
+        ) from None
+
+    staging = None
+    staging_identity = None
+    lock_identity = _file_identity(os.fstat(lock_handle.fileno()))
+    try:
+        with lock_handle:
+            require(
+                not os.path.lexists(target),
+                "overlay_exists",
+                "$.manifest.overlay_id",
+            )
+            staging = Path(
+                tempfile.mkdtemp(
+                    prefix=f".{overlay_id}.",
+                    suffix=".tmp",
+                    dir=store,
+                )
+            )
+            staging_identity = _file_identity(staging.lstat())
+            for name in sorted(CLASS_REVIEW_FILES):
+                data = files[name]
+                with _open_overlay_file(staging / name) as output:
+                    written = _write_overlay_bytes(output, data)
+                    require(written == len(data), "io_error", f"$.files.{name}")
+                    _flush_overlay_file(output)
+                    _fsync_overlay_file(output)
+            staged_files = _read_class_review_overlay_files(staging)
+            for name in sorted(CLASS_REVIEW_FILES):
+                require(
+                    staged_files[name] == files[name],
+                    "integrity_mismatch",
+                    f"$.files.{name}",
+                )
+            require(
+                not os.path.lexists(target),
+                "overlay_exists",
+                "$.manifest.overlay_id",
+            )
+            staged_info = _owned_path_info(staging, staging_identity)
+            require(
+                staged_info is not None and stat.S_ISDIR(staged_info.st_mode),
+                "integrity_mismatch",
+                "$.paths.staging",
+            )
+            try:
+                _rename_overlay_directory(staging, target)
+            except FileExistsError:
+                raise RulesValidationError(
+                    "overlay_exists", "$.manifest.overlay_id"
+                ) from None
+            try:
+                published_info = _owned_path_info(target, staging_identity)
+                require(
+                    published_info is not None
+                    and stat.S_ISDIR(published_info.st_mode),
+                    "integrity_mismatch",
+                    "$.paths.staging",
+                )
+                published_files = _read_class_review_overlay_files(target)
+                for name in sorted(CLASS_REVIEW_FILES):
+                    require(
+                        published_files[name] == files[name],
+                        "integrity_mismatch",
+                        f"$.files.{name}",
+                    )
+                published_info = _owned_path_info(target, staging_identity)
+                require(
+                    published_info is not None
+                    and stat.S_ISDIR(published_info.st_mode),
+                    "integrity_mismatch",
+                    "$.paths.staging",
+                )
+            except (OSError, RulesValidationError):
+                _preserve_rejected_publication(target)
+                raise
+            staging = None
+    finally:
+        try:
+            if staging is not None and staging_identity is not None:
+                _remove_owned_tree(staging, staging_identity)
+        finally:
+            _unlink_owned_file(lock, lock_identity)
+    return target
+
+
+def write_class_review_overlay(
+    authoring: dict,
+    snapshot_manifest_path: Path,
+    corpus_root: Path,
+    store_root: Path,
+) -> Path:
+    """Publish the frozen production class-review overlay exactly once."""
+    return _write_class_review_overlay(
+        authoring,
+        snapshot_manifest_path,
+        corpus_root,
+        store_root,
+    )
+
+
+def _read_class_review_overlay_files(overlay_path: Path) -> dict[str, bytes]:
+    root = Path(overlay_path).absolute()
+    try:
+        reject_links(root)
+        root_info = root.lstat()
+    except (OSError, RulesValidationError):
+        raise RulesValidationError("invalid_package_layout", "$files") from None
+    require(stat.S_ISDIR(root_info.st_mode), "invalid_package_layout", "$files")
+
+    entries = {}
+    casefolded = set()
+    try:
+        with os.scandir(root) as iterator:
+            for entry in iterator:
+                require(len(entries) < len(CLASS_REVIEW_FILES),
+                        "invalid_package_layout", "$files")
+                name = entry.name
+                folded = name.casefold()
+                require(folded not in casefolded,
+                        "invalid_package_layout", "$files")
+                casefolded.add(folded)
+                info = entry.stat(follow_symlinks=False)
+                require(
+                    not stat.S_ISLNK(info.st_mode)
+                    and not (
+                        getattr(info, "st_file_attributes", 0)
+                        & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 1024)
+                    )
+                    and stat.S_ISREG(info.st_mode),
+                    "invalid_package_layout",
+                    "$files",
+                )
+                entries[name] = Path(entry.path)
+    except RulesValidationError:
+        raise
+    except OSError:
+        raise RulesValidationError("invalid_package_layout", "$files") from None
+    require(set(entries) == CLASS_REVIEW_FILES,
+            "invalid_package_layout", "$files")
+
+    files = {}
+    for name in sorted(CLASS_REVIEW_FILES):
+        path = f"$.files.{name}"
+        try:
+            data = read_file(entries[name])
+            document = read_json(data)
+            canonical = canonical_json(document)
+        except RulesValidationError as error:
+            if error.code == "invalid_package_layout":
+                raise RulesValidationError(error.code, "$files") from None
+            raise RulesValidationError(error.code, path) from None
+        require(data == canonical, "noncanonical_bytes", path)
+        files[name] = data
+    return files
+
+
+def _verify_compiled_manifest_hashes(
+    manifest: dict, files: dict[str, bytes]
+) -> None:
+    shape(
+        manifest,
+        "schema_version overlay_id created_at authority kind snapshot_id "
+        "snapshot_manifest_sha256 base_category activation parent_overlay_id "
+        "parent_overlay_hash compiler_version inputs outputs counts overlay_hash",
+        "$.manifest",
+    )
+    shape(manifest["inputs"], "authoring.json", "$.manifest.inputs")
+    shape(
+        manifest["outputs"],
+        "sources.json records.json",
+        "$.manifest.outputs",
+    )
+    for name in ("authoring.json", "sources.json", "records.json"):
+        field = (
+            manifest["inputs"][name]
+            if name == "authoring.json"
+            else manifest["outputs"][name]
+        )
+        _sha256(field, f"$.manifest.files.{name}")
+        require(
+            digest(files[name]) == field,
+            "integrity_mismatch",
+            f"$.files.{name}",
+        )
+    _sha256(manifest["overlay_hash"], "$.manifest.overlay_hash")
+    without_hash = deepcopy(manifest)
+    overlay_hash = without_hash.pop("overlay_hash")
+    require(
+        digest(canonical_json(without_hash)) == overlay_hash,
+        "integrity_mismatch",
+        "$.files.manifest.json",
+    )
+
+
+def _verify_class_review_overlay(
+    overlay_path: Path,
+    snapshot_manifest_path: Path,
+    corpus_root: Path,
+    expected_hash: str | None = None,
+    *,
+    fixture_mode: bool = False,
+) -> dict:
+    """Verify exact package bytes against freshly resolved frozen inputs."""
+    require(type(fixture_mode) is bool, "invalid_type", "$.fixture_mode")
+    root = Path(overlay_path).absolute()
+    _require_disjoint_trees(
+        (
+            ("$.paths.snapshot", Path(snapshot_manifest_path).absolute().parent),
+            ("$.paths.corpus", Path(corpus_root).absolute()),
+            ("$.paths.store", root.parent),
+        )
+    )
+    files = _read_class_review_overlay_files(root)
+    authoring = read_json(files["authoring.json"])
+    manifest = read_json(files["manifest.json"])
+    require(type(manifest) is dict, "invalid_type", "$.manifest")
+    _verify_compiled_manifest_hashes(manifest, files)
+    require("overlay_id" in manifest,
+            "missing_field", "$.manifest.overlay_id")
+    text(manifest["overlay_id"], "$.manifest.overlay_id", pattern=OVERLAY_ID)
+    require(root.name == manifest["overlay_id"],
+            "invalid_package_layout", "$.manifest.overlay_id")
+
+    expected_files = _compile_class_review_overlay(
+        authoring,
+        snapshot_manifest_path,
+        corpus_root,
+        fixture_mode=fixture_mode,
+    )
+    for name in ("authoring.json", "sources.json", "records.json", "manifest.json"):
+        require(
+            files[name] == expected_files[name],
+            "integrity_mismatch",
+            f"$.files.{name}",
+        )
+    manifest = read_json(expected_files["manifest.json"])
+    if expected_hash is not None:
+        text(
+            expected_hash,
+            "$.binding.overlay_hash",
+            pattern=SHA256,
+        )
+        require(
+            expected_hash == manifest["overlay_hash"],
+            "binding_mismatch",
+            "$.binding.overlay_hash",
+        )
+    return {
+        "overlay_id": manifest["overlay_id"],
+        "overlay_hash": manifest["overlay_hash"],
+        "activation": manifest["activation"],
+        "counts": deepcopy(manifest["counts"]),
+    }
+
+
+def verify_class_review_overlay(
+    overlay_path: Path,
+    snapshot_manifest_path: Path,
+    corpus_root: Path,
+    expected_hash: str | None = None,
+) -> dict:
+    """Verify one frozen production class-review overlay package."""
+    return _verify_class_review_overlay(
+        overlay_path,
+        snapshot_manifest_path,
+        corpus_root,
+        expected_hash,
+    )
