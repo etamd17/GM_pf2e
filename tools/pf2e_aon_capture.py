@@ -238,8 +238,8 @@ def _preflight_outputs(root: Path, relatives: list[str]) -> Path:
         require(normalized not in seen, "duplicate_id", "$output")
         seen.add(normalized)
         destination = _target(root, relative)
-        reject_links(destination)
         _require_directory_ancestors(destination.parent)
+        reject_links(destination)
         require(not destination.exists(), "output_exists", "$output/" + relative)
     return root
 
