@@ -467,6 +467,8 @@ def _resolve_class_snapshot(
             "snapshot_included_records": snapshot_summary["records"]["included"],
             "base_class_records": len(records),
             "base_pending_records": pending_count,
+            "base_dispositions": deepcopy(snapshot_summary["dispositions"]),
+            "base_reviews": deepcopy(snapshot_summary["reviews"]),
         },
     }
 
@@ -757,3 +759,192 @@ def _reconcile_class_corpus(
         }
     )
     return value
+
+
+def _apply_class_review_overlay(base_class_ledger: dict, reconciled: dict) -> dict:
+    """Return a detached effective class ledger and zero-activation summary."""
+    bounded_json(reconciled)
+    value = deepcopy(reconciled)
+    effective_ledger = normalize_evidence_ledger(base_class_ledger)
+
+    manifest = value.get("manifest")
+    require(type(manifest) is dict, "invalid_type", "$.manifest")
+    require(
+        manifest.get("activation") == "none",
+        "invalid_value",
+        "$.manifest.activation",
+    )
+    records = sequence(value.get("records"), "$.records")
+    sources = sequence(value.get("sources"), "$.sources")
+    counts = value.get("counts")
+    require(type(counts) is dict, "invalid_type", "$.counts")
+
+    snapshot_records = integer(
+        counts.get("snapshot_included_records"),
+        1,
+        100_000,
+        "$.counts.snapshot_included_records",
+    )
+    base_dispositions = counts.get("base_dispositions")
+    shape(
+        base_dispositions,
+        "excluded mapped pending",
+        "$.counts.base_dispositions",
+    )
+    for field in ("excluded", "mapped", "pending"):
+        integer(
+            base_dispositions[field],
+            0,
+            100_000,
+            "$.counts.base_dispositions." + field,
+        )
+    base_reviews = counts.get("base_reviews")
+    shape(base_reviews, "pending reviewed", "$.counts.base_reviews")
+    for field in ("pending", "reviewed"):
+        integer(
+            base_reviews[field],
+            0,
+            100_000,
+            "$.counts.base_reviews." + field,
+        )
+    require(
+        sum(base_dispositions.values()) == snapshot_records
+        and sum(base_reviews.values()) == snapshot_records,
+        "count_mismatch",
+        "$.counts",
+    )
+    require(
+        base_dispositions["excluded"] == 0
+        and base_dispositions["mapped"] == 0
+        and base_dispositions["pending"] == snapshot_records
+        and base_reviews == {"pending": snapshot_records, "reviewed": 0},
+        "lifecycle_mismatch",
+        "$.counts",
+    )
+    require(
+        counts.get("base_class_records") == len(records)
+        and counts.get("base_pending_records") == len(records),
+        "count_mismatch",
+        "$.counts.base_class_records",
+    )
+
+    records_by_identity = {}
+    for index, record in enumerate(records):
+        path = f"$.records[{index}]"
+        require(type(record) is dict, "invalid_type", path)
+        require("identity" in record, "missing_field", path + ".identity")
+        _identity(record["identity"], path + ".identity")
+        identity = _identity_key(record)
+        require(
+            identity not in records_by_identity,
+            "duplicate_identity",
+            path + ".identity",
+        )
+        require(
+            record.get("disposition") == "mapped",
+            "lifecycle_mismatch",
+            path + ".disposition",
+        )
+        rule_id(record.get("rule_id"), path + ".rule_id", "class")
+        require("rules_review" in record, "missing_field", path + ".rules_review")
+        _review(record["rules_review"], path + ".rules_review")
+        records_by_identity[identity] = record
+
+    ledger_identities = set()
+    for index, entry in enumerate(effective_ledger["entries"]):
+        path = f"$.base_class_ledger.entries[{index}]"
+        identity = _identity_key(entry)
+        require(
+            identity in records_by_identity,
+            "unexpected_identity",
+            path + ".identity",
+        )
+        require(
+            entry["disposition"] == "pending"
+            and entry["rule_id"] is None
+            and entry["reason"] == PENDING_REASON
+            and entry["review"]
+            == {"status": "pending", "reviewer": None, "reviewed_at": None},
+            "lifecycle_mismatch",
+            path,
+        )
+        ledger_identities.add(identity)
+    require(
+        ledger_identities == records_by_identity.keys(),
+        "incomplete_inventory",
+        "$.records",
+    )
+
+    for entry in effective_ledger["entries"]:
+        record = records_by_identity[_identity_key(entry)]
+        entry.update(
+            disposition="mapped",
+            rule_id=record["rule_id"],
+            reason=None,
+        )
+    effective_ledger = normalize_evidence_ledger(effective_ledger)
+
+    gate_statuses = Counter()
+    for index, source in enumerate(sources):
+        path = f"$.sources[{index}]"
+        require(type(source) is dict, "invalid_type", path)
+        for field in ("source_review", "license_review"):
+            require(field in source, "missing_field", path + "." + field)
+            review = _review(source[field], path + "." + field)
+            gate_statuses[review["status"]] += 1
+    for record in records:
+        gate_statuses[record["rules_review"]["status"]] += 1
+
+    mapped_records = len(records)
+    require(
+        base_dispositions["pending"] >= mapped_records,
+        "count_mismatch",
+        "$.counts.base_dispositions.pending",
+    )
+    summary = {
+        "activation": "none",
+        "enabled_mechanics": 0,
+        "effective_dispositions": {
+            "excluded": base_dispositions["excluded"],
+            "mapped": base_dispositions["mapped"] + mapped_records,
+            "pending": base_dispositions["pending"] - mapped_records,
+        },
+        "base_reviews": deepcopy(base_reviews),
+        "overlay_gates": {
+            "sources": len(sources),
+            "licenses": len(sources),
+            "rules": mapped_records,
+            "total": (2 * len(sources)) + mapped_records,
+            "by_status": {
+                status: gate_statuses[status]
+                for status in ("pending", "approved", "rejected")
+            },
+        },
+    }
+
+    if manifest.get("snapshot_id") == PRODUCTION_SNAPSHOT_ID:
+        require(
+            manifest.get("snapshot_manifest_sha256")
+            == PRODUCTION_SNAPSHOT_MANIFEST_SHA256,
+            "snapshot_mismatch",
+            "$.manifest.snapshot_manifest_sha256",
+        )
+        require(
+            summary["effective_dispositions"]
+            == {"excluded": 0, "mapped": 29, "pending": 18_493}
+            and summary["base_reviews"] == {"pending": 18_522, "reviewed": 0}
+            and summary["overlay_gates"]
+            == {
+                "sources": 8,
+                "licenses": 8,
+                "rules": 29,
+                "total": 45,
+                "by_status": {"pending": 45, "approved": 0, "rejected": 0},
+            },
+            "count_mismatch",
+            "$.counts",
+        )
+    return {
+        "effective_class_ledger": effective_ledger,
+        "summary": summary,
+    }

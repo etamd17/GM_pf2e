@@ -336,6 +336,107 @@ def _resolved_record(
     }
 
 
+def _overlay_review(status, marker):
+    if status == "pending":
+        return _pending_review()
+    return {
+        "status": status,
+        "reviewer": "Synthetic reviewer",
+        "reviewed_at": "2026-10-07T15:00:00Z",
+        "evidence_sha256": [marker * 64],
+    }
+
+
+def _overlay_source(source_id, source_status="pending", license_status="pending"):
+    return {
+        "source_id": source_id,
+        "title": source_id.rsplit(".", 1)[-1],
+        "source_review": _overlay_review(source_status, "c"),
+        "license_review": _overlay_review(license_status, "d"),
+    }
+
+
+def _reconciled_record(
+    numeric_id,
+    name,
+    rule_id,
+    *,
+    source_id="pf2e.source.synthetic-core",
+    rules_status="pending",
+):
+    record = _resolved_record(numeric_id, name, rule_id)
+    record["source_id"] = source_id
+    record["rules_review"] = _overlay_review(rules_status, "e")
+    record.update(
+        disposition="mapped",
+        local={
+            "status": "missing",
+            "relative_path": None,
+            "foundry_id": None,
+            "content_sha256": None,
+            "local_key": None,
+        },
+        reconciliation="missing-local",
+    )
+    return record
+
+
+def _synthetic_application(records, sources, *, snapshot_records=None):
+    total = len(records) if snapshot_records is None else snapshot_records
+    value = _synthetic_resolved(records)
+    value["sources"] = sources
+    value["counts"].update(
+        {
+            "snapshot_included_records": total,
+            "base_dispositions": {
+                "excluded": 0,
+                "mapped": 0,
+                "pending": total,
+            },
+            "base_reviews": {"pending": total, "reviewed": 0},
+        }
+    )
+    return value
+
+
+def _base_class_ledger(records):
+    return {
+        "schema_version": 1,
+        "inventory_id": "pf2e-synthetic.class",
+        "authority": "archives-of-nethys",
+        "census_captured_at": "2026-10-07T12:00:00Z",
+        "created_at": "2026-10-07T13:00:00Z",
+        "entries": [
+            {
+                "identity": deepcopy(record["identity"]),
+                "disposition": "pending",
+                "rule_id": None,
+                "reason": (
+                    "Awaiting Paizo source, rules, and license review."
+                ),
+                "review": {
+                    "status": "pending",
+                    "reviewer": None,
+                    "reviewed_at": None,
+                },
+            }
+            for record in records
+        ],
+    }
+
+
+def _current_class_ledger():
+    manifest = json.loads(CURRENT_SNAPSHOT.read_text(encoding="utf-8"))
+    class_shard = next(
+        shard for shard in manifest["shards"] if shard["category"] == "class"
+    )
+    return json.loads(
+        (CURRENT_SNAPSHOT.parent / class_shard["ledger"]["path"]).read_text(
+            encoding="utf-8"
+        )
+    )
+
+
 def _assert_error(document, code, path):
     with pytest.raises(ValueError) as error:
         overlay().normalize_class_review_authoring(document)
@@ -763,6 +864,8 @@ def test_snapshot_resolution_binds_verified_evidence_without_mutation(tmp_path):
         "snapshot_included_records": 3,
         "base_class_records": 2,
         "base_pending_records": 2,
+        "base_dispositions": {"excluded": 0, "mapped": 0, "pending": 3},
+        "base_reviews": {"pending": 3, "reviewed": 0},
     }
     assert [record["identity"]["numeric_id"] for record in resolved["records"]] == [
         35,
@@ -1572,3 +1675,223 @@ def test_current_class_corpus_reconciles_exact_frozen_production_inventory():
         for local in present
     )
     assert len(module._scan_local_classes(ROOT / "compendium_data")) == 27
+
+
+def test_overlay_application_is_detached_and_maps_only_effective_dispositions():
+    records = [
+        _reconciled_record(
+            1,
+            "Alpha",
+            "pf2e.class.alpha",
+            source_id="pf2e.source.alpha",
+            rules_status="approved",
+        ),
+        _reconciled_record(
+            2,
+            "Beta",
+            "pf2e.class.beta",
+            source_id="pf2e.source.beta",
+            rules_status="rejected",
+        ),
+    ]
+    sources = [
+        _overlay_source("pf2e.source.alpha", "pending", "approved"),
+        _overlay_source("pf2e.source.beta", "rejected", "pending"),
+    ]
+    reconciled = _synthetic_application(records, sources, snapshot_records=5)
+    base_ledger = _base_class_ledger(records)
+    reconciled_before = deepcopy(reconciled)
+    ledger_before = deepcopy(base_ledger)
+
+    result = overlay()._apply_class_review_overlay(base_ledger, reconciled)
+
+    assert base_ledger == ledger_before
+    assert reconciled == reconciled_before
+    assert result["effective_class_ledger"] is not base_ledger
+    assert result["effective_class_ledger"]["entries"] == [
+        {
+            "identity": {"page_family": "Classes.aspx", "numeric_id": 1},
+            "disposition": "mapped",
+            "rule_id": "pf2e.class.alpha",
+            "reason": None,
+            "review": {
+                "status": "pending",
+                "reviewer": None,
+                "reviewed_at": None,
+            },
+        },
+        {
+            "identity": {"page_family": "Classes.aspx", "numeric_id": 2},
+            "disposition": "mapped",
+            "rule_id": "pf2e.class.beta",
+            "reason": None,
+            "review": {
+                "status": "pending",
+                "reviewer": None,
+                "reviewed_at": None,
+            },
+        },
+    ]
+    assert result["summary"] == {
+        "activation": "none",
+        "enabled_mechanics": 0,
+        "effective_dispositions": {
+            "excluded": 0,
+            "mapped": 2,
+            "pending": 3,
+        },
+        "base_reviews": {"pending": 5, "reviewed": 0},
+        "overlay_gates": {
+            "sources": 2,
+            "licenses": 2,
+            "rules": 2,
+            "total": 6,
+            "by_status": {"pending": 2, "approved": 2, "rejected": 2},
+        },
+    }
+
+
+@pytest.mark.parametrize(
+    ("mutation", "code", "path"),
+    [
+        (
+            lambda ledger, reconciled: ledger["entries"].pop(),
+            "incomplete_inventory",
+            "$.records",
+        ),
+        (
+            lambda ledger, reconciled: (
+                reconciled["records"].pop(),
+                reconciled["counts"].update(
+                    base_class_records=1,
+                    base_pending_records=1,
+                ),
+            ),
+            "unexpected_identity",
+            "$.base_class_ledger.entries[1].identity",
+        ),
+    ],
+)
+def test_overlay_application_requires_exact_identity_bijection(
+    mutation, code, path
+):
+    records = [
+        _reconciled_record(1, "Alpha", "pf2e.class.alpha"),
+        _reconciled_record(2, "Beta", "pf2e.class.beta"),
+    ]
+    reconciled = _synthetic_application(
+        records, [_overlay_source("pf2e.source.synthetic-core")]
+    )
+    base_ledger = _base_class_ledger(records)
+    mutation(base_ledger, reconciled)
+
+    with pytest.raises(ValueError) as error:
+        overlay()._apply_class_review_overlay(base_ledger, reconciled)
+
+    assert error.value.code == code
+    assert error.value.path == path
+
+
+def test_overlay_application_rejects_malformed_reconciled_identity():
+    records = [_reconciled_record(1, "Alpha", "pf2e.class.alpha")]
+    reconciled = _synthetic_application(
+        records, [_overlay_source("pf2e.source.synthetic-core")]
+    )
+    base_ledger = _base_class_ledger(records)
+    reconciled["records"][0]["identity"] = None
+
+    with pytest.raises(ValueError) as error:
+        overlay()._apply_class_review_overlay(base_ledger, reconciled)
+
+    assert error.value.code == "invalid_type"
+    assert error.value.path == "$.records[0].identity"
+
+
+@pytest.mark.parametrize("lifecycle", ["mapped", "reviewed"])
+def test_overlay_application_requires_original_pending_base_lifecycle(lifecycle):
+    records = [_reconciled_record(1, "Alpha", "pf2e.class.alpha")]
+    reconciled = _synthetic_application(
+        records, [_overlay_source("pf2e.source.synthetic-core")]
+    )
+    base_ledger = _base_class_ledger(records)
+    if lifecycle == "mapped":
+        base_ledger["entries"][0].update(
+            disposition="mapped",
+            rule_id="pf2e.class.alpha",
+            reason=None,
+        )
+    else:
+        base_ledger["entries"][0]["review"] = {
+            "status": "reviewed",
+            "reviewer": "Synthetic reviewer",
+            "reviewed_at": "2026-10-07T15:00:00Z",
+        }
+
+    with pytest.raises(ValueError) as error:
+        overlay()._apply_class_review_overlay(base_ledger, reconciled)
+
+    assert error.value.code == "lifecycle_mismatch"
+    assert error.value.path == "$.base_class_ledger.entries[0]"
+
+
+def test_overlay_application_rejects_any_activation_mode():
+    records = [_reconciled_record(1, "Alpha", "pf2e.class.alpha")]
+    reconciled = _synthetic_application(
+        records, [_overlay_source("pf2e.source.synthetic-core")]
+    )
+    reconciled["manifest"]["activation"] = "rules"
+
+    with pytest.raises(ValueError) as error:
+        overlay()._apply_class_review_overlay(
+            _base_class_ledger(records), reconciled
+        )
+
+    assert error.value.code == "invalid_value"
+    assert error.value.path == "$.manifest.activation"
+
+
+def test_current_overlay_application_preserves_snapshot_bytes_and_zero_activation():
+    snapshot_root = CURRENT_SNAPSHOT.parent
+    before = _snapshot_bytes(snapshot_root)
+    module = overlay()
+    resolved = module._resolve_class_snapshot(_production_authoring(), CURRENT_SNAPSHOT)
+    reconciled = module._reconcile_class_corpus(resolved, ROOT / "compendium_data")
+
+    result = module._apply_class_review_overlay(
+        _current_class_ledger(), reconciled
+    )
+
+    assert len(before) == 137
+    assert _snapshot_bytes(snapshot_root) == before
+    assert resolved["counts"]["base_dispositions"] == {
+        "excluded": 0,
+        "mapped": 0,
+        "pending": 18_522,
+    }
+    assert resolved["counts"]["base_reviews"] == {
+        "pending": 18_522,
+        "reviewed": 0,
+    }
+    assert result["summary"] == {
+        "activation": "none",
+        "enabled_mechanics": 0,
+        "effective_dispositions": {
+            "excluded": 0,
+            "mapped": 29,
+            "pending": 18_493,
+        },
+        "base_reviews": {"pending": 18_522, "reviewed": 0},
+        "overlay_gates": {
+            "sources": 8,
+            "licenses": 8,
+            "rules": 29,
+            "total": 45,
+            "by_status": {"pending": 45, "approved": 0, "rejected": 0},
+        },
+    }
+    effective_entries = result["effective_class_ledger"]["entries"]
+    assert len(effective_entries) == 29
+    assert {entry["disposition"] for entry in effective_entries} == {"mapped"}
+    assert {entry["review"]["status"] for entry in effective_entries} == {
+        "pending"
+    }
