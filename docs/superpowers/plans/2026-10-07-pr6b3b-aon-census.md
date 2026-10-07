@@ -107,6 +107,7 @@ systems/pf2e/rules/
     evidence_snapshot.py
 tools/
   pf2e_aon_capture.py
+  pf2e_aon_manifest.py
   pf2e_rules.py
 tests/pf2e_rules/
   fixtures/aon-capture/
@@ -193,17 +194,19 @@ partial results, and cannot manufacture the ledger from the census.
 
 ## Task 3: freeze and verify the October 7 snapshot
 
-Files: the target evidence directory and
+Files: the target evidence directory, `tools/pf2e_aon_manifest.py`, and
 `tests/pf2e_rules/test_current_aon_snapshot.py`.
 
 1. Run scope, census, and ledger captures independently against the same
    preapproved concrete AoN index and approved scope policy, with distinct
    supplied run IDs/timestamps and result hashes. The scope run must stop if
    the observed index differs. The ledger run may not consume census artifacts.
-2. Generate `snapshot-manifest.json` plus three independently produced capture
-   receipts (scope, census, and ledger) with exact artifact hashes,
-   query/result hashes, observed counts, page families,
-   included/deferred/excluded totals, and the current class roster.
+2. Generate `snapshot-manifest.json` offline from the three independently
+   produced capture receipts (scope, census, and ledger), with exact artifact
+   hashes, query/result hashes, observed counts, page families,
+   included/deferred/excluded totals, and the current class roster. The
+   generator fully verifies the in-memory result before an overwrite-refusing
+   canonical write; checked-in bytes must reproduce exactly.
 3. Add failing then passing integration tests proving offline verification,
    29 current classes including Necromancer and Runesmith, every included row
    pending/unreviewed, no prose-shaped fields, per-file safety budgets, and

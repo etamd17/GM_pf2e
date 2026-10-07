@@ -18,6 +18,10 @@ def snapshot_module():
     return importlib.import_module("systems.pf2e.rules.ingestion.evidence_snapshot")
 
 
+def manifest_tool():
+    return importlib.import_module("tools.pf2e_aon_manifest")
+
+
 def _record(page_family: str, numeric_id: int, name: str, kind: str) -> dict:
     value = {
         "identity": {"page_family": page_family, "numeric_id": numeric_id},
@@ -47,7 +51,9 @@ def _census(records: list[dict]) -> dict:
 def _ledger(category: str, records: list[dict]) -> dict:
     return {
         "schema_version": 1,
-        "inventory_id": f"pf2e-aon-2026-10-07-{category}",
+        "inventory_id": (
+            f"pf2e-aon-2026-10-07-player-build-v1.{category}"
+        ),
         "authority": "archives-of-nethys",
         "census_captured_at": "2026-10-07T12:00:00Z",
         "created_at": "2026-10-07T13:00:00Z",
@@ -83,7 +89,9 @@ def _snapshot_tree(tmp_path: Path) -> tuple[Path, dict]:
         shards.append({
             "category": category,
             "kind": kind,
-            "inventory_id": f"pf2e-aon-2026-10-07-{category}",
+            "inventory_id": (
+                f"pf2e-aon-2026-10-07-player-build-v1.{category}"
+            ),
             "expected_records": len(records),
             "page_families": sorted({record["identity"]["page_family"] for record in records}),
             "census": {"path": census_path.as_posix(), "sha256": census_hash},
@@ -261,6 +269,118 @@ def test_snapshot_verification_is_compact_deterministic_and_nonmutating(tmp_path
     }
     assert {path.relative_to(manifest_path.parent).as_posix(): path.read_bytes()
             for path in manifest_path.parent.rglob("*.json")} == before
+
+
+def test_snapshot_manifest_is_assembled_from_receipts_deterministically(tmp_path):
+    manifest_path, expected = _snapshot_tree(tmp_path)
+    manifest_path.unlink()
+    before = {
+        path.relative_to(manifest_path.parent).as_posix(): path.read_bytes()
+        for path in manifest_path.parent.rglob("*.json")
+    }
+    module = snapshot_module()
+
+    first = module.build_snapshot_manifest(
+        manifest_path.parent, snapshot_id=expected["snapshot_id"]
+    )
+    second = module.build_snapshot_manifest(
+        manifest_path.parent, snapshot_id=expected["snapshot_id"]
+    )
+
+    assert first == second == module.normalize_snapshot_manifest(expected)
+    assert {
+        path.relative_to(manifest_path.parent).as_posix(): path.read_bytes()
+        for path in manifest_path.parent.rglob("*.json")
+    } == before
+
+
+def test_manifest_tool_writes_verified_bytes_and_refuses_overwrite(
+        tmp_path, capsys):
+    manifest_path, expected = _snapshot_tree(tmp_path)
+    manifest_path.unlink()
+    args = [
+        "--snapshot-root", str(manifest_path.parent),
+        "--snapshot-id", expected["snapshot_id"],
+    ]
+
+    assert manifest_tool().main(args) == 0
+    first_bytes = manifest_path.read_bytes()
+    result = json.loads(capsys.readouterr().out)
+    assert result == {
+        "categories": 2,
+        "manifest": "snapshot-manifest.json",
+        "records": 2,
+        "snapshot_id": expected["snapshot_id"],
+    }
+    assert snapshot_module().verify_evidence_snapshot(manifest_path)["complete"]
+
+    assert manifest_tool().main(args) == 2
+    error = json.loads(capsys.readouterr().err)
+    assert error == {"error": "output_exists", "path": "$output"}
+    assert manifest_path.read_bytes() == first_bytes
+
+
+def test_manifest_tool_removes_partial_output_after_fsync_failure(
+        tmp_path, capsys, monkeypatch):
+    manifest_path, expected = _snapshot_tree(tmp_path)
+    manifest_path.unlink()
+    root = manifest_path.parent
+    before = {
+        path.relative_to(root).as_posix(): path.read_bytes()
+        for path in root.rglob("*") if path.is_file()
+    }
+    module = manifest_tool()
+
+    def fail_fsync(_file_descriptor):
+        raise OSError("injected fsync failure")
+
+    monkeypatch.setattr(module.os, "fsync", fail_fsync)
+    result = module.main([
+        "--snapshot-root", str(root),
+        "--snapshot-id", expected["snapshot_id"],
+    ])
+
+    assert result == 2
+    assert json.loads(capsys.readouterr().err) == {
+        "error": "io_error", "path": "$files",
+    }
+    assert not manifest_path.exists()
+    assert {
+        path.relative_to(root).as_posix(): path.read_bytes()
+        for path in root.rglob("*") if path.is_file()
+    } == before
+
+
+def test_manifest_builder_binds_snapshot_id_to_ledger_inventory_ids(tmp_path):
+    manifest_path, _expected = _snapshot_tree(tmp_path)
+    manifest_path.unlink()
+
+    with pytest.raises(ValueError) as error:
+        snapshot_module().build_snapshot_manifest(
+            manifest_path.parent,
+            snapshot_id="pf2e-aon-2026-10-07-wrong-snapshot",
+        )
+
+    assert error.value.code == "snapshot_mismatch"
+    assert error.value.path == "$.ledger.class.inventory_id"
+
+
+def test_manifest_builder_rejects_unknown_included_policy_category(tmp_path):
+    manifest_path, _expected = _snapshot_tree(tmp_path)
+    manifest_path.unlink()
+    policy_path = manifest_path.parent / "scope-policy.json"
+    policy = json.loads(policy_path.read_text(encoding="utf-8"))
+    policy["categories"][0]["name"] = "invented-category"
+    _write_json(policy_path, policy)
+
+    with pytest.raises(ValueError) as error:
+        snapshot_module().build_snapshot_manifest(
+            manifest_path.parent,
+            snapshot_id="pf2e-aon-2026-10-07-player-build-v1",
+        )
+
+    assert error.value.code == "scope_mismatch"
+    assert error.value.path == "$.scope_policy.categories"
 
 
 def test_snapshot_accepts_v2_census_with_v1_pending_ledger(tmp_path):

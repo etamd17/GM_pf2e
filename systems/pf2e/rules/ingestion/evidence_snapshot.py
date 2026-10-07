@@ -8,6 +8,7 @@ import re
 
 from .aon_capture import (
     CATEGORY_SPECS_V1,
+    PENDING_REASON,
     build_category_query_v1,
     build_scope_query_v1,
 )
@@ -443,11 +444,9 @@ def _verify_scope_receipt(root: Path, capture: dict, manifest: dict) -> dict:
     return receipt
 
 
-def verify_evidence_snapshot(manifest_path: Path) -> dict:
-    """Verify a complete sharded snapshot without network or application imports."""
-    manifest_path = Path(manifest_path)
-    manifest = normalize_snapshot_manifest(read_json(read_file(manifest_path)))
-    root = manifest_path.parent
+def _verify_evidence_snapshot_document(manifest: dict, root: Path) -> dict:
+    manifest = normalize_snapshot_manifest(manifest)
+    root = Path(root)
     scope_receipt = _verify_scope_receipt(root, manifest["scope_capture"], manifest)
     _verify_capture_receipt(
         root, "census_capture", "census", manifest["census_capture"],
@@ -503,11 +502,19 @@ def verify_evidence_snapshot(manifest_path: Path) -> dict:
 
     for shard_index, shard in enumerate(manifest["shards"]):
         shard_path = f"$.shards[{shard_index}]"
+        require(shard["category"] in CATEGORY_SPECS_V1,
+                "scope_mismatch", shard_path + ".category")
         expected_kind, allowed_families = CATEGORY_SPECS_V1[shard["category"]]
         require(shard["kind"] == expected_kind,
                 "snapshot_mismatch", shard_path + ".kind")
         require(set(shard["page_families"]) <= allowed_families,
                 "snapshot_mismatch", shard_path + ".page_families")
+        require(
+            shard["inventory_id"]
+            == f"{manifest['snapshot_id']}.{shard['category']}",
+            "snapshot_mismatch",
+            shard_path + ".inventory_id",
+        )
         expected = included_policy[shard["category"]]["included_records"]
         require(shard["expected_records"] == expected,
                 "count_mismatch", shard_path + ".expected_records")
@@ -566,6 +573,11 @@ def verify_evidence_snapshot(manifest_path: Path) -> dict:
                 "lifecycle_mismatch",
                 f"{shard_path}.ledger.entries[{ledger_index}]",
             )
+            require(
+                entry["reason"] == PENDING_REASON,
+                "lifecycle_mismatch",
+                f"{shard_path}.ledger.entries[{ledger_index}]",
+            )
             disposition_counts[entry["disposition"]] += 1
             review_counts[entry["review"]["status"]] += 1
             if shard["category"] == "class":
@@ -604,3 +616,139 @@ def verify_evidence_snapshot(manifest_path: Path) -> dict:
         "class_count": len(class_names),
         "shard_count": len(manifest["shards"]),
     }
+
+
+def _named_document(root: Path, name: str, normalizer) -> tuple[dict, dict]:
+    data = read_file(root / name)
+    return normalizer(read_json(data)), {"path": name, "sha256": digest(data)}
+
+
+def build_snapshot_manifest(snapshot_root: Path, *, snapshot_id: str) -> dict:
+    """Assemble and fully verify a manifest from three capture receipts."""
+    text(snapshot_id, "$.snapshot_id", pattern=SNAPSHOT_ID)
+    root = Path(snapshot_root)
+    policy, policy_ref = _named_document(
+        root, "scope-policy.json", normalize_scope_policy
+    )
+    scope, scope_ref = _named_document(
+        root, "scope-receipt.json", normalize_scope_receipt
+    )
+    census_receipt, census_ref = _named_document(
+        root, "census-receipt.json", normalize_capture_receipt
+    )
+    ledger_receipt, ledger_ref = _named_document(
+        root, "ledger-receipt.json", normalize_capture_receipt
+    )
+    census_by_category = {
+        item["category"]: item for item in census_receipt["artifacts"]
+    }
+    ledger_by_category = {
+        item["category"]: item for item in ledger_receipt["artifacts"]
+    }
+    included = {
+        item["name"]: item for item in policy["categories"]
+        if item["included_records"] > 0
+    }
+    require(included.keys() <= CATEGORY_SPECS_V1.keys(),
+            "scope_mismatch", "$.scope_policy.categories")
+    require(census_by_category.keys() == included.keys(),
+            "scope_mismatch", "$.census_receipt.artifacts")
+    require(ledger_by_category.keys() == included.keys(),
+            "scope_mismatch", "$.ledger_receipt.artifacts")
+
+    class_roster = []
+    shards = []
+    for category in sorted(included):
+        expected_records = included[category]["included_records"]
+        census_artifact = census_by_category[category]
+        ledger_artifact = ledger_by_category[category]
+        census = normalize_aon_census(read_json(_read_artifact(
+            root,
+            {"path": census_artifact["path"], "sha256": census_artifact["sha256"]},
+            f"$.census_receipt.artifacts.{category}",
+        )))
+        ledger = normalize_evidence_ledger(read_json(_read_artifact(
+            root,
+            {"path": ledger_artifact["path"], "sha256": ledger_artifact["sha256"]},
+            f"$.ledger_receipt.artifacts.{category}",
+        )))
+        require(
+            ledger["inventory_id"] == f"{snapshot_id}.{category}",
+            "snapshot_mismatch",
+            f"$.ledger.{category}.inventory_id",
+        )
+        if category == "class":
+            class_roster.extend(record["name"] for record in census["records"])
+        kind, _allowed_families = CATEGORY_SPECS_V1[category]
+        shards.append({
+            "category": category,
+            "kind": kind,
+            "inventory_id": ledger["inventory_id"],
+            "expected_records": expected_records,
+            "page_families": sorted({
+                record["identity"]["page_family"] for record in census["records"]
+            }),
+            "census": {
+                "path": census_artifact["path"],
+                "sha256": census_artifact["sha256"],
+            },
+            "ledger": {
+                "path": ledger_artifact["path"],
+                "sha256": ledger_artifact["sha256"],
+            },
+        })
+
+    manifest = normalize_snapshot_manifest({
+        "schema_version": SNAPSHOT_SCHEMA_VERSION,
+        "snapshot_id": snapshot_id,
+        "lifecycle": "initial-pending",
+        "scope_id": policy["scope_id"],
+        "authority": policy["authority"],
+        "site_update_date": policy["site_update_date"],
+        "site_update_url": f"https://{AON_HOST}/",
+        "search_endpoint": scope["search_endpoint"],
+        "resolved_index": policy["resolved_index"],
+        "scope_policy": policy_ref,
+        "scope_capture": {
+            "run_id": scope["run_id"],
+            "captured_at": scope["captured_at"],
+            "query_sha256": scope["query_sha256"],
+            "result_sha256": scope["response_sha256"],
+            "receipt": scope_ref,
+        },
+        "census_capture": {
+            "run_id": census_receipt["run_id"],
+            "captured_at": census_receipt["captured_at"],
+            "query_sha256": census_receipt["query_set_sha256"],
+            "result_sha256": census_receipt["result_set_sha256"],
+            "receipt": census_ref,
+        },
+        "ledger_enumeration": {
+            "run_id": ledger_receipt["run_id"],
+            "captured_at": ledger_receipt["captured_at"],
+            "query_sha256": ledger_receipt["query_set_sha256"],
+            "result_sha256": ledger_receipt["result_set_sha256"],
+            "receipt": ledger_ref,
+        },
+        "total_index_records": policy["total_records"],
+        "included_records": sum(
+            item["included_records"] for item in policy["categories"]
+        ),
+        "deferred_records": sum(
+            item["deferred_records"] for item in policy["categories"]
+        ),
+        "excluded_records": sum(
+            item["excluded_records"] for item in policy["categories"]
+        ),
+        "class_roster": sorted(class_roster),
+        "shards": shards,
+    })
+    _verify_evidence_snapshot_document(manifest, root)
+    return manifest
+
+
+def verify_evidence_snapshot(manifest_path: Path) -> dict:
+    """Verify a complete sharded snapshot without network or application imports."""
+    manifest_path = Path(manifest_path)
+    manifest = read_json(read_file(manifest_path))
+    return _verify_evidence_snapshot_document(manifest, manifest_path.parent)
