@@ -1,11 +1,14 @@
 """Strict, offline authoring contracts for PF2e class-review overlays."""
 from __future__ import annotations
 
+from collections import Counter
 from copy import deepcopy
+from pathlib import Path, PurePosixPath
 import re
 
-from ..manifest import MAX_FILE_BYTES, digest
+from ..manifest import MAX_FILE_BYTES, digest, read_file, read_json
 from ..validation import (
+    RulesValidationError,
     bounded_json,
     choice,
     integer,
@@ -17,7 +20,17 @@ from ..validation import (
     text,
     timestamp,
 )
-from .evidence_inventory import AON_AUTHORITY, evidence_metadata_text
+from .aon_capture import PENDING_REASON
+from .evidence_inventory import (
+    AON_AUTHORITY,
+    evidence_metadata_text,
+    normalize_aon_census,
+    normalize_evidence_ledger,
+)
+from .evidence_snapshot import (
+    _verify_evidence_snapshot_document,
+    normalize_snapshot_manifest,
+)
 
 
 CLASS_REVIEW_SCHEMA_VERSION = 1
@@ -27,6 +40,20 @@ SNAPSHOT_ID = r"pf2e-aon-[a-z0-9]+(?:-[a-z0-9]+)*"
 CLASS_SOURCE_ID = r"pf2e\.source\.[a-z0-9]+(?:-[a-z0-9]+)*"
 MAX_CLASS_SOURCES = 8
 MAX_CLASS_RECORDS = 29
+PRODUCTION_SNAPSHOT_ID = "pf2e-aon-2026-10-07-player-build-v1"
+PRODUCTION_SNAPSHOT_MANIFEST_SHA256 = (
+    "c61453ba1b1f03680ebda3a7a1ead875e3d838b5fc91d443f441c0401804d4de"
+)
+PRODUCTION_SOURCE_TITLE_COUNTS = {
+    "Battlecry!": 2,
+    "Dark Archive (Remastered)": 2,
+    "Guns & Gears (Remastered)": 2,
+    "Impossible Magic": 4,
+    "Player Core": 8,
+    "Player Core 2": 8,
+    "Rage of Elements": 1,
+    "War of Immortals": 2,
+}
 
 
 def _sha256(value, path: str) -> str:
@@ -199,6 +226,225 @@ def normalize_class_review_authoring(document: dict) -> dict:
         )
     )
     return value
+
+
+def _read_snapshot_document(root: Path, reference: dict, path: str):
+    candidate = root.joinpath(*PurePosixPath(reference["path"]).parts)
+    try:
+        data = read_file(candidate)
+    except RulesValidationError as error:
+        if error.code == "invalid_package_layout":
+            raise RulesValidationError(
+                "invalid_package_layout", path + ".path"
+            ) from None
+        raise
+    require(digest(data) == reference["sha256"], "hash_mismatch", path + ".sha256")
+    return read_json(data)
+
+
+def _identity_key(value: dict) -> tuple[str, int]:
+    return value["identity"]["page_family"], value["identity"]["numeric_id"]
+
+
+def _require_production_snapshot(
+    snapshot: dict, manifest_sha256: str, census: dict
+) -> None:
+    require(
+        snapshot["snapshot_id"] == PRODUCTION_SNAPSHOT_ID,
+        "snapshot_mismatch",
+        "$.manifest.snapshot_id",
+    )
+    require(
+        manifest_sha256 == PRODUCTION_SNAPSHOT_MANIFEST_SHA256,
+        "snapshot_mismatch",
+        "$.manifest.snapshot_manifest_sha256",
+    )
+    records = census["records"]
+    require(
+        len(records) == MAX_CLASS_RECORDS,
+        "count_mismatch",
+        "$.snapshot.class",
+    )
+    source_counts = Counter()
+    for index, record in enumerate(records):
+        require(
+            len(record["source_refs"]) == 1,
+            "source_mismatch",
+            f"$.snapshot.class.census.records[{index}].source_refs",
+        )
+        source_counts[record["source_refs"][0]["title"]] += 1
+    require(
+        dict(sorted(source_counts.items())) == PRODUCTION_SOURCE_TITLE_COUNTS,
+        "source_mismatch",
+        "$.snapshot.class.sources",
+    )
+
+
+def _resolve_class_snapshot(
+    authoring: dict,
+    snapshot_manifest_path: Path,
+    *,
+    fixture_mode: bool = False,
+) -> dict:
+    """Resolve verified class evidence into a detached compilation intermediate."""
+    require(type(fixture_mode) is bool, "invalid_type", "$.fixture_mode")
+    value = normalize_class_review_authoring(authoring)
+    if not fixture_mode:
+        require(
+            value["manifest"]["snapshot_id"] == PRODUCTION_SNAPSHOT_ID,
+            "snapshot_mismatch",
+            "$.manifest.snapshot_id",
+        )
+        require(
+            value["manifest"]["snapshot_manifest_sha256"]
+            == PRODUCTION_SNAPSHOT_MANIFEST_SHA256,
+            "snapshot_mismatch",
+            "$.manifest.snapshot_manifest_sha256",
+        )
+    manifest_path = Path(snapshot_manifest_path)
+    manifest_bytes = read_file(manifest_path)
+    manifest_sha256 = digest(manifest_bytes)
+    require(
+        manifest_sha256 == value["manifest"]["snapshot_manifest_sha256"],
+        "hash_mismatch",
+        "$.manifest.snapshot_manifest_sha256",
+    )
+
+    snapshot = normalize_snapshot_manifest(read_json(manifest_bytes))
+    snapshot_summary = _verify_evidence_snapshot_document(
+        snapshot, manifest_path.parent
+    )
+    require(
+        snapshot["snapshot_id"] == value["manifest"]["snapshot_id"],
+        "snapshot_mismatch",
+        "$.manifest.snapshot_id",
+    )
+    require(
+        snapshot["authority"] == value["manifest"]["authority"],
+        "snapshot_mismatch",
+        "$.manifest.authority",
+    )
+
+    class_shards = [
+        (index, shard)
+        for index, shard in enumerate(snapshot["shards"])
+        if shard["category"] == value["manifest"]["base_category"]
+    ]
+    require(len(class_shards) == 1, "snapshot_mismatch", "$.snapshot.shards")
+    shard_index, class_shard = class_shards[0]
+    require(
+        class_shard["kind"] == value["manifest"]["kind"],
+        "snapshot_mismatch",
+        f"$.snapshot.shards[{shard_index}].kind",
+    )
+
+    root = manifest_path.parent
+    census = normalize_aon_census(
+        _read_snapshot_document(
+            root,
+            class_shard["census"],
+            f"$.snapshot.shards[{shard_index}].census",
+        )
+    )
+    ledger = normalize_evidence_ledger(
+        _read_snapshot_document(
+            root,
+            class_shard["ledger"],
+            f"$.snapshot.shards[{shard_index}].ledger",
+        )
+    )
+    if not fixture_mode:
+        _require_production_snapshot(snapshot, manifest_sha256, census)
+
+    census_by_identity = {
+        _identity_key(record): (index, record)
+        for index, record in enumerate(census["records"])
+    }
+    authoring_by_identity = {
+        _identity_key(record): (index, record)
+        for index, record in enumerate(value["records"])
+    }
+    for identity, (index, _) in authoring_by_identity.items():
+        require(
+            identity in census_by_identity,
+            "unexpected_identity",
+            f"$.records[{index}].identity",
+        )
+    require(
+        authoring_by_identity.keys() == census_by_identity.keys(),
+        "incomplete_inventory",
+        "$.records",
+    )
+
+    ledger_by_identity = {
+        _identity_key(entry): (index, entry)
+        for index, entry in enumerate(ledger["entries"])
+    }
+    require(
+        ledger_by_identity.keys() == census_by_identity.keys(),
+        "incomplete_inventory",
+        "$.snapshot.class.ledger",
+    )
+    pending_count = 0
+    for _, entry in ledger_by_identity.values():
+        require(
+            entry["disposition"] == "pending"
+            and entry["rule_id"] is None
+            and entry["reason"] == PENDING_REASON
+            and entry["review"]
+            == {"status": "pending", "reviewer": None, "reviewed_at": None},
+            "lifecycle_mismatch",
+            "$.snapshot.class.ledger",
+        )
+        pending_count += 1
+
+    sources_by_id = {source["source_id"]: source for source in value["sources"]}
+    records = []
+    for identity, (authoring_index, authored) in authoring_by_identity.items():
+        census_index, evidence = census_by_identity[identity]
+        source_refs = evidence["source_refs"]
+        require(
+            len(source_refs) == 1,
+            "source_mismatch",
+            f"$.snapshot.class.census.records[{census_index}].source_refs",
+        )
+        source_ref = source_refs[0]
+        source = sources_by_id[authored["source_id"]]
+        require(
+            source["title"] == source_ref["title"],
+            "source_mismatch",
+            f"$.records[{authoring_index}].source_id",
+        )
+        records.append(
+            {
+                "identity": deepcopy(evidence["identity"]),
+                "name": evidence["name"],
+                "canonical_url": evidence["canonical_url"],
+                "fingerprint": evidence["fingerprint"],
+                "evidence_sha256": evidence["evidence_sha256"],
+                "source_ref": deepcopy(source_ref),
+                "rule_id": authored["rule_id"],
+                "source_id": authored["source_id"],
+                "rules_review": deepcopy(authored["rules_review"]),
+            }
+        )
+
+    require(
+        snapshot_summary["class_count"] == len(records)
+        and class_shard["expected_records"] == len(records),
+        "count_mismatch",
+        "$.snapshot.class",
+    )
+    return {
+        "manifest": value["manifest"],
+        "sources": value["sources"],
+        "records": records,
+        "counts": {
+            "snapshot_included_records": snapshot_summary["records"]["included"],
+            "base_class_records": len(records),
+            "base_pending_records": pending_count,
+        },
+    }
 
 
 def repository_text_sha256(data: bytes, path: str = "$") -> str:
