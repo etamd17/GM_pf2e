@@ -1,1 +1,2 @@
 tests/pf2e_rules/fixtures/synthetic-source.bin binary
+systems/pf2e/rules/evidence/** text eol=lf

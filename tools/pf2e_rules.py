@@ -16,6 +16,7 @@ from systems.pf2e.rules.ingestion.evidence_inventory import (
     diff_evidence_inventories,
     scan_corpus,
 )
+from systems.pf2e.rules.ingestion.evidence_snapshot import verify_evidence_snapshot
 from systems.pf2e.rules.manifest import MAX_FILE_BYTES, read_file, read_json
 from systems.pf2e.rules.registry import load_package
 from systems.pf2e.rules.validation import RulesValidationError, bounded_json, require
@@ -63,6 +64,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     evidence_diff_cmd.add_argument("before", type=Path)
     evidence_diff_cmd.add_argument("after", type=Path)
+    snapshot_verify_cmd = commands.add_parser(
+        "evidence-snapshot-verify",
+        help="Verify a complete sharded evidence snapshot offline",
+    )
+    snapshot_verify_cmd.add_argument("manifest", type=Path)
     args = parser.parse_args(argv)
     try:
         exit_code = 0
@@ -90,6 +96,8 @@ def main(argv: list[str] | None = None) -> int:
                 "review_changed",
             )
             exit_code = 1 if any(result[field] for field in drift_fields) else 0
+        elif args.command == "evidence-snapshot-verify":
+            result = verify_evidence_snapshot(args.manifest)
         elif args.command == "diff":
             result = diff_packages(load_package(args.before), load_package(args.after))
         else:
@@ -107,7 +115,9 @@ def main(argv: list[str] | None = None) -> int:
         # ASCII-safe JSON keeps Windows console encodings from corrupting diagnostics.
         print(_render_result(
             result,
-            require_readback=args.command in {"evidence-audit", "evidence-diff"},
+            require_readback=args.command in {
+                "evidence-audit", "evidence-diff", "evidence-snapshot-verify",
+            },
         ))
         return exit_code
     except RulesValidationError as error:

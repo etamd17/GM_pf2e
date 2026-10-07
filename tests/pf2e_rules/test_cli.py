@@ -18,6 +18,30 @@ def cli(*args, env=None):
                           cwd=ROOT, env=env, capture_output=True, text=True, encoding="utf-8")
 
 
+def _snapshot_tree(tmp_path):
+    from tests.pf2e_rules.test_evidence_snapshot import _snapshot_tree as build_tree
+
+    return build_tree(tmp_path)
+
+
+def _offline_snapshot_cli(manifest, *, env=None):
+    script = f"""
+import sys
+
+def refuse_network(event, _args):
+    if event.startswith('socket.'):
+        raise AssertionError('snapshot verification must remain offline')
+
+sys.addaudithook(refuse_network)
+from tools.pf2e_rules import main
+raise SystemExit(main(['evidence-snapshot-verify', {str(manifest)!r}]))
+"""
+    return subprocess.run(
+        [sys.executable, "-c", script], cwd=ROOT, env=env,
+        capture_output=True, text=True, encoding="utf-8",
+    )
+
+
 def test_compile_validate_and_diff_use_real_files(tmp_path):
     result = cli("compile", FIXTURE, "--store", tmp_path)
     assert result.returncode == 0, result.stderr
@@ -195,6 +219,87 @@ def test_evidence_diff_returns_zero_when_clean_and_one_for_drift(tmp_path):
     assert "Traceback" not in rejected.stderr
 
 
+def test_evidence_snapshot_verify_is_compact_deterministic_offline_and_nonmutating(
+        tmp_path):
+    manifest_path, manifest = _snapshot_tree(tmp_path)
+    before = {
+        path.relative_to(manifest_path.parent).as_posix(): path.read_bytes()
+        for path in manifest_path.parent.rglob("*") if path.is_file()
+    }
+
+    first = _offline_snapshot_cli(
+        manifest_path, env={**os.environ, "PYTHONHASHSEED": "1"}
+    )
+    second = _offline_snapshot_cli(
+        manifest_path, env={**os.environ, "PYTHONHASHSEED": "417"}
+    )
+
+    assert first.returncode == second.returncode == 0
+    assert first.stderr == second.stderr == ""
+    assert first.stdout == second.stdout
+    assert first.stdout.count("\n") == 1
+    assert json.loads(first.stdout) == {
+        "schema_version": 1,
+        "snapshot_id": manifest["snapshot_id"],
+        "scope_id": manifest["scope_id"],
+        "resolved_index": manifest["resolved_index"],
+        "site_update_date": "2026-10-07",
+        "complete": True,
+        "census_schema_version": 1,
+        "categories": {"deferred": 1, "excluded": 1, "included": 2},
+        "records": {"deferred": 2, "excluded": 1, "included": 2, "total": 5},
+        "dispositions": {"excluded": 0, "mapped": 0, "pending": 2},
+        "reviews": {"pending": 2, "reviewed": 0},
+        "kinds": {"class": 1, "feat": 1},
+        "page_families": {"Classes.aspx": 1, "Feats.aspx": 1},
+        "class_count": 1,
+        "shard_count": 2,
+    }
+    assert {
+        path.relative_to(manifest_path.parent).as_posix(): path.read_bytes()
+        for path in manifest_path.parent.rglob("*") if path.is_file()
+    } == before
+
+
+def test_evidence_snapshot_verify_reports_invalid_manifest_without_traceback(tmp_path):
+    manifest = tmp_path / "snapshot-manifest.json"
+    manifest.write_text(
+        '{"schema_version":1,"schema_version":1}', encoding="utf-8"
+    )
+
+    result = cli("evidence-snapshot-verify", manifest)
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert json.loads(result.stderr) == {"error": "duplicate_key", "path": "$"}
+    assert "Traceback" not in result.stderr
+
+
+def test_evidence_snapshot_verify_reports_tampering_without_mutation_or_traceback(
+        tmp_path):
+    manifest_path, _manifest = _snapshot_tree(tmp_path)
+    census = manifest_path.parent / "census" / "class.json"
+    census.write_bytes(census.read_bytes() + b" ")
+    before = {
+        path.relative_to(manifest_path.parent).as_posix(): path.read_bytes()
+        for path in manifest_path.parent.rglob("*") if path.is_file()
+    }
+
+    result = cli("evidence-snapshot-verify", manifest_path)
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert json.loads(result.stderr) == {
+        "error": "hash_mismatch",
+        "path": "$.shards[0].census.sha256",
+    }
+    assert "Traceback" not in result.stderr
+    assert {
+        path.relative_to(manifest_path.parent).as_posix(): path.read_bytes()
+        for path in manifest_path.parent.rglob("*") if path.is_file()
+    } == before
+
+
 @pytest.mark.parametrize("command", ["evidence-audit", "evidence-diff"])
 def test_evidence_commands_reject_invalid_json_without_traceback(tmp_path, command):
     invalid = tmp_path / "invalid.json"
@@ -261,6 +366,24 @@ def test_cli_refuses_to_emit_a_result_larger_than_its_readback_budget(
 
     code = command.main(["evidence-audit", str(CENSUS), str(LEDGER)])
     output = capsys.readouterr()
+    assert code == 2
+    assert output.out == ""
+    assert json.loads(output.err) == {"error": "limit_exceeded", "path": "$"}
+
+
+def test_snapshot_verify_result_must_fit_the_strict_readback_node_budget(
+        monkeypatch, capsys):
+    import tools.pf2e_rules as command
+
+    monkeypatch.setattr(
+        command,
+        "verify_evidence_snapshot",
+        lambda _manifest: {"rows": [None] * 500_000},
+    )
+
+    code = command.main(["evidence-snapshot-verify", "unused-manifest.json"])
+    output = capsys.readouterr()
+
     assert code == 2
     assert output.out == ""
     assert json.loads(output.err) == {"error": "limit_exceeded", "path": "$"}
