@@ -8661,29 +8661,6 @@ def _inject_cosmere_conditions():
     return {'cos_severe': sorted(systems.cosmere.SEVERE_CONDITIONS)}
 
 
-@app.context_processor
-def _inject_chronicle_ctx():
-    """`chronicle_published` gates the player nav's Chronicle tab (empty-state):
-    true once THIS request's active campaign has a publish (_chronicle_content_dir
-    resolves per-request -- see _chronicle_root -- so this never leaks another
-    campaign's publish state). Checks content-dir existence (stat only, no
-    JSON parse) per render -- cheaper than loading the manifest.
-
-    True for EITHER lane: a vault publish, or at least one published GM
-    document. The GM's own Chronicle entry points are deliberately NOT gated
-    on this (see base.html) -- they must be reachable in order to publish the
-    first thing; this flag only decides whether PLAYERS see a Chronicle tab.
-    """
-    if _account_mode() and not _active_campaign_id():
-        return {'chronicle_published': False}
-    if _chronicle_content_dir() is not None:
-        return {'chronicle_published': True}
-    try:
-        return {'chronicle_published': bool(_chronicle_doc_pages())}
-    except Exception:
-        return {'chronicle_published': False}
-
-
 # ══════════════════════════════════════════════════════════════════════════
 # SESSION-START CURTAIN — "Previously on..." recap from Obsidian + broadcast
 # ══════════════════════════════════════════════════════════════════════════
@@ -11734,7 +11711,6 @@ def gm_hub():
     ingame_date = '%s %s %s' % (cal.get('day', 1),
                                 GOLARION_MONTHS[cal.get('month', 0) % len(GOLARION_MONTHS)]['name'],
                                 cal.get('year', 4724))
-    chronicle_docs = _chronicle_docs_index().get('docs', [])
     return render_template(
         'gm_hub.html',
         party_count=len(PARTY_LIBRARY),
@@ -11747,8 +11723,6 @@ def gm_hub():
         party_level=party_level,
         ingame_date=ingame_date,
         session_stats=_load_campaign_stats(),
-        chronicle_doc_count=len(chronicle_docs),
-        chronicle_published_count=sum(1 for d in chronicle_docs if d.get('published')),
     )
 
 
