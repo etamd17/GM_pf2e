@@ -1,5 +1,8 @@
-"""Chronicle player reading routes + nav gate (PR1, Part 5). Subprocess isolation
-with a throwaway DATA_DIR; GM_PASSWORD='' == legacy-open == caller is the GM."""
+"""Chronicle bookmark compatibility and retired player-nav coverage.
+
+Subprocess isolation uses a throwaway DATA_DIR; GM_PASSWORD='' means the
+legacy-open caller is the GM.
+"""
 import os
 import sys
 import textwrap
@@ -16,7 +19,7 @@ def _run(body):
 
 
 _SEED = '''
-import os, json
+import os, json, shutil
 def seed_chronicle(chronicle_dir, pages, *, session_number=3, html=None, assets=None):
     """Write chronicle_dir/current -> content/<h>/{manifest.json, html/<slug>.html, assets/*}."""
     h = 'deadbeef' * 8
@@ -36,12 +39,19 @@ def seed_chronicle(chronicle_dir, pages, *, session_number=3, html=None, assets=
             f.write(data)
     link = os.path.join(chronicle_dir, 'current'); tmp = link + '.tmp'
     if os.path.islink(tmp): os.unlink(tmp)
-    os.symlink(content, tmp); os.replace(tmp, link)
+    try:
+        os.symlink(content, tmp); os.replace(tmp, link)
+    except OSError:
+        # Windows CI/dev shells may not have symlink privileges. These reader
+        # tests need the published bytes at `current`, not link semantics.
+        if os.path.lexists(tmp):
+            os.unlink(tmp)
+        shutil.copytree(content, link)
     return content
 '''
 
 
-# ---- Task 1: chronicle_published context processor + nav-tab swap ---------
+# ---- Task 1: Chronicle surface retirement keeps Notes in player nav --------
 #
 # NOTE on GM_PASSWORD: the brief's harness note says "GM_PASSWORD='' ==
 # legacy-open == caller is the GM" -- but that means `_is_gm()` is
@@ -50,14 +60,11 @@ def seed_chronicle(chronicle_dir, pages, *, session_number=3, html=None, assets=
 # player_name` (base.html:486). Under GM_PASSWORD='' a GET /notes never
 # renders the player nav at all -- any '>Notes<' match in that mode is a
 # false positive from unrelated page JS (a safety-tools string), not the nav
-# tab. To exercise the ACTUAL nav swap we mirror
-# test_chronicle_auth.py::test_chronicle_gate_legacy_password_mode: a
-# non-empty GM_PASSWORD plus a `session['player_name']` (no
-# `gm_authenticated`), which is a genuine non-GM joined player and makes the
-# nav render for real. The /chronicle route itself doesn't exist until Task
-# 24, so both before/after checks hit /notes (whose bottom nav is shared
-# chrome injected by base.html on every player page, including /notes).
-def test_nav_shows_notes_before_publish_and_chronicle_after():
+# tab. To exercise the actual player navigation, use a non-empty GM_PASSWORD
+# plus a `session['player_name']` (without `gm_authenticated`). That is a
+# genuine non-GM joined player and makes the shared bottom nav render on
+# /notes before and after Chronicle content is published.
+def test_nav_shows_notes_before_and_after_chronicle_publish():
     # NB: these lines are intentionally flush-left (not indented to match the
     # surrounding Python) -- `_run` concatenates this onto `_SEED`, which is
     # itself flush-left at module scope, and `textwrap.dedent` strips the
@@ -88,52 +95,44 @@ pre = nav_slice(c.get('/notes').data)
 assert b'>Notes<' in pre and b'>Chronicle<' not in pre, 'pre-publish nav wrong'
 assert b'href="/notes"' in pre and b'href="/chronicle"' not in pre
 
-# after a publish: Chronicle replaces Notes in the same nav.
+# after a publish: the retired Chronicle surface stays undiscoverable and
+# Notes remains the player's stable destination.
 seed_chronicle(A.CHRONICLE_DIR, [{'slug':'home','section':'home','title':'Home','recipients':'all'}],
                html={'home':'<p>hi</p>'})
 post = nav_slice(c.get('/notes').data)
-assert b'>Chronicle<' in post and b'>Notes<' not in post, 'post-publish nav wrong'
-assert b'href="/chronicle"' in post and b'href="/notes"' not in post
+assert b'>Notes<' in post and b'>Chronicle<' not in post, 'post-publish nav wrong'
+assert b'href="/notes"' in post and b'href="/chronicle"' not in post
 print('OK')
 ''')
     assert 'OK' in r.stdout, (r.stdout, r.stderr)
 
 
-# ---- Supplementary: direct-render check that BOTH nav partials (pf2e and
-# cosmere) got the identical gated swap, independent of the app-route
-# plumbing exercised above (mirrors tests/test_nav_home_and_session_entry.py's
-# render-the-partial-directly style). A tiny request stub stands in for
-# Flask's `request` since the Chronicle tab's active-state check reads
-# `request.path` directly (bypassing Flask's real request context, which
-# `app.jinja_env.get_template(...).render()` does not push).
-class _FakeRequest:
-    def __init__(self, path):
-        self.path = path
-
-
+# ---- Supplementary: direct-render both nav partials (PF2e and Cosmere) and
+# prove Chronicle publication state no longer changes their Notes destination.
+# This is independent of the app-route plumbing exercised above and mirrors
+# tests/test_nav_home_and_session_entry.py's direct-partial style.
 def _render(name, **ctx):
-    ctx.setdefault('request', _FakeRequest('/notes'))
     return A.app.jinja_env.get_template(name).render(**ctx)
 
 
-def test_pf2e_nav_partial_swaps_notes_for_chronicle():
+def test_pf2e_nav_partial_keeps_notes_when_chronicle_is_published():
     off = _render('_player_nav.html', is_gm=False, player_name='Kyle',
                   active_player_tab='sheet', chronicle_published=False, account_user=None)
     on = _render('_player_nav.html', is_gm=False, player_name='Kyle',
                  active_player_tab='sheet', chronicle_published=True, account_user=None)
     assert '>Notes<' in off and 'href="/notes"' in off and '>Chronicle<' not in off
-    assert '>Chronicle<' in on and 'href="/chronicle"' in on
-    assert '>Notes<' not in on and 'href="/notes"' not in on
+    assert '>Notes<' in on and 'href="/notes"' in on
+    assert '>Chronicle<' not in on and 'href="/chronicle"' not in on
 
 
-def test_cosmere_nav_partial_swaps_notes_for_chronicle():
+def test_cosmere_nav_partial_keeps_notes_when_chronicle_is_published():
     off = _render('_cosmere_player_nav.html', active_player_tab='sheet',
                   cosmere_player_char='Shanadin', chronicle_published=False, account_user=None)
     on = _render('_cosmere_player_nav.html', active_player_tab='sheet',
                  cosmere_player_char='Shanadin', chronicle_published=True, account_user=None)
     assert '>Notes<' in off and 'href="/notes"' in off and '>Chronicle<' not in off
-    assert '>Chronicle<' in on and 'href="/chronicle"' in on
-    assert '>Notes<' not in on and 'href="/notes"' not in on
+    assert '>Notes<' in on and 'href="/notes"' in on
+    assert '>Chronicle<' not in on and 'href="/chronicle"' not in on
 
 
 # ---- Task 2: reader helpers + `/chronicle` Home ----------------------------
