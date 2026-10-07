@@ -87,13 +87,20 @@ overlay.
 
 - [ ] Test canonical four-file output, deterministic order, tamper detection,
   exact layout, expected hash, no overwrite, concurrent writer behavior, and
-  pairwise ancestor/descendant overlap among store, snapshot, and corpus.
+  pairwise ancestor/descendant overlap among store, snapshot, and corpus,
+  including Unicode/case aliases, existing-object identities, and bounded
+  path scans.
 - [ ] Inject write, flush, fsync, and rename failures; prove no partial target,
-  cleanup of only owned staging/lock paths, and preservation of stale locks.
+  cleanup of only matching private staging/lock claims, preservation of stale
+  locks, and fail-closed quarantine on every observed swap. Treat the review
+  store as trusted against active same-account mutation after the final
+  portable pathname identity check.
 - [ ] Recompile under multiple `PYTHONHASHSEED` values and require identical
   bytes.
-- [ ] Implement canonical compilation, create-only atomic publication, and
-  complete readback verification.
+- [ ] Implement canonical compilation, create-only process-visible atomic
+  publication, and complete readback verification. Flush and fsync each file;
+  document platform-dependent directory-entry durability rather than claiming
+  power-loss durability.
 
 ### Task 6: Add the offline CLI
 

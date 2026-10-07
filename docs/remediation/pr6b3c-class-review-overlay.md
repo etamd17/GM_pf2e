@@ -115,7 +115,14 @@ and verifies that an explicit `DATA_DIR` remains untouched.
 ## Safety boundaries
 
 - Compilation and verification are local and offline.
-- The overlay directory is create-only; compilation cannot overwrite it.
+- The overlay directory is create-only; compilation cannot overwrite it. Its
+  publication is atomic to observing processes after all four staged files are
+  flushed, fsynced, and read back.
+- This is not a power-loss durability guarantee. Directory-entry persistence
+  after a sudden power loss remains platform-dependent.
+- Store, snapshot, and corpus paths must remain pairwise disjoint under
+  lexical, resolved, Unicode-normalized case-folded component, and bounded
+  existing-object/ancestor identity checks.
 - The snapshot and local class files remain inputs and are never modified.
 - Present local classes bind their exact path, Foundry ID, and normalized
   repository-text SHA-256. Missing local classes bind no invented locator.
@@ -123,6 +130,15 @@ and verifies that an explicit `DATA_DIR` remains untouched.
 - The artifact contains evidence metadata, not copied rule prose or mechanics.
 - `activation: none` and `enabled_mechanics: 0` are required by tests and the
   verifier.
+
+The review store is trusted against active same-account mutation. Random
+private staging names, create-only locks, quarantine, and repeated
+`(st_dev, st_ino)` checks protect normal concurrent writers and every swap
+observed before the final cleanup check. Python has no portable unlink/rmdir
+operation conditional on an earlier inode observation, so an actor that
+replaces a random private claim after that final check is outside the threat
+model; such an actor can already mutate the stored artifacts directly. Every
+observed mismatch still fails publication or verification closed.
 
 ## Next review batches
 

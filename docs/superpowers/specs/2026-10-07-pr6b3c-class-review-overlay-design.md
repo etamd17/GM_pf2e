@@ -38,7 +38,9 @@ systems/pf2e/rules/reviews/pf2e-class-identities-2026-10-07.1/
 ```
 
 The directory is create-only and contains exactly those four canonical UTF-8
-JSON files. No README, binary, prose, mechanics, or additional file is allowed.
+JSON files. Publication is atomic to observing processes: the target name is
+created without replacement only after the private staging directory is
+complete. No README, binary, prose, mechanics, or additional file is allowed.
 
 `authoring.json` has exactly `manifest`, `sources`, and `records`. Its manifest
 has exactly: `schema_version`, `overlay_id`, `created_at`, `authority`, `kind`,
@@ -149,8 +151,10 @@ create-only writing, verification, and pure in-memory application. It must:
   unexpected files, malformed JSON, and hash drift;
 - apply the existing 16 MiB per-file limit and bounded-JSON depth-32 / 500,000
   node limits, plus exact limits of eight sources and 29 records;
-- require resolved store, snapshot, and corpus trees to be pairwise disjoint in
-  both ancestor and descendant directions;
+- require lexical and resolved store, snapshot, and corpus trees to be
+  pairwise disjoint in both ancestor and descendant directions, including
+  conservative Unicode-normalized case-folded component comparisons and
+  bounded existing-object/ancestor `(st_dev, st_ino)` alias checks;
 - produce deterministic bytes across input order and `PYTHONHASHSEED`;
 - leave source objects and all frozen snapshot bytes unchanged;
 - import neither Flask nor `app`, touch no `DATA_DIR`, and use no network;
@@ -171,8 +175,24 @@ python tools/pf2e_rules.py class-review-verify OVERLAY \
 Both commands emit one bounded ASCII-safe JSON line. Validation and I/O
 failures use the existing machine-readable exit-2 contract. Compile tests must
 exercise multiple `PYTHONHASHSEED` values and injected write, flush, fsync, and
-rename failures. A failed publish leaves no target, removes only its private
-staging directory and owned lock, and never removes a pre-existing stale lock.
+rename failures. A failed publish leaves no accepted target, cleans only a
+matching private staging claim and owned lock, and never removes a
+pre-existing stale lock.
+
+Publication provides create-only, process-visible atomicity, not a promise of
+power-loss durability. Each staged file is flushed and fsynced before the
+directory rename; persistence of the directory entry across sudden power loss
+is platform-dependent because Python has no clean cross-platform directory
+fsync contract.
+
+The review store is trusted against active same-account mutation. The
+create-only lock, random private names, quarantine, and repeated
+`(st_dev, st_ino)` checks protect normal concurrent writers and every path
+swap observed before the final cleanup check. Python has no portable
+unlink/rmdir operation conditional on a previously observed inode. An actor
+that discovers and replaces a random private claim after that final check can
+already mutate the review artifacts themselves and is outside this boundary.
+Publication and verification still fail closed on every observed mismatch.
 
 ## Excluded work
 

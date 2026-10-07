@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from collections import Counter
-from contextlib import contextmanager
 from copy import deepcopy
 import ctypes
 import errno
@@ -14,6 +13,7 @@ import shutil
 import stat
 import sys
 import tempfile
+import unicodedata
 
 from ..manifest import (
     MAX_FILE_BYTES,
@@ -59,6 +59,7 @@ MAX_CLASS_SOURCES = 8
 MAX_CLASS_RECORDS = 29
 MAX_LOCAL_CLASS_FILES = 27
 MAX_CLASS_CORPUS_BYTES = 32 * 1024 * 1024
+MAX_DISJOINT_PATH_COMPONENTS = 256
 CLASS_REVIEW_FILES = frozenset(
     {"authoring.json", "sources.json", "records.json", "manifest.json"}
 )
@@ -1118,6 +1119,7 @@ def compile_class_review_overlay(
 
 def _resolved_tree(path: Path, field: str) -> Path:
     candidate = Path(path).absolute()
+    _portable_path_components(candidate)
     try:
         reject_links(candidate)
     except (OSError, RulesValidationError):
@@ -1125,12 +1127,112 @@ def _resolved_tree(path: Path, field: str) -> Path:
     return candidate.resolve(strict=False)
 
 
-def _require_disjoint_trees(paths: tuple[tuple[str, Path], ...]) -> None:
-    resolved = [(_field, _resolved_tree(path, _field)) for _field, path in paths]
-    for index, (_left_field, left) in enumerate(resolved):
-        for _right_field, right in resolved[index + 1 :]:
+def _portable_path_components(path: Path) -> tuple[str, ...]:
+    parts = path.parts
+    require(
+        0 < len(parts) <= MAX_DISJOINT_PATH_COMPONENTS,
+        "path_overlap",
+        "$.paths",
+    )
+    return tuple(
+        unicodedata.normalize(
+            "NFC", unicodedata.normalize("NFC", part).casefold()
+        )
+        for part in parts
+    )
+
+
+def _component_paths_overlap(left: Path, right: Path) -> bool:
+    left_parts = _portable_path_components(left)
+    right_parts = _portable_path_components(right)
+    common = min(len(left_parts), len(right_parts))
+    return left_parts[:common] == right_parts[:common]
+
+
+def _existing_identity_suffixes(
+    path: Path,
+) -> dict[tuple[int, int], tuple[tuple[str, ...], ...]]:
+    """Return bounded existing-object identities and normalized child suffixes."""
+    _portable_path_components(path)
+    current = Path(path)
+    suffix: tuple[str, ...] = ()
+    identities: dict[tuple[int, int], list[tuple[str, ...]]] = {}
+    for _scan in range(MAX_DISJOINT_PATH_COMPONENTS):
+        try:
+            info = current.lstat()
+        except FileNotFoundError:
+            pass
+        except OSError:
+            raise RulesValidationError("path_overlap", "$.paths") from None
+        else:
             require(
-                left != right and left not in right.parents and right not in left.parents,
+                not stat.S_ISLNK(info.st_mode)
+                and not (
+                    getattr(info, "st_file_attributes", 0)
+                    & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 1024)
+                ),
+                "path_overlap",
+                "$.paths",
+            )
+            identities.setdefault(_file_identity(info), []).append(suffix)
+        parent = current.parent
+        if parent == current:
+            return {
+                identity: tuple(suffixes)
+                for identity, suffixes in identities.items()
+            }
+        suffix = (
+            unicodedata.normalize(
+                "NFC",
+                unicodedata.normalize("NFC", current.name).casefold(),
+            ),
+            *suffix,
+        )
+        current = parent
+    raise RulesValidationError("path_overlap", "$.paths")
+
+
+def _identity_paths_overlap(
+    left: dict[tuple[int, int], tuple[tuple[str, ...], ...]],
+    right: dict[tuple[int, int], tuple[tuple[str, ...], ...]],
+) -> bool:
+    for identity in left.keys() & right.keys():
+        for left_suffix in left[identity]:
+            for right_suffix in right[identity]:
+                common = min(len(left_suffix), len(right_suffix))
+                if left_suffix[:common] == right_suffix[:common]:
+                    return True
+    return False
+
+
+def _require_disjoint_trees(paths: tuple[tuple[str, Path], ...]) -> None:
+    resolved = [
+        (
+            field,
+            Path(path).absolute(),
+            _resolved_tree(path, field),
+        )
+        for field, path in paths
+    ]
+    identity_suffixes = [
+        _existing_identity_suffixes(resolved_path)
+        for _field, _absolute, resolved_path in resolved
+    ]
+    for index, (_left_field, left_absolute, left) in enumerate(resolved):
+        for right_index in range(index + 1, len(resolved)):
+            _right_field, right_absolute, right = resolved[right_index]
+            require(
+                left != right
+                and left not in right.parents
+                and right not in left.parents
+                and left_absolute != right_absolute
+                and left_absolute not in right_absolute.parents
+                and right_absolute not in left_absolute.parents
+                and not _component_paths_overlap(left_absolute, right_absolute)
+                and not _component_paths_overlap(left, right)
+                and not _identity_paths_overlap(
+                    identity_suffixes[index], identity_suffixes[right_index]
+                ),
                 "path_overlap",
                 "$.paths",
             )
@@ -1237,64 +1339,53 @@ def _unlink_owned_file(path: Path, identity: tuple[int, int]) -> None:
     claimed = _claim_owned_path(path, identity, stat.S_ISREG)
     if claimed is not None:
         info = _owned_path_info(claimed, identity)
-        if info is not None and stat.S_ISREG(info.st_mode):
-            with _bound_owned_path(claimed, identity, stat.S_ISREG) as owned:
-                if owned:
-                    claimed.unlink()
+        if (
+            info is not None
+            and stat.S_ISREG(info.st_mode)
+            and _owned_path_matches_for_cleanup(
+                claimed, identity, stat.S_ISREG
+            )
+        ):
+            claimed.unlink()
 
 
 def _remove_owned_tree(path: Path, identity: tuple[int, int]) -> None:
     claimed = _claim_owned_path(path, identity, stat.S_ISDIR)
     if claimed is not None:
         info = _owned_path_info(claimed, identity)
-        if info is not None and stat.S_ISDIR(info.st_mode):
-            with _bound_owned_path(claimed, identity, stat.S_ISDIR) as owned:
-                if owned:
-                    shutil.rmtree(claimed)
+        if (
+            info is not None
+            and stat.S_ISDIR(info.st_mode)
+            and _owned_path_matches_for_cleanup(
+                claimed, identity, stat.S_ISDIR
+            )
+        ):
+            shutil.rmtree(claimed)
 
 
 def _private_sibling(path: Path, purpose: str) -> Path:
     return path.with_name(f".{purpose}-{secrets.token_hex(16)}")
 
 
-@contextmanager
-def _bound_owned_path(path: Path, identity: tuple[int, int], kind):
-    """Bind cleanup to a private claim and fail safe on any observed swap.
+def _owned_path_matches_for_cleanup(
+    path: Path, identity: tuple[int, int], kind
+) -> bool:
+    """Make the final portable pathname check before best-effort cleanup.
 
-    POSIX keeps a no-follow descriptor open across deletion. Windows cannot
-    portably delete a directory by handle, so the atomic private claim plus a
-    final direct identity check is the boundary there. Same-account code that
-    discovers and replaces the random claim after that final binding is outside
-    the portable filesystem guarantee; every observable swap is preserved.
+    Python exposes no portable unlink/rmdir operation conditional on a prior
+    ``(st_dev, st_ino)`` observation. The private claim and repeated checks
+    protect normal writers and every swap observed before this check, but they
+    cannot bind the later pathname deletion against an active same-account
+    actor. Review stores are trusted against that actor.
     """
-    handle = None
-    owned = False
     try:
-        if os.name == "nt":
-            opened = path.lstat()
-        else:
-            flags = (
-                os.O_RDONLY
-                | getattr(os, "O_BINARY", 0)
-                | getattr(os, "O_NOFOLLOW", 0)
-                | (getattr(os, "O_DIRECTORY", 0) if kind is stat.S_ISDIR else 0)
-            )
-            handle = os.open(path, flags)
-            opened = os.fstat(handle)
-        current = path.lstat()
-        owned = (
-            _file_identity(opened) == identity
-            and _file_identity(current) == identity
-            and kind(opened.st_mode)
+        current = _owned_path_info(path, identity)
+        return bool(
+            current is not None
             and kind(current.st_mode)
         )
     except OSError:
-        owned = False
-    try:
-        yield owned
-    finally:
-        if handle is not None:
-            os.close(handle)
+        return False
 
 
 def _restore_unowned_claim(claimed: Path, original: Path) -> None:
@@ -1305,7 +1396,7 @@ def _restore_unowned_claim(claimed: Path, original: Path) -> None:
 
 
 def _claim_owned_path(path: Path, identity: tuple[int, int], kind) -> Path | None:
-    """Isolate a matching path before deletion; preserve any raced replacement."""
+    """Privately claim a match and preserve every replacement observed here."""
     info = _owned_path_info(path, identity)
     if info is None or not kind(info.st_mode):
         return None
@@ -1325,8 +1416,13 @@ def _claim_owned_path(path: Path, identity: tuple[int, int], kind) -> Path | Non
     raise RulesValidationError("io_error", "$.paths.store")
 
 
-def _preserve_rejected_publication(target: Path) -> None:
-    """Move an unverified publication away from its reserved target name."""
+def _quarantine_rejected_publication(target: Path) -> None:
+    """Move an observed rejected publication off its reserved target name.
+
+    This fail-closed quarantine assumes the review store is trusted against an
+    active same-account actor that can replace random private paths between the
+    final observation and a pathname operation.
+    """
     for _attempt in range(16):
         rejected = _private_sibling(target, "rejected-publication")
         try:
@@ -1356,7 +1452,12 @@ def _write_class_review_overlay(
     *,
     fixture_mode: bool = False,
 ) -> Path:
-    """Atomically publish one immutable overlay under an exclusive owned lock."""
+    """Create-only publish one overlay atomically to observing processes.
+
+    File contents are flushed and fsynced before publication. Directory-entry
+    durability across power loss remains platform-dependent because Python has
+    no clean cross-platform directory-fsync contract.
+    """
     require(type(fixture_mode) is bool, "invalid_type", "$.fixture_mode")
     manifest_path = Path(snapshot_manifest_path).absolute()
     corpus = Path(corpus_root).absolute()
@@ -1481,7 +1582,7 @@ def _write_class_review_overlay(
                     "$.paths.staging",
                 )
             except (OSError, RulesValidationError):
-                _preserve_rejected_publication(target)
+                _quarantine_rejected_publication(target)
                 raise
             staging = None
     finally:

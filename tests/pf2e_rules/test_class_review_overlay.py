@@ -6,7 +6,7 @@ import hashlib
 import importlib
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import shutil
 import subprocess
 import sys
@@ -2230,6 +2230,102 @@ def test_class_review_writer_requires_pairwise_disjoint_trees(tmp_path, relation
     assert error.value.path == "$.paths"
 
 
+def test_disjoint_tree_guard_rejects_case_only_aliases_with_case_sensitive_paths(
+    monkeypatch,
+):
+    module = overlay()
+    resolved = {
+        "left": PurePosixPath("/review/Store"),
+        "right": PurePosixPath("/review/store/nested"),
+    }
+    monkeypatch.setattr(
+        module,
+        "_resolved_tree",
+        lambda path, _field: resolved[str(path)],
+    )
+
+    with pytest.raises(ValueError) as error:
+        module._require_disjoint_trees(
+            (("$.paths.left", Path("left")), ("$.paths.right", Path("right")))
+        )
+
+    assert error.value.code == "path_overlap"
+    assert error.value.path == "$.paths"
+
+
+def test_disjoint_tree_guard_rejects_unicode_normalization_aliases(tmp_path):
+    left = tmp_path / "Caf\u00e9"
+    right = tmp_path / "Cafe\u0301" / "nested"
+
+    with pytest.raises(ValueError) as error:
+        overlay()._require_disjoint_trees(
+            (("$.paths.left", left), ("$.paths.right", right))
+        )
+
+    assert error.value.code == "path_overlap"
+    assert error.value.path == "$.paths"
+
+
+def test_disjoint_tree_guard_rejects_existing_hard_link_identity_aliases(tmp_path):
+    left = tmp_path / "left"
+    right = tmp_path / "right"
+    left.write_bytes(b"same filesystem object")
+    try:
+        os.link(left, right)
+    except OSError as error:
+        pytest.skip(f"Host does not permit hard-link creation: {error}")
+
+    with pytest.raises(ValueError) as error:
+        overlay()._require_disjoint_trees(
+            (("$.paths.left", left), ("$.paths.right", right))
+        )
+
+    assert error.value.code == "path_overlap"
+    assert error.value.path == "$.paths"
+
+
+def test_disjoint_tree_guard_bounds_component_scans(monkeypatch):
+    module = overlay()
+    over_limit = PurePosixPath("/", *("segment" for _ in range(257)))
+    resolved = {
+        "left": over_limit,
+        "right": PurePosixPath("/other/tree"),
+    }
+    monkeypatch.setattr(
+        module,
+        "_resolved_tree",
+        lambda path, _field: resolved[str(path)],
+    )
+
+    with pytest.raises(ValueError) as error:
+        module._require_disjoint_trees(
+            (("$.paths.left", Path("left")), ("$.paths.right", Path("right")))
+        )
+
+    assert error.value.code == "path_overlap"
+    assert error.value.path == "$.paths"
+
+
+def test_disjoint_tree_guard_bounds_lexical_depth_before_filesystem_scan(
+    tmp_path, monkeypatch
+):
+    module = overlay()
+    over_limit = tmp_path.joinpath(*(f"segment-{index}" for index in range(257)))
+    scanned = []
+
+    def record_scan(_path):
+        scanned.append(True)
+
+    monkeypatch.setattr(module, "reject_links", record_scan)
+
+    with pytest.raises(ValueError) as error:
+        module._resolved_tree(over_limit, "$.paths.left")
+
+    assert error.value.code == "path_overlap"
+    assert error.value.path == "$.paths"
+    assert scanned == []
+
+
 def test_class_review_writer_treats_broken_link_target_as_existing(tmp_path):
     authoring, manifest_path, corpus_root = _class_review_compile_fixture(tmp_path)
     store = tmp_path / "store"
@@ -2504,7 +2600,7 @@ def test_owned_tree_cleanup_preserves_swap_after_identity_check(
     assert (moved / "owned-marker").read_bytes() == b"owned"
 
 
-def test_owned_lock_cleanup_preserves_claimed_path_swap_after_verification(
+def test_owned_lock_cleanup_preserves_claimed_path_swap_before_final_check(
     tmp_path, monkeypatch
 ):
     lock = tmp_path / ".overlay.lock"
@@ -2515,7 +2611,7 @@ def test_owned_lock_cleanup_preserves_claimed_path_swap_after_verification(
     module = overlay()
     real_owned_path_info = module._owned_path_info
 
-    def swap_claimed_after_final_check(path, expected_identity):
+    def swap_claimed_before_final_check(path, expected_identity):
         result = real_owned_path_info(path, expected_identity)
         if path.name.startswith(".cleanup-") and result is not None:
             state["claimed_checks"] += 1
@@ -2526,7 +2622,7 @@ def test_owned_lock_cleanup_preserves_claimed_path_swap_after_verification(
                 state.update(moved=moved, replacement=path)
         return result
 
-    monkeypatch.setattr(module, "_owned_path_info", swap_claimed_after_final_check)
+    monkeypatch.setattr(module, "_owned_path_info", swap_claimed_before_final_check)
 
     module._unlink_owned_file(lock, identity)
 
@@ -2534,7 +2630,7 @@ def test_owned_lock_cleanup_preserves_claimed_path_swap_after_verification(
     assert state["moved"].read_bytes() == b"owned"
 
 
-def test_owned_tree_cleanup_preserves_claimed_path_swap_after_verification(
+def test_owned_tree_cleanup_preserves_claimed_path_swap_before_final_check(
     tmp_path, monkeypatch
 ):
     staging = tmp_path / ".overlay.tmp"
@@ -2546,7 +2642,7 @@ def test_owned_tree_cleanup_preserves_claimed_path_swap_after_verification(
     module = overlay()
     real_owned_path_info = module._owned_path_info
 
-    def swap_claimed_after_final_check(path, expected_identity):
+    def swap_claimed_before_final_check(path, expected_identity):
         result = real_owned_path_info(path, expected_identity)
         if path.name.startswith(".cleanup-") and result is not None:
             state["claimed_checks"] += 1
@@ -2558,7 +2654,7 @@ def test_owned_tree_cleanup_preserves_claimed_path_swap_after_verification(
                 state.update(moved=moved, replacement=path)
         return result
 
-    monkeypatch.setattr(module, "_owned_path_info", swap_claimed_after_final_check)
+    monkeypatch.setattr(module, "_owned_path_info", swap_claimed_before_final_check)
 
     module._remove_owned_tree(staging, identity)
 
