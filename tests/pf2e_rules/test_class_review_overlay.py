@@ -1,9 +1,11 @@
 """Strict contracts for immutable PF2e class-review authoring data."""
+from collections import Counter
 from copy import deepcopy
 import hashlib
 import importlib
 import json
 from pathlib import Path
+import shutil
 
 import pytest
 
@@ -19,6 +21,47 @@ CURRENT_SNAPSHOT = (
     / "2026-10-07-player-build-v1"
     / "snapshot-manifest.json"
 )
+PRODUCTION_SOURCES = [
+    ("pf2e.source.battlecry", "Battlecry!"),
+    ("pf2e.source.dark-archive-remastered", "Dark Archive (Remastered)"),
+    ("pf2e.source.guns-and-gears-remastered", "Guns & Gears (Remastered)"),
+    ("pf2e.source.impossible-magic", "Impossible Magic"),
+    ("pf2e.source.player-core", "Player Core"),
+    ("pf2e.source.player-core-2", "Player Core 2"),
+    ("pf2e.source.rage-of-elements", "Rage of Elements"),
+    ("pf2e.source.war-of-immortals", "War of Immortals"),
+]
+PRODUCTION_CLASS_MAP = [
+    (19, "pf2e.class.inventor", "pf2e.source.guns-and-gears-remastered"),
+    (20, "pf2e.class.gunslinger", "pf2e.source.guns-and-gears-remastered"),
+    (23, "pf2e.class.kineticist", "pf2e.source.rage-of-elements"),
+    (32, "pf2e.class.bard", "pf2e.source.player-core"),
+    (33, "pf2e.class.cleric", "pf2e.source.player-core"),
+    (34, "pf2e.class.druid", "pf2e.source.player-core"),
+    (35, "pf2e.class.fighter", "pf2e.source.player-core"),
+    (36, "pf2e.class.ranger", "pf2e.source.player-core"),
+    (37, "pf2e.class.rogue", "pf2e.source.player-core"),
+    (38, "pf2e.class.witch", "pf2e.source.player-core"),
+    (39, "pf2e.class.wizard", "pf2e.source.player-core"),
+    (56, "pf2e.class.alchemist", "pf2e.source.player-core-2"),
+    (57, "pf2e.class.barbarian", "pf2e.source.player-core-2"),
+    (58, "pf2e.class.champion", "pf2e.source.player-core-2"),
+    (59, "pf2e.class.investigator", "pf2e.source.player-core-2"),
+    (60, "pf2e.class.monk", "pf2e.source.player-core-2"),
+    (61, "pf2e.class.oracle", "pf2e.source.player-core-2"),
+    (62, "pf2e.class.sorcerer", "pf2e.source.player-core-2"),
+    (63, "pf2e.class.swashbuckler", "pf2e.source.player-core-2"),
+    (64, "pf2e.class.animist", "pf2e.source.war-of-immortals"),
+    (65, "pf2e.class.exemplar", "pf2e.source.war-of-immortals"),
+    (66, "pf2e.class.commander", "pf2e.source.battlecry"),
+    (67, "pf2e.class.guardian", "pf2e.source.battlecry"),
+    (68, "pf2e.class.psychic", "pf2e.source.dark-archive-remastered"),
+    (69, "pf2e.class.thaumaturge", "pf2e.source.dark-archive-remastered"),
+    (74, "pf2e.class.magus", "pf2e.source.impossible-magic"),
+    (75, "pf2e.class.necromancer", "pf2e.source.impossible-magic"),
+    (76, "pf2e.class.runesmith", "pf2e.source.impossible-magic"),
+    (77, "pf2e.class.summoner", "pf2e.source.impossible-magic"),
+]
 
 
 def overlay():
@@ -207,6 +250,90 @@ def _current_snapshot_contract_documents():
         )
     )
     return snapshot, hashlib.sha256(manifest_bytes).hexdigest(), census
+
+
+def _production_authoring():
+    document = _authoring()
+    document["manifest"]["snapshot_manifest_sha256"] = hashlib.sha256(
+        CURRENT_SNAPSHOT.read_bytes()
+    ).hexdigest()
+    document["sources"] = [
+        {
+            "source_id": source_id,
+            "title": title,
+            "source_review": _pending_review(),
+            "license_review": _pending_review(),
+        }
+        for source_id, title in PRODUCTION_SOURCES
+    ]
+    document["records"] = [
+        {
+            "identity": {"page_family": "Classes.aspx", "numeric_id": numeric_id},
+            "rule_id": rule_id,
+            "source_id": source_id,
+            "rules_review": _pending_review(),
+        }
+        for numeric_id, rule_id, source_id in PRODUCTION_CLASS_MAP
+    ]
+    return document
+
+
+def _write_local_class(
+    corpus_root,
+    local_key,
+    *,
+    foundry_id,
+    name,
+    publication="Pathfinder Synthetic Core",
+    line_ending=b"\n",
+):
+    classes = corpus_root / "classes"
+    classes.mkdir(parents=True, exist_ok=True)
+    document = {
+        "_id": foundry_id,
+        "name": name,
+        "system": {"publication": {"title": publication}},
+        "type": "class",
+    }
+    data = (
+        json.dumps(document, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+    data = data.replace(b"\n", line_ending)
+    path = classes / f"{local_key}.json"
+    path.write_bytes(data)
+    return path
+
+
+def _synthetic_resolved(records):
+    return {
+        "manifest": {"activation": "none"},
+        "sources": [],
+        "records": records,
+        "counts": {
+            "snapshot_included_records": len(records),
+            "base_class_records": len(records),
+            "base_pending_records": len(records),
+        },
+    }
+
+
+def _resolved_record(
+    numeric_id,
+    name,
+    rule_id,
+    source_title="Synthetic Core",
+):
+    return {
+        "identity": {"page_family": "Classes.aspx", "numeric_id": numeric_id},
+        "name": name,
+        "canonical_url": f"https://2e.aonprd.com/Classes.aspx?ID={numeric_id}",
+        "fingerprint": "a" * 64,
+        "evidence_sha256": "b" * 64,
+        "source_ref": {"title": source_title, "locator": f"{source_title} pg. 1"},
+        "rule_id": rule_id,
+        "source_id": "pf2e.source.synthetic-core",
+        "rules_review": _pending_review(),
+    }
 
 
 def _assert_error(document, code, path):
@@ -931,3 +1058,517 @@ def test_snapshot_document_reader_reports_the_referenced_artifact_path(tmp_path)
 
     assert error.value.code == "invalid_package_layout"
     assert error.value.path == "$.snapshot.class.census.path"
+
+
+def test_local_class_scanner_is_flat_deterministic_and_normalizes_crlf_hashes(
+    tmp_path,
+):
+    lf_root = tmp_path / "lf"
+    crlf_root = tmp_path / "crlf"
+    _write_local_class(
+        lf_root,
+        "zeta",
+        foundry_id="ZZZZZZZZZZZZZZZZ",
+        name="Zeta",
+    )
+    _write_local_class(
+        lf_root,
+        "alpha",
+        foundry_id="AAAAAAAAAAAAAAAA",
+        name="Alpha",
+    )
+    _write_local_class(
+        crlf_root,
+        "alpha",
+        foundry_id="AAAAAAAAAAAAAAAA",
+        name="Alpha",
+        line_ending=b"\r\n",
+    )
+
+    lf_records = overlay()._scan_local_classes(lf_root)
+    crlf_records = overlay()._scan_local_classes(crlf_root)
+
+    assert [record["local_key"] for record in lf_records] == ["alpha", "zeta"]
+    assert lf_records[0] == {
+        "local_key": "alpha",
+        "relative_path": "classes/alpha.json",
+        "foundry_id": "AAAAAAAAAAAAAAAA",
+        "name": "Alpha",
+        "publication_title": "Pathfinder Synthetic Core",
+        "content_sha256": crlf_records[0]["content_sha256"],
+    }
+
+
+def test_local_class_scanner_hash_keeps_non_line_ending_bytes_significant(tmp_path):
+    first_root = tmp_path / "first"
+    second_root = tmp_path / "second"
+    first = _write_local_class(
+        first_root,
+        "alpha",
+        foundry_id="AAAAAAAAAAAAAAAA",
+        name="Alpha",
+    )
+    second = _write_local_class(
+        second_root,
+        "alpha",
+        foundry_id="AAAAAAAAAAAAAAAA",
+        name="Alpha",
+    )
+    second.write_bytes(second.read_bytes().replace(b'"name":', b'"name" :', 1))
+
+    first_hash = overlay()._scan_local_classes(first_root)[0]["content_sha256"]
+    second_hash = overlay()._scan_local_classes(second_root)[0]["content_sha256"]
+
+    assert first_hash != second_hash
+
+
+@pytest.mark.parametrize(
+    ("setup", "code", "path"),
+    [
+        (
+            lambda root: None,
+            "invalid_package_layout",
+            "$.corpus.classes",
+        ),
+        (
+            lambda root: (root / "classes").write_text("not a directory"),
+            "invalid_package_layout",
+            "$.corpus.classes",
+        ),
+        (
+            lambda root: (
+                (root / "classes").mkdir(),
+                (root / "classes" / "nested").mkdir(),
+            ),
+            "invalid_package_layout",
+            "$.corpus.classes.nested",
+        ),
+        (
+            lambda root: (
+                (root / "classes").mkdir(),
+                (root / "classes" / "README.md").write_text("unexpected"),
+            ),
+            "invalid_path",
+            "$.corpus.classes.README.md",
+        ),
+        (
+            lambda root: _write_local_class(
+                root,
+                "Fighter",
+                foundry_id="AAAAAAAAAAAAAAAA",
+                name="Fighter",
+            ),
+            "invalid_path",
+            "$.corpus.classes.Fighter.json",
+        ),
+        (
+            lambda root: _write_local_class(
+                root,
+                "con",
+                foundry_id="AAAAAAAAAAAAAAAA",
+                name="Con",
+            ),
+            "invalid_path",
+            "$.corpus.classes.con.json",
+        ),
+    ],
+)
+def test_local_class_scanner_rejects_missing_nonflat_and_unsafe_layouts(
+    tmp_path, setup, code, path
+):
+    setup(tmp_path)
+
+    with pytest.raises(ValueError) as error:
+        overlay()._scan_local_classes(tmp_path)
+
+    assert error.value.code == code
+    assert error.value.path == path
+
+
+def test_local_class_scanner_rejects_links(tmp_path):
+    classes = tmp_path / "classes"
+    classes.mkdir()
+    target = tmp_path / "target.json"
+    target.write_text("{}", encoding="utf-8")
+    try:
+        (classes / "linked.json").symlink_to(target)
+    except OSError as error:
+        pytest.skip(f"host cannot create a test symlink: {error}")
+
+    with pytest.raises(ValueError) as caught:
+        overlay()._scan_local_classes(tmp_path)
+
+    assert caught.value.code == "invalid_package_layout"
+    assert caught.value.path == "$.corpus.classes.linked.json"
+
+
+@pytest.mark.parametrize(
+    ("mutation", "code", "path"),
+    [
+        (
+            lambda document: document.update(type="feat"),
+            "invalid_value",
+            "$.corpus.classes.alpha.json.type",
+        ),
+        (
+            lambda document: document.update(name=""),
+            "invalid_value",
+            "$.corpus.classes.alpha.json.name",
+        ),
+        (
+            lambda document: document.update(_id="short"),
+            "invalid_id",
+            "$.corpus.classes.alpha.json._id",
+        ),
+        (
+            lambda document: document["system"].pop("publication"),
+            "missing_field",
+            "$.corpus.classes.alpha.json.system.publication",
+        ),
+        (
+            lambda document: document["system"]["publication"].update(title=""),
+            "invalid_value",
+            "$.corpus.classes.alpha.json.system.publication.title",
+        ),
+    ],
+)
+def test_local_class_scanner_validates_required_class_fields(
+    tmp_path, mutation, code, path
+):
+    local = _write_local_class(
+        tmp_path,
+        "alpha",
+        foundry_id="AAAAAAAAAAAAAAAA",
+        name="Alpha",
+    )
+    document = json.loads(local.read_text(encoding="utf-8"))
+    mutation(document)
+    local.write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(ValueError) as error:
+        overlay()._scan_local_classes(tmp_path)
+
+    assert error.value.code == code
+    assert error.value.path == path
+
+
+def test_local_class_scanner_rejects_duplicate_json_keys(tmp_path):
+    classes = tmp_path / "classes"
+    classes.mkdir()
+    (classes / "alpha.json").write_bytes(
+        b'{"_id":"AAAAAAAAAAAAAAAA","name":"Alpha","name":"Other",'
+        b'"system":{"publication":{"title":"Pathfinder Synthetic Core"}},'
+        b'"type":"class"}'
+    )
+
+    with pytest.raises(ValueError) as error:
+        overlay()._scan_local_classes(tmp_path)
+
+    assert error.value.code == "duplicate_key"
+    assert error.value.path == "$.corpus.classes.alpha.json"
+
+
+@pytest.mark.parametrize(
+    ("duplicate", "path"),
+    [
+        ("foundry_id", "$.corpus.classes.beta.json._id"),
+        ("name", "$.corpus.classes.beta.json.name"),
+    ],
+)
+def test_local_class_scanner_rejects_duplicate_ids_and_names(
+    tmp_path, duplicate, path
+):
+    _write_local_class(
+        tmp_path,
+        "alpha",
+        foundry_id="AAAAAAAAAAAAAAAA",
+        name="Alpha",
+    )
+    _write_local_class(
+        tmp_path,
+        "beta",
+        foundry_id=(
+            "AAAAAAAAAAAAAAAA" if duplicate == "foundry_id" else "BBBBBBBBBBBBBBBB"
+        ),
+        name="Alpha" if duplicate == "name" else "Beta",
+    )
+
+    with pytest.raises(ValueError) as error:
+        overlay()._scan_local_classes(tmp_path)
+
+    assert error.value.code == "duplicate_id"
+    assert error.value.path == path
+
+
+def test_local_class_scanner_enforces_file_count_and_aggregate_byte_budgets(
+    tmp_path, monkeypatch
+):
+    for index in range(28):
+        _write_local_class(
+            tmp_path / "too-many",
+            f"class-{index}",
+            foundry_id=f"A{index:015d}",
+            name=f"Class {index}",
+        )
+
+    with pytest.raises(ValueError) as count_error:
+        overlay()._scan_local_classes(tmp_path / "too-many")
+
+    assert count_error.value.code == "limit_exceeded"
+    assert count_error.value.path == "$.corpus.classes"
+
+    _write_local_class(
+        tmp_path / "too-large",
+        "alpha",
+        foundry_id="AAAAAAAAAAAAAAAA",
+        name="Alpha",
+    )
+    monkeypatch.setattr(overlay(), "MAX_CLASS_CORPUS_BYTES", 1)
+
+    with pytest.raises(ValueError) as byte_error:
+        overlay()._scan_local_classes(tmp_path / "too-large")
+
+    assert byte_error.value.code == "limit_exceeded"
+    assert byte_error.value.path == "$.corpus.classes.alpha.json"
+
+
+def test_local_class_scanner_streams_only_the_class_directory(tmp_path, monkeypatch):
+    _write_local_class(
+        tmp_path,
+        "alpha",
+        foundry_id="AAAAAAAAAAAAAAAA",
+        name="Alpha",
+    )
+    (tmp_path / "outside").mkdir()
+    (tmp_path / "outside" / "ignored.json").write_text("not json")
+
+    def unbounded_iterdir(_path):
+        raise AssertionError("Path.iterdir must not materialize directory entries")
+
+    monkeypatch.setattr(Path, "iterdir", unbounded_iterdir)
+
+    assert len(overlay()._scan_local_classes(tmp_path)) == 1
+
+
+def test_class_reconciliation_uses_explicit_rule_suffix_and_does_not_mutate_input(
+    tmp_path,
+):
+    records = [
+        _resolved_record(1, "Display Name", "pf2e.class.operator-key"),
+        _resolved_record(
+            2,
+            "Drifted",
+            "pf2e.class.drifted",
+            source_title="Synthetic Core (Remastered)",
+        ),
+        _resolved_record(3, "Future", "pf2e.class.future"),
+    ]
+    resolved = _synthetic_resolved(records)
+    before = deepcopy(resolved)
+    operator_path = _write_local_class(
+        tmp_path,
+        "operator-key",
+        foundry_id="AAAAAAAAAAAAAAAA",
+        name="Display Name",
+    )
+    _write_local_class(
+        tmp_path,
+        "drifted",
+        foundry_id="BBBBBBBBBBBBBBBB",
+        name="Drifted",
+        publication="Pathfinder Synthetic Core",
+    )
+
+    reconciled = overlay()._reconcile_class_corpus(
+        resolved, tmp_path, fixture_mode=True
+    )
+
+    assert resolved == before
+    assert reconciled["records"][0]["disposition"] == "mapped"
+    assert reconciled["records"][0]["reconciliation"] == "aligned"
+    assert reconciled["records"][0]["local"] == {
+        "status": "present",
+        "relative_path": "classes/operator-key.json",
+        "foundry_id": "AAAAAAAAAAAAAAAA",
+        "content_sha256": overlay().repository_text_sha256(
+            operator_path.read_bytes()
+        ),
+        "local_key": "operator-key",
+    }
+    assert reconciled["records"][1]["reconciliation"] == "source-drift"
+    assert reconciled["records"][2]["reconciliation"] == "missing-local"
+    assert reconciled["records"][2]["local"] == {
+        "status": "missing",
+        "relative_path": None,
+        "foundry_id": None,
+        "content_sha256": None,
+        "local_key": None,
+    }
+    assert reconciled["counts"] == {
+        **before["counts"],
+        "local_class_records": 2,
+        "aligned_records": 1,
+        "source_drift_records": 1,
+        "missing_local_records": 1,
+    }
+
+
+def test_class_reconciliation_strips_only_one_exact_pathfinder_prefix(tmp_path):
+    records = [
+        _resolved_record(1, "Alpha", "pf2e.class.alpha"),
+        _resolved_record(2, "Beta", "pf2e.class.beta"),
+    ]
+    _write_local_class(
+        tmp_path,
+        "alpha",
+        foundry_id="AAAAAAAAAAAAAAAA",
+        name="Alpha",
+    )
+    _write_local_class(
+        tmp_path,
+        "beta",
+        foundry_id="BBBBBBBBBBBBBBBB",
+        name="Beta",
+        publication="Pathfinder Pathfinder Synthetic Core",
+    )
+
+    reconciled = overlay()._reconcile_class_corpus(
+        _synthetic_resolved(records), tmp_path, fixture_mode=True
+    )
+
+    assert [record["reconciliation"] for record in reconciled["records"]] == [
+        "aligned",
+        "source-drift",
+    ]
+
+
+def test_class_reconciliation_rejects_local_name_mismatch(tmp_path):
+    resolved = _synthetic_resolved(
+        [_resolved_record(1, "Expected", "pf2e.class.alpha")]
+    )
+    _write_local_class(
+        tmp_path,
+        "alpha",
+        foundry_id="AAAAAAAAAAAAAAAA",
+        name="Different",
+    )
+
+    with pytest.raises(ValueError) as error:
+        overlay()._reconcile_class_corpus(resolved, tmp_path, fixture_mode=True)
+
+    assert error.value.code == "name_mismatch"
+    assert error.value.path == "$.corpus.classes.alpha.json.name"
+
+
+def test_class_reconciliation_rejects_orphan_local_class(tmp_path):
+    resolved = _synthetic_resolved(
+        [_resolved_record(1, "Alpha", "pf2e.class.alpha")]
+    )
+    _write_local_class(
+        tmp_path,
+        "alpha",
+        foundry_id="AAAAAAAAAAAAAAAA",
+        name="Alpha",
+    )
+    _write_local_class(
+        tmp_path,
+        "orphan",
+        foundry_id="BBBBBBBBBBBBBBBB",
+        name="Orphan",
+    )
+
+    with pytest.raises(ValueError) as error:
+        overlay()._reconcile_class_corpus(resolved, tmp_path, fixture_mode=True)
+
+    assert error.value.code == "orphan_local_class"
+    assert error.value.path == "$.corpus.classes.orphan.json"
+
+
+def test_class_reconciliation_keeps_production_cardinality_strict(tmp_path):
+    resolved = _synthetic_resolved(
+        [_resolved_record(1, "Alpha", "pf2e.class.alpha")]
+    )
+    _write_local_class(
+        tmp_path,
+        "alpha",
+        foundry_id="AAAAAAAAAAAAAAAA",
+        name="Alpha",
+    )
+
+    with pytest.raises(ValueError) as error:
+        overlay()._reconcile_class_corpus(resolved, tmp_path)
+
+    assert error.value.code == "count_mismatch"
+    assert error.value.path == "$.corpus.classes"
+
+
+def test_class_reconciliation_rejects_count_preserving_identity_swap(tmp_path):
+    corpus_root = tmp_path / "corpus"
+    shutil.copytree(ROOT / "compendium_data" / "classes", corpus_root / "classes")
+    gunslinger_path = corpus_root / "classes" / "gunslinger.json"
+    fighter_path = corpus_root / "classes" / "fighter.json"
+    gunslinger = json.loads(gunslinger_path.read_text(encoding="utf-8"))
+    fighter = json.loads(fighter_path.read_text(encoding="utf-8"))
+    gunslinger["system"]["publication"]["title"] = (
+        "Pathfinder Guns & Gears (Remastered)"
+    )
+    fighter["system"]["publication"]["title"] = "Pathfinder Different Core"
+    gunslinger_path.write_text(json.dumps(gunslinger), encoding="utf-8")
+    fighter_path.write_text(json.dumps(fighter), encoding="utf-8")
+    resolved = overlay()._resolve_class_snapshot(
+        _production_authoring(), CURRENT_SNAPSHOT
+    )
+
+    with pytest.raises(ValueError) as error:
+        overlay()._reconcile_class_corpus(resolved, corpus_root)
+
+    assert error.value.code == "reconciliation_mismatch"
+    assert error.value.path == "$.corpus.classes"
+
+
+def test_current_class_corpus_reconciles_exact_frozen_production_inventory():
+    module = overlay()
+    resolved = module._resolve_class_snapshot(_production_authoring(), CURRENT_SNAPSHOT)
+
+    reconciled = module._reconcile_class_corpus(resolved, ROOT / "compendium_data")
+
+    by_reconciliation = Counter(
+        record["reconciliation"] for record in reconciled["records"]
+    )
+    assert by_reconciliation == {
+        "aligned": 21,
+        "source-drift": 6,
+        "missing-local": 2,
+    }
+    assert {
+        record["name"]
+        for record in reconciled["records"]
+        if record["reconciliation"] == "source-drift"
+    } == {
+        "Gunslinger",
+        "Inventor",
+        "Magus",
+        "Psychic",
+        "Summoner",
+        "Thaumaturge",
+    }
+    assert {
+        record["name"]
+        for record in reconciled["records"]
+        if record["reconciliation"] == "missing-local"
+    } == {"Necromancer", "Runesmith"}
+    present = [
+        record["local"]
+        for record in reconciled["records"]
+        if record["local"]["status"] == "present"
+    ]
+    assert len(present) == 27
+    assert len({local["foundry_id"] for local in present}) == 27
+    assert len({local["relative_path"] for local in present}) == 27
+    assert len({local["content_sha256"] for local in present}) == 27
+    assert all(
+        len(local["content_sha256"]) == 64
+        and set(local["content_sha256"]) <= set("0123456789abcdef")
+        for local in present
+    )
+    assert len(module._scan_local_classes(ROOT / "compendium_data")) == 27
