@@ -1,0 +1,48 @@
+{
+  "took": 4,
+  "timed_out": false,
+  "_shards": {"total": 1, "successful": 1, "skipped": 0, "failed": 0},
+  "hits": {
+    "total": {"value": 2, "relation": "eq"},
+    "max_score": null,
+    "hits": [
+      {
+        "_index": "aon-20261007-063536",
+        "_id": "class-20",
+        "_score": 0.0,
+        "_source": {
+          "category": "class",
+          "exclude_from_search": false,
+          "id": "class-20",
+          "legacy_id": ["class-73"],
+          "name": "Gunslinger",
+          "primary_source": "Guns & Gears (Remastered)",
+          "primary_source_raw": "Guns & Gears (Remastered) pg. 105",
+          "release_date": "2025-02-05",
+          "source": ["Guns & Gears (Remastered)"],
+          "source_raw": ["Guns & Gears (Remastered) pg. 105"],
+          "type": "Class",
+          "url": "/Classes.aspx?ID=20"
+        }
+      },
+      {
+        "_index": "aon-20261007-063536",
+        "_id": "class-21",
+        "_score": 0.0,
+        "_source": {
+          "category": "class",
+          "exclude_from_search": false,
+          "id": "class-21",
+          "name": "Synthetic Unlinked Class",
+          "primary_source": "Synthetic Player Source",
+          "primary_source_raw": "Synthetic Player Source pg. 1",
+          "release_date": "2026-10-07",
+          "source": ["Synthetic Player Source"],
+          "source_raw": ["Synthetic Player Source pg. 1"],
+          "type": "Class",
+          "url": "/Classes.aspx?ID=21"
+        }
+      }
+    ]
+  }
+}

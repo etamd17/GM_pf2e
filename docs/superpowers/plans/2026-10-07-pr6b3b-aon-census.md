@@ -64,22 +64,31 @@ numeric_id)`. AoN categories such as domain, language, trait, and weapon group
 are normalized to the existing generic `rule` evidence kind; class-choice
 pages such as eidolons are normalized to `class-feature`. The original AoN
 category remains independently visible in the scope policy and shard name.
+`follower` is provisionally normalized to `class-feature`, while `relic` and
+`set-relic` are provisionally normalized to `item`; those are identity-census
+projections, not claims about their eventual mechanical schemas.
 
 The first snapshot explicitly defers site metadata, sample builds, setting
 articles, creatures, creature templates/families, hazards, kingdoms/warfare,
 planes, and other GM encounter-content families. It also defers companion and
 familiar categories whose real AoN identity includes selectors such as
-`Type=Advancement`, `Unique=true`, or `Specific=true`; forcing those rows into
-schema-v1 would collide distinct records. Their exact category counts remain
-in the scope policy, so they cannot disappear silently and can be added after a
-reviewed selector-aware identity revision.
+`Type=Advancement`, `Unique=true`, or `Specific=true`. Siege weapons are
+deferred for the same identity revision because distinct variant records share
+one `(page_family, numeric_id)` URL and differ only in their AoN record IDs.
+Forcing those rows into the current identity would collide distinct records.
+Their exact category counts remain in the scope policy, so they cannot
+disappear silently and can be added after a reviewed selector- and
+record-aware identity revision.
 
-Aliases and embedded projections are excluded rather than deferred when their
-canonical rule is already represented elsewhere. This includes skill-general
-action aliases, tradition spell-list projections, embedded class-feature and
-item-bonus rows, equipment child variants, and duplicate combination-weapon
-search rows. Categories may therefore partition observed rows among included,
-deferred, and excluded counts; all partitions must reconcile exactly.
+Aliases and embedded projections are excluded rather than treated as
+standalone identities. This includes skill-general-action aliases, tradition
+spell-list projections, embedded class-feature and item-bonus rows, equipment
+child variants, and duplicate combination-weapon search rows. Most point to a
+canonical current page; some item/equipment projections reference a parent
+that is superseded or absent from the current-mode result, so exclusion does
+not claim that every projection has an included parent. Categories may
+therefore partition observed rows among included, deferred, and excluded
+counts; all partitions must reconcile exactly.
 
 ## Target layout
 
@@ -133,6 +142,7 @@ Expected: tampering, path escape, stale rows, missing rows, duplicate identity,
 
 Files: `systems/pf2e/rules/ingestion/evidence_inventory.py`,
 `systems/pf2e/rules/ingestion/evidence_snapshot.py`,
+`systems/pf2e/rules/ingestion/aon_capture.py`,
 `tools/pf2e_aon_capture.py`, `tests/pf2e_rules/test_evidence_inventory.py`,
 `tests/pf2e_rules/test_evidence_snapshot.py`,
 `tests/pf2e_rules/test_aon_capture.py`, and small response fixtures under
@@ -151,6 +161,15 @@ Files: `systems/pf2e/rules/ingestion/evidence_inventory.py`,
    URL/ID agreement, duplicate refusal, prohibited prose-field rejection,
    source-pair validation, conservative rules-era mapping, deterministic
    fingerprints, and census/ledger separation.
+   Scope capture requires an operator-supplied, preapproved concrete index and
+   stops if AoN resolves any other index. Query contract v1 has explicit
+   versioned builders and literal golden hashes covering every included
+   category in census and ledger modes; snapshot-schema-v1 verification calls
+   those builders directly so later query versions cannot reinterpret old
+   receipts.
+   Elasticsearch status and aggregation counters are strict integers with
+   complete shard reconciliation, and malformed output-directory components
+   are rejected before any network request.
 3. Implement separate census, ledger, and audit-report version constants and
    version-aware normalizers. Preserve the census-v1 and audit-v1 contracts;
    v2 adds only `unverified`, and v2 census input emits audit-report v2.
@@ -163,6 +182,9 @@ Files: `systems/pf2e/rules/ingestion/evidence_inventory.py`,
    existing v1 artifacts remain valid, but v1 never accepts that new state.
    Ledger mode retains schema v1, runs a new enumeration using only identity
    fields, and writes all-pending ledger shards; it has no census input option.
+   Snapshot verification requires one census schema version across the entire
+   run and binds every category's evidence kind and page families to the
+   frozen v1 query contract rather than trusting manifest self-declarations.
 6. Generate canonical compact JSON with trailing newline. Capture commands may
    create generated artifacts; hand editing those artifacts is prohibited.
 
@@ -175,9 +197,9 @@ Files: the target evidence directory and
 `tests/pf2e_rules/test_current_aon_snapshot.py`.
 
 1. Run scope, census, and ledger captures independently against the same
-   resolved AoN index and approved scope policy, with distinct supplied run
-   IDs/timestamps and result hashes. The ledger run may not consume census
-   artifacts.
+   preapproved concrete AoN index and approved scope policy, with distinct
+   supplied run IDs/timestamps and result hashes. The scope run must stop if
+   the observed index differs. The ledger run may not consume census artifacts.
 2. Generate `snapshot-manifest.json` plus three independently produced capture
    receipts (scope, census, and ledger) with exact artifact hashes,
    query/result hashes, observed counts, page families,

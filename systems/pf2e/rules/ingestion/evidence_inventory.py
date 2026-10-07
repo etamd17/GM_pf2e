@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import re
 import stat
+from types import MappingProxyType
 from urllib.parse import parse_qsl, urlsplit
 
 from ..manifest import canonical_json, digest, read_file, reject_links
@@ -30,6 +31,18 @@ from ..validation import (
 
 
 EVIDENCE_SCHEMA_VERSION = 1
+CENSUS_SCHEMA_VERSION = 2
+AUDIT_REPORT_SCHEMA_VERSION = 2
+AUDIT_SCHEMA_BY_CENSUS_VERSION = MappingProxyType({
+    EVIDENCE_SCHEMA_VERSION: EVIDENCE_SCHEMA_VERSION,
+    CENSUS_SCHEMA_VERSION: AUDIT_REPORT_SCHEMA_VERSION,
+})
+CENSUS_SCHEMA_VERSIONS = frozenset({EVIDENCE_SCHEMA_VERSION, CENSUS_SCHEMA_VERSION})
+AUDIT_REPORT_SCHEMA_VERSIONS = frozenset({
+    EVIDENCE_SCHEMA_VERSION, AUDIT_REPORT_SCHEMA_VERSION,
+})
+RULES_ERAS_V1 = frozenset({"remaster", "legacy", "mixed", "not-applicable"})
+RULES_ERAS_V2 = RULES_ERAS_V1 | {"unverified"}
 AON_AUTHORITY = "archives-of-nethys"
 AON_HOST = "2e.aonprd.com"
 SHA256 = re.compile(r"[0-9a-f]{64}")
@@ -104,7 +117,14 @@ def _source_ref(value, path: str) -> dict:
     return value
 
 
-def _normalize_census_record(value, path: str, *, verify_fingerprint: bool) -> dict:
+def _rules_eras(schema_version: int, supported: frozenset[int], path: str) -> frozenset[str]:
+    require(type(schema_version) is int, "invalid_type", path)
+    require(schema_version in supported, "unsupported_version", path)
+    return RULES_ERAS_V1 if schema_version == EVIDENCE_SCHEMA_VERSION else RULES_ERAS_V2
+
+
+def _normalize_census_record(value, path: str, *, verify_fingerprint: bool,
+                             rules_eras: frozenset[str]) -> dict:
     shape(
         value,
         "identity canonical_url name kind rules_era source_refs evidence_sha256 fingerprint",
@@ -116,8 +136,7 @@ def _normalize_census_record(value, path: str, *, verify_fingerprint: bool) -> d
     )
     text(value["name"], path + ".name")
     choice(value["kind"], EVIDENCE_KINDS, path + ".kind")
-    choice(value["rules_era"], {"remaster", "legacy", "mixed", "not-applicable"},
-           path + ".rules_era")
+    choice(value["rules_era"], rules_eras, path + ".rules_era")
     refs = sequence(value["source_refs"], path + ".source_refs")
     seen = set()
     for index, source_ref in enumerate(refs):
@@ -140,11 +159,14 @@ def _fingerprint_normalized_record(value: dict) -> str:
     return digest(canonical_json(body))
 
 
-def evidence_fingerprint(entry: dict) -> str:
+def evidence_fingerprint(entry: dict, *, schema_version: int = EVIDENCE_SCHEMA_VERSION) -> str:
     """Return the fingerprint for one detached, normalized census record."""
     bounded_json(entry)
     value = deepcopy(entry)
-    _normalize_census_record(value, "$", verify_fingerprint=False)
+    rules_eras = _rules_eras(schema_version, CENSUS_SCHEMA_VERSIONS, "$.schema_version")
+    _normalize_census_record(
+        value, "$", verify_fingerprint=False, rules_eras=rules_eras
+    )
     return _fingerprint_normalized_record(value)
 
 
@@ -157,9 +179,9 @@ def normalize_aon_census(document: dict) -> dict:
         "schema_version authority captured_at site_update_date site_update_url records",
         "$",
     )
-    require(type(value["schema_version"]) is int, "invalid_type", "$.schema_version")
-    require(value["schema_version"] == EVIDENCE_SCHEMA_VERSION,
-            "unsupported_version", "$.schema_version")
+    rules_eras = _rules_eras(
+        value["schema_version"], CENSUS_SCHEMA_VERSIONS, "$.schema_version"
+    )
     choice(value["authority"], {AON_AUTHORITY}, "$.authority")
     timestamp(value["captured_at"], "$.captured_at")
     iso_date(value["site_update_date"], "$.site_update_date")
@@ -169,7 +191,9 @@ def normalize_aon_census(document: dict) -> dict:
     identities = set()
     for index, record in enumerate(records):
         path = f"$.records[{index}]"
-        _normalize_census_record(record, path, verify_fingerprint=True)
+        _normalize_census_record(
+            record, path, verify_fingerprint=True, rules_eras=rules_eras
+        )
         identity = _identity_key(record["identity"])
         require(identity not in identities, "duplicate_identity", path + ".identity")
         identities.add(identity)
@@ -286,7 +310,8 @@ def _validate_coverage_dimension(value: dict, expected: dict[str, dict[str, int]
             "invalid_value", path)
 
 
-def _validate_coverage(value: dict, records: list[dict], missing: list[str], path: str) -> None:
+def _validate_coverage(value: dict, records: list[dict], missing: list[str],
+                       rules_eras: frozenset[str], path: str) -> None:
     shape(value, "by_disposition by_kind by_rules_era by_review", path)
     expected_disposition = {"excluded": 0, "mapped": 0, "missing": len(missing), "pending": 0}
     expected_review = {"missing": len(missing), "pending": 0, "reviewed": 0}
@@ -321,7 +346,7 @@ def _validate_coverage(value: dict, records: list[dict], missing: list[str], pat
     )
     _validate_coverage_dimension(
         value["by_rules_era"], by_rules_era, len(missing),
-        {"remaster", "legacy", "mixed", "not-applicable"},
+        rules_eras,
         path + ".by_rules_era",
     )
 
@@ -387,7 +412,9 @@ def audit_evidence_inventory(census: dict, ledger: dict) -> dict:
     combined.sort(key=lambda item: item["identity_key"])
     missing.sort()
     return {
-        "schema_version": EVIDENCE_SCHEMA_VERSION,
+        "schema_version": AUDIT_SCHEMA_BY_CENSUS_VERSION[
+            observed["schema_version"]
+        ],
         "authority": observed["authority"],
         "inventory_id": reviewed["inventory_id"],
         "census_captured_at": observed["captured_at"],
@@ -415,10 +442,10 @@ def _validate_audit_report(value: dict, path: str) -> dict:
         "site_update_date site_update_url complete missing coverage records",
         path,
     )
-    require(type(value["schema_version"]) is int,
-            "invalid_type", path + ".schema_version")
-    require(value["schema_version"] == EVIDENCE_SCHEMA_VERSION,
-            "unsupported_version", path + ".schema_version")
+    rules_eras = _rules_eras(
+        value["schema_version"], AUDIT_REPORT_SCHEMA_VERSIONS,
+        path + ".schema_version",
+    )
     choice(value["authority"], {AON_AUTHORITY}, path + ".authority")
     text(value["inventory_id"], path + ".inventory_id",
          pattern=r"pf2e-[a-z0-9]+(?:[.-][a-z0-9]+)*")
@@ -447,7 +474,10 @@ def _validate_audit_report(value: dict, path: str) -> dict:
             "identity", "canonical_url", "name", "kind", "rules_era", "source_refs",
             "evidence_sha256", "fingerprint",
         )}
-        _normalize_census_record(census_record, record_path, verify_fingerprint=True)
+        _normalize_census_record(
+            census_record, record_path, verify_fingerprint=True,
+            rules_eras=rules_eras,
+        )
         record.update(census_record)
         require(record["identity_key"] == _identity_label(record["identity"]),
                 "invalid_identity", record_path + ".identity_key")
@@ -471,7 +501,9 @@ def _validate_audit_report(value: dict, path: str) -> dict:
             "duplicate_identity", path + ".missing")
     require(value["complete"] == (not value["missing"]),
             "invalid_value", path + ".complete")
-    _validate_coverage(value["coverage"], records, missing, path + ".coverage")
+    _validate_coverage(
+        value["coverage"], records, missing, rules_eras, path + ".coverage"
+    )
     records.sort(key=lambda item: item["identity_key"])
     return value
 

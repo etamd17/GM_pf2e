@@ -9,6 +9,8 @@ import sys
 
 import pytest
 
+from systems.pf2e.rules.manifest import canonical_json, digest
+
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = ROOT / "tests" / "pf2e_rules" / "fixtures"
@@ -102,6 +104,61 @@ def test_claimed_fingerprint_is_pinned_and_tampering_fails():
     assert error.value.path == "$.records[0].fingerprint"
 
 
+def test_v1_census_and_audit_canonical_bytes_remain_pinned():
+    census = load(CENSUS_PATH)
+    ledger = load(LEDGER_PATH)
+    module = evidence()
+
+    assert dict(module.AUDIT_SCHEMA_BY_CENSUS_VERSION) == {1: 1, 2: 2}
+    assert digest(canonical_json(module.normalize_aon_census(census))) == (
+        "e3c718d0e661a52711231f2d448fe2d41558ed3a408568371686e196a5ed2ae4"
+    )
+    assert digest(canonical_json(
+        module.audit_evidence_inventory(census, ledger)
+    )) == "53a56cee416deecb26d8452e66bf722ec24b07b468b7266604c426c28329feb1"
+
+
+def test_census_v1_rejects_v2_only_unverified_rules_era():
+    document = load(CENSUS_PATH)
+    document["records"][0]["rules_era"] = "unverified"
+
+    with pytest.raises(ValueError) as error:
+        evidence().normalize_aon_census(document)
+
+    assert error.value.code == "invalid_value"
+    assert error.value.path == "$.records[0].rules_era"
+
+
+def test_census_v2_accepts_unverified_with_version_aware_fingerprint():
+    document = load(CENSUS_PATH)
+    document["schema_version"] = 2
+    document["records"][0]["rules_era"] = "unverified"
+    document["records"][0]["fingerprint"] = evidence().evidence_fingerprint(
+        document["records"][0], schema_version=2
+    )
+
+    normalized = evidence().normalize_aon_census(document)
+
+    assert normalized["schema_version"] == 2
+    assert normalized["records"][0]["rules_era"] == "unverified"
+    with pytest.raises(ValueError) as error:
+        evidence().evidence_fingerprint(document["records"][0], schema_version=1)
+    assert error.value.code == "invalid_value"
+    assert error.value.path == "$.rules_era"
+
+
+def test_census_v2_still_rejects_unspecified_unknown_state():
+    document = load(CENSUS_PATH)
+    document["schema_version"] = 2
+    document["records"][0]["rules_era"] = "unknown"
+
+    with pytest.raises(ValueError) as error:
+        evidence().normalize_aon_census(document)
+
+    assert error.value.code == "invalid_value"
+    assert error.value.path == "$.records[0].rules_era"
+
+
 def test_ledger_normalizes_dispositions_reviews_and_order_without_mutating():
     document = load(LEDGER_PATH)
     original = deepcopy(document)
@@ -116,6 +173,17 @@ def test_ledger_normalizes_dispositions_reviews_and_order_without_mutating():
     ]
     assert normalized["entries"][0]["rule_id"] == "pf2e.class.shared-example"
     assert document["entries"] != normalized["entries"]
+
+
+def test_ledger_remains_schema_v1():
+    document = load(LEDGER_PATH)
+    document["schema_version"] = 2
+
+    with pytest.raises(ValueError) as error:
+        evidence().normalize_evidence_ledger(document)
+
+    assert error.value.code == "unsupported_version"
+    assert error.value.path == "$.schema_version"
 
 
 @pytest.mark.parametrize(("mutate", "code", "path"), [

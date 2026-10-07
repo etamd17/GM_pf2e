@@ -6,6 +6,11 @@ from copy import deepcopy
 from pathlib import Path, PurePosixPath
 import re
 
+from .aon_capture import (
+    CATEGORY_SPECS_V1,
+    build_category_query_v1,
+    build_scope_query_v1,
+)
 from .evidence_inventory import (
     AON_AUTHORITY,
     AON_HOST,
@@ -407,6 +412,11 @@ def _verify_capture_receipt(root: Path, label: str, mode: str, capture: dict,
                 "capture_mismatch", artifact_path + ".reported_records")
         require(artifact["returned_records"] == shard["expected_records"],
                 "capture_mismatch", artifact_path + ".returned_records")
+        expected_query_hash = digest(canonical_json(
+            build_category_query_v1(shard["category"], mode)
+        ))
+        require(artifact["query_sha256"] == expected_query_hash,
+                "capture_mismatch", artifact_path + ".query_sha256")
     return receipt
 
 
@@ -421,6 +431,8 @@ def _verify_scope_receipt(root: Path, capture: dict, manifest: dict) -> dict:
             "capture_mismatch", path + ".query_sha256")
     require(receipt["response_sha256"] == capture["result_sha256"],
             "capture_mismatch", path + ".response_sha256")
+    require(receipt["query_sha256"] == digest(canonical_json(build_scope_query_v1())),
+            "capture_mismatch", path + ".query_sha256")
     for field in (
         "scope_id", "authority", "site_update_date", "search_endpoint", "resolved_index"
     ):
@@ -487,15 +499,26 @@ def verify_evidence_snapshot(manifest_path: Path) -> dict:
     identities: set[tuple[str, int]] = set()
     class_names: list[str] = []
     included_records = 0
+    census_schema_version = None
 
     for shard_index, shard in enumerate(manifest["shards"]):
         shard_path = f"$.shards[{shard_index}]"
+        expected_kind, allowed_families = CATEGORY_SPECS_V1[shard["category"]]
+        require(shard["kind"] == expected_kind,
+                "snapshot_mismatch", shard_path + ".kind")
+        require(set(shard["page_families"]) <= allowed_families,
+                "snapshot_mismatch", shard_path + ".page_families")
         expected = included_policy[shard["category"]]["included_records"]
         require(shard["expected_records"] == expected,
                 "count_mismatch", shard_path + ".expected_records")
         census = normalize_aon_census(read_json(_read_artifact(
             root, shard["census"], shard_path + ".census"
         )))
+        if census_schema_version is None:
+            census_schema_version = census["schema_version"]
+        else:
+            require(census["schema_version"] == census_schema_version,
+                    "snapshot_mismatch", shard_path + ".census.schema_version")
         ledger = normalize_evidence_ledger(read_json(_read_artifact(
             root, shard["ledger"], shard_path + ".ledger"
         )))
@@ -560,6 +583,7 @@ def verify_evidence_snapshot(manifest_path: Path) -> dict:
         "resolved_index": manifest["resolved_index"],
         "site_update_date": manifest["site_update_date"],
         "complete": True,
+        "census_schema_version": census_schema_version,
         "categories": {
             "deferred": len(deferred_policy),
             "excluded": len(excluded_policy),

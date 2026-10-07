@@ -7,6 +7,10 @@ from pathlib import Path
 import pytest
 
 from systems.pf2e.rules.ingestion.evidence_inventory import evidence_fingerprint
+from systems.pf2e.rules.ingestion.aon_capture import (
+    build_category_query_v1 as build_category_query,
+    build_scope_query_v1 as build_scope_query,
+)
 from systems.pf2e.rules.manifest import canonical_json, digest
 
 
@@ -113,7 +117,9 @@ def _snapshot_tree(tmp_path: Path) -> tuple[Path, dict]:
     def receipt(mode, run_id, captured_at, artifact_key):
         artifacts = []
         for shard in shards:
-            query_sha = digest(f"{mode}-query:{shard['category']}".encode("ascii"))
+            query_sha = digest(canonical_json(
+                build_category_query(shard["category"], mode)
+            ))
             response_sha = digest(f"{mode}-response:{shard['category']}".encode("ascii"))
             artifacts.append({
                 "category": shard["category"],
@@ -160,7 +166,7 @@ def _snapshot_tree(tmp_path: Path) -> tuple[Path, dict]:
         "site_update_date": "2026-10-07",
         "search_endpoint": "https://elasticsearch.aonprd.com/aon/_search",
         "resolved_index": policy["resolved_index"],
-        "query_sha256": digest(b"synthetic-scope-query"),
+        "query_sha256": digest(canonical_json(build_scope_query())),
         "response_sha256": digest(b"synthetic-scope-response"),
         "reported_records": 5,
         "returned_records": 5,
@@ -243,6 +249,7 @@ def test_snapshot_verification_is_compact_deterministic_and_nonmutating(tmp_path
         "resolved_index": manifest["resolved_index"],
         "site_update_date": "2026-10-07",
         "complete": True,
+        "census_schema_version": 1,
         "categories": {"deferred": 1, "excluded": 1, "included": 2},
         "records": {"deferred": 2, "excluded": 1, "included": 2, "total": 5},
         "dispositions": {"excluded": 0, "mapped": 0, "pending": 2},
@@ -254,6 +261,102 @@ def test_snapshot_verification_is_compact_deterministic_and_nonmutating(tmp_path
     }
     assert {path.relative_to(manifest_path.parent).as_posix(): path.read_bytes()
             for path in manifest_path.parent.rglob("*.json")} == before
+
+
+def test_snapshot_accepts_v2_census_with_v1_pending_ledger(tmp_path):
+    manifest_path, manifest = _snapshot_tree(tmp_path)
+    for shard in manifest["shards"]:
+        census_path = manifest_path.parent / shard["census"]["path"]
+        census = json.loads(census_path.read_text(encoding="utf-8"))
+        census["schema_version"] = 2
+        if shard["category"] == "class":
+            census["records"][0]["rules_era"] = "unverified"
+        for record in census["records"]:
+            record["fingerprint"] = evidence_fingerprint(
+                record, schema_version=2
+            )
+        shard["census"]["sha256"] = _write_json(census_path, census)
+        _rebind_receipt(
+            manifest_path, manifest, "census_capture", shard["category"], "census"
+        )
+    _write_json(manifest_path, manifest)
+
+    summary = snapshot_module().verify_evidence_snapshot(manifest_path)
+
+    assert summary["complete"] is True
+    assert summary["census_schema_version"] == 2
+    assert summary["records"]["included"] == 2
+
+
+def test_snapshot_rejects_mixed_census_schema_versions(tmp_path):
+    manifest_path, manifest = _snapshot_tree(tmp_path)
+    census_path = manifest_path.parent / "census" / "class.json"
+    census = json.loads(census_path.read_text(encoding="utf-8"))
+    census["schema_version"] = 2
+    census["records"][0]["rules_era"] = "unverified"
+    census["records"][0]["fingerprint"] = evidence_fingerprint(
+        census["records"][0], schema_version=2
+    )
+    manifest["shards"][0]["census"]["sha256"] = _write_json(census_path, census)
+    _rebind_receipt(manifest_path, manifest, "census_capture", "class", "census")
+    _write_json(manifest_path, manifest)
+
+    with pytest.raises(ValueError) as error:
+        snapshot_module().verify_evidence_snapshot(manifest_path)
+
+    assert error.value.code == "snapshot_mismatch"
+    assert error.value.path == "$.shards[1].census.schema_version"
+
+
+def test_snapshot_binds_category_to_frozen_kind_contract(tmp_path):
+    manifest_path, manifest = _snapshot_tree(tmp_path)
+    shard = manifest["shards"][0]
+    census_path = manifest_path.parent / shard["census"]["path"]
+    census = json.loads(census_path.read_text(encoding="utf-8"))
+    census["records"][0]["kind"] = "feat"
+    census["records"][0]["fingerprint"] = evidence_fingerprint(
+        census["records"][0]
+    )
+    shard["kind"] = "feat"
+    shard["census"]["sha256"] = _write_json(census_path, census)
+    _rebind_receipt(manifest_path, manifest, "census_capture", "class", "census")
+    _write_json(manifest_path, manifest)
+
+    with pytest.raises(ValueError) as error:
+        snapshot_module().verify_evidence_snapshot(manifest_path)
+
+    assert error.value.code == "snapshot_mismatch"
+    assert error.value.path == "$.shards[0].kind"
+
+
+def test_snapshot_binds_category_to_frozen_page_family_contract(tmp_path):
+    manifest_path, manifest = _snapshot_tree(tmp_path)
+    shard = manifest["shards"][0]
+    census_path = manifest_path.parent / shard["census"]["path"]
+    ledger_path = manifest_path.parent / shard["ledger"]["path"]
+    census = json.loads(census_path.read_text(encoding="utf-8"))
+    ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+    identity = {"page_family": "Feats.aspx", "numeric_id": 35}
+    census["records"][0]["identity"] = identity
+    census["records"][0]["canonical_url"] = (
+        "https://2e.aonprd.com/Feats.aspx?ID=35"
+    )
+    census["records"][0]["fingerprint"] = evidence_fingerprint(
+        census["records"][0]
+    )
+    ledger["entries"][0]["identity"] = identity
+    shard["page_families"] = ["Feats.aspx"]
+    shard["census"]["sha256"] = _write_json(census_path, census)
+    shard["ledger"]["sha256"] = _write_json(ledger_path, ledger)
+    _rebind_receipt(manifest_path, manifest, "census_capture", "class", "census")
+    _rebind_receipt(manifest_path, manifest, "ledger_enumeration", "class", "ledger")
+    _write_json(manifest_path, manifest)
+
+    with pytest.raises(ValueError) as error:
+        snapshot_module().verify_evidence_snapshot(manifest_path)
+
+    assert error.value.code == "snapshot_mismatch"
+    assert error.value.path == "$.shards[0].page_families"
 
 
 def test_snapshot_rejects_tampered_shard_before_parsing(tmp_path):
@@ -321,8 +424,8 @@ def test_snapshot_rejects_cross_shard_identity_collision(tmp_path):
     with pytest.raises(ValueError) as error:
         snapshot_module().verify_evidence_snapshot(manifest_path)
 
-    assert error.value.code == "duplicate_identity"
-    assert error.value.path == "$.shards[1].census.records[0].identity"
+    assert error.value.code == "snapshot_mismatch"
+    assert error.value.path == "$.shards[1].page_families"
 
 
 @pytest.mark.parametrize("bad_path", ["../outside.json", "/absolute.json", "census\\class.json"])
@@ -384,6 +487,49 @@ def test_snapshot_rejects_receipt_that_does_not_bind_shard(tmp_path):
 
     assert error.value.code == "capture_mismatch"
     assert error.value.path == "$.census_capture.receipt.artifacts[0].sha256"
+
+
+def test_snapshot_recomputes_fixed_category_query_hash(tmp_path):
+    manifest_path, manifest = _snapshot_tree(tmp_path)
+    receipt_path = manifest_path.parent / "census-receipt.json"
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt["artifacts"][0]["query_sha256"] = "f" * 64
+    projection = [
+        {"category": item["category"], "sha256": item["query_sha256"]}
+        for item in receipt["artifacts"]
+    ]
+    receipt["query_set_sha256"] = digest(canonical_json(projection))
+    manifest["census_capture"]["query_sha256"] = receipt["query_set_sha256"]
+    manifest["census_capture"]["receipt"]["sha256"] = _write_json(
+        receipt_path, receipt
+    )
+    _write_json(manifest_path, manifest)
+
+    with pytest.raises(ValueError) as error:
+        snapshot_module().verify_evidence_snapshot(manifest_path)
+
+    assert error.value.code == "capture_mismatch"
+    assert error.value.path == (
+        "$.census_capture.receipt.artifacts[0].query_sha256"
+    )
+
+
+def test_snapshot_recomputes_fixed_scope_query_hash(tmp_path):
+    manifest_path, manifest = _snapshot_tree(tmp_path)
+    receipt_path = manifest_path.parent / "scope-receipt.json"
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt["query_sha256"] = "e" * 64
+    manifest["scope_capture"]["query_sha256"] = receipt["query_sha256"]
+    manifest["scope_capture"]["receipt"]["sha256"] = _write_json(
+        receipt_path, receipt
+    )
+    _write_json(manifest_path, manifest)
+
+    with pytest.raises(ValueError) as error:
+        snapshot_module().verify_evidence_snapshot(manifest_path)
+
+    assert error.value.code == "capture_mismatch"
+    assert error.value.path == "$.scope_capture.receipt.query_sha256"
 
 
 def test_snapshot_rejects_receipt_with_partial_results(tmp_path):
