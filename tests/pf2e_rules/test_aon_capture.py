@@ -390,6 +390,24 @@ def test_ledger_compiler_uses_identity_only_response_and_all_pending_rows():
     (lambda response: response["hits"]["hits"][0]["_source"].update(
         markdown="copied rules prose"),
      "unknown_field", "$.hits.hits[0]._source"),
+    (lambda response: response["hits"]["hits"][0]["_source"].update(
+        name="<em>Gunslinger</em>"),
+     "invalid_value", "$.hits.hits[0]._source.name"),
+    (lambda response: response["hits"]["hits"][0]["_source"]["source"].__setitem__(
+        0, "<b>Guns & Gears</b>"),
+     "invalid_value", "$.hits.hits[0]._source.source[0]"),
+    (lambda response: response["hits"]["hits"][0]["_source"]["source_raw"].__setitem__(
+        0, "Guns & Gears <span>pg. 105</span>"),
+     "invalid_value", "$.hits.hits[0]._source.source_raw[0]"),
+    (lambda response: response["hits"]["hits"][0]["_source"].update(
+        name="**Gunslinger**"),
+     "invalid_value", "$.hits.hits[0]._source.name"),
+    (lambda response: response["hits"]["hits"][0]["_source"]["source"].__setitem__(
+        0, "`Guns & Gears`"),
+     "invalid_value", "$.hits.hits[0]._source.source[0]"),
+    (lambda response: response["hits"]["hits"][0]["_source"]["source_raw"].__setitem__(
+        0, "[Guns & Gears](https://example.com)"),
+     "invalid_value", "$.hits.hits[0]._source.source_raw[0]"),
     (lambda response: response["hits"]["hits"][0]["_source"]["source_raw"].clear(),
      "source_mismatch", "$.hits.hits[0]._source.source_raw"),
     (lambda response: response["hits"]["hits"][1]["_source"].update(

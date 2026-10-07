@@ -62,11 +62,25 @@ MAX_CORPUS_ENTRIES = 100_000
 MAX_CORPUS_DIRECTORIES = 10_000
 MAX_CORPUS_DEPTH = 32
 MAX_CORPUS_BYTES = 256 * 1024 * 1024
+MARKUP_SHAPED = re.compile(
+    r"(?:[<>*_`\[\]]|~~|^(?:#{1,6}|[-+])\s|^(?:---+|===+)$)"
+)
 
 
 def _sha256(value, path: str) -> str:
     value = text(value, path)
     require(SHA256.fullmatch(value) is not None, "invalid_value", path)
+    return value
+
+
+def evidence_metadata_text(value, path: str) -> str:
+    """Validate plain, single-line metadata that cannot carry markup."""
+    value = text(value, path)
+    require(
+        MARKUP_SHAPED.search(value) is None,
+        "invalid_value",
+        path,
+    )
     return value
 
 
@@ -110,10 +124,11 @@ def _canonical_aon_url(value, identity: dict, path: str) -> str:
     return f"https://{AON_HOST}/{identity['page_family']}?ID={identity['numeric_id']}"
 
 
-def _source_ref(value, path: str) -> dict:
+def _source_ref(value, path: str, *, strict_metadata: bool) -> dict:
     shape(value, "title locator", path)
-    text(value["title"], path + ".title")
-    text(value["locator"], path + ".locator")
+    validator = evidence_metadata_text if strict_metadata else text
+    value["title"] = validator(value["title"], path + ".title")
+    value["locator"] = validator(value["locator"], path + ".locator")
     return value
 
 
@@ -124,7 +139,8 @@ def _rules_eras(schema_version: int, supported: frozenset[int], path: str) -> fr
 
 
 def _normalize_census_record(value, path: str, *, verify_fingerprint: bool,
-                             rules_eras: frozenset[str]) -> dict:
+                             rules_eras: frozenset[str],
+                             strict_metadata: bool) -> dict:
     shape(
         value,
         "identity canonical_url name kind rules_era source_refs evidence_sha256 fingerprint",
@@ -134,14 +150,15 @@ def _normalize_census_record(value, path: str, *, verify_fingerprint: bool,
     value["canonical_url"] = _canonical_aon_url(
         value["canonical_url"], value["identity"], path + ".canonical_url"
     )
-    text(value["name"], path + ".name")
+    validator = evidence_metadata_text if strict_metadata else text
+    value["name"] = validator(value["name"], path + ".name")
     choice(value["kind"], EVIDENCE_KINDS, path + ".kind")
     choice(value["rules_era"], rules_eras, path + ".rules_era")
     refs = sequence(value["source_refs"], path + ".source_refs")
     seen = set()
     for index, source_ref in enumerate(refs):
         source_path = f"{path}.source_refs[{index}]"
-        _source_ref(source_ref, source_path)
+        _source_ref(source_ref, source_path, strict_metadata=strict_metadata)
         key = source_ref["title"], source_ref["locator"]
         require(key not in seen, "duplicate_id", source_path)
         seen.add(key)
@@ -165,7 +182,8 @@ def evidence_fingerprint(entry: dict, *, schema_version: int = EVIDENCE_SCHEMA_V
     value = deepcopy(entry)
     rules_eras = _rules_eras(schema_version, CENSUS_SCHEMA_VERSIONS, "$.schema_version")
     _normalize_census_record(
-        value, "$", verify_fingerprint=False, rules_eras=rules_eras
+        value, "$", verify_fingerprint=False, rules_eras=rules_eras,
+        strict_metadata=schema_version == CENSUS_SCHEMA_VERSION,
     )
     return _fingerprint_normalized_record(value)
 
@@ -192,7 +210,8 @@ def normalize_aon_census(document: dict) -> dict:
     for index, record in enumerate(records):
         path = f"$.records[{index}]"
         _normalize_census_record(
-            record, path, verify_fingerprint=True, rules_eras=rules_eras
+            record, path, verify_fingerprint=True, rules_eras=rules_eras,
+            strict_metadata=value["schema_version"] == CENSUS_SCHEMA_VERSION,
         )
         identity = _identity_key(record["identity"])
         require(identity not in identities, "duplicate_identity", path + ".identity")
@@ -477,6 +496,7 @@ def _validate_audit_report(value: dict, path: str) -> dict:
         _normalize_census_record(
             census_record, record_path, verify_fingerprint=True,
             rules_eras=rules_eras,
+            strict_metadata=value["schema_version"] == AUDIT_REPORT_SCHEMA_VERSION,
         )
         record.update(census_record)
         require(record["identity_key"] == _identity_label(record["identity"]),

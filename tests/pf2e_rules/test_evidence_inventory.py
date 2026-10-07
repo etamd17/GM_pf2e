@@ -88,6 +88,66 @@ def test_census_rejects_malformed_or_prose_fields(mutation, code, path):
     assert error.value.path == path
 
 
+@pytest.mark.parametrize(("mutation", "path"), [
+    (lambda record: record.update(name="<em>Shared Example</em>"),
+     "$.records[0].name"),
+    (lambda record: record.update(name="**Shared Example**"),
+     "$.records[0].name"),
+    (lambda record: record.update(name="`Shared Example`"),
+     "$.records[0].name"),
+    (lambda record: record.update(name="_Shared Example_"),
+     "$.records[0].name"),
+    (lambda record: record.update(name="# Shared Example"),
+     "$.records[0].name"),
+    (lambda record: record.update(name="- Shared Example"),
+     "$.records[0].name"),
+    (lambda record: record.update(name="[Shared Example][reference]"),
+     "$.records[0].name"),
+    (lambda record: record["source_refs"][0].update(
+        title="[Synthetic Core](https://example.com)"),
+     "$.records[0].source_refs[0].title"),
+])
+def test_census_v2_rejects_markup_shaped_metadata(mutation, path):
+    document = load(CENSUS_PATH)
+    document["schema_version"] = 2
+    mutation(document["records"][0])
+
+    with pytest.raises(ValueError) as error:
+        evidence().normalize_aon_census(document)
+
+    assert error.value.code == "invalid_value"
+    assert error.value.path == path
+
+
+def test_census_v1_retains_legacy_metadata_compatibility():
+    document = load(CENSUS_PATH)
+    document["records"][0]["name"] = "**Legacy literal metadata**"
+    document["records"][0]["fingerprint"] = evidence().evidence_fingerprint(
+        document["records"][0], schema_version=1
+    )
+
+    normalized = evidence().normalize_aon_census(document)
+
+    assert normalized["records"][0]["name"] == "**Legacy literal metadata**"
+
+
+@pytest.mark.parametrize("name", [
+    "1. Set Objectives",
+    "Pathfinder #217",
+])
+def test_census_v2_allows_plain_numbered_or_midline_hash_metadata(name):
+    document = load(CENSUS_PATH)
+    document["schema_version"] = 2
+    document["records"][0]["name"] = name
+    document["records"][0]["fingerprint"] = evidence().evidence_fingerprint(
+        document["records"][0], schema_version=2
+    )
+
+    normalized = evidence().normalize_aon_census(document)
+
+    assert normalized["records"][0]["name"] == name
+
+
 def test_claimed_fingerprint_is_pinned_and_tampering_fails():
     document = load(CENSUS_PATH)
     first = document["records"][0]

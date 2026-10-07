@@ -17,6 +17,7 @@ from .evidence_inventory import (
     CENSUS_SCHEMA_VERSION,
     EVIDENCE_KINDS,
     EVIDENCE_SCHEMA_VERSION,
+    evidence_metadata_text,
     evidence_fingerprint,
     normalize_aon_census,
     normalize_evidence_ledger,
@@ -607,7 +608,7 @@ def _metadata_text(value, path: str) -> str:
     normalized = re.sub(r"[ \t]*\r\n[ \t]*", " ", value)
     if terminal_crlf and normalized.endswith(" "):
         normalized = normalized[:-1]
-    return text(normalized, path)
+    return evidence_metadata_text(normalized, path)
 
 
 def _record_name(value, identity: dict, kind: str, path: str) -> str:

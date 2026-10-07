@@ -3,7 +3,10 @@ from collections import Counter
 from pathlib import Path
 
 from systems.pf2e.rules.ingestion.aon_capture import PENDING_REASON
-from systems.pf2e.rules.ingestion.evidence_inventory import evidence_fingerprint
+from systems.pf2e.rules.ingestion.evidence_inventory import (
+    evidence_fingerprint,
+    evidence_metadata_text,
+)
 from systems.pf2e.rules.ingestion.evidence_snapshot import (
     build_snapshot_manifest,
     verify_evidence_snapshot,
@@ -148,6 +151,13 @@ def test_current_snapshot_is_metadata_only_and_entirely_pending():
         assert len(census_identities) == shard["expected_records"]
         for record in census["records"]:
             assert set(record) == RECORD_FIELDS
+            retained_metadata = [
+                record["name"],
+                *(value for source_ref in record["source_refs"]
+                  for value in (source_ref["title"], source_ref["locator"])),
+            ]
+            assert all(evidence_metadata_text(value, "$") == value
+                       for value in retained_metadata)
             assert all(set(source_ref) == {"title", "locator"}
                        for source_ref in record["source_refs"])
             assert record["fingerprint"] == evidence_fingerprint(
