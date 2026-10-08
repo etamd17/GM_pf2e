@@ -45,6 +45,12 @@ PR6B3A establishes the offline accounting boundary for the comprehensive rules
 program. See [the evidence inventory and measured corpus report](pr6b3a-aon-evidence.md).
 It deliberately makes no rule-correctness or distribution-rights claim.
 
+PR6B3C adds the first immutable review overlay: all 29 frozen class identities
+now have explicit stable IDs and local reconciliation metadata across eight
+source groups. The artifact activates zero mechanics, leaves every base review
+pending, and adds 45 separate pending source, license, and rules gates. See
+[the class-review overlay record](pr6b3c-class-review-overlay.md).
+
 ## Pull-request gate
 
 Every implementation pull request must include the applicable subset of:

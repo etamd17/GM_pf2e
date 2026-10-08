@@ -1,2 +1,4 @@
 tests/pf2e_rules/fixtures/synthetic-source.bin binary
 systems/pf2e/rules/evidence/** text eol=lf
+compendium_data/classes/*.json text eol=lf
+systems/pf2e/rules/reviews/**/*.json text eol=lf

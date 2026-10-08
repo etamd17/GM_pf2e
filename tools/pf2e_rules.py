@@ -10,6 +10,10 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from systems.pf2e.rules.ingestion.compile_pack import write_package
+from systems.pf2e.rules.ingestion.class_review_overlay import (
+    verify_class_review_overlay,
+    write_class_review_overlay,
+)
 from systems.pf2e.rules.ingestion.diff_pack import diff_packages
 from systems.pf2e.rules.ingestion.evidence_inventory import (
     audit_evidence_inventory,
@@ -69,6 +73,22 @@ def main(argv: list[str] | None = None) -> int:
         help="Verify a complete sharded evidence snapshot offline",
     )
     snapshot_verify_cmd.add_argument("manifest", type=Path)
+    class_review_compile_cmd = commands.add_parser(
+        "class-review-compile",
+        help="Compile a frozen class-review overlay into a new immutable ID",
+    )
+    class_review_compile_cmd.add_argument("authoring", type=Path)
+    class_review_compile_cmd.add_argument("--snapshot", type=Path, required=True)
+    class_review_compile_cmd.add_argument("--corpus", type=Path, required=True)
+    class_review_compile_cmd.add_argument("--store", type=Path, required=True)
+    class_review_verify_cmd = commands.add_parser(
+        "class-review-verify",
+        help="Verify a frozen class-review overlay and optional trusted binding",
+    )
+    class_review_verify_cmd.add_argument("overlay", type=Path)
+    class_review_verify_cmd.add_argument("--snapshot", type=Path, required=True)
+    class_review_verify_cmd.add_argument("--corpus", type=Path, required=True)
+    class_review_verify_cmd.add_argument("--expected-hash")
     args = parser.parse_args(argv)
     try:
         exit_code = 0
@@ -98,6 +118,32 @@ def main(argv: list[str] | None = None) -> int:
             exit_code = 1 if any(result[field] for field in drift_fields) else 0
         elif args.command == "evidence-snapshot-verify":
             result = verify_evidence_snapshot(args.manifest)
+        elif args.command == "class-review-compile":
+            path = write_class_review_overlay(
+                read_json(read_file(args.authoring)),
+                args.snapshot,
+                args.corpus,
+                args.store,
+            )
+            result = {
+                "path": str(path),
+                **verify_class_review_overlay(
+                    path,
+                    args.snapshot,
+                    args.corpus,
+                ),
+            }
+        elif args.command == "class-review-verify":
+            path = args.overlay.absolute()
+            result = {
+                "path": str(path),
+                **verify_class_review_overlay(
+                    path,
+                    args.snapshot,
+                    args.corpus,
+                    expected_hash=args.expected_hash,
+                ),
+            }
         elif args.command == "diff":
             result = diff_packages(load_package(args.before), load_package(args.after))
         else:
@@ -116,6 +162,7 @@ def main(argv: list[str] | None = None) -> int:
         print(_render_result(
             result,
             require_readback=args.command in {
+                "class-review-compile", "class-review-verify",
                 "evidence-audit", "evidence-diff", "evidence-snapshot-verify",
             },
         ))

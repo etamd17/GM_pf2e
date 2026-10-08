@@ -42,6 +42,51 @@ raise SystemExit(main(['evidence-snapshot-verify', {str(manifest)!r}]))
     )
 
 
+def _production_class_review_authoring(tmp_path):
+    from tests.pf2e_rules.test_class_review_overlay import (
+        CURRENT_SNAPSHOT,
+        _production_authoring,
+    )
+
+    source = tmp_path / "class-review-authoring.json"
+    source.write_text(
+        json.dumps(_production_authoring(), ensure_ascii=True, sort_keys=True),
+        encoding="utf-8",
+    )
+    return source, CURRENT_SNAPSHOT, ROOT / "compendium_data"
+
+
+def _tree_bytes(root):
+    return {
+        path.relative_to(root).as_posix(): path.read_bytes()
+        for path in root.rglob("*")
+        if path.is_file()
+    }
+
+
+def _offline_class_review_cli(arguments, *, env=None):
+    script = f"""
+import sys
+
+def refuse_network(event, _args):
+    if event.startswith('socket.'):
+        raise AssertionError('class-review commands must remain offline')
+
+sys.addaudithook(refuse_network)
+from tools.pf2e_rules import main
+assert 'app' not in sys.modules
+assert 'flask' not in sys.modules
+code = main({[str(argument) for argument in arguments]!r})
+assert 'app' not in sys.modules
+assert 'flask' not in sys.modules
+raise SystemExit(code)
+"""
+    return subprocess.run(
+        [sys.executable, "-c", script], cwd=ROOT, env=env,
+        capture_output=True, text=True, encoding="utf-8",
+    )
+
+
 def test_compile_validate_and_diff_use_real_files(tmp_path):
     result = cli("compile", FIXTURE, "--store", tmp_path)
     assert result.returncode == 0, result.stderr
@@ -300,6 +345,145 @@ def test_evidence_snapshot_verify_reports_tampering_without_mutation_or_tracebac
     } == before
 
 
+def test_class_review_compile_and_verify_use_real_frozen_inputs_without_mutation(
+        tmp_path):
+    authoring, snapshot, corpus = _production_class_review_authoring(tmp_path)
+    store = tmp_path / "reviews"
+    snapshot_before = _tree_bytes(snapshot.parent)
+    classes_before = _tree_bytes(corpus / "classes")
+    authoring_before = authoring.read_bytes()
+
+    compiled = cli(
+        "class-review-compile", authoring,
+        "--snapshot", snapshot,
+        "--corpus", corpus,
+        "--store", store,
+    )
+
+    assert compiled.returncode == 0, compiled.stderr
+    assert compiled.stderr == ""
+    compiled.stdout.encode("ascii")
+    report = json.loads(compiled.stdout)
+    assert set(report) == {
+        "activation", "counts", "overlay_hash", "overlay_id", "path",
+    }
+    assert report["overlay_id"] == "pf2e-class-identities-2026-10-07.1"
+    assert report["activation"] == "none"
+    assert report["counts"]["sources"] == 8
+    assert report["counts"]["records"] == 29
+    assert report["counts"]["enabled_mechanics"] == 0
+    package = Path(report["path"])
+    assert package.parent == store.absolute()
+
+    verified = cli(
+        "class-review-verify", package,
+        "--snapshot", snapshot,
+        "--corpus", corpus,
+        "--expected-hash", report["overlay_hash"],
+    )
+
+    assert verified.returncode == 0, verified.stderr
+    assert verified.stderr == ""
+    verified.stdout.encode("ascii")
+    assert json.loads(verified.stdout) == report
+    duplicate = cli(
+        "class-review-compile", authoring,
+        "--snapshot", snapshot,
+        "--corpus", corpus,
+        "--store", store,
+    )
+    assert duplicate.returncode == 2
+    assert duplicate.stdout == ""
+    assert json.loads(duplicate.stderr) == {
+        "error": "overlay_exists", "path": "$.manifest.overlay_id",
+    }
+    rejected = cli(
+        "class-review-verify", package,
+        "--snapshot", snapshot,
+        "--corpus", corpus,
+        "--expected-hash", "0" * 64,
+    )
+    assert rejected.returncode == 2
+    assert rejected.stdout == ""
+    assert json.loads(rejected.stderr) == {
+        "error": "binding_mismatch", "path": "$.binding.overlay_hash",
+    }
+    assert "Traceback" not in duplicate.stderr + rejected.stderr
+    assert authoring.read_bytes() == authoring_before
+    assert _tree_bytes(snapshot.parent) == snapshot_before
+    assert _tree_bytes(corpus / "classes") == classes_before
+
+
+def test_class_review_commands_are_offline_application_independent_and_ignore_data_dir(
+        tmp_path):
+    authoring, snapshot, corpus = _production_class_review_authoring(tmp_path)
+    store = tmp_path / "reviews"
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    package = store / "pf2e-class-identities-2026-10-07.1"
+    environment = {**os.environ, "DATA_DIR": str(data_dir)}
+
+    compiled = _offline_class_review_cli(
+        [
+            "class-review-compile", authoring,
+            "--snapshot", snapshot,
+            "--corpus", corpus,
+            "--store", store,
+        ],
+        env=environment,
+    )
+    verified = _offline_class_review_cli(
+        [
+            "class-review-verify", package,
+            "--snapshot", snapshot,
+            "--corpus", corpus,
+        ],
+        env=environment,
+    )
+
+    assert compiled.returncode == 0, compiled.stderr
+    assert verified.returncode == 0, verified.stderr
+    assert json.loads(compiled.stdout) == json.loads(verified.stdout)
+    assert list(data_dir.iterdir()) == []
+
+
+def test_class_review_compile_reports_bad_authoring_without_traceback(tmp_path):
+    source = tmp_path / "bad-authoring.json"
+    source.write_text('{"manifest":{},"manifest":{}}', encoding="utf-8")
+    store = tmp_path / "reviews"
+
+    result = cli(
+        "class-review-compile", source,
+        "--snapshot", tmp_path / "snapshot-manifest.json",
+        "--corpus", tmp_path / "corpus",
+        "--store", store,
+    )
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert json.loads(result.stderr) == {"error": "duplicate_key", "path": "$"}
+    assert "Traceback" not in result.stderr
+    assert not store.exists()
+
+
+def test_class_review_cli_does_not_expose_synthetic_fixture_mode(tmp_path):
+    authoring, snapshot, corpus = _production_class_review_authoring(tmp_path)
+    store = tmp_path / "reviews"
+
+    result = cli(
+        "class-review-compile", authoring,
+        "--snapshot", snapshot,
+        "--corpus", corpus,
+        "--store", store,
+        "--fixture-mode",
+    )
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "unrecognized arguments: --fixture-mode" in result.stderr
+    assert not store.exists()
+
+
 @pytest.mark.parametrize("command", ["evidence-audit", "evidence-diff"])
 def test_evidence_commands_reject_invalid_json_without_traceback(tmp_path, command):
     invalid = tmp_path / "invalid.json"
@@ -382,6 +566,29 @@ def test_snapshot_verify_result_must_fit_the_strict_readback_node_budget(
     )
 
     code = command.main(["evidence-snapshot-verify", "unused-manifest.json"])
+    output = capsys.readouterr()
+
+    assert code == 2
+    assert output.out == ""
+    assert json.loads(output.err) == {"error": "limit_exceeded", "path": "$"}
+
+
+def test_class_review_verify_result_must_fit_the_strict_readback_node_budget(
+        monkeypatch, capsys):
+    import tools.pf2e_rules as command
+
+    monkeypatch.setattr(
+        command,
+        "verify_class_review_overlay",
+        lambda *_args, **_kwargs: {"rows": [None] * 500_000},
+        raising=False,
+    )
+
+    code = command.main([
+        "class-review-verify", "unused-overlay",
+        "--snapshot", "unused-snapshot",
+        "--corpus", "unused-corpus",
+    ])
     output = capsys.readouterr()
 
     assert code == 2
