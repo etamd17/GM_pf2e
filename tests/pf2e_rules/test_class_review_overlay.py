@@ -2179,6 +2179,58 @@ def test_class_review_writer_preserves_stale_lock_for_operator_review(tmp_path):
     assert lock.read_bytes() == b"stale operator evidence"
 
 
+def test_lock_nonce_writer_completes_short_writes(tmp_path):
+    destination = tmp_path / "lock"
+    nonce = b"n" * 32
+    module = overlay()
+
+    class ShortWriter:
+        def __init__(self, handle):
+            self.handle = handle
+
+        def write(self, data):
+            return self.handle.write(data[:3])
+
+    with destination.open("wb", buffering=0) as handle:
+        module._write_lock_nonce(ShortWriter(handle), nonce)
+
+    assert destination.read_bytes() == nonce
+
+
+def test_class_review_writer_preserves_partial_lock_when_nonce_init_fails(
+    tmp_path, monkeypatch
+):
+    authoring, manifest_path, corpus_root = _class_review_compile_fixture(tmp_path)
+    store = tmp_path / "store"
+    module = overlay()
+
+    def fail_nonce_initialization(handle, nonce):
+        handle.write(nonce[:7])
+        raise OSError("injected lock nonce failure")
+
+    monkeypatch.setattr(
+        module,
+        "_write_lock_nonce",
+        fail_nonce_initialization,
+    )
+
+    with pytest.raises(OSError, match="injected lock nonce failure"):
+        module._write_class_review_overlay(
+            authoring,
+            manifest_path,
+            corpus_root,
+            store,
+            fixture_mode=True,
+        )
+
+    overlay_id = authoring["manifest"]["overlay_id"]
+    locks = list(store.glob(f".{overlay_id}.lock"))
+    assert len(locks) == 1
+    assert len(locks[0].read_bytes()) == 7
+    assert not os.path.lexists(store / overlay_id)
+    assert not list(store.glob(f".{overlay_id}.*.tmp"))
+
+
 def test_class_review_writer_has_one_concurrent_winner(tmp_path):
     authoring, manifest_path, corpus_root = _class_review_compile_fixture(tmp_path)
     store = tmp_path / "store"
@@ -2541,9 +2593,27 @@ def test_owned_lock_cleanup_preserves_replacement_object(tmp_path):
     lock.unlink()
     lock.write_bytes(b"replacement")
 
-    overlay()._unlink_owned_file(lock, identity)
+    overlay()._unlink_owned_file(lock, identity, b"owned")
 
     assert lock.read_bytes() == b"replacement"
+
+
+def test_owned_lock_cleanup_rejects_reused_identity_with_different_nonce(
+    tmp_path, monkeypatch
+):
+    lock = tmp_path / ".overlay.lock"
+    owned_nonce = b"owned nonce"
+    lock.write_bytes(owned_nonce)
+    info = lock.lstat()
+    identity = (info.st_dev, info.st_ino)
+    lock.unlink()
+    lock.write_bytes(b"other nonce")
+    module = overlay()
+    monkeypatch.setattr(module, "_file_identity", lambda _info: identity)
+
+    module._unlink_owned_file(lock, identity, owned_nonce)
+
+    assert lock.read_bytes() == b"other nonce"
 
 
 def test_owned_lock_cleanup_preserves_swap_after_identity_check(
@@ -2566,7 +2636,7 @@ def test_owned_lock_cleanup_preserves_swap_after_identity_check(
 
     monkeypatch.setattr(module, "_owned_path_info", swap_after_check)
 
-    module._unlink_owned_file(lock, identity)
+    module._unlink_owned_file(lock, identity, b"owned")
 
     assert lock.read_bytes() == b"replacement"
     assert moved.read_bytes() == b"owned"
@@ -2610,23 +2680,38 @@ def test_owned_lock_cleanup_preserves_claimed_path_swap_before_final_check(
     state = {"claimed_checks": 0}
     module = overlay()
     real_owned_path_info = module._owned_path_info
+    real_file_identity = module._file_identity
 
     def swap_claimed_before_final_check(path, expected_identity):
         result = real_owned_path_info(path, expected_identity)
         if path.name.startswith(".cleanup-") and result is not None:
             state["claimed_checks"] += 1
-            if state["claimed_checks"] == 2:
+            if state["claimed_checks"] == 3:
                 moved = path.with_name(path.name + ".owned-moved")
                 path.rename(moved)
-                path.write_bytes(b"replacement")
+                path.write_bytes(b"other")
+                replacement_identity = real_file_identity(path.lstat())
+
+                def simulate_reused_identity(info):
+                    actual = real_file_identity(info)
+                    if actual == replacement_identity:
+                        return expected_identity
+                    return actual
+
+                monkeypatch.setattr(
+                    module,
+                    "_file_identity",
+                    simulate_reused_identity,
+                )
                 state.update(moved=moved, replacement=path)
         return result
 
     monkeypatch.setattr(module, "_owned_path_info", swap_claimed_before_final_check)
 
-    module._unlink_owned_file(lock, identity)
+    module._unlink_owned_file(lock, identity, b"owned")
 
-    assert state["replacement"].read_bytes() == b"replacement"
+    assert lock.read_bytes() == b"other"
+    assert not state["replacement"].exists()
     assert state["moved"].read_bytes() == b"owned"
 
 
@@ -2671,14 +2756,30 @@ def test_class_review_writer_preserves_replacement_lock_object(
     lock = store / f".{overlay_id}.lock"
     module = overlay()
     real_remove = module._remove_owned_tree
+    real_file_identity = module._file_identity
+    monkeypatch.setattr(
+        module.secrets,
+        "token_bytes",
+        lambda size: b"a" * size,
+    )
 
     def fail_publish(_staging, _target):
         raise OSError("injected publication failure")
 
     def replace_lock_after_staging_cleanup(path, identity):
         real_remove(path, identity)
+        owned_identity = real_file_identity(lock.lstat())
         lock.unlink()
-        lock.write_bytes(b"replacement lock")
+        lock.write_bytes(b"b" * module.LOCK_NONCE_BYTES)
+        replacement_identity = real_file_identity(lock.lstat())
+
+        def simulate_reused_identity(info):
+            actual = real_file_identity(info)
+            if actual == replacement_identity:
+                return owned_identity
+            return actual
+
+        monkeypatch.setattr(module, "_file_identity", simulate_reused_identity)
 
     monkeypatch.setattr(module, "_rename_overlay_directory", fail_publish)
     monkeypatch.setattr(
@@ -2694,7 +2795,7 @@ def test_class_review_writer_preserves_replacement_lock_object(
             fixture_mode=True,
         )
 
-    assert lock.read_bytes() == b"replacement lock"
+    assert lock.read_bytes() == b"b" * module.LOCK_NONCE_BYTES
 
 
 def test_class_review_writer_refuses_injected_staging_layout(tmp_path, monkeypatch):

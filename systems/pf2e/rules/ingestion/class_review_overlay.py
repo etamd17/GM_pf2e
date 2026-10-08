@@ -60,6 +60,7 @@ MAX_CLASS_RECORDS = 29
 MAX_LOCAL_CLASS_FILES = 27
 MAX_CLASS_CORPUS_BYTES = 32 * 1024 * 1024
 MAX_DISJOINT_PATH_COMPONENTS = 256
+LOCK_NONCE_BYTES = 32
 CLASS_REVIEW_FILES = frozenset(
     {"authoring.json", "sources.json", "records.json", "manifest.json"}
 )
@@ -1254,6 +1255,19 @@ def _fsync_overlay_file(handle) -> None:
     os.fsync(handle.fileno())
 
 
+def _write_lock_nonce(handle, nonce: bytes) -> None:
+    """Write the complete ownership marker or leave cleanup fail-closed."""
+    remaining = memoryview(nonce)
+    while remaining:
+        written = handle.write(remaining)
+        require(
+            type(written) is int and 0 < written <= len(remaining),
+            "io_error",
+            "$.paths.lock",
+        )
+        remaining = remaining[written:]
+
+
 def _rename_path_no_replace(source: Path, target: Path) -> None:
     """Atomically move one path without replacing an existing target."""
     if os.name == "nt":
@@ -1335,18 +1349,55 @@ def _owned_path_info(path: Path, identity: tuple[int, int]):
     return info
 
 
-def _unlink_owned_file(path: Path, identity: tuple[int, int]) -> None:
-    claimed = _claim_owned_path(path, identity, stat.S_ISREG)
-    if claimed is not None:
-        info = _owned_path_info(claimed, identity)
+def _owned_file_matches(
+    path: Path, identity: tuple[int, int], expected_payload: bytes
+) -> bool:
+    try:
+        info = _owned_path_info(path, identity)
         if (
-            info is not None
-            and stat.S_ISREG(info.st_mode)
-            and _owned_path_matches_for_cleanup(
-                claimed, identity, stat.S_ISREG
-            )
+            info is None
+            or not stat.S_ISREG(info.st_mode)
+            or info.st_size != len(expected_payload)
         ):
-            claimed.unlink()
+            return False
+        flags = (
+            os.O_RDONLY
+            | getattr(os, "O_BINARY", 0)
+            | getattr(os, "O_NOFOLLOW", 0)
+        )
+        with os.fdopen(os.open(path, flags), "rb") as handle:
+            opened = os.fstat(handle.fileno())
+            if (
+                _file_identity(opened) != identity
+                or not stat.S_ISREG(opened.st_mode)
+                or (
+                    getattr(opened, "st_file_attributes", 0)
+                    & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 1024)
+                )
+            ):
+                return False
+            payload = handle.read(len(expected_payload) + 1)
+    except OSError:
+        return False
+    return secrets.compare_digest(payload, expected_payload)
+
+
+def _unlink_owned_file(
+    path: Path, identity: tuple[int, int], expected_payload: bytes
+) -> None:
+    if not _owned_file_matches(path, identity, expected_payload):
+        return
+    claimed = _claim_owned_path(path, identity, stat.S_ISREG)
+    if claimed is None:
+        return
+    if (
+        _owned_file_matches(claimed, identity, expected_payload)
+        and _owned_path_matches_for_cleanup(claimed, identity, stat.S_ISREG)
+        and _owned_file_matches(claimed, identity, expected_payload)
+    ):
+        claimed.unlink()
+        return
+    _restore_unowned_claim(claimed, path)
 
 
 def _remove_owned_tree(path: Path, identity: tuple[int, int]) -> None:
@@ -1373,10 +1424,12 @@ def _owned_path_matches_for_cleanup(
     """Make the final portable pathname check before best-effort cleanup.
 
     Python exposes no portable unlink/rmdir operation conditional on a prior
-    ``(st_dev, st_ino)`` observation. The private claim and repeated checks
-    protect normal writers and every swap observed before this check, but they
-    cannot bind the later pathname deletion against an active same-account
-    actor. Review stores are trusted against that actor.
+    ``(st_dev, st_ino)`` observation. Lock cleanup additionally checks its
+    random nonce before and after the private claim so inode reuse cannot make
+    a replacement look owned. The private claim and repeated checks protect
+    normal writers and every swap observed before this check, but they cannot
+    bind the later pathname deletion against an active same-account actor.
+    Review stores are trusted against that actor.
     """
     try:
         current = _owned_path_info(path, identity)
@@ -1503,8 +1556,9 @@ def _write_class_review_overlay(
         "$.manifest.overlay_id",
     )
     lock = store / f".{overlay_id}.lock"
+    lock_nonce = secrets.token_bytes(LOCK_NONCE_BYTES)
     try:
-        lock_handle = lock.open("xb")
+        lock_handle = lock.open("xb", buffering=0)
     except FileExistsError:
         raise RulesValidationError(
             "publication_locked", "$.manifest.overlay_id"
@@ -1513,8 +1567,11 @@ def _write_class_review_overlay(
     staging = None
     staging_identity = None
     lock_identity = _file_identity(os.fstat(lock_handle.fileno()))
+    lock_initialized = False
     try:
         with lock_handle:
+            _write_lock_nonce(lock_handle, lock_nonce)
+            lock_initialized = True
             require(
                 not os.path.lexists(target),
                 "overlay_exists",
@@ -1590,7 +1647,8 @@ def _write_class_review_overlay(
             if staging is not None and staging_identity is not None:
                 _remove_owned_tree(staging, staging_identity)
         finally:
-            _unlink_owned_file(lock, lock_identity)
+            if lock_initialized:
+                _unlink_owned_file(lock, lock_identity, lock_nonce)
     return target
 
 

@@ -91,10 +91,12 @@ overlay.
   including Unicode/case aliases, existing-object identities, and bounded
   path scans.
 - [ ] Inject write, flush, fsync, and rename failures; prove no partial target,
-  cleanup of only matching private staging/lock claims, preservation of stale
-  locks, and fail-closed quarantine on every observed swap. Treat the review
-  store as trusted against active same-account mutation after the final
-  portable pathname identity check.
+  cleanup of only matching private staging claims and identity-plus-nonce lock
+  claims, preservation of stale and replacement locks even under inode reuse,
+  and fail-closed quarantine on every observed swap. Treat the review store as
+  trusted against active same-account mutation after the final portable
+  ownership check. Preserve a partial lock for operator review if its nonce
+  cannot be completely initialized.
 - [ ] Recompile under multiple `PYTHONHASHSEED` values and require identical
   bytes.
 - [ ] Implement canonical compilation, create-only process-visible atomic

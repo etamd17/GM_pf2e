@@ -176,8 +176,10 @@ Both commands emit one bounded ASCII-safe JSON line. Validation and I/O
 failures use the existing machine-readable exit-2 contract. Compile tests must
 exercise multiple `PYTHONHASHSEED` values and injected write, flush, fsync, and
 rename failures. A failed publish leaves no accepted target, cleans only a
-matching private staging claim and owned lock, and never removes a
-pre-existing stale lock.
+matching private staging claim and an identity-plus-nonce-matched owned lock,
+and never removes a pre-existing or replacement lock. Failure before the
+nonce is completely written stops before staging and preserves the partial
+lock for operator review because safe automatic ownership proof is absent.
 
 Publication provides create-only, process-visible atomicity, not a promise of
 power-loss durability. Each staged file is flushed and fsynced before the
@@ -185,14 +187,17 @@ directory rename; persistence of the directory entry across sudden power loss
 is platform-dependent because Python has no clean cross-platform directory
 fsync contract.
 
-The review store is trusted against active same-account mutation. The
-create-only lock, random private names, quarantine, and repeated
-`(st_dev, st_ino)` checks protect normal concurrent writers and every path
-swap observed before the final cleanup check. Python has no portable
-unlink/rmdir operation conditional on a previously observed inode. An actor
-that discovers and replaces a random private claim after that final check can
-already mutate the review artifacts themselves and is outside this boundary.
-Publication and verification still fail closed on every observed mismatch.
+The review store is trusted against active same-account mutation. Random
+private staging names and repeated `(st_dev, st_ino)` checks protect staging
+cleanup. The create-only lock adds a per-lock random nonce so a replacement
+lock cannot look owned merely because its inode was immediately reused.
+Quarantine and repeated ownership checks protect normal concurrent writers and
+every path swap observed before the final cleanup check. Python has no
+portable unlink/rmdir operation conditional on a previously observed
+ownership proof. An actor that reads the nonce or discovers and replaces a
+random private claim after that final check can already mutate the review
+artifacts themselves and is outside this boundary. Publication and
+verification still fail closed on every observed mismatch.
 
 ## Excluded work
 
