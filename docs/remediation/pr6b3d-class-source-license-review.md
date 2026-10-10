@@ -40,15 +40,36 @@ identities, rule IDs, source assignments, local reconciliation, and all
 rules-review objects are frozen to the parent. This PR changes only the eight
 source-review objects; license and rules reviews remain pending.
 
-The production child ID is
-`pf2e-class-source-review-2026-10-10.1`. Its compiler version is
-`pf2e-class-review-2`. The exact child hash is generated and pinned only after
-the deterministic compiler and tests are green.
+The checked-in child is:
+
+```text
+systems/pf2e/rules/reviews/pf2e-class-source-review-2026-10-10.1/
+  authoring.json
+  manifest.json
+  records.json
+  sources.json
+```
+
+Its immutable binding is:
+
+| Field | Required value |
+| --- | --- |
+| Child ID | `pf2e-class-source-review-2026-10-10.1` |
+| Child hash | `e7def3d3bc7f73100a83ea9d59e8d8c289e07d464ce729c5334cabde38d57dbb` |
+| Parent ID | `pf2e-class-identities-2026-10-07.1` |
+| Parent hash | `273d3180178eeea249db01ddcb778e13675c98ff74717d51dbc8efedc73a2614` |
+| Evidence bundle ID | `pf2e-class-sources-2026-10-10.1` |
+| Evidence bundle hash | `4057206e6b7850e376a5a8757aa6d0398a2dc4c015cda2bdcccb0fa04c4689f3` |
+| Compiler | `pf2e-class-review-2` |
+| Activation | `none` |
+| Enabled mechanics | 0 |
 
 ## Retained Paizo evidence bundle
 
 The retained bundle is
 `systems/pf2e/rules/evidence/paizo/pf2e-class-sources-2026-10-10.1/`.
+Its immutable bundle hash is
+`4057206e6b7850e376a5a8757aa6d0398a2dc4c015cda2bdcccb0fa04c4689f3`.
 It contains one canonical `manifest.json` plus exactly eight canonical JSON
 dossiers under `dossiers/`. The bundle contains metadata and citations only;
 it contains no copied rule prose, descriptive product prose, or art.
@@ -140,6 +161,43 @@ and byte-compatible without those arguments. Compilation and verification:
 The child remains a four-file overlay. Parent and evidence artifacts are
 external immutable inputs and are not copied into it.
 
+## Reproducible offline verification
+
+From the repository root, verify the checked-in child against its exact parent,
+evidence bundle, snapshot, corpus, and trusted hash:
+
+```text
+python tools/pf2e_rules.py class-review-verify \
+  systems/pf2e/rules/reviews/pf2e-class-source-review-2026-10-10.1 \
+  --snapshot systems/pf2e/rules/evidence/archives-of-nethys/2026-10-07-player-build-v1/snapshot-manifest.json \
+  --corpus compendium_data \
+  --parent systems/pf2e/rules/reviews/pf2e-class-identities-2026-10-07.1 \
+  --evidence systems/pf2e/rules/evidence/paizo/pf2e-class-sources-2026-10-10.1/manifest.json \
+  --expected-hash e7def3d3bc7f73100a83ea9d59e8d8c289e07d464ce729c5334cabde38d57dbb
+```
+
+Reproduce its canonical bytes into a new empty review store:
+
+```text
+python tools/pf2e_rules.py class-review-compile \
+  systems/pf2e/rules/reviews/pf2e-class-source-review-2026-10-10.1/authoring.json \
+  --snapshot systems/pf2e/rules/evidence/archives-of-nethys/2026-10-07-player-build-v1/snapshot-manifest.json \
+  --corpus compendium_data \
+  --store <empty-review-store> \
+  --parent systems/pf2e/rules/reviews/pf2e-class-identities-2026-10-07.1 \
+  --evidence systems/pf2e/rules/evidence/paizo/pf2e-class-sources-2026-10-10.1/manifest.json
+```
+
+A successful reproduction creates the same four canonical files byte-for-byte.
+Both commands remain offline, do not import the Flask application, and do not
+read or write `DATA_DIR`.
+
+Publication identity approval means only that the eight class-to-publication
+mappings are supported by retained Paizo metadata. It does not approve a
+printing, errata applicability, redistribution rights, or any class mechanic.
+The child therefore has exactly eight approved source reviews, eight pending
+license reviews, and 29 pending rules reviews.
+
 ## Acceptance contract
 
 - PR6B3C's four files and trusted hash are byte-identical.
@@ -155,10 +213,25 @@ external immutable inputs and are not copied into it.
 - Focused PF2e tests, the complete PF2e suite, template parsing, and the primary
   non-browser/non-PostgreSQL suite pass before merge.
 
-## Deferred work
+## Remaining blockers and next review slices
 
-Separate review slices must retain and approve the seven missing final-book
-legal pages, establish the correct OGL/ORC notice and attribution package, bind
-exact printings and applicable errata, review all level 1-20 class mechanics,
-remediate six local source-drift records, and implement Necromancer and
-Runesmith. No UI work follows from this metadata-only slice.
+Redistribution remains blocked because exact printings are unverified for all
+eight products. Seven products still lack a retained final-book artifact and
+legal page; Player Core has an observed notice but no reviewed downstream
+notice/compliance package. Rage of Elements remains license-neutral, with no
+OGL- or ORC-only conclusion. Mechanics remain blocked because no level 1-20
+class rule has been reviewed.
+
+Later slices must, in order:
+
+1. retain and review the missing final-book legal evidence, exact printings,
+   applicable errata, and the mixed OGL/ORC notice and attribution package;
+2. review source-backed level 1-20 mechanics for all 29 classes;
+3. remediate the six local source-drift records;
+4. implement Necromancer and Runesmith separately; and
+5. continue independently reviewable overlays for the other 18,493 pending
+   ancestry, heritage, background, archetype, feat, skill, spell, weapon,
+   equipment, and related identities.
+
+No runtime activation or GM/player UI work is authorized by this slice. Any
+later UI change still requires an approved mockup before implementation.
