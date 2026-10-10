@@ -56,6 +56,28 @@ def _production_class_review_authoring(tmp_path):
     return source, CURRENT_SNAPSHOT, ROOT / "compendium_data"
 
 
+def _production_v2_class_review_authoring(tmp_path):
+    from tests.pf2e_rules.test_class_review_overlay import (
+        CURRENT_CLASS_REVIEW,
+        CURRENT_CLASS_SOURCE_EVIDENCE,
+        CURRENT_SNAPSHOT,
+        _production_v2_authoring,
+    )
+
+    source = tmp_path / "class-source-review-authoring.json"
+    source.write_text(
+        json.dumps(_production_v2_authoring(), ensure_ascii=True, sort_keys=True),
+        encoding="utf-8",
+    )
+    return (
+        source,
+        CURRENT_SNAPSHOT,
+        ROOT / "compendium_data",
+        CURRENT_CLASS_REVIEW,
+        CURRENT_CLASS_SOURCE_EVIDENCE,
+    )
+
+
 def _tree_bytes(root):
     return {
         path.relative_to(root).as_posix(): path.read_bytes()
@@ -413,6 +435,161 @@ def test_class_review_compile_and_verify_use_real_frozen_inputs_without_mutation
     assert _tree_bytes(snapshot.parent) == snapshot_before
     assert _tree_bytes(corpus / "classes") == classes_before
 
+    from tests.pf2e_rules.test_class_review_overlay import (
+        CURRENT_CLASS_REVIEW,
+        CURRENT_CLASS_SOURCE_EVIDENCE,
+    )
+
+    for option, value, expected_path in (
+        ("--parent", CURRENT_CLASS_REVIEW, "$.paths.parent"),
+        ("--evidence", CURRENT_CLASS_SOURCE_EVIDENCE, "$.paths.evidence"),
+    ):
+        supplied_to_v1_compile = cli(
+            "class-review-compile", authoring,
+            "--snapshot", snapshot,
+            "--corpus", corpus,
+            "--store", tmp_path / f"v1-{option.removeprefix('--')}",
+            option, value,
+        )
+        supplied_to_v1_verify = cli(
+            "class-review-verify", package,
+            "--snapshot", snapshot,
+            "--corpus", corpus,
+            option, value,
+        )
+        for result in (supplied_to_v1_compile, supplied_to_v1_verify):
+            assert result.returncode == 2
+            assert result.stdout == ""
+            assert json.loads(result.stderr) == {
+                "error": "unsupported_composition",
+                "path": expected_path,
+            }
+            assert "Traceback" not in result.stderr
+
+
+def test_schema_v2_class_review_cli_round_trip_is_offline_bounded_and_nonmutating(
+        tmp_path):
+    authoring, snapshot, corpus, parent, evidence = (
+        _production_v2_class_review_authoring(tmp_path)
+    )
+    store = tmp_path / "reviews"
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    environment = {**os.environ, "DATA_DIR": str(data_dir)}
+    before = {
+        "authoring": authoring.read_bytes(),
+        "snapshot": _tree_bytes(snapshot.parent),
+        "classes": _tree_bytes(corpus / "classes"),
+        "parent": _tree_bytes(parent),
+        "evidence": _tree_bytes(evidence.parent),
+    }
+
+    compiled = _offline_class_review_cli(
+        [
+            "class-review-compile", authoring,
+            "--snapshot", snapshot,
+            "--corpus", corpus,
+            "--store", store,
+            "--parent", parent,
+            "--evidence", evidence,
+        ],
+        env=environment,
+    )
+
+    assert compiled.returncode == 0, compiled.stderr
+    assert compiled.stderr == ""
+    assert compiled.stdout.count("\n") == 1
+    compiled.stdout.encode("ascii")
+    report = json.loads(compiled.stdout)
+    assert report["overlay_id"] == "pf2e-class-source-review-2026-10-10.1"
+    assert report["activation"] == "none"
+    assert report["counts"]["overlay_gates"]["by_status"] == {
+        "pending": 37,
+        "approved": 8,
+        "rejected": 0,
+    }
+    assert report["counts"]["enabled_mechanics"] == 0
+    package = Path(report["path"])
+
+    verified = _offline_class_review_cli(
+        [
+            "class-review-verify", package,
+            "--snapshot", snapshot,
+            "--corpus", corpus,
+            "--expected-hash", report["overlay_hash"],
+            "--parent", parent,
+            "--evidence", evidence,
+        ],
+        env=environment,
+    )
+
+    assert verified.returncode == 0, verified.stderr
+    assert verified.stderr == ""
+    assert json.loads(verified.stdout) == report
+
+    missing_cases = (
+        ("class-review-compile", ["--evidence", evidence], "$.paths.parent"),
+        ("class-review-compile", ["--parent", parent], "$.paths.evidence"),
+        ("class-review-verify", ["--evidence", evidence], "$.paths.parent"),
+        ("class-review-verify", ["--parent", parent], "$.paths.evidence"),
+    )
+    for index, (command, ancestry, expected_path) in enumerate(missing_cases):
+        if command == "class-review-compile":
+            arguments = [
+                command, authoring,
+                "--snapshot", snapshot,
+                "--corpus", corpus,
+                "--store", tmp_path / f"missing-{index}",
+                *ancestry,
+            ]
+        else:
+            arguments = [
+                command, package,
+                "--snapshot", snapshot,
+                "--corpus", corpus,
+                *ancestry,
+            ]
+        result = _offline_class_review_cli(arguments, env=environment)
+        assert result.returncode == 2
+        assert result.stdout == ""
+        assert json.loads(result.stderr) == {
+            "error": "missing_binding",
+            "path": expected_path,
+        }
+        assert "Traceback" not in result.stderr
+
+    wrong_inputs = (
+        ("--parent", tmp_path / "missing-parent"),
+        ("--evidence", tmp_path / "missing-evidence" / "manifest.json"),
+    )
+    for index, (option, wrong_path) in enumerate(wrong_inputs):
+        ancestry = ["--parent", parent, "--evidence", evidence]
+        ancestry[ancestry.index(option) + 1] = wrong_path
+        result = _offline_class_review_cli(
+            [
+                "class-review-compile", authoring,
+                "--snapshot", snapshot,
+                "--corpus", corpus,
+                "--store", tmp_path / f"wrong-{index}",
+                *ancestry,
+            ],
+            env=environment,
+        )
+        assert result.returncode == 2
+        assert result.stdout == ""
+        assert json.loads(result.stderr) == {
+            "error": "invalid_package_layout",
+            "path": "$files",
+        }
+        assert "Traceback" not in result.stderr
+
+    assert authoring.read_bytes() == before["authoring"]
+    assert _tree_bytes(snapshot.parent) == before["snapshot"]
+    assert _tree_bytes(corpus / "classes") == before["classes"]
+    assert _tree_bytes(parent) == before["parent"]
+    assert _tree_bytes(evidence.parent) == before["evidence"]
+    assert list(data_dir.iterdir()) == []
+
 
 def test_class_review_commands_are_offline_application_independent_and_ignore_data_dir(
         tmp_path):
@@ -577,10 +754,16 @@ def test_class_review_verify_result_must_fit_the_strict_readback_node_budget(
         monkeypatch, capsys):
     import tools.pf2e_rules as command
 
+    seen = {}
+
+    def oversized_result(*_args, **kwargs):
+        seen.update(kwargs)
+        return {"rows": [None] * 500_000}
+
     monkeypatch.setattr(
         command,
         "verify_class_review_overlay",
-        lambda *_args, **_kwargs: {"rows": [None] * 500_000},
+        oversized_result,
         raising=False,
     )
 
@@ -588,12 +771,16 @@ def test_class_review_verify_result_must_fit_the_strict_readback_node_budget(
         "class-review-verify", "unused-overlay",
         "--snapshot", "unused-snapshot",
         "--corpus", "unused-corpus",
+        "--parent", "unused-parent",
+        "--evidence", "unused-evidence",
     ])
     output = capsys.readouterr()
 
     assert code == 2
     assert output.out == ""
     assert json.loads(output.err) == {"error": "limit_exceeded", "path": "$"}
+    assert seen["parent_overlay_path"] == Path("unused-parent")
+    assert seen["evidence_manifest_path"] == Path("unused-evidence")
 
 
 def test_audit_result_must_fit_the_strict_readback_node_budget():
