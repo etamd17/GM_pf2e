@@ -1,7 +1,7 @@
 # PR6B3D class source and license review design
 
-**Status:** Approved  
-**Date:** 2026-10-10  
+**Status:** Approved
+**Date:** 2026-10-10
 **Scope:** Metadata-only publication-identity review; no mechanics or runtime activation
 
 ## Decision
