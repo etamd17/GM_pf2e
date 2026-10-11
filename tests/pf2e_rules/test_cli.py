@@ -1,5 +1,6 @@
 """The operator interface must fail cleanly and leave existing packages intact."""
 import json
+import hashlib
 import os
 from pathlib import Path
 import subprocess
@@ -793,3 +794,338 @@ def test_audit_result_must_fit_the_strict_readback_node_budget():
 
     assert error.value.code == "limit_exceeded"
     assert error.value.path == "$"
+
+
+LEGAL_RULES = ROOT / "systems/pf2e/rules"
+LEGAL_MANIFEST = LEGAL_RULES / "evidence/paizo/pf2e-class-legal-readiness-2026-10-11.1/manifest.json"
+LEGAL_CHAIN = {
+    "--overlay": LEGAL_RULES / "reviews/pf2e-class-source-review-2026-10-10.1",
+    "--snapshot": LEGAL_RULES / "evidence/archives-of-nethys/2026-10-07-player-build-v1/snapshot-manifest.json",
+    "--corpus": ROOT / "compendium_data",
+    "--parent": LEGAL_RULES / "reviews/pf2e-class-identities-2026-10-07.1",
+    "--source-evidence": LEGAL_RULES / "evidence/paizo/pf2e-class-sources-2026-10-10.1/manifest.json",
+}
+LEGAL_HASH = "4eeaef808fae0aa8b7ccc1356fcb7381b4d672a8d2281427f01a7ae9cc7cb410"
+LEGAL_COUNTS = {
+    "sources": 8, "artifact_hashes_observed": 1, "final_artifacts_missing": 7,
+    "final_legal_notices_observed": 1, "final_legal_notices_missing": 7,
+    "printings_unverified": 8, "revisions_unverified": 8,
+    "errata_inventories_complete_as_captured": 1, "errata_inventories_unverified": 7,
+    "license_reviews_ready": 0, "license_reviews_blocked": 8,
+    "license_reviews_approved": 0, "enabled_mechanics": 0,
+}
+LEGAL_COMMANDS = ("class-legal-readiness-verify", "class-legal-readiness-report")
+
+
+def _legal_arguments(command, *, expected_hash=LEGAL_HASH):
+    arguments = [command, LEGAL_MANIFEST]
+    for option, path in LEGAL_CHAIN.items():
+        arguments.extend([option, path])
+    if expected_hash is not None:
+        arguments.extend(["--expected-hash", expected_hash])
+    return arguments
+
+
+def _offline_class_legal_readiness_cli(arguments, data_dir, *, hash_seed="1"):
+    script = f"""
+import os
+import sys
+data_root = os.path.normcase(os.path.abspath({str(data_dir)!r}))
+
+def refuse_external_access(event, args):
+    if event.startswith('socket.'):
+        raise AssertionError('legal-readiness commands must remain offline')
+    if event in {{'open', 'os.listdir', 'os.scandir', 'os.mkdir', 'os.remove',
+                  'os.rmdir', 'os.rename', 'os.replace'}}:
+        for argument in args:
+            if isinstance(argument, (str, bytes, os.PathLike)):
+                path = os.path.normcase(os.path.abspath(os.fsdecode(argument)))
+                if path == data_root or path.startswith(data_root + os.sep):
+                    raise AssertionError('legal-readiness commands must ignore DATA_DIR')
+
+sys.addaudithook(refuse_external_access)
+from tools.pf2e_rules import main
+assert 'app' not in sys.modules
+assert 'flask' not in sys.modules
+code = main({[str(argument) for argument in arguments]!r})
+assert 'app' not in sys.modules
+assert 'flask' not in sys.modules
+raise SystemExit(code)
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script], cwd=ROOT,
+        env={**os.environ, "DATA_DIR": str(data_dir), "PYTHONHASHSEED": hash_seed},
+        capture_output=True, text=True, encoding="utf-8",
+    )
+    assert list(data_dir.iterdir()) == []
+    return result
+
+
+def _legal_chain_hashes():
+    roots = [LEGAL_MANIFEST.parent, *[
+        path.parent if path.suffix == ".json" else path
+        for path in LEGAL_CHAIN.values()
+    ]]
+    return {
+        str(path): hashlib.sha256(path.read_bytes()).hexdigest()
+        for root in roots for path in root.rglob("*") if path.is_file()
+    }
+
+
+def test_class_legal_readiness_verify_cli_uses_exact_chain_offline_and_nonmutating(tmp_path):
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    before = _legal_chain_hashes()
+
+    result = _offline_class_legal_readiness_cli(_legal_arguments(LEGAL_COMMANDS[0]), data_dir)
+
+    assert result.returncode == 0, result.stderr
+    assert result.stderr == ""
+    expected = {
+        "path": str(LEGAL_MANIFEST.absolute()),
+        "bundle_id": "pf2e-class-legal-readiness-2026-10-11.1",
+        "bundle_hash": LEGAL_HASH,
+        "scope": "class-license-readiness",
+        "class_review_overlay_id": "pf2e-class-source-review-2026-10-10.1",
+        "class_review_overlay_hash": "e7def3d3bc7f73100a83ea9d59e8d8c289e07d464ce729c5334cabde38d57dbb",
+        "source_bundle_id": "pf2e-class-sources-2026-10-10.1",
+        "source_bundle_hash": "4057206e6b7850e376a5a8757aa6d0398a2dc4c015cda2bdcccb0fa04c4689f3",
+        "counts": LEGAL_COUNTS,
+    }
+    assert json.loads(result.stdout) == expected
+    assert result.stdout == json.dumps(expected, sort_keys=True, ensure_ascii=True) + "\n"
+    assert _legal_chain_hashes() == before
+
+
+def test_class_legal_readiness_report_cli_is_deterministic_and_reports_exact_blockers(tmp_path):
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    first = _offline_class_legal_readiness_cli(_legal_arguments(LEGAL_COMMANDS[1]), data_dir)
+    second = _offline_class_legal_readiness_cli(
+        _legal_arguments(LEGAL_COMMANDS[1]), data_dir, hash_seed="417",
+    )
+
+    assert first.returncode == second.returncode == 0, first.stderr + second.stderr
+    assert first.stderr == second.stderr == ""
+    observed_blockers = [
+        "downstream-compliance-missing", "errata-applicability-unresolved",
+        "named-reviewer-missing", "printing-unverified", "revision-unverified",
+    ]
+    missing_blockers = [
+        "downstream-compliance-missing", "errata-applicability-unresolved",
+        "errata-inventory-unverified", "final-artifact-missing",
+        "final-legal-notice-missing", "named-reviewer-missing",
+        "printing-unverified", "revision-unverified",
+    ]
+    expected = {
+        "bundle_id": "pf2e-class-legal-readiness-2026-10-11.1",
+        "bundle_hash": LEGAL_HASH, "counts": LEGAL_COUNTS,
+        "sources": [
+            {"source_id": "pf2e.source." + slug,
+             "blockers": observed_blockers if slug == "player-core" else missing_blockers}
+            for slug in (
+                "battlecry", "dark-archive-remastered", "guns-and-gears-remastered",
+                "impossible-magic", "player-core", "player-core-2",
+                "rage-of-elements", "war-of-immortals",
+            )
+        ],
+    }
+    assert json.loads(first.stdout) == expected
+    assert first.stdout == second.stdout == json.dumps(expected, sort_keys=True, ensure_ascii=True) + "\n"
+
+
+@pytest.mark.parametrize("command", LEGAL_COMMANDS)
+@pytest.mark.parametrize("missing", ["manifest", *LEGAL_CHAIN])
+def test_class_legal_readiness_commands_require_every_chain_input(command, missing):
+    arguments = _legal_arguments(command)
+    if missing == "manifest":
+        arguments.pop(1)
+    else:
+        index = arguments.index(missing)
+        del arguments[index:index + 2]
+    result = cli(*arguments)
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "the following arguments are required: " + missing in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+@pytest.mark.parametrize("command", LEGAL_COMMANDS)
+def test_class_legal_readiness_verify_cli_rejects_wrong_trusted_hash_without_traceback(tmp_path, command):
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    before = _legal_chain_hashes()
+    result = _offline_class_legal_readiness_cli(
+        _legal_arguments(command, expected_hash="0" * 64), data_dir,
+    )
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert json.loads(result.stderr) == {"error": "binding_mismatch", "path": "$.binding.bundle_hash"}
+    assert "Traceback" not in result.stderr
+    assert str(ROOT) not in result.stderr
+    assert _legal_chain_hashes() == before
+
+
+@pytest.mark.parametrize("command", LEGAL_COMMANDS)
+@pytest.mark.parametrize("expected_hash", [None, LEGAL_HASH])
+def test_class_legal_readiness_cli_forwards_paths_and_expected_hash_exactly(monkeypatch, capsys, command, expected_hash):
+    import tools.pf2e_rules as module
+    from systems.pf2e.rules.ingestion.class_legal_readiness import (
+        class_legal_readiness_report, verify_class_legal_readiness_bundle,
+    )
+
+    calls, reports, verified = [], [], []
+
+    def verify(*args, **kwargs):
+        calls.append((args, kwargs))
+        bundle = verify_class_legal_readiness_bundle(*args, **kwargs)
+        verified.append(bundle)
+        return bundle
+
+    def report(bundle):
+        reports.append(bundle)
+        return class_legal_readiness_report(bundle)
+
+    monkeypatch.setattr(module, "verify_class_legal_readiness_bundle", verify, raising=False)
+    monkeypatch.setattr(module, "class_legal_readiness_report", report, raising=False)
+    # Relative paths catch unwanted normalization at the forwarding boundary.
+    arguments = [str(value.relative_to(ROOT)) if isinstance(value, Path) else value
+                 for value in _legal_arguments(command, expected_hash=expected_hash)]
+    code = module.main(arguments)
+    output = capsys.readouterr()
+
+    assert code == 0, output.err
+    assert len(calls) == 1
+    assert calls[0] == ((
+        LEGAL_MANIFEST.relative_to(ROOT), LEGAL_CHAIN["--overlay"].relative_to(ROOT),
+        LEGAL_CHAIN["--snapshot"].relative_to(ROOT), LEGAL_CHAIN["--corpus"].relative_to(ROOT),
+    ), {
+        "expected_hash": expected_hash,
+        "parent_overlay_path": LEGAL_CHAIN["--parent"].relative_to(ROOT),
+        "source_evidence_manifest_path": LEGAL_CHAIN["--source-evidence"].relative_to(ROOT),
+    })
+    if command.endswith("report"):
+        assert len(reports) == 1 and reports[0] is verified[0]
+    else:
+        assert reports == []
+    assert output.err == ""
+
+
+@pytest.mark.parametrize("command", LEGAL_COMMANDS)
+def test_class_legal_readiness_cli_results_fit_strict_readback_budget(tmp_path, command):
+    from systems.pf2e.rules.manifest import MAX_FILE_BYTES, read_json
+
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    result = _offline_class_legal_readiness_cli(_legal_arguments(command), data_dir)
+
+    assert result.returncode == 0, result.stderr
+    emitted = result.stdout.encode("ascii")
+    assert len(emitted) <= MAX_FILE_BYTES
+    assert result.stdout.count("\n") == 1
+    assert read_json(emitted) == json.loads(result.stdout)
+
+
+@pytest.mark.parametrize("command", LEGAL_COMMANDS)
+@pytest.mark.parametrize("budget", ["bytes", "nodes"])
+def test_class_legal_readiness_cli_rejects_results_over_readback_budget(monkeypatch, capsys, command, budget):
+    import tools.pf2e_rules as module
+
+    oversized = "x" * 64 if budget == "bytes" else [None] * 500_000
+    manifest = json.loads(LEGAL_MANIFEST.read_text(encoding="utf-8"))
+    manifest["counts"] = {"oversized": oversized}
+    bundle = {"manifest": manifest, "dossiers_by_hash": {}, "dossiers_by_source": {}}
+    monkeypatch.setattr(module, "verify_class_legal_readiness_bundle", lambda *_args, **_kwargs: bundle, raising=False)
+    monkeypatch.setattr(module, "class_legal_readiness_report", lambda _bundle: {"counts": manifest["counts"]}, raising=False)
+    if budget == "bytes":
+        monkeypatch.setattr(module, "MAX_FILE_BYTES", 32)
+
+    code = module.main([str(argument) for argument in _legal_arguments(command)])
+    output = capsys.readouterr()
+
+    assert code == 2
+    assert output.out == ""
+    assert json.loads(output.err) == {"error": "limit_exceeded", "path": "$"}
+
+
+@pytest.mark.parametrize("command", LEGAL_COMMANDS)
+@pytest.mark.parametrize("failure", ["domain", "io"])
+def test_class_legal_readiness_cli_stops_before_reporting_failed_verification(monkeypatch, capsys, command, failure):
+    import tools.pf2e_rules as module
+    from systems.pf2e.rules.validation import RulesValidationError
+
+    calls = []
+
+    def verify(*_args, **_kwargs):
+        calls.append("verify")
+        if failure == "domain":
+            raise RulesValidationError("binding_mismatch", "$.binding.bundle_hash")
+        raise OSError(str(ROOT / "private-host-path"))
+
+    def report(_bundle):
+        raise AssertionError("unverified data must not reach the report")
+
+    monkeypatch.setattr(module, "verify_class_legal_readiness_bundle", verify, raising=False)
+    monkeypatch.setattr(module, "class_legal_readiness_report", report, raising=False)
+    code = module.main([str(argument) for argument in _legal_arguments(command)])
+    output = capsys.readouterr()
+
+    assert calls == ["verify"]
+    assert code == 2
+    assert output.out == ""
+    expected = ({"error": "binding_mismatch", "path": "$.binding.bundle_hash"}
+                if failure == "domain" else {"error": "io_error", "path": "$files"})
+    assert json.loads(output.err) == expected
+    assert "Traceback" not in output.err
+    assert str(ROOT) not in output.err
+
+
+@pytest.mark.parametrize("mode", ["accept", "reject", "mismatch"])
+def test_render_result_reparses_strict_json_before_emitting(monkeypatch, capsys, mode):
+    import tools.pf2e_rules as module
+    from systems.pf2e.rules.manifest import read_json
+    from systems.pf2e.rules.validation import RulesValidationError
+
+    result = {"z": "\u00e9", "a": [1, True, None]}
+    seen = []
+
+    def parse(data):
+        seen.append(data)
+        if mode == "reject":
+            raise RulesValidationError("invalid_json", "$")
+        if mode == "mismatch":
+            return {"different": True}
+        return read_json(data)
+
+    monkeypatch.setattr(module, "read_json", parse)
+    monkeypatch.setattr(module, "verify_evidence_snapshot", lambda _path: result)
+    code = module.main(["evidence-snapshot-verify", "unused.json"])
+    output = capsys.readouterr()
+
+    assert seen == [b'{"a": [1, true, null], "z": "\\u00e9"}\n']
+    if mode == "accept":
+        assert code == 0
+        assert output.out.encode("ascii") == seen[0]
+        assert output.err == ""
+    else:
+        assert code == 2
+        assert output.out == ""
+        assert json.loads(output.err) == {"error": "invalid_json", "path": "$"}
+
+
+def test_class_legal_readiness_cli_exposes_no_compile_or_approval_command():
+    help_result = cli("--help")
+    assert help_result.returncode == 0
+    for command in LEGAL_COMMANDS:
+        assert command in help_result.stdout
+        rejected = cli(*_legal_arguments(command), "--store", "unused-store")
+        assert rejected.returncode == 2
+        assert "unrecognized arguments: --store" in rejected.stderr
+        assert rejected.stdout == ""
+    for action in ("compile", "publish", "approve", "approval", "activate", "activation"):
+        result = cli("class-legal-readiness-" + action)
+        assert result.returncode == 2
+        assert "invalid choice:" in result.stderr
+        assert result.stdout == ""
