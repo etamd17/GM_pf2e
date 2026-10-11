@@ -10,6 +10,10 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from systems.pf2e.rules.ingestion.compile_pack import write_package
+from systems.pf2e.rules.ingestion.class_legal_readiness import (
+    class_legal_readiness_report,
+    verify_class_legal_readiness_bundle,
+)
 from systems.pf2e.rules.ingestion.class_review_overlay import (
     verify_class_review_overlay,
     write_class_review_overlay,
@@ -26,17 +30,27 @@ from systems.pf2e.rules.registry import load_package
 from systems.pf2e.rules.validation import RulesValidationError, bounded_json, require
 
 
-def _render_result(result: dict, *, require_readback: bool = False) -> str:
-    """Serialize bounded output, optionally enforcing strict-parser readback."""
+def _render_result(result: dict, *, require_readback: bool = False) -> bytes:
+    """Return a bounded ASCII JSON line, optionally checking exact-byte readback."""
     if require_readback:
         bounded_json(result)
     try:
         payload = json.dumps(result, sort_keys=True, ensure_ascii=True)
-        size = len((payload + "\n").encode("ascii"))
+        emitted = (payload + "\n").encode("ascii")
     except (TypeError, ValueError, UnicodeError, RecursionError):
         raise RulesValidationError("invalid_json", "$") from None
-    require(size <= MAX_FILE_BYTES, "limit_exceeded", "$")
-    return payload
+    require(len(emitted) <= MAX_FILE_BYTES, "limit_exceeded", "$")
+    if require_readback:
+        require(read_json(emitted) == result, "invalid_json", "$")
+    return emitted
+
+
+def _add_class_legal_readiness_arguments(parser: argparse.ArgumentParser) -> None:
+    """Keep both read-only commands bound to the same complete input chain."""
+    parser.add_argument("manifest", type=Path)
+    for option in ("--overlay", "--snapshot", "--corpus", "--parent", "--source-evidence"):
+        parser.add_argument(option, type=Path, required=True)
+    parser.add_argument("--expected-hash")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -93,6 +107,11 @@ def main(argv: list[str] | None = None) -> int:
     class_review_verify_cmd.add_argument("--expected-hash")
     class_review_verify_cmd.add_argument("--parent", type=Path)
     class_review_verify_cmd.add_argument("--evidence", type=Path)
+    for name, help_text in (
+        ("class-legal-readiness-verify", "Verify frozen class legal-readiness evidence offline"),
+        ("class-legal-readiness-report", "Report verified class legal-readiness blockers offline"),
+    ):
+        _add_class_legal_readiness_arguments(commands.add_parser(name, help=help_text))
     args = parser.parse_args(argv)
     try:
         exit_code = 0
@@ -154,6 +173,28 @@ def main(argv: list[str] | None = None) -> int:
                     evidence_manifest_path=args.evidence,
                 ),
             }
+        elif args.command in {"class-legal-readiness-verify", "class-legal-readiness-report"}:
+            bundle = verify_class_legal_readiness_bundle(
+                args.manifest,
+                args.overlay,
+                args.snapshot,
+                args.corpus,
+                expected_hash=args.expected_hash,
+                parent_overlay_path=args.parent,
+                source_evidence_manifest_path=args.source_evidence,
+            )
+            if args.command == "class-legal-readiness-report":
+                result = class_legal_readiness_report(bundle)
+            else:
+                manifest = bundle["manifest"]
+                result = {
+                    "path": str(args.manifest.absolute()),
+                    **{key: manifest[key] for key in (
+                        "bundle_id", "bundle_hash", "scope", "class_review_overlay_id",
+                        "class_review_overlay_hash", "source_bundle_id", "source_bundle_hash",
+                        "counts",
+                    )},
+                }
         elif args.command == "diff":
             result = diff_packages(load_package(args.before), load_package(args.after))
         else:
@@ -169,10 +210,11 @@ def main(argv: list[str] | None = None) -> int:
                       "enabled_records": sum(r.state == "enabled" for r in package.records.values()),
                       "quarantined_records": sum(r.state == "quarantined" for r in package.records.values())}
         # ASCII-safe JSON keeps Windows console encodings from corrupting diagnostics.
-        print(_render_result(
+        sys.stdout.buffer.write(_render_result(
             result,
             require_readback=args.command in {
                 "class-review-compile", "class-review-verify",
+                "class-legal-readiness-verify", "class-legal-readiness-report",
                 "evidence-audit", "evidence-diff", "evidence-snapshot-verify",
             },
         ))
