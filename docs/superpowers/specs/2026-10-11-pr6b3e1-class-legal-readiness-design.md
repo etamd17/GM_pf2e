@@ -1,6 +1,6 @@
 # PR6B3E1 class legal-readiness design
 
-**Status:** Design approved; written spec awaiting review
+**Status:** Approved
 **Date:** 2026-10-11
 **Scope:** Offline legal, printing, and errata readiness evidence; no review
 approval, mechanics, runtime activation, or UI change
