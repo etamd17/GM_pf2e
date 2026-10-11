@@ -30,8 +30,8 @@ from systems.pf2e.rules.registry import load_package
 from systems.pf2e.rules.validation import RulesValidationError, bounded_json, require
 
 
-def _render_result(result: dict, *, require_readback: bool = False) -> str:
-    """Serialize bounded output, optionally enforcing strict-parser readback."""
+def _render_result(result: dict, *, require_readback: bool = False) -> bytes:
+    """Return a bounded ASCII JSON line, optionally checking exact-byte readback."""
     if require_readback:
         bounded_json(result)
     try:
@@ -42,7 +42,7 @@ def _render_result(result: dict, *, require_readback: bool = False) -> str:
     require(len(emitted) <= MAX_FILE_BYTES, "limit_exceeded", "$")
     if require_readback:
         require(read_json(emitted) == result, "invalid_json", "$")
-    return payload
+    return emitted
 
 
 def _add_class_legal_readiness_arguments(parser: argparse.ArgumentParser) -> None:
@@ -210,7 +210,7 @@ def main(argv: list[str] | None = None) -> int:
                       "enabled_records": sum(r.state == "enabled" for r in package.records.values()),
                       "quarantined_records": sum(r.state == "quarantined" for r in package.records.values())}
         # ASCII-safe JSON keeps Windows console encodings from corrupting diagnostics.
-        print(_render_result(
+        sys.stdout.buffer.write(_render_result(
             result,
             require_readback=args.command in {
                 "class-review-compile", "class-review-verify",

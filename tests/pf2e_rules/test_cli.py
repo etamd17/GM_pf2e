@@ -1115,6 +1115,50 @@ def test_render_result_reparses_strict_json_before_emitting(monkeypatch, capsys,
         assert json.loads(output.err) == {"error": "invalid_json", "path": "$"}
 
 
+@pytest.mark.parametrize("byte_limit", [None, 9, 8])
+def test_strict_readback_matches_raw_stdout_and_enforces_newline_byte_budget(byte_limit):
+    # Nine bytes fit with LF; Windows text emission used to add an unchecked CR.
+    script = f"""
+import json
+import sys
+import tools.pf2e_rules as command
+from systems.pf2e.rules.manifest import read_json
+
+readback = []
+def capture_readback(data):
+    readback.append(data.hex())
+    return read_json(data)
+
+command.read_json = capture_readback
+command.verify_evidence_snapshot = lambda _path: {{'a': 1}}
+byte_limit = {byte_limit!r}
+if byte_limit is not None:
+    command.MAX_FILE_BYTES = byte_limit
+code = command.main(['evidence-snapshot-verify', 'unused.json'])
+# Keep instrumentation separate from CLI diagnostics and capture both as bytes.
+sys.stderr.buffer.write(b'\\nREADBACK:' + json.dumps(readback).encode('ascii'))
+raise SystemExit(code)
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script], cwd=ROOT, capture_output=True,
+    )
+    diagnostics, captured_readback = result.stderr.rsplit(b"\nREADBACK:", 1)
+    reparsed_bytes = [bytes.fromhex(value) for value in json.loads(captured_readback)]
+
+    if byte_limit == 8:
+        assert result.returncode == 2
+        assert result.stdout == b""
+        assert reparsed_bytes == []
+        assert json.loads(diagnostics) == {"error": "limit_exceeded", "path": "$"}
+    else:
+        assert result.returncode == 0, diagnostics
+        assert diagnostics == b""
+        assert reparsed_bytes == [b'{"a": 1}\n']
+        if byte_limit is not None:
+            assert len(result.stdout) <= byte_limit
+        assert result.stdout == reparsed_bytes[0]
+
+
 def test_class_legal_readiness_cli_exposes_no_compile_or_approval_command():
     help_result = cli("--help")
     assert help_result.returncode == 0
