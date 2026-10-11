@@ -58,6 +58,14 @@ reviews and 29 class-rules reviews remain pending, with zero enabled mechanics
 and no runtime or UI change. See
 [the class-source review record](pr6b3d-class-source-license-review.md).
 
+PR6B3E1 retains the immutable legal-readiness inventory for those eight
+publications: one artifact hash/legal notice observed, seven final artifacts
+and legal notices missing, and all eight readiness states blocked. All eight
+license reviews and all 29 class mechanics reviews remain pending, with zero
+enabled mechanics and no runtime or UI change. See
+[the class legal-readiness blockers](pr6b3e1-class-legal-readiness.md).
+The next mechanics slice remains gated by PR6B3E2 legal approval.
+
 ## Pull-request gate
 
 Every implementation pull request must include the applicable subset of:
