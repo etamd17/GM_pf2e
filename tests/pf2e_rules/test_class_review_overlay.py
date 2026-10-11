@@ -33,6 +33,14 @@ CURRENT_CLASS_REVIEW = (
     / "reviews"
     / "pf2e-class-identities-2026-10-07.1"
 )
+CURRENT_CLASS_SOURCE_REVIEW = (
+    ROOT
+    / "systems"
+    / "pf2e"
+    / "rules"
+    / "reviews"
+    / "pf2e-class-source-review-2026-10-10.1"
+)
 CURRENT_CLASS_SOURCE_EVIDENCE = (
     ROOT
     / "systems"
@@ -2555,6 +2563,82 @@ def test_schema_v2_path_checks_reject_aliases_but_allow_same_store_siblings(tmp_
             parent_overlay_path=target,
             evidence_manifest_path=CURRENT_CLASS_SOURCE_EVIDENCE,
         )
+    assert error.value.code == "path_overlap"
+    assert error.value.path == "$.paths"
+
+
+def test_schema_v2_rejects_parent_child_payload_hardlink_before_reads(
+    tmp_path, monkeypatch
+):
+    """Catches distinct artifact roots sharing one mutable payload inode."""
+    module = overlay()
+    evidence_module = importlib.import_module(
+        "systems.pf2e.rules.ingestion.class_source_evidence"
+    )
+    store = tmp_path / "review-store"
+    parent = store / CURRENT_CLASS_REVIEW.name
+    child = store / CURRENT_CLASS_SOURCE_REVIEW.name
+    shutil.copytree(CURRENT_CLASS_REVIEW, parent)
+    shutil.copytree(CURRENT_CLASS_SOURCE_REVIEW, child)
+    child_records = child / "records.json"
+    child_records.unlink()
+    try:
+        os.link(parent / "records.json", child_records)
+    except (OSError, NotImplementedError) as error:
+        pytest.skip(f"Host does not permit hard-link creation: {error}")
+
+    def reject_payload_read(_path):
+        pytest.fail("schema-v2 hardlink preflight must run before payload reads")
+
+    monkeypatch.setattr(module, "read_file", reject_payload_read)
+    monkeypatch.setattr(evidence_module, "read_file", reject_payload_read)
+
+    with pytest.raises(ValueError) as error:
+        module.verify_class_review_overlay(
+            child,
+            CURRENT_SNAPSHOT,
+            ROOT / "compendium_data",
+            parent_overlay_path=parent,
+            evidence_manifest_path=CURRENT_CLASS_SOURCE_EVIDENCE,
+        )
+
+    assert error.value.code == "path_overlap"
+    assert error.value.path == "$.paths"
+
+
+def test_schema_v2_rejects_evidence_payload_hardlink_before_reads(
+    tmp_path, monkeypatch
+):
+    """Catches retained evidence sharing storage with another mutable input."""
+    module = overlay()
+    evidence_module = importlib.import_module(
+        "systems.pf2e.rules.ingestion.class_source_evidence"
+    )
+    parent = tmp_path / CURRENT_CLASS_REVIEW.name
+    evidence_root = tmp_path / CURRENT_CLASS_SOURCE_EVIDENCE.parent.name
+    authoring = _production_v2_authoring()
+    shutil.copytree(CURRENT_CLASS_REVIEW, parent)
+    shutil.copytree(CURRENT_CLASS_SOURCE_EVIDENCE.parent, evidence_root)
+    dossier = evidence_root / "dossiers" / "player-core.json"
+    dossier.unlink()
+    try:
+        os.link(parent / "authoring.json", dossier)
+    except (OSError, NotImplementedError) as error:
+        pytest.skip(f"Host does not permit hard-link creation: {error}")
+
+    def reject_payload_read(_path):
+        pytest.fail("schema-v2 hardlink preflight must run before payload reads")
+
+    monkeypatch.setattr(module, "read_file", reject_payload_read)
+    monkeypatch.setattr(evidence_module, "read_file", reject_payload_read)
+
+    with pytest.raises(ValueError) as error:
+        _compile_production_v2(
+            authoring,
+            parent_overlay_path=parent,
+            evidence_manifest_path=evidence_root / "manifest.json",
+        )
+
     assert error.value.code == "path_overlap"
     assert error.value.path == "$.paths"
 

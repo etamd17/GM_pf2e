@@ -38,6 +38,7 @@ from ..validation import (
 )
 from .aon_capture import PENDING_REASON
 from .class_source_evidence import (
+    PRODUCTION_CLASS_ASSERTIONS,
     class_source_evidence_hashes,
     verify_class_source_evidence_bundle,
 )
@@ -1289,6 +1290,7 @@ def _compile_class_review_overlay(
                 ("$.paths.evidence", evidence_manifest.parent),
             )
         )
+        _require_unshared_v2_payloads(parent_root, evidence_manifest)
         parent_files, _evidence_bundle = _load_v2_inputs(
             normalized_input,
             manifest_path,
@@ -1527,6 +1529,58 @@ def _require_disjoint_trees(paths: tuple[tuple[str, Path], ...]) -> None:
                 "path_overlap",
                 "$.paths",
             )
+
+
+def _require_unshared_v2_payloads(
+    parent_overlay_path: Path,
+    evidence_manifest_path: Path,
+    *,
+    child_overlay_path: Path | None = None,
+) -> None:
+    """Reject schema-v2 payload hardlinks before any package bytes are read."""
+    paths = []
+    overlay_roots = [("$.paths.parent", Path(parent_overlay_path).absolute())]
+    if child_overlay_path is not None:
+        overlay_roots.append(
+            ("$.paths.target", Path(child_overlay_path).absolute())
+        )
+    for field, root in overlay_roots:
+        paths.extend(
+            (f"{field}.{name}", root / name)
+            for name in sorted(CLASS_REVIEW_FILES)
+        )
+
+    evidence_manifest = Path(evidence_manifest_path).absolute()
+    evidence_root = evidence_manifest.parent
+    paths.append(("$.paths.evidence.manifest", evidence_manifest))
+    paths.extend(
+        (
+            f"$.paths.evidence.{source_id}",
+            evidence_root
+            / "dossiers"
+            / f"{source_id.removeprefix('pf2e.source.')}.json",
+        )
+        for source_id in sorted(PRODUCTION_CLASS_ASSERTIONS)
+    )
+
+    for _field, path in paths:
+        try:
+            info = path.lstat()
+        except OSError:
+            raise RulesValidationError(
+                "invalid_package_layout", "$files"
+            ) from None
+        require(
+            not stat.S_ISLNK(info.st_mode)
+            and not (
+                getattr(info, "st_file_attributes", 0)
+                & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 1024)
+            )
+            and stat.S_ISREG(info.st_mode),
+            "invalid_package_layout",
+            "$files",
+        )
+        require(info.st_nlink == 1, "path_overlap", "$.paths")
 
 
 def _open_overlay_file(path: Path):
@@ -2152,6 +2206,12 @@ def _verify_class_review_overlay(
         leaf_paths.append(("$.paths.evidence", evidence_root))
     _require_disjoint_trees(tuple(broad_paths))
     _require_disjoint_trees(tuple(leaf_paths))
+    if parent_overlay_path is not None and evidence_manifest_path is not None:
+        _require_unshared_v2_payloads(
+            Path(parent_overlay_path),
+            Path(evidence_manifest_path),
+            child_overlay_path=root,
+        )
     files = _read_class_review_overlay_files(root)
     authoring = read_json(files["authoring.json"])
     manifest = read_json(files["manifest.json"])
