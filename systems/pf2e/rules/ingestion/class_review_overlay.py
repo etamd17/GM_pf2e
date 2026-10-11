@@ -37,6 +37,11 @@ from ..validation import (
     timestamp,
 )
 from .aon_capture import PENDING_REASON
+from .class_source_evidence import (
+    PRODUCTION_CLASS_ASSERTIONS,
+    class_source_evidence_hashes,
+    verify_class_source_evidence_bundle,
+)
 from .evidence_inventory import (
     AON_AUTHORITY,
     evidence_metadata_text,
@@ -51,6 +56,11 @@ from .evidence_snapshot import (
 
 CLASS_REVIEW_SCHEMA_VERSION = 1
 CLASS_REVIEW_COMPILER_VERSION = "pf2e-class-review-1"
+CLASS_REVIEW_SCHEMA_VERSIONS = frozenset({1, 2})
+CLASS_REVIEW_COMPILER_VERSIONS = {
+    1: CLASS_REVIEW_COMPILER_VERSION,
+    2: "pf2e-class-review-2",
+}
 SHA256 = r"[0-9a-f]{64}"
 OVERLAY_ID = r"pf2e-[a-z0-9]+(?:[.-][a-z0-9]+)*"
 SNAPSHOT_ID = r"pf2e-aon-[a-z0-9]+(?:-[a-z0-9]+)*"
@@ -98,6 +108,16 @@ PRODUCTION_SOURCE_DRIFT_RULE_IDS = frozenset(
 PRODUCTION_MISSING_LOCAL_RULE_IDS = frozenset(
     {"pf2e.class.necromancer", "pf2e.class.runesmith"}
 )
+PRODUCTION_PARENT_OVERLAY_ID = "pf2e-class-identities-2026-10-07.1"
+PRODUCTION_PARENT_OVERLAY_HASH = (
+    "273d3180178eeea249db01ddcb778e13675c98ff74717d51dbc8efedc73a2614"
+)
+PRODUCTION_CHILD_OVERLAY_ID = "pf2e-class-source-review-2026-10-10.1"
+PRODUCTION_CHILD_CREATED_AT = "2026-10-10T13:39:32Z"
+PRODUCTION_EVIDENCE_BUNDLE_ID = "pf2e-class-sources-2026-10-10.1"
+PRODUCTION_EVIDENCE_BUNDLE_HASH = (
+    "4057206e6b7850e376a5a8757aa6d0398a2dc4c015cda2bdcccb0fa04c4689f3"
+)
 
 
 def _sha256(value, path: str) -> str:
@@ -137,19 +157,23 @@ def _review(value, path: str) -> dict:
 
 
 def _manifest(value, path: str) -> dict:
-    shape(
-        value,
-        "schema_version overlay_id created_at authority kind snapshot_id "
-        "snapshot_manifest_sha256 base_category activation parent_overlay_id "
-        "parent_overlay_hash",
-        path,
-    )
-    require(type(value["schema_version"]) is int, "invalid_type", path + ".schema_version")
+    require(type(value) is dict, "invalid_type", path)
+    require("schema_version" in value, "missing_field", path)
+    require(type(value["schema_version"]) is int,
+            "invalid_type", path + ".schema_version")
     require(
-        value["schema_version"] == CLASS_REVIEW_SCHEMA_VERSION,
+        value["schema_version"] in CLASS_REVIEW_SCHEMA_VERSIONS,
         "unsupported_version",
         path + ".schema_version",
     )
+    fields = (
+        "schema_version overlay_id created_at authority kind snapshot_id "
+        "snapshot_manifest_sha256 base_category activation parent_overlay_id "
+        "parent_overlay_hash"
+    )
+    if value["schema_version"] == 2:
+        fields += " evidence_bundle_id evidence_bundle_hash"
+    shape(value, fields, path)
     text(value["overlay_id"], path + ".overlay_id", pattern=OVERLAY_ID)
     timestamp(value["created_at"], path + ".created_at")
     choice(value["authority"], {AON_AUTHORITY}, path + ".authority")
@@ -160,12 +184,26 @@ def _manifest(value, path: str) -> dict:
     )
     choice(value["base_category"], {"class"}, path + ".base_category")
     choice(value["activation"], {"none"}, path + ".activation")
-    require(
-        value["parent_overlay_id"] is None
-        and value["parent_overlay_hash"] is None,
-        "unsupported_composition",
-        path,
-    )
+    if value["schema_version"] == 1:
+        require(
+            value["parent_overlay_id"] is None
+            and value["parent_overlay_hash"] is None,
+            "unsupported_composition",
+            path,
+        )
+    else:
+        text(value["parent_overlay_id"], path + ".parent_overlay_id",
+             pattern=OVERLAY_ID)
+        _sha256(value["parent_overlay_hash"], path + ".parent_overlay_hash")
+        text(value["evidence_bundle_id"], path + ".evidence_bundle_id",
+             pattern=OVERLAY_ID)
+        _sha256(value["evidence_bundle_hash"],
+                path + ".evidence_bundle_hash")
+        require(
+            value["overlay_id"] != value["parent_overlay_id"],
+            "unsupported_composition",
+            path,
+        )
     return value
 
 
@@ -964,6 +1002,16 @@ def _apply_class_review_overlay(
             "snapshot_mismatch",
             "$.manifest.snapshot_manifest_sha256",
         )
+        schema_version = manifest.get("schema_version")
+        production_gate_counts = {
+            1: {"pending": 45, "approved": 0, "rejected": 0},
+            2: {"pending": 37, "approved": 8, "rejected": 0},
+        }
+        require(
+            schema_version in production_gate_counts,
+            "unsupported_version",
+            "$.manifest.schema_version",
+        )
         require(
             summary["effective_dispositions"]
             == {"excluded": 0, "mapped": 29, "pending": 18_493}
@@ -974,7 +1022,7 @@ def _apply_class_review_overlay(
                 "licenses": 8,
                 "rules": 29,
                 "total": 45,
-                "by_status": {"pending": 45, "approved": 0, "rejected": 0},
+                "by_status": production_gate_counts[schema_version],
             },
             "count_mismatch",
             "$.counts",
@@ -1001,25 +1049,257 @@ def _require_pending_overlay_reviews(authoring: dict) -> None:
         )
 
 
+def _require_v2_parent_binding(manifest: dict) -> None:
+    require(
+        manifest["overlay_id"] == PRODUCTION_CHILD_OVERLAY_ID,
+        "binding_mismatch",
+        "$.manifest.overlay_id",
+    )
+    require(
+        manifest["created_at"] == PRODUCTION_CHILD_CREATED_AT,
+        "binding_mismatch",
+        "$.manifest.created_at",
+    )
+    require(
+        manifest["parent_overlay_id"] == PRODUCTION_PARENT_OVERLAY_ID,
+        "parent_mismatch",
+        "$.manifest.parent_overlay_id",
+    )
+    require(
+        manifest["parent_overlay_hash"] == PRODUCTION_PARENT_OVERLAY_HASH,
+        "parent_mismatch",
+        "$.manifest.parent_overlay_hash",
+    )
+    require(
+        manifest["evidence_bundle_id"] == PRODUCTION_EVIDENCE_BUNDLE_ID,
+        "binding_mismatch",
+        "$.manifest.evidence_bundle_id",
+    )
+    require(
+        manifest["evidence_bundle_hash"] == PRODUCTION_EVIDENCE_BUNDLE_HASH,
+        "binding_mismatch",
+        "$.manifest.evidence_bundle_hash",
+    )
+
+
+def _require_v2_parent_authoring(child: dict, parent: dict) -> None:
+    require(parent["manifest"]["schema_version"] == 1,
+            "parent_mismatch", "$.manifest.parent_overlay_id")
+    frozen_manifest_fields = (
+        "authority",
+        "kind",
+        "snapshot_id",
+        "snapshot_manifest_sha256",
+        "base_category",
+        "activation",
+    )
+    for field in frozen_manifest_fields:
+        require(
+            child["manifest"][field] == parent["manifest"][field],
+            "parent_mismatch",
+            "$.manifest." + field,
+        )
+
+    require(len(child["sources"]) == len(parent["sources"]),
+            "parent_mismatch", "$.sources")
+    for index, (child_source, parent_source) in enumerate(
+        zip(child["sources"], parent["sources"], strict=True)
+    ):
+        for field in ("source_id", "title"):
+            require(
+                child_source[field] == parent_source[field],
+                "parent_mismatch",
+                f"$.sources[{index}].{field}",
+            )
+
+    require(len(child["records"]) == len(parent["records"]),
+            "parent_mismatch", "$.records")
+    for index, (child_record, parent_record) in enumerate(
+        zip(child["records"], parent["records"], strict=True)
+    ):
+        for field in ("identity", "rule_id", "source_id", "rules_review"):
+            require(
+                child_record[field] == parent_record[field],
+                "parent_mismatch",
+                f"$.records[{index}].{field}",
+            )
+
+
+def _require_v2_review_evidence(authoring: dict, evidence_bundle: dict) -> None:
+    manifest = evidence_bundle["manifest"]
+    require(
+        manifest["bundle_id"] == authoring["manifest"]["evidence_bundle_id"],
+        "binding_mismatch",
+        "$.manifest.evidence_bundle_id",
+    )
+    require(
+        manifest["bundle_hash"] == authoring["manifest"]["evidence_bundle_hash"],
+        "binding_mismatch",
+        "$.manifest.evidence_bundle_hash",
+    )
+
+    records_by_source = {}
+    for record in authoring["records"]:
+        records_by_source.setdefault(record["source_id"], []).append(
+            record["rule_id"]
+        )
+
+    used_evidence = set()
+    dossiers_by_source = evidence_bundle["dossiers_by_source"]
+    for index, source in enumerate(authoring["sources"]):
+        source_id = source["source_id"]
+        dossier = dossiers_by_source.get(source_id)
+        require(dossier is not None, "evidence_mismatch",
+                f"$.sources[{index}].source_id")
+        require(dossier["overlay_title"] == source["title"],
+                "evidence_mismatch", f"$.sources[{index}].title")
+        require(
+            dossier["class_rule_ids"] == sorted(records_by_source[source_id]),
+            "evidence_mismatch",
+            f"$.sources[{index}].source_id",
+        )
+        for field in ("source_review", "license_review"):
+            path = f"$.sources[{index}].{field}"
+            review = source[field]
+            if review["status"] == "pending":
+                continue
+            allowed = class_source_evidence_hashes(
+                evidence_bundle, source_id, field
+            )
+            supplied = set(review["evidence_sha256"])
+            require(
+                bool(allowed) and supplied == set(allowed),
+                "evidence_mismatch",
+                path + ".evidence_sha256",
+            )
+            require(
+                not (used_evidence & supplied),
+                "evidence_mismatch",
+                path + ".evidence_sha256",
+            )
+            used_evidence.update(supplied)
+
+    for index, source in enumerate(authoring["sources"]):
+        review = source["source_review"]
+        require(
+            review["status"] == "approved"
+            and review["reviewer"] == "OpenAI Codex"
+            and review["reviewed_at"] == PRODUCTION_CHILD_CREATED_AT,
+            "lifecycle_mismatch",
+            f"$.sources[{index}].source_review",
+        )
+        require(
+            source["license_review"]["status"] == "pending",
+            "lifecycle_mismatch",
+            f"$.sources[{index}].license_review",
+        )
+    for index, record in enumerate(authoring["records"]):
+        require(
+            record["rules_review"]["status"] == "pending",
+            "lifecycle_mismatch",
+            f"$.records[{index}].rules_review",
+        )
+
+
+def _load_v2_inputs(
+    authoring: dict,
+    snapshot_manifest_path: Path,
+    corpus_root: Path,
+    parent_overlay_path: Path,
+    evidence_manifest_path: Path,
+) -> tuple[dict[str, bytes], dict]:
+    _require_v2_parent_binding(authoring["manifest"])
+    parent_root = Path(parent_overlay_path).absolute()
+    evidence_manifest = Path(evidence_manifest_path).absolute()
+    _parent_summary, parent_files = _verify_class_review_overlay(
+        parent_root,
+        snapshot_manifest_path,
+        corpus_root,
+        expected_hash=PRODUCTION_PARENT_OVERLAY_HASH,
+        include_files=True,
+    )
+    parent_authoring = normalize_class_review_authoring(
+        read_json(parent_files["authoring.json"])
+    )
+    require(
+        parent_authoring["manifest"]["overlay_id"]
+        == authoring["manifest"]["parent_overlay_id"],
+        "parent_mismatch",
+        "$.manifest.parent_overlay_id",
+    )
+    _require_v2_parent_authoring(authoring, parent_authoring)
+    evidence_bundle = verify_class_source_evidence_bundle(
+        evidence_manifest,
+        expected_hash=authoring["manifest"]["evidence_bundle_hash"],
+    )
+    _require_v2_review_evidence(authoring, evidence_bundle)
+    return parent_files, evidence_bundle
+
+
 def _compile_class_review_overlay(
     authoring: dict,
     snapshot_manifest_path: Path,
     corpus_root: Path,
     *,
     fixture_mode: bool = False,
+    parent_overlay_path: Path | None = None,
+    evidence_manifest_path: Path | None = None,
 ) -> dict[str, bytes]:
     """Compile canonical sidecars from verified evidence without publishing."""
     require(type(fixture_mode) is bool, "invalid_type", "$.fixture_mode")
     manifest_path = Path(snapshot_manifest_path).absolute()
     corpus = Path(corpus_root).absolute()
-    _require_disjoint_trees(
-        (
-            ("$.paths.snapshot", manifest_path.parent),
-            ("$.paths.corpus", corpus),
+    normalized_input = normalize_class_review_authoring(authoring)
+    schema_version = normalized_input["manifest"]["schema_version"]
+    parent_files = None
+    if schema_version == 1:
+        require(
+            parent_overlay_path is None,
+            "unsupported_composition",
+            "$.paths.parent",
         )
-    )
+        require(
+            evidence_manifest_path is None,
+            "unsupported_composition",
+            "$.paths.evidence",
+        )
+        _require_disjoint_trees(
+            (
+                ("$.paths.snapshot", manifest_path.parent),
+                ("$.paths.corpus", corpus),
+            )
+        )
+    else:
+        require(
+            parent_overlay_path is not None,
+            "missing_binding",
+            "$.paths.parent",
+        )
+        require(
+            evidence_manifest_path is not None,
+            "missing_binding",
+            "$.paths.evidence",
+        )
+        parent_root = Path(parent_overlay_path).absolute()
+        evidence_manifest = Path(evidence_manifest_path).absolute()
+        _require_disjoint_trees(
+            (
+                ("$.paths.snapshot", manifest_path.parent),
+                ("$.paths.corpus", corpus),
+                ("$.paths.parent", parent_root),
+                ("$.paths.evidence", evidence_manifest.parent),
+            )
+        )
+        _require_unshared_v2_payloads(parent_root, evidence_manifest)
+        parent_files, _evidence_bundle = _load_v2_inputs(
+            normalized_input,
+            manifest_path,
+            corpus,
+            parent_root,
+            evidence_manifest,
+        )
     resolved = _resolve_class_snapshot(
-        authoring,
+        normalized_input,
         manifest_path,
         fixture_mode=fixture_mode,
         include_base_ledger=True,
@@ -1037,7 +1317,8 @@ def _compile_class_review_overlay(
             for record in resolved["records"]
         ],
     }
-    _require_pending_overlay_reviews(normalized_authoring)
+    if schema_version == 1:
+        _require_pending_overlay_reviews(normalized_authoring)
     reconciled = _reconcile_class_corpus(
         resolved,
         corpus,
@@ -1068,6 +1349,12 @@ def _compile_class_review_overlay(
         }
         for record in reconciled["records"]
     ]
+    if schema_version == 2:
+        require(
+            canonical_json(records) == parent_files["records.json"],
+            "parent_mismatch",
+            "$.files.records.json",
+        )
     files = {
         "authoring.json": canonical_json(normalized_authoring),
         "sources.json": canonical_json(normalized_authoring["sources"]),
@@ -1076,7 +1363,7 @@ def _compile_class_review_overlay(
     summary = applied["summary"]
     manifest = {
         **deepcopy(normalized_authoring["manifest"]),
-        "compiler_version": CLASS_REVIEW_COMPILER_VERSION,
+        "compiler_version": CLASS_REVIEW_COMPILER_VERSIONS[schema_version],
         "inputs": {"authoring.json": digest(files["authoring.json"])},
         "outputs": {
             name: digest(files[name])
@@ -1109,12 +1396,17 @@ def compile_class_review_overlay(
     authoring: dict,
     snapshot_manifest_path: Path,
     corpus_root: Path,
+    *,
+    parent_overlay_path: Path | None = None,
+    evidence_manifest_path: Path | None = None,
 ) -> dict[str, bytes]:
     """Compile the frozen production class-review overlay."""
     return _compile_class_review_overlay(
         authoring,
         snapshot_manifest_path,
         corpus_root,
+        parent_overlay_path=parent_overlay_path,
+        evidence_manifest_path=evidence_manifest_path,
     )
 
 
@@ -1237,6 +1529,58 @@ def _require_disjoint_trees(paths: tuple[tuple[str, Path], ...]) -> None:
                 "path_overlap",
                 "$.paths",
             )
+
+
+def _require_unshared_v2_payloads(
+    parent_overlay_path: Path,
+    evidence_manifest_path: Path,
+    *,
+    child_overlay_path: Path | None = None,
+) -> None:
+    """Reject schema-v2 payload hardlinks before any package bytes are read."""
+    paths = []
+    overlay_roots = [("$.paths.parent", Path(parent_overlay_path).absolute())]
+    if child_overlay_path is not None:
+        overlay_roots.append(
+            ("$.paths.target", Path(child_overlay_path).absolute())
+        )
+    for field, root in overlay_roots:
+        paths.extend(
+            (f"{field}.{name}", root / name)
+            for name in sorted(CLASS_REVIEW_FILES)
+        )
+
+    evidence_manifest = Path(evidence_manifest_path).absolute()
+    evidence_root = evidence_manifest.parent
+    paths.append(("$.paths.evidence.manifest", evidence_manifest))
+    paths.extend(
+        (
+            f"$.paths.evidence.{source_id}",
+            evidence_root
+            / "dossiers"
+            / f"{source_id.removeprefix('pf2e.source.')}.json",
+        )
+        for source_id in sorted(PRODUCTION_CLASS_ASSERTIONS)
+    )
+
+    for _field, path in paths:
+        try:
+            info = path.lstat()
+        except OSError:
+            raise RulesValidationError(
+                "invalid_package_layout", "$files"
+            ) from None
+        require(
+            not stat.S_ISLNK(info.st_mode)
+            and not (
+                getattr(info, "st_file_attributes", 0)
+                & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 1024)
+            )
+            and stat.S_ISREG(info.st_mode),
+            "invalid_package_layout",
+            "$files",
+        )
+        require(info.st_nlink == 1, "path_overlap", "$.paths")
 
 
 def _open_overlay_file(path: Path):
@@ -1504,6 +1848,8 @@ def _write_class_review_overlay(
     store_root: Path,
     *,
     fixture_mode: bool = False,
+    parent_overlay_path: Path | None = None,
+    evidence_manifest_path: Path | None = None,
 ) -> Path:
     """Create-only publish one overlay atomically to observing processes.
 
@@ -1515,33 +1861,78 @@ def _write_class_review_overlay(
     manifest_path = Path(snapshot_manifest_path).absolute()
     corpus = Path(corpus_root).absolute()
     store = Path(store_root).absolute()
-    _require_disjoint_trees(
-        (
-            ("$.paths.snapshot", manifest_path.parent),
-            ("$.paths.corpus", corpus),
-            ("$.paths.store", store),
-        )
+    normalized_input = normalize_class_review_authoring(authoring)
+    schema_version = normalized_input["manifest"]["schema_version"]
+    overlay_id = normalized_input["manifest"]["overlay_id"]
+    target = store / overlay_id
+    require(
+        not os.path.lexists(target),
+        "overlay_exists",
+        "$.manifest.overlay_id",
     )
+    if schema_version == 2:
+        require(
+            parent_overlay_path is not None,
+            "missing_binding",
+            "$.paths.parent",
+        )
+        require(
+            evidence_manifest_path is not None,
+            "missing_binding",
+            "$.paths.evidence",
+        )
+    broad_paths = [
+        ("$.paths.snapshot", manifest_path.parent),
+        ("$.paths.corpus", corpus),
+        ("$.paths.store", store),
+    ]
+    if schema_version == 2:
+        broad_paths.append(
+            ("$.paths.evidence", Path(evidence_manifest_path).absolute().parent)
+        )
+    _require_disjoint_trees(tuple(broad_paths))
+    leaf_paths = [
+        ("$.paths.snapshot", manifest_path.parent),
+        ("$.paths.corpus", corpus),
+        ("$.paths.target", target),
+    ]
+    if schema_version == 2:
+        leaf_paths.extend(
+            (
+                ("$.paths.parent", Path(parent_overlay_path).absolute()),
+                (
+                    "$.paths.evidence",
+                    Path(evidence_manifest_path).absolute().parent,
+                ),
+            )
+        )
+    _require_disjoint_trees(tuple(leaf_paths))
     files = _compile_class_review_overlay(
-        authoring,
+        normalized_input,
         manifest_path,
         corpus,
         fixture_mode=fixture_mode,
+        parent_overlay_path=parent_overlay_path,
+        evidence_manifest_path=evidence_manifest_path,
     )
     manifest = read_json(files["manifest.json"])
-    overlay_id = manifest["overlay_id"]
+    require(
+        manifest["overlay_id"] == overlay_id,
+        "integrity_mismatch",
+        "$.manifest.overlay_id",
+    )
 
     try:
         store.mkdir(parents=True, exist_ok=True)
         reject_links(store)
         require(store.is_dir(), "invalid_package_layout", "$.paths.store")
-        _require_disjoint_trees(
-            (
-                ("$.paths.snapshot", manifest_path.parent),
-                ("$.paths.corpus", corpus),
-                ("$.paths.store", store),
-            )
+        require(
+            not os.path.lexists(target),
+            "overlay_exists",
+            "$.manifest.overlay_id",
         )
+        _require_disjoint_trees(tuple(broad_paths))
+        _require_disjoint_trees(tuple(leaf_paths))
     except RulesValidationError:
         raise
     except OSError:
@@ -1549,7 +1940,6 @@ def _write_class_review_overlay(
             "invalid_package_layout", "$.paths.store"
         ) from None
 
-    target = store / overlay_id
     require(
         not os.path.lexists(target),
         "overlay_exists",
@@ -1657,6 +2047,9 @@ def write_class_review_overlay(
     snapshot_manifest_path: Path,
     corpus_root: Path,
     store_root: Path,
+    *,
+    parent_overlay_path: Path | None = None,
+    evidence_manifest_path: Path | None = None,
 ) -> Path:
     """Publish the frozen production class-review overlay exactly once."""
     return _write_class_review_overlay(
@@ -1664,6 +2057,8 @@ def write_class_review_overlay(
         snapshot_manifest_path,
         corpus_root,
         store_root,
+        parent_overlay_path=parent_overlay_path,
+        evidence_manifest_path=evidence_manifest_path,
     )
 
 
@@ -1726,13 +2121,26 @@ def _read_class_review_overlay_files(overlay_path: Path) -> dict[str, bytes]:
 def _verify_compiled_manifest_hashes(
     manifest: dict, files: dict[str, bytes]
 ) -> None:
-    shape(
-        manifest,
+    require(type(manifest) is dict, "invalid_type", "$.manifest")
+    require("schema_version" in manifest, "missing_field", "$.manifest")
+    require(
+        type(manifest["schema_version"]) is int,
+        "invalid_type",
+        "$.manifest.schema_version",
+    )
+    require(
+        manifest["schema_version"] in CLASS_REVIEW_SCHEMA_VERSIONS,
+        "unsupported_version",
+        "$.manifest.schema_version",
+    )
+    fields = (
         "schema_version overlay_id created_at authority kind snapshot_id "
         "snapshot_manifest_sha256 base_category activation parent_overlay_id "
-        "parent_overlay_hash compiler_version inputs outputs counts overlay_hash",
-        "$.manifest",
+        "parent_overlay_hash compiler_version inputs outputs counts overlay_hash"
     )
+    if manifest["schema_version"] == 2:
+        fields += " evidence_bundle_id evidence_bundle_hash"
+    shape(manifest, fields, "$.manifest")
     shape(manifest["inputs"], "authoring.json", "$.manifest.inputs")
     shape(
         manifest["outputs"],
@@ -1768,17 +2176,42 @@ def _verify_class_review_overlay(
     expected_hash: str | None = None,
     *,
     fixture_mode: bool = False,
-) -> dict:
+    parent_overlay_path: Path | None = None,
+    evidence_manifest_path: Path | None = None,
+    include_files: bool = False,
+) -> dict | tuple[dict, dict[str, bytes]]:
     """Verify exact package bytes against freshly resolved frozen inputs."""
     require(type(fixture_mode) is bool, "invalid_type", "$.fixture_mode")
+    require(type(include_files) is bool, "invalid_type", "$.include_files")
     root = Path(overlay_path).absolute()
-    _require_disjoint_trees(
-        (
-            ("$.paths.snapshot", Path(snapshot_manifest_path).absolute().parent),
-            ("$.paths.corpus", Path(corpus_root).absolute()),
-            ("$.paths.store", root.parent),
+    snapshot_root = Path(snapshot_manifest_path).absolute().parent
+    corpus = Path(corpus_root).absolute()
+    broad_paths = [
+        ("$.paths.snapshot", snapshot_root),
+        ("$.paths.corpus", corpus),
+        ("$.paths.store", root.parent),
+    ]
+    leaf_paths = [
+        ("$.paths.snapshot", snapshot_root),
+        ("$.paths.corpus", corpus),
+        ("$.paths.target", root),
+    ]
+    if parent_overlay_path is not None:
+        leaf_paths.append(
+            ("$.paths.parent", Path(parent_overlay_path).absolute())
         )
-    )
+    if evidence_manifest_path is not None:
+        evidence_root = Path(evidence_manifest_path).absolute().parent
+        broad_paths.append(("$.paths.evidence", evidence_root))
+        leaf_paths.append(("$.paths.evidence", evidence_root))
+    _require_disjoint_trees(tuple(broad_paths))
+    _require_disjoint_trees(tuple(leaf_paths))
+    if parent_overlay_path is not None and evidence_manifest_path is not None:
+        _require_unshared_v2_payloads(
+            Path(parent_overlay_path),
+            Path(evidence_manifest_path),
+            child_overlay_path=root,
+        )
     files = _read_class_review_overlay_files(root)
     authoring = read_json(files["authoring.json"])
     manifest = read_json(files["manifest.json"])
@@ -1790,11 +2223,28 @@ def _verify_class_review_overlay(
     require(root.name == manifest["overlay_id"],
             "invalid_package_layout", "$.manifest.overlay_id")
 
+    schema_version = manifest["schema_version"]
+    if schema_version == 2:
+        require(
+            parent_overlay_path is not None,
+            "missing_binding",
+            "$.paths.parent",
+        )
+        require(
+            evidence_manifest_path is not None,
+            "missing_binding",
+            "$.paths.evidence",
+        )
+        _require_disjoint_trees(tuple(broad_paths))
+        _require_disjoint_trees(tuple(leaf_paths))
+
     expected_files = _compile_class_review_overlay(
         authoring,
         snapshot_manifest_path,
         corpus_root,
         fixture_mode=fixture_mode,
+        parent_overlay_path=parent_overlay_path,
+        evidence_manifest_path=evidence_manifest_path,
     )
     for name in ("authoring.json", "sources.json", "records.json", "manifest.json"):
         require(
@@ -1814,12 +2264,15 @@ def _verify_class_review_overlay(
             "binding_mismatch",
             "$.binding.overlay_hash",
         )
-    return {
+    result = {
         "overlay_id": manifest["overlay_id"],
         "overlay_hash": manifest["overlay_hash"],
         "activation": manifest["activation"],
         "counts": deepcopy(manifest["counts"]),
     }
+    if include_files:
+        return result, deepcopy(files)
+    return result
 
 
 def verify_class_review_overlay(
@@ -1827,6 +2280,9 @@ def verify_class_review_overlay(
     snapshot_manifest_path: Path,
     corpus_root: Path,
     expected_hash: str | None = None,
+    *,
+    parent_overlay_path: Path | None = None,
+    evidence_manifest_path: Path | None = None,
 ) -> dict:
     """Verify one frozen production class-review overlay package."""
     return _verify_class_review_overlay(
@@ -1834,4 +2290,6 @@ def verify_class_review_overlay(
         snapshot_manifest_path,
         corpus_root,
         expected_hash,
+        parent_overlay_path=parent_overlay_path,
+        evidence_manifest_path=evidence_manifest_path,
     )

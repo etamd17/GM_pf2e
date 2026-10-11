@@ -81,6 +81,8 @@ def main(argv: list[str] | None = None) -> int:
     class_review_compile_cmd.add_argument("--snapshot", type=Path, required=True)
     class_review_compile_cmd.add_argument("--corpus", type=Path, required=True)
     class_review_compile_cmd.add_argument("--store", type=Path, required=True)
+    class_review_compile_cmd.add_argument("--parent", type=Path)
+    class_review_compile_cmd.add_argument("--evidence", type=Path)
     class_review_verify_cmd = commands.add_parser(
         "class-review-verify",
         help="Verify a frozen class-review overlay and optional trusted binding",
@@ -89,6 +91,8 @@ def main(argv: list[str] | None = None) -> int:
     class_review_verify_cmd.add_argument("--snapshot", type=Path, required=True)
     class_review_verify_cmd.add_argument("--corpus", type=Path, required=True)
     class_review_verify_cmd.add_argument("--expected-hash")
+    class_review_verify_cmd.add_argument("--parent", type=Path)
+    class_review_verify_cmd.add_argument("--evidence", type=Path)
     args = parser.parse_args(argv)
     try:
         exit_code = 0
@@ -124,6 +128,8 @@ def main(argv: list[str] | None = None) -> int:
                 args.snapshot,
                 args.corpus,
                 args.store,
+                parent_overlay_path=args.parent,
+                evidence_manifest_path=args.evidence,
             )
             result = {
                 "path": str(path),
@@ -131,6 +137,8 @@ def main(argv: list[str] | None = None) -> int:
                     path,
                     args.snapshot,
                     args.corpus,
+                    parent_overlay_path=args.parent,
+                    evidence_manifest_path=args.evidence,
                 ),
             }
         elif args.command == "class-review-verify":
@@ -142,6 +150,8 @@ def main(argv: list[str] | None = None) -> int:
                     args.snapshot,
                     args.corpus,
                     expected_hash=args.expected_hash,
+                    parent_overlay_path=args.parent,
+                    evidence_manifest_path=args.evidence,
                 ),
             }
         elif args.command == "diff":

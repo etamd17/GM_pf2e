@@ -51,6 +51,13 @@ source groups. The artifact activates zero mechanics, leaves every base review
 pending, and adds 45 separate pending source, license, and rules gates. See
 [the class-review overlay record](pr6b3c-class-review-overlay.md).
 
+PR6B3D retains eight canonical Paizo publication dossiers and publishes an
+immutable schema-v2 child bound to the exact PR6B3C parent and evidence bundle.
+It approves only the eight publication-identity gates; eight redistribution
+reviews and 29 class-rules reviews remain pending, with zero enabled mechanics
+and no runtime or UI change. See
+[the class-source review record](pr6b3d-class-source-license-review.md).
+
 ## Pull-request gate
 
 Every implementation pull request must include the applicable subset of:

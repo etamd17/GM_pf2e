@@ -25,6 +25,38 @@ CURRENT_SNAPSHOT = (
     / "2026-10-07-player-build-v1"
     / "snapshot-manifest.json"
 )
+CURRENT_CLASS_REVIEW = (
+    ROOT
+    / "systems"
+    / "pf2e"
+    / "rules"
+    / "reviews"
+    / "pf2e-class-identities-2026-10-07.1"
+)
+CURRENT_CLASS_SOURCE_REVIEW = (
+    ROOT
+    / "systems"
+    / "pf2e"
+    / "rules"
+    / "reviews"
+    / "pf2e-class-source-review-2026-10-10.1"
+)
+CURRENT_CLASS_SOURCE_EVIDENCE = (
+    ROOT
+    / "systems"
+    / "pf2e"
+    / "rules"
+    / "evidence"
+    / "paizo"
+    / "pf2e-class-sources-2026-10-10.1"
+    / "manifest.json"
+)
+CURRENT_CLASS_REVIEW_HASH = (
+    "273d3180178eeea249db01ddcb778e13675c98ff74717d51dbc8efedc73a2614"
+)
+CURRENT_CLASS_SOURCE_EVIDENCE_HASH = (
+    "4057206e6b7850e376a5a8757aa6d0398a2dc4c015cda2bdcccb0fa04c4689f3"
+)
 PRODUCTION_SOURCES = [
     ("pf2e.source.battlecry", "Battlecry!"),
     ("pf2e.source.dark-archive-remastered", "Dark Archive (Remastered)"),
@@ -279,6 +311,32 @@ def _production_authoring():
         }
         for numeric_id, rule_id, source_id in PRODUCTION_CLASS_MAP
     ]
+    return document
+
+
+def _production_v2_authoring():
+    document = _production_authoring()
+    document["manifest"].update(
+        schema_version=2,
+        overlay_id="pf2e-class-source-review-2026-10-10.1",
+        created_at="2026-10-10T13:39:32Z",
+        parent_overlay_id="pf2e-class-identities-2026-10-07.1",
+        parent_overlay_hash=CURRENT_CLASS_REVIEW_HASH,
+        evidence_bundle_id="pf2e-class-sources-2026-10-10.1",
+        evidence_bundle_hash=CURRENT_CLASS_SOURCE_EVIDENCE_HASH,
+    )
+    evidence = json.loads(CURRENT_CLASS_SOURCE_EVIDENCE.read_text(encoding="utf-8"))
+    evidence_by_source = {
+        reference["source_id"]: reference["sha256"]
+        for reference in evidence["dossiers"]
+    }
+    for source in document["sources"]:
+        source["source_review"] = {
+            "status": "approved",
+            "reviewer": "OpenAI Codex",
+            "reviewed_at": "2026-10-10T13:39:32Z",
+            "evidence_sha256": [evidence_by_source[source["source_id"]]],
+        }
     return document
 
 
@@ -570,7 +628,7 @@ def test_authoring_rejects_fields_outside_the_versioned_schema(mutation, code, p
     ("mutation", "code", "path"),
     [
         (
-            lambda value: value["manifest"].update(schema_version=2),
+            lambda value: value["manifest"].update(schema_version=3),
             "unsupported_version",
             "$.manifest.schema_version",
         ),
@@ -2124,6 +2182,550 @@ def test_class_review_compiler_requires_every_v1_gate_pending(tmp_path, gate, pa
 
     assert error.value.code == "lifecycle_mismatch"
     assert error.value.path == path
+
+
+def _compile_production_v2(
+    authoring=None,
+    *,
+    parent_overlay_path=CURRENT_CLASS_REVIEW,
+    evidence_manifest_path=CURRENT_CLASS_SOURCE_EVIDENCE,
+):
+    return overlay().compile_class_review_overlay(
+        _production_v2_authoring() if authoring is None else authoring,
+        CURRENT_SNAPSHOT,
+        ROOT / "compendium_data",
+        parent_overlay_path=parent_overlay_path,
+        evidence_manifest_path=evidence_manifest_path,
+    )
+
+
+def test_schema_v2_normalizes_exact_parent_and_evidence_bindings():
+    """Catches schema v2 dropping an immutable ancestry or evidence binding."""
+    document = _production_v2_authoring()
+    before = deepcopy(document)
+
+    normalized = overlay().normalize_class_review_authoring(document)
+
+    assert document == before
+    assert normalized["manifest"] == {
+        "schema_version": 2,
+        "overlay_id": "pf2e-class-source-review-2026-10-10.1",
+        "created_at": "2026-10-10T13:39:32Z",
+        "authority": "archives-of-nethys",
+        "kind": "class",
+        "snapshot_id": "pf2e-aon-2026-10-07-player-build-v1",
+        "snapshot_manifest_sha256": hashlib.sha256(
+            CURRENT_SNAPSHOT.read_bytes()
+        ).hexdigest(),
+        "base_category": "class",
+        "activation": "none",
+        "parent_overlay_id": "pf2e-class-identities-2026-10-07.1",
+        "parent_overlay_hash": CURRENT_CLASS_REVIEW_HASH,
+        "evidence_bundle_id": "pf2e-class-sources-2026-10-10.1",
+        "evidence_bundle_hash": CURRENT_CLASS_SOURCE_EVIDENCE_HASH,
+    }
+
+
+@pytest.mark.parametrize(
+    ("mutation", "code", "path"),
+    [
+        (
+            lambda value: value["manifest"].pop("evidence_bundle_id"),
+            "missing_field",
+            "$.manifest",
+        ),
+        (
+            lambda value: value["manifest"].update(evidence_bundle_hash="F" * 64),
+            "invalid_value",
+            "$.manifest.evidence_bundle_hash",
+        ),
+        (
+            lambda value: value["manifest"].update(
+                parent_overlay_id=value["manifest"]["overlay_id"]
+            ),
+            "unsupported_composition",
+            "$.manifest",
+        ),
+    ],
+)
+def test_schema_v2_rejects_missing_invalid_or_self_bindings(mutation, code, path):
+    """Catches a child whose external bindings are absent, malformed, or cyclic."""
+    document = _production_v2_authoring()
+    mutation(document)
+
+    _assert_error(document, code, path)
+
+
+def test_v1_bytes_remain_exact_and_v1_rejects_v2_api_bindings(tmp_path):
+    """Catches v2 support changing PR6B3C bytes or implying a false v1 binding."""
+    authoring = json.loads((CURRENT_CLASS_REVIEW / "authoring.json").read_bytes())
+    files = overlay().compile_class_review_overlay(
+        authoring, CURRENT_SNAPSHOT, ROOT / "compendium_data"
+    )
+    assert files == {
+        path.name: path.read_bytes()
+        for path in CURRENT_CLASS_REVIEW.iterdir()
+        if path.is_file()
+    }
+
+    for index, (arguments, expected_path) in enumerate((
+        ({"parent_overlay_path": CURRENT_CLASS_REVIEW}, "$.paths.parent"),
+        (
+            {"evidence_manifest_path": CURRENT_CLASS_SOURCE_EVIDENCE},
+            "$.paths.evidence",
+        ),
+    )):
+        fixture_authoring, fixture_manifest, fixture_corpus = (
+            _class_review_compile_fixture(tmp_path / f"v1-{index}")
+        )
+        with pytest.raises(ValueError) as error:
+            overlay()._compile_class_review_overlay(
+                fixture_authoring,
+                fixture_manifest,
+                fixture_corpus,
+                fixture_mode=True,
+                **arguments,
+            )
+        assert error.value.code == "unsupported_composition"
+        assert error.value.path == expected_path
+
+
+def test_schema_v2_compiler_changes_only_sources_and_manifest_lifecycle():
+    """Catches source approval accidentally changing reconciled class records."""
+    files = _compile_production_v2()
+    authoring = json.loads(files["authoring.json"])
+    sources = json.loads(files["sources.json"])
+    manifest = json.loads(files["manifest.json"])
+
+    assert files["records.json"] == (CURRENT_CLASS_REVIEW / "records.json").read_bytes()
+    assert authoring["manifest"]["schema_version"] == 2
+    assert manifest["compiler_version"] == "pf2e-class-review-2"
+    assert manifest["parent_overlay_id"] == "pf2e-class-identities-2026-10-07.1"
+    assert manifest["parent_overlay_hash"] == CURRENT_CLASS_REVIEW_HASH
+    assert manifest["evidence_bundle_id"] == "pf2e-class-sources-2026-10-10.1"
+    assert manifest["evidence_bundle_hash"] == CURRENT_CLASS_SOURCE_EVIDENCE_HASH
+    assert manifest["counts"]["overlay_gates"] == {
+        "sources": 8,
+        "licenses": 8,
+        "rules": 29,
+        "total": 45,
+        "by_status": {"pending": 37, "approved": 8, "rejected": 0},
+    }
+    assert manifest["counts"]["enabled_mechanics"] == 0
+    assert {source["source_review"]["status"] for source in sources} == {
+        "approved"
+    }
+    assert {source["license_review"]["status"] for source in sources} == {
+        "pending"
+    }
+    assert all(
+        source["source_review"]["reviewer"] == "OpenAI Codex"
+        and source["source_review"]["reviewed_at"] == "2026-10-10T13:39:32Z"
+        and len(source["source_review"]["evidence_sha256"]) == 1
+        for source in sources
+    )
+
+
+@pytest.mark.parametrize(
+    ("parent", "evidence", "path"),
+    [
+        (None, CURRENT_CLASS_SOURCE_EVIDENCE, "$.paths.parent"),
+        (CURRENT_CLASS_REVIEW, None, "$.paths.evidence"),
+    ],
+)
+def test_schema_v2_compiler_requires_explicit_parent_and_evidence(
+    parent, evidence, path
+):
+    """Catches schema v2 silently compiling without one of its immutable inputs."""
+    with pytest.raises(ValueError) as error:
+        _compile_production_v2(
+            parent_overlay_path=parent,
+            evidence_manifest_path=evidence,
+        )
+
+    assert error.value.code == "missing_binding"
+    assert error.value.path == path
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "path"),
+    [
+        ("overlay_id", "pf2e-class-source-review-2026-10-10.2", "$.manifest.overlay_id"),
+        ("created_at", "2026-10-10T13:39:33Z", "$.manifest.created_at"),
+        ("parent_overlay_id", "pf2e-class-identities-wrong.1", "$.manifest.parent_overlay_id"),
+        ("parent_overlay_hash", "f" * 64, "$.manifest.parent_overlay_hash"),
+        ("evidence_bundle_id", "pf2e-class-sources-2026-10-09.1", "$.manifest.evidence_bundle_id"),
+        ("evidence_bundle_hash", "f" * 64, "$.manifest.evidence_bundle_hash"),
+    ],
+)
+def test_schema_v2_rejects_wrong_parent_or_evidence_binding(field, value, path):
+    """Catches a child pointed at a plausible but unapproved immutable input."""
+    authoring = _production_v2_authoring()
+    authoring["manifest"][field] = value
+
+    with pytest.raises(ValueError) as error:
+        _compile_production_v2(authoring)
+
+    assert error.value.code in {"binding_mismatch", "parent_mismatch"}
+    assert error.value.path == path
+
+
+def test_schema_v2_rejects_tampered_and_swapped_parent(tmp_path):
+    """Catches canonical parent tampering or an evidence directory used as parent."""
+    parent = tmp_path / CURRENT_CLASS_REVIEW.name
+    shutil.copytree(CURRENT_CLASS_REVIEW, parent)
+    sources_path = parent / "sources.json"
+    sources = json.loads(sources_path.read_bytes())
+    sources[0]["title"] = "Altered"
+    sources_path.write_bytes(_test_canonical_json(sources))
+
+    with pytest.raises(ValueError) as error:
+        _compile_production_v2(parent_overlay_path=parent)
+    assert error.value.code == "integrity_mismatch"
+    assert error.value.path == "$.files.sources.json"
+
+    swapped_parent = tmp_path / "swapped-parent"
+    shutil.copytree(CURRENT_CLASS_SOURCE_EVIDENCE.parent, swapped_parent)
+    with pytest.raises(ValueError) as error:
+        _compile_production_v2(parent_overlay_path=swapped_parent)
+    assert error.value.code == "invalid_package_layout"
+
+
+def test_schema_v2_rejects_self_consistent_replacement_parent(tmp_path):
+    """Catches a recompiled lookalike parent with a new internally valid hash."""
+    parent_authoring = json.loads(
+        (CURRENT_CLASS_REVIEW / "authoring.json").read_bytes()
+    )
+    parent_authoring["manifest"]["created_at"] = "2026-10-07T22:57:31Z"
+    replacement = overlay()._write_class_review_overlay(
+        parent_authoring,
+        CURRENT_SNAPSHOT,
+        ROOT / "compendium_data",
+        tmp_path / "replacement-store",
+    )
+    with pytest.raises(ValueError) as error:
+        _compile_production_v2(parent_overlay_path=replacement)
+
+    assert error.value.code == "binding_mismatch"
+    assert error.value.path == "$.binding.overlay_hash"
+
+
+def _change_first_source_identity(authoring):
+    old_source_id = authoring["sources"][0]["source_id"]
+    new_source_id = old_source_id + "-changed"
+    authoring["sources"][0]["source_id"] = new_source_id
+    for record in authoring["records"]:
+        if record["source_id"] == old_source_id:
+            record["source_id"] = new_source_id
+
+
+def _change_first_record_identity(authoring):
+    authoring["records"][0]["identity"]["numeric_id"] = 99_999_999
+
+
+@pytest.mark.parametrize(
+    ("mutation", "path"),
+    [
+        (_change_first_source_identity, "$.sources[0].source_id"),
+        (lambda value: value["sources"][0].update(title="Altered"), "$.sources[0].title"),
+        (_change_first_record_identity, "$.records[0].identity"),
+        (lambda value: value["records"][0].update(rule_id="pf2e.class.changed"), "$.records[0].rule_id"),
+        (lambda value: value["records"][0].update(source_id="pf2e.source.player-core"), "$.records[0].source_id"),
+        (
+            lambda value: value["records"][0].update(
+                rules_review={
+                    "status": "approved",
+                    "reviewer": "OpenAI Codex",
+                    "reviewed_at": "2026-10-10T13:39:32Z",
+                    "evidence_sha256": ["f" * 64],
+                }
+            ),
+            "$.records[0].rules_review",
+        ),
+    ],
+)
+def test_schema_v2_freezes_parent_identity_assignment_and_rules_reviews(
+    mutation, path
+):
+    """Catches a source-review child silently editing parent class decisions."""
+    authoring = _production_v2_authoring()
+    mutation(authoring)
+
+    with pytest.raises(ValueError) as error:
+        _compile_production_v2(authoring)
+
+    assert error.value.code == "parent_mismatch"
+    assert error.value.path == path
+
+
+@pytest.mark.parametrize("mutation", ["unknown", "cross-source", "license-scope"])
+def test_schema_v2_completed_reviews_require_same_source_same_scope_evidence(
+    mutation,
+):
+    """Catches an approved gate backed by absent, reused, or wrong-scope evidence."""
+    authoring = _production_v2_authoring()
+    if mutation == "unknown":
+        authoring["sources"][0]["source_review"]["evidence_sha256"] = ["f" * 64]
+        expected_path = "$.sources[0].source_review.evidence_sha256"
+    elif mutation == "cross-source":
+        authoring["sources"][1]["source_review"]["evidence_sha256"] = deepcopy(
+            authoring["sources"][0]["source_review"]["evidence_sha256"]
+        )
+        expected_path = "$.sources[1].source_review.evidence_sha256"
+    else:
+        authoring["sources"][0]["license_review"] = {
+            **deepcopy(authoring["sources"][0]["source_review"]),
+            "status": "approved",
+        }
+        expected_path = "$.sources[0].license_review.evidence_sha256"
+
+    with pytest.raises(ValueError) as error:
+        _compile_production_v2(authoring)
+
+    assert error.value.code == "evidence_mismatch"
+    assert error.value.path == expected_path
+
+
+def test_schema_v2_rejects_tampered_evidence_bundle(tmp_path):
+    """Catches retained dossier bytes changed after the child recorded the bundle."""
+    evidence_root = tmp_path / "evidence"
+    shutil.copytree(CURRENT_CLASS_SOURCE_EVIDENCE.parent, evidence_root)
+    dossier = evidence_root / "dossiers" / "player-core.json"
+    document = json.loads(dossier.read_bytes())
+    document["release_date"] = "2023-11-16"
+    dossier.write_bytes(_test_canonical_json(document))
+
+    with pytest.raises(ValueError) as error:
+        _compile_production_v2(evidence_manifest_path=evidence_root / "manifest.json")
+
+    assert error.value.code == "integrity_mismatch"
+    assert error.value.path == "$.files.dossiers/player-core.json"
+
+
+def test_schema_v2_path_checks_reject_aliases_but_allow_same_store_siblings(tmp_path):
+    """Catches both unsafe aliases and a validator that rejects the intended store."""
+    with pytest.raises(ValueError) as error:
+        _compile_production_v2(
+            evidence_manifest_path=CURRENT_CLASS_REVIEW / "manifest.json"
+        )
+    assert error.value.code == "path_overlap"
+    assert error.value.path == "$.paths"
+
+    store = tmp_path / "review-store"
+    parent = store / CURRENT_CLASS_REVIEW.name
+    shutil.copytree(CURRENT_CLASS_REVIEW, parent)
+    target = overlay()._write_class_review_overlay(
+        _production_v2_authoring(),
+        CURRENT_SNAPSHOT,
+        ROOT / "compendium_data",
+        store,
+        parent_overlay_path=parent,
+        evidence_manifest_path=CURRENT_CLASS_SOURCE_EVIDENCE,
+    )
+    assert target.parent == store
+    assert target.name == "pf2e-class-source-review-2026-10-10.1"
+    assert parent.exists()
+    manifest = json.loads((target / "manifest.json").read_bytes())
+    report = overlay().verify_class_review_overlay(
+        target,
+        CURRENT_SNAPSHOT,
+        ROOT / "compendium_data",
+        manifest["overlay_hash"],
+        parent_overlay_path=parent,
+        evidence_manifest_path=CURRENT_CLASS_SOURCE_EVIDENCE,
+    )
+    assert report["overlay_id"] == target.name
+    assert report["overlay_hash"] == manifest["overlay_hash"]
+    assert report["counts"]["enabled_mechanics"] == 0
+
+    for arguments, expected_path in (
+        (
+            {"evidence_manifest_path": CURRENT_CLASS_SOURCE_EVIDENCE},
+            "$.paths.parent",
+        ),
+        ({"parent_overlay_path": parent}, "$.paths.evidence"),
+    ):
+        with pytest.raises(ValueError) as error:
+            overlay().verify_class_review_overlay(
+                target,
+                CURRENT_SNAPSHOT,
+                ROOT / "compendium_data",
+                **arguments,
+            )
+        assert error.value.code == "missing_binding"
+        assert error.value.path == expected_path
+
+    with pytest.raises(ValueError) as error:
+        overlay().verify_class_review_overlay(
+            target,
+            CURRENT_SNAPSHOT,
+            ROOT / "compendium_data",
+            parent_overlay_path=target,
+            evidence_manifest_path=CURRENT_CLASS_SOURCE_EVIDENCE,
+        )
+    assert error.value.code == "path_overlap"
+    assert error.value.path == "$.paths"
+
+
+def test_schema_v2_rejects_parent_child_payload_hardlink_before_reads(
+    tmp_path, monkeypatch
+):
+    """Catches distinct artifact roots sharing one mutable payload inode."""
+    module = overlay()
+    evidence_module = importlib.import_module(
+        "systems.pf2e.rules.ingestion.class_source_evidence"
+    )
+    store = tmp_path / "review-store"
+    parent = store / CURRENT_CLASS_REVIEW.name
+    child = store / CURRENT_CLASS_SOURCE_REVIEW.name
+    shutil.copytree(CURRENT_CLASS_REVIEW, parent)
+    shutil.copytree(CURRENT_CLASS_SOURCE_REVIEW, child)
+    child_records = child / "records.json"
+    child_records.unlink()
+    try:
+        os.link(parent / "records.json", child_records)
+    except (OSError, NotImplementedError) as error:
+        pytest.skip(f"Host does not permit hard-link creation: {error}")
+
+    def reject_payload_read(_path):
+        pytest.fail("schema-v2 hardlink preflight must run before payload reads")
+
+    monkeypatch.setattr(module, "read_file", reject_payload_read)
+    monkeypatch.setattr(evidence_module, "read_file", reject_payload_read)
+
+    with pytest.raises(ValueError) as error:
+        module.verify_class_review_overlay(
+            child,
+            CURRENT_SNAPSHOT,
+            ROOT / "compendium_data",
+            parent_overlay_path=parent,
+            evidence_manifest_path=CURRENT_CLASS_SOURCE_EVIDENCE,
+        )
+
+    assert error.value.code == "path_overlap"
+    assert error.value.path == "$.paths"
+
+
+def test_schema_v2_rejects_evidence_payload_hardlink_before_reads(
+    tmp_path, monkeypatch
+):
+    """Catches retained evidence sharing storage with another mutable input."""
+    module = overlay()
+    evidence_module = importlib.import_module(
+        "systems.pf2e.rules.ingestion.class_source_evidence"
+    )
+    parent = tmp_path / CURRENT_CLASS_REVIEW.name
+    evidence_root = tmp_path / CURRENT_CLASS_SOURCE_EVIDENCE.parent.name
+    authoring = _production_v2_authoring()
+    shutil.copytree(CURRENT_CLASS_REVIEW, parent)
+    shutil.copytree(CURRENT_CLASS_SOURCE_EVIDENCE.parent, evidence_root)
+    dossier = evidence_root / "dossiers" / "player-core.json"
+    dossier.unlink()
+    try:
+        os.link(parent / "authoring.json", dossier)
+    except (OSError, NotImplementedError) as error:
+        pytest.skip(f"Host does not permit hard-link creation: {error}")
+
+    def reject_payload_read(_path):
+        pytest.fail("schema-v2 hardlink preflight must run before payload reads")
+
+    monkeypatch.setattr(module, "read_file", reject_payload_read)
+    monkeypatch.setattr(evidence_module, "read_file", reject_payload_read)
+
+    with pytest.raises(ValueError) as error:
+        _compile_production_v2(
+            authoring,
+            parent_overlay_path=parent,
+            evidence_manifest_path=evidence_root / "manifest.json",
+        )
+
+    assert error.value.code == "path_overlap"
+    assert error.value.path == "$.paths"
+
+
+def test_schema_v2_writer_rejects_parent_equal_to_child_target_before_read(
+    tmp_path,
+):
+    """Catches target/parent aliases before compiler input reads begin."""
+    store = tmp_path / "review-store"
+    target = store / "pf2e-class-source-review-2026-10-10.1"
+
+    with pytest.raises(ValueError) as error:
+        overlay().write_class_review_overlay(
+            _production_v2_authoring(),
+            CURRENT_SNAPSHOT,
+            ROOT / "compendium_data",
+            store,
+            parent_overlay_path=target,
+            evidence_manifest_path=CURRENT_CLASS_SOURCE_EVIDENCE,
+        )
+
+    assert error.value.code == "path_overlap"
+    assert error.value.path == "$.paths"
+    assert not store.exists()
+
+
+def test_schema_v2_uses_the_exact_verified_parent_file_snapshot(monkeypatch):
+    """Catches a verified parent being discarded and read a second time."""
+    module = overlay()
+    real_reader = module._read_class_review_overlay_files
+    reads = 0
+
+    def count_parent_reads(root):
+        nonlocal reads
+        if Path(root).absolute() == CURRENT_CLASS_REVIEW.absolute():
+            reads += 1
+        return real_reader(root)
+
+    monkeypatch.setattr(module, "_read_class_review_overlay_files", count_parent_reads)
+
+    _compile_production_v2()
+
+    assert reads == 1
+
+
+def test_schema_v2_compiler_bytes_ignore_python_hash_seed(tmp_path):
+    """Catches set/dict iteration changing the immutable child between processes."""
+    authoring_path = tmp_path / "authoring-v2.json"
+    authoring_path.write_bytes(_test_canonical_json(_production_v2_authoring()))
+    script = """
+import json
+import sys
+from pathlib import Path
+from systems.pf2e.rules.ingestion.class_review_overlay import _compile_class_review_overlay
+
+files = _compile_class_review_overlay(
+    json.loads(Path(sys.argv[1]).read_text(encoding='utf-8')),
+    Path(sys.argv[2]),
+    Path(sys.argv[3]),
+    parent_overlay_path=Path(sys.argv[4]),
+    evidence_manifest_path=Path(sys.argv[5]),
+)
+print(json.dumps({name: data.hex() for name, data in sorted(files.items())}, sort_keys=True))
+"""
+    outputs = []
+    for seed in ("1", "417"):
+        environment = os.environ.copy()
+        environment["PYTHONHASHSEED"] = seed
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                script,
+                str(authoring_path),
+                str(CURRENT_SNAPSHOT),
+                str(ROOT / "compendium_data"),
+                str(CURRENT_CLASS_REVIEW),
+                str(CURRENT_CLASS_SOURCE_EVIDENCE),
+            ],
+            cwd=ROOT,
+            env=environment,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        outputs.append(result.stdout)
+    assert outputs[0] == outputs[1]
 
 
 def test_class_review_writer_publishes_exact_create_only_package(tmp_path):
