@@ -1,1 +1,3 @@
 tests/pf2e_rules/fixtures/synthetic-source.bin binary
+contracts/vtt/** text eol=lf
+frontend/vtt/src/protocol/generated/** text eol=lf

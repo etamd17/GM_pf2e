@@ -1,0 +1,424 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://vtt.invalid/v1/gm.schema.json",
+  "title": "GmFrame",
+  "oneOf": [
+    {
+      "$ref": "#/definitions/Snapshot"
+    },
+    {
+      "$ref": "#/definitions/Patch"
+    }
+  ],
+  "definitions": {
+    "EntityRef": {
+      "title": "GmEntityRef",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "id"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "scene",
+            "token",
+            "light",
+            "wall"
+          ]
+        },
+        "id": {
+          "$ref": "common.schema.json#/definitions/Id"
+        }
+      }
+    },
+    "GmScene": {
+      "title": "GmScene",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "id",
+        "version",
+        "name",
+        "width",
+        "height",
+        "gridSize",
+        "showGrid",
+        "backgroundAssetId",
+        "published"
+      ],
+      "properties": {
+        "kind": {
+          "const": "scene"
+        },
+        "id": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "version": {
+          "$ref": "common.schema.json#/definitions/OpaqueToken"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "width": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 16384
+        },
+        "height": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 16384
+        },
+        "gridSize": {
+          "type": "number",
+          "minimum": 8,
+          "maximum": 1024
+        },
+        "showGrid": {
+          "type": "boolean"
+        },
+        "backgroundAssetId": {
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/definitions/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "published": {
+          "type": "boolean"
+        }
+      }
+    },
+    "GmToken": {
+      "title": "GmToken",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "id",
+        "version",
+        "x",
+        "y",
+        "size",
+        "label",
+        "color",
+        "artAssetId",
+        "actorId",
+        "hidden",
+        "locked",
+        "controllerIds"
+      ],
+      "properties": {
+        "kind": {
+          "const": "token"
+        },
+        "id": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "version": {
+          "$ref": "common.schema.json#/definitions/OpaqueToken"
+        },
+        "x": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "y": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "size": {
+          "type": "number",
+          "minimum": 0.25,
+          "maximum": 10
+        },
+        "label": {
+          "$ref": "common.schema.json#/definitions/Label"
+        },
+        "color": {
+          "$ref": "common.schema.json#/definitions/Color"
+        },
+        "artAssetId": {
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/definitions/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "actorId": {
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/definitions/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hidden": {
+          "type": "boolean"
+        },
+        "locked": {
+          "type": "boolean"
+        },
+        "controllerIds": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "common.schema.json#/definitions/Id"
+          }
+        }
+      }
+    },
+    "GmLight": {
+      "title": "GmLight",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "id",
+        "version",
+        "x",
+        "y",
+        "radius",
+        "color",
+        "hidden"
+      ],
+      "properties": {
+        "kind": {
+          "const": "light"
+        },
+        "id": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "version": {
+          "$ref": "common.schema.json#/definitions/OpaqueToken"
+        },
+        "x": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "y": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "radius": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 16384
+        },
+        "color": {
+          "$ref": "common.schema.json#/definitions/Color"
+        },
+        "hidden": {
+          "type": "boolean"
+        }
+      }
+    },
+    "GmWall": {
+      "title": "GmWall",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "id",
+        "version",
+        "x1",
+        "y1",
+        "x2",
+        "y2",
+        "doorState"
+      ],
+      "properties": {
+        "kind": {
+          "const": "wall"
+        },
+        "id": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "version": {
+          "$ref": "common.schema.json#/definitions/OpaqueToken"
+        },
+        "x1": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "y1": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "x2": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "y2": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "doorState": {
+          "type": "string",
+          "enum": [
+            "none",
+            "open",
+            "closed",
+            "locked",
+            "secret"
+          ]
+        }
+      }
+    },
+    "Entity": {
+      "title": "GmEntity",
+      "oneOf": [
+        {
+          "$ref": "#/definitions/GmScene"
+        },
+        {
+          "$ref": "#/definitions/GmToken"
+        },
+        {
+          "$ref": "#/definitions/GmLight"
+        },
+        {
+          "$ref": "#/definitions/GmWall"
+        }
+      ]
+    },
+    "Snapshot": {
+      "title": "GmSnapshot",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "frame",
+        "audience",
+        "subscriptionId",
+        "seq",
+        "campaignId",
+        "sceneId",
+        "principal",
+        "capabilities",
+        "entities"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "$ref": "common.schema.json#/definitions/SchemaVersion"
+        },
+        "frame": {
+          "const": "snapshot"
+        },
+        "audience": {
+          "const": "gm"
+        },
+        "subscriptionId": {
+          "$ref": "common.schema.json#/definitions/OpaqueToken"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 0,
+          "const": 0
+        },
+        "campaignId": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "sceneId": {
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/definitions/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "principal": {
+          "title": "GmPrincipal",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "id",
+            "campaignRole"
+          ],
+          "properties": {
+            "kind": {
+              "const": "member"
+            },
+            "id": {
+              "$ref": "common.schema.json#/definitions/Id"
+            },
+            "campaignRole": {
+              "const": "gm"
+            }
+          }
+        },
+        "capabilities": {
+          "type": "array",
+          "maxItems": 5,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "common.schema.json#/definitions/Capability"
+          }
+        },
+        "entities": {
+          "type": "array",
+          "maxItems": 4096,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/definitions/Entity"
+          }
+        }
+      }
+    },
+    "Patch": {
+      "title": "GmPatch",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "frame",
+        "subscriptionId",
+        "seq",
+        "upserted",
+        "removed"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "$ref": "common.schema.json#/definitions/SchemaVersion"
+        },
+        "frame": {
+          "const": "patch"
+        },
+        "subscriptionId": {
+          "$ref": "common.schema.json#/definitions/OpaqueToken"
+        },
+        "seq": {
+          "$ref": "common.schema.json#/definitions/Seq"
+        },
+        "upserted": {
+          "type": "array",
+          "maxItems": 4096,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/definitions/Entity"
+          }
+        },
+        "removed": {
+          "type": "array",
+          "maxItems": 4096,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/definitions/EntityRef"
+          }
+        },
+        "originCommandId": {
+          "$ref": "common.schema.json#/definitions/OpaqueToken"
+        }
+      }
+    }
+  }
+}

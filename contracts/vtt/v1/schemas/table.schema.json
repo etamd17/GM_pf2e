@@ -1,0 +1,172 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://vtt.invalid/v1/table.schema.json",
+  "title": "TableFrame",
+  "oneOf": [
+    {
+      "$ref": "#/definitions/Snapshot"
+    },
+    {
+      "$ref": "#/definitions/Patch"
+    }
+  ],
+  "definitions": {
+    "EntityRef": {
+      "title": "TableEntityRef",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "id"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "scene",
+            "token",
+            "light"
+          ]
+        },
+        "id": {
+          "$ref": "common.schema.json#/definitions/Id"
+        }
+      }
+    },
+    "Entity": {
+      "title": "TableEntity",
+      "oneOf": [
+        {
+          "$ref": "common.schema.json#/definitions/TableScene"
+        },
+        {
+          "$ref": "common.schema.json#/definitions/TableToken"
+        },
+        {
+          "$ref": "common.schema.json#/definitions/TableLight"
+        }
+      ]
+    },
+    "Snapshot": {
+      "title": "TableSnapshot",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "frame",
+        "audience",
+        "subscriptionId",
+        "seq",
+        "campaignId",
+        "sceneId",
+        "principal",
+        "capabilities",
+        "entities"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "$ref": "common.schema.json#/definitions/SchemaVersion"
+        },
+        "frame": {
+          "const": "snapshot"
+        },
+        "audience": {
+          "const": "table"
+        },
+        "subscriptionId": {
+          "$ref": "common.schema.json#/definitions/OpaqueToken"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 0,
+          "const": 0
+        },
+        "campaignId": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "sceneId": {
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/definitions/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "principal": {
+          "title": "TablePrincipal",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "const": "table"
+            }
+          }
+        },
+        "capabilities": {
+          "type": "array",
+          "maxItems": 0,
+          "items": {
+            "$ref": "common.schema.json#/definitions/Capability"
+          }
+        },
+        "entities": {
+          "type": "array",
+          "maxItems": 2048,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/definitions/Entity"
+          }
+        }
+      }
+    },
+    "Patch": {
+      "title": "TablePatch",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "frame",
+        "subscriptionId",
+        "seq",
+        "upserted",
+        "removed"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "$ref": "common.schema.json#/definitions/SchemaVersion"
+        },
+        "frame": {
+          "const": "patch"
+        },
+        "subscriptionId": {
+          "$ref": "common.schema.json#/definitions/OpaqueToken"
+        },
+        "seq": {
+          "$ref": "common.schema.json#/definitions/Seq"
+        },
+        "upserted": {
+          "type": "array",
+          "maxItems": 2048,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/definitions/Entity"
+          }
+        },
+        "removed": {
+          "type": "array",
+          "maxItems": 2048,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/definitions/EntityRef"
+          }
+        }
+      }
+    }
+  }
+}

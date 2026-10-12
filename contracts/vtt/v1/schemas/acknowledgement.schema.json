@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://vtt.invalid/v1/acknowledgement.schema.json",
+  "title": "Acknowledgement",
+  "oneOf": [
+    {
+      "$ref": "#/definitions/AppliedAck"
+    },
+    {
+      "$ref": "#/definitions/RejectedAck"
+    }
+  ],
+  "definitions": {
+    "AppliedAck": {
+      "title": "AppliedAck",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "commandId",
+        "outcome"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "$ref": "common.schema.json#/definitions/SchemaVersion"
+        },
+        "commandId": {
+          "$ref": "common.schema.json#/definitions/OpaqueToken"
+        },
+        "outcome": {
+          "const": "applied"
+        }
+      }
+    },
+    "RejectedAck": {
+      "title": "RejectedAck",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "commandId",
+        "outcome",
+        "code"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "$ref": "common.schema.json#/definitions/SchemaVersion"
+        },
+        "commandId": {
+          "$ref": "common.schema.json#/definitions/OpaqueToken"
+        },
+        "outcome": {
+          "const": "rejected"
+        },
+        "code": {
+          "$ref": "common.schema.json#/definitions/RejectionCode"
+        }
+      }
+    }
+  }
+}

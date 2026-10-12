@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://vtt.invalid/v1/table-subscribe.schema.json",
+  "title": "TableSubscribe",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "audience"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "$ref": "common.schema.json#/definitions/SchemaVersion"
+    },
+    "audience": {
+      "const": "table"
+    }
+  }
+}

@@ -1,0 +1,3 @@
+# Isolated contract validation/test environment; the app deployment lock is unchanged.
+jsonschema==4.26.0
+pytest==9.1.1

@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://vtt.invalid/v1/bootstrap-rejection.schema.json",
+  "title": "BootstrapRejection",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "reason"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "$ref": "common.schema.json#/definitions/SchemaVersion"
+    },
+    "reason": {
+      "$ref": "common.schema.json#/definitions/BootstrapRejectionReason"
+    }
+  }
+}

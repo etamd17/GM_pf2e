@@ -1,0 +1,270 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://vtt.invalid/v1/common.schema.json",
+  "title": "Common",
+  "definitions": {
+    "SchemaVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1,
+      "const": 1
+    },
+    "Id": {
+      "title": "Id",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9_-]+(?![\\s\\S])"
+    },
+    "OpaqueToken": {
+      "title": "OpaqueToken",
+      "type": "string",
+      "minLength": 16,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9_-]+(?![\\s\\S])"
+    },
+    "Seq": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "Coord": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 16384
+    },
+    "Color": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 16777215
+    },
+    "Label": {
+      "type": "string",
+      "maxLength": 80
+    },
+    "CampaignRole": {
+      "type": "string",
+      "enum": [
+        "gm",
+        "assistant",
+        "player",
+        "observer"
+      ]
+    },
+    "Capability": {
+      "type": "string",
+      "enum": [
+        "scene.prepare",
+        "scene.publish",
+        "token.control",
+        "token.move",
+        "campaign.manage"
+      ]
+    },
+    "ResyncReason": {
+      "type": "string",
+      "enum": [
+        "scene-changed",
+        "reconnected",
+        "sequence-gap",
+        "buffer-overflow",
+        "state-lost",
+        "grant-changed",
+        "revoked",
+        "version-changed"
+      ]
+    },
+    "BootstrapRejectionReason": {
+      "type": "string",
+      "enum": [
+        "grant-revoked",
+        "grant-expired",
+        "session-ended",
+        "unsupported-version"
+      ]
+    },
+    "RejectionCode": {
+      "type": "string",
+      "enum": [
+        "invalid-schema",
+        "unsupported-version",
+        "unknown-command",
+        "authentication-required",
+        "unauthorized",
+        "rate-limited",
+        "command-id-reused",
+        "stale",
+        "conflict",
+        "validation-failed",
+        "rule-violation",
+        "recipient-offline",
+        "resync-required",
+        "temporarily-unavailable",
+        "server-error"
+      ]
+    },
+    "TableScene": {
+      "title": "TableScene",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "id",
+        "version",
+        "name",
+        "width",
+        "height",
+        "gridSize",
+        "showGrid",
+        "backgroundAssetId"
+      ],
+      "properties": {
+        "kind": {
+          "const": "scene"
+        },
+        "id": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "version": {
+          "$ref": "common.schema.json#/definitions/OpaqueToken"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "width": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 16384
+        },
+        "height": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 16384
+        },
+        "gridSize": {
+          "type": "number",
+          "minimum": 8,
+          "maximum": 1024
+        },
+        "showGrid": {
+          "type": "boolean"
+        },
+        "backgroundAssetId": {
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/definitions/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "TableToken": {
+      "title": "TableToken",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "id",
+        "version",
+        "x",
+        "y",
+        "size",
+        "label",
+        "color",
+        "artAssetId",
+        "actorId"
+      ],
+      "properties": {
+        "kind": {
+          "const": "token"
+        },
+        "id": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "version": {
+          "$ref": "common.schema.json#/definitions/OpaqueToken"
+        },
+        "x": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "y": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "size": {
+          "type": "number",
+          "minimum": 0.25,
+          "maximum": 10
+        },
+        "label": {
+          "$ref": "common.schema.json#/definitions/Label"
+        },
+        "color": {
+          "$ref": "common.schema.json#/definitions/Color"
+        },
+        "artAssetId": {
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/definitions/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "actorId": {
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/definitions/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "TableLight": {
+      "title": "TableLight",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "id",
+        "version",
+        "x",
+        "y",
+        "radius",
+        "color"
+      ],
+      "properties": {
+        "kind": {
+          "const": "light"
+        },
+        "id": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "version": {
+          "$ref": "common.schema.json#/definitions/OpaqueToken"
+        },
+        "x": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "y": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "radius": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 16384
+        },
+        "color": {
+          "$ref": "common.schema.json#/definitions/Color"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 1,
+  "batch": "scene-projection-1",
+  "schemas": {
+    "subscribe": "schemas/subscribe.schema.json",
+    "acknowledgement": "schemas/acknowledgement.schema.json",
+    "bootstrap-rejection": "schemas/bootstrap-rejection.schema.json",
+    "resync-required": "schemas/resync-required.schema.json",
+    "gm": "schemas/gm.schema.json",
+    "table": "schemas/table.schema.json",
+    "gm-subscribe": "schemas/gm-subscribe.schema.json",
+    "table-subscribe": "schemas/table-subscribe.schema.json"
+  },
+  "events": {
+    "vtt.subscribe": {
+      "direction": "client",
+      "schemas": {
+        "gm": "gm-subscribe",
+        "table": "table-subscribe"
+      },
+      "status": "schema-ready"
+    },
+    "vtt.command": {
+      "direction": "client",
+      "schemas": {},
+      "status": "reserved"
+    },
+    "vtt.transient": {
+      "direction": "both",
+      "schemas": {},
+      "status": "reserved"
+    },
+    "vtt.whisper.send": {
+      "direction": "client",
+      "schemas": {},
+      "status": "reserved"
+    },
+    "vtt.snapshot": {
+      "direction": "server",
+      "schemas": {
+        "gm": "gm",
+        "table": "table"
+      },
+      "status": "schema-ready"
+    },
+    "vtt.patch": {
+      "direction": "server",
+      "schemas": {
+        "gm": "gm",
+        "table": "table"
+      },
+      "status": "schema-ready"
+    },
+    "vtt.ack": {
+      "direction": "server",
+      "schemas": {
+        "gm": "acknowledgement"
+      },
+      "status": "schema-ready"
+    },
+    "vtt.whisper": {
+      "direction": "server",
+      "schemas": {},
+      "status": "reserved"
+    },
+    "vtt.resync_required": {
+      "direction": "server",
+      "schemas": {
+        "gm": "resync-required",
+        "table": "resync-required"
+      },
+      "status": "schema-ready"
+    }
+  },
+  "bootstrapSchema": "bootstrap-rejection",
+  "surfaces": {
+    "gm": {
+      "types": [
+        "gm",
+        "gm-subscribe",
+        "acknowledgement",
+        "resync-required",
+        "bootstrap-rejection"
+      ],
+      "validators": [
+        "gm",
+        "gm-subscribe",
+        "acknowledgement",
+        "resync-required",
+        "bootstrap-rejection"
+      ]
+    },
+    "table": {
+      "types": [
+        "table",
+        "table-subscribe",
+        "resync-required",
+        "bootstrap-rejection"
+      ],
+      "validators": [
+        "table",
+        "table-subscribe",
+        "resync-required",
+        "bootstrap-rejection"
+      ]
+    }
+  },
+  "deferredAudiences": [
+    "assistant",
+    "player",
+    "observer"
+  ],
+  "commandVariants": [],
+  "transientVariants": []
+}
