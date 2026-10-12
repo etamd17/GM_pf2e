@@ -39,18 +39,22 @@ export interface BannerContent {
 }
 
 // Exported for tests: what the banner says for a given state, or null when
-// there is nothing to say. Renderer problems outrank connection problems
-// because they explain why the map itself looks wrong.
+// there is nothing to say. Precedence: terminal connection states (revoked,
+// version-mismatch) first, because someone must act and the map is gone; then
+// renderer problems, which explain why the map looks wrong; then recoverable
+// connection states.
 export function bannerContent(
   status: ConnectionStatus,
   renderer: RendererStatus,
 ): BannerContent | null {
+  if (status === 'revoked' || status === 'version-mismatch') {
+    return { tone: 'error', ...STATUS_COPY[status] };
+  }
   if (renderer !== 'ok') {
     return { tone: renderer === 'failed' ? 'error' : 'warn', ...RENDERER_COPY[renderer] };
   }
   if (status === 'live') return null;
-  const tone = status === 'revoked' || status === 'version-mismatch' ? 'error' : 'warn';
-  return { tone, ...STATUS_COPY[status] };
+  return { tone: 'warn', ...STATUS_COPY[status] };
 }
 
 interface Props {

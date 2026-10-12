@@ -88,7 +88,7 @@ export function buildReferenceScene(options: ReferenceSceneOptions = {}): Render
     });
   }
 
-  return { width, height, gridSize, tokens, walls, lights };
+  return { width, height, gridSize, showGrid: true, tokens, walls, lights };
 }
 
 // Move one token by (dx, dy), returning a new scene that shares every other

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { useProjection } from './projection';
 
 // Client-side connection and renderer state. These are local UI states, not
 // protocol values: the transport (once VTT-ADR-0002 is accepted) drives them.
@@ -54,6 +55,10 @@ export const useConnection = create<ConnectionState>()((set, get) => ({
   setStatus(status) {
     // Terminal states are sticky: only a reload leaves them.
     if (isTerminal(get().status)) return;
+    // Entering a terminal state drops the projection first, in the same
+    // synchronous call, so no render can observe "revoked but still holding
+    // the scene".
+    if (isTerminal(status)) useProjection.getState().clear();
     set({ status });
   },
   setRenderer(renderer) {

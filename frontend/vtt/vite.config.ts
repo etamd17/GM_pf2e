@@ -2,33 +2,42 @@ import { resolve } from 'node:path';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
 
-// Three entry pages. The table entry must never import authoring code: it is a
-// separate bundle so a TV that is only ever a viewer does not ship GM tools.
+// Production build shape (VTT-20261012-010, integration blockers):
+// - an absolute, app-origin asset base so /vtt, /vtt/table and
+//   /vtt/scene/<id> all resolve the same URLs. The default '/vtt/assets/' is
+//   a proposal; Flask owns the route, so it can be overridden with
+//   VTT_ASSET_BASE until the integration lead fixes it;
+// - a Vite manifest (.vite/manifest.json) for the server-side manifest helper;
+// - no source maps and no bench entry unless explicitly requested
+//   (VTT_SOURCEMAP=1, VTT_BENCH=1) for a protected diagnostics build.
 //
-// Output stays in dist/ (gitignored). Where built assets are published
-// (committed static/dist/vtt/ per ADR-0004, or built on release) is an open
-// decision in VTT-20261012-007, so nothing here assumes a deploy path yet.
-export default defineConfig({
-  plugins: [react()],
-  base: './',
-  build: {
-    outDir: 'dist',
-    emptyOutDir: true,
-    sourcemap: true,
-    rollupOptions: {
-      input: {
-        gm: resolve(import.meta.dirname, 'index.html'),
-        table: resolve(import.meta.dirname, 'table.html'),
-        bench: resolve(import.meta.dirname, 'bench.html'),
-      },
+// Output stays in dist/ (gitignored). VTT-ADR-0002 section 11: generated
+// bundles are built by Docker/CI, never committed.
+export default defineConfig(({ command }) => {
+  const env = process.env;
+  const withBench = env.VTT_BENCH === '1';
+  const input: Record<string, string> = {
+    gm: resolve(import.meta.dirname, 'index.html'),
+    table: resolve(import.meta.dirname, 'table.html'),
+  };
+  if (withBench) input.bench = resolve(import.meta.dirname, 'bench.html');
+  return {
+    plugins: [react()],
+    base: command === 'build' ? (env.VTT_ASSET_BASE ?? '/vtt/assets/') : '/',
+    build: {
+      outDir: env.VTT_OUT_DIR ?? 'dist',
+      emptyOutDir: true,
+      manifest: true,
+      sourcemap: env.VTT_SOURCEMAP === '1',
+      rollupOptions: { input },
     },
-  },
-  server: {
-    port: 5173,
-    strictPort: true,
-  },
-  test: {
-    environment: 'node',
-    include: ['src/**/*.test.{ts,tsx}'],
-  },
+    server: {
+      port: 5173,
+      strictPort: true,
+    },
+    test: {
+      environment: 'node',
+      include: ['src/**/*.test.{ts,tsx}'],
+    },
+  };
 });

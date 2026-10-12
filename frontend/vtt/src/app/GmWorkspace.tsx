@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { ConnectionBanner } from '../components/ConnectionBanner';
 import { MapHost } from '../components/MapHost';
-import type { RenderScene } from '../scene/renderModel';
-import { acceptsDurableInput, useConnection } from '../state/connection';
+import { acceptsDurableInput, isTerminal, useConnection } from '../state/connection';
+import { useProjection } from '../state/projection';
 
 interface Props {
-  scene: RenderScene;
   sceneName: string;
 }
 
@@ -22,8 +21,11 @@ const TOOLS = [
 // centre, contextual right dock, bottom tray. Tools are placeholders until the
 // command contracts exist; they are visibly disabled rather than absent, so the
 // layout can be reviewed at its real density.
-export function GmWorkspace({ scene, sceneName }: Props) {
+export function GmWorkspace({ sceneName }: Props) {
   const status = useConnection((s) => s.status);
+  const scene = useProjection((s) => s.scene);
+  // A terminal state unmounts the map rather than covering it (see TableScreen).
+  const showMap = scene !== null && !isTerminal(status);
   const renderer = useConnection((s) => s.renderer);
   const [zoom, setZoom] = useState(1);
   const [railOpen, setRailOpen] = useState(true);
@@ -62,7 +64,14 @@ export function GmWorkspace({ scene, sceneName }: Props) {
       </nav>
 
       <main className="vtt-stage">
-        <MapHost surface="gm" scene={scene} label={`Map: ${sceneName}`} onViewportChange={(v) => setZoom(v.scale)} />
+        {showMap && (
+          <MapHost
+            surface="gm"
+            scene={scene}
+            label={`Map: ${sceneName}`}
+            onViewportChange={(v) => setZoom(v.scale)}
+          />
+        )}
       </main>
 
       <aside className="vtt-dock" aria-label="Inspector">

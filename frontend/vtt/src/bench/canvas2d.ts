@@ -1,4 +1,4 @@
-import type { RenderScene } from '../scene/renderModel';
+import { gridLines, tokenRadius, type RenderScene } from '../scene/renderModel';
 import { uiFont } from '../ui/fonts';
 
 // Canvas 2D baseline for the R4 spike: the same primitives SceneRuntime draws,
@@ -22,11 +22,13 @@ export function drawCanvas2d(
   ctx.fillRect(0, 0, width, height);
 
   ctx.beginPath();
-  for (let x = 0; x <= width; x += gridSize) {
+  const xs = scene.showGrid ? gridLines(width, gridSize) : [];
+  const ys = scene.showGrid ? gridLines(height, gridSize) : [];
+  for (const x of xs) {
     ctx.moveTo(x, 0);
     ctx.lineTo(x, height);
   }
-  for (let y = 0; y <= height; y += gridSize) {
+  for (const y of ys) {
     ctx.moveTo(0, y);
     ctx.lineTo(width, y);
   }
@@ -72,7 +74,7 @@ export function drawCanvas2d(
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
   for (const t of scene.tokens) {
-    const r = (t.size * gridSize) / 2 - 3;
+    const r = tokenRadius(t.size, gridSize);
     ctx.beginPath();
     ctx.arc(t.x, t.y, r, 0, Math.PI * 2);
     ctx.fillStyle = hex(t.color);

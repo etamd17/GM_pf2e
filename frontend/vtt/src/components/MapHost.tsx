@@ -32,16 +32,30 @@ export function MapHost({ surface, scene, onViewportChange, label }: Props) {
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
+    // Each mount gets its own liveness flag. Callbacks and a late init()
+    // rejection from a runtime that has since been cleaned up (StrictMode,
+    // unmount, surface change) must not write the shared renderer state of its
+    // replacement (VTT-20261012-010 finding 3).
+    let alive = true;
+    const isCurrent = () => alive && runtimeRef.current === runtime;
     const runtime = new SceneRuntime(host, {
       surface,
-      onRendererStatus: (status) => useConnection.getState().setRenderer(status),
-      onViewportChange: (v) => viewportCb.current?.(v),
+      onRendererStatus: (status) => {
+        if (isCurrent()) useConnection.getState().setRenderer(status);
+      },
+      onViewportChange: (v) => {
+        if (isCurrent()) viewportCb.current?.(v);
+      },
     });
     runtimeRef.current = runtime;
+    useConnection.getState().setRenderer('ok');
     runtime.setScene(latestScene.current);
-    void runtime.init().catch(() => useConnection.getState().setRenderer('failed'));
+    runtime.init().catch(() => {
+      if (isCurrent()) useConnection.getState().setRenderer('failed');
+    });
     if (import.meta.env.DEV) window.__vttRuntime = runtime;
     return () => {
+      alive = false;
       runtime.destroy();
       runtimeRef.current = null;
       if (window.__vttRuntime === runtime) delete window.__vttRuntime;

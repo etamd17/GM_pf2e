@@ -1,9 +1,23 @@
 import { Application, Container, Graphics, Text, type WebGLRenderer } from 'pixi.js';
 import { layersFor, type LayerName, type Surface } from './layers';
 import { RenderScheduler } from './renderScheduler';
-import type { RenderScene, RenderToken } from './renderModel';
-import { fitToScreen, panBy, zoomAt, type Viewport } from './viewport';
-import { uiFont } from '../ui/fonts';
+import {
+  gridLines,
+  normalizeScene,
+  tokenRadius,
+  type RenderScene,
+  type RenderToken,
+} from './renderModel';
+import {
+  DEFAULT_ZOOM_LIMITS,
+  FIT_ZOOM_LIMITS,
+  fitToScreen,
+  panBy,
+  zoomAt,
+  type Viewport,
+  type ZoomLimits,
+} from './viewport';
+import { CANVAS_LABEL_FONT, ensureCanvasFont, uiFont } from '../ui/fonts';
 import type { RendererStatus } from '../state/connection';
 
 // Owns the Pixi application for one map host. React mounts a <div>, hands it
@@ -65,6 +79,8 @@ export class SceneRuntime {
   }
 
   async init(): Promise<void> {
+    await ensureCanvasFont();
+    if (this.destroyed) return;
     await this.createApplication();
     if (this.destroyed) return;
     this.resizeObserver = new ResizeObserver(() => this.handleResize());
@@ -72,7 +88,8 @@ export class SceneRuntime {
     if (this.options.surface === 'gm') this.attachInput();
   }
 
-  setScene(next: RenderScene): void {
+  setScene(input: RenderScene): void {
+    const next = normalizeScene(input);
     const prev = this.scene;
     this.scene = next;
     if (!this.app) return; // applied in full once init() completes
@@ -80,7 +97,8 @@ export class SceneRuntime {
       !prev ||
       prev.width !== next.width ||
       prev.height !== next.height ||
-      prev.gridSize !== next.gridSize;
+      prev.gridSize !== next.gridSize ||
+      prev.showGrid !== next.showGrid;
     if (geometryChanged) {
       // Token radius is baked from the grid size, so new geometry rebuilds them.
       if (prev && prev.gridSize !== next.gridSize) this.clearTokens();
@@ -102,8 +120,22 @@ export class SceneRuntime {
         { width: this.scene.width, height: this.scene.height },
         { width: this.host.clientWidth, height: this.host.clientHeight },
         padding,
+        FIT_ZOOM_LIMITS,
       ),
     );
+  }
+
+  // Interactive zoom may always go out at least as far as "fit", so a scene
+  // much larger than the viewport can still be seen whole.
+  private zoomLimits(): ZoomLimits {
+    if (!this.scene) return DEFAULT_ZOOM_LIMITS;
+    const fitted = fitToScreen(
+      { width: this.scene.width, height: this.scene.height },
+      { width: this.host.clientWidth, height: this.host.clientHeight },
+      0,
+      FIT_ZOOM_LIMITS,
+    );
+    return { min: Math.min(DEFAULT_ZOOM_LIMITS.min, fitted.scale), max: DEFAULT_ZOOM_LIMITS.max };
   }
 
   // Forces one frame synchronously. requestAnimationFrame does not fire in a
@@ -271,6 +303,7 @@ export class SceneRuntime {
     canvas.addEventListener('pointermove', this.onPointerMove);
     canvas.addEventListener('pointerup', this.onPointerUp);
     canvas.addEventListener('pointercancel', this.onPointerUp);
+    canvas.addEventListener('lostpointercapture', this.onPointerUp);
     canvas.addEventListener('wheel', this.onWheel, { passive: false });
     this.host.addEventListener('keydown', this.onKeyDown);
   }
@@ -280,12 +313,15 @@ export class SceneRuntime {
     canvas.removeEventListener('pointermove', this.onPointerMove);
     canvas.removeEventListener('pointerup', this.onPointerUp);
     canvas.removeEventListener('pointercancel', this.onPointerUp);
+    canvas.removeEventListener('lostpointercapture', this.onPointerUp);
     canvas.removeEventListener('wheel', this.onWheel);
     this.host.removeEventListener('keydown', this.onKeyDown);
   }
 
   private readonly onPointerDown = (e: PointerEvent): void => {
     if (e.button !== 0 && e.button !== 1) return;
+    // Middle-button pan must not also start the browser's autoscroll.
+    if (e.button === 1) e.preventDefault();
     this.drag = { pointerId: e.pointerId, lastX: e.clientX, lastY: e.clientY };
     (e.target as Element).setPointerCapture?.(e.pointerId);
     this.host.focus({ preventScroll: true });
@@ -312,7 +348,12 @@ export class SceneRuntime {
     const factor = Math.exp(-e.deltaY * 0.0015);
     this.userMovedViewport = true;
     this.applyViewport(
-      zoomAt(this.viewport, { x: e.clientX - rect.left, y: e.clientY - rect.top }, factor),
+      zoomAt(
+        this.viewport,
+        { x: e.clientX - rect.left, y: e.clientY - rect.top },
+        factor,
+        this.zoomLimits(),
+      ),
     );
   };
 
@@ -334,10 +375,10 @@ export class SceneRuntime {
         break;
       case '+':
       case '=':
-        next = zoomAt(this.viewport, centre, KEY_ZOOM);
+        next = zoomAt(this.viewport, centre, KEY_ZOOM, this.zoomLimits());
         break;
       case '-':
-        next = zoomAt(this.viewport, centre, 1 / KEY_ZOOM);
+        next = zoomAt(this.viewport, centre, 1 / KEY_ZOOM, this.zoomLimits());
         break;
       case '0':
         this.userMovedViewport = false;
@@ -372,10 +413,15 @@ export class SceneRuntime {
   }
 
   private drawGrid(scene: RenderScene): void {
+    if (!scene.showGrid) {
+      this.replaceLayerContent('grid', null);
+      return;
+    }
+    // gridLines is bounded and returns nothing for an invalid step, so bad
+    // persisted or imported geometry cannot spin this loop.
     const g = new Graphics();
-    const step = scene.gridSize;
-    for (let x = 0; x <= scene.width; x += step) g.moveTo(x, 0).lineTo(x, scene.height);
-    for (let y = 0; y <= scene.height; y += step) g.moveTo(0, y).lineTo(scene.width, y);
+    for (const x of gridLines(scene.width, scene.gridSize)) g.moveTo(x, 0).lineTo(x, scene.height);
+    for (const y of gridLines(scene.height, scene.gridSize)) g.moveTo(0, y).lineTo(scene.width, y);
     g.stroke({ width: 1, color: GRID_COLOR, alpha: 0.12 });
     this.replaceLayerContent('grid', g);
   }
@@ -450,14 +496,19 @@ function sameAppearance(a: RenderToken, b: RenderToken): boolean {
 
 function buildToken(model: RenderToken, gridSize: number): Container {
   const root = new Container({ label: `token:${model.id}` });
-  const radius = (model.size * gridSize) / 2 - 3;
+  const radius = tokenRadius(model.size, gridSize);
   const body = new Graphics();
   body.circle(0, 0, radius).fill({ color: model.color, alpha: 0.9 });
   body.circle(0, 0, radius).stroke({ width: 3, color: 0x0c0a07, alpha: 0.9 });
   root.addChild(body);
   const label = new Text({
     text: model.label,
-    style: { fontFamily: uiFont(), fontSize: 13, fontWeight: '600', fill: 0xf0ead7 },
+    style: {
+      fontFamily: uiFont(),
+      fontSize: CANVAS_LABEL_FONT.sizePx,
+      fontWeight: CANVAS_LABEL_FONT.weight,
+      fill: 0xf0ead7,
+    },
   });
   label.anchor.set(0.5, 0);
   label.position.set(0, radius + 4);

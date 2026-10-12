@@ -3,14 +3,21 @@
   "private": true,
   "type": "module",
   "description": "PF2e VTT web client (React + raw PixiJS). Owned by the client lead; see docs/vtt/.",
+  "engines": {
+    "node": ">=24.12.0 <25"
+  },
+  "packageManager": "npm@11.6.2",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "check:bundle": "node scripts/check-bundle.mjs"
   },
   "dependencies": {
+    "@fontsource/cinzel": "5.3.0",
+    "@fontsource/inter": "5.3.0",
     "@tanstack/react-query": "5.104.2",
     "pixi.js": "8.22.0",
     "react": "19.3.0",
@@ -20,7 +27,7 @@
   "devDependencies": {
     "@testing-library/dom": "10.4.2",
     "@testing-library/react": "16.3.3",
-    "@types/node": "26.6.5",
+    "@types/node": "24.19.2",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "6.1.2",

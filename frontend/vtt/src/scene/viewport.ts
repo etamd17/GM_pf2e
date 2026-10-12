@@ -24,6 +24,10 @@ export interface ZoomLimits {
 
 export const DEFAULT_ZOOM_LIMITS: ZoomLimits = { min: 0.1, max: 4 };
 
+// Fitting must be able to show a whole oversized scene (16384 px into a small
+// viewport), so its lower bound is far below the interactive default.
+export const FIT_ZOOM_LIMITS: ZoomLimits = { min: 0.005, max: 4 };
+
 export function clampScale(scale: number, limits: ZoomLimits = DEFAULT_ZOOM_LIMITS): number {
   if (!Number.isFinite(scale)) return limits.min;
   return Math.min(limits.max, Math.max(limits.min, scale));
