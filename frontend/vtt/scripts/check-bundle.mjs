@@ -15,7 +15,8 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { build } from 'vite';
-import { cssRefs, htmlRefs, isAllowedAssetRef, resolveAssetBase } from '../src/build/assetOrigin.ts';
+import { cssRefs, isAllowedAssetRef, resolveAssetBase } from '../src/build/assetOrigin.ts';
+import { scanHtml } from '../src/build/htmlScan.ts';
 
 const root = resolve(import.meta.dirname, '..');
 const outDir = mkdtempSync(join(tmpdir(), 'vtt-bundle-check-'));
@@ -105,10 +106,18 @@ try {
   ];
   for (const file of emitted) {
     const text = readFileSync(join(outDir, file), 'utf-8');
-    const refs = file.endsWith('.html') ? htmlRefs(text) : cssRefs(text);
-    for (const ref of refs.filter((r) => !isAllowedAssetRef(r, base))) {
+    // Resolve each reference against the URL its file is served from: pages
+    // under a /vtt route, stylesheets under the asset base.
+    const isHtml = file.endsWith('.html');
+    const documentPath = isHtml ? `/vtt/${file.replace(/\.html$/, '')}` : `${base}${file.slice('assets/'.length)}`;
+    const scan = isHtml ? scanHtml(text) : { refs: cssRefs(text), problems: [] };
+    for (const problem of scan.problems) {
       failed = true;
-      console.error(`FAIL: ${file} references an off-origin or out-of-base asset: ${ref}`);
+      console.error(`FAIL: ${file}: ${problem}`);
+    }
+    for (const ref of scan.refs.filter((r) => !isAllowedAssetRef(r, base, documentPath))) {
+      failed = true;
+      console.error(`FAIL: ${file} references an off-origin or out-of-base asset: ${JSON.stringify(ref)}`);
     }
   }
   console.log(`origin check: ${emitted.length} HTML/CSS files under base ${base}`);

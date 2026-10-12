@@ -1,7 +1,7 @@
 import { resolve } from 'node:path';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
-import { resolveAssetBase } from './src/build/assetOrigin';
+import { resolveAssetBase } from './src/build/assetOrigin.ts';
 
 // Production build shape (VTT-20261012-010, integration blockers):
 // - an absolute, app-origin asset base so /vtt, /vtt/table and
