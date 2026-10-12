@@ -9,7 +9,7 @@ beforeEach(() => {
 describe('connection state', () => {
   it('accepts durable input only while live', () => {
     expect(acceptsDurableInput('live')).toBe(true);
-    for (const s of ['connecting', 'degraded', 'reconnecting', 'resyncing', 'revoked', 'version-mismatch'] as const) {
+    for (const s of ['connecting', 'degraded', 'reconnecting', 'resyncing', 'offline-locked', 'revoked', 'session-ended', 'version-mismatch'] as const) {
       expect(acceptsDurableInput(s), s).toBe(false);
     }
   });

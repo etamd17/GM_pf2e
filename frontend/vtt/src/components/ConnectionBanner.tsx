@@ -13,6 +13,14 @@ const STATUS_COPY: Record<Exclude<ConnectionStatus, 'live'>, { title: string; de
     detail: 'Trying to reach the server. Nothing you did has been lost.',
   },
   resyncing: { title: 'Catching up', detail: 'Reloading the current scene from the server.' },
+  'offline-locked': {
+    title: 'Offline',
+    detail: 'This screen lost its connection and has cleared the map. It returns when the connection does.',
+  },
+  'session-ended': {
+    title: 'Signed out',
+    detail: 'Your session ended. Sign in again to continue.',
+  },
   revoked: {
     title: 'Access ended',
     detail: 'This screen no longer has access to the campaign. Ask the GM to pair it again.',
@@ -47,14 +55,16 @@ export function bannerContent(
   status: ConnectionStatus,
   renderer: RendererStatus,
 ): BannerContent | null {
-  if (status === 'revoked' || status === 'version-mismatch') {
+  if (status === 'revoked' || status === 'session-ended' || status === 'version-mismatch') {
     return { tone: 'error', ...STATUS_COPY[status] };
   }
   if (renderer !== 'ok') {
     return { tone: renderer === 'failed' ? 'error' : 'warn', ...RENDERER_COPY[renderer] };
   }
   if (status === 'live') return null;
-  return { tone: 'warn', ...STATUS_COPY[status] };
+  // A locked table has cleared its map; someone in the room needs to see why,
+  // so it gets the full banner rather than the table's status dot.
+  return { tone: status === 'offline-locked' ? 'error' : 'warn', ...STATUS_COPY[status] };
 }
 
 interface Props {
