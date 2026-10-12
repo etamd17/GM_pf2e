@@ -11,8 +11,19 @@ npm install          # exact versions are pinned in package.json and package-loc
 npm run dev          # http://localhost:5173 (GM), /table.html (table), /bench.html (renderer bench)
 npm test             # vitest
 npm run typecheck
-npm run build        # output in dist/ (gitignored)
+npm run build        # output in dist/ (gitignored), with .vite/manifest.json
+npm run check:bundle # release check: table bundle closure and asset origin
 ```
+
+Node `>=24.12.0 <25` and npm 11.6.2 (see `engines` and `packageManager`).
+
+Build switches, which are environment variables read by `vite.config.ts`:
+- `VTT_ASSET_BASE` sets the absolute asset URL prefix. The default is `/vtt/assets/`, a proposal
+  until Flask routes land.
+- `VTT_SOURCEMAP=1` emits source maps.
+- `VTT_BENCH=1` includes the bench entry.
+
+Source maps and the bench entry are off by default and must not ship in a normal image.
 
 Development builds start "live" on a generated reference scene. Add `?status=<state>` to force a
 connection state, for example `?status=reconnecting` or `/table.html?status=revoked`. Production
