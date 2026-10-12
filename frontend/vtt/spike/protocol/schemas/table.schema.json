@@ -1,0 +1,79 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://vtt.invalid/v1/table.schema.json",
+  "title": "TableFrame",
+  "oneOf": [
+    { "$ref": "#/definitions/TableSnapshot" },
+    { "$ref": "#/definitions/TablePatch" }
+  ],
+  "definitions": {
+    "TableToken": {
+      "title": "TableToken",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "id", "version", "x", "y", "label"],
+      "properties": {
+        "kind": { "const": "token" },
+        "id": { "$ref": "common.schema.json#/definitions/Id" },
+        "version": { "$ref": "common.schema.json#/definitions/OpaqueToken" },
+        "x": { "$ref": "common.schema.json#/definitions/Coord" },
+        "y": { "$ref": "common.schema.json#/definitions/Coord" },
+        "label": { "type": "string", "maxLength": 80 }
+      }
+    },
+    "TablePing": {
+      "title": "TablePing",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "id", "version", "x", "y"],
+      "properties": {
+        "kind": { "const": "ping" },
+        "id": { "$ref": "common.schema.json#/definitions/Id" },
+        "version": { "$ref": "common.schema.json#/definitions/OpaqueToken" },
+        "x": { "$ref": "common.schema.json#/definitions/Coord" },
+        "y": { "$ref": "common.schema.json#/definitions/Coord" }
+      }
+    },
+    "TableEntity": {
+      "title": "TableEntity",
+      "oneOf": [{ "$ref": "#/definitions/TableToken" }, { "$ref": "#/definitions/TablePing" }]
+    },
+    "EntityRef": {
+      "title": "EntityRef",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "id"],
+      "properties": {
+        "kind": { "enum": ["token", "ping"] },
+        "id": { "$ref": "common.schema.json#/definitions/Id" }
+      }
+    },
+    "TableSnapshot": {
+      "title": "TableSnapshot",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "frame", "subscriptionId", "seq", "entities"],
+      "properties": {
+        "schemaVersion": { "$ref": "common.schema.json#/definitions/SchemaVersion" },
+        "frame": { "const": "snapshot" },
+        "subscriptionId": { "$ref": "common.schema.json#/definitions/OpaqueToken" },
+        "seq": { "const": 0 },
+        "entities": { "type": "array", "maxItems": 2000, "items": { "$ref": "#/definitions/TableEntity" } }
+      }
+    },
+    "TablePatch": {
+      "title": "TablePatch",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "frame", "subscriptionId", "seq", "upserted", "removed"],
+      "properties": {
+        "schemaVersion": { "$ref": "common.schema.json#/definitions/SchemaVersion" },
+        "frame": { "const": "patch" },
+        "subscriptionId": { "$ref": "common.schema.json#/definitions/OpaqueToken" },
+        "seq": { "$ref": "common.schema.json#/definitions/Seq" },
+        "upserted": { "type": "array", "maxItems": 2000, "items": { "$ref": "#/definitions/TableEntity" } },
+        "removed": { "type": "array", "maxItems": 2000, "items": { "$ref": "#/definitions/EntityRef" } }
+      }
+    }
+  }
+}
