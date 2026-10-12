@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   clampScale,
+  FIT_ZOOM_LIMITS,
   fitToScreen,
+  interactiveZoomLimits,
   panBy,
   screenToWorld,
   worldToScreen,
@@ -55,5 +57,29 @@ describe('viewport', () => {
     expect(v.scale).toBe(1);
     expect(v.x).toBe(24);
     expect(v.y).toBe(24);
+  });
+
+  // VTT-20261012-012 finding 3: the first zoom-out after Fit must never zoom in.
+  it.each([
+    ['GM, 24 px padding', 24],
+    ['table, no padding', 0],
+  ])('zoom-out from a fitted oversized scene never increases scale (%s)', (_label, padding) => {
+    const scene = { width: 10000, height: 10000 };
+    const screen = { width: 1000, height: 1000 };
+    const fitted = fitToScreen(scene, screen, padding, FIT_ZOOM_LIMITS);
+    const limits = interactiveZoomLimits(scene, screen, padding);
+    const centre = { x: 500, y: 500 };
+    let v = fitted;
+    for (let i = 0; i < 5; i += 1) {
+      const next = zoomAt(v, centre, 1 / 1.2, limits);
+      expect(next.scale).toBeLessThanOrEqual(v.scale);
+      v = next;
+    }
+    expect(limits.min).toBeLessThanOrEqual(fitted.scale);
+  });
+
+  it('keeps the default floor for scenes that fit comfortably', () => {
+    const limits = interactiveZoomLimits({ width: 1000, height: 1000 }, { width: 1920, height: 1080 }, 24);
+    expect(limits.min).toBe(0.1);
   });
 });

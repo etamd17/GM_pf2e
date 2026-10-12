@@ -58,7 +58,7 @@ export const useConnection = create<ConnectionState>()((set, get) => ({
     // Entering a terminal state drops the projection first, in the same
     // synchronous call, so no render can observe "revoked but still holding
     // the scene".
-    if (isTerminal(status)) useProjection.getState().clear();
+    if (isTerminal(status)) useProjection.getState().seal();
     set({ status });
   },
   setRenderer(renderer) {

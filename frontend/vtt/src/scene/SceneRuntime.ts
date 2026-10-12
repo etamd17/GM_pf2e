@@ -12,6 +12,7 @@ import {
   DEFAULT_ZOOM_LIMITS,
   FIT_ZOOM_LIMITS,
   fitToScreen,
+  interactiveZoomLimits,
   panBy,
   zoomAt,
   type Viewport,
@@ -114,28 +115,30 @@ export class SceneRuntime {
 
   fit(): void {
     if (!this.scene) return;
-    const padding = this.options.surface === 'table' ? 0 : 24;
+    // A hidden or collapsed host has no size; fitting into 0x0 would set the
+    // minimum zoom. The ResizeObserver fits again once the host has a size.
+    if (this.host.clientWidth === 0 || this.host.clientHeight === 0) return;
     this.applyViewport(
-      fitToScreen(
-        { width: this.scene.width, height: this.scene.height },
-        { width: this.host.clientWidth, height: this.host.clientHeight },
-        padding,
-        FIT_ZOOM_LIMITS,
-      ),
+      fitToScreen(this.sceneSize(), this.screenSize(), this.fitPadding(), FIT_ZOOM_LIMITS),
     );
   }
 
-  // Interactive zoom may always go out at least as far as "fit", so a scene
-  // much larger than the viewport can still be seen whole.
+  // One padding value for both fitting and the zoom-out floor.
+  private fitPadding(): number {
+    return this.options.surface === 'table' ? 0 : 24;
+  }
+
+  private sceneSize() {
+    return { width: this.scene?.width ?? 1, height: this.scene?.height ?? 1 };
+  }
+
+  private screenSize() {
+    return { width: this.host.clientWidth, height: this.host.clientHeight };
+  }
+
   private zoomLimits(): ZoomLimits {
     if (!this.scene) return DEFAULT_ZOOM_LIMITS;
-    const fitted = fitToScreen(
-      { width: this.scene.width, height: this.scene.height },
-      { width: this.host.clientWidth, height: this.host.clientHeight },
-      0,
-      FIT_ZOOM_LIMITS,
-    );
-    return { min: Math.min(DEFAULT_ZOOM_LIMITS.min, fitted.scale), max: DEFAULT_ZOOM_LIMITS.max };
+    return interactiveZoomLimits(this.sceneSize(), this.screenSize(), this.fitPadding());
   }
 
   // Forces one frame synchronously. requestAnimationFrame does not fire in a

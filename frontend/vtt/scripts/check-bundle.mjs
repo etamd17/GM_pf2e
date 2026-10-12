@@ -6,14 +6,16 @@
 // Vite manifest's transitive closure from the table entry (static and dynamic
 // imports), and reads every chunk's source map to find which modules ended up
 // in the table's download. It fails if any GM workspace, bench or authoring
-// module is in that closure, or if any shipped file references a font CDN.
+// module is in that closure, if any shipped file references a font CDN, or if
+// any emitted HTML or CSS references an asset outside the app origin and base.
 //
 // Usage: npm run check:bundle
 
-import { mkdtempSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { build } from 'vite';
+import { cssRefs, htmlRefs, isAllowedAssetRef, resolveAssetBase } from '../src/build/assetOrigin.ts';
 
 const root = resolve(import.meta.dirname, '..');
 const outDir = mkdtempSync(join(tmpdir(), 'vtt-bundle-check-'));
@@ -91,6 +93,25 @@ try {
     failed = true;
     console.error('FAIL: bench entry present in a default build');
   }
+
+  // Origin boundary: every src/href in emitted HTML and every url()/@import
+  // in emitted CSS must stay on the app origin, under the asset base.
+  const base = resolveAssetBase(process.env.VTT_ASSET_BASE);
+  const emitted = [
+    ...readdirSync(outDir).filter((f) => f.endsWith('.html')),
+    ...readdirSync(join(outDir, 'assets'))
+      .filter((f) => f.endsWith('.css'))
+      .map((f) => `assets/${f}`),
+  ];
+  for (const file of emitted) {
+    const text = readFileSync(join(outDir, file), 'utf-8');
+    const refs = file.endsWith('.html') ? htmlRefs(text) : cssRefs(text);
+    for (const ref of refs.filter((r) => !isAllowedAssetRef(r, base))) {
+      failed = true;
+      console.error(`FAIL: ${file} references an off-origin or out-of-base asset: ${ref}`);
+    }
+  }
+  console.log(`origin check: ${emitted.length} HTML/CSS files under base ${base}`);
 
   for (const file of [...shippedFiles(tableChunks), ...shippedFiles(closure(manifest, 'index.html'))]) {
     const text = readFileSync(join(outDir, file), 'utf-8');

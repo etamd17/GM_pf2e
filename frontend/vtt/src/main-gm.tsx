@@ -14,7 +14,11 @@ const queryClient = new QueryClient();
 // No transport yet: development builds show the reference scene and can force
 // a connection state with ?status=. Production builds stay in 'connecting'.
 // Seed before the status: a terminal ?status= must clear it like a real one.
-useProjection.getState().setScene(buildReferenceScene());
+{
+  const projection = useProjection.getState();
+  const epoch = projection.open();
+  if (epoch !== null) projection.setScene(epoch, buildReferenceScene());
+}
 const devStatus = initialDevStatus(window.location.search, import.meta.env.DEV);
 useConnection.getState().setStatus(devStatus ?? (import.meta.env.DEV ? 'live' : 'connecting'));
 

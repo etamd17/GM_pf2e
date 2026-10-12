@@ -58,6 +58,15 @@ export function panBy(v: Viewport, dx: number, dy: number): Viewport {
   return { ...v, x: v.x + dx, y: v.y + dy };
 }
 
+// Interactive zoom limits for a scene on a surface. Zooming out must always be
+// able to reach the fitted view, computed with the SAME padding the surface
+// fits with. Otherwise the first zoom-out after Fit can clamp upward and zoom
+// in (VTT-20261012-012 finding 3).
+export function interactiveZoomLimits(scene: Size, screen: Size, padding: number): ZoomLimits {
+  const fitted = fitToScreen(scene, screen, padding, FIT_ZOOM_LIMITS);
+  return { min: Math.min(DEFAULT_ZOOM_LIMITS.min, fitted.scale), max: DEFAULT_ZOOM_LIMITS.max };
+}
+
 // Fit the whole scene inside the screen with `padding` CSS px on every side,
 // centred. Used on first load and by the table, which always shows the scene.
 export function fitToScreen(

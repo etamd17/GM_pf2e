@@ -3,7 +3,7 @@ import { act, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EMPTY_SCENE } from '../scene/renderModel';
 import { useConnection } from '../state/connection';
-import { useProjection } from '../state/projection';
+import { resetProjectionForTest, useProjection, type ProjectionEpoch } from '../state/projection';
 
 // VTT-20261012-010 finding 1: a terminal state must clear the projection and
 // destroy the Pixi runtime, not just cover the map with a banner.
@@ -31,10 +31,16 @@ vi.mock('../scene/SceneRuntime', () => ({
 const { TableScreen } = await import('./TableScreen');
 const { GmWorkspace } = await import('./GmWorkspace');
 
+let epoch: ProjectionEpoch;
+
 beforeEach(() => {
   runtimes.length = 0;
   useConnection.setState({ status: 'live', renderer: 'ok' });
-  useProjection.setState({ scene: EMPTY_SCENE });
+  resetProjectionForTest();
+  const opened = useProjection.getState().open();
+  if (opened === null) throw new Error('projection unexpectedly sealed');
+  epoch = opened;
+  useProjection.getState().setScene(epoch, EMPTY_SCENE);
 });
 
 afterEach(cleanup);
@@ -64,12 +70,23 @@ describe.each([
     expect(screen.getByRole('alert').textContent).toContain('Access ended');
   });
 
-  it('does not remount the map if a scene arrives after revocation', () => {
-    const { container } = render(view());
-    act(() => useConnection.getState().setStatus('revoked'));
-    act(() => useProjection.getState().setScene(EMPTY_SCENE));
-    expect(container.querySelector('.vtt-map-host')).toBeNull();
-  });
+  it.each(['revoked', 'version-mismatch'] as const)(
+    'a late write after %s neither remounts the map nor repopulates memory',
+    (terminal) => {
+      const { container } = render(view());
+      act(() => useConnection.getState().setStatus(terminal));
+      // An in-flight snapshot from the old subscription lands late.
+      let accepted = true;
+      act(() => {
+        accepted = useProjection.getState().setScene(epoch, EMPTY_SCENE);
+      });
+      expect(accepted).toBe(false);
+      expect(useProjection.getState().scene).toBeNull();
+      // A brand-new subscription cannot open either: only a reload leaves.
+      expect(useProjection.getState().open()).toBeNull();
+      expect(container.querySelector('.vtt-map-host')).toBeNull();
+    },
+  );
 });
 
 it('version-mismatch also unmounts the map', () => {
