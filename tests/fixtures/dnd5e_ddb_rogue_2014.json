@@ -1,0 +1,37 @@
+{
+  "id": 90000002,
+  "name": "Test Rogue (synthetic)",
+  "stats": [{"id": 1, "value": 8}, {"id": 2, "value": 15}, {"id": 3, "value": 14}, {"id": 4, "value": 12}, {"id": 5, "value": 13}, {"id": 6, "value": 10}],
+  "bonusStats": [], "overrideStats": [],
+  "race": {"fullName": "Lightfoot Halfling", "baseRaceName": "Halfling", "baseName": "Halfling", "isSubRace": true, "subRaceShortName": "Lightfoot", "isLegacy": false},
+  "background": {"definition": {"name": "Criminal"}},
+  "classes": [
+    {"id": 601, "level": 4, "isStartingClass": true,
+     "definition": {"name": "Rogue", "hitDice": 8, "classFeatures": [{"name": "Expertise"}, {"name": "Sneak Attack"}, {"name": "Thieves' Cant"}, {"name": "Cunning Action"}, {"name": "Ability Score Improvement"}]},
+     "subclassDefinition": {"name": "Thief"}}
+  ],
+  "baseHitPoints": 23, "removedHitPoints": 0, "temporaryHitPoints": 0,
+  "feats": [],
+  "modifiers": {
+    "race": [{"type": "bonus", "subType": "dexterity-score", "value": 2}, {"type": "bonus", "subType": "charisma-score", "value": 1}],
+    "class": [
+      {"type": "proficiency", "subType": "acrobatics"}, {"type": "proficiency", "subType": "perception"},
+      {"type": "proficiency", "subType": "sleight-of-hand"}, {"type": "proficiency", "subType": "investigation"},
+      {"type": "expertise", "subType": "stealth"}, {"type": "expertise", "subType": "sleight-of-hand"},
+      {"type": "bonus", "subType": "dexterity-score", "value": 2}
+    ],
+    "background": [{"type": "proficiency", "subType": "deception"}, {"type": "proficiency", "subType": "stealth"}],
+    "feat": [], "item": []
+  },
+  "choices": {"race": [], "class": [], "background": [], "feat": [], "choiceDefinitions": []},
+  "options": {"class": []},
+  "classSpells": [], "spells": {},
+  "inventory": [
+    {"definition": {"name": "Rapier"}, "quantity": 1, "equipped": true, "isAttuned": false},
+    {"definition": {"name": "Leather Armor"}, "quantity": 1, "equipped": true, "isAttuned": false},
+    {"definition": {"name": "Arrows"}, "quantity": 20, "equipped": false, "isAttuned": false}
+  ],
+  "currencies": {"cp": 0, "sp": 0, "gp": 15, "ep": 0, "pp": 0},
+  "deathSaves": {}, "conditions": [], "inspiration": false,
+  "traits": {}, "notes": {}
+}

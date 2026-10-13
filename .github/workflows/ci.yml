@@ -93,6 +93,16 @@ jobs:
       - name: Verify deterministic PF2e package contracts
         run: python -m pytest -q tests/pf2e_rules --strict-markers
 
+      - name: Build D&D 5e rules data (not in git; from the public 5etools source)
+        # dnd5e_data/ is gitignored (public repo, non-SRD content). Without it
+        # every 5e test would skip, so CI builds it from the pinned release.
+        run: |
+          git clone --quiet --depth 1 --branch v2.37.0 https://github.com/5etools-mirror-3/5etools-src.git "$RUNNER_TEMP/5etools-src"
+          test "$(git -C "$RUNNER_TEMP/5etools-src" rev-parse HEAD)" = "8c026b807fac21862a309379a0c3228a0683198b"
+          node tools/dnd5e/export_5etools.mjs "$RUNNER_TEMP/5etools-src" dnd5e_data/resolved
+          python tools/dnd5e/build_dnd5e_db.py
+          cp dnd5e_data/resolved/_tags.json dnd5e_data/_tags.json
+
       - name: Run tests
         run: python -m pytest -q -m "not postgresql and not browser" --strict-markers
 

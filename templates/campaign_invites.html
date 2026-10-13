@@ -112,6 +112,7 @@
   <select name="system" style="width:auto;min-width:220px;">
     <option value="pf2e"{% if (campaign.system or 'pf2e') == 'pf2e' %} selected{% endif %}>Pathfinder 2e</option>
     <option value="cosmere"{% if campaign.system == 'cosmere' %} selected{% endif %}>Cosmere RPG (Stormlight)</option>
+    <option value="dnd5e"{% if campaign.system == 'dnd5e' %} selected{% endif %}>D&amp;D 5th Edition</option>
   </select>
   <button type="submit">Change system</button>
   <span class="muted" style="font-size:12px;">Currently <strong>{{ (campaign.system or 'pf2e')|upper }}</strong></span>

@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block head_extra %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dnd5e.css') }}?v=3">
+<script src="{{ url_for('static', filename='js/dnd5e.js') }}?v=1"></script>
+{% block d5_head %}{% endblock %}
+{% endblock %}
+{% block content %}
+<div class="d5-page">{% block d5_content %}{% endblock %}</div>
+{% endblock %}

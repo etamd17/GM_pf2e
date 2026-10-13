@@ -1,0 +1,53 @@
+{% extends "dnd5e/_base.html" %}
+{% block title %}D&amp;D 5e &middot; Combat{% endblock %}
+{% block d5_content %}
+<div class="d5-head">
+  <span class="d5-title">Combat</span>
+  <span class="d5-round" id="round-label"></span>
+  <span class="d5-spacer"></span>
+  <span class="d5-sub" id="turn-ping"></span>
+</div>
+<div id="my-init" class="d5-card" hidden></div>
+<div id="turns" class="d5-turns" style="margin-top:.8rem;"></div>
+<script>
+(function () {
+  'use strict';
+  var enc = {{ boot|tojson }};
+  var mine = {{ my_pcs|tojson }};
+  var isGM = {{ 'true' if d5_is_gm else 'false' }};
+  function paint() {
+    document.getElementById('round-label').textContent = enc.started ? 'Round ' + enc.round : (enc.combatants.length ? 'Waiting to start' : 'No combat');
+    var active = enc.combatants.filter(function (c) { return c.active; })[0];
+    var ping = document.getElementById('turn-ping');
+    var myTurn = active && mine.indexOf(active.pc_id) !== -1;
+    ping.innerHTML = active ? (myTurn ? '<span class="d5-chip">Your turn!</span>' : 'Turn: ' + D5.esc(active.name)) : '';
+    document.getElementById('turns').innerHTML = enc.combatants.map(function (c) {
+      var self = c.kind === 'pc';
+      var hp = self ? D5.hpBar(c.hp, c.hp_max, c.temp_hp) : '<div class="d5-muted">' + D5.esc(c.status || '') + '</div>';
+      var conds = Object.keys(c.conditions || {}).map(function (k) { return '<span class="d5-chip is-cond">' + D5.esc(k) + '</span>'; }).join(' ');
+      return '<div class="d5-turn' + (c.active ? ' is-active' : '') + (c.dead ? ' is-dead' : '') + '"><div class="d5-init">' + (c.initiative == null ? '&ndash;' : c.initiative) + '</div>' +
+        '<div><div class="d5-turn-name">' + D5.tokenHTML(c.image, c.name, 'is-sm') + '<span class="d5-kind ' + c.kind + '">' + c.kind + '</span>' + D5.esc(c.name) + '</div>' + hp +
+        '<div class="d5-row" style="margin-top:3px;">' + conds + '</div></div><div></div></div>';
+    }).join('') || '<div class="d5-card d5-muted">No combat right now.</div>';
+    var need = enc.combatants.filter(function (c) { return mine.indexOf(c.pc_id) !== -1 && c.initiative == null; });
+    var box = document.getElementById('my-init');
+    box.hidden = !need.length;
+    box.innerHTML = need.map(function (c) {
+      return '<div class="d5-row"><b>' + D5.esc(c.name) + '</b>: roll for initiative &nbsp;' +
+        '<button class="d5-btn is-primary" data-roll-init="' + c.pc_id + '">Roll</button>' +
+        '<span class="d5-muted">or enter</span><input class="d5-input is-num" type="number" data-set-init="' + c.pc_id + '"></div>';
+    }).join('');
+  }
+  document.addEventListener('click', function (ev) {
+    var b = ev.target.closest('[data-roll-init]');
+    if (b) D5.post('/api/dnd5e/pc/' + b.getAttribute('data-roll-init') + '/initiative', {}).then(function (r) { D5.toast('Initiative ' + r.initiative); }).catch(D5.fail);
+  });
+  document.addEventListener('change', function (ev) {
+    var t = ev.target;
+    if (t.matches('[data-set-init]') && t.value !== '') D5.post('/api/dnd5e/pc/' + t.getAttribute('data-set-init') + '/initiative', {value: parseInt(t.value, 10)}).catch(D5.fail);
+  });
+  D5.sse('dnd5e_encounter', function (v) { if (!enc || v.revision >= enc.revision) { enc = v; paint(); } });
+  paint();
+})();
+</script>
+{% endblock %}

@@ -25,7 +25,7 @@
     <form method="POST" action="/admin/campaigns/{{ c.id }}/system" style="display:flex;gap:6px;align-items:center;">
       <select name="system" style="padding:7px 9px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-family:inherit;">
         {% for s in systems %}
-        <option value="{{ s }}"{% if s == c.system %} selected{% endif %}>{{ 'Pathfinder 2e' if s == 'pf2e' else 'Cosmere RPG' }}</option>
+        <option value="{{ s }}"{% if s == c.system %} selected{% endif %}>{{ {'pf2e': 'Pathfinder 2e', 'cosmere': 'Cosmere RPG', 'dnd5e': 'D&D 5th Edition'}.get(s, s) }}</option>
         {% endfor %}
       </select>
       <button type="submit">Update system</button>

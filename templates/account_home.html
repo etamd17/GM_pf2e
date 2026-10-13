@@ -100,7 +100,7 @@
     <div class="cc {{ c.system }}">
       <div class="cc-cover">
         <span class="sys">{{ c.system|upper }}</span>
-        <svg class="crest" width="32" height="32" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="3" style="color:{{ '#9fd2f2' if c.system == 'cosmere' else '#f0d88a' }};opacity:.4;"><polygon points="50,8 86,30 86,70 50,92 14,70 14,30"/></svg>
+        <svg class="crest" width="32" height="32" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="3" style="color:{{ {'cosmere': '#9fd2f2', 'dnd5e': '#f08d84'}.get(c.system, '#f0d88a') }};opacity:.4;"><polygon points="50,8 86,30 86,70 50,92 14,70 14,30"/></svg>
       </div>
       <div class="cc-body">
         <div class="cc-name">{{ c.name }}</div>

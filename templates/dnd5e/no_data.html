@@ -1,0 +1,14 @@
+{% extends "dnd5e/_base.html" %}
+{% block title %}D&amp;D 5e &middot; rules data not installed{% endblock %}
+{% block d5_content %}
+<div class="d5-card" style="max-width:640px; margin:2rem auto;">
+  <h2 style="margin-top:0;">The 5e rules data isn't installed yet</h2>
+  <p>Characters, the bestiary and the compendium read the D&amp;D 5e rules content, which is
+  installed separately from the site's code.</p>
+  {% if is_admin %}
+  <p><a class="d5-btn is-primary" href="/dnd5e/admin/data">Install it</a></p>
+  {% else %}
+  <p class="d5-muted">Ask the site admin to install it.</p>
+  {% endif %}
+</div>
+{% endblock %}
