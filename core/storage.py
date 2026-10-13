@@ -43,7 +43,7 @@ SERVER_STATE_LOCK = threading.RLock()
 SYSTEMS_DIR = os.path.join(DATA_DIR, 'systems')
 
 SCHEMA_VERSION = 1
-SUPPORTED_SYSTEMS = ('pf2e', 'cosmere')
+SUPPORTED_SYSTEMS = ('pf2e', 'cosmere', 'dnd5e')
 
 # IDs are uuid4 hex (dash-less, 32 chars). Validated on every path build so a
 # campaign_id can never escape CAMPAIGNS_DIR (no traversal from user input).
@@ -89,6 +89,8 @@ def calendar_file(cid):            return os.path.join(campaign_dir(cid), 'calen
 def handouts_file(cid):            return os.path.join(campaign_dir(cid), 'handouts.json')
 def cosmere_adversaries_file(cid): return os.path.join(campaign_dir(cid), 'cosmere_adversaries.json')
 def cosmere_pc_dir(cid):           return os.path.join(campaign_dir(cid), 'cosmere_pcs')
+def dnd5e_dir(cid):                return os.path.join(campaign_dir(cid), 'dnd5e')
+def dnd5e_pc_dir(cid):             return os.path.join(dnd5e_dir(cid), 'characters')
 def homebrew_file(cid):            return os.path.join(campaign_dir(cid), 'homebrew.json')
 def chronicle_dir(cid):            return os.path.join(campaign_dir(cid), 'chronicle')
 # GM-uploaded Chronicle documents. A sibling of the vault lane's content/ +

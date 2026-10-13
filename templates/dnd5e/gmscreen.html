@@ -1,0 +1,116 @@
+{% extends "dnd5e/_base.html" %}
+{% block title %}D&amp;D 5e &middot; GM Screen{% endblock %}
+{% block d5_head %}
+<style>
+  .gs-grid { display: grid; gap: .8rem; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); align-items: start; }
+  .gs-grid .d5-card { margin: 0; }
+  .gs-entry summary { cursor: pointer; padding: .3rem 0; font-weight: 600; font-size: 13px; }
+  .gs-entry + .gs-entry { border-top: 1px solid rgba(255,255,255,.04); }
+</style>
+{% endblock %}
+{% block d5_content %}
+<div class="d5-head">
+  <span class="d5-title">GM Screen</span>
+  <span class="d5-sub">Quick reference &middot; click any entry for the full text</span>
+  <span class="d5-spacer"></span>
+  <a class="d5-btn{% if ed == 'one' %} is-primary{% endif %}" href="?edition=one">2024 rules</a>
+  <a class="d5-btn{% if ed == 'classic' %} is-primary{% endif %}" href="?edition=classic">2014 rules</a>
+</div>
+
+<div class="gs-grid">
+  <div class="d5-card">
+    <h3>Conditions</h3>
+    {% for c in conditions %}
+    <details class="gs-entry"><summary>{{ c.name }}</summary><div class="d5-prose">{{ c.html|safe }}</div></details>
+    {% endfor %}
+  </div>
+
+  <div class="d5-card">
+    <h3>Actions in combat</h3>
+    {% for a in actions %}
+    <details class="gs-entry"><summary>{{ a.name }}</summary><div class="d5-prose">{{ a.html|safe }}</div></details>
+    {% endfor %}
+  </div>
+
+  <div class="d5-card">
+    <h3>Difficulty classes</h3>
+    <table class="d5-table"><tbody>
+      {% for dc, label in [(5, 'Very easy'), (10, 'Easy'), (15, 'Medium'), (20, 'Hard'), (25, 'Very hard'), (30, 'Nearly impossible')] %}
+      <tr><td>{{ label }}</td><td style="text-align:right;"><b>{{ dc }}</b></td></tr>
+      {% endfor %}
+    </tbody></table>
+    <h3 style="margin-top:.9rem;">Cover</h3>
+    <table class="d5-table"><tbody>
+      <tr><td>Half</td><td>+2 AC and DEX saves</td></tr>
+      <tr><td>Three-quarters</td><td>+5 AC and DEX saves</td></tr>
+      <tr><td>Total</td><td>Can't be targeted directly</td></tr>
+    </tbody></table>
+    <h3 style="margin-top:.9rem;">Light and vision</h3>
+    <table class="d5-table"><tbody>
+      <tr><td>Lightly obscured / dim light</td><td>Disadvantage on Perception (sight)</td></tr>
+      <tr><td>Heavily obscured / darkness</td><td>Effectively Blinded</td></tr>
+    </tbody></table>
+  </div>
+
+  <div class="d5-card">
+    <h3>Travel pace</h3>
+    <table class="d5-table">
+      <thead><tr><th>Pace</th><th>Minute</th><th>Hour</th><th>Day</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr><td>Fast</td><td>400 ft.</td><td>4 mi.</td><td>30 mi.</td><td>{{ 'Disadvantage on Perception and Survival' if ed == 'one' else '-5 passive Perception' }}</td></tr>
+        <tr><td>Normal</td><td>300 ft.</td><td>3 mi.</td><td>24 mi.</td><td>{{ 'Disadvantage on Stealth' if ed == 'one' else '' }}</td></tr>
+        <tr><td>Slow</td><td>200 ft.</td><td>2 mi.</td><td>18 mi.</td><td>{{ 'Advantage on Perception and Survival' if ed == 'one' else 'Can use Stealth' }}</td></tr>
+      </tbody>
+    </table>
+    <h3 style="margin-top:.9rem;">Hazards</h3>
+    <table class="d5-table"><tbody>
+      <tr><td>Falling</td><td>1d6 bludgeoning per 10 ft. (max 20d6){{ ', land Prone' if ed == 'one' else ', land prone' }}</td></tr>
+      <tr><td>Holding breath</td><td>1 + CON modifier minutes (min 30 seconds)</td></tr>
+      <tr><td>Suffocating</td><td>CON modifier rounds (min 1), then 0 HP</td></tr>
+    </tbody></table>
+  </div>
+
+  <div class="d5-card">
+    <h3>Exhaustion</h3>
+    {% if ed == 'one' %}
+    <p class="d5-prose">Each level: <b>&minus;2</b> to every D20 Test and <b>&minus;5 ft.</b> speed per level. Level 6: death. A Long Rest removes 1 level.</p>
+    {% else %}
+    <table class="d5-table"><tbody>
+      {% for n, e in [(1, 'Disadvantage on ability checks'), (2, 'Speed halved'), (3, 'Disadvantage on attacks and saves'), (4, 'HP maximum halved'), (5, 'Speed 0'), (6, 'Death')] %}
+      <tr><td>{{ n }}</td><td>{{ e }}</td></tr>
+      {% endfor %}
+    </tbody></table>
+    <p class="d5-muted">Effects are cumulative. A long rest with food and water removes 1 level.</p>
+    {% endif %}
+  </div>
+
+  <div class="d5-card">
+    <h3>Encounter budget per character</h3>
+    <table class="d5-table">
+      <thead><tr><th>Lvl</th>{% for n in budget_names %}<th>{{ n|title }}</th>{% endfor %}</tr></thead>
+      <tbody>{% for lvl, row in budget_rows %}<tr><td>{{ lvl }}</td>{% for v in row %}<td>{{ '{:,}'.format(v) }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+    </table>
+    {% if ed == 'classic' %}<p class="d5-muted">Multiply monster XP: 1 &times;1, 2 &times;1.5, 3&ndash;6 &times;2, 7&ndash;10 &times;2.5, 11&ndash;14 &times;3, 15+ &times;4 (one step up for parties under 3, down for 6+).</p>{% endif %}
+  </div>
+
+  {% if glossary %}
+  <div class="d5-card">
+    <h3>Rules glossary</h3>
+    <input class="d5-input" id="gl-q" placeholder="Filter" style="width:100%; margin-bottom:.4rem;">
+    <div id="gl" class="d5-prose" style="max-height:420px; overflow:auto;">
+      {% for g in glossary %}<a class="d5-ref" data-kind="variantrule" data-id="{{ g.id }}" data-name="{{ g.name|lower }}">{{ g.name }}</a>{% if not loop.last %} &middot; {% endif %}{% endfor %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+<script>
+(function () {
+  var q = document.getElementById('gl-q');
+  if (!q) return;
+  q.addEventListener('input', function () {
+    var v = q.value.trim().toLowerCase();
+    document.querySelectorAll('#gl .d5-ref').forEach(function (a) { a.style.display = !v || a.getAttribute('data-name').indexOf(v) !== -1 ? '' : 'none'; });
+  });
+})();
+</script>
+{% endblock %}

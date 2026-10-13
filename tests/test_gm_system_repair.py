@@ -66,7 +66,7 @@ def test_campaign_gm_can_repair_own_system():
         assert campaigns.get_campaign(cid)['system'] == 'pf2e'   # unchanged by the non-member
 
         # an invalid system value is rejected (no silent corruption)
-        assert gm.post('/campaign/' + cid + '/system', data={'system': 'dnd5e'}).status_code in (302, 400)
+        assert gm.post('/campaign/' + cid + '/system', data={'system': 'starfinder'}).status_code in (302, 400)
         assert campaigns.get_campaign(cid)['system'] == 'pf2e'
 
         print('GM_SYSTEM_REPAIR_OK')

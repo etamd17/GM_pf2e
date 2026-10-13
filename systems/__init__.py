@@ -76,6 +76,8 @@ def actor_for_doc(doc, file_path: str = '', default: str = DEFAULT_SYSTEM):
 # --- register the built-in systems (import side effect) --------------------
 from systems import pf2e as _pf2e        # noqa: E402
 from systems import cosmere as _cosmere  # noqa: E402
+from systems import dnd5e as _dnd5e      # noqa: E402
 
 register(_pf2e.SYSTEM)
 register(_cosmere.SYSTEM)
+register(_dnd5e.SYSTEM)

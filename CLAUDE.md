@@ -24,6 +24,10 @@ python tools/check_templates.py   # Jinja parse check (CI runs this) — run aft
 
 ## Working agreements
 
+- **Claude and Codex share work through `docs/handoff/`** (`PROTOCOL.md`, `QUEUE.md`, one brief
+  + report per task in `tasks/`). Check the queue before starting; write a brief before handing
+  work over, and a report with real test numbers when finishing.
+
 - **No emojis** in code, UI strings, comments, or commit messages unless explicitly asked.
 - **Commit/push only when the user asks.** Never commit directly on `main` — branch off it; the user decides when to merge/push. Co-author trailer on commits:
   `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`
@@ -63,6 +67,7 @@ python tools/check_templates.py   # Jinja parse check (CI runs this) — run aft
   - **They union at read time in `_chronicle_visible_pages`**, and `_chronicle_fragment` dispatches by lane. Those two plus `_chronicle_render`'s manifest gate are the entire merge surface — every `/chronicle*` route funnels through them.
   - **`.docx` is parsed with the stdlib** (`zipfile` + `ElementTree` over OOXML) — no new production dependency on a service that auto-deploys `main`. Handles headings, emphasis, lists, tables and links; Word styling with no allowlisted equivalent is dropped, which the sanitizer would do anyway.
   - **Every converted byte goes through `_chronicle_sanitize_html` at WRITE time.** `_chronicle_fragment` hands fragments straight to `|safe` with no checks, so that call is the only thing between GM-pasted markup and the table. Sanitize before writing, never on read.
+- **D&D 5e** (`systems/dnd5e/`, blueprint `dnd5e.*`, pages under `/dnd5e/`) is the third system. It is self-contained: it never reads the PF2e live globals, keeps its state in `campaigns/<cid>/dnd5e/`, and gets its rules content from 5etools data that is **not in git** (public repo, non-SRD): `systems/dnd5e/paths.py` finds it (the Railway volume in prod, installed by a site admin at `/dnd5e/admin/data`; the gitignored `dnd5e_data/` in dev; CI builds it). Never commit `dnd5e_data/` contents. Start at `docs/dnd5e/HANDOFF.md` — architecture, data regeneration, and the honest list of what is not automated yet.
 - **Multi-system**: `systems/` registry; `_active_system()` / `_active_campaign_id()` are request/session-scoped. Templates branch on `body.system-pf2e` / `body.system-cosmere`. Cosmere actors are `systems/cosmere/actor.py::CosmereActor` (reads the Foundry `cosmere-rpg` schema); Cosmere combat is flat-integer, defenses are static (phy/cog/spi), conditions are mostly advantage/disadvantage + Exhausted (a flat test penalty).
 - **Obsidian Session Operations** — the GM drives the live site from a pane inside their own prep.
   Two halves, and BOTH live in this repo now:

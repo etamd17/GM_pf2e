@@ -1,0 +1,57 @@
+{# D&D 5e player bottom nav -- the 5e sibling of _cosmere_player_nav.html.
+   Included from base.html for players (not the GM) in a dnd5e campaign.
+   Reuses .player-nav / .player-nav-tab / .turn-dot from system.css.
+   d5_my_pc_names comes from the dnd5e blueprint's context processor. #}
+{% set _p = request.path %}
+<nav id="player-nav" class="player-nav" role="navigation" aria-label="Player navigation">
+    <a href="/dnd5e/player"
+       class="player-nav-tab{% if _p.startswith('/dnd5e/character') or _p == '/dnd5e/player' %} active{% endif %}"
+       aria-label="My character">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
+        <span>Character</span>
+    </a>
+    <a href="/dnd5e/combat"
+       class="player-nav-tab{% if _p.startswith('/dnd5e/combat') %} active{% endif %}"
+       id="nav-combat-tab" aria-label="Combat order">
+        <svg viewBox="0 0 24 24"><path d="M14.5 2.5L12 5l-2.5-2.5L7 5l-2.5-2.5L2 5v16.5l2.5-2.5L7 21.5l2.5-2.5L12 21.5l2.5-2.5 2.5 2.5 2.5-2.5L22 21.5V5l-2.5-2.5L17 5z"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/></svg>
+        <span>Combat</span>
+        <span id="turn-alert-dot" class="turn-dot hidden"></span>
+    </a>
+    <a href="/dnd5e/characters"
+       class="player-nav-tab{% if _p.startswith('/dnd5e/characters') %} active{% endif %}"
+       aria-label="The party">
+        <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span>Party</span>
+    </a>
+    <a href="/dnd5e/compendium"
+       class="player-nav-tab{% if _p.startswith('/dnd5e/compendium') %} active{% endif %}"
+       aria-label="Spells, items and rules">
+        <svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        <span>Rules</span>
+    </a>
+    {% if account_user %}
+    <a href="/me" class="player-nav-tab" aria-label="Home — all your campaigns and characters">
+        <svg viewBox="0 0 24 24"><path d="M3 9.5L12 3l9 6.5"/><path d="M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10"/><polyline points="9 21 9 14 15 14 15 21"/></svg>
+        <span>Home</span>
+    </a>
+    {% endif %}
+</nav>
+<script>
+(function () {
+    // Light up Combat when one of MY characters is up (dnd5e_prompt 'turn').
+    var MINE = {{ (d5_my_pc_names or [])|tojson }};
+    if (!MINE.length || !window.appSSE) return;
+    window.appSSE('dnd5e_prompt', function (e) {
+        try {
+            var d = JSON.parse(e.data);
+            (d.events || []).forEach(function (ev) {
+                if (ev.type !== 'turn') return;
+                var mine = MINE.indexOf(ev.name) !== -1;
+                var tab = document.getElementById('nav-combat-tab'), dot = document.getElementById('turn-alert-dot');
+                if (tab) tab.classList.toggle('turn-active', mine);
+                if (dot) dot.classList.toggle('hidden', !mine);
+            });
+        } catch (x) {}
+    });
+})();
+</script>

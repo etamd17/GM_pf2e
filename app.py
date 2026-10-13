@@ -713,6 +713,8 @@ def _safe_then(target):
 def _pc_sheet_url(system, name, pid):
     """The deep-link to a character's own sheet, per system."""
     from urllib.parse import quote
+    if (system or 'pf2e') == 'dnd5e':
+        return '/dnd5e/character/' + quote(str(pid or ''), safe='')
     if pid and _account_mode():
         return url_for('character_workflows.character_sheet', character_id=pid)
     if (system or 'pf2e') == 'cosmere':
@@ -1078,6 +1080,7 @@ def _user_can_edit_pc(user_id, pc_name):
 
 # GM-only API prefixes — these are encounter/tracker/vault APIs that players shouldn't access
 GM_API_PREFIXES = (
+    '/api/dnd5e/gm/',  # D&D 5e GM APIs (also CAMPAIGN_GM in route_policy)
     '/api/add_combatant', '/api/add_party', '/api/remove_combatant', '/api/clear_encounter',
     '/api/restore_defeated/',  # Undo an auto-removal of a monster killed at 0 HP
     '/api/adjust_hp/',  # Encounter tracker HP (not adjust_party_hp which is player-facing)
@@ -1216,6 +1219,7 @@ def _authorization_character_locator(resolution):
         _CharacterOwnerSource.ROUTE_PC_NAME,
         _CharacterOwnerSource.ROUTE_CHARACTER_ID,
         _CharacterOwnerSource.ROUTE_COSMERE_PID,
+        _CharacterOwnerSource.ROUTE_DND5E_PID,
     }:
         value = (request.view_args or {}).get(field)
     elif source is _CharacterOwnerSource.QUERY_COSMERE_PID:
@@ -1244,6 +1248,22 @@ def _authorization_character_context(cid, reference, source):
         return _request_context.resolve_character_context(campaign_id=cid,
             character_id=record.character_id, owner_user_id=record.owner_id,
             editor_user_ids=record.editor_ids, viewer_user_ids=record.viewer_ids)
+    if source is _CharacterOwnerSource.ROUTE_DND5E_PID:
+        # D&D 5e characters live in their own per-campaign store keyed by a
+        # validated hex id (systems/dnd5e/store.py), so the lookup is direct.
+        from systems.dnd5e import store as _dnd5e_store
+        # The file's location (campaigns/<cid>/dnd5e/characters/) is what scopes
+        # it to the campaign; a stale campaign_id inside a restored backup must
+        # not lock the GM out, so it is not consulted (load_pc rewrites it).
+        doc = _dnd5e_store.load_pc(cid, reference)
+        if not isinstance(doc, dict) or doc.get('id') != reference:
+            return None
+        owner_id = doc.get('owner_user_id')
+        if not isinstance(owner_id, str) or not owner_id.strip():
+            owner_id = None
+        return _request_context.resolve_character_context(
+            campaign_id=cid, character_id=reference, owner_user_id=owner_id,
+            editor_user_ids=(), viewer_user_ids=())
     cosmere_sources = {
         _CharacterOwnerSource.ROUTE_COSMERE_PID,
         _CharacterOwnerSource.QUERY_COSMERE_PID,
@@ -11447,6 +11467,15 @@ def _me_characters(user_id):
                     subtitle='Level %d · %s' % (b.level, o['name'] if o else (b.path or 'Cosmere').title()),
                     accent=_rad.order_color(b.radiant_order) if b.is_radiant else _rad.DEFAULT_ACCENT,
                     stats=[('Phy', d['phy']), ('Cog', d['cog']), ('Spi', d['spi'])],
+                )
+            elif ch.get('system') == 'dnd5e':
+                from systems.dnd5e import store as _d5store, service as _d5svc
+                doc = _d5store.load_pc(cid, ch['id'])
+                live = _d5svc.pc_live(doc) if doc and (doc.get('build') or {}).get('levels') else None
+                card.update(
+                    subtitle=('Level %d %s' % (live['level'], live['classes'])) if live else 'Not built yet',
+                    accent='#f08d84',
+                    stats=[('AC', live['ac']), ('HP', live['hp_max'])] if live else [],
                 )
             else:
                 doc = _storage.load_json(os.path.join(_storage.party_dir(cid), ch['file']))
@@ -25700,6 +25729,29 @@ app.register_blueprint(_create_workflow_blueprint(
     drafts=_LocalProxy(lambda: _character_workflow_service().drafts),
     workflows=_LocalProxy(_character_workflow_service),
     resolve_context=_character_workflow_context, render_sheet=_render_workflow_character))
+
+
+# D&D 5e: a self-contained blueprint (systems/dnd5e/routes.py). It reads only
+# the request's campaign and never the PF2e live globals; its endpoints are
+# authorized by core/route_policy.py like every other route.
+from systems.dnd5e.routes import create_blueprint as _create_dnd5e_blueprint, Host as _Dnd5eHost
+app.register_blueprint(_create_dnd5e_blueprint(_Dnd5eHost(
+    campaign_id=_active_campaign_id, is_gm=_is_gm, current_user=_auth.current_user,
+    account_mode=_account_mode, broadcast=sse_broadcast, campaign_doc=_active_campaign_doc)))
+
+# The PF2e entry points a 5e table may still hit by bookmark/muscle memory go
+# to their 5e equivalents (same guard Cosmere gets per route).
+_DND5E_REDIRECTS = {'/gm': '/dnd5e/gm', '/player': '/dnd5e/player', '/tracker': '/dnd5e/tracker',
+                    '/encounter_builder': '/dnd5e/encounters', '/party': '/dnd5e/characters',
+                    '/gmscreen': '/dnd5e/gmscreen', '/m': '/dnd5e/combat', '/mobile': '/dnd5e/combat'}
+
+
+@app.before_request
+def _dnd5e_system_redirect():
+    target = _DND5E_REDIRECTS.get(request.path)
+    if target and request.method == 'GET' and _active_system() == 'dnd5e':
+        return redirect(target)
+    return None
 
 
 from services.obsidian_sync import register_obsidian_sync as _register_obsidian_sync
