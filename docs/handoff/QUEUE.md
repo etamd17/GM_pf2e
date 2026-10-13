@@ -14,7 +14,7 @@ One shared list for Claude and Codex. Protocol: `docs/handoff/PROTOCOL.md`.
 | ID | Task | Owner | Model | Status | Brief |
 |---|---|---|---|---|---|
 | 5E-04 | Species versions as a builder choice (Draconic Ancestry, 2024 lineages) + fix raw text in sheet resistances | codex | standard | ready | `tasks/5E-04.md` |
-| 5E-06 | Delete combatant pictures nothing uses | codex | standard | ready | `tasks/5E-06.md` |
+| 5E-06 | Delete combatant pictures nothing uses | codex | standard | done (accepted by Claude; local commit, not pushed) | `tasks/5E-06.md` |
 | 5E-03 | Database ownership for 5e characters (only needed before the site uses PostgreSQL for the web app) | claude | Opus, high | needs brief | - |
 | 5E-05 | Private drafts for 5e characters | claude | Opus, high | needs brief (after 5E-03) | - |
 
@@ -68,6 +68,10 @@ Accepted as a design checkpoint. Notes:
 
 Newest first. One plain line per handoff: who, what, what's next.
 
+- 2026-10-13 Claude: checked Codex's fix for 5E-06; one stuck file no longer blocks the cleanup. Accepted. Next: the user decides when to push and open a PR.
+- 2026-10-13 Codex: fixed cleanup so one locked picture does not block the others; 41 checks passed and 5E-06 is committed locally. Next: user decides if and when to merge; no push or deployment.
+- 2026-10-13 Claude: reviewed 5E-06 (picture cleanup). It never deletes a picture in use; 40 tests pass. One small fix: a single locked file currently stops the whole cleanup. Next: Codex makes that fix, adds a test, commits locally.
+- 2026-10-13 Codex: finished unused-picture cleanup; 22 checks passed and portraits/shared/recent pictures are protected. Next: Claude reviews deletion safety; the changes are local, and the wider checks need browser setup.
 - 2026-10-13 Claude: merged UI-00 into this queue; added the UI/UX and Mistborn sections. Next: UI-01 (Claude), 5E-04/5E-06 (Codex), MB-00 (Codex).
 - 2026-10-13 Codex: wrote UI-00, the design review checkpoint (18 screens approved as mockups).
 - 2026-10-13 Claude: 5e merged (PR #175), installed on Railway and checked live.

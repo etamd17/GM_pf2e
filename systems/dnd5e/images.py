@@ -13,6 +13,7 @@ from __future__ import annotations
 import io
 import os
 import re
+import time
 import uuid
 
 from core import storage
@@ -90,3 +91,37 @@ def delete(cid: str, name: str | None) -> bool:
         return True
     except OSError:
         return False
+
+
+def collect_garbage(cid: str, keep: set[str]) -> int:
+    """Delete old, unreferenced uploads in this campaign's image directory.
+
+    A ten-minute grace period protects uploads not yet attached to a saved row.
+    Do not recurse, follow symlinks or touch temporary/non-upload files.
+    Callers must gather current references before calling and handle directory errors.
+    """
+    directory = images_dir(cid)
+    if os.path.islink(directory):
+        return 0
+    try:
+        entries = os.scandir(directory)
+    except FileNotFoundError:
+        return 0
+    cutoff = time.time() - 600
+    deleted = 0
+    with entries:
+        for entry in entries:
+            if not NAME_RE.fullmatch(entry.name) or entry.name in keep:
+                continue
+            try:
+                if not entry.is_file(follow_symlinks=False):
+                    continue
+                if entry.stat(follow_symlinks=False).st_mtime > cutoff:
+                    continue
+                os.remove(entry.path)
+            except FileNotFoundError:
+                continue           # another collector may have removed it
+            except OSError:
+                continue           # one locked/unreadable file must not block the others
+            deleted += 1
+    return deleted

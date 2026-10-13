@@ -221,8 +221,13 @@ builder's Details step) and GM art for any non-PC tracker combatant (custom mons
 * Stored at `campaigns/<cid>/dnd5e/images/<uuid4 hex>.webp`; served by `GET /dnd5e/img/<name>`
   to campaign members, and only names matching `^[0-9a-f]{32}\.webp$` ever become paths.
 * A replaced or cleared portrait's file is deleted; a deleted character's portrait too.
-  Combatant art is **not** deleted on replace (a file could be shared if a combatant row is
-  ever copied), so those files can be orphaned -- small, and harmless.
+* Replacing/clearing combatant art, removing a combatant or clearing/replacing an encounter
+  collects unused uploads. PC portraits and images still referenced by combatants survive.
+  Files younger than ten minutes wait for a later cleanup-triggering action, protecting
+  uploads whose row has not been saved yet. Collection skips symlinks and non-upload files;
+  filesystem failures are logged and do not fail the combat request. Saved plans currently
+  store monster IDs, not uploaded image names; include their references if that changes.
+  If a character document cannot be read, collection defers rather than guessing its portrait is unused.
 * The old free-text "Portrait URL" detail is no longer offered in the builder (an arbitrary
   external URL in every player's page); existing values are kept in the file but unused.
 

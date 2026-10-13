@@ -23,7 +23,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Callable
 
-from flask import Blueprint, abort, jsonify, redirect, render_template, request, send_file, url_for
+from flask import Blueprint, abort, current_app, jsonify, redirect, render_template, request, send_file, url_for
 
 from systems.dnd5e import combat as K
 from systems.dnd5e import content as C
@@ -740,6 +740,29 @@ def create_blueprint(host: Host) -> Blueprint:
                               if (d.get('build') or {}).get('levels')])
 
     # --- GM API -----------------------------------------------------------------
+    def collect_unused_images(cid):
+        try:
+            # Keep the encounter reference snapshot stable until deletion ends.
+            # New portrait uploads are protected by the collector's grace period.
+            with store.encounter_lock(cid):
+                docs = store.list_pcs(cid)
+                try:
+                    filenames = os.listdir(store.pc_dir(cid))
+                except FileNotFoundError:
+                    filenames = []
+                expected = {f[:-5] for f in filenames if f.endswith('.json') and store.valid_id(f[:-5])}
+                if expected - {d['id'] for d in docs}:
+                    # list_pcs omits corrupt/unreadable documents; their image
+                    # references are unknown, not evidence of unused files.
+                    raise OSError('Character image references could not all be read')
+                refs = [d.get('portrait') for d in docs]
+                refs += [c.get('image') for c in store.load_encounter(cid)['combatants']]
+                # Saved plans contain monster IDs, not uploaded image names. Add
+                # plan image references here if plans acquire an image field.
+                images.collect_garbage(cid, {name for name in refs if isinstance(name, str)})
+        except OSError:
+            current_app.logger.warning('Could not clean unused D&D 5e uploads', exc_info=True)
+
     @bp.post('/api/dnd5e/gm/combat/<action>')
     def api_gm_combat(action):
         cid = cid_or_404()
@@ -759,6 +782,8 @@ def create_blueprint(host: Host) -> Blueprint:
                 enc, ev, touched = service.combat_action(cid, action, b)
             except service.ServiceError as e:
                 return err(e)
+        if action in ('clear', 'remove') or (action == 'stage_plan' and b.get('replace')):
+            collect_unused_images(cid)
         emit_encounter(cid, enc)
         for pid in touched:
             doc = store.load_pc(cid, pid)
@@ -812,6 +837,7 @@ def create_blueprint(host: Host) -> Blueprint:
         if not found:
             images.delete(cid, name)
             return jsonify(error='No such combatant'), 404
+        collect_unused_images(cid)
         emit_encounter(cid)
         return jsonify(image=images.url_for_name(name))
 
