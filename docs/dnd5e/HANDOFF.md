@@ -228,6 +228,12 @@ builder's Details step) and GM art for any non-PC tracker combatant (custom mons
 
 ## Known gaps (honest list)
 
+* **5e characters are only usable while their campaign holds the site's live slot.** The
+  per-character routes use the app-wide `LIVE_CHARACTER_OWNER_OR_GM` policy, so building,
+  the sheet, portraits and the tracker answer 409 `campaign_not_live` for a 5e campaign that
+  isn't live -- the same rule as PF2e and Cosmere, not 5e-specific. Campaign-level pages,
+  the compendium and imports work either way. Found on the first live check (2026-10-13).
+
 * **Feature automation is partial.** Automated: ability increases, proficiencies/expertise,
   Jack of All Trades, Remarkable Athlete (2014), Alert, Tough, Dwarven Toughness, Draconic
   Resilience, Unarmored Defense (Barbarian/Monk), Fast/Unarmored Movement, Martial Arts die,
