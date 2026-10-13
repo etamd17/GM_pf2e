@@ -2148,6 +2148,7 @@ def _reset_live_runtime_state():
         PENDING_INITIATIVES.clear()
         _RECENT_DEFEATED.clear()
         ROUND_EVENTS.clear()
+        COSMERE_PHASE_BOUNDARIES.clear()
         COMBAT_LOGS.clear()
         TURN_REMINDERS.clear()
         TURN_INDEX = 0
@@ -2234,6 +2235,10 @@ _RECENT_DEFEATED = []
 # restore wipes the restored events on every boot. Guarded by
 # test_round_events_global_declared_before_boot_rehydrate.
 ROUND_EVENTS = []
+# Idempotency keys for Cosmere phase-start dispatch ("<round>:<phase>").
+# Persisted with the encounter so a mid-phase restart cannot tick a duration
+# twice when the next combatant shares that phase.
+COSMERE_PHASE_BOUNDARIES = set()
 COMBAT_LOGS = []
 # Session timer: epoch timestamp (seconds) when the current encounter started.
 # None means timer not running. Set by /api/session_timer/start, cleared on
@@ -2472,6 +2477,7 @@ def _do_persist_encounter_state_unlocked():
             "notes": ENCOUNTER_NOTES,
             "session_timer_start": SESSION_TIMER_START,
             "round_events": copy.deepcopy(ROUND_EVENTS),
+            "cosmere_phase_boundaries": sorted(COSMERE_PHASE_BOUNDARIES),
             "combatants": []
         }
         for c in ACTIVE_ENCOUNTER:
@@ -3245,6 +3251,9 @@ def _do_broadcast_encounter_state():
                 entry['reaction_used'] = bool(getattr(c, 'reaction_used', False))
             if entry.get('system') == 'cosmere' and hasattr(c, 'tracker_block'):
                 entry['cosmere'] = c.tracker_block()
+                if c.is_pc:
+                    entry['character_revision'] = int(
+                        getattr(c, 'character_revision', 0) or 0)
             combatants.append(entry)
         payload = {
             'encounter': combatants,
@@ -4946,8 +4955,8 @@ def _cosmere_world():
     """The active campaign's Cosmere visual world-skin: 'stormlight' (default) or
     'mistborn'. Pure theming -- the ruleset is unchanged either way."""
     try:
-        w = _load_campaign_config().get('cosmere_world', 'stormlight')
-        return 'mistborn' if w == 'mistborn' else 'stormlight'
+        from systems.cosmere.rules.profiles import normalize_theme
+        return normalize_theme(_load_campaign_config())
     except Exception:
         return 'stormlight'
 
@@ -8173,6 +8182,7 @@ def _restore_encounter_autosave():
     ROUND_NUMBER = 1
     ENCOUNTER_NOTES = ''
     ROUND_EVENTS.clear()
+    COSMERE_PHASE_BOUNDARIES.clear()
     SESSION_TIMER_START = None
     autosave_path = os.path.join(ENCOUNTER_DIR, '_autosave.json')
     if not os.path.exists(autosave_path):
@@ -8185,6 +8195,13 @@ def _restore_encounter_autosave():
         TURN_INDEX = raw.get('turn_index', 0)
         ENCOUNTER_NOTES = raw.get('notes', '')
         ROUND_EVENTS = list(raw.get('round_events', []) or [])
+        from systems.cosmere.combat import TURN_PHASES as _COSMERE_TURN_PHASES
+        for _key in raw.get('cosmere_phase_boundaries', []) or []:
+            if not isinstance(_key, str) or ':' not in _key:
+                continue
+            _round_text, _phase = _key.split(':', 1)
+            if _round_text.isdigit() and _phase in _COSMERE_TURN_PHASES:
+                COSMERE_PHASE_BOUNDARIES.add(_key)
         SESSION_TIMER_START = raw.get('session_timer_start', None)
         _clear_live_encounter_roster()
         for item in combatants:
@@ -8406,6 +8423,16 @@ CAMPAIGN_DEFAULT = {
 
 MODULES_DIR = os.path.join(BASE_DIR, 'static', 'js', 'modules')
 
+# These fields have no synthetic defaults: a missing rules binding selects legacy
+# mechanics, whereas an explicitly stored null must remain visible and fail closed.
+_CAMPAIGN_OPTIONAL_CONFIG_KEYS = frozenset({'rules_binding', 'cosmere_theme'})
+
+
+def _campaign_config_values(data):
+    return {key: value for key, value in data.items()
+            if key in _CAMPAIGN_OPTIONAL_CONFIG_KEYS
+            or (key in CAMPAIGN_DEFAULT and value is not None)}
+
 def _list_module_files():
     """Catalog `.js` files under static/js/modules/. Returns
     [{id, filename, mtime, size}]. README + dot-files are skipped."""
@@ -8429,21 +8456,18 @@ def _list_module_files():
     return out
 
 def _load_campaign_config_at(path):
-    """Read one explicit campaign config, always returning the full schema."""
+    """Read defaults plus persisted optional fields without inventing a binding."""
     cfg = dict(CAMPAIGN_DEFAULT)
     if _persistence_runtime.sql_enabled() and path:
         cid = os.path.basename(os.path.dirname(path))
         if re.fullmatch(r'[0-9a-f]{32}', cid):
             data = _campaigns.get_campaign(cid) or {}
-            cfg.update({key: data[key] for key in CAMPAIGN_DEFAULT
-                        if data.get(key) is not None})
+            cfg.update(_campaign_config_values(data))
             return cfg
     if path and os.path.exists(path):
         data, err = safe_load_json_file(path)
         if data and isinstance(data, dict):
-            for k in CAMPAIGN_DEFAULT:
-                if k in data and data[k] is not None:
-                    cfg[k] = data[k]
+            cfg.update(_campaign_config_values(data))
     return cfg
 
 
@@ -8478,7 +8502,7 @@ def _request_campaign_config():
     return cfg
 
 def _save_campaign_config(updates):
-    """Merge `updates` (CAMPAIGN_DEFAULT config keys) into campaign.json and persist.
+    """Merge whitelisted defaults and optional fields into campaign.json.
 
     Reads and rewrites the FULL existing file so the multi-campaign doc's own
     keys -- id / slug / system / members / system_config -- survive a config
@@ -8491,8 +8515,7 @@ def _save_campaign_config(updates):
         full = _campaigns.get_campaign(cid, refresh=True)
         if not full:
             raise _persistence_runtime.StoreUnavailable('Campaign is unavailable')
-        full.update({key: updates[key] for key in CAMPAIGN_DEFAULT
-                     if updates.get(key) is not None})
+        full.update(_campaign_config_values(updates))
         if 'session_number' in full:
             full['session_number'] = max(1, safe_int(full['session_number'], 1))
         _campaigns.save_campaign(full)
@@ -8514,9 +8537,7 @@ def _save_campaign_config(updates):
                       f"but failed to parse ({_err}); doc left untouched")
                 return _load_campaign_config()
             full = data
-        for k in CAMPAIGN_DEFAULT:
-            if k in updates and updates[k] is not None:
-                full[k] = updates[k]
+        full.update(_campaign_config_values(updates))
         if 'session_number' in full:
             try:
                 full['session_number'] = max(1, int(full['session_number']))
@@ -9371,13 +9392,56 @@ def api_scene(scene_id):
 @gm_required
 def api_scene_activate(scene_id):
     cid = _active_campaign_id()
-    try:
-        _scenes.set_table_scene(cid, scene_id)
+    with _LIVE_CAMPAIGN_DISPATCH_LOCK:
+        if _active_system() == 'cosmere':
+            _assert_no_cosmere_narrative_transaction_for_lifecycle()
+        previous_scene_id = _scenes.table_scene_id(cid)
         scene = _scenes.load_scene(cid, scene_id)
-    except ValueError:
-        return jsonify({'error': 'scene not found'}), 404
-    _broadcast_scene(scene)
-    sse_broadcast('scene_activated', {'scene_id': scene_id}, campaign_id=cid)
+        if not scene:
+            return jsonify({'error': 'scene not found'}), 404
+        updated_documents = []
+        pending = _load_cosmere_lifecycle_transition(cid)
+        if pending is not None and (
+                pending.get('kind') != 'scene_activate'
+                or pending.get('campaign_id') != cid
+                or pending.get('target_scope_id') != scene_id):
+            raise _CosmereActionTransactionError(
+                'lifecycle_transition_pending',
+                'Another Cosmere lifecycle transition must finish first.', 409)
+        if (pending is None and _active_system() == 'cosmere'
+                and previous_scene_id != scene_id):
+            pending = _begin_cosmere_lifecycle_transition(
+                'scene_activate', triggers=('scene_end', 'scene_start'),
+                source_scope_id=previous_scene_id,
+                target_scope_id=scene_id, campaign_id=cid)
+        if pending is not None:
+            updated_documents = _transition_cosmere_lifecycle(
+                'scene_end', 'scene_start', next_scope_id=scene_id,
+                boundary_id=pending['boundary_id'])
+            if not _do_persist_encounter_state_unlocked():
+                return jsonify({
+                    'success': False,
+                    'error': 'The scene transition could not be durably synchronized.',
+                    'code': 'encounter_persistence_failed',
+                }), 503
+            # Public scene identity is the commit point for the presentation
+            # side of the transition. It must follow character persistence and
+            # the synchronous encounter autosave.
+            _scenes.set_table_scene(cid, scene_id)
+            _broadcast_scene(scene)
+            _do_broadcast_encounter_state()
+            for document in updated_documents:
+                _cosmere_advancement_broadcast(document)
+            sse_broadcast('scene_activated', {'scene_id': scene_id}, campaign_id=cid)
+            _complete_cosmere_lifecycle_transition(
+                pending['boundary_id'], campaign_id=cid)
+        else:
+            try:
+                _scenes.set_table_scene(cid, scene_id)
+            except ValueError:
+                return jsonify({'error': 'scene not found'}), 404
+            _broadcast_scene(scene)
+            sse_broadcast('scene_activated', {'scene_id': scene_id}, campaign_id=cid)
     return jsonify({'success': True, 'active_scene_id': scene_id})
 
 
@@ -9684,7 +9748,11 @@ def api_scene_combatant_action(scene_id, instance_id):
         allowed_types = set(PF2E_DAMAGE_TYPES) | {'impact', 'keen', 'energy', 'vital'}
         if damage_type not in allowed_types:
             return jsonify({'error': 'unknown damage type'}), 400
-        old_hp = _apply_hp_delta(instance_id, amount, action, damage_type)
+        if bool(data.get('nonlethal', False)):
+            old_hp = _apply_hp_delta(
+                instance_id, amount, action, damage_type, nonlethal=True)
+        else:
+            old_hp = _apply_hp_delta(instance_id, amount, action, damage_type)
         updated = _find_active_combatant(instance_id)
         new_hp = updated.current_hp if updated is not None else 0
         defeated = _maybe_auto_remove_defeated(instance_id, old_hp, action)
@@ -10123,7 +10191,12 @@ def api_scene_bulk_combat(scene_id):
             combatant = _find_active_combatant(instance_id)
             if not combatant:
                 continue
-            old_hp = _apply_hp_delta(instance_id, amount, action, damage_type)
+            if bool(data.get('nonlethal', False)):
+                old_hp = _apply_hp_delta(
+                    instance_id, amount, action, damage_type, nonlethal=True)
+            else:
+                old_hp = _apply_hp_delta(
+                    instance_id, amount, action, damage_type)
             updated = _find_active_combatant(instance_id)
             new_hp = updated.current_hp if updated is not None else 0
             defeated = _maybe_auto_remove_defeated(instance_id, old_hp, action)
@@ -11550,8 +11623,8 @@ def _inject_account_ctx():
     except Exception:
         u = None
     request_cfg = _request_campaign_config() if u else dict(CAMPAIGN_DEFAULT)
-    world = request_cfg.get('cosmere_world', 'stormlight')
-    world = 'mistborn' if world == 'mistborn' else 'stormlight'
+    from systems.cosmere.rules.profiles import normalize_theme
+    world = normalize_theme(request_cfg)
     advancement = request_cfg.get('advancement_mode') or 'milestone'
     return {
         'account_user': u,
@@ -12388,17 +12461,39 @@ def api_tracker_state():
 
 # ── Cosmere RPG (Phase 3): bestiary browsing, sheet view, tracker add ──────
 def _load_cosmere_custom_adversaries():
-    """Per-campaign GM-authored Cosmere adversaries (homebrew). Stored as full
-    Foundry-shaped docs so CosmereActor + the tracker treat them like canon."""
-    data = _storage.load_json(COSMERE_ADVERSARIES_FILE, []) if COSMERE_ADVERSARIES_FILE else []
-    return data if isinstance(data, list) else []
+    """Tracker-compatible projections of the revisioned campaign adversaries."""
+    from systems.cosmere.custom_adversaries import adversary_to_actor_document
+    return [adversary_to_actor_document(row)
+            for row in _load_cosmere_custom_adversary_store()['adversaries']]
+
+
+def _load_cosmere_custom_adversary_store():
+    """Load old bare lists and the current rich envelope through one boundary."""
+    from systems.cosmere.custom_adversaries import normalize_store
+    from systems.cosmere.rules.profiles import normalize_binding
+    from systems.cosmere.rules.schema import to_dict
+    data = _storage.load_json(COSMERE_ADVERSARIES_FILE, []) \
+        if COSMERE_ADVERSARIES_FILE else []
+    return normalize_store(data, binding=to_dict(normalize_binding(_load_campaign_config())))
 
 
 def _save_cosmere_custom_adversary(doc):
-    advs = _load_cosmere_custom_adversaries()
-    advs.append(doc)
-    if COSMERE_ADVERSARIES_FILE:
-        _atomic_write_json(COSMERE_ADVERSARIES_FILE, advs, indent=2)
+    """Compatibility writer for the historical quick-create tracker route."""
+    if not COSMERE_ADVERSARIES_FILE:
+        return
+    from systems.cosmere.custom_adversaries import create_adversary, normalize_store
+    from systems.cosmere.rules.profiles import normalize_binding
+    from systems.cosmere.rules.schema import to_dict
+    rules_binding = to_dict(normalize_binding(_load_campaign_config()))
+    rich = normalize_store([doc], binding=rules_binding)['adversaries'][0]
+    with _path_lock(COSMERE_ADVERSARIES_FILE):
+        state = _load_cosmere_custom_adversary_store()
+        state, _result = create_adversary(
+            state, rich, binding=rules_binding,
+            expected_store_revision=state['revision'],
+            request_id=f"legacy.quick.{uuid.uuid4().hex}",
+            id_factory=lambda: doc['_id'])
+        _atomic_write_json(COSMERE_ADVERSARIES_FILE, state, indent=2)
 
 
 def _build_cosmere_adversary_doc(data):
@@ -12460,6 +12555,27 @@ def _cosmere_doc_by_id(actor_id):
     return None
 
 
+def _project_cosmere_profile_runtime_to_combatant(actor, runtime_state):
+    """Mirror profile-specific canonical resources onto a live combatant.
+
+    The historical tracker reads a flat ``current_investiture`` field, while
+    Mistborn owns that value inside its Allomancy state. Keep the nested state
+    intact for API clients and make only the small compatibility projection the
+    tracker needs. No client-provided build authority is accepted here.
+    """
+    state = runtime_state if isinstance(runtime_state, dict) else {}
+    mistborn = state.get('mistborn') if isinstance(state.get('mistborn'), dict) else {}
+    actor.mistborn_runtime = copy.deepcopy(mistborn)
+    allomancy = mistborn.get('allomancy') if isinstance(mistborn.get('allomancy'), dict) else {}
+    if 'current_investiture' in allomancy:
+        try:
+            maximum = max(0, int(allomancy.get('max_investiture', 0) or 0))
+            actor.current_investiture = max(
+                0, min(maximum, int(allomancy['current_investiture'])))
+        except (TypeError, ValueError):
+            pass
+
+
 def _cosmere_combatant(actor_id):
     """A fresh CosmereActor for the tracker (independent mutable combat state) --
     a bestiary adversary by Foundry _id, or a campaign Cosmere PC by id. A PC's
@@ -12476,18 +12592,77 @@ def _cosmere_combatant(actor_id):
             _cb.CosmereBuild(pc.get('build') or {}, homebrew=_cosmere_homebrew_store()).to_actor_doc())
         actor.name = pc.get('name') or actor.name
         actor.restore_id = actor_id        # so the encounter autosave can rehydrate it
+        actor.character_revision = int(pc.get('revision', 0) or 0)
         # Tracker visual identity: the order-glyph watermark + Investiture
         # sphere need the PC's order and CURRENT investiture at add time —
         # otherwise the sphere shows full until the player's next sheet save.
         actor.radiant_order = str((pc.get('build') or {}).get('radiant_order') or '').lower()
-        _ps = pc.get('play_state') or {}
+        _ps = pc.get('runtime_state') or pc.get('play_state') or {}
+        if 'health' in _ps:
+            try:
+                actor.current_hp = max(0, int(_ps['health']))
+            except (TypeError, ValueError):
+                pass
+        if 'focus' in _ps:
+            try:
+                actor.current_focus = max(0, int(_ps['focus']))
+            except (TypeError, ValueError):
+                pass
+        if 'injuries' in _ps:
+            try:
+                actor.injuries = max(0, int(_ps['injuries']))
+            except (TypeError, ValueError):
+                pass
+        if isinstance(_ps.get('effects'), list):
+            from systems.cosmere.effects import normalize_effects, project_conditions
+            actor.effect_instances = normalize_effects(_ps['effects'])
+            actor.conditions = project_conditions(actor.effect_instances)
+        elif isinstance(_ps.get('conditions'), dict):
+            actor.conditions = {k: v for k, v in _ps['conditions'].items() if v}
         if 'investiture' in _ps:
             try:
                 actor.current_investiture = max(0, int(_ps['investiture']))
             except (TypeError, ValueError):
                 pass
+        _project_cosmere_profile_runtime_to_combatant(actor, _ps)
+        if isinstance(_ps.get('turn'), dict):
+            turn = _ps['turn']
+            if turn.get('choice') in ('fast', 'slow'):
+                actor.speed_choice = turn['choice']
+            actor.max_actions = 2 if actor.speed_choice == 'fast' else 3
+            try:
+                remaining = max(0, int(turn.get(
+                    'actions_remaining', actor.max_actions) or 0))
+                actor.actions_used = max(
+                    0, actor.max_actions - min(actor.max_actions, remaining))
+            except (TypeError, ValueError):
+                pass
+            if 'reaction_available' in turn:
+                actor.reaction_used = not bool(turn['reaction_available'])
+            try:
+                actor.turn_serial = max(0, int(turn.get('turn_number', 0) or 0))
+            except (TypeError, ValueError):
+                pass
         return actor
     return None
+
+
+def _migrate_cosmere_legacy_condition_expiry(combatant):
+    """Move historical tracker timers into canonical effect clocks once."""
+    if getattr(combatant, 'system', 'pf2e') != 'cosmere':
+        return False
+    expiry = getattr(combatant, 'condition_expiry', None)
+    if not isinstance(expiry, dict) or not expiry:
+        return False
+    from systems.cosmere.effects import (migrate_condition_expiry,
+                                         project_conditions)
+    combatant.effect_instances = migrate_condition_expiry(
+        getattr(combatant, 'effect_instances', []) or [],
+        getattr(combatant, 'conditions', {}) or {}, expiry,
+        getattr(combatant, 'instance_id', None))
+    combatant.conditions = project_conditions(combatant.effect_instances)
+    combatant.condition_expiry = {}
+    return True
 
 
 def _augment_combatant_save(entry, c):
@@ -12496,10 +12671,26 @@ def _augment_combatant_save(entry, c):
     systems. PF2e combatants get only `system` (back-compatible)."""
     entry['system'] = getattr(c, 'system', 'pf2e')
     if entry['system'] == 'cosmere':
+        _migrate_cosmere_legacy_condition_expiry(c)
+        entry['condition_expiry'] = dict(
+            getattr(c, 'condition_expiry', {}) or {})
+        from systems.cosmere.effects import (effects_from_conditions,
+                                             normalize_effects)
+        effects = normalize_effects(getattr(c, 'effect_instances', []) or [])
+        if not effects and isinstance(getattr(c, 'conditions', None), dict):
+            effects = effects_from_conditions(c.conditions, c.instance_id)
+            c.effect_instances = copy.deepcopy(effects)
         entry['cosmere_id'] = getattr(c, 'restore_id', None)
         entry['injuries'] = int(getattr(c, 'injuries', 0) or 0)
         entry['injury_log'] = [dict(r) for r in (getattr(c, 'injury_log', []) or []) if isinstance(r, dict)]
         entry['speed_choice'] = getattr(c, 'speed_choice', None)
+        entry['character_revision'] = int(getattr(c, 'character_revision', 0) or 0)
+        entry['effects'] = copy.deepcopy(effects)
+        entry['significant_npc_injuries'] = bool(
+            getattr(c, 'significant_npc_injuries', False))
+        entry['defeated'] = bool(getattr(c, 'defeated', False))
+        entry['nonlethal_defeat'] = bool(getattr(c, 'nonlethal_defeat', False))
+        entry['turn_serial'] = int(getattr(c, 'turn_serial', 0) or 0)
     return entry
 
 
@@ -12519,31 +12710,62 @@ def _restore_cosmere_combatant(item):
         return None
     new_c.instance_id = item.get('instance_id', str(uuid.uuid4()))
     new_c.initiative = item.get('initiative', 0)
-    if 'current_hp' in item:
-        new_c.current_hp = item['current_hp']
-    if isinstance(item.get('conditions'), dict):
-        new_c.conditions = dict(item['conditions'])
-    if isinstance(item.get('condition_expiry'), dict):
-        new_c.condition_expiry = dict(item['condition_expiry'])
-    try:
-        new_c.injuries = max(0, int(item.get('injuries', getattr(new_c, 'injuries', 0)) or 0))
-    except (TypeError, ValueError):
-        pass
+    # These fields belong to the encounter overlay, not the revisioned
+    # character document. Restore them even when the overlay's character-owned
+    # health/resources/effects are stale.
     if isinstance(item.get('injury_log'), list):
         new_c.injury_log = [dict(r) for r in item['injury_log'] if isinstance(r, dict)]
-    if item.get('speed_choice'):
-        new_c.speed_choice = item['speed_choice']
     if 'delaying' in item:
         new_c.delaying = bool(item['delaying'])
-    # Match the fast(2)/slow(3) action ceiling cycle_turn would set, so the pip
-    # widget is right immediately on reload (not only after the next turn).
-    new_c.max_actions = 2 if getattr(new_c, 'speed_choice', None) == 'fast' else 3
     if 'visible_to_players' in item:
         new_c.visible_to_players = bool(item['visible_to_players'])
     if item.get('epithet'):
         new_c.epithet = str(item['epithet'])
     if 'tactics' in item:
         new_c.tactics = str(item['tactics'] or '')
+    new_c.significant_npc_injuries = bool(item.get('significant_npc_injuries', False))
+    new_c.defeated = bool(item.get('defeated', False))
+    new_c.nonlethal_defeat = bool(item.get('nonlethal_defeat', False))
+    # A character document newer than this encounter overlay is authoritative.
+    # Keep the freshly projected actor state rather than re-applying stale HP,
+    # conditions, or effects from an older autosave.
+    try:
+        stale_overlay = (new_c.is_pc and
+                         int(item.get('character_revision', 0) or 0) <
+                         int(getattr(new_c, 'character_revision', 0) or 0))
+    except (TypeError, ValueError):
+        stale_overlay = True
+    if stale_overlay:
+        return new_c
+    if 'current_hp' in item:
+        new_c.current_hp = item['current_hp']
+    if isinstance(item.get('conditions'), dict):
+        new_c.conditions = dict(item['conditions'])
+    if isinstance(item.get('effects'), list):
+        from systems.cosmere.effects import normalize_effects, project_conditions
+        new_c.effect_instances = normalize_effects(item['effects'])
+        # A transitional autosave may contain the newly-added empty effects
+        # array alongside an older condition_expiry timer. Preserve its legacy
+        # condition projection just long enough to migrate the timer below.
+        if (new_c.effect_instances or
+                not isinstance(item.get('condition_expiry'), dict) or
+                not item.get('condition_expiry')):
+            new_c.conditions = project_conditions(new_c.effect_instances)
+    if isinstance(item.get('condition_expiry'), dict):
+        new_c.condition_expiry = dict(item['condition_expiry'])
+    _migrate_cosmere_legacy_condition_expiry(new_c)
+    try:
+        new_c.injuries = max(0, int(item.get('injuries', getattr(new_c, 'injuries', 0)) or 0))
+    except (TypeError, ValueError):
+        pass
+    if item.get('speed_choice'):
+        new_c.speed_choice = item['speed_choice']
+    new_c.character_revision = int(item.get(
+        'character_revision', getattr(new_c, 'character_revision', 0)) or 0)
+    new_c.turn_serial = int(item.get('turn_serial', 0) or 0)
+    # Match the fast(2)/slow(3) action ceiling cycle_turn would set, so the pip
+    # widget is right immediately on reload (not only after the next turn).
+    new_c.max_actions = 2 if getattr(new_c, 'speed_choice', None) == 'fast' else 3
     return new_c
 
 
@@ -12628,6 +12850,8 @@ def _list_cosmere_pcs():
 
 
 def _save_cosmere_pc(doc, fsync=True):
+    from systems.cosmere.documents import normalize_character_document
+    from systems.cosmere.rules.profiles import normalize_binding, normalize_theme
     os.makedirs(COSMERE_PC_DIR, exist_ok=True)
     pid = doc.get('id') or uuid.uuid4().hex
     doc['id'] = pid
@@ -12646,8 +12870,87 @@ def _save_cosmere_pc(doc, fsync=True):
                 doc['owner_user_id'] = u['id']
     except Exception:
         pass
-    _atomic_write_json(_cosmere_pc_path(pid), doc, indent=2, fsync=fsync)
+    path = _cosmere_pc_path(pid)
+    if path is None:
+        raise _CosmereRulesValidationError('Invalid Cosmere character identity.')
+    config = _load_campaign_config()
+    homebrew = _cosmere_homebrew_store()
+    normalized = normalize_character_document(
+        doc, actor_id=pid, binding=normalize_binding(config),
+        cosmere_theme=normalize_theme(config), prefer_legacy_runtime=True,
+        homebrew=homebrew)
+    current = None
+    if os.path.isfile(path):
+        try:
+            with open(path, encoding='utf-8') as handle:
+                current = json.load(handle)
+        except (OSError, ValueError):
+            current = None
+    if isinstance(current, dict):
+        current_revision = current.get('revision', 0)
+        if type(current_revision) is not int or current_revision < 0:
+            current_revision = 0
+        if normalized['revision'] < current_revision:
+            raise _CosmereRulesValidationError('Character revision cannot move backwards.')
+        if normalized != current and normalized['revision'] == current_revision:
+            normalized['revision'] = current_revision + 1
+            normalized = normalize_character_document(
+                normalized, actor_id=pid, binding=normalize_binding(config),
+                cosmere_theme=normalize_theme(config), homebrew=homebrew)
+    doc.clear()
+    doc.update(copy.deepcopy(normalized))
+    _atomic_write_json(path, normalized, indent=2, fsync=fsync)
     return pid
+
+
+def _mutate_cosmere_pc(pid, expected_revision, transform, *, fsync=True):
+    """Persist one revisioned mutation under live-campaign then character lock.
+
+    This primitive deliberately emits no SSE. Callers which also synchronize a
+    live combatant must finish that synchronization and its durable encounter
+    autosave before broadcasting the returned state.
+    """
+    from systems.cosmere.documents import (CharacterRevisionError,
+                                           apply_revisioned_mutation,
+                                           normalize_character_document)
+    from systems.cosmere.rules.profiles import normalize_binding
+    path = _cosmere_pc_path(pid)
+    if path is None:
+        raise _CosmereRulesValidationError('Invalid Cosmere character identity.')
+    with _LIVE_CAMPAIGN_DISPATCH_LOCK:
+        with _path_lock(path):
+            loaded = _load_cosmere_pc(pid)
+            if loaded is None:
+                raise FileNotFoundError(pid)
+            homebrew = _cosmere_homebrew_store()
+            current = normalize_character_document(
+                loaded, actor_id=pid,
+                binding=normalize_binding(_load_campaign_config()),
+                homebrew=homebrew)
+            if type(expected_revision) is not int or expected_revision < 0:
+                raise CharacterRevisionError('invalid_revision',
+                                             'Expected revision must be a nonnegative integer.', 422)
+            if current['revision'] != expected_revision:
+                raise CharacterRevisionError('stale_revision',
+                                             'The character changed. Reload before trying again.', 409)
+            proposed = transform(copy.deepcopy(current))
+            if not isinstance(proposed, dict):
+                raise _CosmereRulesValidationError('Character mutation returned invalid data.')
+            proposed_revision = proposed.get('revision', expected_revision)
+            if proposed_revision == expected_revision:
+                updated = apply_revisioned_mutation(
+                    current, expected_revision=expected_revision,
+                    transform=lambda _current: proposed,
+                    binding=current['rules_binding'], homebrew=homebrew)
+            elif proposed_revision == expected_revision + 1:
+                updated = normalize_character_document(
+                    proposed, actor_id=pid, binding=current['rules_binding'],
+                    homebrew=homebrew)
+            else:
+                raise CharacterRevisionError('invalid_revision',
+                                             'A mutation must advance the revision exactly once.', 409)
+            _save_cosmere_pc(updated, fsync=fsync)
+            return copy.deepcopy(updated)
 
 
 # --- Cosmere homebrew (per-campaign content shelf) ------------------------
@@ -12675,141 +12978,27 @@ def _save_homebrew_raw(store):
 
 
 def _cosmere_cultures():
-    """All cultures for the builder -- base system + the ingested handbook
-    (Iriali, Kharbranthian, Listener, Natan, Reshi, Shin, Wayfarer, ...)."""
-    names = {d.get('name', '') for pack in ('cultures', 'handbook-cultures')
-             for d in systems.cosmere.load_pack(pack) if d.get('name')}
-    return sorted(n for n in names if n)
+    from systems.cosmere.stormlight_catalog import cultures
+    return cultures()
 
 
 def _talent_prereq_summary(pr):
-    """A short human-readable summary of a talent's Foundry prerequisites."""
-    if not isinstance(pr, dict) or not pr:
-        return ''
-    parts = []
-    for grp in pr.values():
-        if not isinstance(grp, dict):
-            continue
-        t = grp.get('type')
-        if t == 'skill':
-            parts.append('%s rank %s' % (systems.cosmere.SKILL_NAMES.get(grp.get('skill'), grp.get('skill')), grp.get('rank')))
-        elif t == 'talent':
-            parts.append(' or '.join(x.get('label', '?') for x in (grp.get('talents') or [])))
-        elif t == 'attribute':
-            parts.append('%s %s' % (grp.get('attribute'), grp.get('value')))
-        elif t == 'goal':
-            parts.append('a completed goal')
-        elif t == 'connection':
-            parts.append('a connection')
-        elif t:
-            parts.append(str(t))
-    return ' + '.join(p for p in parts if p)
+    from systems.cosmere.stormlight_catalog import _talent_prereq_summary as summary
+    return summary(pr)
 
 
 def _cosmere_path_talents():
-    """{path_id: [{id, name, key, prereq}]} for the builder's talent picker
-    (key talents first; each carries a prerequisite summary)."""
-    import systems.cosmere.origins as _o
-    import systems.cosmere.talents as _ct
-    from systems.cosmere.radiant_talents import _effect as _talent_effect   # readable one-line summary
-    # The real key talent per path is the one named in PATH_INFO (handbook trees
-    # have many prereq-less roots, so "no prerequisite" is NOT the discriminator).
-    key_names = {p: (info.get('key_talent') or '').strip().lower()
-                 for p, info in _o.PATH_INFO.items()}
-    out, seen = {}, set()
-    # Base system talents first, then the fuller handbook trees; a name clash
-    # per path keeps the BASE talent (so origins.PATH_INFO key-talent ids +
-    # talents.py prereqs still match), and the handbook adds the rest.
-    for pack in ('heroic-paths', 'handbook-heroic-paths'):
-        for d in systems.cosmere.load_pack(pack):
-            if d.get('type') != 'talent':
-                continue
-            s = d.get('system', {})
-            p = _ct.norm_path(s.get('path'))     # champion (a Leader specialty) -> leader
-            if not p:
-                continue
-            name = d.get('name', '')
-            dkey = (p, name.strip().lower())
-            if not name or dkey in seen:
-                continue
-            seen.add(dkey)
-            # Resolve prereqs from the talent-tree graph (authoritative); this
-            # corrects the null / swapped / stale-label item-level prerequisites.
-            out.setdefault(p, []).append({
-                'id': d.get('_id'), 'name': name,
-                'key': name.strip().lower() == key_names.get(p, '\x00'),
-                'specialty': _ct.talent_specialty().get(d.get('_id'), ''),   # '' = core path talent
-                'prereq': _talent_prereq_summary(_ct.resolved_prereqs(d.get('_id'))),
-                'effect': _talent_effect(s.get('description')),   # readable text for the inspector panel
-            })
-    for p in out:
-        # Key talents first, then group by specialty (core '' first), then name.
-        out[p].sort(key=lambda t: (not t['key'], t['specialty'] or '', t['name'].lower()))
-    return out
+    from systems.cosmere.stormlight_catalog import path_talents
+    return path_talents()
 
 
 def _cosmere_starting_kits():
-    """The rulebook starting kits, with armor/weapons resolved to catalog items
-    (id+name) so the builder can add them; equipment/marks/bonus are notes."""
-    import systems.cosmere.origins as _o
-    import systems.cosmere.items as _it
-    out = []
-    for key, k in _o.STARTING_KITS.items():
-        items = []
-        if k['armor']:
-            a = _it.by_name(k['armor'])
-            if a:
-                items.append({'id': a['id'], 'name': a['name']})
-        for wn in k['weapons']:
-            w = _it.by_name(wn)
-            if w:
-                items.append({'id': w['id'], 'name': w['name']})
-        out.append({'key': key, 'name': k['name'], 'items': items,
-                    'equipment': k['equipment'], 'marks': k['marks'], 'bonus': k['bonus']})
-    return out
+    from systems.cosmere.stormlight_catalog import starting_kits
+    return starting_kits()
 
 
 def _cosmere_builder_context(build, hb_store=None):
-    import systems.cosmere.build as _cb
-    import systems.cosmere.radiant as _rad
-    import systems.cosmere.radiant_talents as _rt
-    import systems.cosmere.infected as _inf
-    if hb_store is None:
-        hb_store = _cosmere_homebrew_store()
-    return dict(
-        build=build.to_dict(),
-        infected_arts=_inf.load_arts(),     # the Infected Arts catalog (disease cost + abilities)
-        catalog=systems.cosmere.items.catalog(),
-        fabrials=systems.cosmere.items.fabrials(),
-        skill_names=build.eff_skill_names(), skill_attr=build.eff_skill_attr(),
-        surge_skills=list(build.eff_surge_skills()),
-        attr_names=systems.cosmere.ATTR_NAMES,
-        attr_desc=systems.cosmere.ATTR_DESC, skill_desc=systems.cosmere.SKILL_DESC,
-        culture_info=systems.cosmere.origins.CULTURE_INFO,
-        ancestry_info=systems.cosmere.origins.ANCESTRY_INFO,
-        paths=list(systems.cosmere.PATHS), cultures=_cosmere_cultures(),
-        path_talents=_cosmere_path_talents(),
-        path_trees=systems.cosmere.talents.tree_graphs(),   # positioned DAG per path (visual tree)
-        radiant_orders=_rad.RADIANT_ORDERS, radiant_variants=_rad.RADIANT_VARIANTS,
-        surges=_rad.SURGES, first_ideal=_rad.FIRST_IDEAL,
-        radiant_ideals=_rad.ORDER_IDEALS, ideal_personal=list(_rad.IDEAL_PERSONAL),
-        fourth_ideal_level=_rad.FOURTH_IDEAL_LEVEL,
-        path_info=systems.cosmere.origins.PATH_INFO,
-        singer_forms=systems.cosmere.origins.SINGER_FORMS,
-        singer_change_form=systems.cosmere.origins.SINGER_CHANGE_FORM,
-        starting_kits=_cosmere_starting_kits(),
-        radiant_surge_talents=_rt.SURGE_TALENTS, radiant_order_talents=_rt.ORDER_TALENTS,
-        radiant_surge_powers=_rt.SURGE_POWERS,
-        radiant_trees=_rt.radiant_tree_graphs(),    # positioned Radiant DAGs (visual tree)
-        homebrew=hb_store,            # {type: [entry]} -- merged into the pickers client-side
-        budgets=dict(
-            attr_points=build.attr_points_available(),
-            skill_ranks=build.skill_ranks_available(),
-            max_skill_rank=_cb.max_skill_rank(build.level),
-            talents=build.talents_available(),
-            expertises=build.expertises_available(),
-        ),
-    )
+    return build.profile.builder_context(build, hb_store or _cosmere_homebrew_store())
 
 
 @app.route('/cosmere/gm')
@@ -13034,6 +13223,1282 @@ def cosmere_import_pdf():
     return jsonify({'ok': bool(created), 'created': created, 'errors': errors})
 
 
+from systems.cosmere.rules.schema import RulesValidationError as _CosmereRulesValidationError
+from systems.cosmere.advancement import AdvancementError as _CosmereAdvancementError
+from systems.cosmere.documents import CharacterRevisionError as _CosmereCharacterRevisionError
+from systems.cosmere.actions import ActionTransactionError as _CosmereActionTransactionError
+from systems.cosmere.tables import TableStateError as _CosmereTableStateError
+from systems.cosmere.encounters import EncounterStateError as _CosmereEncounterStateError
+from systems.cosmere.custom_adversaries import AdversaryStateError as _CosmereAdversaryStateError
+from systems.cosmere.narrative_scenes import NarrativeSceneError as _CosmereNarrativeSceneError
+
+
+@app.errorhandler(_CosmereAdvancementError)
+@app.errorhandler(_CosmereCharacterRevisionError)
+@app.errorhandler(_CosmereActionTransactionError)
+@app.errorhandler(_CosmereTableStateError)
+@app.errorhandler(_CosmereEncounterStateError)
+@app.errorhandler(_CosmereAdversaryStateError)
+@app.errorhandler(_CosmereNarrativeSceneError)
+def _cosmere_transaction_error(error):
+    return jsonify({'ok': False, 'error': str(error),
+                    'code': getattr(error, 'code', 'rules_validation_failed'),
+                    'eligible': False, 'blocked_reasons': [str(error)],
+                    'details': list(getattr(error, 'details', ()))}), getattr(error, 'status', 422)
+
+
+@app.errorhandler(_CosmereRulesValidationError)
+def _cosmere_rules_error(error):
+    return jsonify({'ok': False, 'error': str(error), 'eligible': False,
+                    'blocked_reasons': [str(error)]}), 400
+
+
+def _cosmere_site_admin():
+    if not _account_mode():
+        return _is_gm()
+    user = _auth.current_user()
+    return bool(user and user.get('is_admin'))
+
+
+@app.get('/cosmere/admin/data')
+def cosmere_admin_data():
+    if not _cosmere_site_admin():
+        abort(403)
+    from systems.cosmere.rules import paths
+    installed = paths.registry_path().is_file()
+    return render_template('cosmere_admin_data.html', installed=installed,
+                           data_dir=str(paths.install_dir()))
+
+
+@app.post('/api/cosmere/admin/data')
+def api_cosmere_admin_data():
+    if not _cosmere_site_admin():
+        abort(403)
+    from systems.cosmere.rules import datapack, paths
+    from systems.cosmere.rules.profiles import default_registry
+    upload = request.files.get('file')
+    if upload is None:
+        return jsonify(error='Choose a Cosmere data bundle.'), 400
+    dest = paths.install_dir()
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    temporary = dest.parent / f'.cosmere-upload-{uuid.uuid4().hex}'
+    try:
+        upload.save(temporary)
+        result = datapack.install(temporary, dest)
+    except datapack.BundleError as error:
+        return jsonify(error=str(error)), 422
+    except OSError as error:
+        return jsonify(error=f'Could not install Cosmere data ({error.strerror or error}).'), 500
+    finally:
+        temporary.unlink(missing_ok=True)
+    default_registry.cache_clear()
+    return jsonify(dict(result, installed=True))
+
+
+def _cosmere_build_input(data, existing=None):
+    """Enforce campaign pins and restore server-owned advancement grants."""
+    from systems.cosmere.rules.profiles import normalize_binding, normalize_theme
+    from systems.cosmere.rules.schema import to_dict, require
+    build = dict(data.get('build') or data)
+    config = _load_campaign_config()
+    campaign_binding = normalize_binding(config)
+    if 'rules_binding' in build:
+        actor_binding = normalize_binding(build)
+    else:
+        actor_binding = None
+    require(actor_binding is None or actor_binding == campaign_binding,
+            'Build rules binding does not match the campaign.')
+    build['rules_binding'] = to_dict(campaign_binding)
+    if 'cosmere_theme' not in build and 'cosmere_world' not in build:
+        build['cosmere_theme'] = normalize_theme(config)
+    existing_build = (existing or {}).get('build') if isinstance(existing, dict) else None
+    server_grants = (existing_build or {}).get('advancement_bonus_grants', {}) \
+        if isinstance(existing_build, dict) else {}
+    build['advancement_bonus_grants'] = copy.deepcopy(
+        server_grants if isinstance(server_grants, dict) else {})
+    return build
+
+
+def _cosmere_profile_build(data, existing=None, *, homebrew=None):
+    """Construct the actor-scoped build while retaining server-only authority."""
+    from systems.cosmere.build import CosmereBuild
+
+    build_input = _cosmere_build_input(data, existing)
+    existing_build = ((existing or {}).get('build')
+                      if isinstance(existing, dict) else None)
+    trusted_entitlements = None
+    if (isinstance(existing_build, dict)
+            and existing_build.get('origin_world') == 'scadrial'):
+        trusted_entitlements = existing_build.get('goal_entitlements') or ()
+    return CosmereBuild(
+        build_input, homebrew=homebrew,
+        trusted_goal_entitlements=trusted_entitlements)
+
+
+@app.route('/api/cosmere/rules/catalog', methods=['GET'])
+@gm_required
+def api_cosmere_rules_catalog():
+    """Authoritative campaign package identity and scoped rules metadata."""
+    from systems.cosmere.rules.profiles import resolve_profile, normalize_theme
+    config = _load_campaign_config()
+    profile = resolve_profile(config, spoiler_scope='gm')
+    return jsonify({**profile.catalog(), 'cosmere_theme': normalize_theme(config)})
+
+
+def _cosmere_table_state_path():
+    cid = _loaded_campaign_id()
+    return (_storage.cosmere_table_state_file(cid) if cid
+            else os.path.join(DATA_DIR, 'cosmere_table_state.json'))
+
+
+def _cosmere_encounter_stage_path():
+    cid = _loaded_campaign_id()
+    return (_storage.cosmere_encounter_stage_file(cid) if cid
+            else os.path.join(DATA_DIR, 'cosmere_encounter_stage.json'))
+
+
+def _cosmere_narrative_scene_path():
+    cid = _loaded_campaign_id()
+    return (_storage.cosmere_narrative_scenes_file(cid) if cid
+            else os.path.join(DATA_DIR, 'cosmere_narrative_scenes.json'))
+
+
+def _cosmere_narrative_transaction_path():
+    return _storage.cosmere_narrative_transaction_file(_loaded_campaign_id())
+
+
+def _cosmere_service_profile(*, spoiler_scope):
+    """Resolve audience and binding on the server, never from request fields."""
+    from systems.cosmere.rules.profiles import resolve_profile
+    return resolve_profile(_load_campaign_config(), homebrew=_cosmere_homebrew_store(),
+                           spoiler_scope=spoiler_scope)
+
+
+def _cosmere_service_scope(profile, payload=None):
+    payload = payload if isinstance(payload, dict) else {}
+    binding = profile.binding
+    allowed_worlds = tuple(getattr(binding, 'allowed_worlds', ()) or
+                           (binding.default_world,))
+    world = payload.get('world') or binding.default_world
+    if world not in allowed_worlds:
+        raise _CosmereRulesValidationError(
+            'Requested world is not enabled by the campaign rules binding.')
+    allowed = tuple(binding.allowed_eras)
+    era = payload.get('era')
+    if world != 'scadrial':
+        if era not in (None, ''):
+            raise _CosmereRulesValidationError(
+                'Only a Scadrial rules scope may select an era.')
+        return world, None
+    if era is not None and era not in allowed:
+        raise _CosmereRulesValidationError(
+            'Requested era is not enabled by the campaign rules binding.')
+    config_era = _load_campaign_config().get('cosmere_era')
+    if era is None and config_era in allowed:
+        era = config_era
+    if era is None and len(allowed) == 1:
+        era = allowed[0]
+    return world, era
+
+
+def _cosmere_table_registry(profile, *, world=None, era=None):
+    from systems.cosmere.tables import TableRegistry
+    catalog = profile.catalog()
+    pack_ids = {row['id'] for row in catalog.get('packages', [])}
+    return TableRegistry(catalog, world=world or profile.binding.default_world, era=era,
+                         spoiler_scope='gm', allowed_pack_ids=pack_ids)
+
+
+@app.route('/api/cosmere/tables/<path:table_id>/roll', methods=['POST'])
+@gm_required
+def api_cosmere_table_roll(table_id):
+    from systems.cosmere.tables import (TableNotFoundError, TableValidationError,
+                                        roll_and_record)
+    data = request.get_json(silent=True) or {}
+    profile = _cosmere_service_profile(spoiler_scope='gm')
+    world, era = _cosmere_service_scope(profile, data)
+    path = _cosmere_table_state_path()
+    request_id = data.get('request_id')
+    seed = data.get('seed') if 'seed' in data else (
+        'generated.' + hashlib.sha256(
+            ('cosmere-table-seed\0' + str(request_id)).encode('utf-8')).hexdigest())
+    try:
+        registry = _cosmere_table_registry(profile, world=world, era=era)
+        with _path_lock(path):
+            state = _storage.load_json(path, {}) or {}
+            changed, result = roll_and_record(
+                state, registry, table_id, seed=seed,
+                expected_revision=data.get('expected_revision'),
+                request_id=request_id)
+            if changed != state:
+                _atomic_write_json(path, changed, indent=2)
+    except TableNotFoundError:
+        return jsonify({'ok': False, 'error': 'Table not found.',
+                        'code': 'table_not_found'}), 404
+    except TableValidationError as error:
+        return jsonify({'ok': False, 'error': str(error),
+                        'code': 'invalid_table'}), 422
+    return jsonify({'ok': True, **result})
+
+
+@app.route('/api/cosmere/tables/history', methods=['GET'])
+@gm_required
+def api_cosmere_table_history():
+    from systems.cosmere.tables import normalize_table_state
+    return jsonify(normalize_table_state(
+        _storage.load_json(_cosmere_table_state_path(), {}) or {}))
+
+
+@app.route('/api/cosmere/tables/pins', methods=['POST', 'DELETE'])
+@gm_required
+def api_cosmere_table_pins():
+    from systems.cosmere.tables import pin_roll, unpin_roll
+    data = request.get_json(silent=True) or {}
+    path = _cosmere_table_state_path()
+    operation = pin_roll if request.method == 'POST' else unpin_roll
+    with _path_lock(path):
+        state = _storage.load_json(path, {}) or {}
+        changed, result = operation(
+            state, data.get('roll_id'),
+            expected_revision=data.get('expected_revision'),
+            request_id=data.get('request_id'))
+        if changed != state:
+            _atomic_write_json(path, changed, indent=2)
+    return jsonify({'ok': True, **result})
+
+
+@app.route('/api/cosmere/compendium/search', methods=['GET'])
+def api_cosmere_compendium_search():
+    from systems.cosmere.compendium import CompendiumValidationError, search
+    audience = 'gm' if _is_gm() else 'player'
+    profile = _cosmere_service_profile(spoiler_scope=audience)
+    world, era = _cosmere_service_scope(profile, request.args.to_dict())
+    kinds = tuple(part for part in request.args.get('kind', '').split(',') if part) or None
+    try:
+        result = search(profile.catalog(), query=request.args.get('q', ''),
+                        kinds=kinds, world=world, era=era,
+                        spoiler_scope=audience,
+                        limit=request.args.get('limit', 50, type=int))
+    except CompendiumValidationError as error:
+        return jsonify({'ok': False, 'error': str(error),
+                        'code': 'invalid_compendium_query'}), 422
+    return jsonify({'ok': True, **result})
+
+
+@app.route('/api/cosmere/compendium/<path:record_id>', methods=['GET'])
+def api_cosmere_compendium_detail(record_id):
+    from systems.cosmere.compendium import (CompendiumNotFound,
+                                            CompendiumValidationError, detail)
+    audience = 'gm' if _is_gm() else 'player'
+    profile = _cosmere_service_profile(spoiler_scope=audience)
+    world, era = _cosmere_service_scope(profile, request.args.to_dict())
+    try:
+        result = detail(profile.catalog(), record_id, world=world, era=era,
+                        spoiler_scope=audience)
+    except CompendiumNotFound:
+        return jsonify({'ok': False, 'error': 'Compendium record not found.',
+                        'code': 'compendium_not_found'}), 404
+    except CompendiumValidationError as error:
+        return jsonify({'ok': False, 'error': str(error),
+                        'code': 'invalid_compendium'}), 422
+    return jsonify({'ok': True, **result})
+
+
+@app.route('/api/cosmere/party/capabilities', methods=['GET'])
+@gm_required
+def api_cosmere_party_capabilities():
+    from systems.cosmere.party import project_party
+    return jsonify({'ok': True, **project_party(
+        _list_cosmere_pcs(), homebrew=_cosmere_homebrew_store())})
+
+
+def _cosmere_rich_adversary(adversary_id):
+    return next((row for row in _load_cosmere_custom_adversary_store()['adversaries']
+                 if row['id'] == adversary_id), None)
+
+
+def _cosmere_catalog_adversary(profile, adversary_id, *, world, era):
+    catalog = profile.catalog()
+    packages = {
+        (row.get('id'), row.get('version'), row.get('package_hash')): row
+        for row in catalog.get('packages', []) if isinstance(row, dict)
+    }
+    records = (catalog.get('catalogs') or {}).get('adversary', [])
+    if isinstance(records, dict):
+        records = list(records.values())
+    for record in records if isinstance(records, list) else []:
+        if not isinstance(record, dict) or record.get('id') != adversary_id:
+            continue
+        package = record.get('package') if isinstance(record.get('package'), dict) else {}
+        identity = (package.get('id'), package.get('version'), package.get('package_hash'))
+        if identity not in packages:
+            return None
+        worlds = list(record.get('worlds') or [])
+        eras = list(record.get('eras') or [])
+        if 'cosmere' not in worlds and world not in worlds:
+            return None
+        if eras and (era is None or era not in eras):
+            return None
+        parameters = record.get('parameters') if isinstance(record.get('parameters'), dict) else {}
+        payload = (parameters.get('adversary')
+                   if isinstance(parameters.get('adversary'), dict)
+                   else parameters.get('data')
+                   if isinstance(parameters.get('data'), dict)
+                   else parameters)
+        return {
+            'id': adversary_id,
+            'name': record.get('name'),
+            'world': 'cosmere' if 'cosmere' in worlds else world,
+            'era': era if eras else None,
+            'role': payload.get('role', 'ordinary'),
+            'level': payload.get('level', 1),
+            'tier': payload.get('tier'),
+            'size': payload.get('size', 'medium'),
+            'defenses': copy.deepcopy(payload.get('defenses') or {}),
+            'resources': copy.deepcopy(payload.get('resources') or {}),
+            'actions': copy.deepcopy(payload.get('actions') or []),
+            'traits': copy.deepcopy(payload.get('traits') or []),
+            'equipment': copy.deepcopy(payload.get('equipment') or []),
+            'package': {key: copy.deepcopy(package.get(key))
+                        for key in ('id', 'version', 'package_hash', 'dependencies')},
+            'citations': copy.deepcopy(record.get('citations') or []),
+            'provenance': copy.deepcopy(record.get('provenance') or {}),
+        }
+    return None
+
+
+def _cosmere_legacy_adversary(profile, adversary_id, *, world, era):
+    """Explicit adapter for the pinned Stormlight compatibility package only."""
+    if world != 'roshar' or era is not None:
+        return None
+    catalog = profile.catalog()
+    package = next((row for row in catalog.get('packages', [])
+                    if isinstance(row, dict)
+                    and row.get('id') == 'cosmere.stormlight.legacy'), None)
+    if package is None:
+        return None
+    document = next((row for row in systems.cosmere.adversary_docs()
+                     if isinstance(row, dict) and row.get('_id') == adversary_id), None)
+    if document is None:
+        return None
+    actor = systems.cosmere.CosmereActor(document)
+    return {
+        'id': adversary_id, 'name': actor.name, 'world': 'roshar', 'era': None,
+        'role': str(getattr(actor, 'role', '') or 'ordinary').lower(),
+        'level': int(actor.level or 1), 'tier': actor.tier,
+        'size': actor.size,
+        'defenses': {
+            'physical': int(actor.defenses.get('phy', 0) or 0),
+            'cognitive': int(actor.defenses.get('cog', 0) or 0),
+            'spiritual': int(actor.defenses.get('spi', 0) or 0),
+        },
+        'resources': {
+            'health': {'current': int(actor.current_hp), 'max': int(actor.health_max)},
+            'focus': {'current': int(actor.current_focus), 'max': int(actor.focus_max)},
+            'investiture': {'current': int(actor.current_investiture),
+                            'max': int(actor.investiture_max)},
+        },
+        'actions': copy.deepcopy([*(actor.actions or []), *(actor.strikes or [])]),
+        'traits': copy.deepcopy(actor.traits or []), 'equipment': [],
+        'package': {key: copy.deepcopy(package.get(key))
+                    for key in ('id', 'version', 'package_hash', 'dependencies')},
+        'citations': [],
+        'provenance': {'adapter': 'stormlight_legacy_adversary'},
+    }
+
+
+def _cosmere_neutral_adversary(adversary_id, profile, *, world, era):
+    rich = _cosmere_rich_adversary(adversary_id)
+    if rich is not None:
+        return copy.deepcopy(rich)
+    packaged = _cosmere_catalog_adversary(
+        profile, adversary_id, world=world, era=era)
+    if packaged is not None:
+        return packaged
+    return _cosmere_legacy_adversary(
+        profile, adversary_id, world=world, era=era)
+
+
+def _cosmere_encounter_inputs(data, profile, *, world, era):
+    from systems.cosmere.party import project_member
+    participant_ids = data.get('participant_ids', [])
+    adversary_ids = data.get('adversary_ids', [])
+    if (not isinstance(participant_ids, list) or not isinstance(adversary_ids, list)
+            or not all(isinstance(value, str) for value in (*participant_ids, *adversary_ids))
+            or len(set(participant_ids)) != len(participant_ids)
+            or len(set(adversary_ids)) != len(adversary_ids)):
+        raise _CosmereRulesValidationError('Invalid encounter actor identities.')
+    participants = []
+    for actor_id in participant_ids:
+        document = _load_cosmere_pc(actor_id)
+        if document is None:
+            raise _CosmereRulesValidationError('Encounter participant not found.')
+        participants.append(project_member(document, homebrew=_cosmere_homebrew_store()))
+    adversaries = []
+    for actor_id in adversary_ids:
+        row = _cosmere_neutral_adversary(
+            actor_id, profile, world=world, era=era)
+        if row is None:
+            raise _CosmereRulesValidationError('Encounter adversary not found.')
+        adversaries.append(row)
+    return participants, adversaries
+
+
+def _cosmere_encounter_preview(data):
+    from systems.cosmere.encounters import preview_encounter
+    profile = _cosmere_service_profile(spoiler_scope='gm')
+    world, era = _cosmere_service_scope(profile, data)
+    participants, adversaries = _cosmere_encounter_inputs(
+        data, profile, world=world, era=era)
+    return preview_encounter(profile, participants, adversaries,
+                             world=world, era=era)
+
+
+@app.route('/api/cosmere/encounters/preview', methods=['POST'])
+@gm_required
+def api_cosmere_encounter_preview():
+    from systems.cosmere.encounters import EncounterValidationError
+    try:
+        result = _cosmere_encounter_preview(request.get_json(silent=True) or {})
+    except (_CosmereRulesValidationError, EncounterValidationError) as error:
+        return jsonify({'ok': False, 'error': str(error),
+                        'code': 'invalid_encounter'}), 422
+    return jsonify({'ok': True, **result})
+
+
+@app.route('/api/cosmere/encounters/stage', methods=['GET', 'POST'])
+@gm_required
+def api_cosmere_encounter_stage():
+    from systems.cosmere.encounters import (EncounterValidationError,
+                                            normalize_stage_state,
+                                            stage_encounter)
+    path = _cosmere_encounter_stage_path()
+    if request.method == 'GET':
+        return jsonify({'ok': True, **normalize_stage_state(
+            _storage.load_json(path, {}) or {})})
+    data = request.get_json(silent=True) or {}
+    try:
+        preview = _cosmere_encounter_preview(data)
+        with _path_lock(path):
+            state = _storage.load_json(path, {}) or {}
+            changed, result = stage_encounter(
+                state, preview, expected_revision=data.get('expected_revision'),
+                request_id=data.get('request_id'))
+            if changed != state:
+                _atomic_write_json(path, changed, indent=2)
+    except (_CosmereRulesValidationError, EncounterValidationError) as error:
+        return jsonify({'ok': False, 'error': str(error),
+                        'code': 'invalid_encounter'}), 422
+    if not result.get('replayed'):
+        sse_broadcast('cosmere_encounter_stage', result['stage'],
+                      player_filter=lambda _data: None)
+    return jsonify({'ok': True, **result})
+
+
+def _save_cosmere_adversary_store(path, state):
+    _atomic_write_json(path, state, indent=2)
+
+
+def _cosmere_custom_adversary_reference_ids():
+    """Return stable custom IDs retained by every server-owned encounter form."""
+    referenced = {
+        str(getattr(actor, 'restore_id')) for actor in ACTIVE_ENCOUNTER
+        if isinstance(getattr(actor, 'restore_id', None), str)
+    }
+    from systems.cosmere.encounters import normalize_stage_state
+    try:
+        raw_stage = _storage.load_json_strict(_cosmere_encounter_stage_path())
+        if not isinstance(raw_stage, dict):
+            raise TypeError('encounter stage state must be an object')
+        if (raw_stage.get('schema_version') != 1
+                or not {'revision', 'stage', 'receipts'} <= raw_stage.keys()):
+            raise TypeError('encounter stage state requires a versioned envelope')
+        stage = normalize_stage_state(raw_stage).get('stage')
+        if stage is None:
+            staged_adversaries = []
+        else:
+            staged_adversaries = stage.get('adversaries')
+            if not isinstance(staged_adversaries, list):
+                raise TypeError('staged adversaries must be a list')
+            if any(not isinstance(row, dict)
+                   or not isinstance(row.get('id'), str)
+                   or not row['id'] for row in staged_adversaries):
+                raise TypeError('staged adversaries require stable identities')
+    except FileNotFoundError:
+        staged_adversaries = []
+    except (OSError, TypeError, ValueError):
+        # Only an absent stage file proves there are no staged references.
+        raise _CosmereRulesValidationError(
+            'The staged encounter reference state could not be validated.') from None
+    referenced.update(row['id'] for row in staged_adversaries)
+
+    def collect(value):
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if key in {'cosmere_id', 'adversary_id'} and isinstance(child, str):
+                    referenced.add(child)
+                else:
+                    collect(child)
+        elif isinstance(value, list):
+            for child in value:
+                collect(child)
+
+    if ENCOUNTER_DIR and os.path.isdir(ENCOUNTER_DIR):
+        for filename in sorted(glob.glob(os.path.join(ENCOUNTER_DIR, '*.json'))):
+            try:
+                collect(_storage.load_json_strict(filename))
+            except (OSError, TypeError, ValueError):
+                # An unreadable encounter cannot prove that deletion is safe.
+                raise _CosmereRulesValidationError(
+                    'A persisted encounter reference could not be validated.')
+    return referenced
+
+
+@app.route('/api/cosmere/adversaries/custom', methods=['GET', 'POST'])
+@gm_required
+def api_cosmere_custom_adversaries():
+    from systems.cosmere.custom_adversaries import (AdversaryValidationError,
+                                                     create_adversary)
+    if request.method == 'GET':
+        return jsonify({'ok': True, **_load_cosmere_custom_adversary_store()})
+    data = request.get_json(silent=True) or {}
+    path = COSMERE_ADVERSARIES_FILE
+    from systems.cosmere.rules.profiles import normalize_binding
+    from systems.cosmere.rules.schema import to_dict
+    rules_binding = to_dict(normalize_binding(_load_campaign_config()))
+    try:
+        with _path_lock(path):
+            state = _load_cosmere_custom_adversary_store()
+            changed, result = create_adversary(
+                state, data, binding=rules_binding,
+                expected_store_revision=data.get('expected_store_revision'),
+                request_id=data.get('request_id'))
+            if changed != state:
+                _save_cosmere_adversary_store(path, changed)
+    except AdversaryValidationError as error:
+        return jsonify({'ok': False, 'error': str(error),
+                        'code': 'invalid_adversary'}), 422
+    return jsonify({'ok': True, **result})
+
+
+@app.route('/api/cosmere/adversaries/custom/<adversary_id>',
+           methods=['PUT', 'DELETE'])
+@gm_required
+def api_cosmere_custom_adversary(adversary_id):
+    from systems.cosmere.custom_adversaries import (AdversaryValidationError,
+                                                     delete_adversary,
+                                                     edit_adversary)
+    from systems.cosmere.rules.profiles import normalize_binding
+    from systems.cosmere.rules.schema import to_dict
+    data = request.get_json(silent=True) or {}
+    path = COSMERE_ADVERSARIES_FILE
+    rules_binding = to_dict(normalize_binding(_load_campaign_config()))
+    try:
+        with _path_lock(path):
+            state = _load_cosmere_custom_adversary_store()
+            if request.method == 'PUT':
+                changed, result = edit_adversary(
+                    state, adversary_id, data, binding=rules_binding,
+                    expected_revision=data.get('expected_revision'),
+                    request_id=data.get('request_id'))
+            else:
+                changed, result = delete_adversary(
+                    state, adversary_id,
+                    expected_revision=data.get('expected_revision'),
+                    request_id=data.get('request_id'),
+                    referenced_ids=_cosmere_custom_adversary_reference_ids())
+            if changed != state:
+                _save_cosmere_adversary_store(path, changed)
+    except AdversaryValidationError as error:
+        return jsonify({'ok': False, 'error': str(error),
+                        'code': 'invalid_adversary'}), 422
+    return jsonify({'ok': True, **result})
+
+
+@app.route('/api/cosmere/narrative-scenes', methods=['GET'])
+@gm_required
+def api_cosmere_narrative_scenes():
+    from systems.cosmere.narrative_scenes import normalize_scene_store
+    from systems.cosmere.rules.profiles import normalize_binding
+    from systems.cosmere.rules.schema import to_dict
+    binding = to_dict(normalize_binding(_load_campaign_config()))
+    return jsonify({'ok': True, **normalize_scene_store(
+        _storage.load_json(_cosmere_narrative_scene_path(), {}) or {},
+        binding=binding)})
+
+
+def _cosmere_narrative_scope_documents(scene):
+    """Preflight declared participants before any character or scene write."""
+    actor_ids = [row.get('actor_id') for row in scene.get('participants', [])
+                 if isinstance(row, dict) and isinstance(row.get('actor_id'), str)]
+    documents = []
+    for actor_id in actor_ids:
+        document = _load_cosmere_pc(actor_id)
+        if document is None:
+            raise _CosmereRulesValidationError(
+                'Narrative scene participant not found.')
+        build = document.get('build') if isinstance(document.get('build'), dict) else {}
+        rules_binding = (document.get('rules_binding')
+                         if isinstance(document.get('rules_binding'), dict)
+                         else build.get('rules_binding'))
+        binding_default = (rules_binding.get('default_world')
+                           if isinstance(rules_binding, dict) else None)
+        actor_world = (document.get('origin_world') or build.get('origin_world')
+                       or binding_default or 'roshar')
+        actor_era = document.get('era') or build.get('era')
+        scene_world = scene.get('world')
+        if scene_world != 'cosmere' and actor_world != scene_world:
+            raise _CosmereRulesValidationError(
+                'Narrative scene participant world conflicts with the scene scope.')
+        if (scene_world == 'scadrial'
+                and actor_era != scene.get('era')):
+            raise _CosmereRulesValidationError(
+                'Narrative scene participant era conflicts with the scene scope.')
+        current_scene = ((document.get('runtime_state') or {}).get('scene') or {})
+        current_id = current_scene.get('id')
+        if current_id not in (None, scene['id']):
+            raise _CosmereRulesValidationError(
+                'Narrative scene participant is already assigned to another scene.')
+        documents.append(document)
+    return documents
+
+
+def _apply_cosmere_scene_start(
+        document, runtime, *, scene_id, boundary_id, scene_type=None):
+    """Apply a server-owned scene start, including Scadrian Investiture."""
+    from systems.cosmere.actions import apply_lifecycle_transition
+    from systems.cosmere.mistborn_actions import is_mistborn_actor
+    from systems.cosmere.rules.profiles import resolve_profile
+
+    already_applied = boundary_id in set(runtime.get('lifecycle_boundaries') or [])
+    started, _expired = apply_lifecycle_transition(
+        runtime, 'scene_start', next_scope_id=scene_id,
+        boundary_id=boundary_id)
+    if scene_type is not None:
+        scene = dict(started.get('scene') or {})
+        scene['type'] = scene_type
+        started['scene'] = scene
+    if not already_applied and is_mistborn_actor(document):
+        profile = resolve_profile(document, homebrew=_cosmere_homebrew_store())
+        surprised = bool((runtime.get('conditions') or {}).get('surprised'))
+        started = profile.apply_action(started, {
+            'origin_world': 'scadrial',
+            'era': document.get('era') or (document.get('build') or {}).get('era'),
+            'art': 'allomancy',
+            'operation': {'kind': 'scene_start', 'surprised': surprised},
+        })
+    return started
+
+
+def _narrative_scene_boundary_id(scene_id, request_id):
+    return 'lifecycle.narrative.' + hashlib.sha256(
+        (str(scene_id) + '\0' + str(request_id)).encode('utf-8')).hexdigest()
+
+
+def _assign_cosmere_narrative_scope(
+        scene, *, documents=None, boundary_id=None):
+    """Bind declared participants to one narrative scene without ending another."""
+    documents = (documents if documents is not None
+                 else _cosmere_narrative_scope_documents(scene))
+    boundary_id = boundary_id or _narrative_scene_boundary_id(
+        scene['id'], 'scope-assignment')
+
+    updated = []
+    for document in documents:
+        runtime = copy.deepcopy(document.get('runtime_state') or {})
+        current_scene = dict(runtime.get('scene') or {})
+        if current_scene.get('id') == scene['id']:
+            if current_scene.get('type') == scene['type']:
+                updated.append(document)
+                continue
+
+            def repair_type(current, scene_type=scene['type']):
+                state = copy.deepcopy(current.get('runtime_state') or {})
+                scope = dict(state.get('scene') or {})
+                scope['type'] = scene_type
+                state['scene'] = scope
+                current['runtime_state'] = state
+                return current
+
+            changed = _mutate_cosmere_pc(
+                document['id'], document.get('revision', 0), repair_type)
+            _sync_cosmere_combatant_state(
+                changed['id'], changed.get('runtime_state') or {},
+                character_revision=changed.get('revision', 0))
+            updated.append(changed)
+            continue
+
+        def transform(current, scene_id=scene['id'], scene_type=scene['type'],
+                      start_id=boundary_id):
+            state = copy.deepcopy(current.get('runtime_state') or {})
+            state = _apply_cosmere_scene_start(
+                current, state, scene_id=scene_id,
+                boundary_id=f'{start_id}:scene_start', scene_type=scene_type)
+            current['runtime_state'] = state
+            return current
+
+        changed = _mutate_cosmere_pc(
+            document['id'], document.get('revision', 0), transform)
+        _sync_cosmere_combatant_state(
+            changed['id'], changed.get('runtime_state') or {},
+            character_revision=changed.get('revision', 0))
+        updated.append(changed)
+    return updated
+
+
+def _cosmere_narrative_transaction_documents(previous_scene, next_scene):
+    """Snapshot every character a participant replacement could mutate."""
+    documents = {
+        document['id']: document
+        for document in _cosmere_narrative_scope_documents(next_scene)
+    }
+    for row in previous_scene.get('participants', []):
+        actor_id = row.get('actor_id') if isinstance(row, dict) else None
+        if not isinstance(actor_id, str) or actor_id in documents:
+            continue
+        document = _load_cosmere_pc(actor_id)
+        if document is not None:
+            documents[actor_id] = document
+    return [documents[key] for key in sorted(documents)]
+
+
+def _cosmere_narrative_live_snapshots(documents):
+    """Capture affected tracker objects for rollback without revision filtering."""
+    actor_ids = {document['id'] for document in documents}
+    return [
+        (combatant, copy.deepcopy(combatant.__dict__))
+        for combatant in ACTIVE_ENCOUNTER
+        if (getattr(combatant, 'system', 'pf2e') == 'cosmere'
+            and getattr(combatant, 'is_pc', False)
+            and getattr(combatant, 'restore_id', None) in actor_ids)
+    ]
+
+
+def _rollback_cosmere_narrative_transaction(
+        path, original_state, *, path_existed, documents, live_snapshots=()):
+    """Compensate a failed scene-store write while the dispatch lock is held."""
+    if path_existed:
+        _storage.atomic_write_json(path, original_state, indent=2, fsync=True)
+    elif os.path.isfile(path):
+        os.remove(path)
+    for document in sorted(documents, key=lambda row: row['id']):
+        character_path = _cosmere_pc_path(document['id'])
+        if character_path is None:
+            raise _CosmereRulesValidationError(
+                'Invalid Cosmere character identity during narrative rollback.')
+        with _path_lock(character_path):
+            _storage.atomic_write_json(
+                character_path, document, indent=2, fsync=True)
+        _sync_cosmere_combatant_state(
+            document['id'], document.get('runtime_state') or {},
+            character_revision=document.get('revision', 0))
+    # Forward projection advances the tracker's character revision, so the normal
+    # stale-overlay guard intentionally rejects the older document snapshot. This
+    # rollback path owns the dispatch lock and restores the exact captured object.
+    for combatant, snapshot in live_snapshots:
+        combatant.__dict__.clear()
+        combatant.__dict__.update(copy.deepcopy(snapshot))
+
+
+def _reconcile_cosmere_narrative_scope(
+        previous_scene, next_scene, *, request_id, documents=None):
+    """End removed participants' scene and bind the complete replacement cast."""
+    previous_ids = {
+        row.get('actor_id') for row in previous_scene.get('participants', [])
+        if isinstance(row, dict) and isinstance(row.get('actor_id'), str)
+    }
+    desired_ids = {
+        row.get('actor_id') for row in next_scene.get('participants', [])
+        if isinstance(row, dict) and isinstance(row.get('actor_id'), str)
+    }
+    desired_documents = (
+        [document for document in documents if document['id'] in desired_ids]
+        if documents is not None
+        else _cosmere_narrative_scope_documents(next_scene))
+    boundary_id = _narrative_scene_boundary_id(next_scene['id'], request_id)
+    updated = _transition_cosmere_lifecycle(
+        'scene_end', next_scope_id=None, boundary_id=boundary_id,
+        actor_ids=previous_ids - desired_ids,
+        source_scope_id=next_scene['id'])
+    by_id = {document['id']: document for document in updated}
+    for document in _assign_cosmere_narrative_scope(
+            next_scene, documents=desired_documents, boundary_id=boundary_id):
+        by_id[document['id']] = document
+    return list(by_id.values())
+
+
+def _cosmere_narrative_payload_hash(payload):
+    from systems.cosmere.rules.compiler import canonical_json
+    return hashlib.sha256(canonical_json(payload)).hexdigest()
+
+
+def _load_cosmere_narrative_transaction():
+    path = _cosmere_narrative_transaction_path()
+    if not os.path.isfile(path):
+        return None
+    try:
+        pending = _storage.load_json_strict(path)
+    except (OSError, TypeError, ValueError) as exc:
+        raise _CosmereRulesValidationError(
+            'The pending narrative scene transaction is unreadable.') from exc
+    valid = (
+        isinstance(pending, dict)
+        and pending.get('schema_version') == 1
+        and pending.get('status') == 'pending'
+        and pending.get('kind') in {'create', 'update'}
+        and isinstance(pending.get('request_id'), str)
+        and isinstance(pending.get('payload_hash'), str)
+        and isinstance(pending.get('scene_id'), str)
+        and isinstance(pending.get('previous_scene'), dict)
+        and isinstance(pending.get('target_scene'), dict)
+        and isinstance(pending.get('target_state'), dict)
+        and isinstance(pending.get('result'), dict)
+        and pending['target_scene'].get('id') == pending.get('scene_id')
+        and (pending['result'].get('scene') or {}).get('id') == pending.get('scene_id')
+        and pending.get('campaign_id') == _loaded_campaign_id())
+    if not valid:
+        raise _CosmereRulesValidationError(
+            'The pending narrative scene transaction is invalid.')
+    return pending
+
+
+def _assert_no_cosmere_lifecycle_transition_for_narrative():
+    """Keep narrative scene writes out of a pending central boundary."""
+    if _load_cosmere_lifecycle_transition(_loaded_campaign_id()) is not None:
+        raise _CosmereActionTransactionError(
+            'lifecycle_transition_pending',
+            'Another Cosmere lifecycle transition must finish first.', 409)
+
+
+def _assert_no_cosmere_narrative_transaction_for_lifecycle():
+    """Keep central scene/encounter boundaries out of a narrative transaction."""
+    if _load_cosmere_narrative_transaction() is not None:
+        raise _CosmereActionTransactionError(
+            'narrative_transaction_pending',
+            'Another narrative scene transaction must finish first.', 409)
+
+
+def _assert_cosmere_narrative_transaction_request(
+        pending, *, kind, payload, scene_id=None, scene_type=None):
+    same = (
+        pending.get('kind') == kind
+        and pending.get('request_id') == payload.get('request_id')
+        and pending.get('payload_hash') == _cosmere_narrative_payload_hash(payload)
+        and (scene_id is None or pending.get('scene_id') == scene_id)
+        and (scene_type is None
+             or pending.get('scene_type') == scene_type))
+    if not same:
+        raise _CosmereNarrativeSceneError(
+            'narrative_transaction_pending',
+            'Another narrative scene transaction must finish first.', 409)
+
+
+def _begin_cosmere_narrative_transaction(
+        *, kind, payload, previous_scene, target_scene, target_state, result):
+    _assert_no_cosmere_lifecycle_transition_for_narrative()
+    if _load_cosmere_narrative_transaction() is not None:
+        raise _CosmereNarrativeSceneError(
+            'narrative_transaction_pending',
+            'Another narrative scene transaction must finish first.', 409)
+    pending = {
+        'schema_version': 1,
+        'status': 'pending',
+        'kind': kind,
+        'campaign_id': _loaded_campaign_id(),
+        'request_id': payload.get('request_id'),
+        'payload_hash': _cosmere_narrative_payload_hash(payload),
+        'scene_id': target_scene['id'],
+        'scene_type': target_scene['type'],
+        'previous_scene': copy.deepcopy(previous_scene),
+        'target_scene': copy.deepcopy(target_scene),
+        'target_state': copy.deepcopy(target_state),
+        'result': copy.deepcopy(result),
+        'created_at': int(time.time()),
+    }
+    _storage.atomic_write_json(
+        _cosmere_narrative_transaction_path(), pending, indent=2, fsync=True)
+    return pending
+
+
+def _complete_cosmere_narrative_transaction(request_id):
+    pending = _load_cosmere_narrative_transaction()
+    if pending is None:
+        return
+    if pending.get('request_id') != request_id:
+        raise _CosmereRulesValidationError(
+            'The narrative scene transaction identity changed unexpectedly.')
+    os.remove(_cosmere_narrative_transaction_path())
+
+
+def _resume_cosmere_narrative_transaction(pending, *, scene_path):
+    previous_scene = pending['previous_scene']
+    target_scene = pending['target_scene']
+    documents = _cosmere_narrative_transaction_documents(
+        previous_scene, target_scene)
+    if pending['kind'] == 'create':
+        scoped_documents = _assign_cosmere_narrative_scope(
+            target_scene, documents=documents,
+            boundary_id=_narrative_scene_boundary_id(
+                target_scene['id'], pending['request_id']))
+    else:
+        scoped_documents = _reconcile_cosmere_narrative_scope(
+            previous_scene, target_scene,
+            request_id=pending['request_id'], documents=documents)
+    _atomic_write_json(scene_path, pending['target_state'], indent=2)
+    _complete_cosmere_narrative_transaction(pending['request_id'])
+    result = copy.deepcopy(pending['result'])
+    result['replayed'] = True
+    return result, scoped_documents
+
+
+@app.route('/api/cosmere/narrative-scenes/<scene_type>', methods=['POST'])
+@gm_required
+def api_cosmere_narrative_scene_create(scene_type):
+    from systems.cosmere.narrative_scenes import (NarrativeSceneValidationError,
+                                                  create_scene)
+    from systems.cosmere.rules.profiles import normalize_binding
+    from systems.cosmere.rules.schema import to_dict
+    data = request.get_json(silent=True) or {}
+    path = _cosmere_narrative_scene_path()
+    binding = to_dict(normalize_binding(_load_campaign_config()))
+    resumed_transaction = False
+    try:
+        with _LIVE_CAMPAIGN_DISPATCH_LOCK:
+            _assert_no_cosmere_lifecycle_transition_for_narrative()
+            with _path_lock(path):
+                pending = _load_cosmere_narrative_transaction()
+                if pending is not None:
+                    _assert_cosmere_narrative_transaction_request(
+                        pending, kind='create', payload=data,
+                        scene_type=scene_type)
+                    result, scoped_documents = (
+                        _resume_cosmere_narrative_transaction(
+                            pending, scene_path=path))
+                    resumed_transaction = True
+                else:
+                    path_existed = os.path.isfile(path)
+                    state = _storage.load_json(path, {}) or {}
+                    changed, result = create_scene(
+                        state, scene_type, data, binding=binding,
+                        expected_store_revision=data.get('expected_store_revision'),
+                        request_id=data.get('request_id'))
+                    scoped_documents = []
+                    if not result.get('replayed'):
+                        previous_scene = {'participants': []}
+                        transaction_documents = (
+                            _cosmere_narrative_transaction_documents(
+                                previous_scene, result['scene']))
+                        live_snapshots = _cosmere_narrative_live_snapshots(
+                            transaction_documents)
+                        _begin_cosmere_narrative_transaction(
+                            kind='create', payload=data,
+                            previous_scene=previous_scene,
+                            target_scene=result['scene'], target_state=changed,
+                            result=result)
+                        try:
+                            scoped_documents = _assign_cosmere_narrative_scope(
+                                result['scene'], documents=transaction_documents,
+                                boundary_id=_narrative_scene_boundary_id(
+                                    result['scene']['id'], data.get('request_id')))
+                            if changed != state:
+                                _atomic_write_json(path, changed, indent=2)
+                            _complete_cosmere_narrative_transaction(
+                                data.get('request_id'))
+                        except Exception:
+                            _rollback_cosmere_narrative_transaction(
+                                path, state, path_existed=path_existed,
+                                documents=transaction_documents,
+                                live_snapshots=live_snapshots)
+                            _complete_cosmere_narrative_transaction(
+                                data.get('request_id'))
+                            raise
+    except NarrativeSceneValidationError as error:
+        return jsonify({'ok': False, 'error': str(error),
+                        'code': 'invalid_narrative_scene'}), 422
+    if resumed_transaction or not result.get('replayed'):
+        sse_broadcast('cosmere_narrative_scene', result['scene'],
+                      player_filter=lambda _data: None)
+    for document in scoped_documents:
+        _cosmere_advancement_broadcast(document)
+    return jsonify({'ok': True, **result})
+
+
+@app.route('/api/cosmere/narrative-scenes/<scene_id>', methods=['PUT'])
+@gm_required
+def api_cosmere_narrative_scene_update(scene_id):
+    from systems.cosmere.narrative_scenes import (NarrativeSceneValidationError,
+                                                  update_scene)
+    from systems.cosmere.rules.profiles import normalize_binding
+    from systems.cosmere.rules.schema import to_dict
+    data = request.get_json(silent=True) or {}
+    path = _cosmere_narrative_scene_path()
+    binding = to_dict(normalize_binding(_load_campaign_config()))
+    resumed_transaction = False
+    try:
+        with _LIVE_CAMPAIGN_DISPATCH_LOCK:
+            _assert_no_cosmere_lifecycle_transition_for_narrative()
+            with _path_lock(path):
+                pending = _load_cosmere_narrative_transaction()
+                if pending is not None:
+                    _assert_cosmere_narrative_transaction_request(
+                        pending, kind='update', payload=data,
+                        scene_id=scene_id)
+                    result, scoped_documents = (
+                        _resume_cosmere_narrative_transaction(
+                            pending, scene_path=path))
+                    resumed_transaction = True
+                else:
+                    path_existed = os.path.isfile(path)
+                    state = _storage.load_json(path, {}) or {}
+                    previous_scene = next((copy.deepcopy(row)
+                                           for row in state.get('scenes', [])
+                                           if isinstance(row, dict)
+                                           and row.get('id') == scene_id), None)
+                    changed, result = update_scene(
+                        state, scene_id, data, binding=binding,
+                        expected_revision=data.get('expected_revision'),
+                        request_id=data.get('request_id'))
+                    scoped_documents = []
+                    if not result.get('replayed'):
+                        prior = previous_scene or result['scene']
+                        transaction_documents = (
+                            _cosmere_narrative_transaction_documents(
+                                prior, result['scene']))
+                        live_snapshots = _cosmere_narrative_live_snapshots(
+                            transaction_documents)
+                        _begin_cosmere_narrative_transaction(
+                            kind='update', payload=data, previous_scene=prior,
+                            target_scene=result['scene'], target_state=changed,
+                            result=result)
+                        try:
+                            scoped_documents = _reconcile_cosmere_narrative_scope(
+                                prior, result['scene'],
+                                request_id=data.get('request_id'),
+                                documents=transaction_documents)
+                            if changed != state:
+                                _atomic_write_json(path, changed, indent=2)
+                            _complete_cosmere_narrative_transaction(
+                                data.get('request_id'))
+                        except Exception:
+                            _rollback_cosmere_narrative_transaction(
+                                path, state, path_existed=path_existed,
+                                documents=transaction_documents,
+                                live_snapshots=live_snapshots)
+                            _complete_cosmere_narrative_transaction(
+                                data.get('request_id'))
+                            raise
+    except NarrativeSceneValidationError as error:
+        return jsonify({'ok': False, 'error': str(error),
+                        'code': 'invalid_narrative_scene'}), 422
+    if resumed_transaction or not result.get('replayed'):
+        sse_broadcast('cosmere_narrative_scene', result['scene'],
+                      player_filter=lambda _data: None)
+    for document in scoped_documents:
+        _cosmere_advancement_broadcast(document)
+    return jsonify({'ok': True, **result})
+
+
+def _cosmere_lifecycle_receipt(state, request_id):
+    receipts = state.get('lifecycle_receipts') if isinstance(state, dict) else None
+    if not isinstance(receipts, list):
+        return None
+    return next((copy.deepcopy(row) for row in reversed(receipts)
+                 if isinstance(row, dict)
+                 and row.get('request_id') == request_id), None)
+
+
+def _set_cosmere_lifecycle_receipt_coordination(pid, request_id, status):
+    """Finalize a saved lifecycle receipt without spending another revision."""
+    path = _cosmere_pc_path(pid)
+    if path is None:
+        raise _CosmereRulesValidationError('Invalid Cosmere character identity.')
+    with _path_lock(path):
+        document = _load_cosmere_pc(pid)
+        if document is None:
+            raise FileNotFoundError(pid)
+        completed = None
+        for state_key in ('runtime_state', 'play_state'):
+            state = document.get(state_key)
+            receipts = state.get('lifecycle_receipts') if isinstance(state, dict) else None
+            if not isinstance(receipts, list):
+                continue
+            for row in receipts:
+                if isinstance(row, dict) and row.get('request_id') == request_id:
+                    row['coordination_status'] = status
+                    if state_key == 'runtime_state':
+                        completed = copy.deepcopy(row)
+                    break
+        if completed is None:
+            raise _CosmereRulesValidationError(
+                'Lifecycle receipt could not be finalized.')
+        _atomic_write_json(path, document, indent=2, fsync=True)
+        return completed
+
+
+@app.route(
+    '/api/cosmere/narrative-scenes/<scene_id>/participants/<pid>/contribution',
+    methods=['POST'])
+@gm_required
+def api_cosmere_narrative_contribution(scene_id, pid):
+    """Advance one participant's contribution-clock effects through CAS."""
+    from systems.cosmere.actions import apply_lifecycle_transition
+    from systems.cosmere.narrative_scenes import normalize_scene_store
+    from systems.cosmere.rules.profiles import normalize_binding
+    from systems.cosmere.rules.schema import to_dict
+
+    data = request.get_json(silent=True) or {}
+    request_id = data.get('request_id')
+    if (not isinstance(request_id, str)
+            or re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._:-]{0,127}', request_id) is None):
+        raise _CosmereNarrativeSceneError(
+            'invalid_request_id', 'Invalid narrative contribution request ID.')
+    boundary_id = 'lifecycle.contribution.' + hashlib.sha256(
+        (scene_id + '\0' + pid + '\0' + request_id).encode('utf-8')).hexdigest()
+    path = _cosmere_narrative_scene_path()
+
+    with _LIVE_CAMPAIGN_DISPATCH_LOCK:
+        document = _load_cosmere_pc(pid)
+        if document is None:
+            raise _CosmereNarrativeSceneError(
+                'participant_not_found', 'Narrative scene participant not found.', 404)
+        prior = _cosmere_lifecycle_receipt(
+            document.get('runtime_state') or {}, request_id)
+        if prior is not None and prior.get('boundary_id') != boundary_id:
+            raise _CosmereNarrativeSceneError(
+                'request_id_conflict',
+                'Narrative contribution request ID belongs to another boundary.', 409)
+        if prior is not None and prior.get(
+                'coordination_status', 'complete') == 'complete':
+            return jsonify({'ok': True, 'replayed': True,
+                            'revision': document.get('revision', 0),
+                            'expired': prior.get('expired', []),
+                            'receipt': prior})
+
+        if prior is None:
+            binding = to_dict(normalize_binding(_load_campaign_config()))
+            with _path_lock(path):
+                state = normalize_scene_store(
+                    _storage.load_json(path, {}) or {}, binding=binding)
+            scene = next((row for row in state['scenes']
+                          if row.get('id') == scene_id), None)
+            if scene is None:
+                raise _CosmereNarrativeSceneError(
+                    'not_found', 'Narrative scene not found.', 404)
+            if scene.get('status') != 'active':
+                raise _CosmereNarrativeSceneError(
+                    'scene_closed', 'Narrative scene is closed.', 409)
+            participants = {row.get('actor_id') for row in scene.get('participants', [])
+                            if isinstance(row, dict)}
+            runtime = document.get('runtime_state') or {}
+            if (pid not in participants
+                    or (runtime.get('scene') or {}).get('id') != scene_id):
+                raise _CosmereNarrativeSceneError(
+                    'participant_not_found',
+                    'Character is not an active participant in this scene.', 409)
+
+            receipt_box = {}
+
+            def transform(current):
+                transitioned, expired = apply_lifecycle_transition(
+                    current.get('runtime_state') or {}, 'contribution_end',
+                    actor_id=pid, boundary_id=boundary_id)
+                receipt = {
+                    'request_id': request_id,
+                    'boundary_id': boundary_id,
+                    'trigger': 'contribution_end',
+                    'scene_id': scene_id,
+                    'actor_id': pid,
+                    'expired': [row['id'] for row in expired],
+                    'revision': current['revision'] + 1,
+                    'coordination_status': 'pending',
+                }
+                receipts = list(transitioned.get('lifecycle_receipts') or [])
+                receipts.append(copy.deepcopy(receipt))
+                transitioned['lifecycle_receipts'] = receipts[-100:]
+                current['runtime_state'] = transitioned
+                receipt_box['value'] = receipt
+                return current
+
+            updated = _mutate_cosmere_pc(
+                pid, data.get('expected_revision'), transform)
+            prior = receipt_box['value']
+            replayed = False
+        else:
+            updated = document
+            replayed = True
+
+        synced = _sync_cosmere_combatant_state(
+            pid, updated.get('runtime_state') or {},
+            character_revision=updated.get('revision', 0))
+        if synced and not _do_persist_encounter_state_unlocked():
+            raise _CosmereActionTransactionError(
+                'encounter_persistence_failed',
+                'The contribution was saved, but the live encounter could not be durably synchronized.',
+                503)
+        if synced:
+            _do_broadcast_encounter_state()
+        _cosmere_advancement_broadcast(updated)
+        completed = _set_cosmere_lifecycle_receipt_coordination(
+            pid, request_id, 'complete')
+    return jsonify({'ok': True, 'replayed': replayed,
+                    'revision': updated['revision'],
+                    'expired': completed.get('expired', []),
+                    'receipt': completed})
+
+
+@app.route('/api/cosmere/narrative-scenes/<scene_id>/close', methods=['POST'])
+@gm_required
+def api_cosmere_narrative_scene_close(scene_id):
+    from systems.cosmere.narrative_scenes import close_scene
+    data = request.get_json(silent=True) or {}
+    path = _cosmere_narrative_scene_path()
+    campaign_id = _loaded_campaign_id()
+    with _LIVE_CAMPAIGN_DISPATCH_LOCK:
+        with _path_lock(path):
+            if _load_cosmere_narrative_transaction() is not None:
+                raise _CosmereNarrativeSceneError(
+                    'narrative_transaction_pending',
+                    'Another narrative scene transaction must finish first.', 409)
+            state = _storage.load_json(path, {}) or {}
+            changed, result = close_scene(
+                state, scene_id, expected_revision=data.get('expected_revision'),
+                request_id=data.get('request_id'))
+            pending = _load_cosmere_lifecycle_transition(campaign_id)
+            if result.get('replayed') and pending is None:
+                return jsonify({'ok': True, **result})
+            # A replay may resume only the exact durable tail created by its
+            # original close.  It must never manufacture a second boundary.
+            pending = _begin_cosmere_lifecycle_transition(
+                'narrative_scene_close', triggers=('scene_end',),
+                source_scope_id=scene_id, target_scope_id=None,
+                campaign_id=campaign_id)
+            participant_ids = {
+                row.get('actor_id') for row in result['scene'].get('participants', [])
+                if isinstance(row, dict) and isinstance(row.get('actor_id'), str)
+            }
+            updated_documents = _transition_cosmere_lifecycle(
+                'scene_end', next_scope_id=None,
+                boundary_id=pending['boundary_id'], actor_ids=participant_ids,
+                source_scope_id=scene_id)
+            if changed != state:
+                _atomic_write_json(path, changed, indent=2)
+            if ACTIVE_ENCOUNTER and not _do_persist_encounter_state_unlocked():
+                raise _CosmereActionTransactionError(
+                    'encounter_persistence_failed',
+                    'The narrative scene closed, but the live encounter could not be durably synchronized.',
+                    503)
+            if ACTIVE_ENCOUNTER:
+                _do_broadcast_encounter_state()
+            for document in updated_documents:
+                _cosmere_advancement_broadcast(document)
+            if not result.get('replayed'):
+                sse_broadcast('cosmere_narrative_scene', result['scene'],
+                              player_filter=lambda _data: None)
+            _complete_cosmere_lifecycle_transition(
+                pending['boundary_id'], campaign_id=campaign_id)
+    return jsonify({'ok': True, **result})
+
+
 def _build_cosmere_document(data: dict, existing: dict | None) -> dict:
     """Serialize a Cosmere build while retaining the latest live state.
 
@@ -13043,22 +14508,419 @@ def _build_cosmere_document(data: dict, existing: dict | None) -> dict:
     from core.character_workflows.types import WorkflowError
     from core.character_workflows.privacy import preserve_owner_private_build_fields
     from systems.cosmere.build import CosmereBuild
+    from systems.cosmere.documents import normalize_character_document
     from systems.cosmere import lore
-    build = CosmereBuild(data.get('build') or data, homebrew=_cosmere_homebrew_store())
+    homebrew = _cosmere_homebrew_store()
+    build = CosmereBuild(_cosmere_build_input(data, existing), homebrew=homebrew)
     hard = build.hard_violations()
     if hard and not data.get('force'):
         raise WorkflowError('rules_violation', 'This build exceeds the rules.', 422,
                             tuple(hard))
-    doc = {'system': 'cosmere', 'name': build.name, 'build': build.to_dict()}
-    for key in ('wallet', 'play_state'):
-        if existing and isinstance(existing.get(key), dict):
-            doc[key] = copy.deepcopy(existing[key])
+    doc = copy.deepcopy(existing) if isinstance(existing, dict) else {}
+    doc.update(system='cosmere', name=build.name, build=build.to_dict())
     if existing is not None:
         doc = preserve_owner_private_build_fields(existing, doc)
     metal = (data.get('house_metal') or (existing or {}).get('house_metal') or '').lower()
     if metal in lore.METALS:
         doc['house_metal'] = metal
-    return doc
+    doc['revision'] = ((existing or {}).get('revision', 0) + 1
+                       if existing is not None else 0)
+    pending_id = (existing or {}).get('id') or 'cosmere.actor.pending'
+    normalized = normalize_character_document(
+        doc, actor_id=pending_id, binding=build.rules_binding,
+        cosmere_theme=build.cosmere_theme,
+        # Builder publication is the compatibility boundary for historical
+        # routes that still persist live values through ``play_state``.  Once
+        # normalized, ``runtime_state`` is canonical and play_state is only a
+        # detached projection again.
+        prefer_legacy_runtime=existing is not None,
+        profile=build.profile, homebrew=homebrew)
+    if existing is not None:
+        normalized = preserve_owner_private_build_fields(existing, normalized)
+    if existing is None:
+        normalized.pop('id', None)
+    return normalized
+
+
+def _cosmere_advancement_request():
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        raise _CosmereAdvancementError('invalid_advancement', 'Advancement data is invalid.')
+    return data
+
+
+def _cosmere_advancement_response(payload, pid):
+    """Apply the established capability projection to every transaction reply."""
+    result = copy.deepcopy(payload)
+    if not _account_mode():
+        return result
+    from core.character_workflows.capabilities import capabilities_for
+    from core.character_workflows.identity import resolve_character
+    from core.character_workflows.privacy import without_owner_private_build_fields
+    record = resolve_character(_active_campaign_id(), pid)
+    capabilities = capabilities_for(_character_workflow_context(), record)
+    if not capabilities.owner_private:
+        result = without_owner_private_build_fields(result)
+    return result
+
+
+@app.route('/api/cosmere/advancement/preview', methods=['POST'])
+def api_cosmere_advancement_preview():
+    from systems.cosmere.advancement import preview_advancement
+    data = _cosmere_advancement_request()
+    doc = _load_cosmere_pc(data.get('pid'))
+    if doc is None:
+        return jsonify({'ok': False, 'error': 'Character not found.',
+                        'code': 'character_not_found'}), 404
+    homebrew = _cosmere_homebrew_store()
+    payload = {'ok': True, **preview_advancement(doc, data, homebrew=homebrew)}
+    return jsonify(_cosmere_advancement_response(payload, data.get('pid')))
+
+
+def _cosmere_advancement_broadcast(doc):
+    sse_broadcast('cosmere_player_state', {
+        'pid': doc['id'], 'name': doc.get('name'),
+        'play_state': doc.get('play_state', {}), 'revision': doc['revision'],
+    })
+
+
+def _set_cosmere_action_receipt_coordination(pid, request_id, status):
+    """Finalize action coordination metadata without spending a revision.
+
+    ``revision`` protects rules-bearing character mutations. This field is a
+    write-ahead coordination marker for the already-committed revision, so it
+    is updated in place only while both the live-dispatch and character locks
+    are held. If this final write fails, the pending receipt safely retries the
+    idempotent tracker/autosave/notification tail.
+    """
+    path = _cosmere_pc_path(pid)
+    if path is None:
+        raise _CosmereRulesValidationError('Invalid Cosmere character identity.')
+    with _path_lock(path):
+        document = _load_cosmere_pc(pid)
+        if document is None:
+            raise FileNotFoundError(pid)
+        completed = None
+        for state_key in ('runtime_state', 'play_state'):
+            state = document.get(state_key)
+            if not isinstance(state, dict):
+                continue
+            receipts = state.get('action_receipts')
+            if not isinstance(receipts, list):
+                continue
+            for row in receipts:
+                if isinstance(row, dict) and row.get('request_id') == request_id:
+                    row['coordination_status'] = status
+                    if state_key == 'runtime_state':
+                        completed = copy.deepcopy(row)
+                    break
+        if completed is None:
+            raise _CosmereRulesValidationError('Action receipt could not be finalized.')
+        _atomic_write_json(path, document, indent=2, fsync=True)
+        return completed
+
+
+@app.route('/api/cosmere/advancement/commit', methods=['POST'])
+def api_cosmere_advancement_commit():
+    from systems.cosmere.advancement import commit_advancement
+    data = _cosmere_advancement_request()
+    homebrew = _cosmere_homebrew_store()
+    try:
+        updated = _mutate_cosmere_pc(
+            data.get('pid'), data.get('expected_revision'),
+            lambda doc: commit_advancement(doc, data, homebrew=homebrew))
+    except FileNotFoundError:
+        return jsonify({'ok': False, 'error': 'Character not found.',
+                        'code': 'character_not_found'}), 404
+    _cosmere_advancement_broadcast(updated)
+    payload = {'ok': True, 'revision': updated['revision'], 'document': updated}
+    return jsonify(_cosmere_advancement_response(payload, data.get('pid')))
+
+
+@app.route('/api/cosmere/advancement/revert', methods=['POST'])
+def api_cosmere_advancement_revert():
+    from systems.cosmere.advancement import revert_advancement
+    data = _cosmere_advancement_request()
+    homebrew = _cosmere_homebrew_store()
+    try:
+        updated = _mutate_cosmere_pc(
+            data.get('pid'), data.get('expected_revision'),
+            lambda doc: revert_advancement(doc, data, homebrew=homebrew))
+    except FileNotFoundError:
+        return jsonify({'ok': False, 'error': 'Character not found.',
+                        'code': 'character_not_found'}), 404
+    _cosmere_advancement_broadcast(updated)
+    payload = {'ok': True, 'revision': updated['revision'], 'document': updated}
+    return jsonify(_cosmere_advancement_response(payload, data.get('pid')))
+
+
+@app.route('/api/cosmere/pc/<pid>/actions/<action_id>', methods=['POST'])
+def api_cosmere_pc_action(pid, action_id):
+    """Apply one declarative action through the character CAS boundary.
+
+    Coordination stays under the live-campaign dispatch lock through the four
+    externally visible stages: character save, live tracker projection,
+    synchronous encounter autosave, then SSE.  Lost-response retries return
+    their stored receipt without spending the action or resources twice.
+    """
+    from systems.cosmere.actions import (ActionTransactionError, action_by_id,
+                                         action_receipt,
+                                         apply_action_transaction,
+                                         apply_lifecycle_transition)
+    from systems.cosmere.mistborn_actions import (
+        apply_mistborn_action_transaction, compile_mistborn_action,
+        is_mistborn_actor)
+    from systems.cosmere.rules.profiles import resolve_profile
+
+    data = request.get_json(silent=True) or {}
+    request_id = data.get('request_id')
+    expected_revision = data.get('expected_revision')
+    document = _load_cosmere_pc(pid)
+    if document is None:
+        return jsonify({'ok': False, 'error': 'Character not found.',
+                        'code': 'character_not_found'}), 404
+    if not _cosmere_can_act_on(document):
+        return jsonify({'ok': False, 'error': 'not your character'}), 403
+
+    prior = action_receipt(document.get('runtime_state') or {}, request_id)
+    if prior is not None and prior.get('action_id') != action_id:
+        raise ActionTransactionError(
+            'request_id_conflict', 'Action request ID belongs to a different action.', 409)
+    if prior is not None and prior.get('coordination_status', 'complete') == 'complete':
+        return jsonify({'ok': True, 'replayed': True,
+                        'revision': document.get('revision', 0), 'receipt': prior})
+
+    action = None
+    mistborn_actor = is_mistborn_actor(document)
+    if prior is None:
+        profile = resolve_profile(document, homebrew=_cosmere_homebrew_store())
+        if mistborn_actor:
+            # Compile once before entering the mutation boundary so invalid or
+            # spoofed commands fail without acquiring the live dispatch lock.
+            compile_mistborn_action(
+                profile, document, action_id, data,
+                runtime_state=document.get('runtime_state') or {},
+                materialize_effect=False)
+        else:
+            actor_document = profile.project_actor(document.get('build') or {})
+            action = action_by_id(action_id, embedded=actor_document.get('items') or [])
+            if action is None:
+                return jsonify({'ok': False, 'error': 'Unknown action.',
+                                'code': 'action_not_found'}), 404
+
+    receipt_box = {}
+    live_actor = None
+
+    def transform(current):
+        replay = action_receipt(current.get('runtime_state') or {}, request_id)
+        if replay is not None:
+            raise ActionTransactionError(
+                'request_replayed', 'Action request ID was already used.', 409)
+        runtime = copy.deepcopy(current.get('runtime_state') or {})
+        turn = dict(runtime.get('turn') or {})
+        if live_actor is not None:
+            try:
+                live_serial = int(getattr(live_actor, 'turn_serial', 0) or 0)
+                stored_serial = int(turn.get('turn_number', 0) or 0)
+            except (TypeError, ValueError):
+                live_serial, stored_serial = 0, 0
+            if live_serial >= stored_serial:
+                maximum = max(0, int(getattr(live_actor, 'max_actions', 0) or 0))
+                spent = max(0, int(getattr(live_actor, 'actions_used', 0) or 0))
+                live_remaining = max(0, maximum - min(maximum, spent))
+                live_reaction = not bool(
+                    getattr(live_actor, 'reaction_used', False))
+                if live_serial > stored_serial:
+                    # A genuinely new turn refreshes the per-turn named-action
+                    # ledger. Tracker pips may already have been spent through
+                    # the legacy endpoint, so start from its live availability.
+                    turn.update({
+                        'actions_remaining': live_remaining,
+                        'reaction_available': live_reaction,
+                        'named_actions_used': [],
+                        'turn_number': live_serial,
+                        'choice': getattr(live_actor, 'speed_choice', 'slow'),
+                    })
+                else:
+                    # Same-turn tracker clicks and character actions are two
+                    # projections of one budget. Merge conservatively so an
+                    # older projection can never give an action/reaction back.
+                    try:
+                        stored_remaining = max(0, int(turn.get(
+                            'actions_remaining', live_remaining) or 0))
+                    except (TypeError, ValueError):
+                        stored_remaining = live_remaining
+                    turn['actions_remaining'] = min(
+                        stored_remaining, live_remaining)
+                    turn['reaction_available'] = bool(
+                        turn.get('reaction_available', True)) and live_reaction
+                runtime['turn'] = turn
+        scene = runtime.get('scene') if isinstance(runtime.get('scene'), dict) else {}
+        scene_type = scene.get('type')
+        contribution = None
+        if scene_type in {'conversation', 'endeavor'}:
+            boundary_id = 'lifecycle.action.' + hashlib.sha256(
+                (pid + '\0' + action_id + '\0' + str(request_id)).encode('utf-8')
+            ).hexdigest()
+            runtime, expired = apply_lifecycle_transition(
+                runtime, 'contribution_end', actor_id=pid,
+                boundary_id=boundary_id)
+            contribution = {
+                'trigger': 'contribution_end',
+                'actor_id': pid,
+                'scene_id': scene.get('id'),
+                'scene_type': scene_type,
+                'boundary_id': boundary_id,
+                'expired': [row['id'] for row in expired],
+            }
+        if mistborn_actor:
+            current_profile = resolve_profile(
+                current, homebrew=_cosmere_homebrew_store())
+            timing = None
+            if live_actor is not None:
+                from systems.cosmere.combat import turn_phase
+                timing = {
+                    'scene_type': 'combat',
+                    'phase': turn_phase(
+                        bool(getattr(live_actor, 'is_pc', False)),
+                        getattr(live_actor, 'speed_choice', 'slow')),
+                    'round_number': int(ROUND_NUMBER),
+                }
+            command = compile_mistborn_action(
+                current_profile, current, action_id, data,
+                runtime_state=runtime, timing=timing)
+            runtime, receipt = apply_mistborn_action_transaction(
+                runtime, command, profile=current_profile,
+                request_id=request_id)
+        else:
+            runtime, receipt = apply_action_transaction(
+                runtime, action, request_id=request_id)
+        if contribution is not None:
+            receipt['contribution'] = contribution
+        receipt['revision'] = current['revision'] + 1
+        # The rules mutation and the live-encounter coordination are separate
+        # durable stages.  A crash/failure after this save must leave an
+        # idempotently resumable receipt rather than masquerading as success.
+        receipt['coordination_status'] = 'pending'
+        runtime['action_receipts'][-1] = copy.deepcopy(receipt)
+        current['runtime_state'] = runtime
+        receipt_box['value'] = receipt
+        return current
+
+    with _LIVE_CAMPAIGN_DISPATCH_LOCK:
+        live_actor = next((candidate for candidate in ACTIVE_ENCOUNTER
+                           if getattr(candidate, 'system', 'pf2e') == 'cosmere'
+                           and getattr(candidate, 'is_pc', False)
+                           and getattr(candidate, 'restore_id', None) == pid), None)
+        # Re-read after acquiring the dispatch lock. Another retry may have
+        # completed this receipt while this request waited for coordination.
+        locked = _load_cosmere_pc(pid)
+        locked_prior = action_receipt(
+            (locked or {}).get('runtime_state') or {}, request_id)
+        if locked_prior is not None:
+            if locked_prior.get('action_id') != action_id:
+                raise ActionTransactionError(
+                    'request_id_conflict',
+                    'Action request ID belongs to a different action.', 409)
+            if locked_prior.get('coordination_status', 'complete') == 'complete':
+                return jsonify({'ok': True, 'replayed': True,
+                                'revision': locked.get('revision', 0),
+                                'receipt': locked_prior})
+            updated = locked
+            receipt_box['value'] = locked_prior
+            replayed = True
+        else:
+            try:
+                updated = _mutate_cosmere_pc(pid, expected_revision, transform)
+            except FileNotFoundError:
+                return jsonify({'ok': False, 'error': 'Character not found.',
+                                'code': 'character_not_found'}), 404
+            replayed = False
+        synced = _sync_cosmere_combatant_state(
+            pid, updated['runtime_state'], character_revision=updated['revision'])
+        if synced and not _do_persist_encounter_state_unlocked():
+            raise ActionTransactionError(
+                'encounter_persistence_failed',
+                'The action was saved, but the live encounter could not be durably synchronized.',
+                503)
+        if synced:
+            # This is the existing scoped tracker invalidation. Keep it after
+            # the synchronous autosave so failed durability emits no frame.
+            _do_broadcast_encounter_state()
+        published_receipt = copy.deepcopy(receipt_box['value'])
+        published_receipt['coordination_status'] = 'complete'
+        sse_broadcast('cosmere_player_state', {
+            'pid': pid, 'name': updated.get('name'),
+            'play_state': updated['play_state'], 'revision': updated['revision'],
+            'action_receipt': published_receipt,
+        })
+        completed_receipt = _set_cosmere_action_receipt_coordination(
+            pid, request_id, 'complete')
+    return jsonify({'ok': True, 'replayed': replayed,
+                    'revision': updated['revision'],
+                    'receipt': completed_receipt})
+
+
+@app.route('/api/cosmere/pc/<pid>/export', methods=['GET'])
+def api_cosmere_character_export(pid):
+    from systems.cosmere.transfer import export_character
+    doc = _load_cosmere_pc(pid)
+    if doc is None:
+        return jsonify({'ok': False, 'error': 'Character not found.'}), 404
+    response = jsonify(export_character(doc, homebrew=_cosmere_homebrew_store()))
+    response.headers['Content-Disposition'] = 'attachment; filename="cosmere-character.json"'
+    return response
+
+
+@app.route('/api/cosmere/pc/import', methods=['POST'])
+def api_cosmere_character_import():
+    from systems.cosmere.rules.profiles import normalize_binding
+    from systems.cosmere.transfer import import_character
+    payload = request.get_json(silent=True) or {}
+    pid = uuid.uuid4().hex
+    doc = import_character(payload, actor_id=pid,
+                           expected_binding=normalize_binding(_load_campaign_config()),
+                           homebrew=_cosmere_homebrew_store())
+    doc['owner_user_id'] = None if _is_gm() else session.get('user_id')
+    if ACTIVE_CAMPAIGN_ID:
+        doc['campaign_id'] = ACTIVE_CAMPAIGN_ID
+    _save_cosmere_pc(doc)
+    return jsonify({'ok': True, 'id': pid, 'revision': doc['revision'],
+                    'url': _pc_sheet_url('cosmere', doc['name'], pid)})
+
+
+@app.route('/api/cosmere/migration/characters', methods=['POST'])
+@gm_required
+def api_cosmere_character_migration():
+    from contextlib import ExitStack
+    from pathlib import Path
+    from systems.cosmere.migration import MigrationError, migrate_character_directory
+    from systems.cosmere.rules.profiles import normalize_binding, normalize_theme
+    data = request.get_json(silent=True) or {}
+    if type(data.get('apply', False)) is not bool:
+        return jsonify({'ok': False, 'error': 'apply must be boolean'}), 422
+    paths = []
+    if os.path.isdir(COSMERE_PC_DIR):
+        paths = sorted(str(path) for path in Path(COSMERE_PC_DIR).glob('*.json'))
+    config = _load_campaign_config()
+    try:
+        with _LIVE_CAMPAIGN_DISPATCH_LOCK:
+            with ExitStack() as locks:
+                for path in paths:
+                    locks.enter_context(_path_lock(path))
+                report = migrate_character_directory(
+                    COSMERE_PC_DIR, apply=data.get('apply', False),
+                    binding=normalize_binding(config), cosmere_theme=normalize_theme(config),
+                    run_id=data.get('run_id'),
+                    writer=lambda path, value: _atomic_write_json(
+                        str(path), value, indent=2, fsync=True),
+                    homebrew=_cosmere_homebrew_store())
+    except MigrationError as error:
+        invalid = str(error) == 'invalid migration run ID'
+        return jsonify({'ok': False, 'error': str(error),
+                        'code': 'invalid_migration' if invalid else 'migration_failed'}), \
+            (422 if invalid else 409)
+    return jsonify({'ok': True, **report})
 
 
 @app.route('/cosmere/builder', methods=['GET', 'POST'])
@@ -13067,7 +14929,11 @@ def cosmere_builder():
     _hb_store = _cosmere_homebrew_store()
     if request.method == 'POST':
         data = request.get_json(silent=True) or {}
-        build = _cb.CosmereBuild(data.get('build') or data, homebrew=_hb_store)
+        existing = _load_cosmere_pc(data.get('id')) if data.get('id') else None
+        if existing is not None and not _cosmere_can_act_on(existing):
+            return jsonify({'ok': False, 'error': 'not your character'}), 403
+        build = _cb.CosmereBuild(
+            _cosmere_build_input(data, existing), homebrew=_hb_store)
         issues = build.validate()
         # Rules enforcement: a build that OVER-applies the rules (over a cap or
         # budget, OR a talent without its prerequisite) cannot be saved by a
@@ -13078,9 +14944,6 @@ def cosmere_builder():
         if hard and not (bool(data.get('force')) and _is_gm()):
             return jsonify({'ok': False, 'blocked': True, 'hard': hard, 'issues': issues,
                             'error': 'This build exceeds the rules. Fix the flagged limits to save.'}), 400
-        existing = _load_cosmere_pc(data.get('id')) if data.get('id') else None
-        if existing is not None and not _cosmere_can_act_on(existing):
-            return jsonify({'ok': False, 'error': 'not your character'}), 403
         if existing is not None:
             owner = existing.get('owner_user_id')                  # preserve owner on edit / level-up
         else:
@@ -13109,27 +14972,45 @@ def cosmere_builder():
     if existing is not None and not _cosmere_can_act_on(existing):
         return ('Forbidden — not your character', 403)
     build = (_cb.CosmereBuild((existing or {}).get('build'), homebrew=_hb_store)
-             if existing else _cb.CosmereBuild(homebrew=_hb_store))
+             if existing else _cb.CosmereBuild(_cosmere_build_input({}), homebrew=_hb_store))
     if request.args.get('levelup') and existing:
         build.level += 1     # pre-bump for the leveler flow; the player allocates, then saves
     ctx = _cosmere_builder_context(build, _hb_store)
     return render_template('cosmere_builder.html', pid=(existing or {}).get('id', ''), workflow=workflow, **ctx)
 
 
+@app.route('/api/cosmere/builder/preview', methods=['POST'])
 @app.route('/cosmere/builder/preview', methods=['POST'])
 def cosmere_builder_preview():
     """Live 'character so far' for the walkthrough builder: the ENGINE's derived
     stats + budgets + guided validation for a partial build, so the wizard panel
     never drifts from the rules. Read-only."""
     import systems.cosmere.build as _cb
+    from systems.cosmere.rules.profiles import resolve_profile
     data = request.get_json(silent=True) or {}
-    b = _cb.CosmereBuild(data.get('build') or data, homebrew=_cosmere_homebrew_store())
+    existing = _load_cosmere_pc(data.get('id')) if data.get('id') else None
+    if existing is not None and not _cosmere_can_act_on(existing):
+        return jsonify({'eligible': False, 'blocked_reasons': ['not your character']}), 403
+    build_input = _cosmere_build_input(data, existing)
+    homebrew = _cosmere_homebrew_store()
+    metadata = resolve_profile(build_input, homebrew=homebrew).catalog()
+    if not metadata['eligible']:
+        return jsonify(metadata)
+    b = _cb.CosmereBuild(build_input, homebrew=homebrew)
+    metadata = b.profile.catalog()
+    hard = b.hard_violations()
     return jsonify({
+        'rules_binding': metadata['rules_binding'], 'packages': metadata['packages'],
+        'eligible': not hard, 'blocked_reasons': hard,
+        'automation': metadata['automation'], 'source_references': metadata['source_references'],
         'defenses': b.defenses(),
         'health': b.health_max(), 'focus': b.focus_max(),
         'investiture': b.investiture_max(), 'deflect': b.deflect_value(),
         'derived': b.derived_stats(),          # move / senses / lift / recovery die (Ch.3)
-        'tier': b.tier, 'level': b.level, 'is_radiant': b.is_radiant,
+        'origin_world': getattr(b, 'origin_world', metadata['rules_binding']['default_world']),
+        'era': getattr(b, 'era', None),
+        'tier': b.tier, 'level': b.level,
+        'is_radiant': bool(getattr(b, 'is_radiant', False)),
         'budgets': {
             'attr': [b.attr_points_spent(), b.attr_points_available()],
             'skills': [b.skill_ranks_spent(), b.skill_ranks_available()],
@@ -13137,11 +15018,12 @@ def cosmere_builder_preview():
             'expertises': [len(b.expertises), b.expertises_available()],
         },
         'issues': b.validate(),
-        'hard': b.hard_violations(),          # over-cap / over-budget breaks that block a player's save
+        'hard': hard,                        # over-cap / over-budget breaks that block a player's save
         'is_gm': _is_gm(),                     # the GM's builder may override the block
-        'homebrew': sorted(set(b.homebrew_sources)),
-        'homebrew_dangling': b.homebrew_dangling,
-        'infected': [a.get('name') for a in b.infected_records()],
+        'homebrew': sorted(set(getattr(b, 'homebrew_sources', ()))),
+        'homebrew_dangling': getattr(b, 'homebrew_dangling', []),
+        'infected': [a.get('name') for a in (
+            b.infected_records() if hasattr(b, 'infected_records') else ())],
     })
 
 
@@ -13575,7 +15457,7 @@ def _cosmere_can_act_on(doc):
             and u['id'] in doc.get('editor_user_ids', []))
 
 
-def _sync_cosmere_combatant_state(pid, ps):
+def _sync_cosmere_combatant_state(pid, ps, character_revision=None):
     """Mirror a Cosmere PC's saved play_state onto its LIVE tracker combatant so
     the GM screen reflects player-side changes. The combatant in ACTIVE_ENCOUNTER
     is a separate object from the saved doc (loaded when added to the encounter),
@@ -13588,8 +15470,19 @@ def _sync_cosmere_combatant_state(pid, ps):
         if (getattr(c, 'system', 'pf2e') == 'cosmere'
                 and getattr(c, 'is_pc', False)
                 and getattr(c, 'restore_id', None) == pid):
+            if character_revision is not None:
+                try:
+                    incoming_revision = int(character_revision)
+                    tracker_revision = int(getattr(c, 'character_revision', 0) or 0)
+                except (TypeError, ValueError):
+                    return False
+                if incoming_revision < tracker_revision:
+                    return False
             if 'health' in ps:
                 try: c.current_hp = max(0, int(ps['health']))
+                except (TypeError, ValueError): pass
+            if 'focus' in ps:
+                try: c.current_focus = max(0, int(ps['focus']))
                 except (TypeError, ValueError): pass
             if 'injuries' in ps:
                 try: c.injuries = max(0, int(ps['injuries']))
@@ -13597,8 +15490,49 @@ def _sync_cosmere_combatant_state(pid, ps):
             if 'investiture' in ps:
                 try: c.current_investiture = max(0, int(ps['investiture']))
                 except (TypeError, ValueError): pass
+            _project_cosmere_profile_runtime_to_combatant(c, ps)
             if isinstance(ps.get('conditions'), dict):
                 c.conditions = {k: v for k, v in ps['conditions'].items() if v}
+            if isinstance(ps.get('effects'), list):
+                from systems.cosmere.effects import normalize_effects, project_conditions
+                c.effect_instances = normalize_effects(ps['effects'])
+                c.conditions = project_conditions(c.effect_instances)
+            if isinstance(ps.get('turn'), dict):
+                turn = ps['turn']
+                try:
+                    tracker_serial = int(getattr(c, 'turn_serial', 0) or 0)
+                    incoming_serial = int(turn.get('turn_number', 0) or 0)
+                except (TypeError, ValueError):
+                    tracker_serial, incoming_serial = 0, 0
+                # Tracker clicks and character actions are projections of the
+                # same per-turn budget. A delayed character projection may
+                # spend more, but it must never refund a same-turn pip or
+                # overwrite a newer live turn with an older receipt.
+                if incoming_serial >= tracker_serial:
+                    if turn.get('choice') in ('fast', 'slow'):
+                        c.speed_choice = turn['choice']
+                    try:
+                        remaining = max(0, int(turn.get(
+                            'actions_remaining', c.max_actions) or 0))
+                        incoming_spent = max(0, c.max_actions - min(
+                            c.max_actions, remaining))
+                        if incoming_serial == tracker_serial:
+                            c.actions_used = max(
+                                int(getattr(c, 'actions_used', 0) or 0),
+                                incoming_spent)
+                        else:
+                            c.actions_used = incoming_spent
+                    except (TypeError, ValueError):
+                        pass
+                    if 'reaction_available' in turn:
+                        incoming_used = not bool(turn['reaction_available'])
+                        c.reaction_used = (
+                            bool(getattr(c, 'reaction_used', False)) or incoming_used
+                            if incoming_serial == tracker_serial
+                            else incoming_used)
+                    c.turn_serial = incoming_serial
+            if character_revision is not None:
+                c.character_revision = incoming_revision
             hit = True
     return hit
 
@@ -13625,16 +15559,32 @@ def _sync_cosmere_pc_from_combatant(c):
         d = _load_cosmere_pc(pid)               # re-read inside the lock
         if not d:
             return
-        ps = dict(d.get('play_state') or {})
+        ps = dict(d.get('runtime_state') or d.get('play_state') or {})
         ps['health'] = max(0, int(getattr(c, 'current_hp', ps.get('health', 0)) or 0))
         ps['injuries'] = max(0, int(getattr(c, 'injuries', ps.get('injuries', 0)) or 0))
         conds = getattr(c, 'conditions', None)
-        if isinstance(conds, dict):
-            ps['conditions'] = {k: v for k, v in conds.items() if v}
-        d['play_state'] = ps
+        from systems.cosmere.effects import (normalize_effects, project_conditions,
+                                             reconcile_condition_projection)
+        effects = normalize_effects(getattr(c, 'effect_instances', []) or [])
+        if isinstance(conds, dict) and project_conditions(effects) != {
+                k: v for k, v in conds.items() if v}:
+            effects = reconcile_condition_projection(effects, conds, pid)
+        ps['effects'] = effects
+        ps['conditions'] = project_conditions(effects)
+        mistborn_runtime = getattr(c, 'mistborn_runtime', None)
+        if isinstance(mistborn_runtime, dict):
+            from systems.cosmere.mistborn_runtime import (
+                reconcile_mistborn_effect_mirrors)
+            ps['mistborn'] = copy.deepcopy(mistborn_runtime)
+            ps = reconcile_mistborn_effect_mirrors(ps)
+        d['runtime_state'] = ps
+        d['play_state'] = copy.deepcopy(ps)
         _save_cosmere_pc(d, fsync=False)
+        c.character_revision = int(d.get('revision', 0) or 0)
     try:
-        sse_broadcast('cosmere_player_state', {'pid': pid, 'name': name, 'play_state': ps})
+        sse_broadcast('cosmere_player_state', {
+            'pid': pid, 'name': name, 'play_state': ps,
+            'revision': int(getattr(c, 'character_revision', 0) or 0)})
     except Exception:
         pass
 
@@ -13656,7 +15606,7 @@ def cosmere_pc_state(pid):
     # each other's fields (one sets health, the other injuries -> both must stick).
     with _path_lock(_cosmere_pc_path(pid)):
         doc = _load_cosmere_pc(pid) or doc       # re-read inside the lock for a fresh base
-        ps = dict(doc.get('play_state') or {})
+        ps = dict(doc.get('runtime_state') or doc.get('play_state') or {})
         for k in ('health', 'focus', 'investiture', 'injuries'):
             if k in data:
                 try:
@@ -13698,8 +15648,17 @@ def cosmere_pc_state(pid):
                     continue
             ps['crafted_fabrials'] = cf
         if isinstance(data.get('conditions'), dict):
-            ps['conditions'] = data['conditions']
+            from systems.cosmere.effects import (project_conditions,
+                                                 reconcile_condition_projection)
+            ps['effects'] = reconcile_condition_projection(
+                ps.get('effects') or [], data['conditions'], pid)
+            ps['conditions'] = project_conditions(ps['effects'])
         if isinstance(data.get('goals'), list):            # Ch.8 goals: 3 milestones -> reward
+            existing_goals = {
+                str(goal.get('id')): copy.deepcopy(goal)
+                for goal in (ps.get('goals') or [])
+                if isinstance(goal, dict) and goal.get('id')
+            }
             goals = []
             for g in data['goals'][:12]:
                 if not isinstance(g, dict) or not str(g.get('text', '')).strip():
@@ -13707,21 +15666,39 @@ def cosmere_pc_state(pid):
                 ms = g.get('milestones')
                 ms = [bool(x) for x in ms[:3]] if isinstance(ms, list) else []
                 ms += [False] * (3 - len(ms))
+                goal_id = str(g.get('id', ''))[:40]
                 rw = g.get('reward') if isinstance(g.get('reward'), dict) else {}
-                goals.append({
-                    'id': str(g.get('id', ''))[:40],
+                previous = existing_goals.get(goal_id, {})
+                normalized_goal = copy.deepcopy(previous)
+                normalized_goal.update({
+                    'id': goal_id,
                     'text': str(g.get('text'))[:240],
                     'milestones': ms[:3],
-                    'concluded': bool(g.get('concluded')),
+                    'completed': (True if previous.get('consumed_by') else
+                                  bool(g.get('completed', g.get('concluded')))),
                     'reward': {'category': str(rw.get('category', ''))[:40],
                                'text': str(rw.get('text', ''))[:240]},
                 })
+                # Compatibility clients still paint `concluded`; mechanical
+                # advancement reads canonical `completed` and `rewards`.
+                normalized_goal['concluded'] = normalized_goal['completed']
+                for server_key in ('consumed_by', 'rewards', 'grant', 'grants'):
+                    if server_key in previous:
+                        normalized_goal[server_key] = copy.deepcopy(previous[server_key])
+                goals.append(normalized_goal)
+            submitted_ids = {goal.get('id') for goal in goals}
+            # A legacy sheet may omit a completed/consumed goal, but it cannot
+            # delete the server ledger and make that reward available again.
+            goals.extend(copy.deepcopy(goal) for goal_id, goal in existing_goals.items()
+                         if goal_id not in submitted_ids and goal.get('consumed_by'))
             ps['goals'] = goals
+        doc['runtime_state'] = ps
         doc['play_state'] = ps
         _save_cosmere_pc(doc, fsync=False)
     # In-memory combatant mirror + SSE happen AFTER releasing the file lock (they
     # touch ACTIVE_ENCOUNTER, not the file). The tracker still repaints instantly.
-    if _sync_cosmere_combatant_state(pid, ps):
+    if _sync_cosmere_combatant_state(
+            pid, ps, character_revision=doc.get('revision')):
         _broadcast_encounter_state()
     try:
         sse_broadcast('cosmere_player_state', {'pid': pid, 'name': doc.get('name'), 'play_state': ps})
@@ -13740,9 +15717,15 @@ def _cosmere_apply_rest(doc, mode):
     import systems.cosmere.build as _cb
     import systems.cosmere.combat as _cc
     b = _cb.CosmereBuild(doc.get('build') or {}, homebrew=_cosmere_homebrew_store())
-    ps = dict(doc.get('play_state') or {})
+    ps = dict(doc.get('runtime_state') or doc.get('play_state') or {})
     hmax, fmax = b.health_max(), b.focus_max()
-    conds = dict(ps.get('conditions') or {})
+    from systems.cosmere.effects import (effects_from_conditions, normalize_effects,
+                                         project_conditions,
+                                         reconcile_condition_projection)
+    effects = normalize_effects(ps.get('effects') or [])
+    if not effects and ps.get('conditions'):
+        effects = effects_from_conditions(ps.get('conditions') or {}, doc.get('id'))
+    conds = project_conditions(effects)
     if mode == 'long':
         ps['health'] = hmax
         ps['focus'] = fmax
@@ -13759,12 +15742,14 @@ def _cosmere_apply_rest(doc, mode):
         for k in list(conds):
             if k not in ('afflicted', 'exhausted'):
                 conds.pop(k, None)
-        ps['conditions'] = conds
+        effects = reconcile_condition_projection(effects, conds, doc.get('id'))
     else:  # short rest
         wil = int((b.eff_attributes() or {}).get('wil', 0) or 0)
         heal = _cc.roll_recovery(wil)
         ps['health'] = min(hmax, int(ps.get('health', hmax) or 0) + heal)
         ps['focus'] = fmax
+    ps['effects'] = effects
+    ps['conditions'] = project_conditions(effects)
     return ps
 
 
@@ -13792,9 +15777,11 @@ def cosmere_rest():
         with _path_lock(_cosmere_pc_path(pidd)):
             doc = _load_cosmere_pc(pidd) or d
             ps = _cosmere_apply_rest(doc, mode)
+            doc['runtime_state'] = ps
             doc['play_state'] = ps
             _save_cosmere_pc(doc, fsync=False)
-        if _sync_cosmere_combatant_state(pidd, ps):
+        if _sync_cosmere_combatant_state(
+                pidd, ps, character_revision=doc.get('revision')):
             _broadcast_encounter_state()
         try:
             sse_broadcast('cosmere_player_state', {'pid': pidd, 'name': doc.get('name'), 'play_state': ps})
@@ -13823,9 +15810,11 @@ def cosmere_pc_rest(pid):
     with _path_lock(_cosmere_pc_path(pid)):
         doc = _load_cosmere_pc(pid) or doc
         ps = _cosmere_apply_rest(doc, mode)
+        doc['runtime_state'] = ps
         doc['play_state'] = ps
         _save_cosmere_pc(doc, fsync=False)
-    if _sync_cosmere_combatant_state(pid, ps):
+    if _sync_cosmere_combatant_state(
+            pid, ps, character_revision=doc.get('revision')):
         _broadcast_encounter_state()
     try:
         sse_broadcast('cosmere_player_state', {'pid': pid, 'name': doc.get('name'), 'play_state': ps})
@@ -13948,8 +15937,12 @@ def api_cosmere_my_speed():
     choice = (data.get('choice') or '').lower()
     if choice not in ('fast', 'slow'):
         return jsonify({'ok': False, 'error': 'choice must be fast or slow'}), 400
-    c.speed_choice = choice
-    c.max_actions = 2 if choice == 'fast' else 3
+    from systems.cosmere.combat import turn_permissions
+    permissions = turn_permissions(choice, getattr(c, 'conditions', {}) or {})
+    if choice == 'fast' and permissions['choice'] != 'fast':
+        return jsonify({'ok': False, 'error': 'current conditions require a slow turn'}), 409
+    c.speed_choice = permissions['choice']
+    c.max_actions = permissions['actions']
     _sort_encounter()
     _persist_encounter_state()
     _broadcast_encounter_state()
@@ -13976,7 +15969,7 @@ def api_cosmere_my_initiative():
     return jsonify({'ok': True, 'initiative': c.initiative, 'detail': f'd20({d20}) + {spd}'})
 
 
-def _apply_cosmere_condition_change(instance_id, condition, action='toggle'):
+def _apply_cosmere_condition_change(instance_id, condition, action='toggle', effect_data=None):
     """Core Cosmere condition mutation shared by the tracker route below and
     the round-events payload engine (feature 7) -- Cosmere conditions are
     boolean on/off (not PF2e valued stacks) and carry their own PC
@@ -13992,35 +15985,108 @@ def _apply_cosmere_condition_change(instance_id, condition, action='toggle'):
     if target is None:
         return None
     _workflow_assert_actor_mutable(target)
+    from systems.cosmere.effects import (apply_effect, condition_effect,
+                                         effects_from_conditions,
+                                         normalize_effects, project_conditions,
+                                         reconcile_condition_projection)
     if not isinstance(getattr(target, 'conditions', None), dict):
         target.conditions = {}
+    effects = normalize_effects(getattr(target, 'effect_instances', []) or [])
+    if not effects and target.conditions:
+        effects = effects_from_conditions(target.conditions, target.instance_id)
+    elif effects:
+        effects = reconcile_condition_projection(
+            effects, target.conditions, target.instance_id)
+    matches = [row for row in effects
+               if (row.get('parameters') or {}).get('condition') == cond]
+    effect_data = effect_data if isinstance(effect_data, dict) else {}
     if cond in systems.cosmere._VALUED:
         # Exhausted / Afflicted / Enhanced carry an integer magnitude and
         # stack cumulatively (Ch.9) -- 'add' must INCREMENT, not overwrite an
         # injury-set magnitude with boolean True (which silently reduced it).
-        _raw = target.conditions.get(cond, 0)
-        try:
-            cur_mag = int(_raw)
-        except (TypeError, ValueError):
-            cur_mag = 1 if _raw else 0
         if action == 'add':
-            new_mag = cur_mag + 1
+            duration = str(effect_data.get('duration_unit') or
+                           ('turn' if cond == 'surprised' else 'permanent'))
+            remaining = effect_data.get('remaining_duration')
+            if duration == 'permanent':
+                remaining = None
+            elif type(remaining) is not int or remaining < 0:
+                remaining = 1
+            trigger = effect_data.get('trigger')
+            expiry_state = dict(effect_data.get('expiry_state') or {})
+            if duration == 'round' and not trigger:
+                from systems.cosmere.combat import turn_phase as _cosmere_turn_phase
+                trigger = 'phase_start'
+                expiry_state.setdefault(
+                    'phase', _cosmere_turn_phase(
+                        bool(getattr(target, 'is_pc', False)),
+                        getattr(target, 'speed_choice', 'slow')))
+                expiry_state.setdefault('not_before_round', ROUND_NUMBER + 1)
+            elif duration == 'turn' and not trigger:
+                trigger = 'turn_end'
+                expiry_state.setdefault('actor_id', target.instance_id)
+                expiry_state.setdefault(
+                    'not_before_turn', int(getattr(target, 'turn_serial', 0) or 0) + 1)
+            incoming = condition_effect(
+                target.instance_id, cond,
+                magnitude=max(1, int(effect_data.get('magnitude', 1) or 1)),
+                selected_attribute=effect_data.get('selected_attribute'),
+                source_id=effect_data.get('source_id'),
+                duration_unit=duration, remaining_duration=remaining,
+                trigger=str(trigger or 'manual'),
+                refresh_policy=str(effect_data.get('refresh_policy') or 'independent'),
+                expiry_state=expiry_state,
+                instance_id=uuid.uuid4().hex)
+            effects = apply_effect(effects, incoming)
         elif action == 'remove':
-            new_mag = 0
+            effects = [row for row in effects if row not in matches]
         else:  # toggle
-            new_mag = 0 if cur_mag > 0 else 1
-        if new_mag > 0:
-            target.conditions[cond] = new_mag
-        else:
-            target.conditions.pop(cond, None)
-        on = new_mag > 0
+            if matches:
+                effects = [row for row in effects if row not in matches]
+            else:
+                effects = apply_effect(effects, condition_effect(
+                    target.instance_id, cond, instance_id=uuid.uuid4().hex))
+        on = any((row.get('parameters') or {}).get('condition') == cond
+                 for row in effects)
     else:
-        on = bool(target.conditions.get(cond))
+        on = bool(matches)
         on = True if action == 'add' else (False if action == 'remove' else not on)
-        if on:
-            target.conditions[cond] = True
+        if on and not matches:
+            duration = str(effect_data.get('duration_unit') or
+                           ('turn' if cond == 'surprised' else 'permanent'))
+            remaining = effect_data.get('remaining_duration')
+            if duration == 'permanent':
+                remaining = None
+            elif type(remaining) is not int or remaining < 0:
+                remaining = 1
+            trigger = effect_data.get('trigger')
+            expiry_state = dict(effect_data.get('expiry_state') or {})
+            if duration == 'round' and not trigger:
+                from systems.cosmere.combat import turn_phase as _cosmere_turn_phase
+                trigger = 'phase_start'
+                expiry_state.setdefault(
+                    'phase', _cosmere_turn_phase(
+                        bool(getattr(target, 'is_pc', False)),
+                        getattr(target, 'speed_choice', 'slow')))
+                expiry_state.setdefault('not_before_round', ROUND_NUMBER + 1)
+            elif duration == 'turn' and not trigger:
+                trigger = 'turn_end'
+                expiry_state.setdefault('actor_id', target.instance_id)
+                expiry_state.setdefault(
+                    'not_before_turn', int(getattr(target, 'turn_serial', 0) or 0) + 1)
+            effects = apply_effect(effects, condition_effect(
+                target.instance_id, cond, instance_id=uuid.uuid4().hex,
+                selected_attribute=effect_data.get('selected_attribute'),
+                source_id=effect_data.get('source_id'),
+                duration_unit=duration, remaining_duration=remaining,
+                trigger=str(trigger or 'manual'),
+                refresh_policy=str(effect_data.get('refresh_policy') or 'replace'),
+                expiry_state=expiry_state))
         else:
-            target.conditions.pop(cond, None)
+            if not on:
+                effects = [row for row in effects if row not in matches]
+    target.effect_instances = effects
+    target.conditions = project_conditions(effects)
     _combat_log(f"{target.name} {'gained' if on else 'lost'} {cond.capitalize()}", 'condition')
     if on:
         try: _bump_campaign_stat('conditions_applied')
@@ -14030,10 +16096,13 @@ def _apply_cosmere_condition_change(instance_id, condition, action='toggle'):
         pid = getattr(target, 'restore_id', None)
         d = _load_cosmere_pc(pid) if pid else None
         if d:
-            ps = dict(d.get('play_state') or {})
+            ps = dict(d.get('runtime_state') or d.get('play_state') or {})
+            ps['effects'] = copy.deepcopy(target.effect_instances)
             ps['conditions'] = dict(target.conditions)
+            d['runtime_state'] = ps
             d['play_state'] = ps
             _save_cosmere_pc(d, fsync=False)
+            target.character_revision = int(d.get('revision', 0) or 0)
             try:
                 sse_broadcast('cosmere_player_state',
                               {'pid': d.get('id'), 'name': d.get('name'), 'play_state': ps})
@@ -14058,7 +16127,7 @@ def api_cosmere_combatant_condition(instance_id):
     action = (data.get('action') or 'toggle').lower()
     if cond not in systems.cosmere.CONDITION_INFO:
         return jsonify({'ok': False, 'error': 'unknown condition'}), 400
-    target = _apply_cosmere_condition_change(instance_id, cond, action)
+    target = _apply_cosmere_condition_change(instance_id, cond, action, data.get('effect'))
     if target is None:
         return jsonify({'ok': False, 'error': 'not a Cosmere combatant'}), 404
     if _is_ajax():
@@ -14137,6 +16206,8 @@ def add_combatant():
         if new_c is not None:
             new_c.instance_id = str(uuid.uuid4())
             ACTIVE_ENCOUNTER.append(new_c)
+    if new_c is not None and len(ACTIVE_ENCOUNTER) == 1:
+        COSMERE_PHASE_BOUNDARIES.clear()
     # Mid-fight reinforcement: if an initiative order is already established (some
     # combatant has a non-zero initiative), roll the newcomer in and re-sort so it
     # takes its place instead of sitting at init 0 at the bottom. Non-PCs only —
@@ -14152,6 +16223,8 @@ def add_combatant():
 
 @app.route('/api/add_party', methods=['POST'])
 def add_party():
+    if not ACTIVE_ENCOUNTER:
+        COSMERE_PHASE_BOUNDARIES.clear()
     for pc_name, pc_data in PARTY_LIBRARY.items():
         new_c = copy.deepcopy(pc_data)
         new_c.instance_id = str(uuid.uuid4())
@@ -14164,6 +16237,8 @@ def add_party():
 @app.route('/api/cosmere/add_party', methods=['POST'])
 def add_cosmere_party():
     """Add every Cosmere PC in the active campaign to the encounter."""
+    if not ACTIVE_ENCOUNTER:
+        COSMERE_PHASE_BOUNDARIES.clear()
     for d in _list_cosmere_pcs():
         new_c = _cosmere_combatant(d.get('id'))
         if new_c is not None:
@@ -14359,18 +16434,188 @@ def set_combatant_tactics(instance_id):
     return jsonify({'success': True, 'instance_id': instance_id, 'tactics': tactics_text})
 
 
+_COSMERE_LIFECYCLE_CAMPAIGN_UNSET = object()
+
+
+def _cosmere_lifecycle_journal_path(
+        campaign_id=_COSMERE_LIFECYCLE_CAMPAIGN_UNSET):
+    if campaign_id is _COSMERE_LIFECYCLE_CAMPAIGN_UNSET:
+        campaign_id = _loaded_campaign_id()
+    return _storage.cosmere_lifecycle_transition_file(campaign_id)
+
+
+def _load_cosmere_lifecycle_transition(
+        campaign_id=_COSMERE_LIFECYCLE_CAMPAIGN_UNSET):
+    """Load the campaign-scoped pending lifecycle boundary, if any."""
+    path = _cosmere_lifecycle_journal_path(campaign_id)
+    if not os.path.isfile(path):
+        return None
+    try:
+        with open(path, encoding='utf-8') as handle:
+            pending = json.load(handle)
+    except (OSError, ValueError) as exc:
+        raise _CosmereRulesValidationError(
+            'The pending Cosmere lifecycle transition is unreadable.') from exc
+    if not isinstance(pending, dict) or not pending.get('boundary_id'):
+        raise _CosmereRulesValidationError(
+            'The pending Cosmere lifecycle transition is invalid.')
+    return pending
+
+
+def _begin_cosmere_lifecycle_transition(
+        kind, *, triggers, source_scope_id=None, target_scope_id=None,
+        campaign_id=None, actor_names=()):
+    """Create or resume one durable lifecycle intent.
+
+    This journal is deliberately separate from both the public scene index and
+    the encounter autosave. It is written before any character CAS so a failed
+    character save or stale autosave restoration can resume the same stable
+    boundary instead of inventing a second one.
+    """
+    _assert_no_cosmere_narrative_transaction_for_lifecycle()
+    pending = _load_cosmere_lifecycle_transition(campaign_id)
+    if pending is not None:
+        same_transition = (
+            pending.get('kind') == kind
+            and pending.get('campaign_id') == campaign_id
+            and pending.get('source_scope_id') == source_scope_id
+            and pending.get('target_scope_id') == target_scope_id
+            and list(pending.get('triggers') or []) == list(triggers))
+        if not same_transition:
+            raise _CosmereActionTransactionError(
+                'lifecycle_transition_pending',
+                'Another Cosmere lifecycle transition must finish first.', 409)
+        return pending
+    pending = {
+        'schema_version': 1,
+        'boundary_id': f"lifecycle.b-{uuid.uuid4().hex}",
+        'kind': kind,
+        'campaign_id': campaign_id,
+        'source_scope_id': source_scope_id,
+        'target_scope_id': target_scope_id,
+        'triggers': list(triggers),
+        'actor_names': [str(name) for name in actor_names if name],
+        'created_at': int(time.time()),
+        'status': 'pending',
+    }
+    journal_path = _cosmere_lifecycle_journal_path(campaign_id)
+    os.makedirs(os.path.dirname(journal_path), mode=0o700, exist_ok=True)
+    _atomic_write_json(journal_path, pending, indent=2, fsync=True)
+    return pending
+
+
+def _complete_cosmere_lifecycle_transition(
+        boundary_id, *, campaign_id=_COSMERE_LIFECYCLE_CAMPAIGN_UNSET):
+    """Remove exactly the transition whose durable/public tail completed."""
+    pending = _load_cosmere_lifecycle_transition(campaign_id)
+    if pending is None:
+        return
+    if pending.get('boundary_id') != boundary_id:
+        raise _CosmereRulesValidationError(
+            'The Cosmere lifecycle transition identity changed unexpectedly.')
+    os.remove(_cosmere_lifecycle_journal_path(campaign_id))
+
+
+def _transition_cosmere_lifecycle(
+        *triggers, next_scope_id=None, boundary_id=None,
+        actor_ids=None, source_scope_id=None):
+    """Persist authoritative Cosmere scene/encounter boundary events.
+
+    The caller owns ``_LIVE_CAMPAIGN_DISPATCH_LOCK`` and performs the one
+    synchronous encounter autosave before publishing any returned documents.
+    Repeating an already-applied boundary is idempotent and does not advance a
+    character revision again.
+    """
+    from systems.cosmere.actions import apply_lifecycle_transition
+
+    projected = []
+    selected = set(actor_ids) if actor_ids is not None else None
+    for document in _list_cosmere_pcs():
+        if selected is not None and document.get('id') not in selected:
+            continue
+        runtime = copy.deepcopy(document.get('runtime_state') or {})
+        if (source_scope_id is not None
+                and ((runtime.get('scene') or {}).get('id') != source_scope_id)):
+            continue
+        transitioned = runtime
+        for trigger in triggers:
+            trigger_boundary = (
+                f'{boundary_id}:{trigger}' if boundary_id is not None else None)
+            if trigger == 'scene_start':
+                transitioned = _apply_cosmere_scene_start(
+                    document, transitioned, scene_id=next_scope_id,
+                    boundary_id=trigger_boundary)
+            else:
+                transitioned, _expired = apply_lifecycle_transition(
+                    transitioned, trigger, next_scope_id=next_scope_id,
+                    boundary_id=trigger_boundary)
+        if transitioned != runtime:
+            def transform(current, state=copy.deepcopy(transitioned)):
+                current['runtime_state'] = copy.deepcopy(state)
+                return current
+
+            updated = _mutate_cosmere_pc(
+                document['id'], document.get('revision', 0), transform)
+        else:
+            updated = document
+        _sync_cosmere_combatant_state(
+            updated['id'], updated.get('runtime_state') or {},
+            character_revision=updated.get('revision', 0))
+        projected.append(updated)
+    return projected
+
+
 @app.route('/api/clear_encounter', methods=['POST'])
 def clear_encounter():
     global TURN_INDEX, ROUND_NUMBER, ENCOUNTER_NOTES, SESSION_TIMER_START, ROUND_EVENTS
-    if ACTIVE_ENCOUNTER:
-        names = [c.name for c in ACTIVE_ENCOUNTER]
-        _combat_log(f"Encounter ended ({', '.join(names)})", 'system')
-    ACTIVE_ENCOUNTER.clear(); TURN_INDEX = 0; ROUND_NUMBER = 1; ENCOUNTER_NOTES = ''
-    SESSION_TIMER_START = None
-    ROUND_EVENTS = []
-    _RECENT_DEFEATED[:] = []   # drop pending Undos so a stale toast can't resurrect into the ended encounter
-    _persist_encounter_state()
-    _broadcast_encounter_state()
+    with _LIVE_CAMPAIGN_DISPATCH_LOCK:
+        campaign_id = _loaded_campaign_id()
+        if _active_system() == 'cosmere':
+            _assert_no_cosmere_narrative_transaction_for_lifecycle()
+        live_names = [c.name for c in ACTIVE_ENCOUNTER]
+        pending = _load_cosmere_lifecycle_transition(campaign_id)
+        if pending is not None and (
+                pending.get('kind') != 'encounter_clear'
+                or pending.get('campaign_id') != campaign_id):
+            raise _CosmereActionTransactionError(
+                'lifecycle_transition_pending',
+                'Another Cosmere lifecycle transition must finish first.', 409)
+        if pending is None and ACTIVE_ENCOUNTER:
+            pending = _begin_cosmere_lifecycle_transition(
+                'encounter_clear', triggers=('scene_end', 'encounter_end'),
+                source_scope_id='active-encounter', target_scope_id=None,
+                campaign_id=campaign_id, actor_names=live_names)
+        names = list((pending or {}).get('actor_names') or live_names)
+        if pending is not None:
+            updated_documents = _transition_cosmere_lifecycle(
+                'scene_end', 'encounter_end', next_scope_id=None,
+                boundary_id=pending['boundary_id'])
+        else:
+            updated_documents = _list_cosmere_pcs()
+        ACTIVE_ENCOUNTER.clear()
+        TURN_INDEX = 0
+        ROUND_NUMBER = 1
+        ENCOUNTER_NOTES = ''
+        SESSION_TIMER_START = None
+        ROUND_EVENTS = []
+        COSMERE_PHASE_BOUNDARIES.clear()
+        # Drop pending Undos so a stale toast cannot resurrect into the ended
+        # encounter, but publish nothing until the empty encounter is durable.
+        _RECENT_DEFEATED[:] = []
+        if not _do_persist_encounter_state_unlocked():
+            return jsonify({
+                'success': False,
+                'error': 'The encounter could not be durably cleared.',
+                'code': 'encounter_persistence_failed',
+            }), 503
+        if names:
+            _combat_log(f"Encounter ended ({', '.join(names)})", 'system')
+        _do_broadcast_encounter_state()
+        for document in updated_documents:
+            _cosmere_advancement_broadcast(document)
+        if pending is not None:
+            _complete_cosmere_lifecycle_transition(
+                pending['boundary_id'], campaign_id=campaign_id)
     if _is_ajax(): return _tracker_json_response()
     return redirect(url_for('tracker_view'))
 
@@ -16005,23 +18250,64 @@ def _apply_cosmere_injury_effect(c, effect):
     valued condition); slowed/disoriented/surprised set the boolean. 'Can only
     use one hand' has no condition mapping -- it lives in the injury_log only."""
     e = (effect or '').lower()
+    from systems.cosmere.effects import (apply_effect, condition_effect,
+                                         effects_from_conditions,
+                                         normalize_effects, project_conditions)
     conds = c.conditions
+    effects = normalize_effects(getattr(c, 'effect_instances', []) or [])
+    if not effects and isinstance(conds, dict) and conds:
+        effects = effects_from_conditions(conds, c.instance_id)
+    condition = None
+    magnitude = 1
     if 'exhausted' in e:
         import re as _re
         m = _re.search(r'(\d+)', e)
-        mag = int(m.group(1)) if m else 1
-        cur = conds.get('exhausted', 0)
-        cur = int(cur) if (isinstance(cur, (int, float)) and not isinstance(cur, bool)) else (1 if cur else 0)
-        conds['exhausted'] = cur + mag
+        magnitude = int(m.group(1)) if m else 1
+        condition = 'exhausted'
     elif 'slowed' in e:
-        conds['slowed'] = True
+        condition = 'slowed'
     elif 'disoriented' in e:
-        conds['disoriented'] = True
+        condition = 'disoriented'
     elif 'surprised' in e:
-        conds['surprised'] = True
+        condition = 'surprised'
+    if condition:
+        duration_kwargs = {}
+        if condition == 'surprised':
+            duration_kwargs = {
+                'duration_unit': 'turn', 'remaining_duration': 1,
+                'trigger': 'turn_end',
+                'expiry_state': {
+                    'actor_id': c.instance_id,
+                    'not_before_turn': int(getattr(c, 'turn_serial', 0) or 0) + 1,
+                },
+            }
+        effects = apply_effect(effects, condition_effect(
+            c.instance_id, condition, magnitude=magnitude,
+            source_id='injury.effect.' + condition,
+            instance_id=uuid.uuid4().hex,
+            refresh_policy='independent' if condition == 'exhausted' else 'replace',
+            **duration_kwargs))
+        c.effect_instances = effects
+        c.conditions = project_conditions(effects)
 
 
-def _cosmere_adjust_hp(c, amount, action, damage_type):
+def _apply_cosmere_runtime_condition(c, condition, source_id):
+    """Add one canonical condition effect and refresh the legacy projection."""
+    from systems.cosmere.effects import (apply_effect, condition_effect,
+                                         normalize_effects, project_conditions,
+                                         reconcile_condition_projection)
+    effects = normalize_effects(getattr(c, 'effect_instances', []) or [])
+    if isinstance(getattr(c, 'conditions', None), dict):
+        effects = reconcile_condition_projection(
+            effects, c.conditions, c.instance_id)
+    effects = apply_effect(effects, condition_effect(
+        c.instance_id, condition, source_id=source_id,
+        instance_id=uuid.uuid4().hex, refresh_policy='replace'))
+    c.effect_instances = effects
+    c.conditions = project_conditions(effects)
+
+
+def _cosmere_adjust_hp(c, amount, action, damage_type, *, nonlethal=False):
     """Damage/heal a Cosmere combatant via the Cosmere combat engine: Deflect
     reduces impact/keen/energy only, and reaching 0 health triggers an injury
     roll (the death-spiral, Ch.9) instead of the PF2e dying/wounded model."""
@@ -16032,7 +18318,19 @@ def _cosmere_adjust_hp(c, amount, action, damage_type):
     if action == 'heal':
         c.current_hp = min(int(getattr(c, 'max_hp', c.current_hp) or c.current_hp), c.current_hp + amount)
         if c.current_hp > 0:
-            c.conditions.pop('unconscious', None)
+            from systems.cosmere.effects import (effects_from_conditions,
+                                                  normalize_effects,
+                                                  project_conditions)
+            effects = normalize_effects(
+                getattr(c, 'effect_instances', []) or [])
+            if not effects and c.conditions:
+                effects = effects_from_conditions(c.conditions, c.instance_id)
+            effects = [row for row in effects
+                       if (row.get('parameters') or {}).get('condition') != 'unconscious']
+            c.effect_instances = effects
+            c.conditions = project_conditions(effects)
+            c.defeated = False
+            c.nonlethal_defeat = False
         try:
             _bump_campaign_stat('total_healing', amount)
         except Exception:
@@ -16048,7 +18346,15 @@ def _cosmere_adjust_hp(c, amount, action, damage_type):
     if dtype not in _cc.DAMAGE_TYPES:
         dtype = 'impact'
     at_zero_before = c.current_hp <= 0
-    new_hp, taken, hit_zero = _cc.apply_damage(c.current_hp, amount, dtype, deflect)
+    configured_types = (getattr(c, 'deflect', {}) or {}).get('types')
+    if isinstance(configured_types, dict) and configured_types:
+        deflect_types = {kind for kind, enabled in configured_types.items() if enabled}
+    elif isinstance(configured_types, (list, tuple, set)) and configured_types:
+        deflect_types = set(configured_types)
+    else:
+        deflect_types = None
+    new_hp, taken, hit_zero = _cc.apply_damage(
+        c.current_hp, amount, dtype, deflect, deflect_types=deflect_types)
     c.current_hp = new_hp
     try:
         _bump_campaign_stat('total_damage_dealt', taken)
@@ -16057,12 +18363,30 @@ def _cosmere_adjust_hp(c, amount, action, damage_type):
     note = f"{c.name} takes {taken} {dtype} damage"
     if deflect and dtype in _cc.DEFLECTABLE:
         note += f" (Deflect {deflect})"
-    # An injury occurs on being reduced to 0, or on taking damage while at 0 (Ch.9).
+    # An injury occurs on being reduced to 0, or on taking damage while at 0.
+    # PCs use the injury spiral. NPCs do so only when the GM explicitly marks
+    # them significant; ordinary Rivals and Bosses are defeated at zero, and a
+    # Minion is defeated whenever it suffers an injury.
     if hit_zero or (at_zero_before and taken > 0):
+        use_spiral = bool(getattr(c, 'is_pc', False) or
+                          getattr(c, 'significant_npc_injuries', False))
+        outcome = _cc.defeat_outcome(
+            getattr(c, 'role', 'rival'), c.current_hp, suffered_injury=True,
+            significant_npc_injuries=use_spiral, nonlethal=nonlethal)
+        use_spiral = outcome['use_injury_spiral']
+        if not use_spiral:
+            c.defeated = outcome['defeated']
+            c.nonlethal_defeat = bool(nonlethal)
+            if outcome['unconscious'] or nonlethal:
+                _apply_cosmere_runtime_condition(
+                    c, 'unconscious', 'defeat.nonlethal')
+            note += ' — defeated' + (' nonlethally' if nonlethal else '')
+            _combat_log(note, 'critical')
+            return
         inj = int(getattr(c, 'injuries', 0) or 0)
         roll = _cc.roll_injury(deflect=deflect, existing_injuries=inj)
         c.injuries = inj + 1
-        c.conditions['unconscious'] = True
+        _apply_cosmere_runtime_condition(c, 'unconscious', 'injury.unconscious')
         # Persist the STRUCTURED injury (severity/duration/effect) so the GM can
         # track the death spiral over a long fight, not just an integer count.
         if not isinstance(getattr(c, 'injury_log', None), list):
@@ -16236,7 +18560,7 @@ def _workflow_preflight_turn(*, delay_id=None):
         _workflow_preflight_effect_expiry(projected_round)
 
 
-def _apply_hp_delta(instance_id, amount, action, damage_type='untyped'):
+def _apply_hp_delta(instance_id, amount, action, damage_type='untyped', *, nonlethal=False):
     """Core HP-mutation logic shared by the `/api/adjust_hp` route and the
     round-events payload engine (feature 7): PC temp-HP/dying math, Cosmere
     Deflect routing, W/R/I resist/weakness, sheet mirroring, combat-log, and
@@ -16255,7 +18579,8 @@ def _apply_hp_delta(instance_id, amount, action, damage_type='untyped'):
                 # Cosmere combatants use the Cosmere combat engine (Deflect +
                 # injuries), not the PF2e W/R/I + dying/wounded path below.
                 if getattr(c, 'system', 'pf2e') == 'cosmere':
-                    _cosmere_adjust_hp(c, amount, action, damage_type)
+                    _cosmere_adjust_hp(c, amount, action, damage_type,
+                                       nonlethal=nonlethal)
                     _persist_encounter_state()
                     _broadcast_encounter_state()
                     # Reflect the new HP/injuries onto the player's own Cosmere
@@ -16403,9 +18728,12 @@ def _maybe_auto_remove_defeated(instance_id, old_hp, action):
     if idx is None:
         return None
     c = ACTIVE_ENCOUNTER[idx]
-    # PF2e only: a Cosmere adversary at 0 HP enters the unconscious/injury
-    # death-spiral (Ch.9) and must STAY on the tracker to be managed, not vanish.
-    if getattr(c, 'system', 'pf2e') != 'pf2e' or getattr(c, 'is_pc', False) or c.current_hp > 0:
+    if getattr(c, 'is_pc', False) or c.current_hp > 0:
+        return None
+    if (getattr(c, 'system', 'pf2e') == 'cosmere'
+            and not bool(getattr(c, 'defeated', False))):
+        # Explicit significant NPCs remain for injury management; ordinary
+        # adversaries, Minions, and Bosses have ``defeated`` set at zero.
         return None
     ACTIVE_ENCOUNTER.pop(idx)
     if not ACTIVE_ENCOUNTER:
@@ -16438,7 +18766,10 @@ def adjust_hp(instance_id):
         amount = None
     action = request.form.get('action')
     damage_type = request.form.get('damage_type', 'untyped').strip()
-    old_hp = _apply_hp_delta(instance_id, amount, action, damage_type) if amount is not None else None
+    nonlethal = str(request.form.get('nonlethal', '')).lower() in ('1', 'true', 'yes', 'on')
+    old_hp = _apply_hp_delta(
+        instance_id, amount, action, damage_type, nonlethal=nonlethal
+    ) if amount is not None else None
     # Capture the post-damage HP BEFORE any auto-removal so the toast can still
     # report the net that landed even for the killing blow.
     _c = _find_active_combatant(instance_id)
@@ -17608,8 +19939,12 @@ def cosmere_speed_choice(instance_id):
         return jsonify({'error': 'choice must be fast or slow'}), 400
     for c in ACTIVE_ENCOUNTER:
         if c.instance_id == instance_id and getattr(c, 'system', 'pf2e') == 'cosmere':
-            c.speed_choice = choice
-            c.max_actions = 2 if choice == 'fast' else 3
+            from systems.cosmere.combat import turn_permissions
+            permissions = turn_permissions(choice, getattr(c, 'conditions', {}) or {})
+            if choice == 'fast' and permissions['choice'] != 'fast':
+                return jsonify({'error': 'current conditions require a slow turn'}), 409
+            c.speed_choice = permissions['choice']
+            c.max_actions = permissions['actions']
             _sort_encounter()
             _persist_encounter_state(); _broadcast_encounter_state()
             break
@@ -17648,7 +19983,7 @@ def api_cosmere_world():
     Pure theming (re-skins the whole Cosmere side); the ruleset is unchanged."""
     w = (request.get_json(silent=True) or request.form or {}).get('world')
     w = 'mistborn' if w == 'mistborn' else 'stormlight'
-    _save_campaign_config({'cosmere_world': w})
+    _save_campaign_config({'cosmere_theme': w, 'cosmere_world': w})
     return jsonify({'ok': True, 'world': w})
 
 @app.route('/api/reorder_initiative', methods=['POST'])
@@ -17678,6 +20013,74 @@ def reorder_initiative():
     _persist_encounter_state()
     return jsonify({"success": True})
 
+def _dispatch_cosmere_phase_start(phase, round_number, include=None):
+    """Send one phase boundary to every live Cosmere actor exactly once."""
+    from systems.cosmere.combat import TURN_PHASES
+
+    if phase not in TURN_PHASES:
+        return []
+    key = f"{int(round_number)}:{phase}"
+    if key in COSMERE_PHASE_BOUNDARIES:
+        return []
+    actors = list(ACTIVE_ENCOUNTER)
+    if include is not None and all(candidate is not include for candidate in actors):
+        actors.append(include)
+    expired = []
+    seen = set()
+    for combatant in actors:
+        if getattr(combatant, 'system', 'pf2e') != 'cosmere':
+            continue
+        identity = id(combatant)
+        if identity in seen:
+            continue
+        seen.add(identity)
+        expired.extend(_advance_cosmere_combatant_effects(combatant, {
+            'trigger': 'phase_start',
+            'phase': phase,
+            'round': int(round_number),
+            'boundary_id': f'effect.phase.{key}',
+        }))
+    # Publish completion only after every actor has accepted the boundary.  Each
+    # surviving effect also carries this boundary identity, so a retry after a
+    # partial character write (including after restart) cannot decrement an
+    # already-persisted actor twice.
+    COSMERE_PHASE_BOUNDARIES.add(key)
+    return expired
+
+
+def _cosmere_effect_actor_id(combatant):
+    """Return the durable effect owner identity for one live combatant."""
+    if getattr(combatant, 'is_pc', False):
+        stable = getattr(combatant, 'restore_id', None)
+        if stable:
+            return stable
+    return getattr(combatant, 'instance_id', None)
+
+
+def _dispatch_cosmere_phase_transition(old_phase, old_round,
+                                       new_phase, new_round, include=None):
+    """Dispatch crossed phase boundaries, including phases with no actors."""
+    from systems.cosmere.combat import TURN_PHASES
+
+    try:
+        old_rank = TURN_PHASES.index(old_phase)
+        new_rank = TURN_PHASES.index(new_phase)
+        old_round = int(old_round)
+        new_round = int(new_round)
+    except (ValueError, TypeError):
+        return _dispatch_cosmere_phase_start(new_phase, new_round, include)
+    if new_round > old_round:
+        for phase in TURN_PHASES[old_rank + 1:]:
+            _dispatch_cosmere_phase_start(phase, old_round, include)
+        for phase in TURN_PHASES[:new_rank + 1]:
+            _dispatch_cosmere_phase_start(phase, new_round, include)
+    elif new_round == old_round and new_rank > old_rank:
+        for phase in TURN_PHASES[old_rank + 1:new_rank + 1]:
+            _dispatch_cosmere_phase_start(phase, new_round, include)
+    else:
+        _dispatch_cosmere_phase_start(new_phase, new_round, include)
+
+
 def _apply_start_of_turn(new_c):
     """Start-of-new-turn processing for the combatant `new_c` that just
     became active. Shared by cycle_turn('next') AND delay_turn's advance
@@ -17700,13 +20103,29 @@ def _apply_start_of_turn(new_c):
         _broadcast_pc_state(new_c.name)
     # Action economy reset.
     if getattr(new_c, 'system', 'pf2e') == 'cosmere':
-        # Cosmere fast/slow ceiling, derived from the elected speed EACH turn
-        # so it survives turn advance (fast = 2 actions, slow = 3). No PF2e
-        # slowed/stunned integer math — Cosmere conditions are booleans.
-        new_c.max_actions = 2 if getattr(new_c, 'speed_choice', None) == 'fast' else 3
+        from systems.cosmere.combat import turn_permissions, turn_phase
+        new_c.turn_serial = int(getattr(new_c, 'turn_serial', 0) or 0) + 1
+        # Round effects end at the beginning of the same phase in the next
+        # round.  Expire them before deriving this turn's permissions so an
+        # effect that has just ended cannot remove actions or reactions once
+        # more.  Use the elected phase; condition-forced speed is calculated
+        # only after the expiry projection has been refreshed.
+        _dispatch_cosmere_phase_start(
+            turn_phase(bool(getattr(new_c, 'is_pc', False)),
+                       getattr(new_c, 'speed_choice', 'slow')),
+            ROUND_NUMBER, include=new_c)
+        _advance_cosmere_combatant_effects(new_c, {
+            'trigger': 'turn_start',
+            'actor_id': _cosmere_effect_actor_id(new_c),
+            'turn': new_c.turn_serial,
+        })
+        permissions = turn_permissions(
+            getattr(new_c, 'speed_choice', 'slow'),
+            getattr(new_c, 'conditions', {}) or {})
+        new_c.speed_choice = permissions['choice']
+        new_c.max_actions = permissions['actions']
         new_c.actions_used = 0
-        if not new_c.is_pc:
-            new_c.reaction_used = False
+        new_c.reaction_used = not permissions['reaction']
     else:
         # PF2e: Slowed lowers the action ceiling, Stunned then spends from
         # what's left (PF2E Core p.448). Pip widget reads max_actions/
@@ -17764,6 +20183,44 @@ def _apply_start_of_turn(new_c):
             _combat_log(f"{_pc.name}: Persistent damage pending — {', '.join(parts)} (player rolls)", 'condition')
 
 
+def _advance_cosmere_combatant_effects(combatant, event):
+    """Advance canonical effects on one tracker actor and refresh projection."""
+    if getattr(combatant, 'system', 'pf2e') != 'cosmere':
+        return []
+    _migrate_cosmere_legacy_condition_expiry(combatant)
+    from systems.cosmere.effects import (advance_effects, effects_from_conditions,
+                                         normalize_effects, project_conditions)
+    effects = normalize_effects(getattr(combatant, 'effect_instances', []) or [])
+    if not effects and getattr(combatant, 'conditions', None):
+        effects = effects_from_conditions(combatant.conditions, combatant.instance_id)
+    event = dict(event or {})
+    if event.get('boundary_id') is None:
+        event['boundary_id'] = 'effect.runtime.' + hashlib.sha256(
+            json.dumps({
+                key: event.get(key) for key in (
+                    'trigger', 'actor_id', 'phase', 'round', 'turn', 'elapsed')
+            }, sort_keys=True, separators=(',', ':')).encode('utf-8')).hexdigest()
+    active, expired = advance_effects(effects, event)
+    changed = active != effects or bool(expired)
+    combatant.effect_instances = active
+    combatant.conditions = project_conditions(active)
+    if isinstance(getattr(combatant, 'mistborn_runtime', None), dict):
+        from systems.cosmere.mistborn_runtime import (
+            reconcile_mistborn_effect_mirrors)
+        projected = reconcile_mistborn_effect_mirrors({
+            'effects': active,
+            'mistborn': combatant.mistborn_runtime,
+        })
+        combatant.mistborn_runtime = projected['mistborn']
+    for row in expired:
+        condition = (row.get('parameters') or {}).get('condition')
+        label = str(condition or row.get('stacking_identity') or 'Effect').replace('_', ' ').title()
+        _combat_log(f"{combatant.name}: {label} expired", 'condition')
+    if changed and getattr(combatant, 'is_pc', False):
+        _sync_cosmere_pc_from_combatant(combatant)
+    return expired
+
+
 @app.route('/api/cycle_turn/<direction>', methods=['POST'])
 def cycle_turn(direction):
     global TURN_INDEX, ACTIVE_ENCOUNTER, ROUND_NUMBER, TURN_REMINDERS
@@ -17772,12 +20229,26 @@ def cycle_turn(direction):
         _workflow_preflight_turn()
         # === END OF CURRENT TURN: auto-tick conditions (PF2E Remaster) ===
         current_c = ACTIVE_ENCOUNTER[TURN_INDEX]
+        _cosmere_old_phase = None
+        if getattr(current_c, 'system', 'pf2e') == 'cosmere':
+            from systems.cosmere.combat import turn_phase as _cosmere_turn_phase
+            _cosmere_old_phase = _cosmere_turn_phase(
+                bool(getattr(current_c, 'is_pc', False)),
+                getattr(current_c, 'speed_choice', 'slow'))
+
+        if getattr(current_c, 'system', 'pf2e') == 'cosmere':
+            _advance_cosmere_combatant_effects(current_c, {
+                'trigger': 'turn_end',
+                'actor_id': _cosmere_effect_actor_id(current_c),
+                'turn': int(getattr(current_c, 'turn_serial', 0) or 0),
+            })
 
         # GM-defined auto-expiry timers (decremented at end of THIS combatant's
         # turn). Independent of the per-condition tick rules below; whichever
         # clears the condition first wins.
         _expiry = getattr(current_c, 'condition_expiry', None)
-        if isinstance(_expiry, dict) and _expiry:
+        if (getattr(current_c, 'system', 'pf2e') != 'cosmere'
+                and isinstance(_expiry, dict) and _expiry):
             for _cond in list(_expiry.keys()):
                 _expiry[_cond] = int(_expiry[_cond]) - 1
                 if _expiry[_cond] <= 0:
@@ -17866,7 +20337,17 @@ def cycle_turn(direction):
         # === START OF NEW TURN: auto-apply start-of-turn mechanics ===
         # Shared with delay_turn so a combatant reached via Delay gets the
         # SAME start-of-turn processing as one reached via Next Turn.
-        _apply_start_of_turn(ACTIVE_ENCOUNTER[TURN_INDEX])
+        _new_turn_combatant = ACTIVE_ENCOUNTER[TURN_INDEX]
+        if (_cosmere_old_phase is not None and
+                getattr(_new_turn_combatant, 'system', 'pf2e') == 'cosmere'):
+            from systems.cosmere.combat import turn_phase as _cosmere_turn_phase
+            _dispatch_cosmere_phase_transition(
+                _cosmere_old_phase, _round_before_advance,
+                _cosmere_turn_phase(
+                    bool(getattr(_new_turn_combatant, 'is_pc', False)),
+                    getattr(_new_turn_combatant, 'speed_choice', 'slow')),
+                ROUND_NUMBER, include=_new_turn_combatant)
+        _apply_start_of_turn(_new_turn_combatant)
 
         _generate_turn_reminders()
         
@@ -18335,6 +20816,12 @@ def delay_turn(instance_id):
     _workflow_preflight_turn(delay_id=instance_id)
     for i, c in enumerate(ACTIVE_ENCOUNTER):
         if c.instance_id == instance_id:
+            _cosmere_old_phase = None
+            if getattr(c, 'system', 'pf2e') == 'cosmere':
+                from systems.cosmere.combat import turn_phase as _cosmere_turn_phase
+                _cosmere_old_phase = _cosmere_turn_phase(
+                    bool(getattr(c, 'is_pc', False)),
+                    getattr(c, 'speed_choice', 'slow'))
             c.delaying = True
             # If it's currently their turn, advance to next
             if i == TURN_INDEX:
@@ -18365,7 +20852,17 @@ def delay_turn(instance_id):
                 # active — same helper cycle_turn('next') uses, so Delay and
                 # Next Turn reach identical state.
                 if ACTIVE_ENCOUNTER and TURN_INDEX < len(ACTIVE_ENCOUNTER):
-                    _apply_start_of_turn(ACTIVE_ENCOUNTER[TURN_INDEX])
+                    _new_turn_combatant = ACTIVE_ENCOUNTER[TURN_INDEX]
+                    if (_cosmere_old_phase is not None and
+                            getattr(_new_turn_combatant, 'system', 'pf2e') == 'cosmere'):
+                        from systems.cosmere.combat import turn_phase as _cosmere_turn_phase
+                        _dispatch_cosmere_phase_transition(
+                            _cosmere_old_phase, _round_before_advance,
+                            _cosmere_turn_phase(
+                                bool(getattr(_new_turn_combatant, 'is_pc', False)),
+                                getattr(_new_turn_combatant, 'speed_choice', 'slow')),
+                            ROUND_NUMBER, include=_new_turn_combatant)
+                    _apply_start_of_turn(_new_turn_combatant)
                 _generate_turn_reminders()
             _persist_encounter_state()
             _broadcast_encounter_state()
@@ -18481,6 +20978,7 @@ def save_encounter():
             "notes": request.form.get('encounter_notes', ENCOUNTER_NOTES),
             "session_timer_start": SESSION_TIMER_START,
             "round_events": copy.deepcopy(ROUND_EVENTS),
+            "cosmere_phase_boundaries": sorted(COSMERE_PHASE_BOUNDARIES),
             "combatants": []
         }
         for c in ACTIVE_ENCOUNTER:
@@ -18530,6 +21028,7 @@ def load_encounter():
         return jsonify({"success": False, "error": f"encounter file is unreadable or corrupt: {e}"}), 500
     if name and os.path.exists(enc_path):
         ACTIVE_ENCOUNTER.clear(); TURN_INDEX = 0; ROUND_NUMBER = 1; ENCOUNTER_NOTES = ''; ROUND_EVENTS = []
+        COSMERE_PHASE_BOUNDARIES.clear()
         _RECENT_DEFEATED[:] = []   # new encounter context — drop stale Undos
 
         # Support both old format (list) and new format (dict with metadata)
@@ -18544,6 +21043,13 @@ def load_encounter():
             ENCOUNTER_NOTES = raw.get('notes', '')
             SESSION_TIMER_START = raw.get('session_timer_start', None)
             ROUND_EVENTS = list(raw.get('round_events', []) or [])
+            from systems.cosmere.combat import TURN_PHASES as _COSMERE_TURN_PHASES
+            for _key in raw.get('cosmere_phase_boundaries', []) or []:
+                if not isinstance(_key, str) or ':' not in _key:
+                    continue
+                _round_text, _phase = _key.split(':', 1)
+                if _round_text.isdigit() and _phase in _COSMERE_TURN_PHASES:
+                    COSMERE_PHASE_BOUNDARIES.add(_key)
         else:
             combatants = []
 
@@ -18971,6 +21477,7 @@ def api_stage_encounter():
         TURN_INDEX = 0
         ROUND_NUMBER = 1
         ROUND_EVENTS = []
+        COSMERE_PHASE_BOUNDARIES.clear()
 
     # Add monsters + hazards. Hazards arrive with is_hazard=True and a
     # path of '__hazard__<name>'; they're constructed inline rather than
@@ -25357,6 +27864,7 @@ def _obsidian_launch_room_encounter(payload):
     ENCOUNTER_NOTES = str(payload.get('notes') or '')[:4000]
     SESSION_TIMER_START = None
     ROUND_EVENTS = []
+    COSMERE_PHASE_BOUNDARIES.clear()
     for row, source, count in prepared:
         for index in range(count):
             if source is None:

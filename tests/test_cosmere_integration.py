@@ -81,6 +81,8 @@ def test_cosmere_damage_deflect_and_injury_spiral():
     spirit/vital, and the injury death-spiral at 0 health (Ch.9)."""
     a = app._cosmere_combatant(_adv_id('Archer'))      # deflect 1, health 12
     a.instance_id = 'cos-dmg-1'
+    a.role = 'rival'
+    a.significant_npc_injuries = True
     # impact damage: Deflect 1 applies -> 5 - 1 = 4 taken
     app._cosmere_adjust_hp(a, 5, 'damage', 'impact')
     assert a.current_hp == 8
@@ -332,6 +334,8 @@ def test_cosmere_injury_records_details_and_applies_effect(monkeypatch):
         'duration': '1d6 days', 'is_death': False, 'effect': 'Slowed'})
     a = app._cosmere_combatant(_adv_id('Archer'))
     a.instance_id = 'inj-1'
+    a.role = 'rival'
+    a.significant_npc_injuries = True
     a.current_hp = 3
     app._cosmere_adjust_hp(a, 50, 'damage', 'impact')
     assert a.current_hp == 0 and a.injuries == 1
@@ -349,6 +353,8 @@ def test_cosmere_injury_exhausted_effect_stacks(monkeypatch):
         'is_death': False, 'effect': 'Exhausted [-2]'})
     a = app._cosmere_combatant(_adv_id('Archer'))
     a.instance_id = 'inj-2'
+    a.role = 'rival'
+    a.significant_npc_injuries = True
     a.current_hp = 2
     app._cosmere_adjust_hp(a, 50, 'damage', 'impact')
     assert a.conditions.get('exhausted') == 2          # magnitude parsed + stacked

@@ -993,7 +993,7 @@ let _pvTimer=null;
 function refreshPreview(){ clearTimeout(_pvTimer); _pvTimer=setTimeout(doPreview, 250); }
 function doPreview(){
   fetch('/cosmere/builder/preview',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({build:collect()})})
+    body:JSON.stringify({id:PID, build:collect()})})
   .then(r=>r.json()).then(p=>{ LAST_PREVIEW=p; paintPreview(p); }).catch(()=>{});
 }
 let LAST_PREVIEW=null;
