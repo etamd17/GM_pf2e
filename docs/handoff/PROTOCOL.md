@@ -23,6 +23,7 @@ once, in the brief, and the implementation is cheap.
 | Well-specified implementation from a brief | Codex |
 | Mechanical refactors, renames, test backfill, CI/lint fixes | Codex |
 | Save formats, migrations, auth/route policy, anything that deletes or overwrites data | Claude implements, or Claude reviews Codex's diff adversarially |
+| UI/UX design: layout, hierarchy, mobile, visual polish | Claude designs and verifies in the browser; Codex may implement the mechanical parts from Claude's brief |
 | Browser/UI verification against a running server | Claude (has the browser pane) |
 | Review of the other agent's diff | the other agent, **against the brief's acceptance list only** |
 
@@ -38,7 +39,11 @@ Either agent may take any task when the other is unavailable; the table is a def
    report's *Follow-ups*, not into the diff.
 4. **Report.** Fill the report half of the task file: what changed, the exact test
    commands run with their real numbers, what was skipped, what is still wrong. Set the
-   row to `review`.
+   row to `review`, and add one plain line to the **Log** at the bottom of `QUEUE.md`
+   (who, what was done, what's next). The user reads the log between handoffs: plain
+   words, no code terms.
+   Also end your chat reply with the same thing as a few short bullets: done / next /
+   which tool and model to use for the next step.
 5. **Review** (the other agent). Check the diff against the acceptance list and the
    high-risk rules in `CLAUDE.md`. Either `done`, or back to `in-progress` with numbered
    findings appended to the task file.

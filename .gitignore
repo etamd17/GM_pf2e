@@ -131,3 +131,7 @@ dnd5e_data/*
 !dnd5e_data/README.md
 !dnd5e_data/VERSION
 dist/
+
+# Handoff review bundles (mockups, screenshots): large and local-only. Keep the
+# task .md files in git; share the bundles outside it.
+docs/handoff/assets/
