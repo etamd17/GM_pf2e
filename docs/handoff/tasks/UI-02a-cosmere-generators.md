@@ -34,12 +34,12 @@ flatter, and the header explains pins/back in one line. Bigger tap targets on ph
 6. Any class you add that sets `display` must also get `.x[hidden]{display:none}` (CLAUDE.md rule).
 
 ## Acceptance
-- [ ] Same controls as today: 9 Reroll, 9 Pin, 9 Back, 9 Copy, 2 Roll 5, Reroll all, Copy all
+- [x] Same controls as today: 9 Reroll, 9 Pin, 9 Back, 9 Copy, 2 Roll 5, Reroll all, Copy all
       (count in the rendered page).
-- [ ] New test `tests/test_cosmere_generator_ui.py`: GET `/cosmere/generator` as GM in a Cosmere
+- [x] New test `tests/test_cosmere_generator_ui.py`: GET `/cosmere/generator` as GM in a Cosmere
       campaign; assert the counts above, that each card button has a visible text label, and that
       `cgTogglePin`/`cgBack`/`cgCopy`/`cgReroll`/`cgBatch` calls are unchanged.
-- [ ] `pytest -q tests/test_cosmere_generator_ui.py tests/test_inline_handler_escaping.py tests/test_route_policy_inventory.py`
+- [x] `pytest -q tests/test_cosmere_generator_ui.py tests/test_inline_handler_escaping.py tests/test_route_policy_inventory.py`
       and `python tools/check_templates.py` pass (paste numbers).
 - [ ] Browser check (Claude does this if you can't): desktop 1440px and phone 375px, both
       **Stormlight and Mistborn** skins (`cosmere_world` campaign config); no sideways scroll at
@@ -48,3 +48,25 @@ flatter, and the header explains pins/back in one line. Bigger tap targets on ph
 
 ## Out of scope
 - Generator content (MB-03), grouping/filter (that was Revision B, not chosen), any route change.
+
+<!-- ============ REPORT (written by the implementer) ============ -->
+
+## Report
+
+- **Changed:** `templates/cosmere_generator.html` now uses the approved Back, Copy, Pin, optional
+  Roll 5, Reroll order with visible labels. Existing classes, handlers, titles, ARIA attributes and
+  Back disabled state remain intact. Cards use the flatter treatment, the header explains pin/back
+  behavior without Stormlight-only wording, and the phone rule uses one column, wrapped actions and
+  32px controls. The generator functions and route are unchanged.
+- **Regression coverage:** `tests/test_cosmere_generator_ui.py` renders the real GM route in
+  Cosmere mode and checks all nine card types, exact control counts and order, visible labels,
+  header actions, per-card handlers, titles, ARIA labels, pin state and Back disabled state.
+- **TDD evidence:** before the template edit, the new test produced **1 failed, 1 passed in
+  106.52s** because the rendered controls still began with Pin rather than the approved Back / Copy
+  / Pin order. After the edit, the new file passed with **2 passed in 11.22s**.
+- **Tests run:** `python -m pytest -q tests/test_cosmere_generator_ui.py
+  tests/test_inline_handler_escaping.py tests/test_route_policy_inventory.py` -> **24 passed in
+  13.63s**. `python tools/check_templates.py` -> **all 106 templates parse**.
+- **Not verified here:** per the brief, Claude still needs to check desktop 1440px and phone 375px
+  in both skins, including overflow, Pin plus Reroll all, Back history, and Copy's temporary check
+  mark. No browser, push, PR, merge, deployment or generator-content change was performed.
