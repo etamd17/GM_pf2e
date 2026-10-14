@@ -1813,6 +1813,11 @@ def _loaded_encounter_snapshot():
     return tuple(ACTIVE_ENCOUNTER)
 
 
+def _loaded_encounter_dir():
+    """Directory bound to the current live campaign's saved encounters."""
+    return ENCOUNTER_DIR
+
+
 def _bind_campaign_paths(cid):
     """Point every per-campaign path global at campaign `cid`, or at the legacy
     flat layout when cid is None. Single source of truth for campaign data
@@ -12203,7 +12208,8 @@ def api_threads_upload():
 def tracker_view():
     sorted_monsters = sorted(MONSTER_LIBRARY.values(), key=lambda m: m.name)
     sorted_party = sorted(PARTY_LIBRARY.values(), key=lambda p: p.name)
-    saved_encounters = [f.replace('.json', '') for f in os.listdir(ENCOUNTER_DIR) if f.endswith('.json')] if os.path.exists(ENCOUNTER_DIR) else []
+    encounter_dir = _loaded_encounter_dir()
+    saved_encounters = [f.replace('.json', '') for f in os.listdir(encounter_dir) if f.endswith('.json')] if os.path.exists(encounter_dir) else []
     party_level = max([c.level for c in ACTIVE_ENCOUNTER if c.is_pc] or [p.level for p in PARTY_LIBRARY.values()] or [1])
     encounter_xp = calculate_encounter_xp(ACTIVE_ENCOUNTER, party_level)
     diff_label, diff_color = get_difficulty_label(encounter_xp)
@@ -13743,9 +13749,7 @@ def _cosmere_custom_adversary_reference_ids():
             for child in value:
                 collect(child)
 
-    campaign_id = _loaded_campaign_id()
-    encounter_dir = (_storage.encounter_dir(campaign_id) if campaign_id
-                     else os.path.join(DATA_DIR, 'saved_encounters'))
+    encounter_dir = _loaded_encounter_dir()
     if os.path.isdir(encounter_dir):
         for filename in sorted(glob.glob(os.path.join(encounter_dir, '*.json'))):
             try:
