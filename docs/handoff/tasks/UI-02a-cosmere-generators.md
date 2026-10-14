@@ -70,3 +70,28 @@ flatter, and the header explains pins/back in one line. Bigger tap targets on ph
 - **Not verified here:** per the brief, Claude still needs to check desktop 1440px and phone 375px
   in both skins, including overflow, Pin plus Reroll all, Back history, and Copy's temporary check
   mark. No browser, push, PR, merge, deployment or generator-content change was performed.
+
+## Review
+
+**Claude, 2026-10-14: accepted. No required fixes.**
+
+- **Diff (`d2b53c07..d6a766ab`) vs brief:** order Back / Copy / Pin / Roll 5 / Reroll with visible
+  labels; every class, `onclick`, `title`, `aria-label`, `aria-pressed` and Back's `disabled` kept;
+  flatter cards; one-line header; "Rosharan prep" subtitle removed; phone rule present. JS unchanged
+  except a comment.
+- **Tests (rerun by me):** `pytest -q tests/test_cosmere_generator_ui.py tests/test_inline_handler_escaping.py tests/test_route_policy_inventory.py`
+  -> **24 passed**; `python tools/check_templates.py` -> **106 parse**.
+- **Browser, real app on this branch** (fresh local data dir, throwaway account, Cosmere campaign;
+  skin switched with `/api/cosmere/world`), all four combinations **desktop 1440 / phone 375 x
+  Stormlight / Mistborn**:
+  - no sideways scroll (page width = viewport, also after interactions); no button clipped or
+    overflowing its card; phone: one column, buttons 32px tall, header buttons fit;
+  - Pin on NPC -> `aria-pressed=true`, the NPC result unchanged through Reroll all while unpinned
+    cards changed;
+  - Reroll a card -> Back enables -> Back restores the exact previous result;
+  - Copy shows the check mark, then restores its label (~1s).
+- **Optional polish (not required):** (1) `.cg-reroll:hover` now equals its resting style, so
+  Reroll has no hover feedback; (2) Copy shrinks from 68px to 28px while it shows the check mark
+  (`cgCopyText` swaps the whole label) -- a `min-width` or "check + Copied" text would stop the jump;
+  (3) where a card label wraps (e.g. "Highstorm / Weather" at 3 columns) or a card has 5 buttons
+  on a phone (Name, NPC), Reroll wraps onto its own row. Same as the approved mockup; fine to keep.
