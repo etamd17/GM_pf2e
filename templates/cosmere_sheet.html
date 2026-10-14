@@ -390,6 +390,48 @@
     .cs-section-h, .orb-w, .cs-ability, .cs-card, .cs-facet, .cs-rad-plate { break-inside: avoid; }
     a { color: #111 !important; text-decoration: none !important; }
   }
+
+  /* Revision A: permanent vitals, then one task per tab. */
+  .cs-band { display:grid; grid-template-columns:auto minmax(0,1fr); gap:1.2rem 1.6rem;
+    align-items:center; padding:.6rem 0 1rem; border-bottom:1px solid var(--border-card); }
+  .cs-band .cs-orbs { margin:0; gap:1rem; }
+  .cs-defs { display:grid; gap:.6rem; min-width:0; }
+  .cs-defs .cs-facets { margin:0; }
+  .cs-defs .cs-attrs { grid-template-columns:repeat(6,minmax(0,1fr)); }
+  .cs-strip { display:flex; flex-wrap:wrap; align-items:flex-start; gap:.6rem 1.4rem;
+    padding:.7rem 0; border-bottom:1px solid var(--border-card); }
+  .cs-strip > div { margin:0 !important; min-width:0; }
+  .cs-strip .cs-derived { flex:1 1 100%; }
+  .cs-strip .cs-derived span { white-space:normal; }
+  .cs-tabs { display:flex; gap:.25rem; margin:1rem 0 .9rem; border-bottom:1px solid var(--border-card); }
+  .cs-tab { background:none; border:0; border-bottom:2px solid transparent; color:var(--text-on-dark-3);
+    padding:.55rem 1rem; font:600 13px var(--font-ui); cursor:pointer; white-space:nowrap; }
+  .cs-tab[aria-selected="true"] { color:var(--accent); border-bottom-color:var(--accent); }
+  .cs-tab:focus-visible, .cs-panel:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
+  .cs-panel { min-width:0; }
+  .cs-panel[hidden] { display:none; }
+  .cs-panel > .cs-section-h:first-child, .cs-panel > section:first-child > .cs-section-h:first-child { margin-top:0; }
+  @media (max-width:900px) {
+    .cs-band { grid-template-columns:1fr; }
+    .cs-defs .cs-attrs { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  }
+  @media (max-width:640px) {
+    .cs-band { gap:.7rem; padding-top:.3rem; }
+    .cs-band .cs-orbs { flex-wrap:nowrap; gap:.25rem; justify-content:space-between; }
+    .cs-band .orb-w { zoom:.82; min-width:0; flex:1 1 0; }
+    .cs-band .orb-ctrl { width:100%; max-width:130px; }
+    .cs-defs .cs-facets { gap:.35rem; }
+    .cs-defs .cs-facet { min-width:0; }
+    .cs-defs .cs-attrs > * { padding:.3rem .2rem; min-height:0; }
+    .cs-tab { flex:1 1 0; min-width:0; padding:.55rem .35rem; font-size:12px; }
+    .cs-panel { overflow-wrap:anywhere; }
+    .cs-panel .cs-rad-plate { padding:.65rem; }
+    .cs-panel .cs-skills { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  }
+  @media print {
+    .cs-panel, .cs-panel[hidden] { display:block !important; }
+    .cs-tabs { display:none !important; }
+  }
 {% endblock %}
 
 {% block content %}
@@ -474,50 +516,9 @@
     </div>
   </div>
 
-  {# --- Conditions (self-manage) --- #}
-  <div style="margin-bottom:1rem;">
-    <div style="font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-on-dark-3); margin-bottom:.35rem;">Conditions
-      <button type="button" id="cond-fold-btn" onclick="condFoldToggle()" style="background:none; border:none; color:var(--accent); cursor:pointer; font-size:11px; letter-spacing:.05em; text-transform:none; padding:0 .2rem;">edit</button>
-    </div>
-    <div class="cs-chips folded" id="cos-conditions">
-      <span id="cond-none" style="font-size:12px; color:var(--text-on-dark-3); font-style:italic;">No conditions</span>
-      {% for code, info in conditions.items() %}
-      <span class="cs-cond {{ 'on' if cur.conditions.get(code) }}" data-cond="{{ code }}" role="button" tabindex="0" aria-pressed="{{ 'true' if cur.conditions.get(code) else 'false' }}" aria-label="{{ code|capitalize }} condition" onclick='cosCond({{ code|tojson }})' onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" title="{{ info }}">{{ code|capitalize }}</span>
-      {% endfor %}
-    </div>
-    {# Plain-language summary of what every ACTIVE condition is doing right now —
-       so it's obvious which stats/abilities each one affects. JS-rendered. #}
-    <div id="cos-cond-fx" class="cs-cond-fx"></div>
-  </div>
   {% endif %}
 
-  {% if interactive %}
-  {# --- Goals & Rewards (Ch.8): work a goal across three milestones, then conclude
-        it for a reward (a possession, relationship, status, …). --- #}
-  <div class="cs-goals-wrap" style="margin-bottom:1rem;">
-    <div style="display:flex; align-items:center; gap:.6rem; margin-bottom:.4rem;">
-      <span style="font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-on-dark-3);">Goals &amp; Rewards</span>
-      <button type="button" class="goal-add" onclick="cosGoalAdd()">+ Add goal</button>
-    </div>
-    <div id="cos-goals" class="cs-goals"></div>
-  </div>
-  {% endif %}
-
-  {# --- Defenses (quiet hex facets) + the sphere bank (the hero region) --- #}
-  <div class="cs-facets">
-    {# Defense = 10 + a pair of attributes (Ch.3). Show the breakdown on hover so
-       the number is legible, not magic. #}
-    {% set _def_attrs = {'phy':['str','spd'], 'cog':['int','wil'], 'spi':['awa','pre']} %}
-    {% for key in ['phy','cog','spi'] %}
-    {% set _p = _def_attrs[key] %}
-    <div class="cs-facet" title="{{ defense_names[key] }} = 10 + {{ attr_names[_p[0]] }} {{ a.attributes[_p[0]] }} + {{ attr_names[_p[1]] }} {{ a.attributes[_p[1]] }}"><div class="l">{{ defense_names[key] }}</div><div class="n">{{ a.defenses[key] }}</div></div>
-    {% endfor %}
-    <div class="cs-facet deflect" id="cs-deflect" data-base="{{ a.deflect.value }}" data-base-types="{{ a.deflect.types.items()|selectattr('1')|map(attribute='0')|join(',') }}">
-      <div class="l">Deflect <span id="cs-deflect-plate" style="display:{{ '' if cur.shardplate else 'none' }}; color:var(--order-accent,var(--accent)); font-size:9px;">&middot; Plate</span></div><div class="n" id="cs-deflect-n">{{ 5 if cur.shardplate else a.deflect.value }}</div>
-      {% set deflect_info = {'impact':'Crushing / bludgeoning (hammers, falls) — reduced by Deflect.','keen':'Slicing / piercing (blades, spikes) — reduced by Deflect.','energy':'Heat & electricity (fire, lightning) — reduced by Deflect.','spirit':'Soul-deep (Shardblades) — bypasses Deflect.','vital':'Life force (poison, cold, suffocation) — bypasses Deflect.','heal':'Healing.'} %}
-      <div class="cs-chips" id="cs-deflect-types">{% if cur.shardplate %}{% for t in ['impact','keen','energy','spirit','vital'] %}<span class="cs-chip df">{{ t }}</span>{% endfor %}{% else %}{% for t, on in a.deflect.types.items() if on %}<span class="cs-chip df" title="{{ deflect_info.get(t, t) }}">{{ t }}</span>{% endfor %}{% endif %}</div>
-    </div>
-  </div>
+  <div class="cs-band">
   <div class="cs-orbs">
     {% set hpct = (cur.health / a.health.max) if a.health.max else 0 %}
     <div class="orb-w">
@@ -574,6 +575,53 @@
     </div>
     {% endif %}
   </div>
+  <div class="cs-defs">
+  {# --- Defenses (quiet hex facets) + the sphere bank (the hero region) --- #}
+  <div class="cs-facets">
+    {# Defense = 10 + a pair of attributes (Ch.3). Show the breakdown on hover so
+       the number is legible, not magic. #}
+    {% set _def_attrs = {'phy':['str','spd'], 'cog':['int','wil'], 'spi':['awa','pre']} %}
+    {% for key in ['phy','cog','spi'] %}
+    {% set _p = _def_attrs[key] %}
+    <div class="cs-facet" title="{{ defense_names[key] }} = 10 + {{ attr_names[_p[0]] }} {{ a.attributes[_p[0]] }} + {{ attr_names[_p[1]] }} {{ a.attributes[_p[1]] }}"><div class="l">{{ defense_names[key] }}</div><div class="n">{{ a.defenses[key] }}</div></div>
+    {% endfor %}
+    <div class="cs-facet deflect" id="cs-deflect" data-base="{{ a.deflect.value }}" data-base-types="{{ a.deflect.types.items()|selectattr('1')|map(attribute='0')|join(',') }}">
+      <div class="l">Deflect <span id="cs-deflect-plate" style="display:{{ '' if cur.shardplate else 'none' }}; color:var(--order-accent,var(--accent)); font-size:9px;">&middot; Plate</span></div><div class="n" id="cs-deflect-n">{{ 5 if cur.shardplate else a.deflect.value }}</div>
+      {% set deflect_info = {'impact':'Crushing / bludgeoning (hammers, falls) — reduced by Deflect.','keen':'Slicing / piercing (blades, spikes) — reduced by Deflect.','energy':'Heat & electricity (fire, lightning) — reduced by Deflect.','spirit':'Soul-deep (Shardblades) — bypasses Deflect.','vital':'Life force (poison, cold, suffocation) — bypasses Deflect.','heal':'Healing.'} %}
+      <div class="cs-chips" id="cs-deflect-types">{% if cur.shardplate %}{% for t in ['impact','keen','energy','spirit','vital'] %}<span class="cs-chip df">{{ t }}</span>{% endfor %}{% else %}{% for t, on in a.deflect.types.items() if on %}<span class="cs-chip df" title="{{ deflect_info.get(t, t) }}">{{ t }}</span>{% endfor %}{% endif %}</div>
+    </div>
+  </div>
+  {# --- Attributes --- #}
+  <div class="cs-grid cs-attrs">
+    {% for key in ['str','spd','int','wil','awa','pre'] %}
+    <div class="cs-card">
+      <div class="l">{{ attr_names[key] }}</div>
+      <div class="v">{{ a.attributes[key] }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  </div>
+  </div>
+  <div class="cs-strip">
+  {% if interactive %}
+  {# --- Conditions (self-manage) --- #}
+  <div style="margin-bottom:1rem;">
+    <div style="font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-on-dark-3); margin-bottom:.35rem;">Conditions
+      <button type="button" id="cond-fold-btn" onclick="condFoldToggle()" style="background:none; border:none; color:var(--accent); cursor:pointer; font-size:11px; letter-spacing:.05em; text-transform:none; padding:0 .2rem;">edit</button>
+    </div>
+    <div class="cs-chips folded" id="cos-conditions">
+      <span id="cond-none" style="font-size:12px; color:var(--text-on-dark-3); font-style:italic;">No conditions</span>
+      {% for code, info in conditions.items() %}
+      <span class="cs-cond {{ 'on' if cur.conditions.get(code) }}" data-cond="{{ code }}" role="button" tabindex="0" aria-pressed="{{ 'true' if cur.conditions.get(code) else 'false' }}" aria-label="{{ code|capitalize }} condition" onclick='cosCond({{ code|tojson }})' onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" title="{{ info }}">{{ code|capitalize }}</span>
+      {% endfor %}
+    </div>
+    {# Plain-language summary of what every ACTIVE condition is doing right now —
+       so it's obvious which stats/abilities each one affects. JS-rendered. #}
+    <div id="cos-cond-fx" class="cs-cond-fx"></div>
+  </div>
+  {% endif %}
+
   {% if interactive %}
   <div class="cs-rest">
     <span class="cs-rest-l">Rest &amp; recover</span>
@@ -594,73 +642,31 @@
   <div class="cs-derived" style="border-style:dashed;"><span><b>Connections</b> {{ build.connections }}</span></div>
   {% endif %}
 
-  {# --- Radiant (Surgebinding) --- #}
-  {% if pc and radiant %}
-  <div class="cs-section-h">Radiant &mdash; {{ radiant.name }}{% if radiant_variant %} <span style="text-transform:none; letter-spacing:0; color:var(--order-accent,var(--accent)); font-size:12px;">&middot; {{ radiant_variant.name }}</span>{% endif %}</div>
-  <div class="cs-rad-plate">
-    <div style="display:flex; gap:1.4rem; flex-wrap:wrap; align-items:baseline;">
-      <div><span style="font-size:10px; text-transform:uppercase; color:var(--text-on-dark-3);">Spren</span> <b style="color:var(--order-accent,var(--accent));">{{ build.spren_name or radiant.spren }}</b></div>
-      <div><span style="font-size:10px; text-transform:uppercase; color:var(--text-on-dark-3);">Surges</span> <b>{% for s in radiant.surges %}<svg class="cs-surge-gl" aria-hidden="true"><use href="#cg-surge-{{ s }}"></use></svg>{{ surge_names[s].name }}{% if not loop.last %} &nbsp;+ {% endif %}{% endfor %}</b></div>
-      <div><span style="font-size:10px; text-transform:uppercase; color:var(--text-on-dark-3);">Ideals</span> <b>{{ build.ideals_sworn }} / 5</b><span class="cs-ideal-dots" aria-hidden="true">{% for n in range(1,6) %}<i class="{{ 'on' if n <= build.ideals_sworn }}"></i>{% endfor %}</span>{% if build.ideals_sworn == 0 %} <span style="color:var(--text-on-dark-3);">(surges locked until First Ideal)</span>{% endif %}</div>
-    </div>
-    <div style="margin-top:.4rem; font-size:12.5px; color:#aeb8c4; font-style:italic;">{{ radiant.philosophy }}</div>
-    {% if ideal_states and build.ideals_sworn >= 1 %}<div style="margin-top:.45rem; display:flex; flex-direction:column; gap:.25rem;">
-      {% for id in ideal_states if id.sworn %}
-      <div style="font-size:12px; line-height:1.4;"><b style="color:var(--order-accent,var(--accent));">{{ ['','First','Second','Third','Fourth'][id.n] }} Ideal</b> &mdash; <i>{{ id.words or id.suggested or 'spoken' }}</i></div>
-      {% endfor %}
-    </div>{% elif build.ideals_sworn >= 1 %}<div style="margin-top:.35rem; font-size:12px;"><b>First Ideal:</b> <i>{{ first_ideal }}</i></div>{% endif %}
-    {% if interactive and build.ideals_sworn >= 1 %}
-    <div style="margin-top:.6rem;">
-      <button class="cs-rad-btn{{ ' on' if cur.forsaken }}" id="btn-forsake" onclick="cosForsake()" title="Mark your oaths forsaken — your spren withdraws and your Stormlight powers seal until your bond is renewed. GM-toggleable; the rules leave the in-fiction consequences to your table.">{{ 'Renew oaths' if cur.forsaken else 'Oaths forsaken' }}</button>
-    </div>
-    {% endif %}
   </div>
-
-  {% if interactive and a.investiture_max %}
-  <div class="cs-rad-plate{{ ' forsaken' if cur.forsaken }}" id="cos-sl-actions" style="margin-top:.6rem;">
-    <div class="cos-forsaken-banner">Oaths forsaken &mdash; your spren has withdrawn. Surges, Shardblade &amp; Plate are sealed until your bond is renewed.</div>
-    <div style="font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--order-accent,var(--accent)); margin-bottom:.5rem;">Stormlight Actions</div>
-    <div style="display:flex; gap:.5rem; flex-wrap:wrap; align-items:center;">
-      <button class="cs-rad-btn" onclick="cosBreathe()" title="Recover Investiture to your maximum from infused spheres within 5 ft.">Breathe Stormlight</button>
-      <button class="cs-rad-btn" id="btn-enhance" onclick="cosEnhance()" title="Spend 1 Investiture: Enhanced [Strength +1] and [Speed +1] until the end of your next turn. Tap again to drop it.">Enhance <span style="opacity:.7;">(1 Inv)</span></button>
-      <button class="cs-rad-btn" onclick="cosRegenerate()" title="Spend 1 Investiture: recover health equal to 1d6 + your tier ({{ tier }}).">Regenerate <span style="opacity:.7;">(1 Inv)</span></button>
-      {% if has_wound_regen %}<button class="cs-rad-btn" onclick="cosMendInjury()" title="Wound Regeneration: while Regenerating, spend 1 Investiture to instantly recover from an injury of your choice.">Mend Injury <span style="opacity:.7;">(1 Inv)</span></button>{% endif %}
-      {% if shardblade %}<button class="cs-rad-btn" id="btn-shardblade" onclick="cosShardblade()" title="Third Ideal: summon your spren as a Shardblade (2d8 spirit, deadly — bypasses Deflect). Tap again to dismiss.">Summon Shardblade</button>{% endif %}
-      {% if shardplate %}<button class="cs-rad-btn{{ ' on' if cur.shardplate }}" id="btn-shardplate" onclick="cosShardplate()" title="Fourth Ideal: don living Shardplate — Deflect 5 against EVERY damage type (even spirit &amp; vital). Tap again to doff.">{{ 'Doff' if cur.shardplate else 'Don' }} Shardplate</button>{% endif %}
-      <span id="enh-chip" class="cs-chip df" style="display:{{ '' if cur.enhanced else 'none' }};">Enhanced &middot; STR +1 / SPD +1</span>
-    </div>
-    {% if has_take_squire %}
-    <div style="font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--order-accent,var(--accent)); margin:.85rem 0 .35rem;">Squire <span style="text-transform:none; letter-spacing:0; color:var(--text-on-dark-3);">(breathes Stormlight &amp; uses your surges; choose after a long rest)</span></div>
-    <input id="cos-squire" value="{{ cur.squire }}" placeholder="Name your squire&hellip;" oninput="cosSquire(this.value)"
-           style="width:100%; max-width:320px; background:var(--bg-page,#0d1117); border:1px solid var(--border-card); border-radius:7px; padding:.4rem .55rem; color:#e8eef5; font-size:13px;">
-    {% endif %}
-    {% if radiant_powers and build.ideals_sworn >= 1 %}
-    <div style="font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--accent); margin:.85rem 0 .4rem;">Surge Powers <span style="text-transform:none; letter-spacing:0; color:var(--text-on-dark-3);">(tap to spend Investiture &amp; log)</span></div>
-    <div class="cs-grid" style="grid-template-columns:1fr 1fr; gap:.5rem;">
-      {% for p in radiant_powers %}
-      <div class="cs-ability roll" style="margin-bottom:0;"
-           onclick='cosSurge({{ p.name|tojson }}, {{ p.investiture or 0 }}, {{ p.effect|tojson }})'>
-        <div class="an">{{ p.name }} <span style="font-size:11px; color:var(--text-on-dark-3); font-weight:400;">{{ p.cost }} action{{ '' if p.cost == 1 else 's' }}{% if p.investiture %} &middot; {{ p.investiture }} Investiture{% endif %}</span></div>
-        <div class="ad">{{ p.effect }}</div>
-      </div>
-      {% endfor %}
-    </div>
-    {% endif %}
+  {% macro cs_infected_arts() %}
+  <section>
+  {% if infected %}
+  <div class="cs-section-h cs-foldable">Infected Arts</div>
+  {% for art in infected %}
+  <div class="cs-ability" style="border-color:rgba(205,81,191,.5);">
+    <div class="an" style="color:#cd51bf;">{{ art.disease }} &rarr; {{ art.art }}</div>
+    <div class="ad"><b style="color:#f0a9a9;">Disease cost:</b> {{ art.cost }}</div>
+    {% if art.abilities %}<ul style="margin:.45rem 0 0 1.1rem; line-height:1.5;">
+      {% for ab in art.abilities %}<li style="margin-bottom:.25rem;{% if interactive %} cursor:pointer;{% endif %}"{% if interactive %} class="inf-roll" onclick='cosAbility({{ ab.name|tojson }}, {{ ab.desc|tojson }})' title="Tap to roll this ability's dice / log its use"{% endif %}><b style="color:#e8eef5;">{{ ab.name }}</b>{% if ab.cost %} <span class="cs-chip">{{ ab.cost }}</span>{% endif %}{% if interactive %} <span style="font-size:10px; color:var(--accent);">tap to roll</span>{% endif %} &mdash; {{ ab.desc }}</li>{% endfor %}
+    </ul>{% endif %}
   </div>
-  {% endif %}
+  {% endfor %}
   {% endif %}
 
-  {# --- Attributes --- #}
-  <div class="cs-section-h">Attributes</div>
-  <div class="cs-grid cs-attrs">
-    {% for key in ['str','spd','int','wil','awa','pre'] %}
-    <div class="cs-card">
-      <div class="l">{{ attr_names[key] }}</div>
-      <div class="v">{{ a.attributes[key] }}</div>
-    </div>
-    {% endfor %}
+  </section>
+  {% endmacro %}
+  <div class="cs-tabs" role="tablist" aria-label="Character sheet sections">
+    <button type="button" class="cs-tab" role="tab" data-tab="play" aria-selected="true" tabindex="0">Play</button>
+    {% if pc and radiant %}<button type="button" class="cs-tab" role="tab" data-tab="radiant" aria-selected="false" tabindex="-1">Radiant</button>{% endif %}
+    <button type="button" class="cs-tab" role="tab" data-tab="gear" aria-selected="false" tabindex="-1">Gear</button>
+    <button type="button" class="cs-tab" role="tab" data-tab="character" aria-selected="false" tabindex="-1">Character</button>
   </div>
-
+  <div class="cs-panel" role="tabpanel" data-panel="play" tabindex="0">
   {# --- Skills --- #}
   {% set _sk_ns = namespace(locked=false) %}
   {% for _c, _s in a.skills.items() %}{% if not _s.unlocked %}{% set _sk_ns.locked = true %}{% endif %}{% endfor %}
@@ -732,30 +738,88 @@
     </div>
   </div>
 
-  {% if pc %}
-  <div class="cs-section-h cs-foldable">Expertises</div>
-  <div class="cs-chips">
-    {% for e in build.expertises %}<span class="cs-chip">{{ e }}</span>{% else %}<span style="color:var(--text-on-dark-3); font-size:12px;">None</span>{% endfor %}
+  </div>
+  {% if pc and radiant %}
+  <div class="cs-panel" role="tabpanel" data-panel="radiant" tabindex="0" hidden>
+  {# --- Radiant (Surgebinding) --- #}
+  {% if pc and radiant %}
+  <div class="cs-section-h">Radiant &mdash; {{ radiant.name }}{% if radiant_variant %} <span style="text-transform:none; letter-spacing:0; color:var(--order-accent,var(--accent)); font-size:12px;">&middot; {{ radiant_variant.name }}</span>{% endif %}</div>
+  <div class="cs-rad-plate">
+    <div style="display:flex; gap:1.4rem; flex-wrap:wrap; align-items:baseline;">
+      <div><span style="font-size:10px; text-transform:uppercase; color:var(--text-on-dark-3);">Spren</span> <b style="color:var(--order-accent,var(--accent));">{{ build.spren_name or radiant.spren }}</b></div>
+      <div><span style="font-size:10px; text-transform:uppercase; color:var(--text-on-dark-3);">Surges</span> <b>{% for s in radiant.surges %}<svg class="cs-surge-gl" aria-hidden="true"><use href="#cg-surge-{{ s }}"></use></svg>{{ surge_names[s].name }}{% if not loop.last %} &nbsp;+ {% endif %}{% endfor %}</b></div>
+      <div><span style="font-size:10px; text-transform:uppercase; color:var(--text-on-dark-3);">Ideals</span> <b>{{ build.ideals_sworn }} / 5</b><span class="cs-ideal-dots" aria-hidden="true">{% for n in range(1,6) %}<i class="{{ 'on' if n <= build.ideals_sworn }}"></i>{% endfor %}</span>{% if build.ideals_sworn == 0 %} <span style="color:var(--text-on-dark-3);">(surges locked until First Ideal)</span>{% endif %}</div>
+    </div>
+    <div style="margin-top:.4rem; font-size:12.5px; color:#aeb8c4; font-style:italic;">{{ radiant.philosophy }}</div>
+    {% if ideal_states and build.ideals_sworn >= 1 %}<div style="margin-top:.45rem; display:flex; flex-direction:column; gap:.25rem;">
+      {% for id in ideal_states if id.sworn %}
+      <div style="font-size:12px; line-height:1.4;"><b style="color:var(--order-accent,var(--accent));">{{ ['','First','Second','Third','Fourth'][id.n] }} Ideal</b> &mdash; <i>{{ id.words or id.suggested or 'spoken' }}</i></div>
+      {% endfor %}
+    </div>{% elif build.ideals_sworn >= 1 %}<div style="margin-top:.35rem; font-size:12px;"><b>First Ideal:</b> <i>{{ first_ideal }}</i></div>{% endif %}
+    {% if interactive and build.ideals_sworn >= 1 %}
+    <div style="margin-top:.6rem;">
+      <button class="cs-rad-btn{{ ' on' if cur.forsaken }}" id="btn-forsake" onclick="cosForsake()" title="Mark your oaths forsaken — your spren withdraws and your Stormlight powers seal until your bond is renewed. GM-toggleable; the rules leave the in-fiction consequences to your table.">{{ 'Renew oaths' if cur.forsaken else 'Oaths forsaken' }}</button>
+    </div>
+    {% endif %}
   </div>
 
-  <div class="cs-section-h cs-foldable">Talents</div>
-  {% if build.talents %}
-  <div class="cs-chips">{% for t in build.talents %}<span class="cs-chip df">{{ t.name if t.name is defined else t }}</span>{% endfor %}</div>
-  {% else %}<div style="color:var(--text-on-dark-3); font-size:12px;">None selected</div>{% endif %}
-
-  {% if infected %}
-  <div class="cs-section-h cs-foldable">Infected Arts</div>
-  {% for art in infected %}
-  <div class="cs-ability" style="border-color:rgba(205,81,191,.5);">
-    <div class="an" style="color:#cd51bf;">{{ art.disease }} &rarr; {{ art.art }}</div>
-    <div class="ad"><b style="color:#f0a9a9;">Disease cost:</b> {{ art.cost }}</div>
-    {% if art.abilities %}<ul style="margin:.45rem 0 0 1.1rem; line-height:1.5;">
-      {% for ab in art.abilities %}<li style="margin-bottom:.25rem;{% if interactive %} cursor:pointer;{% endif %}"{% if interactive %} class="inf-roll" onclick='cosAbility({{ ab.name|tojson }}, {{ ab.desc|tojson }})' title="Tap to roll this ability's dice / log its use"{% endif %}><b style="color:#e8eef5;">{{ ab.name }}</b>{% if ab.cost %} <span class="cs-chip">{{ ab.cost }}</span>{% endif %}{% if interactive %} <span style="font-size:10px; color:var(--accent);">tap to roll</span>{% endif %} &mdash; {{ ab.desc }}</li>{% endfor %}
-    </ul>{% endif %}
+  {% if interactive and a.investiture_max %}
+  <div class="cs-rad-plate{{ ' forsaken' if cur.forsaken }}" id="cos-sl-actions" style="margin-top:.6rem;">
+    <div class="cos-forsaken-banner">Oaths forsaken &mdash; your spren has withdrawn. Surges, Shardblade &amp; Plate are sealed until your bond is renewed.</div>
+    <div style="font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--order-accent,var(--accent)); margin-bottom:.5rem;">Stormlight Actions</div>
+    <div style="display:flex; gap:.5rem; flex-wrap:wrap; align-items:center;">
+      <button class="cs-rad-btn" onclick="cosBreathe()" title="Recover Investiture to your maximum from infused spheres within 5 ft.">Breathe Stormlight</button>
+      <button class="cs-rad-btn" id="btn-enhance" onclick="cosEnhance()" title="Spend 1 Investiture: Enhanced [Strength +1] and [Speed +1] until the end of your next turn. Tap again to drop it.">Enhance <span style="opacity:.7;">(1 Inv)</span></button>
+      <button class="cs-rad-btn" onclick="cosRegenerate()" title="Spend 1 Investiture: recover health equal to 1d6 + your tier ({{ tier }}).">Regenerate <span style="opacity:.7;">(1 Inv)</span></button>
+      {% if has_wound_regen %}<button class="cs-rad-btn" onclick="cosMendInjury()" title="Wound Regeneration: while Regenerating, spend 1 Investiture to instantly recover from an injury of your choice.">Mend Injury <span style="opacity:.7;">(1 Inv)</span></button>{% endif %}
+      {% if shardblade %}<button class="cs-rad-btn" id="btn-shardblade" onclick="cosShardblade()" title="Third Ideal: summon your spren as a Shardblade (2d8 spirit, deadly — bypasses Deflect). Tap again to dismiss.">Summon Shardblade</button>{% endif %}
+      {% if shardplate %}<button class="cs-rad-btn{{ ' on' if cur.shardplate }}" id="btn-shardplate" onclick="cosShardplate()" title="Fourth Ideal: don living Shardplate — Deflect 5 against EVERY damage type (even spirit &amp; vital). Tap again to doff.">{{ 'Doff' if cur.shardplate else 'Don' }} Shardplate</button>{% endif %}
+      <span id="enh-chip" class="cs-chip df" style="display:{{ '' if cur.enhanced else 'none' }};">Enhanced &middot; STR +1 / SPD +1</span>
+    </div>
+    {% if has_take_squire %}
+    <div style="font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--order-accent,var(--accent)); margin:.85rem 0 .35rem;">Squire <span style="text-transform:none; letter-spacing:0; color:var(--text-on-dark-3);">(breathes Stormlight &amp; uses your surges; choose after a long rest)</span></div>
+    <input id="cos-squire" value="{{ cur.squire }}" placeholder="Name your squire&hellip;" oninput="cosSquire(this.value)"
+           style="width:100%; max-width:320px; background:var(--bg-page,#0d1117); border:1px solid var(--border-card); border-radius:7px; padding:.4rem .55rem; color:#e8eef5; font-size:13px;">
+    {% endif %}
+    {% if radiant_powers and build.ideals_sworn >= 1 %}
+    <div style="font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--accent); margin:.85rem 0 .4rem;">Surge Powers <span style="text-transform:none; letter-spacing:0; color:var(--text-on-dark-3);">(tap to spend Investiture &amp; log)</span></div>
+    <div class="cs-grid" style="grid-template-columns:1fr 1fr; gap:.5rem;">
+      {% for p in radiant_powers %}
+      <div class="cs-ability roll" style="margin-bottom:0;"
+           onclick='cosSurge({{ p.name|tojson }}, {{ p.investiture or 0 }}, {{ p.effect|tojson }})'>
+        <div class="an">{{ p.name }} <span style="font-size:11px; color:var(--text-on-dark-3); font-weight:400;">{{ p.cost }} action{{ '' if p.cost == 1 else 's' }}{% if p.investiture %} &middot; {{ p.investiture }} Investiture{% endif %}</span></div>
+        <div class="ad">{{ p.effect }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
   </div>
-  {% endfor %}
+  {% endif %}
   {% endif %}
 
+  {{ cs_infected_arts() }}
+  </div>
+  {% endif %}
+  <div class="cs-panel" role="tabpanel" data-panel="gear" tabindex="0" hidden>
+  {% if pc %}
+  <section>
+  <div class="cs-section-h cs-foldable">Inventory <span style="text-transform:none; letter-spacing:0;">(equipped in cyan)</span></div>
+  {% if inventory %}
+  <div class="cs-grid" style="grid-template-columns:repeat(auto-fill,minmax(210px,1fr));">
+    {% for it in inventory %}
+    <div class="cs-ability" style="margin-bottom:0;{% if it.equipped %} border-color:rgba(95,168,224,.5);{% endif %}">
+      <div class="an" style="{% if not it.equipped %}color:#e8eef5;{% endif %}">{{ it.name }}{% if it.qty and it.qty > 1 %} &times;{{ it.qty }}{% endif %}</div>
+      <div class="ad">
+        {{ it.kind|capitalize }}{% if it.damage %} &middot; {{ it.damage.formula }} {{ it.damage.type }}{% endif %}{% if it.deflect %} &middot; Deflect {{ it.deflect }}{% endif %}
+        {% if it.traits %}<div class="cs-chips" style="margin-top:.3rem;">{% for tr in it.traits %}<span class="cs-chip">{{ tr }}</span>{% endfor %}</div>{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}<div style="color:var(--text-on-dark-3); font-size:12px;">Empty</div>{% endif %}
+
+  </section>
+  <section>
   {% if pc %}
   <div class="cs-section-h cs-foldable">Spheres &amp; Goods <span style="text-transform:none; letter-spacing:0;">(awarded by the GM)</span></div>
   <div id="cos-wallet">
@@ -774,6 +838,8 @@
   </div>
   {% endif %}
 
+  </section>
+  <section>
   {% if fabrials or crafted or interactive %}
   <div class="cs-section-h cs-foldable">Fabrials <span style="text-transform:none; letter-spacing:0;">(tap &minus;/+ to spend &amp; recharge)</span></div>
   {% for f in fabrials %}
@@ -804,21 +870,41 @@
   {% endif %}
   {% endif %}
 
-  <div class="cs-section-h cs-foldable">Inventory <span style="text-transform:none; letter-spacing:0;">(equipped in cyan)</span></div>
-  {% if inventory %}
-  <div class="cs-grid" style="grid-template-columns:repeat(auto-fill,minmax(210px,1fr));">
-    {% for it in inventory %}
-    <div class="cs-ability" style="margin-bottom:0;{% if it.equipped %} border-color:rgba(95,168,224,.5);{% endif %}">
-      <div class="an" style="{% if not it.equipped %}color:#e8eef5;{% endif %}">{{ it.name }}{% if it.qty and it.qty > 1 %} &times;{{ it.qty }}{% endif %}</div>
-      <div class="ad">
-        {{ it.kind|capitalize }}{% if it.damage %} &middot; {{ it.damage.formula }} {{ it.damage.type }}{% endif %}{% if it.deflect %} &middot; Deflect {{ it.deflect }}{% endif %}
-        {% if it.traits %}<div class="cs-chips" style="margin-top:.3rem;">{% for tr in it.traits %}<span class="cs-chip">{{ tr }}</span>{% endfor %}</div>{% endif %}
-      </div>
-    </div>
-    {% endfor %}
+  </section>
+  {% endif %}
   </div>
-  {% else %}<div style="color:var(--text-on-dark-3); font-size:12px;">Empty</div>{% endif %}
+  <div class="cs-panel" role="tabpanel" data-panel="character" tabindex="0" hidden>
+  {% if pc %}
+  <section>
+  <div class="cs-section-h cs-foldable">Talents</div>
+  {% if build.talents %}
+  <div class="cs-chips">{% for t in build.talents %}<span class="cs-chip df">{{ t.name if t.name is defined else t }}</span>{% endfor %}</div>
+  {% else %}<div style="color:var(--text-on-dark-3); font-size:12px;">None selected</div>{% endif %}
 
+  </section>
+  <section>
+  <div class="cs-section-h cs-foldable">Expertises</div>
+  <div class="cs-chips">
+    {% for e in build.expertises %}<span class="cs-chip">{{ e }}</span>{% else %}<span style="color:var(--text-on-dark-3); font-size:12px;">None</span>{% endfor %}
+  </div>
+
+  </section>
+  {% if not radiant %}
+  {{ cs_infected_arts() }}
+  {% endif %}
+  {% if interactive %}
+  {# --- Goals & Rewards (Ch.8): work a goal across three milestones, then conclude
+        it for a reward (a possession, relationship, status, …). --- #}
+  <div class="cs-goals-wrap" style="margin-bottom:1rem;">
+    <div style="display:flex; align-items:center; gap:.6rem; margin-bottom:.4rem;">
+      <span style="font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-on-dark-3);">Goals &amp; Rewards</span>
+      <button type="button" class="goal-add" onclick="cosGoalAdd()">+ Add goal</button>
+    </div>
+    <div id="cos-goals" class="cs-goals"></div>
+  </div>
+  {% endif %}
+
+  <section>
   {% if owner_private is not defined or owner_private %}
   <div class="cs-section-h cs-foldable">Session Notes</div>
   <textarea id="pc-notes" placeholder="Jot down anything during the session — saves automatically."
@@ -837,6 +923,53 @@
   </script>
 
   {% endif %}
+  </section>
+  {% endif %}
+  </div>
+  <script data-cs-tabs>
+  (function(){
+    const tabs = Array.from(document.querySelectorAll('.cs-tab'));
+    const panels = Array.from(document.querySelectorAll('.cs-panel'));
+    const key = 'cosmere-sheet-tab:' + {{ actor_id|tojson }};
+    // Add only the new accessibility ids here; preserve the legacy rendered id contract.
+    tabs.forEach(function(tab){
+      const name = tab.dataset.tab;
+      const panel = panels.find(function(p){ return p.dataset.panel === name; });
+      tab.id = 'cs-tab-' + name;
+      panel.id = 'cs-panel-' + name;
+      tab.setAttribute('aria-controls', panel.id);
+      panel.setAttribute('aria-labelledby', tab.id);
+    });
+    function select(name, focus){
+      if(!tabs.some(function(tab){ return tab.dataset.tab === name; })) name = 'play';
+      tabs.forEach(function(tab){
+        const active = tab.dataset.tab === name;
+        tab.setAttribute('aria-selected', String(active));
+        tab.tabIndex = active ? 0 : -1;
+        if(active && focus) tab.focus();
+      });
+      panels.forEach(function(panel){ panel.hidden = panel.dataset.panel !== name; });
+      try { sessionStorage.setItem(key, name); } catch(e) {}
+    }
+    tabs.forEach(function(tab, index){
+      tab.addEventListener('click', function(){ select(tab.dataset.tab, false); });
+      tab.addEventListener('keydown', function(e){
+        let next;
+        if(e.key === 'ArrowRight') next = (index + 1) % tabs.length;
+        else if(e.key === 'ArrowLeft') next = (index + tabs.length - 1) % tabs.length;
+        else if(e.key === 'Home') next = 0;
+        else if(e.key === 'End') next = tabs.length - 1;
+        else return;
+        e.preventDefault();
+        select(tabs[next].dataset.tab, true);
+      });
+    });
+    let saved = 'play';
+    try { saved = sessionStorage.getItem(key) || 'play'; } catch(e) {}
+    select(saved, false);
+  })();
+  </script>
+  {% if pc %}
   {# Collapsible reference sections (combat-first): fold the non-combat sections
      away; the choice persists per character in localStorage. #}
   <script>
