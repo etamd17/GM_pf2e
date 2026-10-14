@@ -68,6 +68,26 @@ UI-03 bug list (from `tasks/UI-00.md` > Anything broken or risky):
 - Merging with main: one trivial conflict (`core/storage.py`).
 - Not done yet: full test run is red (order-dependent), branch not pushed, 43 commits behind main.
 
+## VTT (table-top map rebuild)
+
+Decided 2026-10-14: the VTT lives **on the site**, not in Obsidian. It reuses the site's characters,
+tracker, live sync and the existing map (`/map`, `/map/table`). Obsidian stays the prep and control
+side through the Session Operations plugin.
+
+This work runs on its **own channel**, not this queue: branch `side/vtt-rebuild`, handoffs in
+`GM_pf2e_vtt/docs/vtt/handoffs/` (rules in `docs/vtt/README.md`), decisions in `docs/vtt/decisions/`
+(ADR-0001 table-first, ADR-0002 wire protocol, ADR-0003 hosting). Codex owns `vtt/` and the backend,
+Claude owns `frontend/vtt/`. The rows below only track where it stands.
+
+| ID | Task | Owner | Model | Status | Where |
+|---|---|---|---|---|---|
+| VTT-017 | Fix the session issue Codex flagged in client commit `de880953`; review Codex's first contract batch (`c5653e05`); publish handoff 017 | claude | Opus, high | ready (idle since 2026-10-12) | `GM_pf2e_vtt/docs/vtt/handoffs/VTT-20261012-016-codex.md` |
+| VTT-ALPHA | First usable milestone: GM workspace + shared table display talking to the new backend, on a Railway **staging** environment of the same project (ADR-0003). Production untouched until the user merges | codex + claude | strongest / Opus high | needs plan (after VTT-017) | ADR-0003 |
+| VTT-PLAYERS | Per-player screens and per-player vision | - | - | deferred by the user (ADR-0001) | - |
+
+Order: finish the Cosmere UI-02 screens first, then pick VTT back up at VTT-017. Creating the
+Railway staging environment or spending money needs the user's approval at that time.
+
 ## UI-00 review (Claude, 2026-10-13)
 
 Accepted as a design checkpoint. Notes:
@@ -81,6 +101,7 @@ Accepted as a design checkpoint. Notes:
 
 Newest first. One plain line per handoff: who, what, what's next.
 
+- 2026-10-14 Claude: added the VTT to this list. Decision: build it on the site (not Obsidian). It continues on its own branch and handoff files; next step is VTT-017 (Claude), after the Cosmere screens.
 - 2026-10-14 Claude: checked the new Cosmere generators page (UI-02a) on desktop and phone in both skins: everything works and fits. Accepted, no fixes needed. Next: Codex commits and opens the PR; the user merges.
 - 2026-10-14 Codex: built UI-02a labelled Cosmere generator controls; 24 focused tests pass and all 106 templates parse. Next: Claude reviews the diff and checks both skins at 1440px and 375px.
 - 2026-10-14 Codex: PR #182's final full CI passed (4,812 standard tests plus browser and PostgreSQL); it is ready for the user to merge. Next: merge #182 before UI-02a / PR #183.
