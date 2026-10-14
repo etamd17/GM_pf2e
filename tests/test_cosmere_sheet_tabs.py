@@ -323,13 +323,24 @@ def test_tabs_and_default_panel(render_sheet, radiant, readonly):
             assert any(a.get('data-panel') == panel for a in node['ancestors']), target
 
 
-def test_non_pc_actor_has_no_radiant_tab(monkeypatch):
+def test_non_pc_actor_shows_play_without_tabs(monkeypatch):
     monkeypatch.setattr(app, '_cosmere_doc_by_id', lambda _: {
         '_id': 'guard', 'name': 'Guard', 'type': 'adversary', 'system': {}})
     with app.app.test_request_context('/cosmere/sheet/guard'):
         dom = Sheet(app.cosmere_sheet('guard'))
-    assert [n['data-tab'] for n in dom.find(role='tab')] == ['play', 'gear', 'character']
-    assert not dom.find(**{'data-panel': 'radiant'})
+    assert not dom.find(role='tablist')
+    assert not dom.find(**{'class': 'cs-tabs'})
+    assert not dom.find(role='tab')
+    assert not dom.find(**{'class': 'cs-tab'})
+    assert not dom.find(role='tabpanel')
+    assert not any('data-cs-tabs' in node for node in dom.nodes)
+    for panel in ('radiant', 'gear', 'character'):
+        assert not dom.find(**{'data-panel': panel})
+    play, = dom.find(**{'data-panel': 'play'})
+    skills, = dom.find(id='cs-skills-grid')
+    assert play in skills['ancestors']
+    assert not any('hidden' in node for node in (*skills['ancestors'], skills))
+    assert 'tabindex' not in play
 
 
 def test_hidden_print_keyboard_and_storage_safeguards():

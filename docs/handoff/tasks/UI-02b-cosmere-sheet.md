@@ -156,3 +156,73 @@ blocks to move. Infected Arts is defined once as a template macro and emitted in
   Character panels are empty because those original sections were PC-only; the brief only requests
   conditional omission for Radiant, so the other tab names are retained for review.
 - No rule, route, payload, or PF2e-sheet changes; no push, merge or deployment. UI-02c was not started.
+
+## Review
+
+**Claude, 2026-10-14: changes requested -- one small fix; everything else accepted.**
+
+Diff `3b021789..6c7fb88e` vs the brief: blocks moved whole into band / strip / four panels; Infected
+Arts rendered exactly once (Radiant panel for Radiant PCs, Character otherwise); print rules show
+every panel, expand folded sections and hide the tablist; tablist with arrows/Home/End, ARIA
+wiring and per-character `sessionStorage`. Full suite not rerun (per instructions).
+
+Browser, real app on this branch (fresh local data, throwaway account, Cosmere campaign, a level 5
+Windrunner PC added to the tracker):
+- **Tabs:** Play default; ArrowRight -> Radiant -> Gear, End -> Character, Home -> Play, ArrowLeft
+  wraps; focus follows; `aria-selected`/`aria-controls` set; selection restored after reload.
+- **Live updates with Gear open:** GM tracker damage 5 -> Health 21 -> 18 (Deflect 2) on the orb and
+  the sticky bar; GM-applied Prone turned on with its effect text; Gear stayed open.
+- **Wallet:** GM loot award (3 marks + Rope) while the Character tab was open -> wallet showed
+  Mark 3 and Rope on Gear.
+- **Notes autosave** after tab changes: "Saved", and the server copy has the new text.
+- **Fabrial Workshop** after tab changes: effect picker fills the body (15 effects); "Trap the spren"
+  roll runs with no errors.
+- **Print:** all six reference sections folded, each fold body keeps its content; the loaded print
+  rules are `.cs-fold-body.collapsed`, `.cs-panel[hidden]` -> `display:block !important` and
+  `.cs-tabs` hidden. (Checked from the live CSSOM; a real print preview isn't available in this
+  pane.)
+- **Desktop 1440 and phone 375, Stormlight and Mistborn:** no sideways scroll on any tab, including
+  all three resource controls open and the workshop expanded at 375; three rings on one row on
+  phones; tab labels fit; desktop band in two columns.
+
+Required fix:
+1. **Non-PC sheet shows two empty tabs.** `/cosmere/sheet/<actor_id>` (checked with the bestiary
+   "Archer") renders Play, Gear, Character; Gear and Character panels are completely empty. Apply
+   the brief's own rule ("render a tab only when it has content", as done for Radiant): wrap the Gear
+   and Character tab buttons and panels in `{% if pc %}`, and when Play is the only tab, don't
+   render the tablist at all (keep the Play panel visible). Add a test: non-PC sheet has no
+   Gear/Character tab and no tablist; PC sheet unchanged.
+
+Optional (not required): on phones there is an empty band under the header links (the gated
+`#cs-vbar` still takes space); it predates this change.
+
+## Fix after review
+
+- **Changed:** Gear/Character panels, the tab row and tab controller now render only for PCs.
+  Radiant remains gated by `pc and radiant`. Non-PC Play content stays visible without orphan
+  tabpanel semantics or a focusable panel wrapper. The earlier empty-tab follow-up is resolved.
+- **Strict TDD red:** `python -m pytest -q tests/test_cosmere_sheet_tabs.py::test_non_pc_actor_shows_play_without_tabs`
+  -> **1 failed in 20.08s**, at the unwanted tablist assertion, before the template edit.
+  The revised test also checks no tab row/buttons/controller, no Radiant/Gear/Character panels,
+  no tabpanel role and no hidden ancestor around the visible Play skills. Existing PC assertions
+  and controller tests are unchanged.
+- **Focused green:** using `../.venv_cosmere_rules/Scripts/python.exe` as `python`:
+
+  ```text
+  python -m pytest -q --basetemp=.pytest_cache/ui02b-review-fix tests/test_cosmere_sheet_tabs.py tests/test_cosmere_sheet_extras.py tests/test_cosmere_sheet_polish.py tests/test_cosmere_sheet_redesign.py tests/test_cosmere_print.py tests/test_cosmere_player.py tests/test_cosmere_integration.py
+  59 passed in 20.78s
+  ```
+
+  These seven files cover tabs, existing sheet markup/print, PC controls and the non-PC sheet
+  route. The first run of the same files without `--basetemp` returned **1 failed, 47 passed,
+  11 errors in 40.35s**: Windows sandbox temporary-directory `os.replace` permission errors.
+  Moving temporary files into the writable workspace resolved all twelve failures/errors.
+- **PC preservation:** an in-memory comparison against `6c7fb88e` with a fixed CSRF token
+  confirmed **4 rendered pages byte-for-byte equal** (Radiant/non-Radiant x read-only/interactive).
+  No script bodies or PC behavior changed.
+- `python tools/check_templates.py` -> **OK: all 107 templates parse**, exit 0.
+- `git diff --check` -> **exit 0**, no whitespace errors (Git emitted its existing LF-to-CRLF
+  conversion notice for this report).
+- **Scope/remaining verification:** Claude's existing review is preserved; browser verification
+  of this non-PC-only fix remains for Claude. No full 441-test run, push, merge, deployment or
+  UI-02c work. Queue returned to `review`.

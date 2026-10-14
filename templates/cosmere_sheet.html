@@ -660,13 +660,13 @@
 
   </section>
   {% endmacro %}
-  <div class="cs-tabs" role="tablist" aria-label="Character sheet sections">
+  {% if pc %}<div class="cs-tabs" role="tablist" aria-label="Character sheet sections">
     <button type="button" class="cs-tab" role="tab" data-tab="play" aria-selected="true" tabindex="0">Play</button>
     {% if pc and radiant %}<button type="button" class="cs-tab" role="tab" data-tab="radiant" aria-selected="false" tabindex="-1">Radiant</button>{% endif %}
     <button type="button" class="cs-tab" role="tab" data-tab="gear" aria-selected="false" tabindex="-1">Gear</button>
     <button type="button" class="cs-tab" role="tab" data-tab="character" aria-selected="false" tabindex="-1">Character</button>
-  </div>
-  <div class="cs-panel" role="tabpanel" data-panel="play" tabindex="0">
+  </div>{% endif %}
+  <div class="cs-panel"{% if pc %} role="tabpanel"{% endif %} data-panel="play"{% if pc %} tabindex="0"{% endif %}>
   {# --- Skills --- #}
   {% set _sk_ns = namespace(locked=false) %}
   {% for _c, _s in a.skills.items() %}{% if not _s.unlocked %}{% set _sk_ns.locked = true %}{% endif %}{% endfor %}
@@ -800,7 +800,7 @@
   {{ cs_infected_arts() }}
   </div>
   {% endif %}
-  <div class="cs-panel" role="tabpanel" data-panel="gear" tabindex="0" hidden>
+  {% if pc %}<div class="cs-panel" role="tabpanel" data-panel="gear" tabindex="0" hidden>
   {% if pc %}
   <section>
   <div class="cs-section-h cs-foldable">Inventory <span style="text-transform:none; letter-spacing:0;">(equipped in cyan)</span></div>
@@ -872,8 +872,8 @@
 
   </section>
   {% endif %}
-  </div>
-  <div class="cs-panel" role="tabpanel" data-panel="character" tabindex="0" hidden>
+  </div>{% endif %}
+  {% if pc %}<div class="cs-panel" role="tabpanel" data-panel="character" tabindex="0" hidden>
   {% if pc %}
   <section>
   <div class="cs-section-h cs-foldable">Talents</div>
@@ -925,8 +925,8 @@
   {% endif %}
   </section>
   {% endif %}
-  </div>
-  <script data-cs-tabs>
+  </div>{% endif %}
+  {% if pc %}<script data-cs-tabs>
   (function(){
     const tabs = Array.from(document.querySelectorAll('.cs-tab'));
     const panels = Array.from(document.querySelectorAll('.cs-panel'));
@@ -968,7 +968,7 @@
     try { saved = sessionStorage.getItem(key) || 'play'; } catch(e) {}
     select(saved, false);
   })();
-  </script>
+  </script>{% endif %}
   {% if pc %}
   {# Collapsible reference sections (combat-first): fold the non-combat sections
      away; the choice persists per character in localStorage. #}
