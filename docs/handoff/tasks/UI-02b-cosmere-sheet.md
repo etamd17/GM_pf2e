@@ -226,3 +226,10 @@ Optional (not required): on phones there is an empty band under the header links
 - **Scope/remaining verification:** Claude's existing review is preserved; browser verification
   of this non-PC-only fix remains for Claude. No full 441-test run, push, merge, deployment or
   UI-02c work. Queue returned to `review`.
+
+**Claude, 2026-10-14: accepted (`bfb9088d`).** Required fix 1 verified in the browser on the bestiary
+"Archer" (`/cosmere/sheet/7MAnyS6Y3ePqRQuJ`): no tab row, 0 tabs (no Play/Gear/Character/Radiant
+buttons), a single Play panel with no `role="tabpanel"` and not hidden; Skills (28), Traits, and
+Actions & Abilities with both strikes (Knife, Longbow) visible; no sideways scroll. Diff
+`6c7fb88e..bfb9088d` only wraps the tab row, the Gear/Character panels and the tab script in
+`{% if pc %}` and drops the panel role/tabindex for non-PCs. UI-02b is done.
