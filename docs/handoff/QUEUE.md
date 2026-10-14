@@ -14,7 +14,7 @@ One shared list for Claude and Codex. Protocol: `docs/handoff/PROTOCOL.md`.
 | ID | Task | Owner | Model | Status | Brief |
 |---|---|---|---|---|---|
 | 5E-04 | Species versions as a builder choice (Draconic Ancestry, 2024 lineages) + fix raw text in sheet resistances | codex | standard | ready | `tasks/5E-04.md` |
-| 5E-06 | Delete combatant pictures nothing uses | codex | standard | done (accepted by Claude; local commit, not pushed) | `tasks/5E-06.md` |
+| 5E-06 | Delete combatant pictures nothing uses | codex | standard | done (PR #180 merged after CI) | `tasks/5E-06.md` |
 | 5E-03 | Database ownership for 5e characters (only needed before the site uses PostgreSQL for the web app) | claude | Opus, high | needs brief | - |
 | 5E-05 | Private drafts for 5e characters | claude | Opus, high | needs brief (after 5E-03) | - |
 
@@ -30,7 +30,7 @@ UI/UX design is Claude's by default; Codex implements mechanical parts from Clau
 | ID | Task | Owner | Model | Status | Brief |
 |---|---|---|---|---|---|
 | UI-00 | Design review checkpoint: 18 screens approved as mockups | codex | - | done (review: accepted, see below) | `tasks/UI-00.md` |
-| UI-01 | Finish the design review: Cosmere generators, then Cosmere sheet, level-up and builder. Mockups first; the user picks a direction for each | claude | Opus, medium-high | ready | `tasks/UI-00.md` > What's next |
+| UI-01 | Finish the design review: Cosmere generators, then Cosmere sheet, level-up and builder. Mockups first; the user picks a direction for each | claude | Opus, medium-high | done (generators A, sheet A, builder B) | `tasks/UI-01.md` |
 | UI-02 | Build the approved screens, one small task per screen, starting from current `main` (the mockups were made on an older snapshot) | claude briefs, codex builds | briefs: Opus high; build: standard | needs brief | - |
 | UI-03 | Fix the real bugs the review found. Check each on current `main` first, then fix it with a test | codex | standard | needs brief | - |
 
@@ -51,9 +51,19 @@ UI-03 bug list (from `tasks/UI-00.md` > Anything broken or risky):
 
 | ID | Task | Owner | Model | Status | Brief |
 |---|---|---|---|---|---|
-| MB-00 | Codex's handoff for the Mistborn work (in progress: still reading the Mistborn materials) | codex | its strongest | in-progress | `tasks/MB-00.md` (not written yet) |
+| MB-00 | Mistborn rules backend (Era 1 and 2, Allomancy, Feruchemy, versioned rules packages, GM services) | codex | its strongest | done, reviewed by Claude (see below) | `GM_pf2e_cosmere_rules/docs/handoff/tasks/MB-00.md` |
+| MB-01 | Bring MB-00 up to date with main, move the Mistborn data out of git (installed like 5e), make the full test run green, open a PR | codex | strongest model, high effort (history rewrite + test-failure hunt) | ready | `tasks/MB-01.md` |
+| MB-02 | Verify the 252 Mistborn records still blocked on source checks | codex | its strongest | needs brief | - |
+| MB-03 | Generators: make Mistborn content for Mistborn campaigns (found in UI-01) | codex | standard | needs brief | - |
 
-Once MB-00 is in, Claude reads it, checks it against the code and splits the rest into tasks here.
+**MB-00 review (Claude, 2026-10-13):** accepted as a backend milestone, not ready to merge yet.
+- 1024 Cosmere tests pass on the branch (623 new + 401 existing).
+- Data is short rule summaries, not book text; 4.8 MB. It's a public repo, so the user decides
+  whether it goes into git (see MB-01).
+- Opening a sheet never rewrites the file; a character converts to the new format on its next save
+  (tested for wallet and live state).
+- Merging with main: one trivial conflict (`core/storage.py`).
+- Not done yet: full test run is red (order-dependent), branch not pushed, 43 commits behind main.
 
 ## UI-00 review (Claude, 2026-10-13)
 
@@ -68,6 +78,11 @@ Accepted as a design checkpoint. Notes:
 
 Newest first. One plain line per handoff: who, what, what's next.
 
+- 2026-10-13 Codex: merged 5E-06 as PR #180 after all CI jobs passed; the public site health checks returned ready. Next: continue the remaining UI and Mistborn tasks.
+- 2026-10-13 Claude: reviewed Codex's Mistborn backend (MB-00): solid, 1024 tests pass, one easy merge conflict. User decided the Mistborn data stays out of git (like 5e). Next: Codex does MB-01.
+- 2026-10-13 Claude: Cosmere builder/level-up design picked (B: a 'still to choose' list and level-up badge). Design review for all screens is now complete. Next: Claude writes build briefs (UI-02) so Codex can build the approved screens.
+- 2026-10-13 Claude: Cosmere character sheet design picked (A: vitals band on top + Play/Radiant/Gear/Character tabs). Next: Cosmere builder / level-up mockups.
+- 2026-10-13 Claude: Cosmere generators design picked (A: labelled buttons, like PF2e). Also noticed the generators make Stormlight content even in Mistborn mode (for the Mistborn task). Next: Cosmere character sheet mockups.
 - 2026-10-13 Claude: checked Codex's fix for 5E-06; one stuck file no longer blocks the cleanup. Accepted. Next: the user decides when to push and open a PR.
 - 2026-10-13 Codex: fixed cleanup so one locked picture does not block the others; 41 checks passed and 5E-06 is committed locally. Next: user decides if and when to merge; no push or deployment.
 - 2026-10-13 Claude: reviewed 5E-06 (picture cleanup). It never deletes a picture in use; 40 tests pass. One small fix: a single locked file currently stops the whole cleanup. Next: Codex makes that fix, adds a test, commits locally.

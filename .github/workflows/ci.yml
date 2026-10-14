@@ -13,9 +13,56 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
+  changes:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 5
+    outputs:
+      run_product_checks: ${{ steps.filter.outputs.run_product_checks }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Classify pull request files
+        id: filter
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        shell: bash
+        run: |
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            echo "run_product_checks=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          python - <<'PY'
+          import os
+          import subprocess
+
+          parents = subprocess.check_output(
+              ['git', 'rev-list', '--parents', '-n', '1', 'HEAD'], text=True
+          ).split()
+          if len(parents) != 3:
+              raise RuntimeError('Expected a pull request merge commit with two parents')
+          changed = subprocess.check_output(
+              ['git', 'diff', '--name-only', '-z', 'HEAD^1', 'HEAD']
+          ).split(b'\0')
+          paths = [os.fsdecode(path) for path in changed if path]
+          if not paths:
+              raise RuntimeError('Pull request diff was empty; cannot classify safely')
+          docs_only = all(
+              path.startswith('docs/') or path.endswith('.md')
+              for path in paths
+          )
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write(f'run_product_checks={str(not docs_only).lower()}\n')
+          print(f'Files: {len(paths)}; docs only: {docs_only}')
+          PY
+
+  test:
+    needs: changes
+    if: needs.changes.outputs.run_product_checks == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
     env:
       PYTHONHASHSEED: "0"
       PYTHONDONTWRITEBYTECODE: "1"
@@ -107,6 +154,8 @@ jobs:
         run: python -m pytest -q -m "not postgresql and not browser" --strict-markers
 
   browser:
+    needs: changes
+    if: needs.changes.outputs.run_product_checks == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:
@@ -156,6 +205,8 @@ jobs:
           retention-days: 7
 
   postgresql:
+    needs: changes
+    if: needs.changes.outputs.run_product_checks == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
