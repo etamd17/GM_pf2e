@@ -3,32 +3,29 @@
 {% block extra_head %}
   /* Cosmere generators. Raw CSS -- base.html already wraps extra_head in <style>;
      never nest a <style> here (the CSS parser eats the first rule). */
-  .cg-head { display:flex; align-items:baseline; justify-content:space-between; gap:.8rem; flex-wrap:wrap; border-bottom:1px solid var(--border-card); padding-bottom:.7rem; margin-bottom:1.1rem; }
+  .cg-head { display:flex; align-items:flex-end; justify-content:space-between; gap:.8rem; flex-wrap:wrap; border-bottom:1px solid var(--border-card); padding-bottom:.7rem; margin-bottom:1.1rem; }
   .cg-title { display:inline-block; margin:0; font-family:var(--font-display, serif); font-size:1.7rem; font-weight:700; color:var(--storm-100, var(--accent)); }
-  .cg-sub { font-size:12px; color:var(--text-on-dark-3); }
+  .cg-sub { margin:.25rem 0 0; font-size:12px; color:var(--text-on-dark-3); }
   .cg-all { font-size:12px; text-decoration:none; padding:.45rem .9rem; border-radius:8px; background:var(--bg-card-2); border:1px solid color-mix(in srgb, var(--accent) 45%, transparent); color:var(--accent); cursor:pointer; transition:background .12s, border-color .12s; }
+  .cg-all-reroll { background:color-mix(in srgb, var(--accent) 12%, transparent); }
   .cg-all:hover { background:color-mix(in srgb, var(--accent) 12%, transparent); border-color:var(--accent); }
   .cg-all:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
   .cg-head-actions { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
   .cg-grid { display:grid; gap:1rem; grid-template-columns:repeat(auto-fill, minmax(320px,1fr)); align-items:start; }
-  /* Flatter cells: keep the raised card surface for grouping, but drop the
-     teal outline for a neutral hairline so a grid of cards reads calm, not
-     like a wall of teal-bordered boxes. Teal is reserved for text + hover. */
-  .cg-card { background:var(--bg-card); border:1px solid rgba(255,255,255,.06); border-radius:var(--r-md); padding:.9rem 1rem; }
-  .cg-card-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:.5rem; }
-  .cg-label { font-family:var(--font-display, serif); font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); }
-  .cg-reroll { background:none; border:1px solid rgba(255,255,255,.08); color:var(--text-on-dark-3); border-radius:6px; width:26px; height:26px; cursor:pointer; font-size:14px; line-height:1; transition:color .12s, border-color .12s; }
+  .cg-card { background:transparent; border:1px solid rgba(255,255,255,.07); border-radius:var(--r-md); padding:.9rem 1rem; }
+  .cg-card-head { display:flex; align-items:center; justify-content:space-between; gap:.6rem; margin-bottom:.65rem; padding-bottom:.55rem; border-bottom:1px solid rgba(255,255,255,.07); }
+  .cg-label { font-family:var(--font-display, serif); font-size:13.5px; font-weight:700; letter-spacing:.02em; color:var(--accent); }
+  .cg-reroll { background:none; border:1px solid var(--accent); color:var(--accent); border-radius:6px; width:auto; height:26px; padding:0 .55rem; cursor:pointer; font:600 11.5px var(--font-ui); line-height:1; transition:color .12s, border-color .12s, background .12s; }
   .cg-reroll:hover { color:var(--accent); border-color:var(--accent); }
   .cg-reroll:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
-  .cg-card-actions { display:flex; align-items:center; gap:.35rem; }
-  .cg-copy { background:none; border:1px solid rgba(255,255,255,.08); color:var(--text-on-dark-3); border-radius:6px; width:26px; height:26px; cursor:pointer; line-height:1; display:inline-flex; align-items:center; justify-content:center; transition:color .12s, border-color .12s; }
+  .cg-card-actions { display:flex; align-items:center; justify-content:flex-end; gap:.35rem; flex:1 1 auto; min-width:0; flex-wrap:wrap; }
+  .cg-copy { background:none; border:1px solid rgba(255,255,255,.08); color:var(--text-on-dark-3); border-radius:6px; width:auto; height:26px; padding:0 .55rem; cursor:pointer; font:600 11.5px var(--font-ui); line-height:1; display:inline-flex; align-items:center; justify-content:center; gap:.3rem; transition:color .12s, border-color .12s; }
   .cg-copy:hover { color:var(--accent); border-color:var(--accent); }
   .cg-copy:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
   .cg-copy svg { width:14px; height:14px; }
   /* Pin (keep on Reroll-all), step-back (result history), and batch (roll N). */
-  .cg-pin, .cg-back, .cg-batch { background:none; border:1px solid rgba(255,255,255,.08); color:var(--text-on-dark-3); border-radius:6px; height:26px; cursor:pointer; line-height:1; display:inline-flex; align-items:center; justify-content:center; transition:color .12s, border-color .12s, background .12s; }
-  .cg-pin, .cg-back { width:26px; }
-  .cg-batch { padding:0 7px; font-size:11px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .cg-pin, .cg-back, .cg-batch { background:none; border:1px solid rgba(255,255,255,.08); color:var(--text-on-dark-3); border-radius:6px; width:auto; height:26px; padding:0 .55rem; cursor:pointer; font:600 11.5px var(--font-ui); line-height:1; display:inline-flex; align-items:center; justify-content:center; gap:.3rem; transition:color .12s, border-color .12s, background .12s; }
+  .cg-batch { font-variant-numeric:tabular-nums; }
   .cg-pin:hover, .cg-back:hover, .cg-batch:hover { color:var(--accent); border-color:var(--accent); }
   .cg-pin:focus-visible, .cg-back:focus-visible, .cg-batch:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
   .cg-pin svg { width:13px; height:13px; }
@@ -44,15 +41,21 @@
   .cg-body .muted { color:var(--text-on-dark-3); }
   .cg-body.flash { animation:cgFlash .45s ease; }
   @keyframes cgFlash { from { opacity:.2; } to { opacity:1; } }
+  @media (max-width:640px) {
+    .cg-grid { grid-template-columns:1fr; }
+    .cg-card-head { align-items:flex-start; flex-wrap:wrap; }
+    .cg-card-actions { width:100%; flex-basis:100%; justify-content:flex-start; }
+    .cg-reroll, .cg-copy, .cg-pin, .cg-back, .cg-batch { height:32px; }
+  }
 {% endblock %}
 {% block content %}
 <div class="cg-head">
-  <span>
+  <div>
     <h1 class="cg-title">Cosmere Generators</h1>
-    <span class="cg-sub">&nbsp; Rosharan prep, one tap at a time.</span>
-  </span>
+    <p class="cg-sub"><strong>Reroll all</strong> refreshes every card except the ones you pin; <strong>Back</strong> returns a card to its previous result.</p>
+  </div>
   <span class="cg-head-actions">
-    <button class="cg-all" onclick="cgRerollAll()"><span aria-hidden="true">&#8635;</span> Reroll all</button>
+    <button class="cg-all cg-all-reroll" onclick="cgRerollAll()"><span aria-hidden="true">&#8635;</span> Reroll all</button>
     <button class="cg-all" onclick="cgCopyAll(this)" title="Copy every card as text for your session notes">Copy all</button>
   </span>
 </div>
@@ -63,11 +66,11 @@
     <div class="cg-card-head">
       <span class="cg-label">{{ c.label }}</span>
       <span class="cg-card-actions">
-        <button class="cg-pin" title="Pin &mdash; keep this when you Reroll all" aria-label="Pin {{ c.label }}" aria-pressed="false" onclick="cgTogglePin('{{ c.type }}', this)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M4 2h8v10l-4-3-4 3z"/></svg></button>
-        <button class="cg-back" title="Previous result" aria-label="Previous {{ c.label }}" onclick="cgBack('{{ c.type }}')" disabled><span aria-hidden="true">&#8592;</span></button>
-        <button class="cg-copy" title="Copy {{ c.label }}" aria-label="Copy {{ c.label }}" onclick="cgCopy('{{ c.type }}', this)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M3 11V3a1 1 0 0 1 1-1h7"/></svg></button>
-        <button class="cg-reroll" title="Reroll {{ c.label }}" aria-label="Reroll {{ c.label }}" onclick="cgReroll('{{ c.type }}')"><span aria-hidden="true">&#8635;</span></button>
-        {% if c.type in ['name', 'npc'] %}<button class="cg-batch" title="Roll 5 at once (a crowd)" aria-label="Roll 5 {{ c.label }}" onclick="cgBatch('{{ c.type }}', 5)">&times;5</button>{% endif %}
+        <button class="cg-back" title="Previous result" aria-label="Previous {{ c.label }}" onclick="cgBack('{{ c.type }}')" disabled><span aria-hidden="true">&#8592;</span> Back</button>
+        <button class="cg-copy" title="Copy {{ c.label }}" aria-label="Copy {{ c.label }}" onclick="cgCopy('{{ c.type }}', this)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M3 11V3a1 1 0 0 1 1-1h7"/></svg> Copy</button>
+        <button class="cg-pin" title="Pin &mdash; keep this when you Reroll all" aria-label="Pin {{ c.label }}" aria-pressed="false" onclick="cgTogglePin('{{ c.type }}', this)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M4 2h8v10l-4-3-4 3z"/></svg> Pin</button>
+        {% if c.type in ['name', 'npc'] %}<button class="cg-batch" title="Roll 5 at once (a crowd)" aria-label="Roll 5 {{ c.label }}" onclick="cgBatch('{{ c.type }}', 5)">Roll 5</button>{% endif %}
+        <button class="cg-reroll" title="Reroll {{ c.label }}" aria-label="Reroll {{ c.label }}" onclick="cgReroll('{{ c.type }}')"><span aria-hidden="true">&#8635;</span> Reroll</button>
       </span>
     </div>
     <div class="cg-body" id="cg-{{ c.type }}">{{ c.html|safe }}</div>
@@ -146,7 +149,7 @@ function cgBatch(t, n) {
 }
 
 // Copy a string to the clipboard, with a brief checkmark swap on the button
-// (icon buttons only) and a toast either way.
+// and a toast either way.
 function cgCopyText(text, btn) {
   navigator.clipboard.writeText(text).then(function () {
     if (btn) {
