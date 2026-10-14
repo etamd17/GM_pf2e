@@ -1,0 +1,1 @@
+"""Cosmere rules test package."""

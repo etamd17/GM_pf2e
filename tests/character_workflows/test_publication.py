@@ -79,6 +79,12 @@ def test_cosmere_publish_rename_retains_live_wallet_and_state(cosmere_env):
     path = Path(storage.cosmere_pc_dir(env.cid)) / (result.character_id + '.json')
     document = json.loads(path.read_text(encoding='utf-8'))
     assert document['owner_user_id'] == env.users['owner']
+    assert document['schema_version'] == 2
+    assert document['revision'] == 0
+    assert document['origin_world'] == 'roshar' and document['era'] is None
+    assert document['rules_binding']['default_world'] == 'roshar'
+    assert document['runtime_state'] == document['play_state']
+    assert document['advancement_history'] == []
     update = cos_payload()
     update['build']['name'] = 'Renamed'
     update['build']['notes'] = 'FORGED NOTE'
@@ -93,7 +99,10 @@ def test_cosmere_publish_rename_retains_live_wallet_and_state(cosmere_env):
     assert edited.character_id == result.character_id
     current = json.loads(path.read_text(encoding='utf-8'))
     assert current['name'] == 'Renamed'
-    assert current['wallet'] == {'spheres': 5} and current['play_state'] == {'health': 3}
+    assert current['revision'] == 1
+    assert current['wallet'] == {'spheres': 5}
+    assert current['runtime_state'] == current['play_state'] == {
+        'health': 3, 'effects': [], 'conditions': {}}
     assert current['build']['notes'] == 'OWNER NOTE'
     assert current['build']['session_notes'] == [
         {'date': 'today', 'text': 'OWNER SESSION'}

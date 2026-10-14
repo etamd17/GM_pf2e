@@ -235,3 +235,9 @@ def adversary_docs() -> list:
 def load_adversaries() -> list:
     """Every adversary in the bestiary (base system + modules) as a CosmereActor."""
     return [CosmereActor(doc) for doc in adversary_docs()]
+
+
+def rules_profile(document=None, **options):
+    """Resolve world mechanics separately from the system's cosmetic theme."""
+    from systems.cosmere.rules.profiles import resolve_profile
+    return resolve_profile(document, **options)

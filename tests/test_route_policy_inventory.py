@@ -150,6 +150,7 @@ def test_owner_private_character_endpoints_use_the_strict_policy():
         "save_session_note",
         "delete_session_note",
         "cosmere_pc_notes",
+        "api_cosmere_character_export",
     }
     assert {
         endpoint
@@ -259,6 +260,15 @@ def test_non_route_character_locators_are_explicit_and_safe_to_dispatch():
     assert actual == {
         "api_cosmere_my_combat": CharacterOwnerResolution(
             CharacterOwnerSource.QUERY_COSMERE_PID, "pid"
+        ),
+        "api_cosmere_advancement_commit": CharacterOwnerResolution(
+            CharacterOwnerSource.JSON_COSMERE_PID, "pid"
+        ),
+        "api_cosmere_advancement_preview": CharacterOwnerResolution(
+            CharacterOwnerSource.JSON_COSMERE_PID, "pid"
+        ),
+        "api_cosmere_advancement_revert": CharacterOwnerResolution(
+            CharacterOwnerSource.JSON_COSMERE_PID, "pid"
         ),
         "api_cosmere_my_initiative": CharacterOwnerResolution(
             CharacterOwnerSource.JSON_COSMERE_PID, "pid"

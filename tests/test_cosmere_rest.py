@@ -38,7 +38,7 @@ def test_long_rest_restores_maxes_and_clears_short_lived_conditions():
     assert ps['health'] == b.health_max()        # full health
     assert ps['focus'] == b.focus_max()           # full focus
     assert ps['conditions'].get('exhausted') == 1  # reduced by 1 (2 -> 1)
-    assert ps['conditions'].get('afflicted') is True   # ongoing affliction kept
+    assert ps['conditions'].get('afflicted') == 1      # ongoing affliction kept
     assert not ps['conditions'].get('slowed')     # short-lived condition cleared
 
 

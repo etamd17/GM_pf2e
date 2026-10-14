@@ -21,6 +21,7 @@ health/focus/deflect), we honor it; otherwise we compute from the rulebook.
 """
 from __future__ import annotations
 
+from copy import deepcopy
 import re
 
 from systems.cosmere.enrich import enrich as _enrich
@@ -103,6 +104,13 @@ class CosmereActor:
         self.tier = sys.get('tier')
         self.role = sys.get('role')
         self.size = sys.get('size', 'medium')
+        build = sys.get('cosmere_build') if isinstance(sys.get('cosmere_build'), dict) else {}
+        self.origin_world = str(sys.get('origin_world') or build.get('origin_world') or 'roshar')
+        raw_era = sys.get('era', build.get('era'))
+        self.era = str(raw_era) if raw_era not in (None, '') else None
+        self.radiant_order = str(sys.get('radiant_order') or build.get('radiant_order') or '')
+        self.mistborn_runtime = deepcopy(
+            sys.get('mistborn') if isinstance(sys.get('mistborn'), dict) else {})
         lvl = sys.get('level')
         self.level = _i(lvl.get('value'), 1) if isinstance(lvl, dict) else _i(lvl, 1)
 
@@ -120,8 +128,10 @@ class CosmereActor:
 
         # --- resources: health / focus / investiture ---
         res = sys.get('resources', {})
-        self.is_radiant = bool(self._max_node(res, 'inv').get('value')) or \
-            self._max_node(res, 'inv').get('override') not in (None, 0)
+        # Investiture is a universal resource, not proof of a Nahel bond.  In
+        # particular, Allomancers have a non-zero pool but must never acquire
+        # Stormlight-only Radiant behavior in the shared tracker.
+        self.is_radiant = bool(self.radiant_order) or bool(build.get('is_radiant'))
         self.health_max = self._resource_max(
             res, 'hea', cosmere_max_health(self.level, self._attr('str'))
         )
@@ -129,6 +139,13 @@ class CosmereActor:
         self.focus_max = self._resource_max(res, 'foc', 2 + self._attr('wil'))
         inv_default = (2 + max(self._attr('awa'), self._attr('pre'))) if self.is_radiant else 0
         self.investiture_max = self._resource_max(res, 'inv', inv_default)
+        allomancy = (self.mistborn_runtime.get('allomancy')
+                     if isinstance(self.mistborn_runtime.get('allomancy'), dict)
+                     else {})
+        self.current_investiture = _i(
+            allomancy.get('current_investiture'),
+            _i(res.get('inv', {}).get('value'), self.investiture_max)
+            if isinstance(res.get('inv'), dict) else self.investiture_max)
 
         # --- deflect ---
         dfl = sys.get('deflect', {}) if isinstance(sys.get('deflect'), dict) else {}
@@ -156,14 +173,19 @@ class CosmereActor:
         # --- abilities from embedded items (adversary actions/weapons/traits) ---
         self.actions, self.strikes, self.traits = [], [], []
         items = doc.get('items', []) if isinstance(doc, dict) else []
+        actor_source_id = (doc.get('_id') if isinstance(doc, dict) else None) or data.get('id')
         for it in (items or []):
             if not isinstance(it, dict):
                 continue
             itype, iname = it.get('type'), it.get('name', '')
             isys = it.get('system', {}) if isinstance(it.get('system'), dict) else {}
             if itype == 'action':
-                self.actions.append({'name': iname, 'description': _enrich(_text(isys.get('description')), self.name)})
+                from systems.cosmere.actions import normalize_action_item
+                action = normalize_action_item(it, actor_id=actor_source_id)
+                action['description'] = _enrich(_text(isys.get('description')), self.name)
+                self.actions.append(action)
             elif itype == 'weapon':
+                from systems.cosmere.actions import normalize_action_item
                 dmg = isys.get('damage', {}) if isinstance(isys.get('damage'), dict) else {}
                 skill = dmg.get('skill')
                 # attack mod = the weapon-skill's mod (hwp/lwp); damage = dice + that mod on a hit.
@@ -177,8 +199,14 @@ class CosmereActor:
                     _smod = _i(isys.get('custom_attack_bonus'))
                 else:
                     _smod = self.skills.get(skill, {}).get('mod', 0) if skill else 0
-                self.strikes.append({'name': iname, 'damage': dmg.get('formula', ''), 'type': dmg.get('type', ''),
-                                     'skill': skill, 'mod': _smod, 'bonus': _smod})
+                strike = normalize_action_item(it, actor_id=actor_source_id)
+                # Preserve the historical flat fields used by the current
+                # tracker while retaining the full declarative action record.
+                strike.update({'name': iname, 'damage': dmg.get('formula', ''),
+                               'damage_record': strike['damage'],
+                               'type': dmg.get('type', ''), 'skill': skill,
+                               'mod': _smod, 'bonus': _smod})
+                self.strikes.append(strike)
             elif itype == 'trait':
                 self.traits.append(iname)
 
@@ -191,11 +219,17 @@ class CosmereActor:
         self.elite_weak = 0
         self.reaction_used = False
         self.actions_used = 0
+        self.turn_serial = 0
         self.injuries = 0             # Cosmere death-spiral counter (Ch.9)
         self.speed_choice = 'slow'    # Cosmere: elect fast(2 actions, early) / slow(3, late) each round
         self.max_actions = 3          # reflects speed_choice (slow=3 / fast=2)
         self.conditions = {}          # Cosmere conditions {name: value|bool}
+        self.effect_instances = []    # canonical runtime effects; conditions are a projection
         self.condition_expiry = {}
+        self.character_revision = 0
+        self.significant_npc_injuries = False
+        self.defeated = False
+        self.nonlethal_defeat = False
         # Health drives the tracker HP bar. Expose PF2e-shaped aliases so the
         # existing tracker serializers/templates run UNMODIFIED; the true Cosmere
         # stats live in tracker_block()/to_summary() and the UI branches on
@@ -267,13 +301,17 @@ class CosmereActor:
             # for PCs and stays '' for adversaries.
             'investiture_current': int(getattr(self, 'current_investiture',
                                                self.investiture_max) or 0),
-            'radiant_order': str(getattr(self, 'radiant_order', '') or ''),
+            'radiant_order': self.radiant_order,
+            'origin_world': self.origin_world,
+            'era': self.era,
+            'mistborn': deepcopy(self.mistborn_runtime),
             'attributes': dict(self.attributes),
             'injuries': int(getattr(self, 'injuries', 0) or 0),
             'speed_choice': getattr(self, 'speed_choice', 'slow'),
             'phase': '%s_%s' % ('fast' if getattr(self, 'speed_choice', 'slow') == 'fast' else 'slow',
                                 'pc' if self.is_pc else 'npc'),
             'tier': self.tier, 'role': self.role, 'size': self.size,
+            'character_revision': int(getattr(self, 'character_revision', 0) or 0),
         }
 
     def to_summary(self) -> dict:
