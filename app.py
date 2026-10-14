@@ -13702,7 +13702,7 @@ def _save_cosmere_adversary_store(path, state):
 def _cosmere_custom_adversary_reference_ids():
     """Return stable custom IDs retained by every server-owned encounter form."""
     referenced = {
-        str(getattr(actor, 'restore_id')) for actor in ACTIVE_ENCOUNTER
+        str(getattr(actor, 'restore_id')) for actor in _loaded_encounter_snapshot()
         if isinstance(getattr(actor, 'restore_id', None), str)
     }
     from systems.cosmere.encounters import normalize_stage_state
@@ -13743,8 +13743,11 @@ def _cosmere_custom_adversary_reference_ids():
             for child in value:
                 collect(child)
 
-    if ENCOUNTER_DIR and os.path.isdir(ENCOUNTER_DIR):
-        for filename in sorted(glob.glob(os.path.join(ENCOUNTER_DIR, '*.json'))):
+    campaign_id = _loaded_campaign_id()
+    encounter_dir = (_storage.encounter_dir(campaign_id) if campaign_id
+                     else os.path.join(DATA_DIR, 'saved_encounters'))
+    if os.path.isdir(encounter_dir):
+        for filename in sorted(glob.glob(os.path.join(encounter_dir, '*.json'))):
             try:
                 collect(_storage.load_json_strict(filename))
             except (OSError, TypeError, ValueError):
@@ -13967,7 +13970,7 @@ def _cosmere_narrative_live_snapshots(documents):
     actor_ids = {document['id'] for document in documents}
     return [
         (combatant, copy.deepcopy(combatant.__dict__))
-        for combatant in ACTIVE_ENCOUNTER
+        for combatant in _loaded_encounter_snapshot()
         if (getattr(combatant, 'system', 'pf2e') == 'cosmere'
             and getattr(combatant, 'is_pc', False)
             and getattr(combatant, 'restore_id', None) in actor_ids)
@@ -14482,12 +14485,12 @@ def api_cosmere_narrative_scene_close(scene_id):
                 source_scope_id=scene_id)
             if changed != state:
                 _atomic_write_json(path, changed, indent=2)
-            if ACTIVE_ENCOUNTER and not _do_persist_encounter_state_unlocked():
+            if _loaded_encounter_snapshot() and not _do_persist_encounter_state_unlocked():
                 raise _CosmereActionTransactionError(
                     'encounter_persistence_failed',
                     'The narrative scene closed, but the live encounter could not be durably synchronized.',
                     503)
-            if ACTIVE_ENCOUNTER:
+            if _loaded_encounter_snapshot():
                 _do_broadcast_encounter_state()
             for document in updated_documents:
                 _cosmere_advancement_broadcast(document)
@@ -14808,7 +14811,7 @@ def api_cosmere_pc_action(pid, action_id):
         return current
 
     with _LIVE_CAMPAIGN_DISPATCH_LOCK:
-        live_actor = next((candidate for candidate in ACTIVE_ENCOUNTER
+        live_actor = next((candidate for candidate in _loaded_encounter_snapshot()
                            if getattr(candidate, 'system', 'pf2e') == 'cosmere'
                            and getattr(candidate, 'is_pc', False)
                            and getattr(candidate, 'restore_id', None) == pid), None)
@@ -14882,8 +14885,8 @@ def api_cosmere_character_import():
                            expected_binding=normalize_binding(_load_campaign_config()),
                            homebrew=_cosmere_homebrew_store())
     doc['owner_user_id'] = None if _is_gm() else session.get('user_id')
-    if ACTIVE_CAMPAIGN_ID:
-        doc['campaign_id'] = ACTIVE_CAMPAIGN_ID
+    if _loaded_campaign_id():
+        doc['campaign_id'] = _loaded_campaign_id()
     _save_cosmere_pc(doc)
     return jsonify({'ok': True, 'id': pid, 'revision': doc['revision'],
                     'url': _pc_sheet_url('cosmere', doc['name'], pid)})
@@ -16206,7 +16209,7 @@ def add_combatant():
         if new_c is not None:
             new_c.instance_id = str(uuid.uuid4())
             ACTIVE_ENCOUNTER.append(new_c)
-    if new_c is not None and len(ACTIVE_ENCOUNTER) == 1:
+    if new_c is not None and len(_loaded_encounter_snapshot()) == 1:
         COSMERE_PHASE_BOUNDARIES.clear()
     # Mid-fight reinforcement: if an initiative order is already established (some
     # combatant has a non-zero initiative), roll the newcomer in and re-sort so it
@@ -16223,7 +16226,7 @@ def add_combatant():
 
 @app.route('/api/add_party', methods=['POST'])
 def add_party():
-    if not ACTIVE_ENCOUNTER:
+    if not _loaded_encounter_snapshot():
         COSMERE_PHASE_BOUNDARIES.clear()
     for pc_name, pc_data in PARTY_LIBRARY.items():
         new_c = copy.deepcopy(pc_data)
@@ -16237,7 +16240,7 @@ def add_party():
 @app.route('/api/cosmere/add_party', methods=['POST'])
 def add_cosmere_party():
     """Add every Cosmere PC in the active campaign to the encounter."""
-    if not ACTIVE_ENCOUNTER:
+    if not _loaded_encounter_snapshot():
         COSMERE_PHASE_BOUNDARIES.clear()
     for d in _list_cosmere_pcs():
         new_c = _cosmere_combatant(d.get('id'))
@@ -16572,7 +16575,7 @@ def clear_encounter():
         campaign_id = _loaded_campaign_id()
         if _active_system() == 'cosmere':
             _assert_no_cosmere_narrative_transaction_for_lifecycle()
-        live_names = [c.name for c in ACTIVE_ENCOUNTER]
+        live_names = [c.name for c in _loaded_encounter_snapshot()]
         pending = _load_cosmere_lifecycle_transition(campaign_id)
         if pending is not None and (
                 pending.get('kind') != 'encounter_clear'
@@ -16580,7 +16583,7 @@ def clear_encounter():
             raise _CosmereActionTransactionError(
                 'lifecycle_transition_pending',
                 'Another Cosmere lifecycle transition must finish first.', 409)
-        if pending is None and ACTIVE_ENCOUNTER:
+        if pending is None and _loaded_encounter_snapshot():
             pending = _begin_cosmere_lifecycle_transition(
                 'encounter_clear', triggers=('scene_end', 'encounter_end'),
                 source_scope_id='active-encounter', target_scope_id=None,
@@ -16592,7 +16595,7 @@ def clear_encounter():
                 boundary_id=pending['boundary_id'])
         else:
             updated_documents = _list_cosmere_pcs()
-        ACTIVE_ENCOUNTER.clear()
+        _clear_live_encounter_roster()
         TURN_INDEX = 0
         ROUND_NUMBER = 1
         ENCOUNTER_NOTES = ''
@@ -20022,7 +20025,7 @@ def _dispatch_cosmere_phase_start(phase, round_number, include=None):
     key = f"{int(round_number)}:{phase}"
     if key in COSMERE_PHASE_BOUNDARIES:
         return []
-    actors = list(ACTIVE_ENCOUNTER)
+    actors = list(_loaded_encounter_snapshot())
     if include is not None and all(candidate is not include for candidate in actors):
         actors.append(include)
     expired = []
