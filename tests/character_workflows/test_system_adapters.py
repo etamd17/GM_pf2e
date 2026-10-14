@@ -102,7 +102,9 @@ def test_cosmere_edit_preserves_wallet_and_play_state():
                                             current, override=False)
     assert result['name'] == 'Renamed Hero'
     assert result['wallet'] == current['wallet']
-    assert result['play_state'] == current['play_state']
+    assert result['play_state']['health'] == current['play_state']['health']
+    assert result['runtime_state'] == result['play_state'] == {
+        'health': 3, 'effects': [], 'conditions': {}}
     assert result['house_metal'] == 'steel'
     assert 'id' not in result and 'owner_user_id' not in result
 

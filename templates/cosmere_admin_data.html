@@ -1,0 +1,41 @@
+{% extends "_account_base.html" %}
+{% block title %}Cosmere rules data{% endblock %}
+{% block content %}
+<h1>Cosmere rules data</h1>
+<p class="sub">Mistborn rules packages are installed separately from the public code repository.
+Build a bundle on the machine with the private data using <code>python tools/cosmere_bundle.py</code>,
+then upload it here as the site administrator.</p>
+<ul class="list"><li class="row"><div><strong>Status</strong>
+  <div class="meta" id="status">{{ 'Installed' if installed else 'Not installed' }}</div>
+  <div class="meta">Directory: <code>{{ data_dir }}</code></div>
+</div></li></ul>
+<label for="bundle">Rules bundle (.tar.gz)</label>
+<input id="bundle" type="file" accept=".gz,.tgz,application/gzip">
+<div style="margin-top:12px"><button type="button" id="install">Upload and install</button></div>
+<pre id="result" class="muted" style="white-space:pre-wrap;margin-top:12px;font-size:12px"></pre>
+<p class="foot muted"><a href="/me">Back</a></p>
+<script>
+(function () {
+  var button = document.getElementById('install');
+  var result = document.getElementById('result');
+  button.addEventListener('click', function () {
+    var file = document.getElementById('bundle').files[0];
+    if (!file) { result.textContent = 'Choose a bundle first.'; return; }
+    button.disabled = true;
+    result.textContent = 'Uploading ' + file.name + '...';
+    var form = new FormData(); form.append('file', file);
+    fetch('/api/cosmere/admin/data', {method: 'POST', body: form, credentials: 'same-origin'})
+      .then(function (response) { return response.json().then(function (body) {
+        if (!response.ok) throw new Error(body.error || 'Upload failed.');
+        return body;
+      }); })
+      .then(function (body) {
+        result.textContent = 'Installed ' + body.packages + ' packages and ' + body.records + ' records.';
+        document.getElementById('status').textContent = 'Installed';
+      })
+      .catch(function (error) { result.textContent = error.message; })
+      .finally(function () { button.disabled = false; });
+  });
+})();
+</script>
+{% endblock %}

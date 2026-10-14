@@ -41,12 +41,47 @@ def preserve_owner_private_build_fields(current: JSON, updated: JSON) -> JSON:
     return result
 
 
-def without_owner_private_build_fields(document: JSON) -> JSON:
-    """Return a copy safe to cross an editor-facing presentation boundary."""
+_DROP_PRIVATE_OPERATION = object()
 
-    result = deepcopy(document)
-    build = result.get("build") if isinstance(result, dict) else None
-    if isinstance(build, dict):
-        for field in OWNER_PRIVATE_BUILD_FIELDS:
-            build.pop(field, None)
-    return result
+
+def _without_owner_private_build_fields(value):
+    """Recursively redact build snapshots and operations in audit envelopes."""
+
+    if isinstance(value, dict):
+        path = value.get("path")
+        if (isinstance(path, (list, tuple)) and len(path) >= 2
+                and path[0] == "build"
+                and path[1] in OWNER_PRIVATE_BUILD_FIELDS):
+            return _DROP_PRIVATE_OPERATION
+        result = {}
+        for key, item in value.items():
+            redacted = _without_owner_private_build_fields(item)
+            if redacted is _DROP_PRIVATE_OPERATION:
+                continue
+            if key == "build" and isinstance(redacted, dict):
+                for field in OWNER_PRIVATE_BUILD_FIELDS:
+                    redacted.pop(field, None)
+            result[key] = redacted
+        return result
+    if isinstance(value, list):
+        result = []
+        for item in value:
+            redacted = _without_owner_private_build_fields(item)
+            if redacted is not _DROP_PRIVATE_OPERATION:
+                result.append(redacted)
+        return result
+    if isinstance(value, tuple):
+        result = []
+        for item in value:
+            redacted = _without_owner_private_build_fields(item)
+            if redacted is not _DROP_PRIVATE_OPERATION:
+                result.append(redacted)
+        return tuple(result)
+    return deepcopy(value)
+
+
+def without_owner_private_build_fields(document: JSON) -> JSON:
+    """Return a copy safe for editors, including nested audit snapshots."""
+
+    result = _without_owner_private_build_fields(document)
+    return {} if result is _DROP_PRIVATE_OPERATION else result
