@@ -1,0 +1,50 @@
+# UI-02a: Build the approved Cosmere generators design (Revision A, labelled controls)
+
+<!-- ============ BRIEF ============ -->
+
+- **Owner:** codex (standard model, medium effort). Claude verifies in the browser after.
+- **Branch:** `codex/ui-02a-cosmere-generators` from current `main` (after PR #181 merges, so
+  `tasks/UI-01.md` is present).
+- **Depends on:** none in code. Independent of PR #182 (#182 doesn't touch this page).
+- **Context:** decision in `tasks/UI-01.md` > Decisions (generators **A**); approved PF2e twin in
+  `tasks/UI-00.md` (PF2e generators A). Local mockup: `docs/handoff/assets/UI-01-review/`
+  (`a.html`, built by `build.py`; not in git, ask the user if you need it). One file:
+  `templates/cosmere_generator.html`. Route `app.py::cosmere_generator` (unchanged).
+
+## Goal
+Same page, same grid, same features; every icon-only button becomes a labelled button, cards get
+flatter, and the header explains pins/back in one line. Bigger tap targets on phones.
+
+## Approach (template + its own CSS block only)
+1. Card header buttons, in this order: **Back** (keep `&#8592;` glyph + text), **Copy**, **Pin**
+   (keep the bookmark SVG + text), **Roll 5** (only `name`/`npc`, was "x5"), **Reroll** (accent
+   outline, last). Keep every class (`cg-back`, `cg-copy`, `cg-pin`, `cg-batch`, `cg-reroll`),
+   `onclick`, `title`, `aria-label`, `aria-pressed` and the `disabled` on Back exactly as they are.
+   Buttons get `width:auto; padding:0 .55rem; font:600 11.5px var(--font-ui)`.
+2. `cgCopyText` swaps the clicked button's `innerHTML` to a check mark for 900 ms and restores it:
+   it still works with text labels. No JS change needed. The other functions locate cards by
+   `.cg-card[data-type]` and are untouched.
+3. Cards: transparent background, 1px `rgba(255,255,255,.07)` border, a hairline under the card
+   head; label in display font at 13.5px, not uppercase.
+4. Header: title, then one line: "**Reroll all** refreshes every card except the ones you pin;
+   **Back** returns a card to its previous result." Reroll all gets the accent-tinted background.
+   Remove the "Rosharan prep, one tap at a time." subtitle (it's wrong under the Mistborn skin;
+   MB-03 handles generator content).
+5. `@media (max-width:640px)`: one column, buttons 32px tall, action row wraps under the label.
+6. Any class you add that sets `display` must also get `.x[hidden]{display:none}` (CLAUDE.md rule).
+
+## Acceptance
+- [ ] Same controls as today: 9 Reroll, 9 Pin, 9 Back, 9 Copy, 2 Roll 5, Reroll all, Copy all
+      (count in the rendered page).
+- [ ] New test `tests/test_cosmere_generator_ui.py`: GET `/cosmere/generator` as GM in a Cosmere
+      campaign; assert the counts above, that each card button has a visible text label, and that
+      `cgTogglePin`/`cgBack`/`cgCopy`/`cgReroll`/`cgBatch` calls are unchanged.
+- [ ] `pytest -q tests/test_cosmere_generator_ui.py tests/test_inline_handler_escaping.py tests/test_route_policy_inventory.py`
+      and `python tools/check_templates.py` pass (paste numbers).
+- [ ] Browser check (Claude does this if you can't): desktop 1440px and phone 375px, both
+      **Stormlight and Mistborn** skins (`cosmere_world` campaign config); no sideways scroll at
+      375px; Pin keeps a card through Reroll all; Back steps to the previous result; Copy shows the
+      check mark.
+
+## Out of scope
+- Generator content (MB-03), grouping/filter (that was Revision B, not chosen), any route change.

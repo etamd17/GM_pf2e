@@ -31,7 +31,10 @@ UI/UX design is Claude's by default; Codex implements mechanical parts from Clau
 |---|---|---|---|---|---|
 | UI-00 | Design review checkpoint: 18 screens approved as mockups | codex | - | done (review: accepted, see below) | `tasks/UI-00.md` |
 | UI-01 | Finish the design review: Cosmere generators, then Cosmere sheet, level-up and builder. Mockups first; the user picks a direction for each | claude | Opus, medium-high | done (generators A, sheet A, builder B) | `tasks/UI-01.md` |
-| UI-02 | Build the approved screens, one small task per screen, starting from current `main` (the mockups were made on an older snapshot) | claude briefs, codex builds | briefs: Opus high; build: standard | needs brief | - |
+| UI-02a | Build Cosmere generators (A: labelled buttons) | codex | standard, medium | ready (after PR #181) | `tasks/UI-02a-cosmere-generators.md` |
+| UI-02b | Build Cosmere character sheet (A: vitals band + Play/Radiant/Gear/Character tabs) | codex | strongest, high | ready (after PR #181) | `tasks/UI-02b-cosmere-sheet.md` |
+| UI-02c | Build Cosmere builder / level-up (B: still-to-choose list, step badges, level-up badge) | codex | standard, high | waiting on PR #182 | `tasks/UI-02c-cosmere-builder.md` |
+| UI-02 | PF2e screens from UI-00 (18): briefs still to write | claude briefs, codex builds | briefs: Opus high | needs brief | - |
 | UI-03 | Fix the real bugs the review found. Check each on current `main` first, then fix it with a test | codex | standard | needs brief | - |
 
 UI-03 bug list (from `tasks/UI-00.md` > Anything broken or risky):
@@ -78,6 +81,7 @@ Accepted as a design checkpoint. Notes:
 
 Newest first. One plain line per handoff: who, what, what's next.
 
+- 2026-10-14 Claude: reviewed MB-01 / PR #182 (safe: private rules stay out of GitHub, installer validated, Stormlight unaffected; 3 small notes); waiting on one full test run before merge. Wrote build briefs for the 3 Cosmere screens (UI-02a/b/c). Next: Codex builds UI-02a and UI-02b; UI-02c after #182 merges.
 - 2026-10-13 Codex: merged 5E-06 as PR #180 after all CI jobs passed; the public site health checks returned ready. Next: continue the remaining UI and Mistborn tasks.
 - 2026-10-13 Claude: reviewed Codex's Mistborn backend (MB-00): solid, 1024 tests pass, one easy merge conflict. User decided the Mistborn data stays out of git (like 5e). Next: Codex does MB-01.
 - 2026-10-13 Claude: Cosmere builder/level-up design picked (B: a 'still to choose' list and level-up badge). Design review for all screens is now complete. Next: Claude writes build briefs (UI-02) so Codex can build the approved screens.
