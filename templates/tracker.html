@@ -1530,7 +1530,7 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
        settings panel. #}
     <div class="hb-right">
         <button class="hb-btn gold" onclick="apiPost('/api/session/roll_initiative')" title="Cinematic ROLL FOR INITIATIVE banner on every screen, with a drum hit on this device. Flavor only — use Roll Init for the mechanical NPC roll.">To Arms!</button>
-        <button class="hb-btn" onclick="apiPost('/api/roll_npc_initiative')" title="Roll d20+Perception for all NPCs">Roll Init</button>
+        <button class="hb-btn" onclick="apiPost('/api/roll_npc_initiative')" title="{% if active_system == 'cosmere' %}Roll d20+Speed for all adversaries{% else %}Roll d20+Perception for all NPCs{% endif %}">Roll Init</button>
         <button class="hb-btn" onclick="apiPost('/api/sort_initiative')">Sort</button>
         <button class="hb-btn" id="multi-toggle-btn" onclick="toggleMultiMode()" title="Select multiple combatants for AOE damage / condition application">Multi</button>
         <button class="hb-btn danger" id="end-encounter-btn" onclick="if(confirm('End this encounter and clear the tracker?')){apiPost('/api/clear_encounter')}" title="End the encounter and clear the tracker — works whether or not initiative was rolled">End</button>
@@ -1539,8 +1539,10 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
             <div id="trk-tools-menu" class="trk-tools-menu" role="menu" style="display:none; position:absolute; right:0; top:100%; margin-top:4px; background:var(--t-bg-higher); border:1px solid var(--t-border); border-radius:6px; padding:6px; min-width:180px; z-index:100; box-shadow:0 12px 32px rgba(0,0,0,0.5);">
                 <button class="hb-btn gold" style="width:100%; justify-content:flex-start; margin-bottom:4px;" onclick="openSecretRollPanel(); closeTrkTools()">Secret Roll</button>
                 <button class="hb-btn purple" style="width:100%; justify-content:flex-start; margin-bottom:4px;" onclick="openHandoutPanel(); closeTrkTools()">Send Handout</button>
+                {% if active_system != 'cosmere' %}
                 <button class="hb-btn gold" style="width:100%; justify-content:flex-start; margin-bottom:4px;" onclick="openLootPanel(); closeTrkTools()">Send Loot</button>
                 <button class="hb-btn purple" style="width:100%; justify-content:flex-start; margin-bottom:4px;" onclick="openCheckRequestPanel(); closeTrkTools()">Request Check</button>
+                {% endif %}
                 <div style="height:1px; background:var(--t-border); margin:4px 0;"></div>
                 <button class="hb-btn danger" style="width:100%; justify-content:flex-start;" onclick="if(confirm('Clear the encounter?')){closeTrkTools(); apiPost('/api/clear_encounter')}">Clear Encounter</button>
             </div>
@@ -1745,9 +1747,15 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
             <label class="tlabel">Recipients</label>
             <select id="handout-recipients" class="tselect" style="width:100%;" multiple>
                 <option value="all" selected>All Players</option>
+                {% if active_system == 'cosmere' %}
+                {% for p in cosmere_pcs %}
+                <option value="{{ p.name }}">{{ p.name }}</option>
+                {% endfor %}
+                {% else %}
                 {% for p in party %}
                 <option value="{{ p.name }}">{{ p.name }}</option>
                 {% endfor %}
+                {% endif %}
             </select>
         </div>
     </div>
@@ -1764,7 +1772,8 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
     </div>
 </div>
 
-{# ═══════════════════ LOOT DISPATCH PANEL ═══════════════════ #}
+{% if active_system != 'cosmere' %}
+{# ═══════════════════ PF2E LOOT DISPATCH PANEL ═══════════════════ #}
 <div id="loot-panel" class="panel hidden">
     <div class="panel-head">
         <span class="panel-ttl" style="color:var(--t-gold);"> Send Loot to Player</span>
@@ -1798,7 +1807,7 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
     </div>
 </div>
 
-{# ═══════════════════ CHECK-REQUEST PANEL ═══════════════════ #}
+{# ═══════════════════ PF2E CHECK-REQUEST PANEL ═══════════════════ #}
 <div id="check-request-panel" class="panel hidden">
     <div class="panel-head">
         <span class="panel-ttl" style="color:var(--t-gold);"> Request a Roll from Players</span>
@@ -1842,8 +1851,10 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
         <button class="ts-btn primary" onclick="sendCheckRequest()">Ask Players</button>
     </div>
 </div>
+{% endif %}
 
-{# ═══════════════════ CUSTOM MONSTER FORM ═══════════════════ #}
+{% if active_system != 'cosmere' %}
+{# ═══════════════════ PF2E CUSTOM MONSTER FORM ═══════════════════ #}
 <div id="custom-monster-form" class="panel hidden">
     <div class="panel-head">
         <span class="panel-ttl" style="color:var(--t-red-b);">Custom Monster</span>
@@ -1875,6 +1886,7 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
         <button class="ts-btn" onclick="toggleCustomForm()">Cancel</button>
     </div>
 </div>
+{% endif %}
 
 {# ═══════════════════ MAIN LAYOUT ═══════════════════ #}
 <div id="main-layout" class="layout has-active">
@@ -1945,7 +1957,7 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
                 <div class="h-center">Init</div>
                 <div>Combatant</div>
                 <div class="h-center">Defenses</div>
-                <div class="h-center">Hit Points</div>
+                <div class="h-center">{% if active_system == 'cosmere' %}Health{% else %}Hit Points{% endif %}</div>
                 <div>Conditions</div>
                 <div class="h-right">Actions</div>
             </div>
@@ -2003,6 +2015,13 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
     <div class="ma-section">
         <input type="number" id="multi-dmg-amount" placeholder="amount" min="1" style="width:80px;">
         <select id="multi-dmg-type">
+            {% if active_system == 'cosmere' %}
+            <option value="impact">impact</option>
+            <option value="keen">keen</option>
+            <option value="energy">energy</option>
+            <option value="spirit">spirit</option>
+            <option value="vital">vital</option>
+            {% else %}
             <option value="untyped">untyped</option>
             <option value="bludgeoning">bludgeoning</option>
             <option value="piercing">piercing</option>
@@ -2019,10 +2038,12 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
             <option value="mental">mental</option>
             <option value="poison">poison</option>
             <option value="bleed">bleed</option>
+            {% endif %}
         </select>
-        <button class="hb-btn danger" type="button" onclick="multiApplyDamage('damage')" title="Apply damage to all selected (W/R/I auto-applies for monsters)">Damage</button>
+        <button class="hb-btn danger" type="button" onclick="multiApplyDamage('damage')" title="{% if active_system == 'cosmere' %}Apply damage to all selected{% else %}Apply damage to all selected (W/R/I auto-applies for monsters){% endif %}">Damage</button>
         <button class="hb-btn gold" type="button" onclick="multiApplyDamage('heal')" title="Heal all selected">Heal</button>
     </div>
+    {% if active_system != 'cosmere' %}
     <div class="ma-section" title="Basic save: rolls each target's save vs the DC and applies the amount above as crit-success 0 / success half / failure full / crit-failure double (W/R/I still applies).">
         <span class="ma-lbl" style="font-size:11px;opacity:.7;">Basic save</span>
         <select id="multi-save-type" style="width:84px;">
@@ -2034,10 +2055,13 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
         <button class="hb-btn danger" type="button" onclick="multiSaveDamage()" title="Roll saves and apply the amount above (uses the damage amount + type from the row above)">Roll saves</button>
     </div>
     <div class="ma-section" id="multi-save-results" style="display:none;font-size:11px;line-height:1.5;flex-direction:column;align-items:flex-start;gap:1px;"></div>
+    {% endif %}
     <div class="ma-section">
         <select id="multi-cond-sel"></select>
+        {% if active_system != 'cosmere' %}
         <input type="number" id="multi-cond-val" placeholder="val" min="1" max="9" style="width:48px;" title="For valued conditions (frightened, sickened, etc.) — defaults to 1">
         <input type="number" id="multi-cond-rounds" placeholder="rounds" min="1" max="9" style="width:64px;" title="Optional auto-expiry: clear after N end-of-turns">
+        {% endif %}
         <button class="hb-btn" type="button" onclick="multiApplyCondition()" title="Add condition to all selected">Add Condition</button>
     </div>
     <div class="ma-section">
@@ -2355,7 +2379,7 @@ function _renderNow() {
 function syncMultiDamageTypes() {
     const sel = document.getElementById('multi-dmg-type');
     if (!sel) return;
-    const isCos = (STATE.combatants || []).some(c => c.system === 'cosmere');
+    const isCos = document.body.classList.contains('system-cosmere');
     const want = isCos ? 'cosmere' : 'pf2e';
     if (sel.dataset.sys === want) return;        // already built for this system
     sel.dataset.sys = want;
@@ -2570,6 +2594,12 @@ function condTooltip(cond) {
     return tips[cond] || cond.replace(/_/g,' ');
 }
 
+function conditionTooltipFor(c, cond) {
+    // Several condition names overlap across games while their rules do not.
+    // Keep Cosmere chips descriptive without borrowing PF2e mechanics.
+    return c && c.system === 'cosmere' ? cond.replace(/_/g, ' ') : condTooltip(cond);
+}
+
 function condChipClass(cond) {
     if (DEADLY_CONDS.has(cond) || cond === 'frightened' || cond === 'sickened') return 'red';
     if (cond === 'off_guard' || cond === 'concealed' || cond === 'hidden' || cond === 'undetected') return 'gold';
@@ -2717,13 +2747,14 @@ function renderInitList() {
     }
 
     list.innerHTML = STATE.combatants.map((c, idx) => {
+        const isCos = c.system === 'cosmere';
         const isActive = idx === STATE.turn_index;
         const hpPct = c.max_hp > 0 ? Math.round(c.current_hp / c.max_hp * 100) : 0;
-        const isDying = c.conditions && c.conditions.dying > 0;
+        const isDying = !isCos && c.conditions && c.conditions.dying > 0;
         const dyingVal = c.conditions ? (c.conditions.dying || 0) : 0;
         const doomedVal = c.conditions ? (c.conditions.doomed || 0) : 0;
         const maxDying = Math.max(1, 4 - doomedVal);
-        const isAtDeath = dyingVal >= maxDying && dyingVal > 0;
+        const isAtDeath = !isCos && dyingVal >= maxDying && dyingVal > 0;
         const rowCls = `combatant ${isActive ? 'active' : ''} ${c.delaying ? 'delaying' : ''} ${isDying ? 'down dying-active' : ''}`;
 
         // Conditions HTML (read-only in grid; full controls in hero card).
@@ -2733,6 +2764,7 @@ function renderInitList() {
             const expiry = c.condition_expiry || {};
             for (const [k, v] of Object.entries(c.conditions)) {
                 if (!v || v === 0 || v === false) continue;
+                if (isCos && !COSMERE_CONDITIONS.includes(k)) continue;
                 const isValued = typeof v === 'number' && v > 0;
                 let label = k.replace(/_/g,'-') + (isValued ? ' ' + v : '');
                 const exp = expiry[k];
@@ -2740,7 +2772,7 @@ function renderInitList() {
                     label += ` <span class="cp-exp" title="Expires in ${exp} round${exp === 1 ? '' : 's'}">⏱${exp}</span>`;
                 }
                 const cls = condChipClass(k);
-                condsHtml += `<span class="cp ${cls}" data-cond-name="${k.replace(/_/g,'-')}" title="${condTooltip(k)}">${label}</span>`;
+                condsHtml += `<span class="cp ${cls}" data-cond-name="${k.replace(/_/g,'-')}" title="${conditionTooltipFor(c, k)}">${label}</span>`;
             }
         }
 
@@ -2751,13 +2783,13 @@ function renderInitList() {
             roleLabel = `<span class="k hazard">${ht}</span>`;
         } else if (isActive) roleLabel = `<span class="k active">ACTIVE</span>`;
         else if (c.delaying) roleLabel = `<span class="k delay">DELAYING</span>`;
-        else roleLabel = c.is_pc ? `<span class="k pc">PC</span>` : `<span class="k">ENEMY</span>`;
+        else roleLabel = c.is_pc ? `<span class="k pc">PC</span>` : `<span class="k">${isCos ? 'ADVERSARY' : 'ENEMY'}</span>`;
 
         // Hidden-from-players badge (NPC only). When true, players see '???'
         // in their encounter viewer and can't read HP/conditions.
         const isHidden = !c.is_pc && c.visible_to_players === false;
         let hiddenBadge = '';
-        if (isHidden) hiddenBadge = ' · <span class="k hidden" title="Players see ??? and no HP/conditions">HIDDEN</span>';
+        if (isHidden) hiddenBadge = ` · <span class="k hidden" title="Players see ??? and no ${isCos ? 'Health' : 'HP'}/conditions">HIDDEN</span>`;
 
         let subText = '';
         if (c.is_hazard) {
@@ -2777,7 +2809,7 @@ function renderInitList() {
             const _rxnName = c.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
             const reactionTag = c.reaction_used
                 ? `<button type="button" class="k rxn-spent" onclick="event.stopPropagation();toggleReaction('${_rxnName}',false)" title="Reaction spent — click to restore">RXN ✗</button>`
-                : `<button type="button" class="k rxn-ready" onclick="event.stopPropagation();toggleReaction('${_rxnName}',true)" title="Reaction available — click to mark spent (AoO, Shield Block, etc.)">RXN</button>`;
+                : `<button type="button" class="k rxn-ready" onclick="event.stopPropagation();toggleReaction('${_rxnName}',true)" title="${isCos ? 'Reaction available — click to mark spent' : 'Reaction available — click to mark spent (AoO, Shield Block, etc.)'}">RXN</button>`;
             subText = `${roleLabel}${c.level ? ' · Lvl ' + c.level : ''} · ${reactionTag}`;
         }
         else {
@@ -2787,10 +2819,13 @@ function renderInitList() {
             // and spend their reaction from the row, not just the stat panel.
             const _mrxn = c.reaction_used
                 ? `<button type="button" class="k rxn-spent" onclick="event.stopPropagation();useAction('${c.instance_id}','reaction',-1)" title="Reaction spent — click to restore">RXN ✗</button>`
-                : `<button type="button" class="k rxn-ready" onclick="event.stopPropagation();useAction('${c.instance_id}','reaction',1)" title="Reaction available — click to mark spent (Reactive Strike, Shield Block, etc.)">RXN</button>`;
-            subText = `${roleLabel}${c.level != null ? ' · Level ' + c.level : ''}${hiddenBadge} · ${_mrxn}`;
+                : `<button type="button" class="k rxn-ready" onclick="event.stopPropagation();useAction('${c.instance_id}','reaction',1)" title="${isCos ? 'Reaction available — click to mark spent' : 'Reaction available — click to mark spent (Reactive Strike, Shield Block, etc.)'}">RXN</button>`;
+            const rankText = isCos && c.cosmere
+                ? ` · Tier ${c.cosmere.tier || 1}`
+                : (c.level != null ? ' · Level ' + c.level : '');
+            subText = `${roleLabel}${rankText}${hiddenBadge} · ${_mrxn}`;
         }
-        if (c.persistent_damage) subText += ` · <span class="pd">PD ${c.persistent_damage}</span> <span class="pd-dc" title="DC 15 flat check (DC 10 assisted)">DC 15</span>`;
+        if (!isCos && c.persistent_damage) subText += ` · <span class="pd">PD ${c.persistent_damage}</span> <span class="pd-dc" title="DC 15 flat check (DC 10 assisted)">DC 15</span>`;
         if (isAtDeath) subText += ` · <span class="dying-badge">DEAD</span>`;
         else if (isDying) subText += ` · <span class="dying-badge">Dying ${dyingVal}</span>`;
 
@@ -2805,7 +2840,7 @@ function renderInitList() {
         // Secondary controls live behind a ⋯ overflow (UX-B): elite/weak,
         // announce, hide/reveal, remove — so the run-time row stays calm.
         const ofItems = [];
-        if (!c.is_pc && !c.is_hazard) {
+        if (!isCos && !c.is_pc && !c.is_hazard) {
             const eCls = c.elite_weak === 1 ? 'on-elite' : '';
             const wCls = c.elite_weak === -1 ? 'on-weak' : '';
             ofItems.push(`<div class="of-ew"><span class="of-lbl">Adjust</span><button class="ew-btn ${eCls}" onclick="eliteWeak('${c.instance_id}','elite')" title="Elite">E</button><button class="ew-btn" onclick="eliteWeak('${c.instance_id}','normal')" title="Normal">N</button><button class="ew-btn ${wCls}" onclick="eliteWeak('${c.instance_id}','weak')" title="Weak">W</button></div>`);
@@ -2840,7 +2875,7 @@ function renderInitList() {
                     : ''
                 }<span class="port-init">${initials(c.name)}</span></div>
                 <div class="nm-wrap">
-                    <button class="nm" onclick="inspectCombatant('${c.instance_id}')" title="Preview this combatant in the inspector">${escapeHtml(dispName(c))}${c.elite_weak === 1 ? ' (E)' : ''}${c.elite_weak === -1 ? ' (W)' : ''}</button>
+                    <button class="nm" onclick="inspectCombatant('${c.instance_id}')" title="Preview this combatant in the inspector">${escapeHtml(dispName(c))}${!isCos && c.elite_weak === 1 ? ' (E)' : ''}${!isCos && c.elite_weak === -1 ? ' (W)' : ''}</button>
                     <div class="nm-sub">${subText}</div>
                     ${(c.system === 'cosmere' && c.cosmere) ? `<div class="nm-sub" style="color:#5eead4;font-size:10px;letter-spacing:.02em;" title="Cosmere defenses (Physical / Cognitive / Spiritual) + Deflect + injury count">Phy ${c.cosmere.defenses.phy} · Cog ${c.cosmere.defenses.cog} · Spi ${c.cosmere.defenses.spi}${c.cosmere.deflect.value ? ` · Defl ${c.cosmere.deflect.value}` : ''}${c.cosmere.injuries ? ` · <span style="color:#f87171">Injuries ${c.cosmere.injuries}</span>` : ''}</div>` : ''}
                     ${(c.system === 'cosmere' && c.cosmere && COSMERE_INIT_MODE === 'phases') ? `<div class="nm-sub" style="margin-top:2px;"><button onclick="event.stopPropagation();cosmereSpeed('${c.instance_id}','${c.cosmere.speed_choice==='fast'?'slow':'fast'}')" style="background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.4);color:#5eead4;border-radius:4px;padding:0 6px;font-size:9px;cursor:pointer;letter-spacing:.03em;" title="Cosmere turn phase — toggle Fast (2 actions, acts early) / Slow (3 actions, acts late)">${c.cosmere.speed_choice==='fast'?'FAST · 2 act':'SLOW · 3 act'}</button></div>` : ''}
@@ -2874,7 +2909,7 @@ function renderInitList() {
             </div>
             <div class="c-cond">
                 ${condsHtml}
-                ${!c.is_hazard ? `<div class="cq-wrap" onclick="event.stopPropagation()">
+                ${!isCos && !c.is_hazard ? `<div class="cq-wrap" onclick="event.stopPropagation()">
                     <button class="cq-add" title="Add a condition" aria-haspopup="true" aria-expanded="false" aria-label="Add a condition to ${escapeHtml(dispName(c))}" onclick="event.stopPropagation();toggleCondQuick(this)">+</button>
                     <div class="cq-menu" role="menu">
                         ${QUICK_CONDS.map(function(qc){ return `<button class="cq-chip" role="menuitem" onclick="event.stopPropagation();quickCond('${c.instance_id}','${qc.k}')">${qc.l}</button>`; }).join('')}
@@ -2960,11 +2995,12 @@ function renderActivePanel() {
     let c = (_inspectPinned && _inspectId) ? STATE.combatants.find(x => x.instance_id === _inspectId) : null;
     if (!c) { c = activeC; _inspectPinned = false; _inspectId = null; }   // pinned target gone -> follow active
     if (!c) { wrap.classList.add('hidden'); layout.classList.remove('has-active'); return; }
+    const isCos = c.system === 'cosmere';
     const _previewing = _inspectPinned && activeC && c.instance_id !== activeC.instance_id;
     wrap.classList.remove('hidden');
     layout.classList.add('has-active');
 
-    const eliteTag = c.elite_weak === 1 ? ' (Elite)' : c.elite_weak === -1 ? ' (Weak)' : '';
+    const eliteTag = isCos ? '' : (c.elite_weak === 1 ? ' (Elite)' : c.elite_weak === -1 ? ' (Weak)' : '');
     // Hidden helpers for backward compat with any outside reference
     const apName = document.getElementById('ap-name');
     const apSub = document.getElementById('ap-subtitle');
@@ -2980,11 +3016,13 @@ function renderActivePanel() {
     let tagHtml = '';
     if (c.is_pc) {
         tagHtml += `<span class="tagp pc">PC · LVL ${c.level || '?'}</span>`;
+    } else if (isCos && c.cosmere) {
+        tagHtml += `<span class="tagp">TIER ${c.cosmere.tier || 1}</span>`;
     } else {
         tagHtml += `<span class="tagp">LVL ${c.level != null ? c.level : '?'}</span>`;
     }
-    if (c.elite_weak === 1) tagHtml += `<span class="tagp gold">Elite</span>`;
-    if (c.elite_weak === -1) tagHtml += `<span class="tagp">Weak</span>`;
+    if (!isCos && c.elite_weak === 1) tagHtml += `<span class="tagp gold">Elite</span>`;
+    if (!isCos && c.elite_weak === -1) tagHtml += `<span class="tagp">Weak</span>`;
     if (!c.is_pc && c.traits && c.traits.length) {
         const rar = {uncommon:'uncommon',rare:'rare',unique:'unique'};
         c.traits.slice(0, 4).forEach(t => {
@@ -3037,7 +3075,7 @@ function renderActivePanel() {
     const dmgOpts = damageTypeListFor(c).map(d => `<option value="${d}"${(_dmgIsCos && d === 'impact') ? ' selected' : ''}>${(!_dmgIsCos && d === 'untyped') ? '— type —' : d}</option>`).join('');
     html += `<div class="hp-ribbon">
         <div class="hp-r-top">
-            <span class="l">Hit Points</span>
+            <span class="l">${isCos ? 'Health' : 'Hit Points'}</span>
             <span class="pct" style="color:${pctColor};">${hpPct}%</span>
         </div>
         <div class="hp-num">${c.current_hp}<span class="slash">/</span><span class="mx">${c.max_hp}</span></div>
@@ -3071,8 +3109,8 @@ function renderActivePanel() {
         html += `</div>`;
     }
 
-    // Recall Knowledge (NPC only)
-    if (!c.is_pc) {
+    // Recall Knowledge is a PF2e creature-identification action.
+    if (!isCos && !c.is_pc) {
         html += `<button class="rk-btn" onclick="openRecallKnowledge('${c.instance_id}')">📖 Recall Knowledge</button>
                  <span id="rk-info-${c.instance_id}" style="font-size:10px;color:var(--t-t3);margin-left:6px;"></span>`;
     }
@@ -3103,7 +3141,7 @@ function renderActivePanel() {
     const _woundedVal = c.conditions ? (c.conditions.wounded || 0) : 0;
     const _doomedVal = c.conditions ? (c.conditions.doomed || 0) : 0;
     const _maxDying = Math.max(1, 4 - _doomedVal);
-    if (_dyingVal > 0 || _woundedVal > 0) {
+    if (!isCos && (_dyingVal > 0 || _woundedVal > 0)) {
         html += `<div class="dying-tracker">`;
         if (_dyingVal > 0) {
             html += `<span class="dt-label">Dying</span><div class="dt-pips">`;
@@ -3129,8 +3167,8 @@ function renderActivePanel() {
     }
 
     // Conditions
-    const isCos = c.system === 'cosmere';
-    const activeConds = c.conditions ? Object.entries(c.conditions).filter(([k,v]) => v && v !== 0 && v !== false) : [];
+    const activeConds = c.conditions ? Object.entries(c.conditions).filter(([k,v]) =>
+        v && v !== 0 && v !== false && (!isCos || COSMERE_CONDITIONS.includes(k))) : [];
     html += `<div class="section-h">Conditions ${activeConds.length ? '<span class="tk">click x to remove</span>' : ''}</div>`;
     if (activeConds.length) {
         const expiry = c.condition_expiry || {};
@@ -3143,7 +3181,7 @@ function renderActivePanel() {
                 label += ` <span class="cp-exp" title="Auto-expires in ${exp} round${exp === 1 ? '' : 's'}">⏱${exp}</span>`;
             }
             const cls = condChipClass(k);
-            html += `<span class="cond-chip ${cls}" data-cond-name="${k.replace(/_/g,'-')}" title="${condTooltip(k)}">${label}`;
+            html += `<span class="cond-chip ${cls}" data-cond-name="${k.replace(/_/g,'-')}" title="${conditionTooltipFor(c, k)}">${label}`;
             if (isValued && VALUED_CONDITIONS.includes(k)) {
                 html += `<button onclick="condAction('${c.instance_id}','${k}','decrease')" title="Decrease">−</button>`;
                 html += `<button onclick="condAction('${c.instance_id}','${k}','increase')" title="Increase">+</button>`;
@@ -3174,12 +3212,10 @@ function renderActivePanel() {
         </div>`;
     }
 
-    // Persistent damage. PCs use structured list[dict]; monsters keep the
-    // legacy free-text string. For PCs the GM gets per-entry roll/remove
-    // buttons (DC 15 flat check ends the entry on success).
-    // Feature 13: Show flat-check DC inline.
-    html += `<div class="pd-block" style="margin-top:6px;">`;
-    if (c.is_pc) {
+    // PF2e persistent damage. Cosmere injuries/conditions use their own engine.
+    if (!isCos) {
+        html += `<div class="pd-block" style="margin-top:6px;">`;
+        if (c.is_pc) {
         const pdList = Array.isArray(c.persistent_damage_list) ? c.persistent_damage_list : [];
         if (pdList.length) {
             html += `<div class="pd-list">`;
@@ -3219,16 +3255,17 @@ function renderActivePanel() {
             <input type="text" id="pd-src-${c.instance_id}" placeholder="source (optional)" style="width:140px;">
             <button onclick="addPersistentDamage('${c.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}','${c.instance_id}')">Add</button>
         </div>`;
-    } else {
-        const _monsterPD = c.persistent_damage || '';
-        html += `<div class="pd-row">
-            <span class="pd-lbl">PD</span>
-            <input type="text" id="pd-ap-${c.instance_id}" value="${_monsterPD}" placeholder="e.g. 1d6 fire">
-            ${_monsterPD ? '<span class="pd-dc" title="DC 15 flat check to end (DC 10 with assisted recovery)">DC 15</span>' : ''}
-            <button onclick="setPDAP('${c.instance_id}')">Set</button>
-        </div>`;
+        } else {
+            const _monsterPD = c.persistent_damage || '';
+            html += `<div class="pd-row">
+                <span class="pd-lbl">PD</span>
+                <input type="text" id="pd-ap-${c.instance_id}" value="${_monsterPD}" placeholder="e.g. 1d6 fire">
+                ${_monsterPD ? '<span class="pd-dc" title="DC 15 flat check to end (DC 10 with assisted recovery)">DC 15</span>' : ''}
+                <button onclick="setPDAP('${c.instance_id}')">Set</button>
+            </div>`;
+        }
+        html += `</div>`;
     }
-    html += `</div>`;
 
     // GM Creature Tactics Notes (Feature 22) — only for non-PC combatants, GM view only.
     {% if is_gm %}
@@ -3251,14 +3288,14 @@ function renderActivePanel() {
     // the primary attack so the GM doesn't have to subtract in their head when
     // the monster takes a second/third swing.
     if (c.strikes && c.strikes.length) {
-        const mapHint = `<span class="tk" title="PF2e Multiple Attack Penalty: 2nd Strike −5 (−4 agile), 3rd Strike −10 (−8 agile). Resets each turn.">Round ${STATE.round} · MAP −5 / −10</span>`;
+        const mapHint = isCos ? '' : `<span class="tk" title="PF2e Multiple Attack Penalty: 2nd Strike −5 (−4 agile), 3rd Strike −10 (−8 agile). Resets each turn.">Round ${STATE.round} · MAP −5 / −10</span>`;
         html += `<div class="section-h">Strikes ${mapHint}</div>`;
         html += `<div class="strikes">`;
         c.strikes.forEach(s => {
             const hitStr = String(s.hit || '');
             const m = hitStr.match(/([+-]?\d+)/);
             let mapHtml = '';
-            if (m) {
+            if (!isCos && m) {
                 const base = parseInt(m[1]);
                 const fmt = n => (n >= 0 ? '+' + n : '' + n);
                 // We don't always know the agile trait on raw strike dicts, so we
@@ -3280,7 +3317,7 @@ function renderActivePanel() {
     // Spell attack / DC quick-reference (PCs + caster foes) — the numbers ride
     // tracker_state for both, so the GM can read a caster's attack/DC without
     // opening a sheet or stat block.
-    if ((Number(c.spell_attack) || 0) !== 0 || (Number(c.spell_dc) || 0) !== 0) {
+    if (!isCos && ((Number(c.spell_attack) || 0) !== 0 || (Number(c.spell_dc) || 0) !== 0)) {
         const _sa = Number(c.spell_attack) || 0;
         const atk = _sa ? ((_sa >= 0 ? '+' : '') + _sa) : '—';
         const dc = (Number(c.spell_dc) || 0) || '—';
@@ -3305,7 +3342,7 @@ function renderActivePanel() {
     }
 
     // PC Feats / Features pills
-    if (c.is_pc && c.feats && c.feats.length) {
+    if (!isCos && c.is_pc && c.feats && c.feats.length) {
         html += `<div class="section-h">Feats &amp; Features</div>`;
         html += `<div class="cond-row">`;
         c.feats.slice(0, 20).forEach(f => {
@@ -3319,7 +3356,7 @@ function renderActivePanel() {
     // PC has available without flipping to their full sheet. Cantrips
     // (rank 0) and ranks with at least one spell are shown; empty
     // ranks are skipped. Slots remaining shown if applicable.
-    if (c.is_pc && Array.isArray(c.spell_casters) && c.spell_casters.length) {
+    if (!isCos && c.is_pc && Array.isArray(c.spell_casters) && c.spell_casters.length) {
         const headerExtras = [];
         if (c.spell_attack)  headerExtras.push(`Atk +${c.spell_attack}`);
         if (c.spell_dc)      headerExtras.push(`DC ${c.spell_dc}`);
@@ -3355,7 +3392,7 @@ function renderActivePanel() {
     // Player Core p.404); persistent damage + frightened tick at end-of-turn.
     const startReminders = [];
     const endReminders = [];
-    if (c.conditions && c.conditions.dying > 0) {
+    if (!isCos && c.conditions && c.conditions.dying > 0) {
         const dyingVal = c.conditions.dying;
         const dc = 10 + dyingVal;
         const idSafe = c.instance_id;
@@ -3368,8 +3405,8 @@ function renderActivePanel() {
             </span>`
         );
     }
-    if (c.persistent_damage) endReminders.push(`Take <b>${c.persistent_damage}</b> persistent damage, then DC 15 flat check.`);
-    if (c.conditions && c.conditions.frightened > 0) endReminders.push(`Frightened decreases by 1 at end of turn.`);
+    if (!isCos && c.persistent_damage) endReminders.push(`Take <b>${c.persistent_damage}</b> persistent damage, then DC 15 flat check.`);
+    if (!isCos && c.conditions && c.conditions.frightened > 0) endReminders.push(`Frightened decreases by 1 at end of turn.`);
     if (startReminders.length) {
         html += `<div class="reminder"><b>Start-of-turn:</b> ${startReminders.join(' · ')}</div>`;
     }
@@ -3502,9 +3539,11 @@ async function addCustomCosmereAdversary() {
 // change after Deflect / resistances / weaknesses / temp HP / clamping) over
 // the raw amount typed, so e.g. "6 impact" that Deflect knocks down to 5 reads
 // "Took 5 damage". Falls back to the raw amount if the server didn't report one.
-function hpAdjustToast(action, d, rawAmt) {
+function hpAdjustToast(action, d, rawAmt, instanceId) {
     const net = (d && d.applied && typeof d.applied.net === 'number') ? d.applied.net : rawAmt;
-    window.pf2eToast(action === 'heal' ? ('Healed ' + net + ' HP') : ('Took ' + net + ' damage'),
+    const target = STATE.combatants.find(c => c.instance_id === instanceId);
+    const healthLabel = target && target.system === 'cosmere' ? ' Health' : ' HP';
+    window.pf2eToast(action === 'heal' ? ('Healed ' + net + healthLabel) : ('Took ' + net + ' damage'),
                      action === 'heal' ? 'success' : 'danger');
 }
 
@@ -3518,7 +3557,7 @@ async function adjustHP(id, action) {
     fd.append('action', action);
     fd.append('damage_type', dmgType);
     const d = await apiPost('/api/adjust_hp/' + id, fd, null);
-    if (d) hpAdjustToast(action, d, amt);
+    if (d) hpAdjustToast(action, d, amt, id);
 }
 
 // Active-panel HP adjust (uses separate input IDs so it doesn't collide with grid row)
@@ -3532,7 +3571,7 @@ async function adjustHPAP(id, action) {
     fd.append('action', action);
     fd.append('damage_type', dmgType);
     const d = await apiPost('/api/adjust_hp/' + id, fd, null);
-    if (d) hpAdjustToast(action, d, amt);
+    if (d) hpAdjustToast(action, d, amt, id);
 }
 
 // Inline row HP adjust: reads the row's own quick-entry field (rhp-<id>), applies
@@ -3553,7 +3592,7 @@ async function adjustHPDirect(id, action, amount) {
     fd.append('action', action);
     fd.append('damage_type', 'untyped');
     const d = await apiPost('/api/adjust_hp/' + id, fd, null);
-    if (d) hpAdjustToast(action, d, amount);
+    if (d) hpAdjustToast(action, d, amount, id);
 }
 
 async function updateInit(id, val) {
@@ -3731,7 +3770,7 @@ const _multiSelected = new Set();
 function _populateMultiCondSel() {
     const sel = document.getElementById('multi-cond-sel');
     if (!sel || sel.options.length) return;
-    CONDITIONS_LIST.forEach(co => {
+    _reConditionList().forEach(co => {
         const o = document.createElement('option');
         o.value = co; o.textContent = co.replace(/_/g, '-');
         sel.appendChild(o);
@@ -3876,11 +3915,19 @@ async function multiApplyCondition() {
     const cond = document.getElementById('multi-cond-sel').value;
     if (!cond) return;
     const valuedSet = new Set(VALUED_CONDITIONS);
+    const valueInput = document.getElementById('multi-cond-val');
+    const roundsInput = document.getElementById('multi-cond-rounds');
     const repeats = valuedSet.has(cond)
-        ? Math.max(1, parseInt(document.getElementById('multi-cond-val').value || '1', 10))
+        ? Math.max(1, parseInt((valueInput && valueInput.value) || '1', 10))
         : 1;
-    const rounds = parseInt(document.getElementById('multi-cond-rounds').value || '0', 10);
+    const rounds = parseInt((roundsInput && roundsInput.value) || '0', 10);
     for (const id of ids) {
+        const target = STATE.combatants.find(c => c.instance_id === id);
+        if (target && target.system === 'cosmere') {
+            await apiAction('/api/cosmere/combatant/' + encodeURIComponent(id) + '/condition',
+                {condition: cond, action: 'add'});
+            continue;
+        }
         for (let r = 0; r < repeats; r++) {
             const fd = new FormData();
             fd.append('condition', cond);
@@ -4219,13 +4266,17 @@ async function openStatModal(instanceId) {
         const d = await apiGet(`/api/combatant_stats/${instanceId}`);
         if (d.error) { document.getElementById('sm-body').innerHTML = `<div style="color:var(--t-red-b);padding:18px;">${d.error}</div>`; return; }
 
-        const eliteLabel = d.elite_weak === 1 ? ' (Elite)' : d.elite_weak === -1 ? ' (Weak)' : '';
-        document.getElementById('sm-name').textContent = d.name + eliteLabel;
         const posIdx = STATE.combatants.findIndex(c => c.instance_id === instanceId);
         const posStr = posIdx >= 0 ? `  ·  ${posIdx + 1} / ${STATE.combatants.length}` : '';
-        const _scm = (posIdx >= 0 && STATE.combatants[posIdx] && STATE.combatants[posIdx].system === 'cosmere')
-            ? STATE.combatants[posIdx].cosmere : null;
-        const subText = _scm
+        const _stateCombatant = posIdx >= 0 ? STATE.combatants[posIdx] : null;
+        const _isCosmereDetail = d.system === 'cosmere'
+            || (_stateCombatant && _stateCombatant.system === 'cosmere');
+        const _scm = _isCosmereDetail
+            ? (d.cosmere || (_stateCombatant ? _stateCombatant.cosmere : {}) || {})
+            : null;
+        const eliteLabel = _isCosmereDetail ? '' : (d.elite_weak === 1 ? ' (Elite)' : d.elite_weak === -1 ? ' (Weak)' : '');
+        document.getElementById('sm-name').textContent = d.name + eliteLabel;
+        const subText = _isCosmereDetail
             ? `${d.is_pc ? 'Hero' : (_scm.role || 'Adversary')} · Tier ${_scm.tier || 1}${_scm.injuries ? ' · Injuries ' + _scm.injuries : ''}`
             : (d.is_pc
                 ? `Level ${d.level} ${d.ancestry || ''} ${d.class_name || ''} ${d.subclass ? '- ' + d.subclass : ''}`
@@ -4247,7 +4298,7 @@ async function openStatModal(instanceId) {
         }
 
         // Stat grid — Cosmere combatants show defenses/resources + attributes.
-        if (_scm) {
+        if (_isCosmereDetail) {
             html += `<div class="hero-stats">${cosmereStatBoxes(_scm)}</div>${cosmereAttrBoxes(_scm)}`;
         } else {
             html += `<div class="hero-stats">
@@ -4260,10 +4311,10 @@ async function openStatModal(instanceId) {
         </div>`;
         }
 
-        // HP
+        // Health / HP
         const hpPct = d.max_hp > 0 ? Math.round((d.current_hp / d.max_hp) * 100) : 0;
         html += `<div class="hp-ribbon">
-            <div class="hp-r-top"><span class="l">Hit Points</span><span class="pct" style="color:${hpPctColor(hpPct, d.is_pc)};">${hpPct}%</span></div>
+            <div class="hp-r-top"><span class="l">${_isCosmereDetail ? 'Health' : 'Hit Points'}</span><span class="pct" style="color:${hpPctColor(hpPct, d.is_pc)};">${hpPct}%</span></div>
             <div class="hp-num">${d.current_hp}<span class="slash">/</span><span class="mx">${d.max_hp}</span></div>
             <div class="hp-bar"><div class="f ${hpBarClass(hpPct, d.is_pc)}" style="width:${hpPct}%"></div></div>
         </div>`;
@@ -4285,7 +4336,8 @@ async function openStatModal(instanceId) {
 
         // Conditions
         if (d.conditions && Object.keys(d.conditions).length) {
-            const active = Object.entries(d.conditions).filter(([k,v]) => v && v !== 0 && v !== false);
+            const active = Object.entries(d.conditions).filter(([k,v]) =>
+                v && v !== 0 && v !== false && (!_isCosmereDetail || COSMERE_CONDITIONS.includes(k)));
             if (active.length) {
                 html += `<div class="cond-row" style="margin-bottom:10px;">`;
                 active.forEach(([k,v]) => {
@@ -4298,7 +4350,7 @@ async function openStatModal(instanceId) {
         }
 
         // Ability scores (PCs)
-        if (d.is_pc && d.abilities) {
+        if (!_isCosmereDetail && d.is_pc && d.abilities) {
             html += `<div class="hero-stats" style="grid-template-columns:repeat(6,1fr);">`;
             ['str','dex','con','int','wis','cha'].forEach(ab => {
                 const mod = d.abilities[ab] || 0;
@@ -4341,7 +4393,7 @@ async function openStatModal(instanceId) {
         }
 
         // Spells
-        if (d.is_pc && d.spell_casters && d.spell_casters.length) {
+        if (!_isCosmereDetail && d.is_pc && d.spell_casters && d.spell_casters.length) {
             html += `<div class="section-h">Spellcasting</div>`;
             d.spell_casters.forEach(sc => {
                 html += `<div class="abl-row">
@@ -5520,41 +5572,42 @@ async function sendCheckRequest() {
                 repaint();
             } catch(_) {}
         });
-        es.addEventListener('treat_wounds', (e) => {
-            try {
-                const d = JSON.parse(e.data || '{}');
-                const ok = d.success === 'success' || d.success === 'crit_success';
-                const sign = (d.healing >= 0 ? '+' : '') + d.healing;
-                messages.push({
-                    kind: 'whisper', pc: d.healer,
-                    text: `Treat Wounds → ${d.target}: rolled ${d.roll_total} vs DC ${d.dc} (${(d.success||'').replace('_',' ')}) → ${sign} HP`,
-                    ts: d.ts
-                });
-                repaint();
-            } catch(_) {}
-        });
-        // Hero Point Nomination (Tier 4 #19)
-        es.addEventListener('hero_nomination', (e) => {
-            try {
-                const d = JSON.parse(e.data || '{}');
-                const esc = (s) => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-                const nomId = d.id || '';
-                messages.push({
-                    kind: 'nomination', pc: d.nominator,
-                    text: `Nominated <b>${esc(d.nominee)}</b> for a Hero Point: "${esc(d.reason)}"`,
-                    ts: d.ts,
-                    nominee: d.nominee,
-                    nomId: nomId,
-                    actionable: true
-                });
-                if (inbox.style.display !== 'block') {
-                    fab.dataset.unread = String(parseInt(fab.dataset.unread || '0', 10) + 1);
-                    repaintFab();
-                }
-                repaint();
-                try { toast(d.nominator + ' nominated ' + d.nominee + ' for a Hero Point', 'info'); } catch(_) {}
-            } catch(_) {}
-        });
+        if (!document.body.classList.contains('system-cosmere')) {
+            es.addEventListener('treat_wounds', (e) => {
+                try {
+                    const d = JSON.parse(e.data || '{}');
+                    const sign = (d.healing >= 0 ? '+' : '') + d.healing;
+                    messages.push({
+                        kind: 'whisper', pc: d.healer,
+                        text: `Treat Wounds → ${d.target}: rolled ${d.roll_total} vs DC ${d.dc} (${(d.success||'').replace('_',' ')}) → ${sign} HP`,
+                        ts: d.ts
+                    });
+                    repaint();
+                } catch(_) {}
+            });
+            // Hero Point Nomination (Tier 4 #19)
+            es.addEventListener('hero_nomination', (e) => {
+                try {
+                    const d = JSON.parse(e.data || '{}');
+                    const esc = (s) => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                    const nomId = d.id || '';
+                    messages.push({
+                        kind: 'nomination', pc: d.nominator,
+                        text: `Nominated <b>${esc(d.nominee)}</b> for a Hero Point: "${esc(d.reason)}"`,
+                        ts: d.ts,
+                        nominee: d.nominee,
+                        nomId: nomId,
+                        actionable: true
+                    });
+                    if (inbox.style.display !== 'block') {
+                        fab.dataset.unread = String(parseInt(fab.dataset.unread || '0', 10) + 1);
+                        repaintFab();
+                    }
+                    repaint();
+                    try { toast(d.nominator + ' nominated ' + d.nominee + ' for a Hero Point', 'info'); } catch(_) {}
+                } catch(_) {}
+            });
+        }
     } catch(e) { console.error('GM inbox SSE failed:', e); }
 })();
 
@@ -5581,8 +5634,7 @@ function _reConditionList() {
     // server-side, so a Cosmere GM pre-authoring events on an EMPTY tracker
     // still gets Cosmere conditions (combatant sniffing alone fell back to
     // the PF2e list until the fight was staged).
-    const isCos = document.body.classList.contains('system-cosmere')
-        || (STATE.combatants || []).some(c => c.system === 'cosmere');
+    const isCos = document.body.classList.contains('system-cosmere');
     return isCos ? COSMERE_CONDITIONS : CONDITIONS_LIST;
 }
 
