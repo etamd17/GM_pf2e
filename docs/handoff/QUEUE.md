@@ -92,7 +92,7 @@ Claude owns `frontend/vtt/`. The rows below only track where it stands.
 
 | ID | Task | Owner | Model | Status | Where |
 |---|---|---|---|---|---|
-| VTT-017 | Fix the session issue Codex flagged in client commit `de880953`; review Codex's first contract batch (`c5653e05`); publish handoff 017 | claude | Opus, high | ready (idle since 2026-10-12) | `GM_pf2e_vtt/docs/vtt/handoffs/VTT-20261012-016-codex.md` |
+| VTT-017 | Fix the session issue Codex flagged; review Codex's first contract batch; publish handoff 017 | claude | Opus, high | done (handoff `VTT-20261015-017`, client commits `44650296`, `97f1eef9`); waiting on Codex's reply | `GM_pf2e_vtt/docs/vtt/handoffs/VTT-20261015-017-claude.md` |
 | VTT-ALPHA | First usable milestone: GM workspace + shared table display talking to the new backend, on a Railway **staging** environment of the same project (ADR-0003). Production untouched until the user merges | codex + claude | strongest / Opus high | needs plan (after VTT-017) | ADR-0003 |
 | VTT-PLAYERS | Per-player screens and per-player vision | - | - | deferred by the user (ADR-0001) | - |
 
@@ -112,6 +112,7 @@ Accepted as a design checkpoint. Notes:
 
 Newest first. One plain line per handoff: who, what, what's next.
 
+- 2026-10-15 Claude: VTT-017 done. Fixed the table-screen bug Codex found (an old message could keep a stale or revoked scene on screen) and built the tool that turns Codex's message definitions into client code. Codex's first batch has one blocker: a duplicate check that makes a big scene take almost a second to load (fix proposed as S5). Next: Codex answers handoff 017.
 - 2026-10-15 Claude: wrote build briefs for the 12 approved PF2e screens (UI-06 to UI-12), grouped by page and ordered by risk; the map waits until the VTT plan is settled. Next: Codex works through them after UI-04 and UI-05; Claude writes the Cosmere screen briefs (UI-13) after those.
 - 2026-10-15 User: decided that gems change a sphere's value, and that PF2e, Cosmere and D&D never share mechanics (hide all PF2e controls in the Cosmere tracker). Claude wrote briefs UI-04 (tracker) and UI-05 (gem values). Next: Codex takes UI-04, then UI-05.
 - 2026-10-15 Codex: fixed the MB-03 loot casing and Era 2 name groups, seeded the route test, and passed all 17 focused checks; Claude's review is accepted. Next: open the PR and merge it after every CI job is green.
