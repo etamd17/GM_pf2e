@@ -114,6 +114,11 @@ def _lower_list(xs) -> list:
     return [str(x).split('|')[0].lower() for x in xs or []]
 
 
+def _lower_strings(xs) -> list:
+    """Normalise fixed string grants without leaking choice objects to a sheet."""
+    return [x.split('|')[0].lower() for x in xs or [] if isinstance(x, str)]
+
+
 def _col_label(lbl) -> str:
     return strip_tags(lbl).strip()
 
@@ -349,11 +354,17 @@ def compute(doc: dict) -> dict:
     _validate_base_scores(ctx, method, base)
 
     race = C.get('race', b.get('race') or '') if b.get('race') else None
+    race_for_summary = race
     background = C.get('background', b.get('background') or '') if b.get('background') else None
     if b.get('race') and race is None:
         ctx.errors.append(f'Unknown species {b.get("race")!r}')
     if b.get('background') and background is None:
         ctx.errors.append(f'Unknown background {b.get("background")!r}')
+
+    if race:
+        race = _select_race_version(ctx, race)
+        if race:
+            race_for_summary = race
 
     classes = _load_classes(ctx)
     class_levels_by_name = {}
@@ -539,9 +550,11 @@ def compute(doc: dict) -> dict:
                           'short_name': subclasses[cid].get('shortName')} if cid in subclasses else None),
             'table': class_table(rec, clv),
         } for rec, cid, clv, _ in classes],
-        'race': ({'id': entity_id(race['name'], race['source']), 'name': race['name'], 'source': race['source'],
-                  'size': race.get('size') or ['M'], 'creature_type': (race.get('creatureTypes') or ['humanoid'])[0]}
-                 if race else None),
+        'race': ({'id': entity_id(race_for_summary['name'], race_for_summary['source']),
+                  'name': race_for_summary['name'], 'source': race_for_summary['source'],
+                  'size': race_for_summary.get('size') or ['M'],
+                  'creature_type': (race_for_summary.get('creatureTypes') or ['humanoid'])[0]}
+                 if race_for_summary else None),
         'background': ({'id': entity_id(background['name'], background['source']),
                         'name': background['name'], 'source': background['source']} if background else None),
         'abilities': {a: {'score': scores[a], 'base': base[a], 'mod': mods[a], 'save': saves[a]['mod'],
@@ -554,9 +567,9 @@ def compute(doc: dict) -> dict:
         'hp_max': hp_max,
         'hit_dice': hit_dice,
         'senses': senses,
-        'resist': sorted((ctx.grants.resist | set(_lower_list(race.get('resist') if race else [])) | m.resist)
+        'resist': sorted((ctx.grants.resist | set(_lower_strings(race.get('resist') if race else [])) | m.resist)
                          - {''}),
-        'immune': sorted(set(_lower_list(race.get('immune') if race else [])) | m.immune),
+        'immune': sorted(set(_lower_strings(race.get('immune') if race else [])) | m.immune),
         'vulnerable': sorted(m.vulnerable),
         'condition_immune': sorted(set(_lower_list(race.get('conditionImmune') if race else []))
                                    | m.condition_immune),
@@ -619,6 +632,54 @@ def _req_text(req) -> str:
 
 # --- species / background ----------------------------------------------------
 
+def _species_version_label(version: dict) -> str:
+    name = version['name']
+    if '; ' in name:
+        before, label = name.rsplit('; ', 1)
+        if before.count('(') > before.count(')') and label.endswith(')'):
+            label = label[:-1]
+        return label
+    if name.endswith(')') and '(' in name:
+        return name.rsplit('(', 1)[1][:-1]
+    return name
+
+
+def _select_race_version(ctx: _Ctx, base: dict) -> dict | None:
+    """Add a base species' version choice and return its selected full record.
+
+    A legacy build can store a version id directly. Resolve that record through
+    the same cached index so any content normalization also applies, but do not
+    add a new choice.
+
+    Until a valid version is selected, no base grants are expanded. Version
+    records are authoritative and can replace more than one related field, so
+    applying the base would expose independent choices that disagree with the
+    eventual version.
+    """
+    if base.get('_versionBase_isVersion'):
+        direct_id = entity_id(base['name'], base['source'])
+        return next((version for version in C.race_versions(
+            base.get('_versionBase_name'), base.get('_versionBase_source'))
+            if entity_id(version['name'], version['source']) == direct_id), base)
+    versions = C.race_versions(base['name'], base['source'])
+    if not versions:
+        return base
+    options = [{'value': entity_id(v['name'], v['source']), 'label': _species_version_label(v)}
+               for v in versions]
+    label = ('Draconic Ancestry'
+             if base['name'] == 'Dragonborn' and base['source'] in ('PHB', 'XPHB')
+             else f'{base["name"]}: choose a version')
+    origin = f'Species ({base["name"]})'
+    ctx.add_choice(G.Choice(id='race:version', kind='species_version', label=label,
+                            options=options, origin=origin))
+    picked = ctx.picks.get('race:version')
+    picked = picked[0] if isinstance(picked, list) and picked else picked
+    if picked is None:
+        return None
+    return next((version for version in versions
+                 if entity_id(version['name'], version['source']) == str(picked).lower()), None)
+
+
 def _apply_race(ctx: _Ctx, race: dict):
     org = f'Species ({race["name"]})'
     g = ctx.grants
@@ -638,8 +699,9 @@ def _apply_race(ctx: _Ctx, race: dict):
                       ('armor', 'armorProficiencies'), ('skillToolLanguage', 'skillToolLanguageProficiencies')):
         G.expand_list(kind, race.get(fld), f'race:{kind}', org, ctx.picks, ctx.pools, g, ctx.choices)
     if race.get('resist'):
-        G.expand_list('resist', [{r: True} if isinstance(r, str) else r for r in race['resist']],
-                      'race:resist', org, ctx.picks, ctx.pools, g, ctx.choices)
+        g.resist.update(_lower_strings(race['resist']))
+        choices = [r for r in race['resist'] if not isinstance(r, str)]
+        G.expand_list('resist', choices, 'race:resist', org, ctx.picks, ctx.pools, g, ctx.choices)
     _feat_grants(ctx, race.get('feats'), 'race:feat', org)
     _additional_spells(ctx, race.get('additionalSpells'), 'race:spells', org, None)
     size = race.get('size') or ['M']

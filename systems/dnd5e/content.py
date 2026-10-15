@@ -50,6 +50,8 @@ def reload():
     """Forget everything read from the old data (after a bundle install)."""
     _generation[0] += 1
     _get_cached.cache_clear()
+    _race_versions_by_base.cache_clear()
+    _race_builder_scaffold_ids.cache_clear()
     _images['mtime'] = None
     reset_tag_cache()
 
@@ -157,6 +159,75 @@ def all_records(kind: str, *, sources=None, edition=None):
         sql += ' AND edition=?'
         args.append(edition)
     return [json.loads(r['data']) for r in _con().execute(sql, args)]
+
+
+@lru_cache(maxsize=1)
+def _race_versions_by_base() -> dict:
+    """Resolved species versions keyed by their base species id."""
+    records = all_records('race')
+    bases = {entity_id(record.get('name'), record.get('source')): record
+             for record in records if not record.get('_versionBase_isVersion')}
+    variable_resists = {}
+    # Five FTD Chromatic implementations put their fixed resistance inside
+    # `_variables`. The upstream resolved export substitutes the prose but
+    # leaves the base choose-object in `resist`; recover the fixed value from
+    # the base metadata without changing the installed data.
+    for base in bases.values():
+        for spec in base.get('_versions') or []:
+            abstract = spec.get('_abstract') or {}
+            name_template = abstract.get('name')
+            source = abstract.get('source') or base.get('source')
+            if not name_template:
+                continue
+            for implementation in spec.get('_implementations') or []:
+                variables = implementation.get('_variables') or {}
+                resist = variables.get('resist')
+                if not isinstance(resist, list) or not all(isinstance(x, str) for x in resist):
+                    continue
+                name = name_template
+                for key, value in variables.items():
+                    if isinstance(value, (str, int, float)):
+                        name = name.replace('{{' + key + '}}', str(value))
+                variable_resists[entity_id(name, source)] = list(resist)
+
+    out = {}
+    for record in records:
+        if not record.get('_versionBase_isVersion'):
+            continue
+        rid = entity_id(record.get('name'), record.get('source'))
+        if rid in variable_resists and any(not isinstance(x, str) for x in record.get('resist') or []):
+            record = dict(record)
+            record['resist'] = variable_resists[rid]
+        base_id = entity_id(record.get('_versionBase_name'), record.get('_versionBase_source'))
+        out.setdefault(base_id, []).append(record)
+    return {base_id: tuple(sorted(records, key=lambda r: r['name'].casefold()))
+            for base_id, records in out.items()}
+
+
+def race_versions(name: str, source: str) -> list:
+    """Full resolved version records for a base species."""
+    return list(_race_versions_by_base().get(entity_id(name, source), ()))
+
+
+def race_version_ids() -> set:
+    """Ids hidden from the builder's base species grid."""
+    return {entity_id(record['name'], record['source'])
+            for records in _race_versions_by_base().values() for record in records}
+
+
+@lru_cache(maxsize=1)
+def _race_builder_scaffold_ids() -> frozenset:
+    # The resolved export has both the usable merged Dragonborn row and its
+    # raw base-race scaffold under PHB. Keep every other non-version row.
+    return frozenset(entity_id(record['name'], record['source'])
+                     for record in all_records('race')
+                     if record.get('_isBaseRace') and record.get('_rawName') == 'Dragonborn'
+                     and record.get('source') == 'PHB')
+
+
+def race_builder_scaffold_ids() -> set:
+    """Duplicate raw scaffolds hidden from the species grid."""
+    return set(_race_builder_scaffold_ids())
 
 
 def search_monsters(*, q='', cr_min=None, cr_max=None, types=None, sizes=None,

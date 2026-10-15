@@ -128,6 +128,10 @@ it assumed a private repo). Nothing from it was ever pushed.
 * Spell rows: attack/save, damage/healing dice at the character's level, upcast on Cast (server
   roll), Agonizing Blast / Potent Spellcasting / Empowered Evocation; Magical Secrets lists.
 * 2014 prose choices: Dragon Ancestor, Favored Enemy, Natural Explorer.
+* Species `_versions` are one required builder choice on the base species. The selected resolved
+  version supplies all of its grants and feature text together (Draconic Ancestry, 2024 lineages
+  and legacies, giant ancestry, and the other data-defined versions). Existing characters that
+  stored a version id directly remain valid.
 * Spells cast from magic items (`attachedSpells`: wands, staffs) appear on the Spells tab; Cast
   spends the item's charges and uses the item's fixed save DC. A shield hides a weapon's two-handed (versatile) damage.
 * Extras tab: companions / familiars / Wild Shape forms with their own HP and statblock. Players
@@ -249,8 +253,6 @@ builder's Details step) and GM art for any non-PC tracker combatant (custom mons
   and Sneak Attack dice appear as notes on the attack rows they apply to (not folded into the
   numbers, since both depend on the moment). Everything else is displayed as rules text: e.g.
   Bladesong AC, Hexblade, Smite dice.
-* Prose-only choices outside `FEATURE_CHOICES` (e.g. 2014 Draconic Ancestry, Totem animal,
-  Favored Terrain) are not prompted.
 * Spells: preparing a 2014 Cleric/Druid/Paladin list is done in the builder.
 * 2014 encounter multiplier counts every monster (DMG says weak ones *may* be ignored).
 * **Postgres (SQL ownership) mode**: 5e characters are not registered in the SQL ownership
