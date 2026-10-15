@@ -11,6 +11,12 @@ from __future__ import annotations
 import random
 
 from systems.cosmere import generator_scadrial as _scadrial
+from systems.cosmere.spheres import (
+    DENOMINATIONS,
+    GEMS,
+    format_marks,
+    value_in_chips,
+)
 
 # ── Names by Rosharan culture ──────────────────────────────────────────────
 # Recognizably-flavored given names + lighteyed/family names per culture.
@@ -98,8 +104,8 @@ WEATHER = [
 ]
 
 # ── Spheres (Rosharan currency) ─────────────────────────────────────────────
-_SPHERE_GEMS = ['diamond', 'garnet', 'ruby', 'sapphire', 'smokestone', 'emerald']
-_SPHERE_DENOM = [('chip', 1), ('mark', 5), ('broam', 20)]
+_SPHERE_GEMS = GEMS
+_SPHERE_DENOM = DENOMINATIONS
 
 # ── Loot / fabrials / finds ─────────────────────────────────────────────────
 LOOT = [
@@ -233,12 +239,13 @@ def gen_spheres(world='stormlight', era='era-1'):
     total = 0
     for _ in range(random.randint(2, 3)):
         gem = random.choice(_SPHERE_GEMS)
-        denom, val = random.choice(_SPHERE_DENOM)
+        denom = random.choice(_SPHERE_DENOM)
         n = random.randint(1, 9)
-        total += n * val
+        total += n * value_in_chips(gem, denom)
         bits.append('%d %s %s%s' % (n, gem, denom, '' if n == 1 else 's'))
     return ('A pouch of <b>%s</b>.<br>%s' % (
-        ', '.join(bits), _muted('Roughly %d clearchips’ worth, if the gems were spent for their Light.' % total)))
+        ', '.join(bits), _muted('Roughly %s diamond marks’ worth, if the gems were spent for their Light.'
+                                % format_marks(total))))
 
 
 def gen_loot(world='stormlight', era='era-1'):

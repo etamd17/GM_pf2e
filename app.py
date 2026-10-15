@@ -11954,14 +11954,19 @@ def api_loot_ledger_delete():
 # The Rosharan sibling of the PF2e ledger: spheres & spoils instead of coins.
 # Reuses the same campaign-scoped storage (a Cosmere campaign keeps its own
 # loot_ledger.json), just with Cosmere-shaped entries (spheres, gem colour).
-_COSMERE_GEMS = ('diamond', 'garnet', 'ruby', 'sapphire', 'smokestone', 'emerald')
-_SPHERE_DENOMS = (('broam', 20), ('mark', 5), ('chip', 1))   # value in clearchips
+from systems.cosmere.spheres import (
+    DENOMINATIONS as _SPHERE_DENOMINATIONS,
+    GEMS as _COSMERE_GEMS,
+    format_marks as _format_sphere_marks,
+    normalize_wallet as _normalize_cosmere_wallet,
+    sphere_value as _cosmere_sphere_value,
+    wallet_total as _cosmere_wallet_total,
+)
 
 
-def _sphere_value(spheres):
-    """A sphere stash's worth in clearchips (chip 1 / mark 5 / broam 20)."""
-    s = spheres or {}
-    return sum(int(s.get(k, 0) or 0) * v for k, v in _SPHERE_DENOMS)
+def _sphere_value(spheres, gem='diamond'):
+    """Return a sphere stash's exact value in diamond chips."""
+    return _cosmere_sphere_value(spheres, gem)
 
 
 @app.route('/cosmere/loot')
@@ -11981,25 +11986,46 @@ def api_cosmere_loot():
     if _active_system() != 'cosmere':
         return jsonify({'error': 'cosmere only'}), 400
     ledger = _load_loot_ledger()
-    entries = ledger.get('entries', [])
+    entries = []
+    total_chips = 0
+    for raw_entry in ledger.get('entries', []):
+        if not isinstance(raw_entry, dict):
+            continue
+        entry = copy.deepcopy(raw_entry)
+        gem = entry.get('gem') if entry.get('gem') in _COSMERE_GEMS else 'diamond'
+        value_chips = _sphere_value(entry.get('spheres'), gem)
+        entry['gem'] = gem
+        entry['value_chips'] = value_chips
+        entry['value_marks'] = _format_sphere_marks(value_chips)
+        total_chips += value_chips
+        entries.append(entry)
     party = []
     for d in _list_cosmere_pcs():
         b = d.get('build') or {}
         party.append({'name': d.get('name') or b.get('name') or 'Unnamed',
                       'level': b.get('level', 1)})
     return jsonify({'entries': entries, 'party': party, 'gems': list(_COSMERE_GEMS),
-                    'total_chips': sum(_sphere_value(e.get('spheres')) for e in entries)})
+                    'total_chips': total_chips,
+                    'total_marks': _format_sphere_marks(total_chips)})
 
 
-def _credit_cosmere_loot(doc, items, spheres):
+def _credit_cosmere_loot(doc, items, spheres, gem='diamond'):
     """Accumulate awarded spheres + items onto a Cosmere PC doc's `wallet` so the
     award shows on the player's sheet (not just the ledger). Spheres sum by
-    denomination; items merge by name. Returns the updated wallet."""
-    w = doc.get('wallet') if isinstance(doc.get('wallet'), dict) else {}
-    sp = dict(w.get('spheres') or {})
-    for k in ('chip', 'mark', 'broam'):
-        sp[k] = int(sp.get(k, 0) or 0) + int((spheres or {}).get(k, 0) or 0)
-    goods = [dict(g) for g in (w.get('items') or []) if isinstance(g, dict)]
+    gem and denomination; items merge by name. A real wallet mutation upgrades
+    a legacy flat wallet to version 2. Returns the updated wallet."""
+    gem = gem if gem in _COSMERE_GEMS else 'diamond'
+    wallet = _normalize_cosmere_wallet(doc.get('wallet'))
+    sphere_groups = wallet['spheres']
+    current = dict(sphere_groups.get(gem) or {})
+    for key in _SPHERE_DENOMINATIONS:
+        current[key] = max(0, int(current.get(key, 0) or 0)) + max(
+            0, int((spheres or {}).get(key, 0) or 0))
+    if any(current.values()):
+        sphere_groups[gem] = current
+    else:
+        sphere_groups.pop(gem, None)
+    goods = [dict(g) for g in wallet['items'] if isinstance(g, dict)]
     for it in (items or []):
         name = str(it.get('name', '')).strip()
         if not name:
@@ -12011,26 +12037,29 @@ def _credit_cosmere_loot(doc, items, spheres):
                 break
         else:
             goods.append({'name': name[:80], 'qty': qty})
-    doc['wallet'] = {'spheres': sp, 'items': goods}
+    wallet['items'] = goods
+    doc['wallet'] = wallet
     return doc['wallet']
 
 
-def _debit_cosmere_loot(doc, items, spheres):
+def _debit_cosmere_loot(doc, items, spheres, gem='diamond'):
     """Remove a recorded award from a Cosmere PC wallet.
 
     Validate the whole debit before changing the document so a partially spent
     award cannot leave any denomination or item below zero.
     """
-    wallet = doc.get('wallet') if isinstance(doc.get('wallet'), dict) else {}
-    current_spheres = dict(wallet.get('spheres') or {})
+    gem = gem if gem in _COSMERE_GEMS else 'diamond'
+    wallet = _normalize_cosmere_wallet(doc.get('wallet'))
+    current_spheres = dict(wallet['spheres'].get(gem) or {})
     required_spheres = {
         key: max(0, int((spheres or {}).get(key, 0) or 0))
-        for key in ('chip', 'mark', 'broam')
+        for key in _SPHERE_DENOMINATIONS
     }
     for key, required in required_spheres.items():
         available = max(0, int(current_spheres.get(key, 0) or 0))
         if available < required:
-            raise ValueError(f'Wallet does not have enough {key}s to reverse this award.')
+            raise ValueError(
+                f'Wallet does not have enough {gem} {key}s to reverse this award.')
 
     goods = [dict(g) for g in (wallet.get('items') or []) if isinstance(g, dict)]
     required_items = {}
@@ -12063,13 +12092,16 @@ def _debit_cosmere_loot(doc, items, spheres):
         if qty:
             good['qty'] = qty
             kept_goods.append(good)
-    doc['wallet'] = {
-        'spheres': {
-            key: max(0, int(current_spheres.get(key, 0) or 0)) - required
-            for key, required in required_spheres.items()
-        },
-        'items': kept_goods,
+    remaining_spheres = {
+        key: max(0, int(current_spheres.get(key, 0) or 0)) - required
+        for key, required in required_spheres.items()
     }
+    if any(remaining_spheres.values()):
+        wallet['spheres'][gem] = remaining_spheres
+    else:
+        wallet['spheres'].pop(gem, None)
+    wallet['items'] = kept_goods
+    doc['wallet'] = wallet
     return doc['wallet']
 
 
@@ -12105,6 +12137,7 @@ def api_cosmere_loot_add():
     norm_items = [item for item in norm_items if item['qty']]
     norm_spheres = {k: max(0, int(spheres.get(k, 0) or 0))
                     for k in ('chip', 'mark', 'broam')}
+    wallet_changed = bool(norm_items or any(norm_spheres.values()))
     from datetime import datetime as _dt_loot
     entry = {
         'id': str(uuid.uuid4()),
@@ -12130,22 +12163,24 @@ def api_cosmere_loot_add():
                 if doc is None:
                     return jsonify({'success': False, 'error': 'Loot recipient no longer exists.'}), 409
                 old_wallet = copy.deepcopy(doc.get('wallet'))
-                wallet = _credit_cosmere_loot(doc, norm_items, norm_spheres)
-                try:
-                    _save_cosmere_pc(doc, fsync=False)
-                except (OSError, ValueError):
-                    app.logger.exception('Could not save the Cosmere loot recipient wallet')
-                    return jsonify({'success': False, 'error': 'Could not save the recipient wallet.'}), 503
+                if wallet_changed:
+                    wallet = _credit_cosmere_loot(doc, norm_items, norm_spheres, gem)
+                    try:
+                        _save_cosmere_pc(doc, fsync=False)
+                    except (OSError, ValueError):
+                        app.logger.exception('Could not save the Cosmere loot recipient wallet')
+                        return jsonify({'success': False, 'error': 'Could not save the recipient wallet.'}), 503
                 entry['recipient_pid'] = pid
                 ledger.setdefault('entries', []).append(entry)
                 try:
                     _save_loot_ledger(ledger)
                 except OSError:
-                    doc['wallet'] = old_wallet
-                    try:
-                        _save_cosmere_pc(doc, fsync=False)
-                    except (OSError, ValueError):
-                        app.logger.exception('Could not roll back a Cosmere loot wallet')
+                    if wallet_changed:
+                        doc['wallet'] = old_wallet
+                        try:
+                            _save_cosmere_pc(doc, fsync=False)
+                        except (OSError, ValueError):
+                            app.logger.exception('Could not roll back a Cosmere loot wallet')
                     app.logger.exception('Could not save the Cosmere loot ledger')
                     return jsonify({'success': False, 'error': 'Could not save the loot ledger.'}), 503
         else:
@@ -12155,11 +12190,13 @@ def api_cosmere_loot_add():
             except OSError:
                 app.logger.exception('Could not save the Cosmere loot ledger')
                 return jsonify({'success': False, 'error': 'Could not save the loot ledger.'}), 503
-    if pid:
+    if pid and wallet_changed:
         try:
             sse_broadcast('cosmere_loot', {'pid': pid, 'name': recipient,
                                            'wallet': wallet, 'items': norm_items,
-                                           'spheres': norm_spheres})
+                                           'spheres': norm_spheres, 'gem': gem,
+                                           'wallet_total_marks': _format_sphere_marks(
+                                               _cosmere_wallet_total(wallet))})
         except Exception:
             pass
     return jsonify({'success': True})
@@ -12186,7 +12223,12 @@ def api_cosmere_loot_delete():
         recipient = str(entry.get('recipient') or '')
         pid = None if entry.get('ledger_only') else _cosmere_loot_recipient(
             recipient, recipient_pid=entry.get('recipient_pid'))
-        if pid:
+        entry_spheres = entry.get('spheres') or {}
+        wallet_changed = bool(entry.get('items') or any(
+            max(0, int(entry_spheres.get(key, 0) or 0))
+            for key in _SPHERE_DENOMINATIONS
+        ))
+        if pid and wallet_changed:
             pc_path = _cosmere_pc_path(pid)
             if pc_path is None:
                 return jsonify({'success': False, 'error': 'Loot recipient is invalid.'}), 409
@@ -12200,7 +12242,8 @@ def api_cosmere_loot_delete():
                 old_wallet = copy.deepcopy(doc.get('wallet'))
                 try:
                     wallet = _debit_cosmere_loot(
-                        doc, entry.get('items') or [], entry.get('spheres') or {})
+                        doc, entry.get('items') or [], entry.get('spheres') or {},
+                        entry.get('gem') if entry.get('gem') in _COSMERE_GEMS else 'diamond')
                 except (TypeError, ValueError) as exc:
                     return jsonify({'success': False, 'error': str(exc)}), 409
                 try:
@@ -12228,12 +12271,17 @@ def api_cosmere_loot_delete():
             except OSError:
                 app.logger.exception('Could not save the Cosmere loot ledger')
                 return jsonify({'success': False, 'error': 'Could not save the loot ledger.'}), 503
-    if pid:
+    if pid and wallet_changed:
         try:
             sse_broadcast('cosmere_loot', {'pid': pid, 'name': recipient,
                                            'wallet': wallet,
                                            'items': entry.get('items') or [],
-                                           'spheres': entry.get('spheres') or {}})
+                                           'spheres': entry.get('spheres') or {},
+                                           'gem': (entry.get('gem')
+                                                   if entry.get('gem') in _COSMERE_GEMS
+                                                   else 'diamond'),
+                                           'wallet_total_marks': _format_sphere_marks(
+                                               _cosmere_wallet_total(wallet))})
         except Exception:
             pass
     return jsonify({'success': True})
@@ -15446,6 +15494,10 @@ def _render_cosmere_pc_sheet(doc, capabilities=None):
         crest_glyph, crest_color = 'cg-order-' + build.radiant_order, systems.cosmere.radiant.order_color(build.radiant_order)
     else:
         crest_glyph, crest_color = '', ''
+    # Project legacy flat wallets into the v2 per-gem shape for display only.
+    # Merely opening a sheet must never rewrite a saved character document.
+    wallet = _normalize_cosmere_wallet(doc.get('wallet'))
+    wallet_total_marks = _format_sphere_marks(_cosmere_wallet_total(wallet))
     return render_template(
         'cosmere_sheet.html', a=actor.to_summary(), actor_id=pid, can_delete=can_delete,
         owner_private=owner_private,
@@ -15461,7 +15513,7 @@ def _render_cosmere_pc_sheet(doc, capabilities=None):
         attr_names=systems.cosmere.ATTR_NAMES,
         defense_names=systems.cosmere.DEFENSE_NAMES,
         pc=True, build=build.to_dict(), inventory=build.inventory.resolved(),
-        wallet=doc.get('wallet') if isinstance(doc.get('wallet'), dict) else None,
+        wallet=wallet, wallet_total_marks=wallet_total_marks,
         infected=build.infected_records(),           # selected Infected Arts (cost + abilities)
         warnings=build.validate(), edit_url=url_for('cosmere_builder', pc=pid),
         radiant=build.order(),                       # canon OR homebrew order

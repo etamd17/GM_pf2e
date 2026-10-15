@@ -48,7 +48,7 @@ UI/UX design is Claude's by default; Codex implements mechanical parts from Clau
 | UI-16 | Cosmere loot (B: form beside searchable history, draft worth from the server table) | codex | standard, medium | ready after UI-05 | `tasks/UI-16-cosmere-loot.md` |
 | UI-03 | Fix the seven confirmed bugs from the UI review | codex | standard | done (accepted by Claude) | `tasks/UI-03.md` |
 | UI-04 | Cosmere tracker: hide every PF2e-only control (user: each system stays separate) | codex | standard, high | done (accepted by Claude) | `tasks/UI-04-cosmere-tracker-separation.md` |
-| UI-05 | Cosmere spheres: gem changes value (rulebook table); wallets keep gems | codex | strongest, high | ready (after UI-03, now merged) | `tasks/UI-05-cosmere-gem-values.md` |
+| UI-05 | Cosmere spheres: gem changes value (rulebook table); wallets keep gems | codex | strongest, high | done (accepted by Claude) | `tasks/UI-05-cosmere-gem-values.md` |
 
 UI-03 bug list (from `tasks/UI-00.md` > Anything broken or risky; all checked on `main` at `4664c887`):
 
@@ -117,6 +117,8 @@ Accepted as a design checkpoint. Notes:
 Newest first. One plain line per handoff: who, what, what's next.
 
 - 2026-10-15 Claude: wrote briefs for the 6 approved Cosmere screens as UI-13 to UI-16 (dashboard + GM Screen, tracker, Vitals + roster, loot). Also added MB-04 (Mistborn money), which needs a user decision. Next: Codex builds them after the PF2e screens, tracker after UI-08 and loot after UI-05.
+- 2026-10-15 Claude: checked UI-05 in the browser: gem values match the rulebook, an emerald broam is worth 200 marks, old wallets show as diamond without being rewritten, the sheet updates live, and deleting awards restores the wallet exactly (and can't be paid back with a different gem). Accepted, no fixes needed. Next: Codex commits, opens the PR and merges when CI is green, then starts UI-06.
+- 2026-10-15 Codex: implemented UI-05's exact ten-gem values, version-2 per-gem wallets, legacy projection, gem-isolated reversal, server totals and live sheet repaint; 62 focused checks and 33 regressions pass, with all 107 templates parsing. Next: Claude reviews the diff and the award/delete flow in both Cosmere skins.
 - 2026-10-15 Claude: checked UI-04 in the browser: a Cosmere fight now shows only Cosmere controls, conditions and stats (hero and adversaries), PF2e actions are refused for Cosmere targets, and a PF2e fight keeps all its controls. Accepted, no fixes needed. Next: Codex commits, opens the PR and merges when CI is green, then starts UI-05.
 - 2026-10-15 Claude: VTT-017 done. Fixed the table-screen bug Codex found (an old message could keep a stale or revoked scene on screen) and built the tool that turns Codex's message definitions into client code. Codex's first batch has one blocker: a duplicate check that makes a big scene take almost a second to load (fix proposed as S5). Next: Codex answers handoff 017.
 - 2026-10-15 Codex: separated Cosmere tracker controls, vocabulary, conditions and routes from PF2e; 28 required checks and 38 PF2e regressions pass, with all 107 templates parsing. Next: Claude reviews both systems in the browser at 1440px.

@@ -59,6 +59,11 @@
   .cs-surge-toggle:hover { color:var(--accent); border-color:var(--accent); }
   #cs-skills-grid.hide-locked .cs-skill.locked { display:none; }
   .cs-chips { display:flex; gap:.35rem; flex-wrap:wrap; }
+  .cs-wallet-spheres { flex-direction:column; align-items:flex-start; gap:.45rem; }
+  .cs-wallet-gem { display:flex; align-items:center; gap:.35rem; flex-wrap:wrap; }
+  .cs-wallet-gem-name { min-width:76px; font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--cs-accent); }
+  .cs-wallet-total { margin-top:.45rem; font-size:12px; color:var(--text-on-dark-3); }
+  .cs-wallet-total b { color:var(--cs-accent-2); font-variant-numeric:tabular-nums; }
   /* Folded conditions: show only ACTIVE chips; the full picker expands via
      the edit toggle. Purely display -- chip DOM and cosCond() are unchanged,
      so GM-pushed condition updates keep painting. */
@@ -825,11 +830,22 @@
   <div id="cos-wallet">
     {% set w = wallet or {} %}
     {% set sp = w.spheres or {} %}
-    <div class="cs-chips" id="cos-wallet-spheres">
-      <span class="cs-chip" data-sphere="broam">Broam <b data-sphere-v="broam">{{ sp.broam or 0 }}</b></span>
-      <span class="cs-chip" data-sphere="mark">Mark <b data-sphere-v="mark">{{ sp.mark or 0 }}</b></span>
-      <span class="cs-chip" data-sphere="chip">Chip <b data-sphere-v="chip">{{ sp.chip or 0 }}</b></span>
+    {% set sphere_state = namespace(any=false) %}
+    <div class="cs-chips cs-wallet-spheres" id="cos-wallet-spheres">
+      {% for gem, counts in sp.items() %}
+      {% if counts.get('broam', 0) or counts.get('mark', 0) or counts.get('chip', 0) %}
+      {% set sphere_state.any = true %}
+      <div class="cs-wallet-gem" data-gem="{{ gem }}">
+        <strong class="cs-wallet-gem-name">{{ gem|capitalize }}</strong>
+        <span class="cs-chip" data-sphere="broam">Broam <b data-sphere-v="broam">{{ counts.get('broam', 0) }}</b></span>
+        <span class="cs-chip" data-sphere="mark">Mark <b data-sphere-v="mark">{{ counts.get('mark', 0) }}</b></span>
+        <span class="cs-chip" data-sphere="chip">Chip <b data-sphere-v="chip">{{ counts.get('chip', 0) }}</b></span>
+      </div>
+      {% endif %}
+      {% endfor %}
+      {% if not sphere_state.any %}<span class="cs-chip" data-wallet-empty>No spheres</span>{% endif %}
     </div>
+    <div class="cs-wallet-total">Worth <b data-wallet-total aria-live="polite">{{ wallet_total_marks or '0' }} mk</b></div>
     <div class="cs-chips" id="cos-wallet-goods" style="margin-top:.35rem;">
       {% for it in (w['items'] if w.get('items') else []) %}
       <span class="cs-chip">{{ it.name }}{% if it.qty and it.qty > 1 %} &times;{{ it.qty }}{% endif %}</span>
@@ -1678,12 +1694,32 @@
       _csbSse.addEventListener('cosmere_loot', function(e){
         try {
           const d=JSON.parse(e.data); if(!d || d.pid!==PID) return;
-          const w=d.wallet||{}; const sp=w.spheres||{};
-          ['broam','mark','chip'].forEach(function(k){
-            const el=document.querySelector('[data-sphere-v="'+k+'"]'); if(el) el.textContent=(sp[k]||0);
-          });
-          const goods=document.getElementById('cos-wallet-goods');
+          const w=d.wallet||{}; const raw=(w.spheres && typeof w.spheres==='object') ? w.spheres : {};
+          // Older live payloads used one flat sphere bucket. Treat it as diamond;
+          // the server remains the sole source of gem-value arithmetic.
+          const flat=['broam','mark','chip'].some(function(k){ return Object.prototype.hasOwnProperty.call(raw,k); });
+          const sp=flat ? {diamond:raw} : raw;
+          const spheres=document.getElementById('cos-wallet-spheres');
           const _esc=function(s){ const t=document.createElement('span'); t.textContent=String(s==null?'':s); return t.innerHTML; };
+          const _attr=function(s){ return _esc(s).replace(/"/g,'&quot;').replace(/'/g,'&#39;'); };
+          if(spheres){
+            const groups=[];
+            Object.keys(sp).forEach(function(gem){
+              const counts=(sp[gem] && typeof sp[gem]==='object') ? sp[gem] : {};
+              const vals={};
+              ['broam','mark','chip'].forEach(function(k){ vals[k]=Math.max(0, parseInt(counts[k]||0,10)||0); });
+              if(!vals.broam && !vals.mark && !vals.chip) return;
+              groups.push('<div class="cs-wallet-gem" data-gem="'+_attr(gem)+'">'
+                +'<strong class="cs-wallet-gem-name">'+_esc(gem.charAt(0).toUpperCase()+gem.slice(1))+'</strong>'
+                +['broam','mark','chip'].map(function(k){
+                  return '<span class="cs-chip" data-sphere="'+k+'">'+k.charAt(0).toUpperCase()+k.slice(1)
+                    +' <b data-sphere-v="'+k+'">'+vals[k]+'</b></span>'; }).join('')+'</div>');
+            });
+            spheres.innerHTML=groups.length ? groups.join('') : '<span class="cs-chip" data-wallet-empty>No spheres</span>';
+          }
+          const total=document.querySelector('[data-wallet-total]');
+          if(total && d.wallet_total_marks != null) total.textContent=String(d.wallet_total_marks)+' mk';
+          const goods=document.getElementById('cos-wallet-goods');
           if(goods){ goods.innerHTML=(w.items||[]).map(function(it){
             return '<span class="cs-chip">'+_esc(it.name)+(it.qty>1?(' &times;'+it.qty):'')+'</span>'; }).join(''); }
           if(window.pf2eToast) window.pf2eToast('Loot received', 'success');
