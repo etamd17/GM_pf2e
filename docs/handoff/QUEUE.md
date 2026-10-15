@@ -33,7 +33,7 @@ UI/UX design is Claude's by default; Codex implements mechanical parts from Clau
 | UI-01 | Finish the design review: Cosmere generators, then Cosmere sheet, level-up and builder. Mockups first; the user picks a direction for each | claude | Opus, medium-high | done (generators A, sheet A, builder B) | `tasks/UI-01.md` |
 | UI-02a | Build Cosmere generators (A: labelled buttons) | codex | standard, medium | done (PR #183 merged) | `tasks/UI-02a-cosmere-generators.md` |
 | UI-02b | Build Cosmere character sheet (A: vitals band + Play/Radiant/Gear/Character tabs) | codex | strongest, high | done (accepted by Claude) | `tasks/UI-02b-cosmere-sheet.md` |
-| UI-02c | Build Cosmere builder / level-up (B: still-to-choose list, step badges, level-up badge) | codex | standard, high | ready | `tasks/UI-02c-cosmere-builder.md` |
+| UI-02c | Build Cosmere builder / level-up (B: still-to-choose list, step badges, level-up badge) | codex | standard, high | review | `tasks/UI-02c-cosmere-builder.md` |
 | UI-02 | PF2e screens from UI-00 (18): briefs still to write | claude briefs, codex builds | briefs: Opus high | needs brief | - |
 | UI-03 | Fix the real bugs the review found. Check each on current `main` first, then fix it with a test | codex | standard | needs brief | - |
 
@@ -81,6 +81,7 @@ Accepted as a design checkpoint. Notes:
 
 Newest first. One plain line per handoff: who, what, what's next.
 
+- 2026-10-14 Codex: built the Cosmere level-up guide and compact draft bar; 399 focused checks and all 32 browser checks passed. Next: Claude reviews level-up and scrolling on desktop and phone.
 - 2026-10-14 Claude: rechecked the monster/NPC sheet fix for UI-02b: no empty tabs now. The new Cosmere character sheet is accepted. Next: Codex opens the PR; after it merges, UI-02c (builder).
 - 2026-10-14 Codex: removed the empty tabs from monster/NPC sheets; all 59 focused checks pass and player sheets are unchanged. Next: Claude reviews the small fix.
 - 2026-10-14 Claude: checked the new Cosmere character sheet (UI-02b) on desktop and phone in both skins: tabs, live HP/conditions, wallet, notes, workshop and print all work. One small fix: monster/NPC sheets show two empty tabs. Next: Codex fixes that, then commits.
