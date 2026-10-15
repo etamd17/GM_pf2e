@@ -97,6 +97,75 @@
         .qa-modal__body { padding: var(--sp-4); overflow-y: auto; font-size: 13px; line-height: 1.65; color: var(--text-on-dark); }
         .qa-modal__body b { color: var(--gilt-200); font-weight: 700; }
         .qa-modal__foot { display: flex; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); border-top: 1px solid var(--border-card); }
+        /* Revision B: a session-first dashboard with compact supporting tools. */
+        .gm-hub-stage { padding: 20px 12px; }
+        .gm-hub-header { gap: 18px; padding-bottom: 20px; margin-bottom: 20px; }
+        .gm-id h1 { font-size: 28px; line-height: 1.25; }
+        .gm-id .arc { font-size: 13px; line-height: 1.6; }
+        .resume-combat { padding: 16px 18px; border-radius: 4px; }
+        .gm-group-label { font-size: 12px; margin-top: 24px; margin-bottom: 12px; letter-spacing: 0.09em; }
+        .gm-hub-stage .tile { border-radius: 5px; padding: 20px; }
+        .gm-hub-stage .tile__title { font-size: 15px; line-height: 1.4; letter-spacing: 0.025em !important; }
+        .gm-hub-stage .tile__desc { font-size: 13px; line-height: 1.55; }
+        .hrow .nm { font-family: var(--font-ui); font-size: 12px; }
+        .hrow .bd { font-size: 11px; text-transform: none; letter-spacing: 0; }
+        .qa-btn { min-height: 34px; border-radius: 4px; letter-spacing: 0.035em; }
+        .tile__qa { gap: 12px; }
+        .session-ritual-card { border-radius: 5px !important; padding: 20px !important; }
+        .session-ritual-card p { font-size: 12px !important; line-height: 1.6; }
+        .gm-hub-quick-link { font-size: 12px; }
+        .gm-hub-stage .gm-party-watch {
+            display: grid;
+            grid-template-columns: 172px minmax(0, 1fr);
+            gap: 24px;
+            align-items: center;
+            padding: 16px 18px;
+            margin: 18px 0;
+            border-left: 2px solid var(--gilt-300);
+            min-height: 165px;
+        }
+        .gm-party-watch[hidden] { display: none; }
+        .gm-party-watch .tile__glyph { display: none; }
+        .gm-party-watch .tile__title { margin: 0 0 4px; }
+        .gm-party-watch .tile__desc { font-size: 12px; margin: 0; }
+        .gm-party-watch .tile-health {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px 28px;
+            margin: 0;
+        }
+        .gm-party-watch .tile-health[hidden] { display: none; }
+        .gm-main-grid .tile--run { min-height: 165px; }
+        .gm-main-grid .tile--run .tile__desc { margin-top: 7px; }
+        .gm-main-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .gm-secondary-grid .tile {
+            display: grid;
+            grid-template-columns: 30px minmax(0, 1fr);
+            column-gap: 12px;
+            align-content: start;
+            padding: 17px 18px;
+        }
+        .gm-secondary-grid .tile[hidden] { display: none; }
+        .gm-secondary-grid .tile__link { position: absolute; inset: 0; }
+        .gm-secondary-grid .tile__glyph { grid-row: 1 / 4; margin: 0; }
+        .gm-secondary-grid .tile__title { margin: 0; }
+        .gm-secondary-grid .tile__desc,
+        .gm-secondary-grid .tile__qa,
+        .gm-secondary-grid .tile-stat { grid-column: 2; }
+        @media (max-width: 900px) {
+            .gm-main-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .gm-hub-stage .gm-party-watch { grid-template-columns: 1fr; gap: 14px; }
+            .gm-hub-header { flex-wrap: wrap; }
+            .gm-pills { margin-left: 0; justify-content: flex-start; }
+        }
+        @media (max-width: 560px) {
+            .gm-hub-stage { padding: 10px 0; }
+            .gm-main-grid { grid-template-columns: 1fr; }
+            .gm-party-watch .tile-health { grid-template-columns: 1fr; }
+            .gm-id h1 { font-size: 23px; }
+            .resume-combat { flex-wrap: wrap; }
+            .resume-combat .rc-cta { margin-left: 21px; }
+        }
         @media (prefers-reduced-motion: reduce) { .resume-combat .rc-dot { animation: none; } .qa-btn:active { transform: none; } }
 {% endblock %}
 {% block content %}
@@ -134,9 +203,28 @@
             </a>
             {% endif %}
 
+            <a href="/party" class="tile tile--run gm-party-watch">
+                <div class="gm-party-watch__heading">
+                    <h2 class="tile__title">Party View</h2>
+                    <p class="tile__desc">HP, conditions, prepared spells &mdash; the at-a-glance party status board.</p>
+                </div>
+                <div class="tile__glyph"><svg viewBox="0 0 24 24"><circle cx="9" cy="8.5" r="3"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5"/><circle cx="16.5" cy="9.5" r="2.3"/><path d="M13.5 20c.4-2.6 1.9-4.2 4-4.2 2 0 3.4 1.4 3.9 3.5"/></svg></div>
+                {% if party_health %}
+                <div class="tile-health">
+                    {% for h in party_health %}
+                    {% set bcls = 'ok' if h.pct > 75 else 'hurt' if h.pct > 50 else 'bloodied' if h.pct > 25 else 'crit' %}
+                    {% set band = 'Healthy' if h.pct > 75 else 'Hurt' if h.pct > 50 else 'Bloodied' if h.pct > 25 else 'Badly hurt' %}
+                    <span class="hrow {{ bcls }}"><i></i><span class="nm">{{ h.name }}</span><span class="bd">{{ band }}</span></span>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <span class="pill" style="margin-top:var(--sp-3);">no characters</span>
+                {% endif %}
+            </a>
+
             {# ── RUN — live at the table ── #}
             <div class="gm-group-label run">Run &mdash; live at the table</div>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3" style="gap: var(--sp-3); margin-bottom: var(--sp-4);">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gm-main-grid" style="gap: var(--sp-3); margin-bottom: var(--sp-4);">
                 <a href="/tracker" class="tile tile--run" {% if encounter_count > 0 %}data-tone="alert"{% endif %}>
                     <div class="tile__glyph"><svg viewBox="0 0 24 24"><polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"/><line x1="13" y1="19" x2="19" y2="13"/><line x1="16" y1="16" x2="20" y2="20"/><line x1="19" y1="21" x2="21" y2="19"/><polyline points="14.5 6.5 18 3 21 3 21 6 17.5 9.5"/><line x1="5" y1="14" x2="9" y2="18"/><line x1="7" y1="17" x2="4" y2="20"/><line x1="3" y1="19" x2="5" y2="21"/></svg></div>
                     <h2 class="tile__title">Encounter Tracker</h2>
@@ -150,22 +238,6 @@
                     <h2 class="tile__title">Tactical Map</h2>
                     <p class="tile__desc">Shared scenes, linked tokens, live turns, health, and conditions.</p>
                     <span class="pill" style="margin-top:var(--sp-3);">open table map</span>
-                </a>
-                <a href="/party" class="tile tile--run">
-                    <div class="tile__glyph"><svg viewBox="0 0 24 24"><circle cx="9" cy="8.5" r="3"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5"/><circle cx="16.5" cy="9.5" r="2.3"/><path d="M13.5 20c.4-2.6 1.9-4.2 4-4.2 2 0 3.4 1.4 3.9 3.5"/></svg></div>
-                    <h2 class="tile__title">Party View</h2>
-                    <p class="tile__desc">HP, conditions, prepared spells &mdash; the at-a-glance party status board.</p>
-                    {% if party_health %}
-                    <div class="tile-health">
-                        {% for h in party_health %}
-                        {% set bcls = 'ok' if h.pct > 75 else 'hurt' if h.pct > 50 else 'bloodied' if h.pct > 25 else 'crit' %}
-                        {% set band = 'Healthy' if h.pct > 75 else 'Hurt' if h.pct > 50 else 'Bloodied' if h.pct > 25 else 'Badly hurt' %}
-                        <span class="hrow {{ bcls }}"><i></i><span class="nm">{{ h.name }}</span><span class="bd">{{ band }}</span></span>
-                        {% endfor %}
-                    </div>
-                    {% else %}
-                    <span class="pill" style="margin-top:var(--sp-3);">no characters</span>
-                    {% endif %}
                 </a>
                 {% if active_system == 'cosmere' %}
                 <a href="/cosmere/gm/vitals" class="tile tile--run">
@@ -188,7 +260,7 @@
 
             {# ── PREP — build the encounter ── #}
             <div class="gm-group-label">Prep &mdash; build the encounter</div>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3" style="gap: var(--sp-3); margin-bottom: var(--sp-4);">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gm-secondary-grid" style="gap: var(--sp-3); margin-bottom: var(--sp-4);">
                 <a href="/encounter_builder" class="tile">
                     <div class="tile__glyph"><svg viewBox="0 0 24 24"><path d="M12 3 21 8l-9 5-9-5z"/><path d="M3 12l9 5 9-5M3 16l9 5 9-5"/></svg></div>
                     <h2 class="tile__title">Encounter Builder</h2>
@@ -208,7 +280,7 @@
 
             {# ── MANAGE — the campaign ── #}
             <div class="gm-group-label">Manage &mdash; the campaign</div>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3" style="gap: var(--sp-3); margin-bottom: var(--sp-7);">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gm-secondary-grid" style="gap: var(--sp-3); margin-bottom: var(--sp-7);">
                 <a href="/player" class="tile">
                     <div class="tile__glyph"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></div>
                     <h2 class="tile__title">Player Hub</h2>

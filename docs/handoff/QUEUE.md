@@ -35,7 +35,7 @@ UI/UX design is Claude's by default; Codex implements mechanical parts from Clau
 | UI-02b | Build Cosmere character sheet (A: vitals band + Play/Radiant/Gear/Character tabs) | codex | strongest, high | done (accepted by Claude) | `tasks/UI-02b-cosmere-sheet.md` |
 | UI-02c | Build Cosmere builder / level-up (B: still-to-choose list, step badges, level-up badge) | codex | standard, high | done (accepted by Claude) | `tasks/UI-02c-cosmere-builder.md` |
 | UI-02 | PF2e screens from UI-00 (12): briefs written as UI-06 to UI-12 | claude | Opus high | done (briefs) | see rows below |
-| UI-06 | PF2e GM dashboard (B) + GM Screen (B). Holds the shared conventions for UI-06 to UI-12 | codex | standard, medium | ready | `tasks/UI-06-pf2e-gm-hub-and-gmscreen.md` |
+| UI-06 | PF2e GM dashboard (B) + GM Screen (B). Holds the shared conventions for UI-06 to UI-12 | codex | standard, medium | done (accepted by Claude) | `tasks/UI-06-pf2e-gm-hub-and-gmscreen.md` |
 | UI-07 | PF2e generators (A) + loot ledger (B) | codex | standard, medium | ready | `tasks/UI-07-pf2e-generators-and-loot.md` |
 | UI-08 | PF2e encounter tracker (B: combat first, setup folds away) | codex | strongest, high | ready after UI-04 | `tasks/UI-08-pf2e-tracker.md` |
 | UI-09 | PF2e party overview (A+B) + campaign management (B tabs) + My table (A) | codex | standard, high | ready | `tasks/UI-09-pf2e-party-and-campaign-pages.md` |
@@ -116,6 +116,9 @@ Accepted as a design checkpoint. Notes:
 
 Newest first. One plain line per handoff: who, what, what's next.
 
+- 2026-10-15 Codex: fixed UI-06 multi-topic search so every match is visible in All and clearing restores the prior topic; all 55 focused tests and 107 template parses pass. Next: UI-07 after UI-06 CI and merge.
+- 2026-10-15 Claude: checked UI-06 in the browser: the new GM dashboard (party status under the combat banner) and the GM Screen tabs, pins, condition links, Checks drawer and print all work on desktop and phone. One fix: searching a word found in several topics only shows the results in one of them. Next: Codex fixes search (show every match), then commits and merges after CI.
+- 2026-10-15 Codex: built UI-06 dashboard B and PF2e GM Screen B; 55 focused tests pass and all 107 templates parse. Next: Claude reviews both pages and checks 1440px/375px in the browser.
 - 2026-10-15 Claude: wrote briefs for the 6 approved Cosmere screens as UI-13 to UI-16 (dashboard + GM Screen, tracker, Vitals + roster, loot). Also added MB-04 (Mistborn money), which needs a user decision. Next: Codex builds them after the PF2e screens, tracker after UI-08 and loot after UI-05.
 - 2026-10-15 Claude: checked UI-05 in the browser: gem values match the rulebook, an emerald broam is worth 200 marks, old wallets show as diamond without being rewritten, the sheet updates live, and deleting awards restores the wallet exactly (and can't be paid back with a different gem). Accepted, no fixes needed. Next: Codex commits, opens the PR and merges when CI is green, then starts UI-06.
 - 2026-10-15 Codex: implemented UI-05's exact ten-gem values, version-2 per-gem wallets, legacy projection, gem-isolated reversal, server totals and live sheet repaint; 62 focused checks and 33 regressions pass, with all 107 templates parsing. Next: Claude reviews the diff and the award/delete flow in both Cosmere skins.

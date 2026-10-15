@@ -67,4 +67,58 @@ the `GM_pf2e_dnd5e` checkout). Extract it to a **new** folder (e.g.
 
 ## Report
 
+- Ported dashboard Revision B into `templates/gm_hub.html`: Party View now follows the active-combat banner, the Run tools form the three-card primary row, and Prep and Manage use compact secondary grids. All original controls, links, live regions and repaint hooks remain.
+- Ported GM Screen Revision B into `templates/gmscreen.html`: Checks, Conditions, Adversaries, Exploration and All topic controls use roving keyboard focus; single-topic searches reveal their topic, multi-topic searches show All, and clearing restores the prior topic; pins remain inside their original group; print still exposes every reference group. The header Checks button uses the existing drawer and now keeps `aria-expanded` synchronized.
+- Added `tests/test_pf2e_gm_screens.py` with rendered inventories for IDs, links, handlers, JS selector classes, form and ARIA attributes, plus normalized-content fingerprints captured from `main` for all nine dashboard tiles, 14 reference cards and six drawer panes.
+- Extended the Node controller harness to cover mouse and four-way keyboard topic navigation, Home/End, search reveal, condition links, drawer button and shortcuts, editable/copy-key guards, and interactive pin/unpin persistence and ordering.
+
+### Verification
+
+- `python tools/check_templates.py` — **107 templates parse**.
+- `pytest -q tests/test_pf2e_gm_screens.py tests/test_gmscreen_polish.py tests/test_gm_xp_award.py tests/test_gm_system_repair.py tests/test_nav_cleanup.py tests/test_cosmere_gm_vitals.py tests/test_cosmere_world_skin.py tests/test_system_guards.py tests/test_inline_handler_escaping.py tests/test_route_policy_inventory.py` — **55 passed**.
+- Claude completed the 1440px and 375px browser checks, including the populated-party and active-encounter dashboard states, GM Screen controls, print behavior and horizontal overflow. The required cross-topic search follow-up is covered by the runtime test.
+
 ## Review
+
+**Claude, 2026-10-15: one required fix, then accepted.**
+
+Read the diff (`gm_hub.html`, `gmscreen.html`, both test files) and checked live in a PF2e campaign
+with an active encounter (Goblin Warrior + Kyle) at 1440px and 375px. Did not rerun the test
+suite.
+
+What works:
+- **`/gm`:** the party band sits directly under the "Combat in progress" banner (226-280, band
+  298-463), with Kyle's health row. The three Run tools form one row (Tracker / Map / GM Screen),
+  and the remaining tools sit in compact grids. At 375px there is one column and no sideways
+  scroll.
+- **`/gmscreen` topics:**
+  - 5 topic tabs; Checks shows by default;
+  - "All references" shows all four groups;
+  - Arrow keys move focus and the topic; Home and End work;
+  - 14 cards and 12 tables are kept.
+- **Search** for a term found only in a hidden topic ("Cover") switches to that topic.
+- **Pins:** pin/unpin keeps the card in its own group (moves to the top of Adversaries and back).
+- **Condition links:** clicking "Off-Guard" opens its detail.
+- **Checks drawer:** the button, the C key and Escape all open/close it with `aria-expanded` in
+  step.
+- **Print:** the print rules hide the tabs and show every group.
+- **375px:** no sideways scroll in a single topic or in All.
+
+### Required fix
+1. **Search hides most of its results when they span topics.** Measured from the Checks tab:
+   - "damage" matches 6 cards in 3 topics, but only 1 is visible;
+   - "DC" matches 8 cards in 4 topics, with 3 visible;
+   - "hidden" matches 2 cards in 2 topics, with 1 visible.
+
+   The search reveals only the first match's topic, so the GM sees a partial answer with no hint
+   that more exist.
+
+   **Fix:** when the matches span more than one topic, switch to "All references" (or the
+   matching topics only). Then scroll to the first match. When the search is cleared, return to the
+   topic that was selected before. Add a test: search a term present in two topics and check that
+   every `.ref-match` card is visible.
+
+### Note (not required)
+- On a phone, the fixed "CHECKS" drawer handle on the right edge covers the last column of wide
+  tables (for example the DC column of "DCs by level" in All). The handle predates this change.
+  It's worth a small inset or a smaller handle at 375px in a later pass.
