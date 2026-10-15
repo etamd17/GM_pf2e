@@ -49,7 +49,7 @@ raising the level. The numbers come from the engine's existing preview, not new 
 - [x] `pytest -q tests/test_cosmere_builder*.py tests/test_cosmere_creator_ux.py tests/character_workflows tests/test_inline_handler_escaping.py tests/test_route_policy_inventory.py`
       and `python tools/check_templates.py` pass (paste numbers). The draft-bar change touches PF2e
       pages, so also run `pytest -q tests/browser -m browser` in CI.
-- [ ] Browser (Claude verifies): edit a level-5 character, press + once: badge "5 -> 6", the list
+- [x] Browser (Claude verifies): edit a level-5 character, press + once: badge "5 -> 6", the list
       grows by the engine's numbers (UI-01 saw +1 attribute point, +2 skill ranks, +2 talents), Go
       opens the right step; a fully spent step shows a check and no "left"; phone 375px has no
       sideways scroll; the PF2e builder's draft bar still works.
@@ -159,3 +159,36 @@ Claude still owns the brief's final browser review: existing level-5 PC, + to le
 and engine delta, all Go destinations, fully spent ticks, red over-budget markers, actual sticky
 scrolling, 375px overflow, and PF2e draft controls. Check both Cosmere skins. No production
 verification or deployment was requested for this branch.
+
+## Review
+
+**Claude, 2026-10-14: accepted. No required fixes.**
+
+Live check on `4bc3a5ae` (local server on this branch, throwaway data folder, existing level-5 PC
+"Teft Varenn"; skin switched with `/api/cosmere/world`):
+
+- **Level-up, both skins at 1440px:** at level 5 the list shows 4 skill ranks, 3 expertises,
+  3 talents; Attributes has a check and no "left". Press + once: badge reads "Leveling up: 5 -> 6";
+  the list becomes 1 attribute point, 6 skill ranks, 3 expertises, 5 talents (+1 / +2 / +0 / +2,
+  matching the engine). Press - again: badge hides and the list returns to the level-5 numbers.
+  Stormlight and Mistborn give identical results.
+- **Go buttons:** attribute point -> Attributes, skill ranks and expertises -> Skills,
+  talents -> Heroic Path (rail indexes 1 / 2 / 3).
+- **Rail markers:** a fully spent step shows the check with no "left" and "complete" in its
+  aria-label. Over-budget was checked by feeding `paintBudgetGuide` an overspent attribute budget
+  (13 of 12), not by a real overspend in the UI: red "!" (`#f87171`), "needs attention" label, no row.
+- **Sticky at 1440px:** scrolled the page's scroll container by ~600px: the top bar (81-158),
+  rail (158-200) and preview panel (216-778) stay pinned in that order with no overlap.
+- **Phone 375px, both skins:** page width = viewport (375); the rail scrolls sideways inside itself
+  (868 wide in a 338 box); badge and draft bar fit. The only elements past the edge are the site's
+  top nav links, which already scroll sideways on their own (unchanged by this PR).
+- **PF2e draft bar** (`/player/builder` in a throwaway PF2e campaign): flex + wrap at 375px
+  (fits, 63px tall) and in the 1440px sidebar; "Save draft" saved and moved the URL to the new
+  `draft_id`; hidden "Save a copy" / "Reload saved draft" stay hidden (`display:none`).
+  Import-preview and publication-recovery pages were not opened (they need an import or a failed
+  publish to reach); they share the same partial and `system.css`.
+- Did not re-run the test suite; Codex's numbers above stand.
+
+Optional (not required): on phones the "Still to choose" list sits below the current step's content
+(the preview column stacks under it), so a player sees the rail's "N left" badges first and the list
+only after scrolling. Fine for now.
