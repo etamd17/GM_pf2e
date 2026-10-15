@@ -822,8 +822,7 @@ class _WorkflowCharacterFiles:
         if record.system == 'pf2e':
             _broadcast_pc_state(record.document['build']['name'])
         else:
-            sse_broadcast('cosmere_player_state', {'pid': record.character_id,
-                'name': record.document.get('name'), 'play_state': record.document.get('play_state', {})})
+            _broadcast_cosmere_player_state(record.document)
 
 
 def _delete_character_document(path):
@@ -8615,9 +8614,7 @@ def _mark_party_ready(ready=True):
                 doc['ready_to_level'] = bool(ready)
                 _save_cosmere_pc(doc, fsync=False)
             try:
-                sse_broadcast('cosmere_player_state',
-                              {'pid': pid, 'name': doc.get('name'),
-                               'play_state': doc.get('play_state') or {}, 'ready_to_level': bool(ready)})
+                _broadcast_cosmere_player_state(doc, ready_to_level=bool(ready))
             except Exception:
                 pass
             out.append({'name': doc.get('name'), 'ready': bool(ready)})
@@ -13294,22 +13291,27 @@ def api_cosmere_generate(gtype):
 @app.route('/cosmere/pcs')
 def cosmere_pcs():
     import systems.cosmere.build as _cb
+    from systems.cosmere.party import project_member
     import systems.cosmere.radiant as _rad
     cards = []
     _hb_store = _cosmere_homebrew_store()
     for d in _list_cosmere_pcs():
         b = _cb.CosmereBuild(d.get('build'), homebrew=_hb_store)
         o = b.order()
+        resources = project_member(d, homebrew=_hb_store)['resources']
         _ps = d.get('play_state') or {}
-        _cur_h = _ps.get('health')
         cards.append({
             'id': d['id'], 'name': d.get('name', 'Unknown'), 'level': b.level, 'tier': b.tier,
-            'path': b.path, 'defenses': b.defenses(), 'health': b.health_max(),
+            'path': b.path, 'defenses': b.defenses(), 'health': resources['health']['max'],
             # Current health + active conditions from runtime play_state, so the
             # roster shows party status at a glance (parity with the hub card).
-            'current_health': int(_cur_h if _cur_h is not None else b.health_max()),
+            'current_health': resources['health']['current'],
+            'focus': resources['focus']['max'],
+            'current_focus': resources['focus']['current'],
+            'investiture': resources['investiture']['max'],
+            'current_investiture': resources['investiture']['current'],
             'conditions': {k: v for k, v in (_ps.get('conditions') or {}).items() if v},
-            'deflect': b.deflect_value(), 'investiture': b.investiture_max(),
+            'deflect': b.deflect_value(),
             'is_radiant': b.is_radiant,
             'order': o['name'] if o else '', 'spren': b.spren_name or (o['spren'] if o else ''),
             'surges': [_rad.surge_name(s) for s in o['surges']] if (o and b.first_ideal_sworn) else [],
@@ -14745,11 +14747,26 @@ def api_cosmere_advancement_preview():
     return jsonify(_cosmere_advancement_response(payload, data.get('pid')))
 
 
-def _cosmere_advancement_broadcast(doc):
-    sse_broadcast('cosmere_player_state', {
+def _broadcast_cosmere_player_state(doc, **extra):
+    """Publish identity, live state, and current resource limits together."""
+    from systems.cosmere.party import project_member
+    resources = project_member(doc, homebrew=_cosmere_homebrew_store())['resources']
+    payload = {
         'pid': doc['id'], 'name': doc.get('name'),
-        'play_state': doc.get('play_state', {}), 'revision': doc['revision'],
-    })
+        'play_state': doc.get('play_state') or {},
+        'health_max': resources['health']['max'],
+        'focus_max': resources['focus']['max'],
+        'investiture_max': resources['investiture']['max'],
+        'health_current': resources['health']['current'],
+        'focus_current': resources['focus']['current'],
+        'investiture_current': resources['investiture']['current'],
+    }
+    payload.update(extra)
+    sse_broadcast('cosmere_player_state', payload)
+
+
+def _cosmere_advancement_broadcast(doc):
+    _broadcast_cosmere_player_state(doc, revision=doc['revision'])
 
 
 def _set_cosmere_action_receipt_coordination(pid, request_id, status):
@@ -15017,11 +15034,8 @@ def api_cosmere_pc_action(pid, action_id):
             _do_broadcast_encounter_state()
         published_receipt = copy.deepcopy(receipt_box['value'])
         published_receipt['coordination_status'] = 'complete'
-        sse_broadcast('cosmere_player_state', {
-            'pid': pid, 'name': updated.get('name'),
-            'play_state': updated['play_state'], 'revision': updated['revision'],
-            'action_receipt': published_receipt,
-        })
+        _broadcast_cosmere_player_state(
+            updated, revision=updated['revision'], action_receipt=published_receipt)
         completed_receipt = _set_cosmere_action_receipt_coordination(
             pid, request_id, 'complete')
     return jsonify({'ok': True, 'replayed': replayed,
@@ -15750,9 +15764,8 @@ def _sync_cosmere_pc_from_combatant(c):
         _save_cosmere_pc(d, fsync=False)
         c.character_revision = int(d.get('revision', 0) or 0)
     try:
-        sse_broadcast('cosmere_player_state', {
-            'pid': pid, 'name': name, 'play_state': ps,
-            'revision': int(getattr(c, 'character_revision', 0) or 0)})
+        _broadcast_cosmere_player_state(
+            d, revision=int(getattr(c, 'character_revision', 0) or 0))
     except Exception:
         pass
 
@@ -15869,7 +15882,7 @@ def cosmere_pc_state(pid):
             pid, ps, character_revision=doc.get('revision')):
         _broadcast_encounter_state()
     try:
-        sse_broadcast('cosmere_player_state', {'pid': pid, 'name': doc.get('name'), 'play_state': ps})
+        _broadcast_cosmere_player_state(doc)
     except Exception:
         pass
     return jsonify({'ok': True, 'play_state': ps})
@@ -15952,7 +15965,7 @@ def cosmere_rest():
                 pidd, ps, character_revision=doc.get('revision')):
             _broadcast_encounter_state()
         try:
-            sse_broadcast('cosmere_player_state', {'pid': pidd, 'name': doc.get('name'), 'play_state': ps})
+            _broadcast_cosmere_player_state(doc)
         except Exception:
             pass
         rested.append({'pid': pidd, 'name': doc.get('name'), 'play_state': ps})
@@ -15985,7 +15998,7 @@ def cosmere_pc_rest(pid):
             pid, ps, character_revision=doc.get('revision')):
         _broadcast_encounter_state()
     try:
-        sse_broadcast('cosmere_player_state', {'pid': pid, 'name': doc.get('name'), 'play_state': ps})
+        _broadcast_cosmere_player_state(doc)
     except Exception:
         pass
     _combat_log(f"{doc.get('name', 'A hero')} took a {mode} rest.", 'info')
@@ -16272,8 +16285,7 @@ def _apply_cosmere_condition_change(instance_id, condition, action='toggle', eff
             _save_cosmere_pc(d, fsync=False)
             target.character_revision = int(d.get('revision', 0) or 0)
             try:
-                sse_broadcast('cosmere_player_state',
-                              {'pid': d.get('id'), 'name': d.get('name'), 'play_state': ps})
+                _broadcast_cosmere_player_state(d)
             except Exception:
                 pass
     _persist_encounter_state()
@@ -27487,6 +27499,7 @@ def _cosmere_status_party(docs):
     play_state; the maxes + defenses come from the build. `hero_points` is None
     (Cosmere has none) so the board can hide that stat."""
     import systems.cosmere.build as _cb
+    from systems.cosmere.party import project_member
     hb = _cosmere_homebrew_store()
     out = []
     for d in docs:
@@ -27495,15 +27508,17 @@ def _cosmere_status_party(docs):
         except Exception:
             continue
         ps = d.get('play_state') if isinstance(d.get('play_state'), dict) else {}
+        resources = project_member(d, homebrew=hb)['resources']
         def _ps(key, default):
             try:
                 return int(ps[key])
             except (KeyError, TypeError, ValueError):
                 return int(default)
-        hmax = b.health_max()
-        cur = _ps('health', hmax)
+        hmax = resources['health']['max']
+        cur = resources['health']['current']
         o = b.order()
         out.append({
+            'id': d.get('id'),
             'name': d.get('name', 'Unknown'),
             'ancestry': b.ancestry,
             'class_name': (o['name'] if o else b.path) or '',
@@ -27516,9 +27531,10 @@ def _cosmere_status_party(docs):
             'conditions': {k: v for k, v in (ps.get('conditions') or {}).items() if v},
             'hero_points': None,
             'injuries': _ps('injuries', 0),
-            'focus_current': _ps('focus', b.focus_max()), 'focus_max': b.focus_max(),
-            'investiture_current': _ps('investiture', b.investiture_max()),
-            'investiture_max': b.investiture_max(),
+            'focus_current': resources['focus']['current'],
+            'focus_max': resources['focus']['max'],
+            'investiture_current': resources['investiture']['current'],
+            'investiture_max': resources['investiture']['max'],
             'exploration_activity': '',
         })
     return out

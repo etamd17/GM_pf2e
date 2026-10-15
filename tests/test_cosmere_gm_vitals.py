@@ -13,6 +13,7 @@ chips), driven by the real SSE round-trip.
 from __future__ import annotations
 
 import pathlib
+import re
 
 import pytest
 
@@ -37,12 +38,32 @@ def test_route_is_gm_gated_and_renders(tmp_path, monkeypatch):
     assert 'Party Vitals' in html
     assert 'Shallan' in html
     assert 'data-name="Shallan"' in html and 'data-hpmax=' in html
+    assert f'data-pid="{pid}"' in html
 
 
 def test_board_listens_for_live_state():
     assert "appSSE('cosmere_player_state'" in _TPL
     assert 'data-bar="health"' in _TPL and 'data-bar="investiture"' in _TPL and 'data-bar="focus"' in _TPL
     assert "classList.toggle('crit'" in _TPL          # low-HP highlight
+
+
+def test_board_keys_live_updates_by_pid_with_name_only_as_legacy_fallback():
+    lookup = _TPL[_TPL.index('function _card'): _TPL.index('function _setBar')]
+
+    assert re.search(r'function\s+_card\s*\(\s*pid\s*,\s*name\s*\)', lookup)
+    assert 'data-pid' in lookup
+    assert 'data-name' in lookup
+    assert lookup.index('data-pid') < lookup.index('data-name')
+    assert re.search(r'if\s*\(\s*pid\s*\)\s*return', lookup), (
+        'the name lookup must be used only when an event has no stable pid')
+    assert re.search(r'_apply\s*\(\s*d\.pid\s*,\s*d\.name\s*,', _TPL)
+
+
+def test_board_repaints_live_resource_maxima_and_labels():
+    for key in ('health_max', 'focus_max', 'investiture_max'):
+        assert key in _TPL
+    assert '.setAttribute(' in _TPL
+    assert '[data-m="' in _TPL
 
 
 def test_hub_has_cosmere_vitals_tile():

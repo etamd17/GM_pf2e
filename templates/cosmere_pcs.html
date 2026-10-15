@@ -23,6 +23,7 @@
   .pc-def .v { font-family:var(--font-ui); font-variant-numeric:tabular-nums; font-weight:700; font-size:16px; color:#e8eef5; }
   .pc-res { display:flex; gap:1.1rem; margin-top:.55rem; font-size:12.5px; color:#aeb8c4; }
   .pc-res b { color:#e8eef5; font-family:var(--font-ui); font-variant-numeric:tabular-nums; }
+  .pc-res [hidden] { display:none; }
   .pc-surges { margin-top:.5rem; font-size:11.5px; color:var(--text-on-dark-3); }
   .pc-surges b { color:var(--accent); }
   /* At-a-glance party health bar (green -> accent when hurt -> ruby when critical). */
@@ -85,7 +86,7 @@
 <div class="pc-grid">
   {% for pc in pcs %}
   {% set access = workflow_access.get(pc.id, {}) %}
-  <a class="pc-card" {% if not account_user or access.get('view') %}href="{{ character_sheet_url(pc.name, 'cosmere', pc.id) }}"{% else %}aria-disabled="true"{% endif %} style="--accent:{{ pc.accent }};" aria-label="{{ pc.name }}'s character">
+  <a class="pc-card" data-pid="{{ pc.id }}" {% if not account_user or access.get('view') %}href="{{ character_sheet_url(pc.name, 'cosmere', pc.id) }}"{% else %}aria-disabled="true"{% endif %} style="--accent:{{ pc.accent }};" aria-label="{{ pc.name }}'s character">
     <div class="pc-top">
       <span class="pc-name">{{ pc.name }}</span>
       <span class="pc-lv">Lv {{ pc.level }} &middot; T{{ pc.tier }}</span>
@@ -102,9 +103,10 @@
     </div>
     <div class="pc-hp" role="img" aria-label="Health {{ pc.current_health }} of {{ pc.health }}"><div class="pc-hp-fill{% if pc.health and pc.current_health <= pc.health * 0.25 %} crit{% elif pc.health and pc.current_health <= pc.health * 0.5 %} hurt{% endif %}" style="width:{{ (pc.current_health / pc.health * 100) if pc.health else 0 }}%"></div></div>
     <div class="pc-res">
-      <span>&#9829; <b>{{ pc.current_health }}</b>/{{ pc.health }}</span>
+      <span>&#9829; <b data-f="health">{{ pc.current_health }}</b>/<span data-m="health">{{ pc.health }}</span></span>
       <span>Deflect <b>{{ pc.deflect }}</b></span>
-      {% if pc.is_radiant %}<span>Inv <b>{{ pc.investiture }}</b></span>{% endif %}
+      <span>Focus <b data-f="focus">{{ pc.current_focus }}</b>/<span data-m="focus">{{ pc.focus }}</span></span>
+      <span data-resource="investiture"{% if not pc.investiture %} hidden{% endif %}>Inv <b data-f="investiture">{{ pc.current_investiture }}</b>/<span data-m="investiture">{{ pc.investiture }}</span></span>
     </div>
     {% if pc.conditions %}
     <div class="pc-conds" aria-label="Active conditions">
@@ -120,4 +122,31 @@
 {% else %}
 <p class="pc-empty">No Cosmere characters yet. Use <b>+ New Character</b> to build one with the rulebook-guided creator.</p>
 {% endif %}
+<script>
+(function(){
+  function applyState(data){
+    if(!data || !data.pid) return;
+    var card=document.querySelector('.pc-card[data-pid="'+(window.CSS&&CSS.escape?CSS.escape(data.pid):data.pid)+'"]');
+    if(!card) return;
+    ['health','focus','investiture'].forEach(function(key){
+      var value=data[key+'_current'];
+      if(value===undefined && data.play_state) value=data.play_state[key];
+      var maximum=data[key+'_max'];
+      var currentLabel=card.querySelector('[data-f="'+key+'"]');
+      var maxLabel=card.querySelector('[data-m="'+key+'"]');
+      if(value!==undefined && currentLabel) currentLabel.textContent=value;
+      if(maximum!==undefined && maxLabel) maxLabel.textContent=maximum;
+      if(key==='investiture' && maximum!==undefined){ var row=card.querySelector('[data-resource="investiture"]'); if(row) row.hidden=!(+maximum); }
+    });
+    var current=+(card.querySelector('[data-f="health"]')||{}).textContent||0;
+    var maximum=+(card.querySelector('[data-m="health"]')||{}).textContent||0;
+    var pct=maximum>0?Math.max(0,Math.min(100,100*current/maximum)):0;
+    var track=card.querySelector('.pc-hp');
+    var fill=card.querySelector('.pc-hp-fill');
+    if(track) track.setAttribute('aria-label','Health '+current+' of '+maximum);
+    if(fill){ fill.style.width=pct+'%'; fill.classList.toggle('crit',pct<=25); fill.classList.toggle('hurt',pct>25&&pct<=50); }
+  }
+  try { window.appSSE('cosmere_player_state', function(event){ try { applyState(JSON.parse(event.data)); } catch(_error){} }); } catch(_error){}
+})();
+</script>
 {% endblock %}
