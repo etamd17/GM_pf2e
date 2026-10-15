@@ -12437,6 +12437,22 @@ def _find_active_combatant(instance_id):
     return next((c for c in ACTIVE_ENCOUNTER if c.instance_id == instance_id), None)
 
 
+def _pf2e_only_combatant_error(combatant, feature):
+    """Return a clear 400 response when a PF2e mechanic targets another system.
+
+    Older PF2e encounter snapshots predate the ``system`` field, so a missing or
+    empty value keeps the legacy PF2e behavior. Callers must resolve the target
+    first so their existing stale/missing-combatant responses stay unchanged.
+    """
+    system = getattr(combatant, 'system', None) or 'pf2e'
+    if system != 'pf2e':
+        return jsonify({
+            'success': False,
+            'error': f'PF2e {feature} cannot be used for {system} combatants.',
+        }), 400
+    return None
+
+
 def require_live_combatant(fn):
     """Guard per-combatant actions against a STALE tracker tab. If the targeted
     instance_id is no longer in the live encounter (the encounter was cleared,
@@ -17056,6 +17072,10 @@ def recall_knowledge(instance_id):
     if not getattr(target, 'visible_to_players', True) and not _is_gm():
         return jsonify({"error": "Target creature not found"}), 404
 
+    pf2e_error = _pf2e_only_combatant_error(target, 'Recall Knowledge')
+    if pf2e_error is not None:
+        return pf2e_error
+
     # Find the PC
     pc = PARTY_LIBRARY.get(pc_name)
     if not pc:
@@ -17157,6 +17177,9 @@ def recall_knowledge_info(instance_id):
         if c.instance_id == instance_id and not c.is_pc:
             if not getattr(c, 'visible_to_players', True) and not _is_gm():
                 return jsonify({"error": "Target creature not found"}), 404
+            pf2e_error = _pf2e_only_combatant_error(c, 'Recall Knowledge')
+            if pf2e_error is not None:
+                return pf2e_error
             skill, creature_type = _get_rk_skill(c)
             dc = _get_rk_dc(c)
             return jsonify({
@@ -19129,6 +19152,13 @@ def multi_save_damage():
     rolls = data.get('rolls') or {}
     dtype = str(data.get('damage_type') or 'untyped').strip()
     by_id = {c.instance_id: c for c in ACTIVE_ENCOUNTER}
+    for iid in ids:
+        target = by_id.get(iid)
+        if target is None:
+            continue
+        pf2e_error = _pf2e_only_combatant_error(target, 'Basic save damage')
+        if pf2e_error is not None:
+            return pf2e_error
     results = []
     for iid in ids:
         c = by_id.get(iid)
@@ -19831,6 +19861,10 @@ def _apply_condition_change(instance_id, condition, action, rounds=0):
 @app.route('/api/toggle_condition/<instance_id>', methods=['POST'])
 @require_live_combatant
 def toggle_condition(instance_id):
+    pf2e_error = _pf2e_only_combatant_error(
+        _find_active_combatant(instance_id), 'Condition controls')
+    if pf2e_error is not None:
+        return pf2e_error
     condition = request.form.get('condition')
     action = request.form.get('action')
     # Optional rounds value sets a GM-defined auto-expiry timer that ticks
@@ -19962,6 +19996,9 @@ def recovery_check(instance_id):
         target = next((c for c in ACTIVE_ENCOUNTER if c.instance_id == instance_id), None)
         if not target:
             return jsonify({"success": False, "error": "Combatant not found"}), 404
+        pf2e_error = _pf2e_only_combatant_error(target, 'Recovery checks')
+        if pf2e_error is not None:
+            return pf2e_error
         result, rc_err = _resolve_recovery_check(target, data.get('d20'))
         if rc_err:
             return jsonify({"success": False, "error": _RECOVERY_ERRORS[rc_err]}), 400
@@ -20017,6 +20054,10 @@ def pc_recovery_check(pc_name):
 @app.route('/api/set_persistent_damage/<instance_id>', methods=['POST'])
 @require_live_combatant
 def set_persistent_damage(instance_id):
+    pf2e_error = _pf2e_only_combatant_error(
+        _find_active_combatant(instance_id), 'Persistent damage')
+    if pf2e_error is not None:
+        return pf2e_error
     pd_val = request.form.get('persistent_damage', '') or (request.json or {}).get('persistent_damage', '')
     # Hold ENCOUNTER_LOCK across the iterate-and-mutate so the autosave
     # snapshot (which also takes the lock) can't see a torn write, and
@@ -20046,6 +20087,10 @@ def set_persistent_damage(instance_id):
 @app.route('/api/toggle_elite_weak/<instance_id>', methods=['POST'])
 @require_live_combatant
 def toggle_elite_weak(instance_id):
+    pf2e_error = _pf2e_only_combatant_error(
+        _find_active_combatant(instance_id), 'Elite and weak adjustments')
+    if pf2e_error is not None:
+        return pf2e_error
     mode = request.form.get('mode', 'normal') or (request.json or {}).get('mode', 'normal')
     mode_val = {'elite': 1, 'weak': -1, 'normal': 0}.get(mode, 0)
     with ENCOUNTER_LOCK:
@@ -22303,6 +22348,7 @@ def _combatant_detail_payload(c, *, is_pc=None):
     this for every combatant once a second is the stall CLAUDE.md warns about.
     """
     is_pc = c.is_pc if is_pc is None else is_pc
+    system = getattr(c, 'system', None) or 'pf2e'
     data = {
         'name': c.name, 'level': c.level, 'is_pc': is_pc,
         'ac': c.ac, 'fort': c.fort, 'ref': c.ref, 'will': c.will,
@@ -22310,6 +22356,47 @@ def _combatant_detail_payload(c, *, is_pc=None):
         'current_hp': c.current_hp, 'max_hp': c.hp,
         'conditions': {k: v for k, v in c.conditions.items() if v and v != 0 and v is not False},
     }
+    if system == 'cosmere':
+        data['system'] = 'cosmere'
+        data['conditions'] = {
+            k: v for k, v in data['conditions'].items()
+            if k in systems.cosmere.CONDITION_INFO
+        }
+        tracker_block = getattr(c, 'tracker_block', None)
+        data['cosmere'] = tracker_block() if callable(tracker_block) else {}
+
+        def _cosmere_hit(strike):
+            shown = strike.get('hit')
+            if shown not in (None, ''):
+                return str(shown)
+            try:
+                bonus = int(strike.get('bonus', strike.get('mod', 0)) or 0)
+            except (TypeError, ValueError):
+                bonus = 0
+            return f'+{bonus}' if bonus >= 0 else str(bonus)
+
+        data['attacks'] = [
+            {'name': s.get('name', ''), 'hit': _cosmere_hit(s),
+             'damage': s.get('damage', '')}
+            for s in (getattr(c, 'strikes', None) or [])
+        ]
+        data['actions'] = [
+            {'name': a.get('name', ''), 'description': a.get('description', ''),
+             'actions': a.get('actions', '')}
+            for a in (getattr(c, 'actions', None) or [])
+        ]
+        raw_skills = getattr(c, 'skills', None) or {}
+        data['skills'] = [
+            {'name': systems.cosmere.SKILL_NAMES.get(code, code),
+             'total': int(skill.get('mod', 0) or 0)}
+            for code, skill in raw_skills.items()
+            if isinstance(skill, dict) and skill.get('unlocked', True) is not False
+        ] if isinstance(raw_skills, dict) else []
+        data['immunities'] = getattr(c, 'immunities', [])
+        data['resistances'] = getattr(c, 'resistances', [])
+        data['weaknesses'] = getattr(c, 'weaknesses', [])
+        data['traits'] = getattr(c, 'traits', [])
+        return data
     if is_pc:
         data['class_name'] = c.class_name
         data['ancestry'] = c.ancestry

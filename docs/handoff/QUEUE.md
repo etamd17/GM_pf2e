@@ -44,7 +44,7 @@ UI/UX design is Claude's by default; Codex implements mechanical parts from Clau
 | UI-12 | PF2e map (B: map first, right-side tabs) | codex | strongest, high | waiting on user (after the VTT plan) | `tasks/UI-12-pf2e-map.md` |
 | UI-13 | Cosmere screens from UI-00 (6): dashboard, tracker, Party Vitals, roster, GM Screen, loot | claude briefs, codex builds | briefs: Opus high | needs brief (after UI-04/UI-05) | - |
 | UI-03 | Fix the seven confirmed bugs from the UI review | codex | standard | done (accepted by Claude) | `tasks/UI-03.md` |
-| UI-04 | Cosmere tracker: hide every PF2e-only control (user: each system stays separate) | codex | standard, high | ready | `tasks/UI-04-cosmere-tracker-separation.md` |
+| UI-04 | Cosmere tracker: hide every PF2e-only control (user: each system stays separate) | codex | standard, high | done (accepted by Claude) | `tasks/UI-04-cosmere-tracker-separation.md` |
 | UI-05 | Cosmere spheres: gem changes value (rulebook table); wallets keep gems | codex | strongest, high | ready (after UI-03, now merged) | `tasks/UI-05-cosmere-gem-values.md` |
 
 UI-03 bug list (from `tasks/UI-00.md` > Anything broken or risky; all checked on `main` at `4664c887`):
@@ -112,7 +112,9 @@ Accepted as a design checkpoint. Notes:
 
 Newest first. One plain line per handoff: who, what, what's next.
 
+- 2026-10-15 Claude: checked UI-04 in the browser: a Cosmere fight now shows only Cosmere controls, conditions and stats (hero and adversaries), PF2e actions are refused for Cosmere targets, and a PF2e fight keeps all its controls. Accepted, no fixes needed. Next: Codex commits, opens the PR and merges when CI is green, then starts UI-05.
 - 2026-10-15 Claude: VTT-017 done. Fixed the table-screen bug Codex found (an old message could keep a stale or revoked scene on screen) and built the tool that turns Codex's message definitions into client code. Codex's first batch has one blocker: a duplicate check that makes a big scene take almost a second to load (fix proposed as S5). Next: Codex answers handoff 017.
+- 2026-10-15 Codex: separated Cosmere tracker controls, vocabulary, conditions and routes from PF2e; 28 required checks and 38 PF2e regressions pass, with all 107 templates parsing. Next: Claude reviews both systems in the browser at 1440px.
 - 2026-10-15 Claude: wrote build briefs for the 12 approved PF2e screens (UI-06 to UI-12), grouped by page and ordered by risk; the map waits until the VTT plan is settled. Next: Codex works through them after UI-04 and UI-05; Claude writes the Cosmere screen briefs (UI-13) after those.
 - 2026-10-15 User: decided that gems change a sphere's value, and that PF2e, Cosmere and D&D never share mechanics (hide all PF2e controls in the Cosmere tracker). Claude wrote briefs UI-04 (tracker) and UI-05 (gem values). Next: Codex takes UI-04, then UI-05.
 - 2026-10-15 Codex: fixed the MB-03 loot casing and Era 2 name groups, seeded the route test, and passed all 17 focused checks; Claude's review is accepted. Next: open the PR and merge it after every CI job is green.
