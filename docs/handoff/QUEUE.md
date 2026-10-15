@@ -37,18 +37,19 @@ UI/UX design is Claude's by default; Codex implements mechanical parts from Clau
 | UI-02 | PF2e screens from UI-00 (18): briefs still to write | claude briefs, codex builds | briefs: Opus high | needs brief | - |
 | UI-03 | Fix the seven confirmed bugs from the UI review | codex | standard | review | `tasks/UI-03.md` |
 
-UI-03 bug list (from `tasks/UI-00.md` > Anything broken or risky):
+UI-03 bug list (from `tasks/UI-00.md` > Anything broken or risky; all checked on `main` at `4664c887`):
 
-| Bug | Checked on current `main`? |
+| Bug | Status |
 |---|---|
-| PF2e GM screen: the polish script looks for `.masonry`, which no longer exists, so it never runs | **yes, real** |
-| Map: with no scene, an error message can crash before the message system is set up | **yes, real (read in the code)** |
-| PF2e builder: ancestry feat treated as text in the review step | not yet |
-| PF2e level-up: the gains panel can block clicks on the picker | not yet |
-| Cosmere loot: totals ignore gems; deleting a log doesn't undo the credit; failed saves can clear the form | not yet |
-| Cosmere roster/vitals: no live updates; old maximums | not yet |
-| Cosmere tracker shows PF2e-only controls (rules question for the user, not a plain bug) | not yet |
-| Campaign delete: the wording says "delete" but it's moved to the trash | not yet |
+| PF2e GM screen: the polish script looks for `.masonry`, so pins, search highlight and clickable conditions never run | fixed in UI-03 |
+| Map: with no scene, the error toast crashes before it is set up | fixed in UI-03 |
+| PF2e builder: the Review step goes blank (ancestry feat treated as text) and shows stale class/spell/skill fields | fixed in UI-03 |
+| PF2e level-up: the gains panel can block clicks on the picker | fixed in UI-03 |
+| Cosmere loot: deleting a log doesn't undo the credit; ledger and wallet can disagree; the form clears on errors | fixed in UI-03 |
+| Cosmere loot: totals and wallets ignore which gem a sphere is | **needs a user rules decision** |
+| Cosmere roster/vitals: no live updates; max Investiture; vitals keyed by name with frozen maximums | fixed in UI-03; missing Mistborn bundle fallback added |
+| Cosmere tracker shows PF2e-only controls (MAP/agile, PF2e quick conditions, Elite/Weak, persistent damage, basic saves) | **needs a user rules decision** |
+| Campaign delete: the wording says "permanently delete" but it's moved to the trash | fixed in UI-03 |
 
 ## Cosmere: Mistborn
 
@@ -81,6 +82,8 @@ Accepted as a design checkpoint. Notes:
 
 Newest first. One plain line per handoff: who, what, what's next.
 
+- 2026-10-15 Codex: fixed UI-03's missing Mistborn rules fallback for the roster, vitals, and broadcasts; 24 focused tests pass. Next: open the PR for CI and Claude's final recheck.
+- 2026-10-15 Claude: checked UI-03 in the browser: the GM screen pins, map error message, builder Review, level-up picker clicks, loot add/remove, live roster and vitals all work. One required fix: a Mistborn character on a server without the Mistborn data now breaks the whole roster and vitals page. Next: Codex adds a per-character fallback plus a test, then opens the PR.
 - 2026-10-15 Codex: fixed all seven UI-03 bugs in seven local commits with regression tests; focused verification and template parsing passed. Next: Claude reviews the diff and completes the brief's browser checks; no push, merge, or deploy yet.
 - 2026-10-14 Claude: checked the new Cosmere builder / level-up (UI-02c) on desktop and phone in both skins: level badge, to-do list, Go buttons, step ticks, sticky layout and the PF2e draft bar all work. Accepted, no fixes needed. Next: Codex commits this review and opens the PR; the user merges.
 - 2026-10-14 Codex: built the Cosmere level-up guide and compact draft bar; 399 focused checks and all 32 browser checks passed. Next: Claude reviews level-up and scrolling on desktop and phone.

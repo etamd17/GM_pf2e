@@ -13294,14 +13294,13 @@ def api_cosmere_generate(gtype):
 @app.route('/cosmere/pcs')
 def cosmere_pcs():
     import systems.cosmere.build as _cb
-    from systems.cosmere.party import project_member
     import systems.cosmere.radiant as _rad
     cards = []
     _hb_store = _cosmere_homebrew_store()
     for d in _list_cosmere_pcs():
         b = _cb.CosmereBuild(d.get('build'), homebrew=_hb_store)
         o = b.order()
-        resources = project_member(d, homebrew=_hb_store)['resources']
+        resources = _cosmere_live_resources(d, build=b, homebrew=_hb_store)
         _ps = d.get('play_state') or {}
         cards.append({
             'id': d['id'], 'name': d.get('name', 'Unknown'), 'level': b.level, 'tier': b.tier,
@@ -14750,22 +14749,67 @@ def api_cosmere_advancement_preview():
     return jsonify(_cosmere_advancement_response(payload, data.get('pid')))
 
 
-def _broadcast_cosmere_player_state(doc, **extra):
-    """Publish identity, live state, and current resource limits together."""
+def _cosmere_live_resources(doc, *, build=None, homebrew=None):
+    """Project resources, retaining legacy card values if rules are unavailable."""
     from systems.cosmere.party import project_member
-    resources = project_member(doc, homebrew=_cosmere_homebrew_store())['resources']
-    payload = {
-        'pid': doc['id'], 'name': doc.get('name'),
-        'play_state': doc.get('play_state') or {},
-        'health_max': resources['health']['max'],
-        'focus_max': resources['focus']['max'],
-        'investiture_max': resources['investiture']['max'],
-        'health_current': resources['health']['current'],
-        'focus_current': resources['focus']['current'],
-        'investiture_current': resources['investiture']['current'],
+    try:
+        return project_member(doc, homebrew=homebrew)['resources']
+    except (ValueError, TypeError, KeyError, AttributeError):
+        # A saved Mistborn PC can outlive the private rules installation. The
+        # older build and play_state still have enough data for display/SSE.
+        pass
+
+    if build is None:
+        try:
+            from systems.cosmere.build import CosmereBuild
+            build = CosmereBuild(doc.get('build') or {}, homebrew=homebrew)
+        except (ValueError, TypeError, KeyError, AttributeError):
+            build = None
+    state = doc.get('play_state') if isinstance(doc.get('play_state'), dict) else {}
+    derived = doc.get('derived') if isinstance(doc.get('derived'), dict) else {}
+
+    def number(value, default=0):
+        try:
+            return int(value if value is not None else default)
+        except (ValueError, TypeError, OverflowError):
+            return int(default)
+
+    def maximum(method, key):
+        try:
+            return max(0, number(getattr(build, method)())) if build else max(
+                0, number(derived.get(key)))
+        except (ValueError, TypeError, AttributeError):
+            return max(0, number(derived.get(key)))
+
+    health_max = maximum('health_max', 'health_max')
+    focus_max = maximum('focus_max', 'focus_max')
+    investiture_max = maximum('investiture_max', 'investiture_max')
+    return {
+        'health': {'current': number(state.get('health'), health_max), 'max': health_max},
+        'focus': {'current': number(state.get('focus'), focus_max), 'max': focus_max},
+        'investiture': {'current': number(state.get('investiture'), investiture_max),
+                        'max': investiture_max},
     }
-    payload.update(extra)
-    sse_broadcast('cosmere_player_state', payload)
+
+
+def _broadcast_cosmere_player_state(doc, **extra):
+    """Publish identity, live state, and resource limits without failing a save."""
+    try:
+        resources = _cosmere_live_resources(doc, homebrew=_cosmere_homebrew_store())
+        payload = {
+            'pid': doc['id'], 'name': doc.get('name'),
+            'play_state': doc.get('play_state') or {},
+            'health_max': resources['health']['max'],
+            'focus_max': resources['focus']['max'],
+            'investiture_max': resources['investiture']['max'],
+            'health_current': resources['health']['current'],
+            'focus_current': resources['focus']['current'],
+            'investiture_current': resources['investiture']['current'],
+        }
+        payload.update(extra)
+        sse_broadcast('cosmere_player_state', payload)
+    except Exception:
+        app.logger.exception('Could not broadcast Cosmere player state')
 
 
 def _cosmere_advancement_broadcast(doc):
@@ -27502,7 +27546,6 @@ def _cosmere_status_party(docs):
     play_state; the maxes + defenses come from the build. `hero_points` is None
     (Cosmere has none) so the board can hide that stat."""
     import systems.cosmere.build as _cb
-    from systems.cosmere.party import project_member
     hb = _cosmere_homebrew_store()
     out = []
     for d in docs:
@@ -27511,7 +27554,7 @@ def _cosmere_status_party(docs):
         except Exception:
             continue
         ps = d.get('play_state') if isinstance(d.get('play_state'), dict) else {}
-        resources = project_member(d, homebrew=hb)['resources']
+        resources = _cosmere_live_resources(d, build=b, homebrew=hb)
         def _ps(key, default):
             try:
                 return int(ps[key])
