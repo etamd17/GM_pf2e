@@ -58,7 +58,7 @@ UI-03 bug list (from `tasks/UI-00.md` > Anything broken or risky; all checked on
 | MB-00 | Mistborn rules backend (Era 1 and 2, Allomancy, Feruchemy, versioned rules packages, GM services) | codex | its strongest | done, reviewed by Claude (see below) | `GM_pf2e_cosmere_rules/docs/handoff/tasks/MB-00.md` |
 | MB-01 | Bring MB-00 up to date with main, move the Mistborn data out of git (installed like 5e), make the full test run green, open a PR | codex | strongest model, high effort (history rewrite + test-failure hunt) | done (PR #182 merged; private bundle installed) | `tasks/MB-01.md` |
 | MB-02 | Verify the 252 Mistborn records still blocked on source checks | codex | its strongest | needs brief | - |
-| MB-03 | Generators: make Mistborn content for Mistborn campaigns (found in UI-01) | codex | standard, medium | ready | `tasks/MB-03.md` |
+| MB-03 | Generators: make Mistborn content for Mistborn campaigns (found in UI-01) | codex | standard, medium | done (accepted by Claude) | `tasks/MB-03.md` |
 
 **MB-00 review (Claude, 2026-10-13):** accepted as a backend milestone, not ready to merge yet.
 - 1024 Cosmere tests pass on the branch (623 new + 401 existing).
@@ -102,6 +102,9 @@ Accepted as a design checkpoint. Notes:
 
 Newest first. One plain line per handoff: who, what, what's next.
 
+- 2026-10-15 Codex: fixed the MB-03 loot casing and Era 2 name groups, seeded the route test, and passed all 17 focused checks; Claude's review is accepted. Next: open the PR and merge it after every CI job is green.
+- 2026-10-15 Claude: checked MB-03 in the browser in both skins on desktop and phone: Mistborn campaigns get original Scadrial content on every card, Stormlight is unchanged, and all buttons work. One small fix: four loot lines lose their capital letters (e.g. "kredik shaw"). Next: Codex fixes that (plus two small extras), then commits, opens the PR and merges once CI is green.
+- 2026-10-15 Codex: made all nine Cosmere generator cards switch to Mistborn content in Mistborn campaigns, with Era 2 when it is the campaign's only era; 42 checks and all 107 templates pass. Next: Claude reviews the writing and browser behavior in both skins.
 - 2026-10-15 Claude: rechecked the UI-03 follow-up: a Mistborn character without the Mistborn data no longer breaks the roster or vitals, and other characters show and update normally. UI-03 accepted. Next: the user merges PR #189 once CI is green, except the known glossary test, which has its own fix.
 - 2026-10-15 Codex: fixed UI-03's missing Mistborn rules fallback for the roster, vitals, and broadcasts; 24 focused tests pass. Next: open the PR for CI and Claude's final recheck.
 - 2026-10-15 Claude: checked UI-03 in the browser: the GM screen pins, map error message, builder Review, level-up picker clicks, loot add/remove, live roster and vitals all work. One required fix: a Mistborn character on a server without the Mistborn data now breaks the whole roster and vitals page. Next: Codex adds a per-character fallback plus a test, then opens the PR.
