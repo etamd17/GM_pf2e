@@ -1,0 +1,51 @@
+{
+  "batch": "scene-projection-1",
+  "schemaVersion": 1,
+  "sourceDigest": "64b8baaf3838b4c5015b2ae81df75458ce6b3303ed91166537b501b5640e2ed8",
+  "sourceNote": "PREVIEW: contracts c5653e05 with proposed amendment S5 (uniqueItems removed from the 8 entity arrays). Regenerate from the canonical source once the platform publishes S5.",
+  "generator": {
+    "versions": {
+      "ajv": "8.20.0",
+      "json-schema-to-typescript": "16.0.0"
+    },
+    "ajvOptions": {
+      "strict": true,
+      "strictNumbers": true,
+      "allErrors": false,
+      "coerceTypes": false,
+      "useDefaults": false,
+      "removeAdditional": false,
+      "ownProperties": true,
+      "code": {
+        "source": true,
+        "esm": true,
+        "lines": true
+      }
+    },
+    "typescriptOptions": {
+      "unknownAny": true,
+      "additionalProperties": false,
+      "strictIndexSignatures": true,
+      "declareExternallyReferenced": true,
+      "format": true
+    },
+    "runtimeHelpers": {
+      "ucs2length": "ucs2length"
+    }
+  },
+  "outputs": {
+    "ajv-runtime.mjs": "99c0e4ed98924e6341f2d043908a4537a102600fc8c90b188c561166f6d57013",
+    "fixtures.json": "c82452c488453384312b8bc58955fd4cfe9a459fb2411c0d4d8619b737314edd",
+    "gm.validators.d.mts": "79edaee43d201327629d8a81b28968555a6c4f7323e1e096a205ff2a5be1ba74",
+    "gm.validators.mjs": "0e2f4dd695e780395a349f010747357e32747912d4888811a9371e720304067c",
+    "table.validators.d.mts": "6be82ce18f9a89722c10b0bf9c38355fd1738dc206621c9d88a99b8c95693ea4",
+    "table.validators.mjs": "a2a35fbe476c8d95f5596765df6dc04abbbd2b09bc13396e04d1a9176efc0168",
+    "types/acknowledgement.d.ts": "1a1eb5985db5c138ad35ebf0de0a3c24836b2a5770d370f905153a6340391948",
+    "types/bootstrap-rejection.d.ts": "1893ffa6bd97bc1c5a0a6a25fa6a7953718097520193037aef3bbfa243561e7f",
+    "types/gm-subscribe.d.ts": "0d6b59c9c30714e479dc830123813bb2d10fa81029fd57ffe03691f781eaf3a4",
+    "types/gm.d.ts": "bb55eed5bc480c943ba9c6ad4a4094767738bc9e7afa47baae7368078f7d68aa",
+    "types/resync-required.d.ts": "be449cd9fbd41324b502c1110cd8295915c9969717679aa7fc95a0f79a394d02",
+    "types/table-subscribe.d.ts": "4806b57abbe6a5ab579b4e1341b4fce5dad0ee6a81989fa4ceef6c1c80635c03",
+    "types/table.d.ts": "cfe63fc89dc72fc42c6964290ba20849b06086759f79280407422e046ad38467"
+  }
+}

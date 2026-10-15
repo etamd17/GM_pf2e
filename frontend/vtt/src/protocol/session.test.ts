@@ -444,6 +444,28 @@ describe('old snapshots cannot revive a retired subscription (sections 6 and 10)
   });
 });
 
+describe('duplicate entity keys (proposed S5)', () => {
+  it('a snapshot naming an entity twice is not applied and triggers a resubscribe', () => {
+    const t = setup();
+    t.transport.subscribe(t.session);
+    t.transport.push(snapshot('s1', [tok('a'), tok('a', 9)]));
+    t.transport.deliver(t.session);
+    expect(t.scene()).toBeNull();
+    expect(t.session.stats.invalidFrames).toBe(1);
+    expect(t.transport.resubscribeRequests).toEqual(['state-lost']);
+  });
+
+  it('a patch upserting an entity twice keeps the last good projection and resyncs', () => {
+    const t = setup();
+    t.transport.subscribe(t.session);
+    t.transport.push(snapshot('s1', [tok('a')]), patch('s1', 1, [tok('b'), tok('b', 3)]));
+    t.transport.deliver(t.session);
+    expect(t.ids()).toEqual(['a']);
+    expect(t.status()).toBe('resyncing');
+    expect(t.session.currentSubscriptionId).toBeNull();
+  });
+});
+
 describe('rejection behaviour table (section 8, criterion 13)', () => {
   it('has exactly one behaviour per code', () => {
     expect(Object.keys(REJECTION_ACTIONS).sort()).toEqual([...REJECTION_CODES].sort());

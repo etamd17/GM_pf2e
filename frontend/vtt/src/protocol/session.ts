@@ -2,6 +2,7 @@ import type { ConnectionStatus } from '../state/connection';
 import type { ProjectionEpoch } from '../state/projection';
 import {
   entityKey,
+  hasDuplicateEntityKeys,
   type AckFrame,
   type BootstrapRejectionReason,
   type EntityKey,
@@ -46,6 +47,7 @@ export interface SessionStats {
   discardedOtherSubscription: number;
   gaps: number;
   refusedSnapshots: number;
+  invalidFrames: number;
 }
 
 // Retired subscription IDs are remembered so a delayed duplicate can never
@@ -81,6 +83,7 @@ export class ProjectionSession<E extends EntityKey, O = unknown> {
     discardedOtherSubscription: 0,
     gaps: 0,
     refusedSnapshots: 0,
+    invalidFrames: 0,
   };
 
   constructor(
@@ -129,6 +132,10 @@ export class ProjectionSession<E extends EntityKey, O = unknown> {
       this.stats.refusedSnapshots += 1;
       return;
     }
+    if (hasDuplicateEntityKeys(frame.entities)) {
+      this.invalidFrame();
+      return;
+    }
     const epoch = this.sink.openProjection();
     if (epoch === null) return;
     this.epoch = epoch;
@@ -154,6 +161,10 @@ export class ProjectionSession<E extends EntityKey, O = unknown> {
     }
     if (frame.seq <= this.lastSeq) {
       this.stats.duplicates += 1;
+      return;
+    }
+    if (hasDuplicateEntityKeys(frame.upserted) || hasDuplicateEntityKeys(frame.removed)) {
+      this.invalidFrame();
       return;
     }
     if (frame.seq !== this.lastSeq + 1) {
@@ -276,6 +287,16 @@ export class ProjectionSession<E extends EntityKey, O = unknown> {
     this.sink.sealProjection();
     this.sink.stopRetrying();
     this.sink.setStatus(status);
+  }
+
+  // A frame for the current subscription that names an entity twice cannot be
+  // applied unambiguously. Nothing from it is applied; the client resubscribes
+  // as for lost state and keeps the last good projection on screen.
+  private invalidFrame(): void {
+    this.stats.invalidFrames += 1;
+    this.retireCurrent();
+    this.sink.setStatus('resyncing');
+    this.sink.requestResubscribe('state-lost');
   }
 
   // Retire the live subscription ID (if any) and void every attempt.

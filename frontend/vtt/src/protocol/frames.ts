@@ -1,8 +1,17 @@
-// PROVISIONAL message shapes for the client state machine, limited to the
-// fields VTT-ADR-0002 names explicitly. They are replaced by the generated
-// types from contracts/vtt/v1/ once the first canonical batch lands
-// (VTT-20261012-014/015). Do not add fields here: a new field is a contract
-// change and goes through the schema proposal.
+// Client views of the wire frames. The canonical shapes are generated from
+// contracts/vtt/v1/ into ./generated (scripts/generate-protocol.mjs); the
+// session works against these narrower structural views so it stays generic
+// over the GM and table entity unions. Every view, enumeration and constant
+// below is checked against the generated types at compile time (bottom of this
+// file), so a contract change that the client does not follow fails typecheck.
+
+import type { Acknowledgement, RejectedAck } from './generated/types/acknowledgement';
+import type { BootstrapRejection } from './generated/types/bootstrap-rejection';
+import type { GmEntity, GmEntityRef, GmPatch, GmSnapshot } from './generated/types/gm';
+import type { ResyncRequired } from './generated/types/resync-required';
+import type { TableEntity, TableEntityRef, TablePatch, TableSnapshot } from './generated/types/table';
+
+export type { GmEntity, GmPatch, GmSnapshot, TableEntity, TablePatch, TableSnapshot };
 
 export interface EntityKey {
   kind: string;
@@ -67,8 +76,39 @@ export const REJECTION_CODES = [
 ] as const;
 export type RejectionCode = (typeof REJECTION_CODES)[number];
 
+// The session ignores schemaVersion (the validator already enforced it).
 export type AckFrame =
   | { commandId: string; outcome: 'applied' }
   | { commandId: string; outcome: 'rejected'; code: RejectionCode };
 
 export const entityKey = (e: EntityKey): string => `${e.kind}\u0000${e.id}`;
+
+// Proposed amendment S5 (VTT-20261015-017): entity arrays carry no schema
+// uniqueItems (deep equality is O(n^2) and misses same-key different-field
+// duplicates). Uniqueness by entity key is checked here instead, for every
+// snapshot entities, patch upserted and patch removed list.
+export function hasDuplicateEntityKeys(list: readonly EntityKey[]): boolean {
+  const seen = new Set<string>();
+  for (const e of list) {
+    const key = entityKey(e);
+    if (seen.has(key)) return true;
+    seen.add(key);
+  }
+  return false;
+}
+
+// ---- compile-time agreement with the generated contract types ----
+type Exactly<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+const agree = <T extends true>(_proof?: T): void => {};
+agree<Exactly<ResyncReason, ResyncRequired['reason']>>();
+agree<Exactly<BootstrapRejectionReason, BootstrapRejection['reason']>>();
+agree<Exactly<RejectionCode, RejectedAck['code']>>();
+// Every generated frame and ack is accepted by the session's views.
+const views = <T extends true>(_proof?: T): void => {};
+views<TableSnapshot extends SnapshotFrame<TableEntity> ? true : false>();
+views<TablePatch extends PatchFrame<TableEntity> ? true : false>();
+views<GmSnapshot extends SnapshotFrame<GmEntity> ? true : false>();
+views<GmPatch extends PatchFrame<GmEntity> ? true : false>();
+views<TableEntityRef extends EntityKey ? true : false>();
+views<GmEntityRef extends EntityKey ? true : false>();
+views<Acknowledgement extends AckFrame ? true : false>();
