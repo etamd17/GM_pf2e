@@ -45,18 +45,43 @@ export interface SessionStats {
   duplicates: number;
   discardedOtherSubscription: number;
   gaps: number;
+  refusedSnapshots: number;
 }
+
+// Retired subscription IDs are remembered so a delayed duplicate can never
+// revive one (sections 6 and 10). IDs are server-issued and unique, so a
+// bounded memory of the most recent ones is enough.
+const RETIRED_ID_MEMORY = 256;
+
+// A subscribe attempt, issued by subscribing(). The transport hands the token
+// back with the snapshot that answers that subscribe. It is local transport
+// metadata, never a wire field.
+export type SubscribeAttempt = number;
 
 export class ProjectionSession<E extends EntityKey, O = unknown> {
   private subscriptionId: string | null = null;
   private lastSeq = 0;
-  private awaitingSnapshot = false;
   private sealed = false;
+  // The attempt whose snapshot may be accepted now, or null when no
+  // authenticated subscribe is outstanding. Losing the transport clears it;
+  // only subscribing() (a new authenticated subscribe) or a server resync on a
+  // still-authenticated transport sets it.
+  private pendingAttempt: SubscribeAttempt | null = null;
+  // The attempt that produced the current live subscription.
+  private liveAttempt: SubscribeAttempt | null = null;
+  private attemptCounter = 0;
+  private retired = new Set<string>();
   private epoch: ProjectionEpoch | null = null;
   private entities = new Map<string, E>();
   private overlays = new Map<string, O>();
   private deadline: unknown = null;
-  readonly stats: SessionStats = { applied: 0, duplicates: 0, discardedOtherSubscription: 0, gaps: 0 };
+  readonly stats: SessionStats = {
+    applied: 0,
+    duplicates: 0,
+    discardedOtherSubscription: 0,
+    gaps: 0,
+    refusedSnapshots: 0,
+  };
 
   constructor(
     private readonly surface: Surface,
@@ -73,11 +98,15 @@ export class ProjectionSession<E extends EntityKey, O = unknown> {
     return this.subscriptionId;
   }
 
-  // An authenticated subscribe is in flight; the next snapshot starts the new
-  // subscription.
-  subscribing(): void {
-    if (this.sealed) return;
-    this.awaitingSnapshot = true;
+  // An authenticated subscribe has just been sent. Only the snapshot answering
+  // this attempt may start the new subscription; any earlier attempt is void.
+  // Returns null once sealed: a terminal session never subscribes again.
+  subscribing(): SubscribeAttempt | null {
+    if (this.sealed) return null;
+    this.retireCurrent();
+    this.attemptCounter += 1;
+    this.pendingAttempt = this.attemptCounter;
+    return this.pendingAttempt;
   }
 
   // Section 4: a snapshot atomically replaces all state for its subscription
@@ -85,12 +114,26 @@ export class ProjectionSession<E extends EntityKey, O = unknown> {
   // every overlay from the old subscription (section 7) and, with a successful
   // subscribe, is the only thing that cancels the stale-display deadline
   // (section 10).
-  onSnapshot(frame: SnapshotFrame<E>): void {
-    if (this.sealed || !this.awaitingSnapshot) return;
+  //
+  // A snapshot is accepted only for the outstanding attempt and only for a
+  // subscription ID that has never been retired. A delayed copy of an old
+  // snapshot therefore cannot restore an old subscription or cancel the
+  // deadline, whether it arrives before or after the next subscribe.
+  onSnapshot(frame: SnapshotFrame<E>, attempt: SubscribeAttempt | null): void {
+    if (this.sealed) return;
+    if (
+      this.pendingAttempt === null ||
+      attempt !== this.pendingAttempt ||
+      this.retired.has(frame.subscriptionId)
+    ) {
+      this.stats.refusedSnapshots += 1;
+      return;
+    }
     const epoch = this.sink.openProjection();
     if (epoch === null) return;
     this.epoch = epoch;
-    this.awaitingSnapshot = false;
+    this.liveAttempt = this.pendingAttempt;
+    this.pendingAttempt = null;
     this.subscriptionId = frame.subscriptionId;
     this.lastSeq = 0;
     this.entities = new Map(frame.entities.map((e) => [entityKey(e), e]));
@@ -115,8 +158,8 @@ export class ProjectionSession<E extends EntityKey, O = unknown> {
     }
     if (frame.seq !== this.lastSeq + 1) {
       this.stats.gaps += 1;
-      this.awaitingSnapshot = true;
-      this.subscriptionId = null;
+      // The transport sends a new subscribe and reports it via subscribing().
+      this.retireCurrent();
       this.sink.setStatus('resyncing');
       this.sink.requestResubscribe('sequence-gap');
       return;
@@ -150,8 +193,7 @@ export class ProjectionSession<E extends EntityKey, O = unknown> {
     if (action.kind === 'enter-state' && action.state === 'version-mismatch') {
       this.terminate('version-mismatch');
     } else if (action.kind === 'enter-state' && action.state === 'resyncing') {
-      this.subscriptionId = null;
-      this.awaitingSnapshot = true;
+      this.retireCurrent();
       this.sink.setStatus('resyncing');
       this.sink.requestResubscribe('state-lost');
     }
@@ -167,8 +209,12 @@ export class ProjectionSession<E extends EntityKey, O = unknown> {
       this.terminate(reason === 'revoked' ? 'revoked' : 'version-mismatch');
       return;
     }
-    this.subscriptionId = null;
-    this.awaitingSnapshot = true;
+    // The server sends the replacement on the same authenticated transport, so
+    // the live attempt (or the subscribe still in flight on it) may answer it,
+    // but only with a new subscription ID.
+    const attempt = this.liveAttempt ?? this.pendingAttempt;
+    this.retireCurrent();
+    this.pendingAttempt = attempt;
     if (reason === 'scene-changed' || reason === 'grant-changed') {
       this.entities = new Map();
       this.epoch = null;
@@ -194,10 +240,11 @@ export class ProjectionSession<E extends EntityKey, O = unknown> {
   // Section 10: a table that loses its transport starts a monotonic deadline.
   // If no authenticated subscribe and replacement snapshot arrive in time, it
   // clears its projection and locks, even while transport retries continue.
+  // Losing the transport voids every outstanding attempt: nothing is accepted
+  // until a new authenticated subscribe begins.
   onTransportLost(): void {
     if (this.sealed) return;
-    this.subscriptionId = null;
-    this.awaitingSnapshot = true;
+    this.retireCurrent();
     this.sink.setStatus('reconnecting');
     if (this.surface === 'table' && this.deadline === null) {
       this.deadline = this.clock.setTimeout(() => this.expireDeadline(), STALE_DISPLAY_DEADLINE_MS);
@@ -206,7 +253,7 @@ export class ProjectionSession<E extends EntityKey, O = unknown> {
 
   private expireDeadline(): void {
     this.deadline = null;
-    if (this.sealed || !this.awaitingSnapshot) return;
+    if (this.sealed || this.subscriptionId !== null) return;
     this.entities = new Map();
     this.epoch = null;
     this.dropOverlays(() => true);
@@ -222,14 +269,27 @@ export class ProjectionSession<E extends EntityKey, O = unknown> {
   private terminate(status: ConnectionStatus): void {
     this.sealed = true;
     this.cancelDeadline();
-    this.subscriptionId = null;
-    this.awaitingSnapshot = false;
+    this.retireCurrent();
     this.entities = new Map();
     this.epoch = null;
     this.dropOverlays(() => true);
     this.sink.sealProjection();
     this.sink.stopRetrying();
     this.sink.setStatus(status);
+  }
+
+  // Retire the live subscription ID (if any) and void every attempt.
+  private retireCurrent(): void {
+    if (this.subscriptionId !== null) {
+      this.retired.add(this.subscriptionId);
+      if (this.retired.size > RETIRED_ID_MEMORY) {
+        const oldest = this.retired.values().next().value;
+        if (oldest !== undefined) this.retired.delete(oldest);
+      }
+    }
+    this.subscriptionId = null;
+    this.pendingAttempt = null;
+    this.liveAttempt = null;
   }
 
   private dropOverlays(match: (commandId: string) => boolean): void {

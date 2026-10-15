@@ -86,7 +86,7 @@ beforeEach(() => {
 describe('snapshot and patch sequencing (section 6)', () => {
   it('applies a snapshot then contiguous patches', () => {
     const t = setup();
-    t.session.subscribing();
+    t.transport.subscribe(t.session);
     t.transport.push(snapshot('s1', [tok('a')]), patch('s1', 1, [tok('b')]), patch('s1', 2, [tok('a', 5)]));
     t.transport.deliver(t.session);
     expect(t.status()).toBe('live');
@@ -96,7 +96,7 @@ describe('snapshot and patch sequencing (section 6)', () => {
 
   it('ignores duplicated frames', () => {
     const t = setup();
-    t.session.subscribing();
+    t.transport.subscribe(t.session);
     t.transport.push(snapshot('s1', []), patch('s1', 1, [tok('a')]), patch('s1', 2, [tok('b')]));
     t.transport.deliver(t.session, { duplicate: true });
     expect(t.ids()).toEqual(['a', 'b']);
@@ -105,7 +105,7 @@ describe('snapshot and patch sequencing (section 6)', () => {
 
   it('discards a frame for another subscription', () => {
     const t = setup();
-    t.session.subscribing();
+    t.transport.subscribe(t.session);
     t.transport.push(snapshot('s1', []), patch('old', 1, [tok('ghost')]));
     t.transport.deliver(t.session);
     expect(t.ids()).toEqual([]);
@@ -114,13 +114,19 @@ describe('snapshot and patch sequencing (section 6)', () => {
 
   it('a gap enters resyncing without applying, then a new snapshot recovers', () => {
     const t = setup();
-    t.session.subscribing();
+    t.transport.subscribe(t.session);
     t.transport.push(snapshot('s1', [tok('a')]), patch('s1', 1, [tok('b')]), patch('s1', 3, [tok('c')]));
     t.transport.deliver(t.session);
     expect(t.status()).toBe('resyncing');
     expect(t.ids()).toEqual(['a', 'b']); // seq 3 not applied
     expect(t.transport.resubscribeRequests).toEqual(['sequence-gap']);
-    t.transport.push(patch('s1', 2, [tok('late')]), snapshot('s2', [tok('fresh')]));
+    // Nothing is accepted until the transport actually sends the new subscribe.
+    t.transport.push(snapshot('s2', [tok('early')]));
+    t.transport.deliver(t.session);
+    expect(t.ids()).toEqual(['a', 'b']);
+    expect(t.session.stats.refusedSnapshots).toBe(1);
+    t.transport.subscribe(t.session);
+    t.transport.push(patch('s1', 2, [tok('late')]), snapshot('s3', [tok('fresh')]));
     t.transport.deliver(t.session);
     expect(t.ids()).toEqual(['fresh']); // late old-subscription frame ignored
     expect(t.status()).toBe('live');
@@ -128,7 +134,7 @@ describe('snapshot and patch sequencing (section 6)', () => {
 
   it('reordered frames converge or visibly resync, never partially apply', () => {
     const t = setup();
-    t.session.subscribing();
+    t.transport.subscribe(t.session);
     t.transport.push(snapshot('s1', []), patch('s1', 1, [tok('a')]), patch('s1', 2, [tok('b')]));
     t.transport.deliver(t.session, { order: [0, 2, 1] });
     expect(t.status()).toBe('resyncing');
@@ -137,7 +143,7 @@ describe('snapshot and patch sequencing (section 6)', () => {
 
   it('a snapshot is never merged with earlier state', () => {
     const t = setup();
-    t.session.subscribing();
+    t.transport.subscribe(t.session);
     t.transport.push(snapshot('s1', [tok('a'), tok('b')]));
     t.transport.deliver(t.session);
     t.session.onResyncRequired('reconnected');
@@ -150,7 +156,7 @@ describe('snapshot and patch sequencing (section 6)', () => {
 describe('command completion (section 7, criterion 15)', () => {
   function live() {
     const t = setup();
-    t.session.subscribing();
+    t.transport.subscribe(t.session);
     t.transport.push(snapshot('s1', [tok('a')]));
     t.transport.deliver(t.session);
     t.session.beginCommand('c1', 'move a');
@@ -219,7 +225,7 @@ describe('command completion (section 7, criterion 15)', () => {
 describe('resync reasons (section 3, criterion 16)', () => {
   it.each(RESYNC_REASONS)('handles %s', (reason) => {
     const t = setup();
-    t.session.subscribing();
+    t.transport.subscribe(t.session);
     t.transport.push(snapshot('s1', [tok('a')]));
     t.transport.deliver(t.session);
     t.session.onResyncRequired(reason);
@@ -254,7 +260,7 @@ describe('bootstrap rejections (section 1, criterion 16)', () => {
 
   it.each(BOOTSTRAP_REJECTION_REASONS)('%s clears, seals and stops retrying', (reason) => {
     const t = setup('table');
-    t.session.subscribing();
+    t.transport.subscribe(t.session);
     t.transport.push(snapshot('s1', [tok('a')]));
     t.transport.deliver(t.session);
     t.session.onBootstrapRejected(reason);
@@ -269,7 +275,7 @@ describe('bootstrap rejections (section 1, criterion 16)', () => {
 describe('table stale-display deadline (section 10, criterion 11)', () => {
   function liveTable(surface: Surface = 'table') {
     const t = setup(surface);
-    t.session.subscribing();
+    t.transport.subscribe(t.session);
     t.transport.push(snapshot('s1', [tok('a')]));
     t.transport.deliver(t.session);
     return t;
@@ -289,7 +295,7 @@ describe('table stale-display deadline (section 10, criterion 11)', () => {
   it('a reconnect without a replacement snapshot does not cancel the deadline', () => {
     const t = liveTable();
     t.session.onTransportLost();
-    t.session.subscribing(); // transport back, subscribe sent, no snapshot yet
+    t.transport.subscribe(t.session); // transport back, subscribe sent, no snapshot yet
     t.time.advance(STALE_DISPLAY_DEADLINE_MS);
     expect(t.scene()).toBeNull();
     expect(t.status()).toBe('offline-locked');
@@ -299,7 +305,7 @@ describe('table stale-display deadline (section 10, criterion 11)', () => {
     const t = liveTable();
     t.session.onTransportLost();
     t.time.advance(30_000);
-    t.session.subscribing();
+    t.transport.subscribe(t.session);
     t.transport.push(snapshot('s2', [tok('b')]));
     t.transport.deliver(t.session);
     t.time.advance(STALE_DISPLAY_DEADLINE_MS);
@@ -311,7 +317,7 @@ describe('table stale-display deadline (section 10, criterion 11)', () => {
     const t = liveTable();
     t.session.onTransportLost();
     t.time.advance(STALE_DISPLAY_DEADLINE_MS);
-    t.session.subscribing();
+    t.transport.subscribe(t.session);
     t.transport.push(snapshot('s2', [tok('b')]));
     t.transport.deliver(t.session);
     expect(t.ids()).toEqual(['b']);
@@ -333,6 +339,108 @@ describe('table stale-display deadline (section 10, criterion 11)', () => {
     t.session.onBootstrapRejected('grant-revoked');
     expect(t.scene()).toBeNull();
     expect(t.status()).toBe('revoked');
+  });
+});
+
+describe('old snapshots cannot revive a retired subscription (sections 6 and 10)', () => {
+  function liveTable() {
+    const t = setup('table');
+    const first = t.transport.subscribe(t.session);
+    t.transport.push(snapshot('s-old', [tok('a')]));
+    t.transport.deliver(t.session);
+    return { t, first };
+  }
+
+  it('Codex repro: a delayed old snapshot after transport loss is refused', () => {
+    const { t, first } = liveTable();
+    t.session.onTransportLost();
+    t.transport.push({ ...snapshot('s-old', [tok('a')]), attempt: first });
+    t.transport.deliver(t.session);
+    expect(t.status()).toBe('reconnecting');
+    expect(t.session.currentSubscriptionId).toBeNull();
+    expect(t.session.stats.refusedSnapshots).toBe(1);
+    t.time.advance(STALE_DISPLAY_DEADLINE_MS);
+    expect(t.scene()).toBeNull();
+    expect(t.status()).toBe('offline-locked');
+  });
+
+  it('a delayed old snapshot is refused after a new subscribe begins and cannot cancel the deadline', () => {
+    const { t, first } = liveTable();
+    t.session.onTransportLost();
+    t.transport.subscribe(t.session);
+    // Same retired subscription ID, even if it arrives on the new attempt.
+    t.transport.push(snapshot('s-old', [tok('a')]));
+    // And a frame still carrying the previous attempt's token.
+    t.transport.push({ ...snapshot('s-other', [tok('x')]), attempt: first });
+    t.transport.deliver(t.session);
+    expect(t.session.currentSubscriptionId).toBeNull();
+    expect(t.session.stats.refusedSnapshots).toBe(2);
+    t.time.advance(STALE_DISPLAY_DEADLINE_MS);
+    expect(t.scene()).toBeNull();
+    expect(t.status()).toBe('offline-locked');
+  });
+
+  it('a genuine replacement snapshot for the new subscribe still recovers', () => {
+    const { t } = liveTable();
+    t.session.onTransportLost();
+    t.transport.subscribe(t.session);
+    t.transport.push(snapshot('s-old', [tok('a')]), snapshot('s-new', [tok('b')]));
+    t.transport.deliver(t.session);
+    expect(t.ids()).toEqual(['b']);
+    expect(t.status()).toBe('live');
+    t.time.advance(STALE_DISPLAY_DEADLINE_MS);
+    expect(t.status()).toBe('live');
+  });
+
+  it('only one snapshot answers a subscribe; a second is refused', () => {
+    const { t } = liveTable();
+    t.transport.push(snapshot('s-dup', [tok('z')]));
+    t.transport.deliver(t.session);
+    expect(t.session.currentSubscriptionId).toBe('s-old');
+    expect(t.ids()).toEqual(['a']);
+  });
+
+  it.each(['reconnected', 'scene-changed', 'grant-changed'] as const)(
+    'after resync %s, the old subscription snapshot is refused and a new one recovers',
+    (reason) => {
+      const { t } = liveTable();
+      t.session.onResyncRequired(reason);
+      t.transport.push(snapshot('s-old', [tok('a')]));
+      t.transport.deliver(t.session);
+      expect(t.session.currentSubscriptionId).toBeNull();
+      expect(t.status()).toBe('resyncing');
+      t.transport.push(snapshot('s-new', [tok('b')]));
+      t.transport.deliver(t.session);
+      expect(t.ids()).toEqual(['b']);
+      expect(t.status()).toBe('live');
+    },
+  );
+
+  it('a resync on a transport that is then lost voids the pending replacement', () => {
+    const { t, first } = liveTable();
+    t.session.onResyncRequired('reconnected');
+    t.session.onTransportLost();
+    t.transport.push({ ...snapshot('s-new', [tok('b')]), attempt: first });
+    t.transport.deliver(t.session);
+    expect(t.session.currentSubscriptionId).toBeNull();
+    t.time.advance(STALE_DISPLAY_DEADLINE_MS);
+    expect(t.status()).toBe('offline-locked');
+  });
+
+  it('a resync that arrives before the first snapshot keeps the in-flight subscribe valid', () => {
+    const t = setup('table');
+    t.transport.subscribe(t.session);
+    t.session.onResyncRequired('reconnected');
+    t.transport.push(snapshot('s1', [tok('a')]));
+    t.transport.deliver(t.session);
+    expect(t.ids()).toEqual(['a']);
+    expect(t.status()).toBe('live');
+  });
+
+  it('a sealed session refuses to start a new attempt', () => {
+    const { t } = liveTable();
+    t.session.onBootstrapRejected('grant-revoked');
+    expect(t.transport.subscribe(t.session)).toBeNull();
   });
 });
 
