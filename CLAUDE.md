@@ -29,7 +29,13 @@ python tools/check_templates.py   # Jinja parse check (CI runs this) — run aft
   work over, and a report with real test numbers when finishing.
 
 - **No emojis** in code, UI strings, comments, or commit messages unless explicitly asked.
-- **Commit/push only when the user asks.** Never commit directly on `main` — branch off it; the user decides when to merge/push. Co-author trailer on commits:
+- **When to commit, push and merge.** Never commit directly on `main`; branch off it, one branch
+  per task. For a handoff task, once the reviewer accepts it, commit, push, open the PR and merge
+  it with `gh pr merge <n> --merge` as soon as **every** CI job is green, without waiting to be
+  asked (standing rule from the user, 2026-10-15; details in `docs/handoff/PROTOCOL.md` step 6).
+  Never merge while a job is running or red, and never use `--auto`: the repo has no required
+  checks, so it merges at once. Docs-only PRs merge once `changes` passes. For anything outside a
+  handoff task, commit/push only when the user asks. Co-author trailer on commits:
   `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`
 - **Verify prod-facing fixes on Railway**, not just locally — local-green has missed prod-only failures before.
 - This is a **single-GM, in-person** tool (4 players + 1 GM). Snappiness with that table + tracker↔sheet sync is the priority.
