@@ -4,12 +4,16 @@
 
 {% block extra_head %}
 <style>
-    /* Masonry layout — variable-height cards flow into 1/2/3/4 columns. */
-    .masonry { column-count: 1; column-gap: 1rem; }
-    @media (min-width: 768px)  { .masonry { column-count: 2; } }
-    @media (min-width: 1280px) { .masonry { column-count: 3; } }
-    @media (min-width: 1536px) { .masonry { column-count: 4; } }
-    .masonry-item { break-inside: avoid; margin-bottom: 1rem; }
+    .generator-page [hidden] { display: none; }
+
+    /* Revision A: row-order cards stay predictable as the column count changes. */
+    .masonry {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 18px;
+        align-items: start;
+    }
+    .masonry-item { margin-bottom: 0; min-width: 0; }
 
     /* Generated-content typography. The legacy version had bold in teal,
        italics muted, and undifferentiated body — every card looked like
@@ -17,22 +21,22 @@
        weight, body is base-200 for contrast, hints/flavor stay muted,
        and lists indent properly so the GM can skim a result in a beat. */
     .gen-content {
-        font-size: 12.5px;
-        line-height: 1.55;
-        color: #d8d8e6;        /* base-200 */
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--text-on-dark-2);
     }
     .gen-content > p:first-child > strong:first-child,
     .gen-content > b:first-child,
     .gen-content > strong:first-child {
         display: inline-block;
-        font-family: 'Cinzel', serif;
+        font-family: var(--font-display);
         font-size: 13px;
         letter-spacing: 0.02em;
-        color: #ededf4;        /* base-100 — headline pop */
+        color: var(--text-on-dark);
         margin-bottom: 2px;
     }
-    .gen-content b, .gen-content strong { color: #e0b65a; font-weight: 700; }
-    .gen-content em, .gen-content i { color: #9494b0; font-style: italic; }
+    .gen-content b, .gen-content strong { color: var(--gilt-300); font-weight: 700; }
+    .gen-content em, .gen-content i { color: var(--text-on-dark-3); font-style: italic; }
     .gen-content ul { list-style-type: disc; padding-left: 1.1rem; margin: 0.35rem 0; }
     .gen-content li { margin-bottom: 0.15rem; }
     .gen-content hr { border: none; border-top: 1px dashed rgba(255,255,255,0.08); margin: 0.5rem 0; }
@@ -51,101 +55,99 @@
     .gen-content.rerolling { animation: gen-pulse 0.7s ease-in-out infinite; }
 
     .gen-card {
-        background: #191920;
+        background: var(--bg-card);
         border: 1px solid rgba(255,255,255,0.06);
-        border-radius: 10px;
+        border-radius: 4px;
         overflow: hidden;
-        transition: border-color 0.2s, transform 0.15s;
+        transition: border-color 0.2s;
     }
-    .gen-card:hover {
-        border-color: rgba(224,182,90,0.22);
-        transform: translateY(-1px);
-    }
+    .gen-card:hover { border-color: rgba(224,182,90,0.22); }
     .gen-card-header {
-        padding: 9px 12px;
+        padding: 12px;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        background: #24242e;
+        gap: 8px;
+        flex-wrap: wrap;
+        background: transparent;
         border-bottom: 1px solid rgba(255,255,255,0.05);
     }
     .gen-card-title {
-        font-family: 'Cinzel', serif;
-        font-size: 12px;
+        font-family: var(--font-display);
+        font-size: 14px;
         font-weight: 700;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        color: #e0b65a;
+        letter-spacing: 0.02em;
+        color: var(--gilt-300);
         display: flex;
         align-items: center;
         gap: 8px;
+        cursor: pointer;
     }
-    .gen-card-title .glyph {
-        color: #6b6b8a;
-        font-size: 14px;
-        line-height: 1;
-        width: 14px;
-        text-align: center;
-    }
+    .gen-card-title .glyph { display: none; }
     .gen-card-body { padding: 11px 12px 12px; }
 
-    .reroll-btn, .pin-btn {
+    .gen-card-actions {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        flex-wrap: wrap;
+    }
+    .copy-btn, .reroll-btn, .pin-btn {
         background: transparent;
         border: 1px solid transparent;
         border-radius: 4px;
-        padding: 3px 6px;
+        min-height: 32px;
+        padding: 5px 7px;
         cursor: pointer;
-        opacity: 0.55;
         transition: opacity 0.15s, border-color 0.15s, color 0.15s;
-        font-size: 14px;
-        line-height: 1;
-        color: #b8b8cc;
+        font: 600 11px/1.4 var(--font-ui);
+        color: var(--text-on-dark-2);
     }
-    .reroll-btn:hover, .pin-btn:hover {
-        opacity: 1;
+    .copy-btn:hover, .reroll-btn:hover, .pin-btn:hover {
         border-color: rgba(224,182,90,0.25);
-        color: #e0b65a;
+        color: var(--gilt-300);
     }
     .pin-btn.pinned {
-        opacity: 0.4;
-        color: #e0b65a;
+        opacity: 0.55;
+        color: var(--gilt-300);
         cursor: default;
         pointer-events: none;
     }
 
     /* Pinned section */
     .pinned-section {
-        background: #191920;
-        border: 1px solid rgba(224,182,90,0.12);
-        border-radius: 10px;
+        background: transparent;
+        border: 0;
+        border-top: 1px solid var(--border-rule);
+        border-bottom: 1px solid var(--border-rule);
+        border-radius: 0;
         margin-bottom: 1.25rem;
         overflow: hidden;
     }
     .pinned-header {
-        padding: 10px 14px;
+        padding: 10px 0;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        background: #24242e;
+        background: transparent;
         border-bottom: 1px solid rgba(255,255,255,0.05);
         cursor: pointer;
         user-select: none;
     }
-    .pinned-header:hover { background: #2a2a36; }
     .pinned-title {
-        font-family: 'Cinzel', serif;
+        font-family: var(--font-display);
         font-size: 12px;
         font-weight: 700;
         letter-spacing: 0.06em;
         text-transform: uppercase;
-        color: #e0b65a;
+        color: var(--gilt-300);
         display: flex;
         align-items: center;
         gap: 8px;
     }
     .pinned-toggle-icon {
         font-size: 11px;
-        color: #6b6b8a;
+        color: var(--text-on-dark-3);
         transition: transform 0.2s;
     }
     .pinned-section.expanded .pinned-toggle-icon { transform: rotate(90deg); }
@@ -159,19 +161,20 @@
         align-items: flex-start;
         gap: 10px;
         padding: 8px 10px;
-        border-radius: 6px;
-        border: 1px solid rgba(255,255,255,0.04);
+        border-radius: 0;
+        border: 0;
+        border-bottom: 1px solid rgba(201,163,78,0.14);
         margin-bottom: 8px;
-        background: rgba(255,255,255,0.015);
+        background: transparent;
     }
     .pinned-item:last-child { margin-bottom: 0; }
     .pinned-item-type {
-        font-family: 'Cinzel', serif;
+        font-family: var(--font-display);
         font-size: 10px;
         font-weight: 700;
         letter-spacing: 0.04em;
         text-transform: uppercase;
-        color: #6b6b8a;
+        color: var(--text-on-dark-3);
         min-width: 80px;
         flex-shrink: 0;
         padding-top: 2px;
@@ -184,11 +187,13 @@
     .pinned-remove-btn {
         background: transparent;
         border: none;
-        color: #6b6b8a;
+        color: var(--text-on-dark-3);
         cursor: pointer;
         font-size: 14px;
         line-height: 1;
         padding: 2px 4px;
+        min-width: 32px;
+        min-height: 32px;
         opacity: 0.6;
         transition: opacity 0.15s, color 0.15s;
         flex-shrink: 0;
@@ -200,77 +205,123 @@
         display: flex;
         align-items: center;
         gap: 8px;
-        padding: 7px 10px 7px 12px;
-        border-radius: 8px;
-        border: 1px solid rgba(255,255,255,0.08);
-        background: #191920;
+        padding: 0;
+        border: 0;
+        background: transparent;
     }
     .gen-toolbar-chip label {
         font-size: 10px;
         text-transform: uppercase;
         letter-spacing: 0.08em;
-        color: #6b6b8a;
+        color: var(--text-on-dark-3);
         font-weight: 700;
     }
     .gen-toolbar-input {
-        background: #0d0d12;
+        min-height: 34px;
+        background: var(--bg-page);
         border: 1px solid rgba(255,255,255,0.10);
-        color: #d8d8e6;
+        color: var(--text-on-dark-2);
         font-size: 12px;
         padding: 4px 8px;
         border-radius: 4px;
     }
     .gen-toolbar-input:focus { outline: none; border-color: rgba(224,182,90,0.35); }
 
+    .generator-header { display: block; }
+    .gen-context-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
+    .generator-hint { margin: 8px 0 0; color: var(--text-on-dark-3); font: 12px/1.5 var(--font-ui); }
+    .generator-top-action {
+        min-height: 34px;
+        padding: 6px 14px;
+        border-radius: 4px;
+        background: transparent;
+        color: var(--gilt-200);
+        border: 1px solid rgba(201,163,78,0.25);
+        font: 700 12px/1.4 var(--font-ui);
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        cursor: pointer;
+    }
+    .generator-top-action:hover { background: rgba(201,163,78,0.10); border-color: var(--gilt-300); }
+
     /* ── Rapid Fire bar: one-tap, one-line generators for live play ── */
-    .rapid-bar { background:#191920; border:1px solid rgba(224,182,90,0.14); border-radius:10px; margin-bottom:1.25rem; overflow:hidden; }
-    .rapid-bar-head { display:flex; align-items:center; gap:10px; padding:9px 14px; background:linear-gradient(180deg,#25303a,#20262e); border-bottom:1px solid rgba(255,255,255,0.05); }
-    .rapid-bar-title { font-family:'Cinzel',serif; font-size:12px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:#e0b65a; }
-    .rapid-bar-hint { font-size:10.5px; color:#6b6b8a; flex:1; }
-    .rapid-clear { font-size:10px; text-transform:uppercase; letter-spacing:0.05em; color:#8a8aa2; background:transparent; border:1px solid rgba(255,255,255,0.1); border-radius:5px; padding:3px 9px; cursor:pointer; }
+    .rapid-bar { background:transparent; border:0; border-top:1px solid var(--border-rule); border-bottom:1px solid var(--border-rule); border-radius:0; margin-bottom:1.25rem; overflow:hidden; }
+    .rapid-bar-head { display:flex; align-items:center; gap:10px; padding:10px 0; background:transparent; border-bottom:1px solid rgba(255,255,255,0.05); }
+    .rapid-bar-title { font-family:var(--font-display); font-size:12px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--gilt-300); }
+    .rapid-bar-hint { font-size:10.5px; color:var(--text-on-dark-3); flex:1; }
+    .rapid-clear { min-height:32px; font-size:10px; text-transform:uppercase; letter-spacing:0.05em; color:#8a8aa2; background:transparent; border:1px solid rgba(255,255,255,0.1); border-radius:5px; padding:3px 9px; cursor:pointer; }
     .rapid-clear:hover { color:#e06060; border-color:rgba(224,96,96,0.3); }
-    .rapid-buttons { display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:10px 14px; }
-    .rapid-group-label { font-size:9px; text-transform:uppercase; letter-spacing:0.08em; color:#5a5a74; font-weight:700; margin:0 2px 0 10px; }
+    .rapid-buttons { display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:12px 0; }
+    .rapid-group-label { font-size:9px; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-on-dark-3); font-weight:700; margin:0 2px 0 10px; }
     .rapid-group-label:first-child { margin-left:0; }
-    .rapid-btn { font-family:'Inter',sans-serif; font-size:11.5px; font-weight:600; color:#cfe9e9; background:rgba(224,182,90,0.08); border:1px solid rgba(224,182,90,0.22); border-radius:6px; padding:5px 11px; cursor:pointer; transition:background 0.12s, border-color 0.12s, transform 0.12s; }
+    .rapid-btn { min-height:32px; font-family:var(--font-ui); font-size:11.5px; font-weight:600; color:var(--text-on-dark-2); background:rgba(224,182,90,0.08); border:1px solid rgba(224,182,90,0.22); border-radius:4px; padding:5px 11px; cursor:pointer; transition:background 0.12s, border-color 0.12s, transform 0.12s; }
     .rapid-btn:hover { background:rgba(224,182,90,0.18); border-color:rgba(224,182,90,0.5); transform:translateY(-1px); }
     .rapid-btn:active { transform:translateY(0); }
-    .rapid-results { padding:0 14px 12px; display:flex; flex-direction:column; gap:6px; }
+    .rapid-results { padding:0 0 12px; display:flex; flex-direction:column; gap:6px; }
     .rapid-results:empty { display:none; }
     .rapid-result { display:flex; align-items:flex-start; gap:8px; padding:7px 10px; border-radius:6px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05); }
     .rapid-result.rapid-new { animation:rapid-flash 0.6s ease-out; }
     @keyframes rapid-flash { from { background:rgba(224,182,90,0.16); } to { background:rgba(255,255,255,0.02); } }
     .rapid-result-text { flex:1; min-width:0; font-size:12.5px; line-height:1.5; }
-    .rapid-copy, .rapid-dismiss { background:transparent; border:none; cursor:pointer; flex-shrink:0; font-size:13px; line-height:1; padding:2px 4px; opacity:0.55; color:#b8b8cc; }
+    .rapid-copy, .rapid-dismiss { min-width:32px; min-height:32px; background:transparent; border:none; cursor:pointer; flex-shrink:0; font-size:13px; line-height:1; padding:2px 4px; opacity:0.55; color:#b8b8cc; }
     .rapid-copy:hover { opacity:1; color:#e0b65a; }
     .rapid-dismiss:hover { opacity:1; color:#e06060; }
 
     /* ── Category filter chips ── */
     .gen-filter { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:1rem; }
-    .gen-filter-chip { font-family:'Inter',sans-serif; font-size:11px; font-weight:600; color:#8a8aa2; background:transparent; border:1px solid rgba(255,255,255,0.1); border-radius:20px; padding:4px 13px; cursor:pointer; transition:color 0.12s, background 0.12s, border-color 0.12s; }
+    .gen-filter-chip { min-height:32px; font-family:var(--font-ui); font-size:11px; font-weight:600; color:#8a8aa2; background:transparent; border:1px solid rgba(255,255,255,0.1); border-radius:20px; padding:4px 13px; cursor:pointer; transition:color 0.12s, background 0.12s, border-color 0.12s; }
     .gen-filter-chip:hover { color:#cfe9e9; border-color:rgba(224,182,90,0.3); }
     .gen-filter-chip.active { color:#0d0d12; background:#e0b65a; border-color:#e0b65a; }
     .masonry-item.gen-hidden { display:none; }
 
-    /* ── Per-card copy button + collapse ── */
-    .copy-btn { background:transparent; border:1px solid transparent; border-radius:4px; padding:3px 6px; cursor:pointer; opacity:0.55; transition:opacity 0.15s, border-color 0.15s, color 0.15s; font-size:13px; line-height:1; color:#b8b8cc; }
-    .copy-btn:hover { opacity:1; border-color:rgba(224,182,90,0.25); color:#e0b65a; }
+    /* ── Per-card collapse ── */
     .collapse-caret { font-size:9px; color:#6b6b8a; transition:transform 0.18s; display:inline-block; }
     .gen-card.collapsed .collapse-caret { transform:rotate(-90deg); }
     .gen-card.collapsed .gen-card-body { display:none; }
+    :is(.generator-page button, .generator-page [role="button"]):focus-visible {
+        outline: 2px solid var(--gilt-300);
+        outline-offset: 3px;
+    }
+
+    @media (max-width: 1000px) {
+        .masonry { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 600px) {
+        .masonry { grid-template-columns: minmax(0, 1fr); }
+        .rapid-bar-head { flex-wrap: wrap; }
+        .pinned-item { flex-wrap: wrap; }
+        .pinned-item-type { min-width: 0; }
+    }
+
+    .masonry[hidden],
+    .gen-card-header[hidden],
+    .gen-card-title[hidden],
+    .gen-card-actions[hidden],
+    .pinned-header[hidden],
+    .pinned-title[hidden],
+    .pinned-section.expanded .pinned-body[hidden],
+    .pinned-item[hidden],
+    .gen-toolbar-chip[hidden],
+    .generator-header[hidden],
+    .gen-context-toolbar[hidden],
+    .rapid-bar-head[hidden],
+    .rapid-buttons[hidden],
+    .rapid-results[hidden],
+    .rapid-result[hidden],
+    .gen-filter[hidden] { display: none; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="max-w-7xl mx-auto">
+<div class="generator-page max-w-7xl mx-auto">
 
     {# ── Toolbar ── #}
-    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-5 pb-4 border-b border-white/[0.06]">
+    <div class="generator-header mb-5 pb-4 border-b border-white/[0.06]">
         <div>
             <h1 class="font-display text-accent-300 text-xl tracking-wide mb-1">Generators</h1>
             <p class="text-base-500 text-xs">Random PF2e content scaled to party level &amp; biome. Click any reroll &mdash; or hit <strong style="color:#b8b8cc;">Reroll All</strong> to refresh the whole table.</p>
         </div>
-        <div class="flex items-center gap-2 flex-wrap">
+        <div class="gen-context-toolbar">
             <div class="gen-toolbar-chip">
                 <label for="gen-level">Level</label>
                 <input type="number" id="gen-level" value="{{ current_level }}" min="1" max="20" onchange="_genUpdateUrl()" class="gen-toolbar-input w-12 text-center font-mono">
@@ -284,13 +335,14 @@
                     {% endfor %}
                 </select>
             </div>
-            <button onclick="rerollAll()" class="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors" style="background:var(--gilt-300); color:#1a1408; border:1px solid var(--gilt-200);" onmouseover="this.style.background='var(--gilt-200)'" onmouseout="this.style.background='var(--gilt-300)'">
+            <button onclick="rerollAll()" class="generator-top-action flex items-center gap-1.5">
                 <span id="all-dice-icon" class="text-base">&#x2684;</span> Reroll All
             </button>
-            <button onclick="copyAllCards(this)" class="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors" style="background:transparent; color:var(--gilt-200); border:1px solid var(--gilt-300);" onmouseover="this.style.background='rgba(201,163,78,0.10)'" onmouseout="this.style.background='transparent'" title="Copy every visible card as text for your session notes">
+            <button onclick="copyAllCards(this)" class="generator-top-action" title="Copy every visible card as text for your session notes">
                 Copy Table
             </button>
         </div>
+        <p class="generator-hint">Changing level or biome rerolls all 19 results. Pin anything you want to keep first.</p>
     </div>
 
     {# ── Rapid Fire bar — one-tap, one-line generators for live play ── #}
@@ -330,10 +382,10 @@
 
     {# ── Pinned Section (collapsed by default) ── #}
     <div id="pinned-section" class="pinned-section" style="display:none;">
-        <div class="pinned-header" onclick="togglePinned()">
+        <div class="pinned-header" onclick="togglePinned()" onkeydown="togglePinnedKey(event)" role="button" tabindex="0" aria-expanded="false">
             <span class="pinned-title">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 2h10v5l-2 2v4l-3-2-3 2V9L3 7V2z"/></svg>
-                Pinned <span id="pinned-count" style="font-family:'Inter',sans-serif;font-size:10px;color:#6b6b8a;font-weight:600;">(0)</span>
+                Pinned <span id="pinned-count" style="font-family:var(--font-ui);font-size:10px;color:var(--text-on-dark-3);font-weight:600;">(0)</span>
             </span>
             <span class="pinned-toggle-icon">&#9656;</span>
         </div>
@@ -341,26 +393,21 @@
     </div>
 
     {# ── Generator Cards ──────────────────────────────────────────────
-       Ordered top-to-bottom by frequency-of-use at the table:
-         1. Combat & moment-to-moment (encounter / event / weather / hazard / puzzle)
-         2. NPCs & narrative (npc / rumor / quest)
-         3. Places (settlement / tavern / shop)
-         4. Treasure (loot / magic item / hoard)
-       Masonry packs them into 2-4 columns; first-column-first means the
-       most-used cards are immediately to the eye on page load.
+       Kept in the original frequency-of-use order. The responsive grid
+       reads left-to-right, then top-to-bottom at every column count.
     ──────────────────────────────────────────────────────────────────── #}
     <div class="masonry">
 
         {% macro gen_card(id, title, glyph, cat) %}
         <div class="masonry-item gen-card" data-cat="{{ cat }}">
             <div class="gen-card-header">
-                <span class="gen-card-title" onclick="toggleCollapse(this)" style="cursor:pointer;" title="Collapse / expand">
+                <span class="gen-card-title" onclick="toggleCollapse(this)" onkeydown="toggleCollapseKey(event, this)" role="button" tabindex="0" aria-expanded="true" title="Collapse / expand">
                     <span class="collapse-caret">&#9660;</span><span class="glyph">{{ glyph | safe }}</span>{{ title }}
                 </span>
-                <span style="display:flex;gap:4px;align-items:center;">
-                    <button onclick="copyCard('{{ id }}', this)" class="copy-btn" title="Copy"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M3 11V3a1 1 0 0 1 1-1h7"/></svg></button>
-                    <button onclick="pinCard('{{ id }}', this)" class="pin-btn" title="Pin this result"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 2h10v5l-2 2v4l-3-2-3 2V9L3 7V2z"/></svg></button>
-                    <button onclick="rerollSingle('{{ id }}', this)" class="reroll-btn" title="Reroll">&#x2684;</button>
+                <span class="gen-card-actions">
+                    <button onclick="copyCard('{{ id }}', this)" class="copy-btn" title="Copy" aria-label="Copy {{ title }}">Copy</button>
+                    <button onclick="pinCard('{{ id }}', this)" class="pin-btn" title="Pin this result" aria-label="Pin {{ title }}">Pin</button>
+                    <button onclick="rerollSingle('{{ id }}', this)" class="reroll-btn" title="Reroll" aria-label="Reroll {{ title }}">Reroll</button>
                 </span>
             </div>
             <div id="content-{{ id }}" class="gen-card-body gen-content">{{ data[id] | safe }}</div>
@@ -461,8 +508,8 @@ function addRapidResult(html) {
     const row = document.createElement('div');
     row.className = 'rapid-result rapid-new';
     row.innerHTML = '<div class="rapid-result-text gen-content"></div>'
-        + '<button class="rapid-copy" title="Copy">&#10697;</button>'
-        + '<button class="rapid-dismiss" title="Dismiss">&times;</button>';
+        + '<button class="rapid-copy" title="Copy" aria-label="Copy">&#10697;</button>'
+        + '<button class="rapid-dismiss" title="Dismiss" aria-label="Dismiss">&times;</button>';
     row.querySelector('.rapid-result-text').innerHTML = html;
     row.querySelector('.rapid-copy').onclick = function() {
         copyText(row.querySelector('.rapid-result-text').innerText, this);
@@ -510,7 +557,16 @@ function copyAllCards(btn) {
 /* ── Collapse / expand a single card ── */
 function toggleCollapse(titleEl) {
     const card = titleEl.closest('.gen-card');
-    if (card) card.classList.toggle('collapsed');
+    if (!card) return;
+    const collapsed = card.classList.toggle('collapsed');
+    titleEl.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+}
+
+function toggleCollapseKey(event, titleEl) {
+    if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        toggleCollapse(titleEl);
+    }
 }
 
 /* ── Category filter ── */
@@ -565,7 +621,17 @@ async function unpinCard(pinId) {
 }
 
 function togglePinned() {
-    document.getElementById('pinned-section').classList.toggle('expanded');
+    const section = document.getElementById('pinned-section');
+    const expanded = section.classList.toggle('expanded');
+    const header = section.querySelector('.pinned-header');
+    if (header) header.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+}
+
+function togglePinnedKey(event) {
+    if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        togglePinned();
+    }
 }
 
 async function loadPinnedSection() {
@@ -586,7 +652,7 @@ async function loadPinnedSection() {
             <div class="pinned-item">
                 <span class="pinned-item-type">${_esc(p.type.replace('_', ' '))}</span>
                 <div class="pinned-item-content"><div class="gen-content">${p.content}</div></div>
-                <button class="pinned-remove-btn" onclick="unpinCard('${p.id}')" title="Remove pin">&times;</button>
+                <button class="pinned-remove-btn" onclick="unpinCard('${p.id}')" title="Remove pin" aria-label="Remove pin">&times;</button>
             </div>
         `).join('');
     } catch (e) { console.error('Load pins error:', e); }
