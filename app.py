@@ -10721,7 +10721,8 @@ def campaign_invites(cid):
                     for inv in _auth.list_active_invites(cid) if not inv.get('character_id')]
     return render_template('campaign_invites.html', campaign=camp, rows=rows,
                            members=members, gm_total=_campaigns.gm_count(camp),
-                           open_invites=open_invites)
+                           open_invites=open_invites,
+                           trash_ttl_days=_campaigns.TRASH_TTL_DAYS)
 
 
 def _require_campaign_gm(cid):
@@ -10827,8 +10828,10 @@ def campaign_set_system(cid):
 @app.route('/campaign/<cid>/delete', methods=['POST'])
 @_auth.login_required
 def campaign_delete(cid):
-    """Permanently delete a campaign and ALL its data. GM/owner or site admin,
-    guarded by typing the campaign name back as confirmation."""
+    """Move a campaign to restorable trash for TRASH_TTL_DAYS.
+
+    GM/owner or site admin, guarded by typing the campaign name back.
+    """
     u, camp = _require_campaign_gm(cid)
     if not camp:
         return jsonify({'error': 'GM only'}), 403
@@ -10841,7 +10844,7 @@ def campaign_delete(cid):
             'The live campaign could not be saved, so it was not deleted.',
             503,
         )
-    _campaigns.delete_campaign(cid)   # soft delete -> trash (restorable ~30 days)
+    _campaigns.delete_campaign(cid)   # soft delete; restoration uses TRASH_TTL_DAYS
     if session.get('active_campaign_id') == cid:
         session.pop('active_campaign_id', None)
     # The active/live campaign may have just been removed -> rebind the globals
