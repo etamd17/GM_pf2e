@@ -14,7 +14,7 @@
        (Checks / Conditions / Adversaries / Exploration) so the page reads as
        organized reference, not an undifferentiated wall of dashboard cards. */
     .gm-group { margin-bottom: 26px; }
-    .gm-group-label { font-family: 'Cinzel', serif; font-size: 11px; font-weight: 700;
+    .gm-group-label { font-family: var(--font-display); font-size: 11px; font-weight: 700;
         letter-spacing: 0.16em; text-transform: uppercase; color: var(--text-on-dark-3);
         margin: 0 0 12px; padding-left: 2px; }
     .gm-group-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -38,7 +38,7 @@
     .gm-ref-card:hover { border-color: rgba(201,163,78,0.18); }
 
     .gm-ref-header {
-        font-family: 'Cinzel', serif;
+        font-family: var(--font-display);
         font-size: 14px;
         font-weight: 700;
         letter-spacing: 0.06em;
@@ -60,7 +60,7 @@
     .gm-table { width: 100%; font-size: 13px; border-collapse: collapse; }
     .gm-table th {
         text-align: left; padding: 6px 10px;
-        font-family: 'Cinzel', serif;
+        font-family: var(--font-display);
         font-size: 10px; font-weight: 700;
         letter-spacing: 0.08em; text-transform: uppercase;
         color: var(--gilt-200);
@@ -88,7 +88,7 @@
        text RIGHT NOW, not click to expand. */
     .gm-cond { display: grid; grid-template-columns: max-content 1fr; gap: 6px 12px; align-items: baseline; }
     .gm-cond dt {
-        font-family: 'Cinzel', serif;
+        font-family: var(--font-display);
         font-weight: 700;
         font-size: 12px;
         color: var(--ruby-100);                 /* danger-300 — conditions are bad news */
@@ -120,7 +120,7 @@
         width: 100%; background: var(--bg-page); border: 1px solid rgba(255,255,255,0.10);
         color: var(--text-on-dark); border-radius: 6px;
         padding: 9px 12px; font-size: 13px;
-        font-family: 'Inter', sans-serif;
+        font-family: var(--font-ui);
     }
     .gm-search-input:focus { outline: none; border-color: rgba(201,163,78,0.4); }
     .gm-cat-btn {
@@ -129,7 +129,7 @@
         background: var(--bg-card-2); border: 1px solid rgba(255,255,255,0.08);
         color: var(--text-on-dark-2); border-radius: 6px;
         cursor: pointer; transition: all 0.15s;
-        font-family: 'Inter', sans-serif;
+        font-family: var(--font-ui);
     }
     .gm-cat-btn:hover { border-color: rgba(201,163,78,0.3); color: var(--text-on-dark); }
     .gm-cat-btn.active { background: rgba(201,163,78,0.12); border-color: rgba(201,163,78,0.4); color: var(--gilt-200); }
@@ -225,7 +225,7 @@
     .checks-drawer-handle-label {
       writing-mode: vertical-rl; text-orientation: mixed;
       transform: rotate(180deg);
-      font-family:'Cinzel',serif;
+      font-family:var(--font-display);
       font-size:13px; font-weight:700; letter-spacing:3px;
       color:var(--t-gold); text-transform:uppercase;
       user-select:none; white-space:nowrap;
@@ -248,7 +248,7 @@
       padding:14px 18px; display:flex; justify-content:space-between; align-items:center;
       border-bottom:1px solid var(--t-border); background:rgba(19,22,31,0.55); flex-shrink:0;
     }
-    .checks-drawer-head h3 { font-family:'Cinzel',serif; font-size:16px; font-weight:700; color:var(--t-gold); margin:0; }
+    .checks-drawer-head h3 { font-family:var(--font-display); font-size:16px; font-weight:700; color:var(--t-gold); margin:0; }
     .checks-drawer-head .sub { font-size:10px; color:var(--t-t3); letter-spacing:1px; text-transform:uppercase; margin-top:2px; }
     .checks-drawer-close { background:transparent; border:none; color:var(--t-t3); font-size:22px; cursor:pointer; line-height:1; padding:0 6px; }
     .checks-drawer-close:hover { color:var(--t-red-b); }
@@ -268,7 +268,7 @@
       background:rgba(26,30,41,0.5); border:1px solid var(--t-border); border-radius:8px; padding:10px 12px;
     }
     .check-card h4 {
-      font-family:'Cinzel',serif; font-size:12px; font-weight:700; letter-spacing:1px; text-transform:uppercase;
+      font-family:var(--font-display); font-size:12px; font-weight:700; letter-spacing:1px; text-transform:uppercase;
       color:var(--t-gold); margin:0 0 3px; display:flex; justify-content:space-between; align-items:baseline;
     }
     .check-card h4 .ability-tag { font-size:9px; color:var(--t-t3); font-family:var(--font-ui); font-variant-numeric:tabular-nums; font-weight:600; letter-spacing:.5px; }
@@ -298,7 +298,7 @@
 
     .situation-table { width:100%; border-collapse:collapse; font-size:12px; }
     .situation-table th {
-      text-align:left; padding:8px 10px; color:var(--t-gold); font-family:'Cinzel',serif;
+      text-align:left; padding:8px 10px; color:var(--t-gold); font-family:var(--font-display);
       font-size:11px; letter-spacing:1px; text-transform:uppercase;
       border-bottom:2px solid var(--t-border); background:rgba(19,22,31,0.5); position:sticky; top:0;
     }
@@ -312,7 +312,7 @@
 
     .dc-table { width:100%; border-collapse:collapse; font-size:13px; font-family:var(--font-ui); font-variant-numeric:tabular-nums; line-height: 1.5; }
     .dc-table th {
-      text-align:center; padding:8px 8px; color:var(--t-gold); font-family:'Cinzel',serif;
+      text-align:center; padding:8px 8px; color:var(--t-gold); font-family:var(--font-display);
       font-size:11px; letter-spacing:1px; text-transform:uppercase;
       border-bottom:2px solid var(--t-border); background:rgba(19,22,31,0.5);
     }
@@ -322,7 +322,7 @@
     .dc-table td strong { color:var(--t-t1); }
 
     .dc-card { background:rgba(26,30,41,0.5); border:1px solid var(--t-border); border-radius:8px; padding:12px 14px; margin-bottom:12px; }
-    .dc-card h4 { font-family:'Cinzel',serif; font-size:12px; letter-spacing:1px; text-transform:uppercase; color:var(--t-gold); margin:0 0 8px; }
+    .dc-card h4 { font-family:var(--font-display); font-size:12px; letter-spacing:1px; text-transform:uppercase; color:var(--t-gold); margin:0 0 8px; }
     .dc-card .dc-row { display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px dotted rgba(255,255,255,0.05); font-size:12px; }
     .dc-card .dc-row:last-child { border-bottom:none; }
     .dc-card .dc-row .k { color:var(--t-t2); }
@@ -339,6 +339,98 @@
     .gm-ref-card.ref-match { border-color: var(--gilt-300) !important; box-shadow: 0 0 0 1px var(--gilt-300), 0 0 18px rgba(201,163,78,0.18); }
     .gm-cond dt.xlink { cursor: pointer; transition: color .12s; }
     .gm-cond dt.xlink:hover { color: var(--gilt-100); text-decoration: underline dotted; }
+
+    /* Revision B: compact, topic-focused rules reference. */
+    .gm-checks-button {
+        color: var(--gilt-200);
+        font: 600 12px/1.4 var(--font-ui);
+        background: rgba(201,163,78,0.06);
+        border: 1px solid rgba(201,163,78,0.25);
+        padding: 9px 12px;
+        margin-right: 36px;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    .gm-checks-button:hover { border-color: rgba(201,163,78,0.45); color: var(--gilt-100); }
+    .gm-checks-button:focus-visible,
+    .gm-reference-nav button:focus-visible { outline: 2px solid var(--gilt-300); outline-offset: 4px; }
+
+    .gm-reference-nav {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0 18px;
+        margin: 0 0 22px;
+        border-bottom: 1px solid rgba(201,163,78,0.22);
+    }
+    .gm-reference-nav button {
+        font: 600 12px/1.45 var(--font-ui);
+        color: var(--text-on-dark-2);
+        background: transparent;
+        border: 0;
+        border-bottom: 2px solid transparent;
+        padding: 12px 0;
+        cursor: pointer;
+        border-radius: 0;
+    }
+    .gm-reference-nav button:hover { color: var(--gilt-100); }
+    .gm-reference-nav button[aria-pressed="true"] {
+        border-bottom-color: var(--gilt-300);
+        color: var(--gilt-200);
+    }
+
+    .gm-group { scroll-margin-top: 90px; margin-bottom: 32px; }
+    .gm-group-label {
+        color: var(--text-on-dark-3);
+        font-family: var(--font-display);
+        font-size: 11px;
+        letter-spacing: 0.1em;
+        padding-bottom: 8px;
+        border-bottom: 0;
+        margin-bottom: 4px;
+    }
+    .gm-group-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+    .gm-ref-card {
+        background: transparent;
+        border: 0;
+        border-top: 1px solid rgba(201,163,78,0.25);
+        border-radius: 0;
+        padding: 16px 4px;
+    }
+    .gm-ref-header {
+        font-family: var(--font-display);
+        font-size: 16px;
+        letter-spacing: 0.025em !important;
+        text-transform: none;
+        border-bottom: 0;
+        padding-bottom: 0;
+        padding-right: 22px;
+    }
+    .gm-table { font-size: 13px !important; }
+    .gm-table th { font-size: 11px; padding: 7px 8px; }
+    .gm-table td { padding: 7px 8px; line-height: 1.45; }
+    .gm-cond { gap: 6px 18px; }
+    .gm-cond dd { font-size: 13px; line-height: 1.55; }
+    .gm-cond dt { font-size: 12px; }
+    .gm-reference-nav[hidden],
+    .gm-group[hidden],
+    .gm-group-grid[hidden],
+    .gm-cond[hidden] { display: none; }
+
+    @media (max-width: 680px) {
+        .gm-checks-button { margin-right: 0; width: 100%; }
+        .gm-reference-nav { gap: 0 14px; }
+        .gm-group-grid { grid-template-columns: minmax(0, 1fr); }
+        .gm-ref-card { padding-left: 8px; padding-right: 8px; }
+        .gm-table td { padding: 7px 5px; }
+        .gm-cond { grid-template-columns: minmax(0, 1fr); gap: 0; }
+        .gm-cond dd { padding-top: 0; }
+    }
+    @media print {
+        .gm-checks-button,
+        .gm-reference-nav { display: none !important; }
+        .gm-group[hidden] { display: block !important; }
+    }
 </style>
 {% endblock %}
 
@@ -350,6 +442,7 @@
         <h1 class="font-display text-accent-300 text-xl tracking-wide mb-1">GM Screen</h1>
         <p class="text-base-500 text-xs">Rules reference — DCs, conditions, and combat math at a glance. Press <kbd class="kbd">C</kbd> for the checks drawer.</p>
     </div>
+    <button type="button" class="gm-checks-button" aria-controls="checks-drawer" aria-expanded="false">Checks reference &middot; C</button>
 </div>
 
 <div class="gm-search-wrap mb-5">
@@ -381,7 +474,15 @@
     </div>
 </div>
 
-<section class="gm-group">
+<nav class="gm-reference-nav" aria-label="Reference topics">
+    <button type="button" class="gm-reference-tab" data-reference-topic="checks" aria-controls="reference-checks" aria-pressed="true" tabindex="0">Checks &amp; actions</button>
+    <button type="button" class="gm-reference-tab" data-reference-topic="conditions" aria-controls="reference-conditions" aria-pressed="false" tabindex="-1">Conditions &amp; dying</button>
+    <button type="button" class="gm-reference-tab" data-reference-topic="adversaries" aria-controls="reference-adversaries" aria-pressed="false" tabindex="-1">Adversaries &amp; damage</button>
+    <button type="button" class="gm-reference-tab" data-reference-topic="exploration" aria-controls="reference-exploration" aria-pressed="false" tabindex="-1">Exploration</button>
+    <button type="button" class="gm-reference-tab" data-reference-topic="all" aria-controls="reference-checks reference-conditions reference-adversaries reference-exploration" aria-pressed="false" tabindex="-1">All references</button>
+</nav>
+
+<section id="reference-checks" class="gm-group" data-reference-topic="checks">
   <div class="gm-group-label">Checks, DCs & Actions</div>
   <div class="gm-group-grid">
       <div class="masonry-item gm-ref-card">
@@ -461,7 +562,7 @@
   </div>
 </section>
 
-<section class="gm-group">
+<section id="reference-conditions" class="gm-group" data-reference-topic="conditions" hidden>
   <div class="gm-group-label">Conditions & Dying</div>
   <div class="gm-group-grid">
       <div class="masonry-item gm-ref-card">
@@ -535,7 +636,7 @@
   </div>
 </section>
 
-<section class="gm-group">
+<section id="reference-adversaries" class="gm-group" data-reference-topic="adversaries" hidden>
   <div class="gm-group-label">Adversaries & Damage</div>
   <div class="gm-group-grid">
       <div class="masonry-item gm-ref-card">
@@ -580,7 +681,7 @@
   </div>
 </section>
 
-<section class="gm-group">
+<section id="reference-exploration" class="gm-group" data-reference-topic="exploration" hidden>
   <div class="gm-group-label">Exploration & Environment</div>
   <div class="gm-group-grid">
       <div class="masonry-item gm-ref-card">
@@ -737,9 +838,18 @@
        rules-reference page instead of the combat timer. Behavior is
        identical: click the right-edge handle (or press C) to slide it
        open, Esc to close. Non-modal — the page behind stays interactive. */
-    function openChecksDrawer()   { document.getElementById('checks-drawer').classList.add('open'); }
-    function closeChecksDrawer()  { document.getElementById('checks-drawer').classList.remove('open'); }
-    function toggleChecksDrawer() { document.getElementById('checks-drawer').classList.toggle('open'); }
+    function setChecksDrawerOpen(open) {
+        const drawer = document.getElementById('checks-drawer');
+        drawer.classList.toggle('open', open);
+        const trigger = document.querySelector('.gm-checks-button');
+        if (trigger) trigger.setAttribute('aria-expanded', String(open));
+    }
+    function openChecksDrawer()   { setChecksDrawerOpen(true); }
+    function closeChecksDrawer()  { setChecksDrawerOpen(false); }
+    function toggleChecksDrawer() {
+        const drawer = document.getElementById('checks-drawer');
+        setChecksDrawerOpen(!drawer.classList.contains('open'));
+    }
     function switchChecksTab(which) {
         document.querySelectorAll('#checks-drawer .checks-tab').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.tab === which);
@@ -1121,12 +1231,48 @@
     </div>
 </div>
 
-<script>
-/* GM Screen polish: (1) pin/reorder cards, (2) unified reference search, (3) condition cross-links */
+<script data-gmscreen-controller>
+/* GM Screen polish: (1) topic navigation, (2) pin/reorder cards,
+   (3) unified reference search, (4) condition cross-links. */
 (function () {
+    var checksButton = document.querySelector('.gm-checks-button');
+    if (checksButton) checksButton.addEventListener('click', openChecksDrawer);
     var cards = Array.prototype.slice.call(document.querySelectorAll('.gm-group-grid .gm-ref-card'));
     if (!cards.length) return;
+    var groups = Array.prototype.slice.call(document.querySelectorAll('.gm-group[data-reference-topic]'));
+    var topicButtons = Array.prototype.slice.call(document.querySelectorAll('.gm-reference-tab'));
     var PIN_KEY = 'gmscreen_pinned_v1';
+    var currentTopic = 'checks';
+
+    // ---- 1. Topic navigation + roving keyboard focus ----
+    function selectTopic(topic, moveFocus) {
+        currentTopic = topic;
+        groups.forEach(function (group) {
+            group.hidden = topic !== 'all' && group.dataset.referenceTopic !== topic;
+        });
+        topicButtons.forEach(function (button) {
+            var selected = button.dataset.referenceTopic === topic;
+            button.setAttribute('aria-pressed', String(selected));
+            button.tabIndex = selected ? 0 : -1;
+            if (selected && moveFocus) button.focus();
+        });
+    }
+    topicButtons.forEach(function (button, index) {
+        button.addEventListener('click', function () {
+            selectTopic(button.dataset.referenceTopic, false);
+        });
+        button.addEventListener('keydown', function (event) {
+            var next = null;
+            if (event.key === 'ArrowRight' || event.key === 'ArrowDown') next = (index + 1) % topicButtons.length;
+            if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') next = (index - 1 + topicButtons.length) % topicButtons.length;
+            if (event.key === 'Home') next = 0;
+            if (event.key === 'End') next = topicButtons.length - 1;
+            if (next === null) return;
+            event.preventDefault();
+            selectTopic(topicButtons[next].dataset.referenceTopic, true);
+        });
+    });
+    selectTopic('checks', false);
 
     function cardKey(card) {
         var h = card.querySelector('.gm-ref-header');
@@ -1136,7 +1282,7 @@
     function getPinned() { try { return JSON.parse(localStorage.getItem(PIN_KEY) || '[]'); } catch (e) { return []; } }
     function setPinned(a) { try { localStorage.setItem(PIN_KEY, JSON.stringify(a)); } catch (e) {} }
 
-    // ---- 1. Pin buttons + persisted reorder ----
+    // ---- 2. Pin buttons + persisted reorder ----
     cards.forEach(function (card) {
         card._gmGroup = card.parentElement;
         card.dataset.cardKey = cardKey(card);
@@ -1173,27 +1319,53 @@
     }
     applyPins();
 
-    // ---- 2. Unified search: highlight (and jump to) reference cards that match ----
+    // ---- 3. Unified search: highlight (and jump to) reference cards that match ----
     var search = document.getElementById('comp-search');
     if (search) {
         var refTimer = null;
+        var topicBeforeSearch = null;
         search.addEventListener('input', function () {
             clearTimeout(refTimer);
             var q = search.value.trim().toLowerCase();
-            if (q.length < 2) { cards.forEach(function (c) { c.classList.remove('ref-match'); }); return; }
+            if (q.length < 2) {
+                cards.forEach(function (c) { c.classList.remove('ref-match'); });
+                if (topicBeforeSearch !== null) {
+                    selectTopic(topicBeforeSearch, false);
+                    topicBeforeSearch = null;
+                }
+                return;
+            }
             refTimer = setTimeout(function () {
-                var first = null;
+                var matches = [];
+                var matchTopics = [];
                 cards.forEach(function (c) {
                     var hit = c.textContent.toLowerCase().indexOf(q) !== -1;
                     c.classList.toggle('ref-match', hit);
-                    if (hit && !first) first = c;
+                    if (!hit) return;
+                    matches.push(c);
+                    var group = c.closest('.gm-group[data-reference-topic]');
+                    var topic = group && group.dataset.referenceTopic;
+                    if (topic && matchTopics.indexOf(topic) === -1) matchTopics.push(topic);
                 });
-                if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                if (matches.length) {
+                    var targetTopic = currentTopic;
+                    if (matchTopics.length > 1) {
+                        targetTopic = 'all';
+                    } else {
+                        var matchGroup = matches[0].closest('.gm-group[data-reference-topic]');
+                        if (matchGroup && matchGroup.hidden) targetTopic = matchTopics[0];
+                    }
+                    if (targetTopic !== currentTopic) {
+                        if (topicBeforeSearch === null) topicBeforeSearch = currentTopic;
+                        selectTopic(targetTopic, false);
+                    }
+                    matches[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
             }, 350);
         });
     }
 
-    // ---- 3. Cross-link condition names -> compendium detail ----
+    // ---- 4. Cross-link condition names -> compendium detail ----
     document.querySelectorAll('.gm-cond dt').forEach(function (dt) {
         var name = dt.textContent.replace(/\s+[Xx]$/, '').trim();   // "Frightened X" -> "Frightened"
         if (!name) return;
