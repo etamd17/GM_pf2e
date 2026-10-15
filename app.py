@@ -11874,10 +11874,19 @@ def _save_story_threads(beats):
 #  LOOT LEDGER — persistent party treasury and award log
 # ═══════════════════════════════════════════════════════════════════════
 
+def _pf2e_only_api_error():
+    """Reject stale/direct PF2e mechanic requests in another system."""
+    if _active_system() != 'pf2e':
+        return jsonify({'success': False, 'error': 'pf2e only'}), 400
+    return None
+
+
 @app.route('/gm/loot')
 @gm_required
 def loot_ledger_view():
     """Persistent loot ledger page -- wealth tracking and award history."""
+    if _active_system() == 'cosmere':
+        return redirect(url_for('cosmere_loot_view'))
     return render_template('loot_ledger.html')
 
 
@@ -11885,6 +11894,9 @@ def loot_ledger_view():
 @gm_required
 def api_loot_ledger():
     """Return full loot ledger plus current party wealth summary."""
+    system_error = _pf2e_only_api_error()
+    if system_error is not None:
+        return system_error
     ledger = _load_loot_ledger()
     party_wealth = []
     for name, pc in PARTY_LIBRARY.items():
@@ -11902,10 +11914,8 @@ def api_loot_ledger():
             'total_gp': round(total_gp, 1),
         })
     # Wealth-by-level reference from PF2E guidelines
-    from pf2e_generator import PF2EGenerator
-    gen = PF2EGenerator()
     avg_level = max(1, round(sum(pc.level for pc in PARTY_LIBRARY.values()) / max(len(PARTY_LIBRARY), 1)))
-    expected = gen._wealth_by_level.get(min(max(avg_level, 1), 20), 175)
+    expected = pf2e_gen._wealth_by_level.get(min(max(avg_level, 1), 20), 175)
     return jsonify({
         'entries': ledger.get('entries', []),
         'party_wealth': party_wealth,
@@ -11918,6 +11928,9 @@ def api_loot_ledger():
 @gm_required
 def api_loot_ledger_add():
     """Manually add a ledger entry (for retroactive logging)."""
+    system_error = _pf2e_only_api_error()
+    if system_error is not None:
+        return system_error
     data = request.get_json(silent=True) or {}
     recipient = (data.get('recipient') or '').strip()
     items = data.get('items') or []
@@ -11943,6 +11956,9 @@ def api_loot_ledger_add():
 @gm_required
 def api_loot_ledger_delete():
     """Delete a ledger entry by ID."""
+    system_error = _pf2e_only_api_error()
+    if system_error is not None:
+        return system_error
     entry_id = (request.get_json(silent=True) or {}).get('id', '')
     if not entry_id:
         return jsonify({"success": False}), 400
@@ -21908,6 +21924,9 @@ def dm_generator():
 
 @app.route('/api/generate/<element_type>', methods=['POST'])
 def api_generate(element_type):
+    system_error = _pf2e_only_api_error()
+    if system_error is not None:
+        return system_error
     if element_type not in VALID_GENERATOR_TYPES:
         return jsonify({'error': 'Invalid generator type'}), 400
     data = request.get_json()
@@ -21932,11 +21951,17 @@ def _save_pinned_generators(pins):
 @app.route('/api/generator/pins', methods=['GET'])
 @gm_required
 def api_list_pinned_generators():
+    system_error = _pf2e_only_api_error()
+    if system_error is not None:
+        return system_error
     return jsonify({'pins': _load_pinned_generators()})
 
 @app.route('/api/generator/pin', methods=['POST'])
 @gm_required
 def api_pin_generator():
+    system_error = _pf2e_only_api_error()
+    if system_error is not None:
+        return system_error
     from datetime import datetime as _dt
     data = request.get_json()
     if not data or 'type' not in data or 'content' not in data:
@@ -21958,6 +21983,9 @@ def api_pin_generator():
 @app.route('/api/generator/pin/<pin_id>', methods=['DELETE'])
 @gm_required
 def api_unpin_generator(pin_id):
+    system_error = _pf2e_only_api_error()
+    if system_error is not None:
+        return system_error
     pins = _load_pinned_generators()
     pins = [p for p in pins if p.get('id') != pin_id]
     _save_pinned_generators(pins)
@@ -23629,6 +23657,9 @@ def _deposit_loot_to_pc(pc_name, items, coins):
 # player-targeted event the player sheet listens for.
 @app.route('/api/send_loot', methods=['POST'])
 def send_loot_to_player():
+    system_error = _pf2e_only_api_error()
+    if system_error is not None:
+        return system_error
     data = request.get_json(silent=True) or {}
     target = (data.get('target') or '').strip()
     items = data.get('items') or []  # list of {name, qty?, bulk?, note?}
@@ -23668,6 +23699,9 @@ def api_loot_ledger_award(entry_id):
     items + coins, mark it awarded, notify the player. Target defaults to
     the entry's recipient when that names a party PC; pass {target} to
     override (e.g. a 'party' entry). Refuses to re-award unless force."""
+    system_error = _pf2e_only_api_error()
+    if system_error is not None:
+        return system_error
     data = request.get_json(silent=True) or {}
     ledger = _load_loot_ledger()
     entry = next((e for e in ledger.get('entries', []) if e.get('id') == entry_id), None)
@@ -28631,7 +28665,9 @@ app.register_blueprint(_create_dnd5e_blueprint(_Dnd5eHost(
 # to their 5e equivalents (same guard Cosmere gets per route).
 _DND5E_REDIRECTS = {'/gm': '/dnd5e/gm', '/player': '/dnd5e/player', '/tracker': '/dnd5e/tracker',
                     '/encounter_builder': '/dnd5e/encounters', '/party': '/dnd5e/characters',
-                    '/gmscreen': '/dnd5e/gmscreen', '/m': '/dnd5e/combat', '/mobile': '/dnd5e/combat'}
+                    '/gmscreen': '/dnd5e/gmscreen', '/generator': '/dnd5e/gm',
+                    '/gm/loot': '/dnd5e/gm', '/m': '/dnd5e/combat',
+                    '/mobile': '/dnd5e/combat'}
 
 
 @app.before_request
