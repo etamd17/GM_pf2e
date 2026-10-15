@@ -4966,6 +4966,16 @@ def _cosmere_world():
         return 'stormlight'
 
 
+def _cosmere_generator_era():
+    """Use Era 2 only when the server-side rules binding pins it alone."""
+    try:
+        from systems.cosmere.rules.profiles import normalize_binding
+        allowed = tuple(normalize_binding(_load_campaign_config()).allowed_eras)
+        return 'era-2' if allowed == ('era-2',) else 'era-1'
+    except Exception:
+        return 'era-1'
+
+
 def _free_archetype_enabled():
     """Whether the active campaign runs the PF2e Free Archetype variant
     (standard flavor: an archetype-only feat slot at every even level)."""
@@ -13108,15 +13118,15 @@ def cosmere_gmscreen():
 @app.route('/cosmere/generator')
 @gm_required
 def cosmere_generator():
-    """Cosmere GM generators -- Rosharan names, NPCs, highstorms/weather, spheres,
-    loot & fabrials, locations, plot hooks, rumors, and scene dressing. Mirrors
-    the PF2e /generator page (initial cards + per-card reroll via the API below).
-    System-aware: redirects out in non-Cosmere mode, like the dashboard."""
+    """World-aware Cosmere GM generators with initial per-card results."""
     if _active_system() != 'cosmere':
         return redirect(_active_system_ui().gm_home)
     import systems.cosmere.generator as _gen
-    cards = [{'type': t, 'label': lbl, 'html': fn()}
-             for t, (lbl, fn) in _gen.GENERATORS.items()]
+    world = _cosmere_world()
+    era = _cosmere_generator_era()
+    cards = [{'type': key, 'label': _gen.label_for(key, world),
+              'html': _gen.generate(key, world=world, era=era)}
+             for key in _gen.GENERATORS]
     return render_template('cosmere_generator.html', cards=cards)
 
 
@@ -13127,7 +13137,8 @@ def api_cosmere_generate(gtype):
     import systems.cosmere.generator as _gen
     if gtype not in _gen.GENERATORS:
         return jsonify({'error': 'unknown generator'}), 400
-    return jsonify({'html': _gen.generate(gtype)})
+    return jsonify({'html': _gen.generate(
+        gtype, world=_cosmere_world(), era=_cosmere_generator_era())})
 
 
 @app.route('/cosmere/pcs')
