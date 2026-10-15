@@ -1,7 +1,7 @@
 """Cosmere loot ledger -- the Rosharan sibling of the PF2e /gm/loot ledger.
 
 Spheres & spoils awarded to the party, persisted in the campaign-scoped ledger,
-with a clearchips total. GM-only and Cosmere-mode-gated (redirects out in PF2e).
+with exact gem-aware diamond-mark totals. GM-only and Cosmere-mode-gated.
 Runs in a subprocess with a throwaway DATA_DIR (mirrors the other Cosmere e2e
 tests) so it's CI-safe.
 """
@@ -35,7 +35,7 @@ def test_cosmere_loot_ledger_end_to_end():
         page = c.get('/cosmere/loot')
         assert page.status_code == 200 and b'Spheres' in page.data and b'COSMERE' in page.data
 
-        # record an award: 1 broam + 2 marks + 3 chips = 33 clearchips, plus an item
+        # Diamond award: 1 broam + 2 marks + 3 chips = 33 diamond chips = 6.6 mk.
         add = c.post('/api/cosmere/loot/add', json={
             'recipient': 'Kaladin', 'gem': 'diamond',
             'items': [{'name': 'Shardblade', 'qty': 1}],
@@ -45,10 +45,14 @@ def test_cosmere_loot_ledger_end_to_end():
         data = c.get('/api/cosmere/loot').get_json()
         assert len(data['entries']) == 1
         assert data['total_chips'] == 33, data['total_chips']
+        assert data['total_marks'] == '6.6'
         e = data['entries'][0]
         assert e['recipient'] == 'Kaladin' and e['spheres'] == {'broam': 1, 'mark': 2, 'chip': 3}
         assert e['items'][0]['name'] == 'Shardblade' and e['gem'] == 'diamond'
-        assert data['gems'] and 'diamond' in data['gems']
+        assert e['value_chips'] == 33 and e['value_marks'] == '6.6'
+        assert data['gems'] == [
+            'diamond', 'garnet', 'heliodor', 'topaz', 'ruby',
+            'smokestone', 'zircon', 'amethyst', 'sapphire', 'emerald']
 
         # the ledger persists under THIS campaign (campaign-scoped storage)
         led = storage.load_json(storage.loot_ledger_file(cid))
