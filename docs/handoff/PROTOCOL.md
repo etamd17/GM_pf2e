@@ -47,7 +47,15 @@ Either agent may take any task when the other is unavailable; the table is a def
 5. **Review** (the other agent). Check the diff against the acceptance list and the
    high-risk rules in `CLAUDE.md`. Either `done`, or back to `in-progress` with numbered
    findings appended to the task file.
-6. **Merge** is the user's call. Agents never push to `main`.
+6. **Commit, PR and merge** (standing rule from the user, 2026-10-15). Once the reviewer
+   accepts a task, the implementer commits (task file and queue edits included), pushes
+   and opens the PR without waiting to be asked. Merge it with `gh pr merge <n> --merge` as
+   soon as **every** CI job on the PR has finished green. Don't merge while a job is still
+   running or failing, and don't use auto-merge (this repo has no required checks, so it
+   merges at once). Docs-only PRs skip the test jobs and can merge when `changes` passes.
+   A red job goes back to the implementer. Never push directly to `main`; merges go through
+   a PR. `main` deploys to the live site, so this rule is what ships.
+   Keep few branches open: one per task, merged promptly, so `QUEUE.md` doesn't conflict.
 
 ## Rules that save usage
 
@@ -69,7 +77,7 @@ Either agent may take any task when the other is unavailable; the table is a def
 ## Repo conventions both agents follow
 
 `CLAUDE.md` is authoritative for both agents (Codex reads it via `AGENTS.md`):
-no emojis, commit only on a branch and only when the user asks, `encoding='utf-8'`
+no emojis, commit only on a branch (see step 6 for when), `encoding='utf-8'`
 in tests, `python tools/check_templates.py` after any template edit, the
 `[hidden]`-vs-`display` rule, inline-handler escaping, every new endpoint in
 `core/route_policy.py`.

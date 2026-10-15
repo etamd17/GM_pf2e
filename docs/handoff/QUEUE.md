@@ -69,6 +69,26 @@ UI-03 bug list (from `tasks/UI-00.md` > Anything broken or risky; all checked on
 - Merging with main: one trivial conflict (`core/storage.py`).
 - Not done yet: full test run is red (order-dependent), branch not pushed, 43 commits behind main.
 
+## VTT (table-top map rebuild)
+
+Decided 2026-10-14: the VTT lives **on the site**, not in Obsidian. It reuses the site's characters,
+tracker, live sync and the existing map (`/map`, `/map/table`). Obsidian stays the prep and control
+side through the Session Operations plugin.
+
+This work runs on its **own channel**, not this queue: branch `side/vtt-rebuild`, handoffs in
+`GM_pf2e_vtt/docs/vtt/handoffs/` (rules in `docs/vtt/README.md`), decisions in `docs/vtt/decisions/`
+(ADR-0001 table-first, ADR-0002 wire protocol, ADR-0003 hosting). Codex owns `vtt/` and the backend,
+Claude owns `frontend/vtt/`. The rows below only track where it stands.
+
+| ID | Task | Owner | Model | Status | Where |
+|---|---|---|---|---|---|
+| VTT-017 | Fix the session issue Codex flagged in client commit `de880953`; review Codex's first contract batch (`c5653e05`); publish handoff 017 | claude | Opus, high | ready (idle since 2026-10-12) | `GM_pf2e_vtt/docs/vtt/handoffs/VTT-20261012-016-codex.md` |
+| VTT-ALPHA | First usable milestone: GM workspace + shared table display talking to the new backend, on a Railway **staging** environment of the same project (ADR-0003). Production untouched until the user merges | codex + claude | strongest / Opus high | needs plan (after VTT-017) | ADR-0003 |
+| VTT-PLAYERS | Per-player screens and per-player vision | - | - | deferred by the user (ADR-0001) | - |
+
+Order: finish the Cosmere UI-02 screens first, then pick VTT back up at VTT-017. Creating the
+Railway staging environment or spending money needs the user's approval at that time.
+
 ## UI-00 review (Claude, 2026-10-13)
 
 Accepted as a design checkpoint. Notes:
@@ -89,6 +109,7 @@ Newest first. One plain line per handoff: who, what, what's next.
 - 2026-10-15 Claude: wrote the MB-03 brief (Mistborn content in the generators, Era 1 by default, all text original). The UI-03 brief travels with Codex's UI-03 branch. Next: Codex takes MB-03 after UI-03.
 - 2026-10-14 Claude: checked the new Cosmere builder / level-up (UI-02c) on desktop and phone in both skins: level badge, to-do list, Go buttons, step ticks, sticky layout and the PF2e draft bar all work. Accepted, no fixes needed. Next: Codex commits this review and opens the PR; the user merges.
 - 2026-10-14 Codex: built the Cosmere level-up guide and compact draft bar; 399 focused checks and all 32 browser checks passed. Next: Claude reviews level-up and scrolling on desktop and phone.
+- 2026-10-14 Claude: added the VTT to this list. Decision: build it on the site (not Obsidian). It continues on its own branch and handoff files; next step is VTT-017 (Claude), after the Cosmere screens.
 - 2026-10-14 Claude: rechecked the monster/NPC sheet fix for UI-02b: no empty tabs now. The new Cosmere character sheet is accepted. Next: Codex opens the PR; after it merges, UI-02c (builder).
 - 2026-10-14 Codex: removed the empty tabs from monster/NPC sheets; all 59 focused checks pass and player sheets are unchanged. Next: Claude reviews the small fix.
 - 2026-10-14 Claude: checked the new Cosmere character sheet (UI-02b) on desktop and phone in both skins: tabs, live HP/conditions, wallet, notes, workshop and print all work. One small fix: monster/NPC sheets show two empty tabs. Next: Codex fixes that, then commits.
