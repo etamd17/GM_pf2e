@@ -1457,6 +1457,174 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
   .trk .dying-badge { animation: none; }
 }
 
+/* ═══ UI-08 · PF2e combat-first layout (Revision B) ═══
+   Keep every rule under the PF2e body class. The Cosmere tracker shares this
+   template and gets its own approved layout in a later task. */
+body.system-pf2e .trk {
+  min-width:0;
+  max-width:100%;
+}
+body.system-pf2e .trk .hero-bar {
+  grid-template-columns:minmax(0, 1fr) auto;
+  row-gap:12px;
+  gap:18px;
+  padding:12px 16px;
+  border-radius:5px !important;
+}
+body.system-pf2e .trk .hb-turn {
+  grid-column:1;
+  grid-row:1;
+  justify-self:start;
+}
+body.system-pf2e .trk .hb-right {
+  grid-column:2;
+  grid-row:1;
+  gap:8px;
+}
+body.system-pf2e .trk .hb-left {
+  grid-column:1 / -1;
+  grid-row:2;
+  max-width:none;
+  gap:14px;
+}
+body.system-pf2e .trk .turn-now .v { font-size:18px; }
+body.system-pf2e .trk .hb-btn {
+  min-height:32px;
+  padding:6px 9px;
+  font-size:12px;
+}
+body.system-pf2e .trk .xp-bar-wrap { margin-bottom:8px; }
+body.system-pf2e .trk .combatant {
+  border:0 !important;
+  border-bottom:1px solid var(--border-card) !important;
+  min-height:78px;
+  padding:11px 12px;
+}
+body.system-pf2e .trk .combatant.active {
+  box-shadow:inset 3px 0 var(--accent) !important;
+}
+body.system-pf2e .trk .nm { font-size:13px !important; }
+body.system-pf2e .trk .nm-sub { font-size:11px; }
+body.system-pf2e .trk .grid-head {
+  font-size:10px;
+  letter-spacing:.06em;
+}
+body.system-pf2e .trk .c-hp-quick { height:29px; }
+body.system-pf2e .trk .c-hp-quick .qhp { width:30px; }
+body.system-pf2e .trk .cp { font-size:11px; }
+body.system-pf2e .trk .hero-stats {
+  gap:0;
+  border-top:1px solid var(--border-rule);
+  border-bottom:1px solid var(--border-rule);
+}
+body.system-pf2e .trk .hs-box {
+  border:0 !important;
+  background:transparent !important;
+  border-radius:0 !important;
+  padding:10px 6px;
+}
+body.system-pf2e .trk .hero-top { padding-bottom:12px; }
+body.system-pf2e .trk .section-h {
+  font-size:12px;
+  letter-spacing:.05em;
+}
+body.system-pf2e .trk .hp-ribbon {
+  border-radius:4px !important;
+  padding:12px;
+}
+
+body.system-pf2e .trk .pf2e-encounter-setup {
+  margin:10px 0 12px;
+  border-block:1px solid var(--border-card);
+}
+body.system-pf2e .trk .pf2e-encounter-setup > summary {
+  padding:12px 4px;
+  color:var(--text-on-dark-2);
+  font:12px/1.4 var(--font-ui);
+  cursor:pointer;
+}
+body.system-pf2e .trk .pf2e-encounter-setup > summary[hidden],
+body.system-pf2e .trk .pf2e-encounter-setup[hidden] {
+  display:none !important;
+}
+
+body.system-pf2e .trk .pf2e-combat-scroll {
+  max-width:100%;
+  min-width:0;
+  border-radius:4px;
+}
+body.system-pf2e .trk .pf2e-combat-scroll:focus-visible {
+  outline:2px solid var(--t-accent);
+  outline-offset:2px;
+}
+body.system-pf2e .trk .pf2e-combat-scroll-hint {
+  display:none;
+  margin:8px 0;
+  color:var(--text-on-dark-3);
+  font:11px/1.5 var(--font-ui);
+}
+body.system-pf2e .trk .pf2e-combat-scroll-hint[hidden] {
+  display:none !important;
+}
+
+@media (min-width:1280px) {
+  body.system-pf2e .trk .layout.has-active {
+    grid-template-columns:minmax(0, 1fr) 335px;
+  }
+  body.system-pf2e .trk .grid-head,
+  body.system-pf2e .trk .combatant {
+    grid-template-columns:24px 48px minmax(155px, 1fr) 94px 142px minmax(120px, .9fr) 62px;
+    gap:7px;
+  }
+  body.system-pf2e .trk .c-init input {
+    width:100%;
+    max-width:48px;
+    padding-inline:3px;
+  }
+}
+
+@media (max-width:1100px) {
+  body.system-pf2e .trk .hero-bar { grid-template-columns:1fr; }
+  body.system-pf2e .trk .hb-turn {
+    grid-column:1;
+    grid-row:1;
+  }
+  body.system-pf2e .trk .hb-left {
+    grid-column:1;
+    grid-row:2;
+  }
+  body.system-pf2e .trk .hb-right {
+    grid-column:1;
+    grid-row:3;
+    justify-content:flex-start;
+  }
+}
+
+@media (max-width:767px) {
+  body.system-pf2e .trk .hero-bar { padding:10px; }
+  body.system-pf2e .trk .hb-turn {
+    width:100%;
+    gap:8px;
+    padding-inline:8px;
+  }
+  body.system-pf2e .trk .turn-now {
+    min-width:0;
+    flex:1 1 auto;
+  }
+  body.system-pf2e .trk .pf2e-combat-scroll {
+    overflow-x:auto;
+    overscroll-behavior-inline:contain;
+    -webkit-overflow-scrolling:touch;
+  }
+  body.system-pf2e .trk .pf2e-combat-scroll-hint { display:block; }
+  body.system-pf2e .trk .pf2e-combat-scroll .grid-wrap { min-width:800px; }
+  body.system-pf2e .trk .pf2e-combat-scroll .grid-head,
+  body.system-pf2e .trk .pf2e-combat-scroll .combatant {
+    grid-template-columns:24px 48px minmax(155px, 1fr) 94px 142px minmax(120px, .9fr) 62px;
+    gap:7px;
+  }
+}
+
 /* Utility */
 .trk .hidden { display:none !important; }
 {% endblock %}
@@ -1570,6 +1738,10 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
 {% endif %}
 
 {# ═══════════════════ TOOL STRIP ═══════════════════ #}
+{% if active_system == 'pf2e' %}
+<details id="pf2e-encounter-setup" class="pf2e-encounter-setup"{% if not initial_state.combatants %} open{% endif %}>
+    <summary>Encounter setup · add creatures, party, save/load, and mood</summary>
+{% endif %}
 <div class="tool-strip">
     {% if active_system == 'cosmere' %}
     {# Cosmere encounter building: pick an adversary or a party PC. Both add via
@@ -1652,6 +1824,9 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
         <button type="button" id="mood-suggest" class="mood-suggest hidden" onclick="applyMoodSuggestion()" title="Apply the suggested mood"></button>
     </div>
 </div>
+{% if active_system == 'pf2e' %}
+</details>
+{% endif %}
 
 {# ═══════════════════ SAVE/LOAD PANEL ═══════════════════ #}
 <div id="save-load-panel" class="panel hidden">
@@ -1951,6 +2126,14 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
             </div>
         </details>
         {% endif %}
+        {% if active_system == 'pf2e' %}
+        <div id="pf2e-tracker-scroll-hint" class="pf2e-combat-scroll-hint">
+            Swipe or scroll sideways to reach every combat control.
+        </div>
+        <div class="pf2e-combat-scroll" tabindex="0" role="region"
+             aria-label="Initiative order" aria-describedby="pf2e-tracker-scroll-hint"
+             data-tracker-scroll>
+        {% endif %}
         <div class="grid-wrap">
             <div class="grid-head">
                 <div></div>
@@ -1970,6 +2153,9 @@ button.k.rxn-spent:hover { color: var(--t-gold); border-style: solid; opacity: 1
                 No combatants yet. {% if active_system == 'cosmere' %}Add adversaries or your party above.{% else %}Search for monsters or add your party above.{% endif %}
             </div>
         </div>
+        {% if active_system == 'pf2e' %}
+        </div>
+        {% endif %}
 
         {# ═══════════════════ COMBAT LOG (collapsible) ═══════════════════ #}
         <div class="log-wrap">
@@ -2167,6 +2353,19 @@ let STATE = {
     // forever — which surfaced as "Request failed" on every tracker mutation.
 })();
 
+// The disclosure follows encounter-shape transitions without fighting the GM:
+// adding the first combatant closes it, clearing the last opens it, and ordinary
+// HP/condition repaints preserve any manual choice made during combat.
+const _pf2eEncounterSetup = document.getElementById('pf2e-encounter-setup');
+let _pf2eSetupWasEmpty = (STATE.combatants || []).length === 0;
+function _syncPf2eEncounterSetup(combatants) {
+    if (!_pf2eEncounterSetup) return;
+    const isEmpty = !combatants.length;
+    if (isEmpty === _pf2eSetupWasEmpty) return;
+    _pf2eEncounterSetup.open = isEmpty;
+    _pf2eSetupWasEmpty = isEmpty;
+}
+
 function toggleSaveLoadPanel() {
     document.getElementById('save-load-panel').classList.toggle('hidden');
 }
@@ -2335,6 +2534,7 @@ async function apiGet(url) {
 
 function applyState(data) {
     STATE.combatants = data.combatants || [];
+    _syncPf2eEncounterSetup(STATE.combatants);
     STATE.round = data.round ?? STATE.round;
     STATE.turn_index = data.turn_index ?? STATE.turn_index;
     STATE.active_name = data.active_name ?? null;
@@ -5047,9 +5247,26 @@ setInterval(async () => {
                        Focus order: stat-panel combatant > active combatant
      Esc            → close side-panel / RK modal
 */
+function _trackerKeepsNativeKey(e) {
+    const target = e.target;
+    const activationKey = e.key === 'Enter' || e.key === ' ' || e.code === 'Space';
+    const setupSummary = target.tagName === 'SUMMARY'
+        && target.closest?.('#pf2e-encounter-setup');
+    if (setupSummary && activationKey) return true;
+
+    const scrollRegion = target.closest?.('[data-tracker-scroll]');
+    if (!scrollRegion) return false;
+    const horizontalArrow = e.key === 'ArrowLeft' || e.key === 'ArrowRight';
+    if (target === scrollRegion && horizontalArrow
+        && scrollRegion.scrollWidth > scrollRegion.clientWidth) return true;
+    const control = target.closest?.('button, a, [role="button"]');
+    return Boolean(activationKey && control && scrollRegion.contains(control));
+}
+
 document.addEventListener('keydown', e => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
     if (e.target.isContentEditable) return;
+    if (_trackerKeepsNativeKey(e)) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
 
     if (e.key === 'n' || e.key === 'N' || e.key === ' ' || e.code === 'Space') {
