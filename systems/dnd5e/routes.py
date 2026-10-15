@@ -943,8 +943,13 @@ def _b(v):
 
 def _summaries(kind):
     rows = C.list_summaries(kind)
+    version_ids = C.race_version_ids() if kind == 'race' else set()
+    builder_scaffold_ids = C.race_builder_scaffold_ids() if kind == 'race' else set()
     for r in rows:
         r['image'] = C.image_for(kind, r.get('id'))
+        if kind == 'race':
+            r['_versionBase_isVersion'] = r['id'] in version_ids
+            r['_builderHideScaffold'] = r['id'] in builder_scaffold_ids
     return rows
 
 

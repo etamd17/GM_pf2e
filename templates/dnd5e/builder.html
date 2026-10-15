@@ -153,7 +153,7 @@
 
   function pSpecies() {
     var cur = B().race || null;
-    var list = RACES.map(function (r) { return {id: r.id, name: r.name, source: r.source, image: r.image, meta: r.edition === 'one' ? '2024' : ''}; });
+    var list = RACES.filter(function (r) { return !r._versionBase_isVersion && !r._builderHideScaffold; }).map(function (r) { return {id: r.id, name: r.name, source: r.source, image: r.image, meta: r.edition === 'one' ? '2024' : ''}; });
     var h = '<div class="d5-card"><h3>Species</h3><input class="d5-input" id="filter" placeholder="Filter (e.g. elf)" style="margin-bottom:.6rem;">' +
       '<div id="grid">' + pickGrid(list, cur, 'data-race') + '</div></div>';
     if (cur) h += '<div class="d5-card" id="info"></div>';
@@ -450,7 +450,13 @@
       save({levels: lv}); return;
     }
     var r = t.closest('[data-race]');
-    if (r) { save({race: r.getAttribute('data-race')}); return; }
+    if (r) {
+      var raceId = r.getAttribute('data-race');
+      if (raceId === B().race) return;
+      var choices = Object.assign({}, B().choices || {});
+      delete choices['race:version'];
+      save({race: raceId, choices: choices}); return;
+    }
     var bg = t.closest('[data-bg]');
     if (bg) { save({background: bg.getAttribute('data-bg')}); return; }
     var m = t.closest('[data-method]');
