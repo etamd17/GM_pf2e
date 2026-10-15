@@ -42,7 +42,10 @@ UI/UX design is Claude's by default; Codex implements mechanical parts from Clau
 | UI-10 | PF2e player sheet (A: compact header, CSS only) | codex | standard, high | ready | `tasks/UI-10-pf2e-player-sheet.md` |
 | UI-11 | PF2e level-up (B) + builder (B): roadmap and live preview | codex | strongest, high | ready | `tasks/UI-11-pf2e-levelup-and-builder.md` |
 | UI-12 | PF2e map (B: map first, right-side tabs) | codex | strongest, high | waiting on user (after the VTT plan) | `tasks/UI-12-pf2e-map.md` |
-| UI-13 | Cosmere screens from UI-00 (6): dashboard, tracker, Party Vitals, roster, GM Screen, loot | claude briefs, codex builds | briefs: Opus high | needs brief (after UI-04/UI-05) | - |
+| UI-13 | Cosmere GM dashboard (hybrid) + GM Screen (B) + 3 hub error-handling fixes | codex | standard, medium | ready | `tasks/UI-13-cosmere-dashboard-and-gmscreen.md` |
+| UI-14 | Cosmere tracker (B: phase/turn first, phase band) + check the Archer's missing strikes | codex | strongest, high | ready after UI-08 | `tasks/UI-14-cosmere-tracker.md` |
+| UI-15 | Cosmere Party Vitals (B) + roster (A cards + attention summary) | codex | standard, high | ready | `tasks/UI-15-cosmere-vitals-and-roster.md` |
+| UI-16 | Cosmere loot (B: form beside searchable history, draft worth from the server table) | codex | standard, medium | ready after UI-05 | `tasks/UI-16-cosmere-loot.md` |
 | UI-03 | Fix the seven confirmed bugs from the UI review | codex | standard | done (accepted by Claude) | `tasks/UI-03.md` |
 | UI-04 | Cosmere tracker: hide every PF2e-only control (user: each system stays separate) | codex | standard, high | done (accepted by Claude) | `tasks/UI-04-cosmere-tracker-separation.md` |
 | UI-05 | Cosmere spheres: gem changes value (rulebook table); wallets keep gems | codex | strongest, high | ready (after UI-03, now merged) | `tasks/UI-05-cosmere-gem-values.md` |
@@ -69,6 +72,7 @@ UI-03 bug list (from `tasks/UI-00.md` > Anything broken or risky; all checked on
 | MB-01 | Bring MB-00 up to date with main, move the Mistborn data out of git (installed like 5e), make the full test run green, open a PR | codex | strongest model, high effort (history rewrite + test-failure hunt) | done (PR #182 merged; private bundle installed) | `tasks/MB-01.md` |
 | MB-02 | Verify the 252 Mistborn records still blocked on source checks | codex | its strongest | needs brief | - |
 | MB-03 | Generators: make Mistborn content for Mistborn campaigns (found in UI-01) | codex | standard, medium | done (accepted by Claude) | `tasks/MB-03.md` |
+| MB-04 | Mistborn money: boxings and clips in wallets and the loot page under the Mistborn skin (today they show Roshar spheres) | - | - | waiting on user (how Mistborn currency should work) | - |
 
 **MB-00 review (Claude, 2026-10-13):** accepted as a backend milestone, not ready to merge yet.
 - 1024 Cosmere tests pass on the branch (623 new + 401 existing).
@@ -112,6 +116,7 @@ Accepted as a design checkpoint. Notes:
 
 Newest first. One plain line per handoff: who, what, what's next.
 
+- 2026-10-15 Claude: wrote briefs for the 6 approved Cosmere screens as UI-13 to UI-16 (dashboard + GM Screen, tracker, Vitals + roster, loot). Also added MB-04 (Mistborn money), which needs a user decision. Next: Codex builds them after the PF2e screens, tracker after UI-08 and loot after UI-05.
 - 2026-10-15 Claude: checked UI-04 in the browser: a Cosmere fight now shows only Cosmere controls, conditions and stats (hero and adversaries), PF2e actions are refused for Cosmere targets, and a PF2e fight keeps all its controls. Accepted, no fixes needed. Next: Codex commits, opens the PR and merges when CI is green, then starts UI-05.
 - 2026-10-15 Claude: VTT-017 done. Fixed the table-screen bug Codex found (an old message could keep a stale or revoked scene on screen) and built the tool that turns Codex's message definitions into client code. Codex's first batch has one blocker: a duplicate check that makes a big scene take almost a second to load (fix proposed as S5). Next: Codex answers handoff 017.
 - 2026-10-15 Codex: separated Cosmere tracker controls, vocabulary, conditions and routes from PF2e; 28 required checks and 38 PF2e regressions pass, with all 107 templates parsing. Next: Claude reviews both systems in the browser at 1440px.
