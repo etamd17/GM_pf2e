@@ -34,7 +34,15 @@ UI/UX design is Claude's by default; Codex implements mechanical parts from Clau
 | UI-02a | Build Cosmere generators (A: labelled buttons) | codex | standard, medium | done (PR #183 merged) | `tasks/UI-02a-cosmere-generators.md` |
 | UI-02b | Build Cosmere character sheet (A: vitals band + Play/Radiant/Gear/Character tabs) | codex | strongest, high | done (accepted by Claude) | `tasks/UI-02b-cosmere-sheet.md` |
 | UI-02c | Build Cosmere builder / level-up (B: still-to-choose list, step badges, level-up badge) | codex | standard, high | done (accepted by Claude) | `tasks/UI-02c-cosmere-builder.md` |
-| UI-02 | PF2e screens from UI-00 (18): briefs still to write | claude briefs, codex builds | briefs: Opus high | needs brief | - |
+| UI-02 | PF2e screens from UI-00 (12): briefs written as UI-06 to UI-12 | claude | Opus high | done (briefs) | see rows below |
+| UI-06 | PF2e GM dashboard (B) + GM Screen (B). Holds the shared conventions for UI-06 to UI-12 | codex | standard, medium | ready | `tasks/UI-06-pf2e-gm-hub-and-gmscreen.md` |
+| UI-07 | PF2e generators (A) + loot ledger (B) | codex | standard, medium | ready | `tasks/UI-07-pf2e-generators-and-loot.md` |
+| UI-08 | PF2e encounter tracker (B: combat first, setup folds away) | codex | strongest, high | ready after UI-04 | `tasks/UI-08-pf2e-tracker.md` |
+| UI-09 | PF2e party overview (A+B) + campaign management (B tabs) + My table (A) | codex | standard, high | ready | `tasks/UI-09-pf2e-party-and-campaign-pages.md` |
+| UI-10 | PF2e player sheet (A: compact header, CSS only) | codex | standard, high | ready | `tasks/UI-10-pf2e-player-sheet.md` |
+| UI-11 | PF2e level-up (B) + builder (B): roadmap and live preview | codex | strongest, high | ready | `tasks/UI-11-pf2e-levelup-and-builder.md` |
+| UI-12 | PF2e map (B: map first, right-side tabs) | codex | strongest, high | waiting on user (after the VTT plan) | `tasks/UI-12-pf2e-map.md` |
+| UI-13 | Cosmere screens from UI-00 (6): dashboard, tracker, Party Vitals, roster, GM Screen, loot | claude briefs, codex builds | briefs: Opus high | needs brief (after UI-04/UI-05) | - |
 | UI-03 | Fix the seven confirmed bugs from the UI review | codex | standard | done (accepted by Claude) | `tasks/UI-03.md` |
 | UI-04 | Cosmere tracker: hide every PF2e-only control (user: each system stays separate) | codex | standard, high | ready | `tasks/UI-04-cosmere-tracker-separation.md` |
 | UI-05 | Cosmere spheres: gem changes value (rulebook table); wallets keep gems | codex | strongest, high | ready (after UI-03, now merged) | `tasks/UI-05-cosmere-gem-values.md` |
@@ -104,6 +112,7 @@ Accepted as a design checkpoint. Notes:
 
 Newest first. One plain line per handoff: who, what, what's next.
 
+- 2026-10-15 Claude: wrote build briefs for the 12 approved PF2e screens (UI-06 to UI-12), grouped by page and ordered by risk; the map waits until the VTT plan is settled. Next: Codex works through them after UI-04 and UI-05; Claude writes the Cosmere screen briefs (UI-13) after those.
 - 2026-10-15 User: decided that gems change a sphere's value, and that PF2e, Cosmere and D&D never share mechanics (hide all PF2e controls in the Cosmere tracker). Claude wrote briefs UI-04 (tracker) and UI-05 (gem values). Next: Codex takes UI-04, then UI-05.
 - 2026-10-15 Codex: fixed the MB-03 loot casing and Era 2 name groups, seeded the route test, and passed all 17 focused checks; Claude's review is accepted. Next: open the PR and merge it after every CI job is green.
 - 2026-10-15 Claude: checked MB-03 in the browser in both skins on desktop and phone: Mistborn campaigns get original Scadrial content on every card, Stormlight is unchanged, and all buttons work. One small fix: four loot lines lose their capital letters (e.g. "kredik shaw"). Next: Codex fixes that (plus two small extras), then commits, opens the PR and merges once CI is green.
