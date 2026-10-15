@@ -4885,6 +4885,26 @@ body.system-cosmere .trk .grid-wrap::after {
     #ready-to-level-banner.trk-cond-in { animation:none; }
 }
 
+/* Shared private character draft controls: wraps in narrow builder sidebars. */
+.draft-bar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: .3rem 1rem;
+    margin: .5rem; padding: .45rem .8rem; border-radius: 8px;
+    border: 1px solid var(--border-card); font: 12.5px var(--font-ui);
+    background: color-mix(in srgb, var(--accent) 5%, transparent);
+    color: var(--text-on-dark-3); overflow-wrap: anywhere; min-width: 0;
+}
+.draft-bar p { margin: 0; min-width: 0; }
+.draft-bar .draft-bar-title { color: var(--text-on-dark); font-weight: 600; }
+.draft-bar-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; margin-left: auto; min-width: 0; }
+.draft-bar button {
+    display: inline-flex; font: 600 12px var(--font-ui); padding: .3rem .7rem;
+    border-radius: 6px; cursor: pointer; background: none;
+    color: var(--text-on-dark-2); border: 1px solid var(--border-card);
+}
+.draft-bar button[hidden] { display: none; }
+.draft-bar #draft-save { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
+.draft-bar a { font-size: 12px; color: var(--text-on-dark-3); }
+
 /* End of system.css */
 
 /* ═══════════════════════════════════════════════════════════════════════
