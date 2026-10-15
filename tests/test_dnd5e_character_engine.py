@@ -1,16 +1,165 @@
 """Golden characters for the D&D 5e engine, every number checked by hand
 against the PHB (2014) / XPHB (2024). If one of these changes, the engine or
 the data changed -- work out which before touching the expectation."""
+from pathlib import Path
+
 import pytest
 
 from systems.dnd5e import content
-from systems.dnd5e.rules.character import compute
+from systems.dnd5e.rules.character import _species_version_label, compute
 
 pytestmark = pytest.mark.skipif(not content.available(), reason='dnd5e.db not built')
 
 
 def _doc(build, state=None):
     return {'name': 'Golden', 'build': build, 'state': state or {}}
+
+
+def _species_doc(race, choices=None):
+    return _doc({
+        'edition': 'one' if race.endswith('|xphb') else 'classic',
+        'race': race,
+        'ability_method': 'manual',
+        'base_scores': {a: 10 for a in ('str', 'dex', 'con', 'int', 'wis', 'cha')},
+        'levels': [],
+        'choices': choices or {},
+    })
+
+
+def _choice(sheet, choice_id):
+    return next(c for c in sheet['choices'] if c['id'] == choice_id)
+
+
+def test_base_dragonborn_requires_ancestry_and_uses_the_selected_version():
+    pending = compute(_species_doc('dragonborn|phb'))
+    ancestry = _choice(pending, 'race:version')
+
+    assert ancestry['kind'] == 'species_version'
+    assert ancestry['label'] == 'Draconic Ancestry'
+    assert ancestry['complete'] is False
+    assert ancestry['id'] in pending['pending']
+    assert [o['label'] for o in ancestry['options']] == [
+        'Black', 'Blue', 'Brass', 'Bronze', 'Copper',
+        'Gold', 'Green', 'Red', 'Silver', 'White',
+    ]
+    assert all(isinstance(value, str) for value in pending['resist'])
+
+    black = compute(_species_doc(
+        'dragonborn|phb', {'race:version': ['dragonborn (black)|phb']}))
+
+    assert black['errors'] == []
+    assert black['race']['id'] == 'dragonborn (black)|phb'
+    assert black['resist'] == ['acid']
+    assert 'race:version' not in black['pending']
+    assert not any(c['id'].startswith('race:resist') for c in black['choices'])
+    assert all(isinstance(value, str) for value in black['resist'])
+
+    invalid = compute(_species_doc(
+        'dragonborn|phb', {'race:version': ['dragonborn (ultraviolet)|phb']}))
+    assert any("'dragonborn (ultraviolet)|phb' is not an option" in e for e in invalid['errors'])
+
+
+@pytest.mark.parametrize(('base_id', 'version_id', 'labels'), [
+    ('elf|xphb', 'elf; drow lineage|xphb',
+     ['Drow Lineage', 'High Elf Lineage', 'Wood Elf Lineage']),
+    ('tiefling|xphb', 'tiefling; abyssal legacy|xphb',
+     ['Abyssal Legacy', 'Chthonic Legacy', 'Infernal Legacy']),
+])
+def test_2024_species_versions_are_required_and_authoritative(base_id, version_id, labels):
+    pending = compute(_species_doc(base_id))
+    version_choice = _choice(pending, 'race:version')
+    assert version_choice['kind'] == 'species_version'
+    assert [o['label'] for o in version_choice['options']] == labels
+    assert version_choice['id'] in pending['pending']
+
+    selected = compute(_species_doc(base_id, {'race:version': [version_id]}))
+    direct = compute(_species_doc(version_id))
+
+    assert selected['race']['id'] == version_id
+    assert [f['name'] for f in selected['features']] == [f['name'] for f in direct['features']]
+    assert selected['resist'] == direct['resist']
+    assert not any(c['id'].startswith(('race:resist', 'race:spells#alt'))
+                   for c in selected['choices'])
+
+
+def test_saved_direct_species_version_keeps_legacy_behavior():
+    sheet = compute(_species_doc('dragonborn (black)|phb'))
+
+    assert sheet['resist'] == ['acid']
+    assert [f['name'] for f in sheet['features']] == [
+        'Age', 'Size', 'Breath Weapon', 'Damage Resistance', 'Languages',
+    ]
+    assert [c['id'] for c in sheet['choices']] == []
+    assert 'race:version' not in sheet['pending']
+
+
+def test_species_version_labels_trim_parentheses_after_semicolon():
+    assert _species_version_label({'name': 'Base; Version (UA)'}) == 'Version (UA)'
+
+    sheet = compute(_species_doc('dragonborn (chromatic)|ftd'))
+
+    assert [o['label'] for o in _choice(sheet, 'race:version')['options']] == [
+        'Black', 'Blue', 'Green', 'Red', 'White',
+    ]
+
+    black = compute(_species_doc(
+        'dragonborn (chromatic)|ftd',
+        {'race:version': ['dragonborn (chromatic; black)|ftd']}))
+    assert black['resist'] == ['acid']
+    assert not any(c['id'].startswith('race:resist') for c in black['choices'])
+
+    direct = compute(_species_doc('dragonborn (chromatic; black)|ftd'))
+    assert direct['resist'] == black['resist']
+    assert [f['name'] for f in direct['features']] == [f['name'] for f in black['features']]
+    assert 'race:version' not in {c['id'] for c in direct['choices']}
+    assert not any(c['id'].startswith('race:resist') for c in direct['choices'])
+
+
+def test_species_version_with_multiple_fixed_resistances_has_no_resist_choice():
+    sheet = compute(_species_doc(
+        'aasimar|mpmm', {'race:version': ['aasimar; radiant soul|mpmm']}))
+
+    assert sheet['resist'] == ['necrotic', 'radiant']
+    assert not any(c['id'].startswith('race:resist') for c in sheet['choices'])
+
+
+def test_builder_clears_a_version_pick_when_the_base_species_changes():
+    template = Path('templates/dnd5e/builder.html').read_text(encoding='utf-8')
+    handler = template.split("var r = t.closest('[data-race]');", 1)[1].split(
+        "var bg = t.closest('[data-bg]');", 1)[0]
+
+    assert "delete choices['race:version'];" in handler
+    assert 'save({race: raceId, choices: choices})' in handler
+
+
+def test_builder_species_summaries_hide_versions_and_duplicate_dragonborn_scaffold():
+    from systems.dnd5e.routes import _summaries
+
+    rows = _summaries('race')
+    visible = [r for r in rows
+               if not r['_versionBase_isVersion'] and not r['_builderHideScaffold']]
+    assert [(r['name'], r['source']) for r in visible
+            if r['name'] == 'Dragonborn' and r['source'] in ('PHB', 'XPHB')] == [
+        ('Dragonborn', 'PHB'), ('Dragonborn', 'XPHB'),
+    ]
+    assert any(r['_versionBase_isVersion'] for r in rows)
+    assert [r['id'] for r in rows if r['_builderHideScaffold']] == ['dragonborn (base)|phb']
+    assert any(r['id'] == 'elf|phb' and not r['_builderHideScaffold'] for r in rows)
+
+    template = Path('templates/dnd5e/builder.html').read_text(encoding='utf-8')
+    assert '!r._versionBase_isVersion && !r._builderHideScaffold' in template
+
+
+def test_content_reload_clears_species_version_caches():
+    content.race_versions('Dragonborn', 'PHB')
+    content.race_builder_scaffold_ids()
+    assert content._race_versions_by_base.cache_info().currsize == 1
+    assert content._race_builder_scaffold_ids.cache_info().currsize == 1
+
+    content.reload()
+
+    assert content._race_versions_by_base.cache_info().currsize == 0
+    assert content._race_builder_scaffold_ids.cache_info().currsize == 0
 
 
 def test_fighter_1_2024_human_soldier():

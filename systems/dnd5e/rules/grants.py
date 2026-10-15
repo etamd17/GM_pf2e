@@ -30,7 +30,8 @@ class Choice:
     id: str
     kind: str                 # skill | language | tool | ability | feat | spell | optionalfeature |
     #                           subclass | expertise | weapon | alternative | resist | save | asi |
-    #                           equipment | weapon_mastery | size | ability_score_method
+    #                           equipment | weapon_mastery | size | species_version |
+    #                           ability_score_method
     label: str
     count: int = 1
     options: list = field(default_factory=list)   # concrete option values (may be [] = "query")
