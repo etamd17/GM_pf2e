@@ -75,6 +75,10 @@ python tools/check_templates.py   # Jinja parse check (CI runs this) — run aft
   - **Every converted byte goes through `_chronicle_sanitize_html` at WRITE time.** `_chronicle_fragment` hands fragments straight to `|safe` with no checks, so that call is the only thing between GM-pasted markup and the table. Sanitize before writing, never on read.
 - **D&D 5e** (`systems/dnd5e/`, blueprint `dnd5e.*`, pages under `/dnd5e/`) is the third system. It is self-contained: it never reads the PF2e live globals, keeps its state in `campaigns/<cid>/dnd5e/`, and gets its rules content from 5etools data that is **not in git** (public repo, non-SRD): `systems/dnd5e/paths.py` finds it (the Railway volume in prod, installed by a site admin at `/dnd5e/admin/data`; the gitignored `dnd5e_data/` in dev; CI builds it). Never commit `dnd5e_data/` contents. Start at `docs/dnd5e/HANDOFF.md` — architecture, data regeneration, and the honest list of what is not automated yet.
 - **Multi-system**: `systems/` registry; `_active_system()` / `_active_campaign_id()` are request/session-scoped. Templates branch on `body.system-pf2e` / `body.system-cosmere`. Cosmere actors are `systems/cosmere/actor.py::CosmereActor` (reads the Foundry `cosmere-rpg` schema); Cosmere combat is flat-integer, defenses are static (phy/cog/spi), conditions are mostly advantage/disadvantage + Exhausted (a flat test penalty).
+  **Systems never share mechanics** (user decision 2026-10-15): PF2e, Cosmere and D&D 5e each show
+  only their own rules. A shared page (the tracker, for one) must hide another system's controls,
+  vocabulary and conditions, not just relabel them, and its routes must refuse the wrong system's
+  combatant. When you touch a shared page, check it for bleed.
 - **Obsidian Session Operations** — the GM drives the live site from a pane inside their own prep.
   Two halves, and BOTH live in this repo now:
   - **Server**: `services/obsidian_sync.py` (bearer-authed blueprint at

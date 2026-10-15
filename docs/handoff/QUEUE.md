@@ -36,6 +36,8 @@ UI/UX design is Claude's by default; Codex implements mechanical parts from Clau
 | UI-02c | Build Cosmere builder / level-up (B: still-to-choose list, step badges, level-up badge) | codex | standard, high | done (accepted by Claude) | `tasks/UI-02c-cosmere-builder.md` |
 | UI-02 | PF2e screens from UI-00 (18): briefs still to write | claude briefs, codex builds | briefs: Opus high | needs brief | - |
 | UI-03 | Fix the seven confirmed bugs from the UI review | codex | standard | done (accepted by Claude) | `tasks/UI-03.md` |
+| UI-04 | Cosmere tracker: hide every PF2e-only control (user: each system stays separate) | codex | standard, high | ready | `tasks/UI-04-cosmere-tracker-separation.md` |
+| UI-05 | Cosmere spheres: gem changes value (rulebook table); wallets keep gems | codex | strongest, high | ready (after UI-03, now merged) | `tasks/UI-05-cosmere-gem-values.md` |
 
 UI-03 bug list (from `tasks/UI-00.md` > Anything broken or risky; all checked on `main` at `4664c887`):
 
@@ -46,9 +48,9 @@ UI-03 bug list (from `tasks/UI-00.md` > Anything broken or risky; all checked on
 | PF2e builder: the Review step goes blank (ancestry feat treated as text) and shows stale class/spell/skill fields | fixed in UI-03 |
 | PF2e level-up: the gains panel can block clicks on the picker | fixed in UI-03 |
 | Cosmere loot: deleting a log doesn't undo the credit; ledger and wallet can disagree; the form clears on errors | fixed in UI-03 |
-| Cosmere loot: totals and wallets ignore which gem a sphere is | **needs a user rules decision** |
+| Cosmere loot: totals and wallets ignore which gem a sphere is | user: gems change value -> UI-05 |
 | Cosmere roster/vitals: no live updates; max Investiture; vitals keyed by name with frozen maximums | fixed in UI-03; missing Mistborn bundle fallback added |
-| Cosmere tracker shows PF2e-only controls (MAP/agile, PF2e quick conditions, Elite/Weak, persistent damage, basic saves) | **needs a user rules decision** |
+| Cosmere tracker shows PF2e-only controls (MAP/agile, PF2e quick conditions, Elite/Weak, persistent damage, basic saves) | user: hide all PF2e in Cosmere -> UI-04 |
 | Campaign delete: the wording says "permanently delete" but it's moved to the trash | fixed in UI-03 |
 
 ## Cosmere: Mistborn
@@ -102,6 +104,7 @@ Accepted as a design checkpoint. Notes:
 
 Newest first. One plain line per handoff: who, what, what's next.
 
+- 2026-10-15 User: decided that gems change a sphere's value, and that PF2e, Cosmere and D&D never share mechanics (hide all PF2e controls in the Cosmere tracker). Claude wrote briefs UI-04 (tracker) and UI-05 (gem values). Next: Codex takes UI-04, then UI-05.
 - 2026-10-15 Codex: fixed the MB-03 loot casing and Era 2 name groups, seeded the route test, and passed all 17 focused checks; Claude's review is accepted. Next: open the PR and merge it after every CI job is green.
 - 2026-10-15 Claude: checked MB-03 in the browser in both skins on desktop and phone: Mistborn campaigns get original Scadrial content on every card, Stormlight is unchanged, and all buttons work. One small fix: four loot lines lose their capital letters (e.g. "kredik shaw"). Next: Codex fixes that (plus two small extras), then commits, opens the PR and merges once CI is green.
 - 2026-10-15 Codex: made all nine Cosmere generator cards switch to Mistborn content in Mistborn campaigns, with Era 2 when it is the campaign's only era; 42 checks and all 107 templates pass. Next: Claude reviews the writing and browser behavior in both skins.
