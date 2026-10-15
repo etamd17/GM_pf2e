@@ -822,8 +822,7 @@ class _WorkflowCharacterFiles:
         if record.system == 'pf2e':
             _broadcast_pc_state(record.document['build']['name'])
         else:
-            sse_broadcast('cosmere_player_state', {'pid': record.character_id,
-                'name': record.document.get('name'), 'play_state': record.document.get('play_state', {})})
+            _broadcast_cosmere_player_state(record.document)
 
 
 def _delete_character_document(path):
@@ -2276,11 +2275,7 @@ def _load_loot_ledger():
 
 def _save_loot_ledger(ledger):
     """Persist the loot ledger to disk."""
-    try:
-        with open(LOOT_LEDGER_FILE, 'w', encoding='utf-8') as f:
-            json.dump(ledger, f, indent=2)
-    except IOError:
-        pass
+    _atomic_write_json(LOOT_LEDGER_FILE, ledger, indent=2)
 
 
 def _mutate_loot_ledger(fn):
@@ -8629,9 +8624,7 @@ def _mark_party_ready(ready=True):
                 doc['ready_to_level'] = bool(ready)
                 _save_cosmere_pc(doc, fsync=False)
             try:
-                sse_broadcast('cosmere_player_state',
-                              {'pid': pid, 'name': doc.get('name'),
-                               'play_state': doc.get('play_state') or {}, 'ready_to_level': bool(ready)})
+                _broadcast_cosmere_player_state(doc, ready_to_level=bool(ready))
             except Exception:
                 pass
             out.append({'name': doc.get('name'), 'ready': bool(ready)})
@@ -10738,7 +10731,8 @@ def campaign_invites(cid):
                     for inv in _auth.list_active_invites(cid) if not inv.get('character_id')]
     return render_template('campaign_invites.html', campaign=camp, rows=rows,
                            members=members, gm_total=_campaigns.gm_count(camp),
-                           open_invites=open_invites)
+                           open_invites=open_invites,
+                           trash_ttl_days=_campaigns.TRASH_TTL_DAYS)
 
 
 def _require_campaign_gm(cid):
@@ -10844,8 +10838,10 @@ def campaign_set_system(cid):
 @app.route('/campaign/<cid>/delete', methods=['POST'])
 @_auth.login_required
 def campaign_delete(cid):
-    """Permanently delete a campaign and ALL its data. GM/owner or site admin,
-    guarded by typing the campaign name back as confirmation."""
+    """Move a campaign to restorable trash for TRASH_TTL_DAYS.
+
+    GM/owner or site admin, guarded by typing the campaign name back.
+    """
     u, camp = _require_campaign_gm(cid)
     if not camp:
         return jsonify({'error': 'GM only'}), 403
@@ -10858,7 +10854,7 @@ def campaign_delete(cid):
             'The live campaign could not be saved, so it was not deleted.',
             503,
         )
-    _campaigns.delete_campaign(cid)   # soft delete -> trash (restorable ~30 days)
+    _campaigns.delete_campaign(cid)   # soft delete; restoration uses TRASH_TTL_DAYS
     if session.get('active_campaign_id') == cid:
         session.pop('active_campaign_id', None)
     # The active/live campaign may have just been removed -> rebind the globals
@@ -12019,6 +12015,77 @@ def _credit_cosmere_loot(doc, items, spheres):
     return doc['wallet']
 
 
+def _debit_cosmere_loot(doc, items, spheres):
+    """Remove a recorded award from a Cosmere PC wallet.
+
+    Validate the whole debit before changing the document so a partially spent
+    award cannot leave any denomination or item below zero.
+    """
+    wallet = doc.get('wallet') if isinstance(doc.get('wallet'), dict) else {}
+    current_spheres = dict(wallet.get('spheres') or {})
+    required_spheres = {
+        key: max(0, int((spheres or {}).get(key, 0) or 0))
+        for key in ('chip', 'mark', 'broam')
+    }
+    for key, required in required_spheres.items():
+        available = max(0, int(current_spheres.get(key, 0) or 0))
+        if available < required:
+            raise ValueError(f'Wallet does not have enough {key}s to reverse this award.')
+
+    goods = [dict(g) for g in (wallet.get('items') or []) if isinstance(g, dict)]
+    required_items = {}
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get('name', '')).strip()[:80]
+        if not name:
+            continue
+        required_items[name] = required_items.get(name, 0) + max(
+            0, int(item.get('qty', 1) or 1))
+    available_items = {}
+    for good in goods:
+        name = str(good.get('name', '')).strip()[:80]
+        if name:
+            available_items[name] = available_items.get(name, 0) + max(
+                0, int(good.get('qty', 0) or 0))
+    for name, required in required_items.items():
+        if available_items.get(name, 0) < required:
+            raise ValueError(f'Wallet does not have enough {name} to reverse this award.')
+
+    remaining = dict(required_items)
+    kept_goods = []
+    for good in goods:
+        name = str(good.get('name', '')).strip()[:80]
+        qty = max(0, int(good.get('qty', 0) or 0))
+        take = min(qty, remaining.get(name, 0))
+        remaining[name] = remaining.get(name, 0) - take
+        qty -= take
+        if qty:
+            good['qty'] = qty
+            kept_goods.append(good)
+    doc['wallet'] = {
+        'spheres': {
+            key: max(0, int(current_spheres.get(key, 0) or 0)) - required
+            for key, required in required_spheres.items()
+        },
+        'items': kept_goods,
+    }
+    return doc['wallet']
+
+
+def _cosmere_loot_recipient(recipient, *, recipient_pid=None):
+    """Resolve a named loot recipient to a stable PC identity."""
+    if recipient_pid:
+        return recipient_pid
+    if recipient.strip().casefold() in {'party', 'the party'}:
+        return None
+    for candidate in _list_cosmere_pcs():
+        name = candidate.get('name') or (candidate.get('build') or {}).get('name') or ''
+        if name == recipient:
+            return candidate.get('id')
+    return None
+
+
 @app.route('/api/cosmere/loot/add', methods=['POST'])
 @gm_required
 def api_cosmere_loot_add():
@@ -12032,9 +12099,12 @@ def api_cosmere_loot_add():
     items = data.get('items') or []
     spheres = data.get('spheres') or {}
     gem = data.get('gem') if data.get('gem') in _COSMERE_GEMS else 'diamond'
-    norm_items = [{'name': str(it.get('name', '')).strip()[:80], 'qty': int(it.get('qty', 1) or 1)}
+    norm_items = [{'name': str(it.get('name', '')).strip()[:80],
+                   'qty': max(0, int(it.get('qty', 1) or 1))}
                   for it in items if isinstance(it, dict) and (it.get('name') or '').strip()]
-    norm_spheres = {k: int(spheres.get(k, 0) or 0) for k in ('chip', 'mark', 'broam')}
+    norm_items = [item for item in norm_items if item['qty']]
+    norm_spheres = {k: max(0, int(spheres.get(k, 0) or 0))
+                    for k in ('chip', 'mark', 'broam')}
     from datetime import datetime as _dt_loot
     entry = {
         'id': str(uuid.uuid4()),
@@ -12045,36 +12115,127 @@ def api_cosmere_loot_add():
         'gem': gem,
         'note': (data.get('note') or '').strip()[:280],
     }
-    _mutate_loot_ledger(lambda l: l['entries'].append(entry))
-    # Credit a NAMED PC's sheet wallet (so player-visible wealth tracks the
-    # ledger). A whole-party award (recipient not matching a PC, e.g. 'Party')
-    # stays ledger-only. Mirrors the PF2e send_loot sheet write.
-    for d in _list_cosmere_pcs():
-        if (d.get('name') or (d.get('build') or {}).get('name') or '') == recipient:
-            pid = d.get('id')
-            wallet = None
-            with _path_lock(_cosmere_pc_path(pid)):
-                doc = _load_cosmere_pc(pid) or d
+    pid = _cosmere_loot_recipient(recipient)
+    if not pid:
+        entry['ledger_only'] = True
+    wallet = None
+    with _path_lock(LOOT_LEDGER_FILE):
+        ledger = _load_loot_ledger()
+        if pid:
+            pc_path = _cosmere_pc_path(pid)
+            if pc_path is None:
+                return jsonify({'success': False, 'error': 'Loot recipient is invalid.'}), 409
+            with _path_lock(pc_path):
+                doc = _load_cosmere_pc(pid)
+                if doc is None:
+                    return jsonify({'success': False, 'error': 'Loot recipient no longer exists.'}), 409
+                old_wallet = copy.deepcopy(doc.get('wallet'))
                 wallet = _credit_cosmere_loot(doc, norm_items, norm_spheres)
-                _save_cosmere_pc(doc, fsync=False)
+                try:
+                    _save_cosmere_pc(doc, fsync=False)
+                except (OSError, ValueError):
+                    app.logger.exception('Could not save the Cosmere loot recipient wallet')
+                    return jsonify({'success': False, 'error': 'Could not save the recipient wallet.'}), 503
+                entry['recipient_pid'] = pid
+                ledger.setdefault('entries', []).append(entry)
+                try:
+                    _save_loot_ledger(ledger)
+                except OSError:
+                    doc['wallet'] = old_wallet
+                    try:
+                        _save_cosmere_pc(doc, fsync=False)
+                    except (OSError, ValueError):
+                        app.logger.exception('Could not roll back a Cosmere loot wallet')
+                    app.logger.exception('Could not save the Cosmere loot ledger')
+                    return jsonify({'success': False, 'error': 'Could not save the loot ledger.'}), 503
+        else:
+            ledger.setdefault('entries', []).append(entry)
             try:
-                sse_broadcast('cosmere_loot', {'pid': pid, 'name': recipient,
-                                               'wallet': wallet, 'items': norm_items,
-                                               'spheres': norm_spheres})
-            except Exception:
-                pass
-            break
+                _save_loot_ledger(ledger)
+            except OSError:
+                app.logger.exception('Could not save the Cosmere loot ledger')
+                return jsonify({'success': False, 'error': 'Could not save the loot ledger.'}), 503
+    if pid:
+        try:
+            sse_broadcast('cosmere_loot', {'pid': pid, 'name': recipient,
+                                           'wallet': wallet, 'items': norm_items,
+                                           'spheres': norm_spheres})
+        except Exception:
+            pass
     return jsonify({'success': True})
 
 
 @app.route('/api/cosmere/loot/delete', methods=['POST'])
 @gm_required
 def api_cosmere_loot_delete():
-    """Remove a loot-ledger entry by id."""
+    """Reverse a recorded award and remove its loot-ledger entry."""
+    if _active_system() != 'cosmere':
+        return jsonify({'success': False, 'error': 'cosmere only'}), 400
     entry_id = (request.get_json(silent=True) or {}).get('id', '')
     if not entry_id:
-        return jsonify({'success': False}), 400
-    _mutate_loot_ledger(lambda l: l.update(entries=[e for e in l['entries'] if e.get('id') != entry_id]))
+        return jsonify({'success': False, 'error': 'entry id required'}), 400
+    wallet = None
+    pid = None
+    recipient = ''
+    with _path_lock(LOOT_LEDGER_FILE):
+        ledger = _load_loot_ledger()
+        entry = next((item for item in ledger.get('entries', [])
+                      if item.get('id') == entry_id), None)
+        if entry is None:
+            return jsonify({'success': False, 'error': 'Loot entry not found.'}), 404
+        recipient = str(entry.get('recipient') or '')
+        pid = None if entry.get('ledger_only') else _cosmere_loot_recipient(
+            recipient, recipient_pid=entry.get('recipient_pid'))
+        if pid:
+            pc_path = _cosmere_pc_path(pid)
+            if pc_path is None:
+                return jsonify({'success': False, 'error': 'Loot recipient is invalid.'}), 409
+            with _path_lock(pc_path):
+                doc = _load_cosmere_pc(pid)
+                if doc is None:
+                    return jsonify({
+                        'success': False,
+                        'error': 'The recipient wallet is unavailable; the ledger entry was kept.',
+                    }), 409
+                old_wallet = copy.deepcopy(doc.get('wallet'))
+                try:
+                    wallet = _debit_cosmere_loot(
+                        doc, entry.get('items') or [], entry.get('spheres') or {})
+                except (TypeError, ValueError) as exc:
+                    return jsonify({'success': False, 'error': str(exc)}), 409
+                try:
+                    _save_cosmere_pc(doc, fsync=False)
+                except (OSError, ValueError):
+                    app.logger.exception('Could not save a reversed Cosmere loot wallet')
+                    return jsonify({'success': False, 'error': 'Could not save the recipient wallet.'}), 503
+                ledger['entries'] = [item for item in ledger.get('entries', [])
+                                     if item.get('id') != entry_id]
+                try:
+                    _save_loot_ledger(ledger)
+                except OSError:
+                    doc['wallet'] = old_wallet
+                    try:
+                        _save_cosmere_pc(doc, fsync=False)
+                    except (OSError, ValueError):
+                        app.logger.exception('Could not roll back a reversed Cosmere loot wallet')
+                    app.logger.exception('Could not save the Cosmere loot ledger')
+                    return jsonify({'success': False, 'error': 'Could not save the loot ledger.'}), 503
+        else:
+            ledger['entries'] = [item for item in ledger.get('entries', [])
+                                 if item.get('id') != entry_id]
+            try:
+                _save_loot_ledger(ledger)
+            except OSError:
+                app.logger.exception('Could not save the Cosmere loot ledger')
+                return jsonify({'success': False, 'error': 'Could not save the loot ledger.'}), 503
+    if pid:
+        try:
+            sse_broadcast('cosmere_loot', {'pid': pid, 'name': recipient,
+                                           'wallet': wallet,
+                                           'items': entry.get('items') or [],
+                                           'spheres': entry.get('spheres') or {}})
+        except Exception:
+            pass
     return jsonify({'success': True})
 
 
@@ -13150,16 +13311,20 @@ def cosmere_pcs():
     for d in _list_cosmere_pcs():
         b = _cb.CosmereBuild(d.get('build'), homebrew=_hb_store)
         o = b.order()
+        resources = _cosmere_live_resources(d, build=b, homebrew=_hb_store)
         _ps = d.get('play_state') or {}
-        _cur_h = _ps.get('health')
         cards.append({
             'id': d['id'], 'name': d.get('name', 'Unknown'), 'level': b.level, 'tier': b.tier,
-            'path': b.path, 'defenses': b.defenses(), 'health': b.health_max(),
+            'path': b.path, 'defenses': b.defenses(), 'health': resources['health']['max'],
             # Current health + active conditions from runtime play_state, so the
             # roster shows party status at a glance (parity with the hub card).
-            'current_health': int(_cur_h if _cur_h is not None else b.health_max()),
+            'current_health': resources['health']['current'],
+            'focus': resources['focus']['max'],
+            'current_focus': resources['focus']['current'],
+            'investiture': resources['investiture']['max'],
+            'current_investiture': resources['investiture']['current'],
             'conditions': {k: v for k, v in (_ps.get('conditions') or {}).items() if v},
-            'deflect': b.deflect_value(), 'investiture': b.investiture_max(),
+            'deflect': b.deflect_value(),
             'is_radiant': b.is_radiant,
             'order': o['name'] if o else '', 'spren': b.spren_name or (o['spren'] if o else ''),
             'surges': [_rad.surge_name(s) for s in o['surges']] if (o and b.first_ideal_sworn) else [],
@@ -14595,11 +14760,71 @@ def api_cosmere_advancement_preview():
     return jsonify(_cosmere_advancement_response(payload, data.get('pid')))
 
 
+def _cosmere_live_resources(doc, *, build=None, homebrew=None):
+    """Project resources, retaining legacy card values if rules are unavailable."""
+    from systems.cosmere.party import project_member
+    try:
+        return project_member(doc, homebrew=homebrew)['resources']
+    except (ValueError, TypeError, KeyError, AttributeError):
+        # A saved Mistborn PC can outlive the private rules installation. The
+        # older build and play_state still have enough data for display/SSE.
+        pass
+
+    if build is None:
+        try:
+            from systems.cosmere.build import CosmereBuild
+            build = CosmereBuild(doc.get('build') or {}, homebrew=homebrew)
+        except (ValueError, TypeError, KeyError, AttributeError):
+            build = None
+    state = doc.get('play_state') if isinstance(doc.get('play_state'), dict) else {}
+    derived = doc.get('derived') if isinstance(doc.get('derived'), dict) else {}
+
+    def number(value, default=0):
+        try:
+            return int(value if value is not None else default)
+        except (ValueError, TypeError, OverflowError):
+            return int(default)
+
+    def maximum(method, key):
+        try:
+            return max(0, number(getattr(build, method)())) if build else max(
+                0, number(derived.get(key)))
+        except (ValueError, TypeError, AttributeError):
+            return max(0, number(derived.get(key)))
+
+    health_max = maximum('health_max', 'health_max')
+    focus_max = maximum('focus_max', 'focus_max')
+    investiture_max = maximum('investiture_max', 'investiture_max')
+    return {
+        'health': {'current': number(state.get('health'), health_max), 'max': health_max},
+        'focus': {'current': number(state.get('focus'), focus_max), 'max': focus_max},
+        'investiture': {'current': number(state.get('investiture'), investiture_max),
+                        'max': investiture_max},
+    }
+
+
+def _broadcast_cosmere_player_state(doc, **extra):
+    """Publish identity, live state, and resource limits without failing a save."""
+    try:
+        resources = _cosmere_live_resources(doc, homebrew=_cosmere_homebrew_store())
+        payload = {
+            'pid': doc['id'], 'name': doc.get('name'),
+            'play_state': doc.get('play_state') or {},
+            'health_max': resources['health']['max'],
+            'focus_max': resources['focus']['max'],
+            'investiture_max': resources['investiture']['max'],
+            'health_current': resources['health']['current'],
+            'focus_current': resources['focus']['current'],
+            'investiture_current': resources['investiture']['current'],
+        }
+        payload.update(extra)
+        sse_broadcast('cosmere_player_state', payload)
+    except Exception:
+        app.logger.exception('Could not broadcast Cosmere player state')
+
+
 def _cosmere_advancement_broadcast(doc):
-    sse_broadcast('cosmere_player_state', {
-        'pid': doc['id'], 'name': doc.get('name'),
-        'play_state': doc.get('play_state', {}), 'revision': doc['revision'],
-    })
+    _broadcast_cosmere_player_state(doc, revision=doc['revision'])
 
 
 def _set_cosmere_action_receipt_coordination(pid, request_id, status):
@@ -14867,11 +15092,8 @@ def api_cosmere_pc_action(pid, action_id):
             _do_broadcast_encounter_state()
         published_receipt = copy.deepcopy(receipt_box['value'])
         published_receipt['coordination_status'] = 'complete'
-        sse_broadcast('cosmere_player_state', {
-            'pid': pid, 'name': updated.get('name'),
-            'play_state': updated['play_state'], 'revision': updated['revision'],
-            'action_receipt': published_receipt,
-        })
+        _broadcast_cosmere_player_state(
+            updated, revision=updated['revision'], action_receipt=published_receipt)
         completed_receipt = _set_cosmere_action_receipt_coordination(
             pid, request_id, 'complete')
     return jsonify({'ok': True, 'replayed': replayed,
@@ -15600,9 +15822,8 @@ def _sync_cosmere_pc_from_combatant(c):
         _save_cosmere_pc(d, fsync=False)
         c.character_revision = int(d.get('revision', 0) or 0)
     try:
-        sse_broadcast('cosmere_player_state', {
-            'pid': pid, 'name': name, 'play_state': ps,
-            'revision': int(getattr(c, 'character_revision', 0) or 0)})
+        _broadcast_cosmere_player_state(
+            d, revision=int(getattr(c, 'character_revision', 0) or 0))
     except Exception:
         pass
 
@@ -15719,7 +15940,7 @@ def cosmere_pc_state(pid):
             pid, ps, character_revision=doc.get('revision')):
         _broadcast_encounter_state()
     try:
-        sse_broadcast('cosmere_player_state', {'pid': pid, 'name': doc.get('name'), 'play_state': ps})
+        _broadcast_cosmere_player_state(doc)
     except Exception:
         pass
     return jsonify({'ok': True, 'play_state': ps})
@@ -15802,7 +16023,7 @@ def cosmere_rest():
                 pidd, ps, character_revision=doc.get('revision')):
             _broadcast_encounter_state()
         try:
-            sse_broadcast('cosmere_player_state', {'pid': pidd, 'name': doc.get('name'), 'play_state': ps})
+            _broadcast_cosmere_player_state(doc)
         except Exception:
             pass
         rested.append({'pid': pidd, 'name': doc.get('name'), 'play_state': ps})
@@ -15835,7 +16056,7 @@ def cosmere_pc_rest(pid):
             pid, ps, character_revision=doc.get('revision')):
         _broadcast_encounter_state()
     try:
-        sse_broadcast('cosmere_player_state', {'pid': pid, 'name': doc.get('name'), 'play_state': ps})
+        _broadcast_cosmere_player_state(doc)
     except Exception:
         pass
     _combat_log(f"{doc.get('name', 'A hero')} took a {mode} rest.", 'info')
@@ -16122,8 +16343,7 @@ def _apply_cosmere_condition_change(instance_id, condition, action='toggle', eff
             _save_cosmere_pc(d, fsync=False)
             target.character_revision = int(d.get('revision', 0) or 0)
             try:
-                sse_broadcast('cosmere_player_state',
-                              {'pid': d.get('id'), 'name': d.get('name'), 'play_state': ps})
+                _broadcast_cosmere_player_state(d)
             except Exception:
                 pass
     _persist_encounter_state()
@@ -27345,15 +27565,17 @@ def _cosmere_status_party(docs):
         except Exception:
             continue
         ps = d.get('play_state') if isinstance(d.get('play_state'), dict) else {}
+        resources = _cosmere_live_resources(d, build=b, homebrew=hb)
         def _ps(key, default):
             try:
                 return int(ps[key])
             except (KeyError, TypeError, ValueError):
                 return int(default)
-        hmax = b.health_max()
-        cur = _ps('health', hmax)
+        hmax = resources['health']['max']
+        cur = resources['health']['current']
         o = b.order()
         out.append({
+            'id': d.get('id'),
             'name': d.get('name', 'Unknown'),
             'ancestry': b.ancestry,
             'class_name': (o['name'] if o else b.path) or '',
@@ -27366,9 +27588,10 @@ def _cosmere_status_party(docs):
             'conditions': {k: v for k, v in (ps.get('conditions') or {}).items() if v},
             'hero_points': None,
             'injuries': _ps('injuries', 0),
-            'focus_current': _ps('focus', b.focus_max()), 'focus_max': b.focus_max(),
-            'investiture_current': _ps('investiture', b.investiture_max()),
-            'investiture_max': b.investiture_max(),
+            'focus_current': resources['focus']['current'],
+            'focus_max': resources['focus']['max'],
+            'investiture_current': resources['investiture']['current'],
+            'investiture_max': resources['investiture']['max'],
             'exploration_activity': '',
         })
     return out

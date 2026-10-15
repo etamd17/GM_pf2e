@@ -1124,9 +1124,8 @@
 <script>
 /* GM Screen polish: (1) pin/reorder cards, (2) unified reference search, (3) condition cross-links */
 (function () {
-    var grid = document.querySelector('.masonry');
-    if (!grid) return;
-    var cards = Array.prototype.slice.call(grid.querySelectorAll('.gm-ref-card'));
+    var cards = Array.prototype.slice.call(document.querySelectorAll('.gm-group-grid .gm-ref-card'));
+    if (!cards.length) return;
     var PIN_KEY = 'gmscreen_pinned_v1';
 
     function cardKey(card) {
@@ -1139,6 +1138,7 @@
 
     // ---- 1. Pin buttons + persisted reorder ----
     cards.forEach(function (card) {
+        card._gmGroup = card.parentElement;
         card.dataset.cardKey = cardKey(card);
         var h = card.querySelector('.gm-ref-header');
         if (h && !h.querySelector('.gm-pin-btn')) {
@@ -1155,8 +1155,10 @@
     function applyPins() {
         var pinned = getPinned(), byKey = {};
         cards.forEach(function (c) { byKey[c.dataset.cardKey] = c; });
-        pinned.forEach(function (k) { if (byKey[k]) grid.appendChild(byKey[k]); });
-        cards.forEach(function (c) { if (pinned.indexOf(c.dataset.cardKey) === -1) grid.appendChild(c); });
+        pinned.forEach(function (k) { if (byKey[k]) byKey[k]._gmGroup.appendChild(byKey[k]); });
+        cards.forEach(function (c) {
+            if (pinned.indexOf(c.dataset.cardKey) === -1) c._gmGroup.appendChild(c);
+        });
         cards.forEach(function (c) {
             var isP = pinned.indexOf(c.dataset.cardKey) !== -1;
             c.classList.toggle('is-pinned', isP);

@@ -4,7 +4,56 @@ the sheet; Cosmere was record-only, so player-visible wealth desynced).
 """
 from __future__ import annotations
 
+import copy
+
 import app
+import pytest
+
+
+@pytest.fixture
+def loot_routes(tmp_path, monkeypatch):
+    ledger_path = tmp_path / 'loot.json'
+    original = {
+        'id': 'a' * 32,
+        'name': 'Kal',
+        'wallet': {
+            'spheres': {'chip': 4, 'mark': 2, 'broam': 1},
+            'items': [{'name': 'Rope', 'qty': 2}],
+        },
+    }
+    store = {original['id']: copy.deepcopy(original)}
+    saves = []
+
+    def load(pid):
+        return copy.deepcopy(store.get(pid))
+
+    def save(doc, fsync=True):
+        saves.append(copy.deepcopy(doc))
+        store[doc['id']] = copy.deepcopy(doc)
+        return doc['id']
+
+    monkeypatch.setattr(app, 'LOOT_LEDGER_FILE', str(ledger_path))
+    monkeypatch.setattr(app, '_active_system', lambda: 'cosmere')
+    monkeypatch.setattr(app, '_is_gm', lambda: True)
+    monkeypatch.setattr(app, '_list_cosmere_pcs', lambda: [copy.deepcopy(v) for v in store.values()])
+    monkeypatch.setattr(app, '_load_cosmere_pc', load)
+    monkeypatch.setattr(app, '_save_cosmere_pc', save)
+    monkeypatch.setattr(app, 'sse_broadcast', lambda *_a, **_k: None)
+    return app.app.test_client(), store, saves
+
+
+def _award(client, recipient='Kal'):
+    return client.post('/api/cosmere/loot/add', json={
+        'recipient': recipient,
+        'items': [{'name': 'Rope', 'qty': 3}, {'name': 'Knife', 'qty': 1}],
+        'spheres': {'chip': 2, 'mark': 1, 'broam': 1},
+    })
+
+
+def _only_entry(client):
+    entries = client.get('/api/cosmere/loot').get_json()['entries']
+    assert len(entries) == 1
+    return entries[0]
 
 
 def test_credit_cosmere_loot_accumulates_spheres_and_merges_items():
@@ -53,3 +102,76 @@ def test_credit_cosmere_loot_ignores_blank_items():
     w = app._credit_cosmere_loot(doc, [{'name': '', 'qty': 5}, {'name': '  ', 'qty': 1}], {})
     assert w['items'] == []
     assert w['spheres'] == {'chip': 0, 'mark': 0, 'broam': 0}
+
+
+def test_delete_reverses_a_named_award_from_the_wallet(loot_routes):
+    client, store, _saves = loot_routes
+    before = copy.deepcopy(store['a' * 32]['wallet'])
+
+    added = _award(client)
+    assert added.status_code == 200, added.get_json()
+    entry = _only_entry(client)
+    assert entry['recipient_pid'] == 'a' * 32
+
+    deleted = client.post('/api/cosmere/loot/delete', json={'id': entry['id']})
+    assert deleted.status_code == 200, deleted.get_json()
+    assert store['a' * 32]['wallet'] == before
+    assert client.get('/api/cosmere/loot').get_json()['entries'] == []
+
+
+def test_delete_refuses_when_the_awarded_wallet_value_was_spent(loot_routes):
+    client, store, _saves = loot_routes
+    assert _award(client).status_code == 200
+    entry = _only_entry(client)
+    store['a' * 32]['wallet']['spheres']['broam'] = 0
+    after_spend = copy.deepcopy(store['a' * 32]['wallet'])
+
+    deleted = client.post('/api/cosmere/loot/delete', json={'id': entry['id']})
+
+    assert deleted.status_code == 409
+    assert 'enough' in deleted.get_json()['error'].lower()
+    assert store['a' * 32]['wallet'] == after_spend
+    assert _only_entry(client)['id'] == entry['id']
+
+
+def test_wallet_save_failure_leaves_no_ledger_entry(loot_routes, monkeypatch):
+    client, store, _saves = loot_routes
+    before = copy.deepcopy(store['a' * 32]['wallet'])
+
+    def fail_save(_doc, fsync=True):
+        raise OSError('injected wallet failure')
+
+    monkeypatch.setattr(app, '_save_cosmere_pc', fail_save)
+    response = _award(client)
+
+    assert response.status_code == 503
+    assert store['a' * 32]['wallet'] == before
+    assert app._load_loot_ledger()['entries'] == []
+
+
+def test_ledger_save_failure_rolls_the_wallet_back(loot_routes, monkeypatch):
+    client, store, saves = loot_routes
+    before = copy.deepcopy(store['a' * 32]['wallet'])
+
+    def fail_ledger(_ledger):
+        raise OSError('injected ledger failure')
+
+    monkeypatch.setattr(app, '_save_loot_ledger', fail_ledger)
+    response = _award(client)
+
+    assert response.status_code == 503
+    assert store['a' * 32]['wallet'] == before
+    assert len(saves) == 2  # attempted credit, then compensating wallet restore
+    assert app._load_loot_ledger()['entries'] == []
+
+
+def test_party_award_is_ledger_only_and_can_be_removed(loot_routes):
+    client, store, saves = loot_routes
+    before = copy.deepcopy(store)
+
+    assert _award(client, 'The Party').status_code == 200
+    entry = _only_entry(client)
+    assert 'recipient_pid' not in entry
+    assert client.post('/api/cosmere/loot/delete', json={'id': entry['id']}).status_code == 200
+    assert store == before
+    assert saves == []

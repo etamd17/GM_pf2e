@@ -9,6 +9,7 @@ import os
 import sys
 import textwrap
 import subprocess
+from pathlib import Path
 
 _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -80,6 +81,25 @@ def test_cosmere_loot_redirects_out_in_pf2e_mode():
         assert c.post('/campaign/' + cid + '/activate').status_code == 302
         assert c.get('/cosmere/loot').status_code == 302           # redirects out
         assert c.post('/api/cosmere/loot/add', json={'recipient': 'X', 'spheres': {'chip': 1}}).status_code == 400
+        assert c.post('/api/cosmere/loot/delete', json={'id': 'old-entry'}).status_code == 400
         print('COSMERE_LOOT_GATED_OK')
     ''')
     assert 'COSMERE_LOOT_GATED_OK' in r.stdout, "stdout:\n%s\nstderr:\n%s" % (r.stdout, r.stderr)
+
+
+def test_cosmere_loot_client_keeps_form_state_and_reports_api_errors():
+    source = Path(_REPO, 'templates', 'cosmere_loot.html').read_text(encoding='utf-8')
+    helper = source[source.index('async function postJSON'):source.index('function load()')]
+    assert '!response.ok' in helper
+    assert '!data.success' in helper
+    assert 'data.error || data.message' in helper
+
+    delete = source[source.index('async function del(id)'):source.index("$('cl-additem').onclick")]
+    assert 'await postJSON' in delete
+    assert 'showError(error)' in delete
+
+    submit = source[source.index("$('cl-form').onsubmit"):source.index('load();\n})()')]
+    assert 'await postJSON' in submit
+    assert 'showError(error)' in submit
+    assert submit.index("await postJSON") < submit.index("$('cl-items').innerHTML = ''")
+    assert submit.index("$('cl-items').innerHTML = ''") < submit.index('} catch (error)')

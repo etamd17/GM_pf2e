@@ -6,6 +6,7 @@
     const sceneId = cfg.sceneId;
     const canvas = document.getElementById('map-canvas');
     const viewport = document.getElementById('map-viewport');
+    let toastTimer = null;
     if (!sceneId || !canvas || !viewport) {
         wireCreateForm();
         // A table screen opened BEFORE a scene is pushed used to stop here, and
@@ -71,7 +72,6 @@
     let measurement = null;
     let background = null;
     let backgroundKey = '';
-    let toastTimer = null;
 
     function toast(message, error) {
         const el = document.getElementById('map-toast');

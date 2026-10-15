@@ -1600,6 +1600,18 @@
             } else { aInfo.textContent = ''; }
         }
 
+        function pf2eTrainedSkills() {
+            const cData = bData.classes[state.cls] || {};
+            const trained = [
+                ...(cData.base_skills || []),
+                ...(state.bgSkills || []),
+                ...(state.freeSkills || []),
+            ];
+            const subclass = state.subclass && bData.subclass_matrix && bData.subclass_matrix[state.subclass];
+            if (subclass && subclass.skills) trained.push(...subclass.skills);
+            return [...new Set(trained.filter(Boolean).map(s => String(s).toLowerCase()))];
+        }
+
         function _builderValidationWarnings() {
             // Surface obvious prereq mismatches the picker doesn't currently
             // gate. PF2e feat prereqs are written in natural language ("you
@@ -1624,7 +1636,7 @@
             const myAnc = state.ancestry.toLowerCase().replace(/-/g, ' ').replace(/_/g, ' ');
             const warnings = [];
             const allFeatNames = [];
-            if (state.ancFeat) allFeatNames.push({ slot: 'Ancestry feat', name: state.ancFeat });
+            if (state.ancFeat) allFeatNames.push({ slot: 'Ancestry feat', name: state.ancFeat.name });
             if (state.background) allFeatNames.push({ slot: 'Background', name: state.background });
             for (const [k, v] of Object.entries(state.clsFeats || {})) {
                 if (typeof v === 'string') allFeatNames.push({ slot: 'Class feat', name: v });
@@ -1679,7 +1691,7 @@
                 <div class="flex gap-3">
                     <span class="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-amber-400 font-bold">${state.ancestry || '—'}</span>
                     <span class="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-gray-300 font-bold">${state.heritage || '—'}</span>
-                    ${state.ancFeat ? `<span class="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-green-400 text-sm">Feat: ${esc(state.ancFeat)}</span>` : ''}
+                    ${state.ancFeat ? `<span class="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-green-400 text-sm">Feat: ${esc(state.ancFeat.name)}</span>` : ''}
                 </div>
             </div>`;
             
@@ -1693,7 +1705,7 @@
             html += `<div class="mb-6">
                 <h4 class="text-sm font-bold text-gray-400 border-b border-gray-700 pb-1 mb-3 uppercase">Class</h4>
                 <div class="flex gap-3">
-                    <span class="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-amber-400 font-bold">${state.className || '—'}</span>
+                    <span class="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-amber-400 font-bold">${state.cls ? esc(state.cls.charAt(0).toUpperCase() + state.cls.slice(1)) : '—'}</span>
                     ${state.subclass ? `<span class="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-gray-300">${esc(state.subclass)}</span>` : ''}
                     ${state.keyStat ? `<span class="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-gray-400">Key: <span class="text-white font-bold uppercase">${state.keyStat}</span></span>` : ''}
                 </div>
@@ -1718,7 +1730,7 @@
             html += `</div></div>`;
             
             // Skills
-            let trainedSkills = (state.trainedSkills || state.freeSkills || []).filter(s => s);
+            let trainedSkills = pf2eTrainedSkills();
             let allLores = [...(state.bgLores || []).map(l => l.replace('lore: ', '').replace('lore:', '').trim()), ...(state.customLores || [])];
             if (trainedSkills.length > 0 || allLores.length > 0) {
                 html += `<div class="mb-6">
@@ -1730,7 +1742,7 @@
             }
             
             // Spells (if spellcaster)
-            let selectedSpells = state.selectedSpells || [];
+            let selectedSpells = state.spells || [];
             if (selectedSpells.length > 0) {
                 html += `<div class="mb-6">
                     <h4 class="text-sm font-bold text-gray-400 border-b border-gray-700 pb-1 mb-3 uppercase">Starting Spells</h4>
@@ -1773,16 +1785,12 @@
             let safeFlaws = (state.ancestry && dbAncestries[state.ancestry]) ? dbAncestries[state.ancestry].flaws : [];
             if(document.getElementById('sel-anc-method').value === 'standard') { parseDeepFlaws(safeFlaws).forEach(f => finalStats[f]-=2); }
 
-            let allSkills = [...((bData.classes[state.cls] || {}).base_skills || []).map(s=>s.toLowerCase()), ...state.bgSkills.map(s=>s.toLowerCase()), ...state.freeSkills.map(s=>s.toLowerCase())];
+            let allSkills = pf2eTrainedSkills();
             
             // Add background-granted lore skills
             state.bgLores.forEach(l => allSkills.push(l));
             // Add custom lore skills
             state.customLores.forEach(l => allSkills.push('lore: ' + l.toLowerCase()));
-            
-            if (state.subclass && bData.subclass_matrix && bData.subclass_matrix[state.subclass] && bData.subclass_matrix[state.subclass].skills) {
-                bData.subclass_matrix[state.subclass].skills.forEach(sk => allSkills.push(sk.toLowerCase()));
-            }
             
             let spellData = [];
             const cData = bData.classes[state.cls] || {};
