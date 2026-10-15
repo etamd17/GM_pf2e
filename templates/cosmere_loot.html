@@ -104,6 +104,19 @@
   }
   function esc(t){ const d = document.createElement('div'); d.textContent = t==null?'':String(t); return d.innerHTML; }
 
+  async function postJSON(url, body){
+    const response = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    let data = {};
+    try { data = await response.json(); } catch (_error) {}
+    if (!response.ok || !data.success) throw new Error(data.error || data.message || 'The loot change could not be saved.');
+    return data;
+  }
+  function showError(error){
+    const message = error && error.message ? error.message : 'The loot change could not be saved.';
+    if (window.pf2eToast) window.pf2eToast(message, 'danger');
+    else window.alert(message);
+  }
+
   function addItemRow(name, qty){
     const row = document.createElement('div');
     row.className = 'cl-item';
@@ -152,13 +165,17 @@
   function load(){
     fetch('/api/cosmere/loot').then(r => r.json()).then(render).catch(()=>{});
   }
-  function del(id){
-    fetch('/api/cosmere/loot/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})})
-      .then(() => load());
+  async function del(id){
+    try {
+      await postJSON('/api/cosmere/loot/delete', {id});
+      load();
+    } catch (error) {
+      showError(error);
+    }
   }
 
   $('cl-additem').onclick = () => addItemRow('', 1);
-  $('cl-form').onsubmit = function(ev){
+  $('cl-form').onsubmit = async function(ev){
     ev.preventDefault();
     const items = [...document.querySelectorAll('#cl-items .cl-item')].map(r => ({
       name: r.querySelector('.nm').value.trim(),
@@ -166,12 +183,14 @@
     })).filter(i => i.name);
     const spheres = {broam: +$('cl-broam').value||0, mark: +$('cl-mark').value||0, chip: +$('cl-chip').value||0};
     if (!items.length && !sphereValue(spheres) && !$('cl-note').value.trim()) return;
-    fetch('/api/cosmere/loot/add', {method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({recipient: $('cl-recipient').value, gem: $('cl-gem').value, items, spheres, note: $('cl-note').value.trim()})})
-      .then(r => r.json()).then(() => {
-        $('cl-items').innerHTML = ''; $('cl-broam').value = $('cl-mark').value = $('cl-chip').value = 0; $('cl-note').value = '';
-        load();
-      });
+    try {
+      await postJSON('/api/cosmere/loot/add', {recipient: $('cl-recipient').value, gem: $('cl-gem').value,
+        items, spheres, note: $('cl-note').value.trim()});
+      $('cl-items').innerHTML = ''; $('cl-broam').value = $('cl-mark').value = $('cl-chip').value = 0; $('cl-note').value = '';
+      load();
+    } catch (error) {
+      showError(error);
+    }
   };
 
   load();

@@ -2276,11 +2276,7 @@ def _load_loot_ledger():
 
 def _save_loot_ledger(ledger):
     """Persist the loot ledger to disk."""
-    try:
-        with open(LOOT_LEDGER_FILE, 'w', encoding='utf-8') as f:
-            json.dump(ledger, f, indent=2)
-    except IOError:
-        pass
+    _atomic_write_json(LOOT_LEDGER_FILE, ledger, indent=2)
 
 
 def _mutate_loot_ledger(fn):
@@ -12009,6 +12005,77 @@ def _credit_cosmere_loot(doc, items, spheres):
     return doc['wallet']
 
 
+def _debit_cosmere_loot(doc, items, spheres):
+    """Remove a recorded award from a Cosmere PC wallet.
+
+    Validate the whole debit before changing the document so a partially spent
+    award cannot leave any denomination or item below zero.
+    """
+    wallet = doc.get('wallet') if isinstance(doc.get('wallet'), dict) else {}
+    current_spheres = dict(wallet.get('spheres') or {})
+    required_spheres = {
+        key: max(0, int((spheres or {}).get(key, 0) or 0))
+        for key in ('chip', 'mark', 'broam')
+    }
+    for key, required in required_spheres.items():
+        available = max(0, int(current_spheres.get(key, 0) or 0))
+        if available < required:
+            raise ValueError(f'Wallet does not have enough {key}s to reverse this award.')
+
+    goods = [dict(g) for g in (wallet.get('items') or []) if isinstance(g, dict)]
+    required_items = {}
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get('name', '')).strip()[:80]
+        if not name:
+            continue
+        required_items[name] = required_items.get(name, 0) + max(
+            0, int(item.get('qty', 1) or 1))
+    available_items = {}
+    for good in goods:
+        name = str(good.get('name', '')).strip()[:80]
+        if name:
+            available_items[name] = available_items.get(name, 0) + max(
+                0, int(good.get('qty', 0) or 0))
+    for name, required in required_items.items():
+        if available_items.get(name, 0) < required:
+            raise ValueError(f'Wallet does not have enough {name} to reverse this award.')
+
+    remaining = dict(required_items)
+    kept_goods = []
+    for good in goods:
+        name = str(good.get('name', '')).strip()[:80]
+        qty = max(0, int(good.get('qty', 0) or 0))
+        take = min(qty, remaining.get(name, 0))
+        remaining[name] = remaining.get(name, 0) - take
+        qty -= take
+        if qty:
+            good['qty'] = qty
+            kept_goods.append(good)
+    doc['wallet'] = {
+        'spheres': {
+            key: max(0, int(current_spheres.get(key, 0) or 0)) - required
+            for key, required in required_spheres.items()
+        },
+        'items': kept_goods,
+    }
+    return doc['wallet']
+
+
+def _cosmere_loot_recipient(recipient, *, recipient_pid=None):
+    """Resolve a named loot recipient to a stable PC identity."""
+    if recipient_pid:
+        return recipient_pid
+    if recipient.strip().casefold() in {'party', 'the party'}:
+        return None
+    for candidate in _list_cosmere_pcs():
+        name = candidate.get('name') or (candidate.get('build') or {}).get('name') or ''
+        if name == recipient:
+            return candidate.get('id')
+    return None
+
+
 @app.route('/api/cosmere/loot/add', methods=['POST'])
 @gm_required
 def api_cosmere_loot_add():
@@ -12022,9 +12089,12 @@ def api_cosmere_loot_add():
     items = data.get('items') or []
     spheres = data.get('spheres') or {}
     gem = data.get('gem') if data.get('gem') in _COSMERE_GEMS else 'diamond'
-    norm_items = [{'name': str(it.get('name', '')).strip()[:80], 'qty': int(it.get('qty', 1) or 1)}
+    norm_items = [{'name': str(it.get('name', '')).strip()[:80],
+                   'qty': max(0, int(it.get('qty', 1) or 1))}
                   for it in items if isinstance(it, dict) and (it.get('name') or '').strip()]
-    norm_spheres = {k: int(spheres.get(k, 0) or 0) for k in ('chip', 'mark', 'broam')}
+    norm_items = [item for item in norm_items if item['qty']]
+    norm_spheres = {k: max(0, int(spheres.get(k, 0) or 0))
+                    for k in ('chip', 'mark', 'broam')}
     from datetime import datetime as _dt_loot
     entry = {
         'id': str(uuid.uuid4()),
@@ -12035,36 +12105,127 @@ def api_cosmere_loot_add():
         'gem': gem,
         'note': (data.get('note') or '').strip()[:280],
     }
-    _mutate_loot_ledger(lambda l: l['entries'].append(entry))
-    # Credit a NAMED PC's sheet wallet (so player-visible wealth tracks the
-    # ledger). A whole-party award (recipient not matching a PC, e.g. 'Party')
-    # stays ledger-only. Mirrors the PF2e send_loot sheet write.
-    for d in _list_cosmere_pcs():
-        if (d.get('name') or (d.get('build') or {}).get('name') or '') == recipient:
-            pid = d.get('id')
-            wallet = None
-            with _path_lock(_cosmere_pc_path(pid)):
-                doc = _load_cosmere_pc(pid) or d
+    pid = _cosmere_loot_recipient(recipient)
+    if not pid:
+        entry['ledger_only'] = True
+    wallet = None
+    with _path_lock(LOOT_LEDGER_FILE):
+        ledger = _load_loot_ledger()
+        if pid:
+            pc_path = _cosmere_pc_path(pid)
+            if pc_path is None:
+                return jsonify({'success': False, 'error': 'Loot recipient is invalid.'}), 409
+            with _path_lock(pc_path):
+                doc = _load_cosmere_pc(pid)
+                if doc is None:
+                    return jsonify({'success': False, 'error': 'Loot recipient no longer exists.'}), 409
+                old_wallet = copy.deepcopy(doc.get('wallet'))
                 wallet = _credit_cosmere_loot(doc, norm_items, norm_spheres)
-                _save_cosmere_pc(doc, fsync=False)
+                try:
+                    _save_cosmere_pc(doc, fsync=False)
+                except (OSError, ValueError):
+                    app.logger.exception('Could not save the Cosmere loot recipient wallet')
+                    return jsonify({'success': False, 'error': 'Could not save the recipient wallet.'}), 503
+                entry['recipient_pid'] = pid
+                ledger.setdefault('entries', []).append(entry)
+                try:
+                    _save_loot_ledger(ledger)
+                except OSError:
+                    doc['wallet'] = old_wallet
+                    try:
+                        _save_cosmere_pc(doc, fsync=False)
+                    except (OSError, ValueError):
+                        app.logger.exception('Could not roll back a Cosmere loot wallet')
+                    app.logger.exception('Could not save the Cosmere loot ledger')
+                    return jsonify({'success': False, 'error': 'Could not save the loot ledger.'}), 503
+        else:
+            ledger.setdefault('entries', []).append(entry)
             try:
-                sse_broadcast('cosmere_loot', {'pid': pid, 'name': recipient,
-                                               'wallet': wallet, 'items': norm_items,
-                                               'spheres': norm_spheres})
-            except Exception:
-                pass
-            break
+                _save_loot_ledger(ledger)
+            except OSError:
+                app.logger.exception('Could not save the Cosmere loot ledger')
+                return jsonify({'success': False, 'error': 'Could not save the loot ledger.'}), 503
+    if pid:
+        try:
+            sse_broadcast('cosmere_loot', {'pid': pid, 'name': recipient,
+                                           'wallet': wallet, 'items': norm_items,
+                                           'spheres': norm_spheres})
+        except Exception:
+            pass
     return jsonify({'success': True})
 
 
 @app.route('/api/cosmere/loot/delete', methods=['POST'])
 @gm_required
 def api_cosmere_loot_delete():
-    """Remove a loot-ledger entry by id."""
+    """Reverse a recorded award and remove its loot-ledger entry."""
+    if _active_system() != 'cosmere':
+        return jsonify({'success': False, 'error': 'cosmere only'}), 400
     entry_id = (request.get_json(silent=True) or {}).get('id', '')
     if not entry_id:
-        return jsonify({'success': False}), 400
-    _mutate_loot_ledger(lambda l: l.update(entries=[e for e in l['entries'] if e.get('id') != entry_id]))
+        return jsonify({'success': False, 'error': 'entry id required'}), 400
+    wallet = None
+    pid = None
+    recipient = ''
+    with _path_lock(LOOT_LEDGER_FILE):
+        ledger = _load_loot_ledger()
+        entry = next((item for item in ledger.get('entries', [])
+                      if item.get('id') == entry_id), None)
+        if entry is None:
+            return jsonify({'success': False, 'error': 'Loot entry not found.'}), 404
+        recipient = str(entry.get('recipient') or '')
+        pid = None if entry.get('ledger_only') else _cosmere_loot_recipient(
+            recipient, recipient_pid=entry.get('recipient_pid'))
+        if pid:
+            pc_path = _cosmere_pc_path(pid)
+            if pc_path is None:
+                return jsonify({'success': False, 'error': 'Loot recipient is invalid.'}), 409
+            with _path_lock(pc_path):
+                doc = _load_cosmere_pc(pid)
+                if doc is None:
+                    return jsonify({
+                        'success': False,
+                        'error': 'The recipient wallet is unavailable; the ledger entry was kept.',
+                    }), 409
+                old_wallet = copy.deepcopy(doc.get('wallet'))
+                try:
+                    wallet = _debit_cosmere_loot(
+                        doc, entry.get('items') or [], entry.get('spheres') or {})
+                except (TypeError, ValueError) as exc:
+                    return jsonify({'success': False, 'error': str(exc)}), 409
+                try:
+                    _save_cosmere_pc(doc, fsync=False)
+                except (OSError, ValueError):
+                    app.logger.exception('Could not save a reversed Cosmere loot wallet')
+                    return jsonify({'success': False, 'error': 'Could not save the recipient wallet.'}), 503
+                ledger['entries'] = [item for item in ledger.get('entries', [])
+                                     if item.get('id') != entry_id]
+                try:
+                    _save_loot_ledger(ledger)
+                except OSError:
+                    doc['wallet'] = old_wallet
+                    try:
+                        _save_cosmere_pc(doc, fsync=False)
+                    except (OSError, ValueError):
+                        app.logger.exception('Could not roll back a reversed Cosmere loot wallet')
+                    app.logger.exception('Could not save the Cosmere loot ledger')
+                    return jsonify({'success': False, 'error': 'Could not save the loot ledger.'}), 503
+        else:
+            ledger['entries'] = [item for item in ledger.get('entries', [])
+                                 if item.get('id') != entry_id]
+            try:
+                _save_loot_ledger(ledger)
+            except OSError:
+                app.logger.exception('Could not save the Cosmere loot ledger')
+                return jsonify({'success': False, 'error': 'Could not save the loot ledger.'}), 503
+    if pid:
+        try:
+            sse_broadcast('cosmere_loot', {'pid': pid, 'name': recipient,
+                                           'wallet': wallet,
+                                           'items': entry.get('items') or [],
+                                           'spheres': entry.get('spheres') or {}})
+        except Exception:
+            pass
     return jsonify({'success': True})
 
 
