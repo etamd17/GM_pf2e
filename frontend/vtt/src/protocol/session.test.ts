@@ -535,6 +535,26 @@ describe('a rejected snapshot retires its subscription ID (handoff 020)', () => 
     expect(t.status()).toBe('resyncing');
   });
 
+  it("Codex's repro: from a live projection, a reused rejected ID is refused and the good scene stays", () => {
+    const t = setup('table');
+    t.transport.subscribe(t.session);
+    t.transport.push(snapshot('s-good-1', [tok('a')]));
+    t.transport.deliver(t.session);
+    t.transport.subscribe(t.session);
+    t.transport.push(snapshot('sub_bad0000000000', [tok('x'), tok('x', 4)]));
+    t.transport.deliver(t.session);
+    expect(t.ids()).toEqual(['a']);
+    expect(t.status()).toBe('resyncing');
+    expect(t.transport.resubscribeRequests).toEqual(['state-lost']);
+    t.transport.subscribe(t.session);
+    t.transport.push(snapshot('sub_bad0000000000', [tok('y')]));
+    t.transport.deliver(t.session);
+    expect(t.session.stats.refusedSnapshots).toBe(1);
+    expect(t.session.currentSubscriptionId).toBeNull();
+    expect(t.ids()).toEqual(['a']);
+    expect(t.status()).toBe('resyncing');
+  });
+
   it('a genuinely new ID still recovers', () => {
     const t = rejected();
     t.transport.subscribe(t.session);
