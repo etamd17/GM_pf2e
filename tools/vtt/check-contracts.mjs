@@ -8,6 +8,7 @@ import { mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFile
 import { basename, dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
+import { checkFrame } from './semantics.mjs';
 
 const args = process.argv.slice(2);
 if (args.includes('--help')) {
@@ -76,7 +77,7 @@ const results = load(join(root, 'fixtures/cases.json')).map((c) => {
   try {
     const message = Object.hasOwn(c, 'raw') ? decodeRaw(c.raw) : c.message;
     checkJson(message);
-    valid = validators.get(c.schema)(message) === true;
+    valid = validators.get(c.schema)(message) === true && checkFrame(c.schema, message);
   } catch { /* Invalid raw text or boundary input is rejected before validation. */ }
   return { id: c.id, valid, matches: valid === c.valid };
 });

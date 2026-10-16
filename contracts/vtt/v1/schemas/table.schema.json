@@ -118,7 +118,6 @@
         "entities": {
           "type": "array",
           "maxItems": 2048,
-          "uniqueItems": true,
           "items": {
             "$ref": "#/definitions/Entity"
           }
@@ -153,7 +152,6 @@
         "upserted": {
           "type": "array",
           "maxItems": 2048,
-          "uniqueItems": true,
           "items": {
             "$ref": "#/definitions/Entity"
           }
@@ -161,7 +159,6 @@
         "removed": {
           "type": "array",
           "maxItems": 2048,
-          "uniqueItems": true,
           "items": {
             "$ref": "#/definitions/EntityRef"
           }

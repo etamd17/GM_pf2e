@@ -12,6 +12,8 @@ from jsonschema import Draft7Validator
 from jsonschema.exceptions import SchemaError, ValidationError
 from referencing import Registry, Resource
 
+from vtt.protocol.semantics import SemanticError, check_frame
+
 MAX_SAFE_INTEGER = 9_007_199_254_740_991
 MAX_JSON_BYTES = 2_097_152
 MAX_JSON_DEPTH = 64
@@ -19,7 +21,7 @@ SCHEMA_KEYWORDS = {
     "$schema", "$id", "$ref", "title", "description", "type", "const", "enum",
     "properties", "required", "additionalProperties", "definitions", "oneOf", "anyOf",
     "items", "minLength", "maxLength", "pattern", "minimum", "maximum", "minItems",
-    "maxItems", "uniqueItems",
+    "maxItems",
 }
 
 
@@ -119,8 +121,13 @@ def _check_refs(value, source: Path, files: set[Path]):
             target = (source.parent / reference.path).resolve() if reference.path else source
             if target not in files:
                 raise ProtocolValidationError("Missing local schema reference")
-        if value.get("type") == "integer" and not {"minimum", "maximum"}.issubset(value):
-            raise ProtocolValidationError("Every integer schema must be explicitly bounded")
+        kind = value.get("type")
+        if kind in ("integer", "number") and not {"minimum", "maximum"}.issubset(value):
+            raise ProtocolValidationError("Every numeric schema must be explicitly bounded")
+        if kind == "string" and "maxLength" not in value and not {"enum", "const"}.intersection(value):
+            raise ProtocolValidationError("Every string schema must be explicitly bounded")
+        if kind == "array" and "maxItems" not in value:
+            raise ProtocolValidationError("Every array schema must be explicitly bounded")
         for keyword in ("properties", "definitions"):
             for child in value.get(keyword, {}).values():
                 _check_refs(child, source, files)
@@ -175,6 +182,10 @@ class ContractRegistry:
         except ValidationError as error:
             # Error paths can disclose private fields; never serialize the library error.
             raise ProtocolValidationError("Message failed the canonical schema") from error
+        try:
+            check_frame(schema_key, message)
+        except SemanticError as error:
+            raise ProtocolValidationError("Message failed a frame rule") from error
 
     def parse_and_validate(self, schema_key: str, payload):
         message = StrictJSON.loads(payload)

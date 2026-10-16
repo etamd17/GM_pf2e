@@ -6,11 +6,16 @@
   "additionalProperties": false,
   "required": [
     "schemaVersion",
+    "subscriptionId",
     "reason"
   ],
   "properties": {
     "schemaVersion": {
       "$ref": "common.schema.json#/definitions/SchemaVersion"
+    },
+    "subscriptionId": {
+      "$ref": "common.schema.json#/definitions/OpaqueToken",
+      "description": "The subscription this resync ends. A client ignores a resync that names neither its live nor its pending subscription."
     },
     "reason": {
       "$ref": "common.schema.json#/definitions/ResyncReason"
