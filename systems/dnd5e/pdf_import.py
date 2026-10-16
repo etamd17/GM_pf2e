@@ -14,6 +14,7 @@ points are spread so the computed maximum equals the sheet's.
 from __future__ import annotations
 
 import io
+import itertools
 import re
 
 from systems.dnd5e import content as C
@@ -237,8 +238,8 @@ def to_ddb_shape(f: dict) -> dict:
         mods.append({'type': 'proficiency', 'subType': D._norm(tool).replace(' ', '-'), 'friendlySubtypeName': tool})
     # The sheet doesn't say which origin granted what, so every origin sees
     # every proficiency; the importer never assigns one twice.
-    modifiers = {g: list(mods) for g in ('race', 'class', 'background')}
-    modifiers.update(feat=[], item=[])
+    modifiers = {g: list(mods) for g in ('race', 'class', 'background', 'feat')}
+    modifiers.update(item=[])
 
     feats = [n for n in bullets.get('FEATS', []) if not re.search(r'ability score improvements?$', n, re.I)]
 
@@ -349,6 +350,33 @@ def _equip_worn_armor(inventory: list):
 
 # --- fitting ------------------------------------------------------------------------
 
+def _fit_worn_armor(doc: dict, want_ac: int, report: dict):
+    """The sheet doesn't say what is worn, only the AC it gives. Armour and
+    shields were assumed worn; take them off (fewest first) until the AC
+    matches. Returns the new compute() result, or None (left as it was)."""
+    inv = doc['state'].get('inventory') or []
+    worn = []
+    for it in inv:
+        if not it.get('equipped') or not it.get('id'):
+            continue
+        rec = C.get('item', it['id']) or {}
+        if (rec.get('type') or '').split('|')[0] in ('LA', 'MA', 'HA', 'S'):
+            worn.append(it)
+    for n in range(1, len(worn) + 1):
+        for off in itertools.combinations(worn, n):
+            for it in off:
+                it['equipped'] = False
+            s = compute(doc)
+            if s['ac']['value'] == want_ac:
+                names = ', '.join((C.get('item', it['id']) or {}).get('name', it['id']) for it in off)
+                report['warnings'].append(f"{names}: carried, not worn (the sheet's AC {want_ac} says so). "
+                                          'Equip it on the sheet if that is wrong.')
+                return s
+            for it in off:
+                it['equipped'] = True
+    return None
+
+
 def import_pdf(data: bytes, *, edition: str | None = None) -> dict:
     return import_fields(read_fields(data), edition=edition)
 
@@ -436,6 +464,8 @@ def import_fields(fields: dict, *, edition: str | None = None) -> dict:
         s = compute(doc)
         if s['hp_max'] != pdf['max_hp']:
             report['mismatches'].append(f'Max HP: sheet {pdf["max_hp"]}, here {s["hp_max"]}')
+    if pdf.get('ac') and s['ac']['value'] != pdf['ac']:
+        s = _fit_worn_armor(doc, pdf['ac'], report) or s
     if pdf.get('ac') and s['ac']['value'] != pdf['ac']:
         report['mismatches'].append(f'AC: sheet {pdf["ac"]}, here {s["ac"]["value"]} (check what is equipped)')
     st = doc['state']

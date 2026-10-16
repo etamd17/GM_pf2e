@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import contextlib
 import copy
+import re
 import uuid
 
 from systems.dnd5e import combat as K
@@ -40,7 +41,41 @@ def sheet_for(doc: dict) -> dict:
     s = compute(doc)
     st = doc.setdefault('state', {})
     K.normalize_vitals(st, s['hp_max'])
+    _migrate_resource_keys(st, s)
     return s
+
+
+_OLD_ARCANUM = re.compile(r'^feature:mystic arcanum \((\d)th level\)$')
+
+
+def _migrate_resource_keys(st: dict, s: dict):
+    """Carry saved usage across renamed resource keys (5E-07), in place:
+
+    * free casts were keyed by spell (``spell:misty step|xphb``) and are now
+      keyed by grant (``spell:misty step|xphb@feat-fey-touched``). The old
+      single resource was the first grant of that spell, so its usage moves to
+      the first matching grant; any other grant starts unused.
+    * 2014 Mystic Arcanum was ``feature:mystic arcanum (6th level)``; it is now
+      ``mystic_arcanum_6`` like 2024.
+
+    Keys that match nothing are left alone (a resource can be absent for a
+    while, e.g. an unequipped item), never deleted."""
+    used = st.get('resources_used')
+    if not used:
+        return
+    keys = [r['key'] for r in s['resources']]
+    for old in [k for k in used if k not in keys]:
+        new = None
+        if old.startswith('spell:') and '@' not in old:
+            new = next((k for k in keys if k.startswith(old + '@')), None)
+        else:
+            m = _OLD_ARCANUM.match(old)
+            if m and f'mystic_arcanum_{m.group(1)}' in keys:
+                new = f'mystic_arcanum_{m.group(1)}'
+        if new:
+            if new not in used:
+                used[new] = used[old]
+            del used[old]
 
 
 def pc_live(doc: dict, sheet: dict | None = None) -> dict:
@@ -363,8 +398,28 @@ def level_down(cid: str, pid: str):
         levels.pop()
         doc['build_rev'] = int(doc.get('build_rev') or 0) + 1
         s = compute(doc)
+        picks = doc['build'].setdefault('choices', {})
         for k in s['stale_choices']:
-            doc['build'].setdefault('choices', {}).pop(k, None)
+            picks.pop(k, None)
+        # A choice that allows fewer picks at the lower level (cantrips, spells
+        # known, invocations, masteries...) keeps the earliest ones.
+        trimmed = False
+        for ch in s['choices']:
+            v = picks.get(ch['id'])
+            if not isinstance(v, list):
+                continue
+            levels = (ch.get('query') or {}).get('levels')
+            if ch['kind'] == 'spell' and levels:
+                # spells above what the lower level can learn come off
+                keep = [x for x in v if (C.get('spell', str(x)) or {}).get('level', 0) in levels]
+                if keep != v:
+                    v = picks[ch['id']] = keep
+                    trimmed = True
+            if ch.get('count') and len(v) > ch['count']:
+                picks[ch['id']] = v[:ch['count']]
+                trimmed = True
+        if trimmed or s['stale_choices']:
+            s = compute(doc)
         s['stale_choices'] = []
         K.normalize_vitals(doc.setdefault('state', {}), s['hp_max'])
         return s
@@ -708,6 +763,9 @@ def encounter_view(cid: str, enc: dict | None = None, *, for_player: bool = Fals
                 row['ac'] = live['ac']
                 row['name'] = live['name']
                 row['image'] = live['portrait']
+                if not for_player:
+                    # what the PC has left, so the GM can follow casting from the tracker
+                    row.update({k: live[k] for k in ('slots', 'pact', 'resources')})
         else:
             row.update({k: c.get(k) for k in ('hp', 'hp_max', 'temp_hp', 'conditions', 'exhaustion',
                                               'death_saves', 'stable', 'dead', 'concentration')})

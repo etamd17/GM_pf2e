@@ -15,6 +15,7 @@ One shared list for Claude and Codex. Protocol: `docs/handoff/PROTOCOL.md`.
 |---|---|---|---|---|---|
 | 5E-04 | Species versions as a builder choice (Draconic Ancestry, 2024 lineages) + fix raw text in sheet resistances | codex | standard | done (accepted by Claude) | `tasks/5E-04.md` |
 | 5E-06 | Delete combatant pictures nothing uses | codex | standard | done (PR #180 merged after CI) | `tasks/5E-06.md` |
+| 5E-07 | Monday rehearsal: D&D Beyond PDF Paladin/Warlock, all classes to 20, GM encounter flow; fixes | claude | Opus, high | done (PR #206, merges after CI) | `tasks/5E-07-rehearsal.md` |
 | 5E-03 | Database ownership for 5e characters (only needed before the site uses PostgreSQL for the web app) | claude | Opus, high | needs brief | - |
 | 5E-05 | Private drafts for 5e characters | claude | Opus, high | needs brief (after 5E-03) | - |
 
@@ -44,7 +45,7 @@ UI/UX design is Claude's by default; Codex implements mechanical parts from Clau
 | UI-11 | PF2e level-up (B) + builder (B): roadmap and live preview | codex | strongest, high | ready | `tasks/UI-11-pf2e-levelup-and-builder.md` |
 | UI-12 | PF2e map (B: map first, right-side tabs) | claude | Opus, high | waiting on user (after the VTT plan) | `tasks/UI-12-pf2e-map.md` |
 | UI-13 | Cosmere GM dashboard (hybrid) + GM Screen (B) + 3 hub error-handling fixes | codex | standard, medium | ready | `tasks/UI-13-cosmere-dashboard-and-gmscreen.md` |
-| UI-14 | Cosmere tracker (B: phase/turn first, phase band) + check the Archer's missing strikes | claude | Opus, high | accepted (Claude commits; CI pending) | `tasks/UI-14-cosmere-tracker.md` |
+| UI-14 | Cosmere tracker (B: phase/turn first, phase band) + check the Archer's missing strikes | claude | Opus, high | done (PR #205 merged after CI) | `tasks/UI-14-cosmere-tracker.md` |
 | UI-15 | Cosmere Party Vitals (B) + roster (A cards + attention summary) | codex | standard, high | ready | `tasks/UI-15-cosmere-vitals-and-roster.md` |
 | UI-16 | Cosmere loot (B: form beside searchable history, draft worth from the server table) | codex | standard, medium | ready after UI-05 | `tasks/UI-16-cosmere-loot.md` |
 | UI-03 | Fix the seven confirmed bugs from the UI review | codex | standard | done (accepted by Claude) | `tasks/UI-03.md` |
@@ -117,6 +118,12 @@ Accepted as a design checkpoint. Notes:
 
 Newest first. One plain line per handoff: who, what, what's next.
 
+- 2026-10-16 Codex: accepted 5E-07 after recheck 3; the actual cantrip handler and class-owned invocation prerequisites are fixed, all 40 rehearsal/PDF checks pass and 107 templates parse. Next: Claude commits the implementation and reviews, opens the PR and merges once every CI job is green.
+- 2026-10-16 Claude: fixed both 5E-07 recheck items: casting a cantrip no longer breaks the Cast button, and Agonizing Blast's 2024 prerequisite now needs a cantrip picked as a Warlock. 34 rehearsal tests, 178 dnd5e passed. Next: Codex rechecks.
+- 2026-10-16 Codex: rechecked 5E-07; 35 rehearsal/PDF tests pass and 107 templates parse; four original fixes and saved-use migration are accepted, but the casting refactor crashes on cantrips and a Wizard-only cantrip still satisfies a Warlock prerequisite. Next: Claude fixes the two numbered recheck findings and returns for review.
+- 2026-10-16 Claude: fixed the five 5E-07 review items: free casts match only an explicit grant; innate spells take their limit or cost from the owning trait; spellbook rituals get a Ritual button; invocation spell prerequisites are checked; each grant keeps its own uses, with saved usage migrated. 29 rehearsal tests, 173 dnd5e passed. Next: Codex rechecks.
+- 2026-10-16 Codex: reviewed all of 5E-07; 19 rehearsal/PDF tests pass and 107 templates parse, but free-cast matching, innate costs, unprepared Wizard rituals, invocation spell prerequisites and independent duplicate-spell grants need fixes. Next: Claude fixes the five numbered Review items and returns the uncommitted task for recheck.
+- 2026-10-15 Claude: built 5E-07, the Monday D&D rehearsal. The user's D&D Beyond PDF (Paladin 9 / Warlock 1) now imports matching the sheet; every class and subclass reaches level 20 with no errors; the GM encounter flow works end to end in the browser. Fixed 10 bugs with tests (armour guess, feat skills, invocation prerequisites, spell filters, free casts, level down, phone layout of builder and sheet, double tracker prompts). Next: Codex reviews the uncommitted diff in GM_pf2e_claude_5e.
 - 2026-10-16 Codex: accepted UI-14 after rechecking all four fixes; 40 focused tests pass and 107 templates parse, with PF2e inventory and system separation intact. Next: Claude commits, opens the PR and merges after every CI job is green.
 - 2026-10-15 Claude: fixed the four UI-14 review items: the phase strip follows the turn, the initiative mode syncs to every open tracker, the Strike mapping is exact and custom adversaries load again, and the boundary tests are added. Focused run 143 passed. Next: Codex rechecks.
 - 2026-10-15 Codex: reviewed UI-14; the scoped layout and Archer mapping direction are sound, but live phase and initiative-mode state go stale across tracker clients, the broad Strike predicate breaks legacy custom-adversary normalization, and tracker deduplication/setup transitions need boundary tests. Next: Claude fixes the four focused review items and returns UI-14 for recheck.

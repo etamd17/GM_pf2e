@@ -110,3 +110,43 @@ def damage_bonuses(rec: dict, *, sheet_feature_names: set, invocations: set, fla
             and caster_class == 'Wizard':
         out.append((mods['int'], 'Empowered Evocation (one roll)'))
     return out
+
+
+def spells_for_filter(filt: str, edition: str, sources=None, limit: int = 1500) -> list:
+    """Spell rows matching a 5etools ``choose`` filter such as
+    ``level=0;1;2|class=Cleric;Druid;Wizard|school=V`` (additionalSpells).
+
+    Lists inside a key are ``;``-separated and any one matches. Supported keys:
+    level, class, school, ``components & miscellaneous=ritual`` and
+    ``spell attack`` (m/r/o). Unknown keys are ignored rather than emptying
+    the list. Class lists use the edition's core class (XPHB for 2024)."""
+    from systems.dnd5e import content as C
+    f = {}
+    for part in (filt or '').split('|'):
+        if '=' in part:
+            k, v = part.split('=', 1)
+            f[k.strip().lower()] = [x.strip() for x in v.split(';') if x.strip()]
+    levels = [int(x) for x in f.get('level', []) if x.isdigit()] or None
+    classes = [c.title() for c in f.get('class', [])] or [None]
+    rows, have = [], set()
+    for cls in classes:
+        for r in C.search_spells(levels=levels, class_name=cls,
+                                 class_source=('XPHB' if edition == 'one' else 'PHB') if cls else None,
+                                 sources=sources, limit=limit):
+            if r['id'] not in have:
+                have.add(r['id'])
+                rows.append(r)
+    schools = {s.upper() for s in f.get('school', [])}
+    if schools:
+        rows = [r for r in rows if (r.get('school') or '').upper() in schools]
+    misc = {m.lower() for m in f.get('components & miscellaneous', [])}
+    if 'ritual' in misc:
+        rows = [r for r in rows if r.get('ritual')]
+    attacks = {a.upper() for a in f.get('spell attack', [])}
+    if attacks:
+        def _atk(r):
+            rec = C.get('spell', r['id']) or {}
+            return {str(x).upper() for x in rec.get('spellAttack') or []}
+        rows = [r for r in rows if _atk(r) & attacks]
+    rows.sort(key=lambda r: (r.get('level') or 0, r['name']))
+    return rows
