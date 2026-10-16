@@ -40,10 +40,11 @@ UI/UX design is Claude's by default; Codex implements mechanical parts from Clau
 | UI-08 | PF2e encounter tracker (B: combat first, setup folds away) | codex | strongest, high | done (accepted by Claude) | `tasks/UI-08-pf2e-tracker.md` |
 | UI-09 | PF2e party overview (A+B) + campaign management (B tabs) + My table (A) | codex | standard, high | done (accepted by Claude) | `tasks/UI-09-pf2e-party-and-campaign-pages.md` |
 | UI-10 | PF2e player sheet (A: compact header, CSS only) | codex | standard, high | ready | `tasks/UI-10-pf2e-player-sheet.md` |
+| UI-17 | PF2e sheet: Inventory "Add" row runs off-screen on phones (CSS only; inventory scope hold still applies) | codex | standard, low | ready after UI-10 | `tasks/UI-17-pf2e-sheet-inventory-add-row.md` |
 | UI-11 | PF2e level-up (B) + builder (B): roadmap and live preview | codex | strongest, high | ready | `tasks/UI-11-pf2e-levelup-and-builder.md` |
-| UI-12 | PF2e map (B: map first, right-side tabs) | codex | strongest, high | waiting on user (after the VTT plan) | `tasks/UI-12-pf2e-map.md` |
+| UI-12 | PF2e map (B: map first, right-side tabs) | claude | Opus, high | waiting on user (after the VTT plan) | `tasks/UI-12-pf2e-map.md` |
 | UI-13 | Cosmere GM dashboard (hybrid) + GM Screen (B) + 3 hub error-handling fixes | codex | standard, medium | ready | `tasks/UI-13-cosmere-dashboard-and-gmscreen.md` |
-| UI-14 | Cosmere tracker (B: phase/turn first, phase band) + check the Archer's missing strikes | codex | strongest, high | ready | `tasks/UI-14-cosmere-tracker.md` |
+| UI-14 | Cosmere tracker (B: phase/turn first, phase band) + check the Archer's missing strikes | claude | Opus, high | ready | `tasks/UI-14-cosmere-tracker.md` |
 | UI-15 | Cosmere Party Vitals (B) + roster (A cards + attention summary) | codex | standard, high | ready | `tasks/UI-15-cosmere-vitals-and-roster.md` |
 | UI-16 | Cosmere loot (B: form beside searchable history, draft worth from the server table) | codex | standard, medium | ready after UI-05 | `tasks/UI-16-cosmere-loot.md` |
 | UI-03 | Fix the seven confirmed bugs from the UI review | codex | standard | done (accepted by Claude) | `tasks/UI-03.md` |
@@ -70,7 +71,7 @@ UI-03 bug list (from `tasks/UI-00.md` > Anything broken or risky; all checked on
 |---|---|---|---|---|---|
 | MB-00 | Mistborn rules backend (Era 1 and 2, Allomancy, Feruchemy, versioned rules packages, GM services) | codex | its strongest | done, reviewed by Claude (see below) | `GM_pf2e_cosmere_rules/docs/handoff/tasks/MB-00.md` |
 | MB-01 | Bring MB-00 up to date with main, move the Mistborn data out of git (installed like 5e), make the full test run green, open a PR | codex | strongest model, high effort (history rewrite + test-failure hunt) | done (PR #182 merged; private bundle installed) | `tasks/MB-01.md` |
-| MB-02 | Verify the 252 Mistborn records still blocked on source checks | codex | its strongest | needs brief | - |
+| MB-02 | Verify the 252 Mistborn records still blocked on source checks | claude | Opus, high | needs brief | - |
 | MB-03 | Generators: make Mistborn content for Mistborn campaigns (found in UI-01) | codex | standard, medium | done (accepted by Claude) | `tasks/MB-03.md` |
 | MB-04 | Mistborn money: boxings and clips in wallets and the loot page under the Mistborn skin (today they show Roshar spheres) | - | - | waiting on user (how Mistborn currency should work) | - |
 
@@ -116,6 +117,7 @@ Accepted as a design checkpoint. Notes:
 
 Newest first. One plain line per handoff: who, what, what's next.
 
+- 2026-10-15 User/Claude: new split. Claude builds the heavy or high-risk code (rules, saved data, live sync, the shared tracker and map, the VTT) and Codex reviews it; Codex keeps UI ports and smaller fixes. UI-14, UI-12 and MB-02 move to Claude; UI-11 stays with Codex (already started). Added UI-17 (phone Inventory Add button). Next: Codex continues UI-11.
 - 2026-10-15 Claude: checked UI-09 in the browser: the Party page's watch strip updates live and jumps to the character, campaign management's three tabs work by mouse, keyboard and link, and its notices stay visible; My Table only got styling. Accepted. Next: Codex commits and merges after CI, then UI-10 (player sheet).
 - 2026-10-15 Codex: built UI-09's PF2e Party watch and compact cards, three-tab campaign management and compact My table while preserving every role/form/control contract and isolating `/party` by system; the 82-check focused suite passed, final corrections passed 12 UI and 10 route checks, and all 107 templates parse. Next: Claude reviews the diff and checks all three pages at 1440px and 375px using a throwaway campaign.
 - 2026-10-15 Claude: checked UI-08 in the browser: the PF2e tracker now puts combat first, the setup panel opens and closes on its own as the fight starts and ends, keyboard shortcuts still work, and on a phone every row button is reachable by scrolling the table. Cosmere is unchanged. Accepted. Next: Codex commits and merges after CI, then UI-09.
