@@ -1,0 +1,242 @@
+/* Tokens mirror static/css/system.css so the VTT reads as the same app.
+   Two typefaces only: Cinzel (display) and Inter (UI). */
+:root {
+  --gilt-200: #e0b65a;
+  --gilt-300: #c9a34e;
+  --ruby-300: #a83a3a;
+  --ink-700: #2e2920;
+  --ink-800: #1d1a14;
+  --ink-900: #14110c;
+  --ink-950: #0c0a07;
+  --bg-page: var(--ink-950);
+  --bg-card: #1c1813;
+  --text-primary: #ede4cf;
+  --text-secondary: #c8bd9e;
+  --text-muted: #a79d88;
+  --border-card: rgba(201, 163, 78, 0.14);
+  --border-rule: rgba(201, 163, 78, 0.28);
+  --warn: #8a6a14;
+  --font-display: 'Cinzel', 'Cormorant Garamond', Georgia, serif;
+  --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --r-md: 4px;
+  --t-fast: 120ms ease;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 14px;
+}
+
+button {
+  font: inherit;
+  color: var(--text-primary);
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--r-md);
+  padding: var(--sp-1) var(--sp-3);
+  cursor: pointer;
+}
+
+button:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+button:focus-visible,
+.vtt-map-host:focus-visible {
+  outline: 2px solid var(--gilt-200);
+  outline-offset: -2px;
+}
+
+/* GM command deck */
+.vtt-gm {
+  display: grid;
+  height: 100%;
+  grid-template-columns: 112px 1fr 280px;
+  grid-template-rows: 40px auto 1fr 56px;
+  grid-template-areas:
+    'top top top'
+    'banner banner banner'
+    'rail stage dock'
+    'tray tray tray';
+}
+
+.vtt-gm.is-rail-collapsed {
+  grid-template-columns: 72px 1fr 280px;
+}
+
+.vtt-gm.is-dock-collapsed {
+  grid-template-columns: 112px 1fr 120px;
+}
+
+.vtt-gm.is-rail-collapsed.is-dock-collapsed {
+  grid-template-columns: 72px 1fr 120px;
+}
+
+.vtt-topbar {
+  grid-area: top;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 0 var(--sp-3);
+  border-bottom: 1px solid var(--border-card);
+  background: var(--ink-900);
+}
+
+.vtt-brand {
+  font-family: var(--font-display);
+  color: var(--gilt-300);
+  letter-spacing: 0.08em;
+}
+
+.vtt-scene-name {
+  color: var(--text-secondary);
+}
+
+.vtt-topbar-spacer {
+  flex: 1;
+}
+
+.vtt-zoom,
+.vtt-conn {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.vtt-banner {
+  grid-area: banner;
+  display: flex;
+  gap: var(--sp-2);
+  align-items: baseline;
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--border-rule);
+}
+
+.vtt-banner.vtt-tone-warn {
+  background: #2a2210;
+}
+
+.vtt-banner.vtt-tone-error {
+  background: #3f0d0d;
+}
+
+.vtt-rail {
+  grid-area: rail;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-2);
+  border-right: 1px solid var(--border-card);
+  background: var(--ink-900);
+  overflow-y: auto;
+}
+
+.vtt-stage {
+  grid-area: stage;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+
+.vtt-dock {
+  grid-area: dock;
+  padding: var(--sp-2);
+  border-left: 1px solid var(--border-card);
+  background: var(--ink-900);
+  overflow-y: auto;
+}
+
+.vtt-tray {
+  grid-area: tray;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--sp-3);
+  border-top: 1px solid var(--border-card);
+  background: var(--ink-900);
+}
+
+.vtt-empty {
+  color: var(--text-muted);
+  margin: var(--sp-2) 0;
+}
+
+.vtt-map-host {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  touch-action: none;
+}
+
+.vtt-canvas {
+  display: block;
+}
+
+/* Display-only table: the map is the whole screen. */
+.vtt-table {
+  position: fixed;
+  inset: 0;
+  background: var(--ink-950);
+}
+
+.vtt-table .vtt-banner {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+.vtt-status-dot {
+  position: absolute;
+  right: var(--sp-3);
+  bottom: var(--sp-3);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--warn);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* Renderer benchmark page (bench.html). Fixed 1280x720 so runs compare. */
+.is-bench {
+  padding: var(--sp-3);
+  overflow: auto;
+}
+
+.is-bench .bench-host {
+  display: block;
+  position: relative;
+  width: 1280px;
+  height: 720px;
+  margin-top: var(--sp-3);
+  border: 1px solid var(--border-card);
+}
+
+.is-bench pre {
+  font-size: 12px;
+  white-space: pre;
+}

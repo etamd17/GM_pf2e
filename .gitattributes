@@ -1,3 +1,5 @@
 tests/pf2e_rules/fixtures/synthetic-source.bin binary
+
+# VTT contracts and generated protocol sources keep LF (schema amendment S3)
 contracts/vtt/** text eol=lf
 frontend/vtt/src/protocol/generated/** text eol=lf

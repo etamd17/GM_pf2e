@@ -1,0 +1,115 @@
+// The renderer's own input model. This is NOT the wire contract: the shared
+// v1 schemas are still being agreed (VTT-ADR-0002). Once they are accepted, an
+// adapter maps a sanitized projection into these shapes, and the renderer
+// never sees protocol fields.
+//
+// Objects are treated as immutable. SceneRuntime skips any token whose object
+// identity has not changed, so producers must replace, never mutate.
+
+export interface RenderToken {
+  readonly id: string;
+  readonly x: number; // centre, scene px
+  readonly y: number;
+  readonly size: number; // in grid squares (1 = medium)
+  readonly label: string;
+  readonly color: number; // 0xRRGGBB
+}
+
+export interface RenderWall {
+  readonly x1: number;
+  readonly y1: number;
+  readonly x2: number;
+  readonly y2: number;
+  readonly kind: 'wall' | 'door';
+}
+
+export interface RenderLight {
+  readonly id: string;
+  readonly x: number;
+  readonly y: number;
+  readonly radius: number; // scene px
+  readonly color: number;
+}
+
+export interface RenderScene {
+  readonly width: number;
+  readonly height: number;
+  // Scene px per grid square. Always a usable unit, because token size is
+  // measured in squares even on a gridless map.
+  readonly gridSize: number;
+  // False for a gridless scene. Gridless is explicit, never encoded as a zero
+  // or negative gridSize.
+  readonly showGrid: boolean;
+  readonly tokens: readonly RenderToken[];
+  readonly walls: readonly RenderWall[];
+  readonly lights: readonly RenderLight[];
+}
+
+export const EMPTY_SCENE: RenderScene = {
+  width: 2048,
+  height: 2048,
+  gridSize: 64,
+  showGrid: true,
+  tokens: [],
+  walls: [],
+  lights: [],
+};
+
+// Defensive bounds for the renderer. The adapter and the shared schema must
+// reject bad geometry first; these only guarantee that invalid persisted or
+// imported data can never hang the main thread (VTT-20261012-010 finding 2).
+export const SCENE_LIMITS = {
+  maxDimension: 16384,
+  minGrid: 8,
+  maxGrid: 1024,
+  defaultGrid: 64,
+  maxTokenSize: 10,
+} as const;
+
+const finiteIn = (v: number, min: number, max: number): boolean =>
+  Number.isFinite(v) && v >= min && v <= max;
+
+// Returns a scene the renderer can always draw in bounded time. Inner arrays
+// are passed through by identity so the runtime's change detection still works,
+// and an already-valid scene is returned as the same object.
+export function normalizeScene(scene: RenderScene): RenderScene {
+  const width = finiteIn(scene.width, 1, SCENE_LIMITS.maxDimension)
+    ? scene.width
+    : clampDimension(scene.width);
+  const height = finiteIn(scene.height, 1, SCENE_LIMITS.maxDimension)
+    ? scene.height
+    : clampDimension(scene.height);
+  const gridOk = finiteIn(scene.gridSize, SCENE_LIMITS.minGrid, SCENE_LIMITS.maxGrid);
+  const gridSize = gridOk ? scene.gridSize : SCENE_LIMITS.defaultGrid;
+  const showGrid = scene.showGrid && gridOk;
+  if (
+    width === scene.width &&
+    height === scene.height &&
+    gridSize === scene.gridSize &&
+    showGrid === scene.showGrid
+  ) {
+    return scene;
+  }
+  return { ...scene, width, height, gridSize, showGrid };
+}
+
+function clampDimension(v: number): number {
+  if (!Number.isFinite(v) || v < 1) return 1;
+  return Math.min(v, SCENE_LIMITS.maxDimension);
+}
+
+// Grid line positions along one axis, or an empty list when the grid must not
+// be drawn. Bounded: at most maxDimension / minGrid + 1 entries per axis.
+export function gridLines(length: number, step: number): number[] {
+  if (!finiteIn(step, SCENE_LIMITS.minGrid, SCENE_LIMITS.maxGrid)) return [];
+  if (!finiteIn(length, 1, SCENE_LIMITS.maxDimension)) return [];
+  const lines: number[] = [];
+  for (let i = 0; i * step <= length; i += 1) lines.push(i * step);
+  return lines;
+}
+
+// Token radius in scene px, never negative or non-finite.
+export function tokenRadius(size: number, gridSize: number): number {
+  const squares = finiteIn(size, 0.25, SCENE_LIMITS.maxTokenSize) ? size : 1;
+  return Math.max(2, (squares * gridSize) / 2 - 3);
+}
