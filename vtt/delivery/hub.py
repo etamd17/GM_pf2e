@@ -56,6 +56,9 @@ class Principal:
     # The heartbeat uses them to fail closed when storage cannot be checked.
     verified_at: datetime | None = None
     expires_at: datetime | None = None
+    # Members only (M4a): the app ended this member's session. Any command still
+    # arriving on the connection answers authentication-required.
+    session_ended: bool = False
 
 
 @dataclass

@@ -2665,6 +2665,7 @@ def _close_sse_subscribers_for_user(campaign_id, user_id):
     """
     if not user_id:
         return 0
+    _vtt_end_member(user_id, campaign_id)
     with _sse_lock:
         stale = [
             entry for entry in _sse_subscribers
@@ -2700,8 +2701,21 @@ def _close_legacy_gm_sse_subscribers():
     return len(stale)
 
 
+def _vtt_end_member(user_id, campaign_id):
+    """The VTT's half of revoking a member (M4a): its sockets close where the
+    SSE streams do. A no-op unless VTT_ENABLED built a service."""
+    service = globals().get('VTT_SERVICE')
+    if service is None:
+        return
+    try:
+        service.end_member(user_id, campaign_id)
+    except Exception:
+        app.logger.exception('VTT member revocation failed')
+
+
 def _close_account_sse_subscribers():
     """Revoke every stream whose authority depends on the account store."""
+    _vtt_end_member(None, None)
     with _sse_lock:
         stale = [
             entry for entry in _sse_subscribers

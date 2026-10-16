@@ -45,8 +45,10 @@ import hashlib
 import hmac
 from collections.abc import Callable
 from dataclasses import dataclass
+import re
 import threading
 import time
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from typing import Any, Protocol
 
@@ -63,6 +65,7 @@ from vtt.protocol import ContractRegistry, ProtocolValidationError, StrictJSON
 from vtt.storage.models import VttTableGrant
 
 NAMESPACE = "/vtt"
+OPAQUE = re.compile(r"[A-Za-z0-9_-]{16,128}")
 TABLE_COOKIE = "vtt_table"
 # Section 10: no connected table may go more than AUTH_BOUND without its grant
 # being confirmed in storage, whatever storage is doing. The numbers are chosen so
@@ -128,6 +131,7 @@ class VttHost(Protocol):
 
     def current_member_id(self) -> str | None: ...
     def csrf_valid(self, token: Any) -> bool: ...
+    def csrf_token(self) -> str: ...
     def is_campaign_gm(self, session, user_id: str, campaign_id: str) -> bool: ...
 
 
@@ -154,6 +158,7 @@ class VttService:
     heartbeat: Callable[[], int]
     sweep: Callable[[str | None], int]
     sweep_stats: dict
+    end_member: Callable[..., int]
 
 
 def table_verifier(grant_key: bytes, credential: str) -> str:
@@ -164,7 +169,7 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
              registry: ContractRegistry | None = None, allowed_origins: list[str] | None = None,
              async_mode: str | None = None, now: Callable[[], datetime] | None = None,
              rate_limiter: RateLimiter | None = None, start_heartbeat: bool = True,
-             pairing_limits=None) -> VttService:
+             pairing_limits=None, dist_dir: Path | None = None) -> VttService:
     registry = registry or ContractRegistry()
     clock = now or (lambda: datetime.now(timezone.utc))
     socketio = SocketIO(app, json=StrictJSON, async_mode=async_mode, manage_session=False,
@@ -292,9 +297,46 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
     if start_heartbeat:
         socketio.start_background_task(heartbeat_loop)
 
+    def end_member(user_id: str | None, campaign_id: str | None = None) -> int:
+        """The app revoked a member's authority (M4a). The app calls this from
+        the same places it closes that user's SSE streams.
+
+        - ``campaign_id`` given (membership or role changed in one campaign): each
+          of the member's subscriptions in that campaign gets the terminal
+          ``revoked`` and is closed. Other campaigns are untouched.
+        - ``campaign_id`` None (the session itself ended: password change,
+          logout everywhere, account store unavailable): every connection of the
+          member is closed. Reconnecting answers ``session-ended``, and a command
+          still in flight answers ``authentication-required``.
+        - ``user_id`` None with ``campaign_id`` None: every member connection.
+        """
+        ended = 0
+        for sid, p in list(principals.items()):
+            if p.kind != "member" or (user_id is not None and p.id != user_id):
+                continue
+            if campaign_id is None:
+                p.session_ended = True
+                ended += 1
+                try:
+                    hub.unsubscribe(sid)
+                    close(sid)
+                except Exception:
+                    sweep_stats["end_errors"] += 1
+                continue
+            sub = hub.subscription(sid)
+            if sub is not None and sub.campaign_id == campaign_id:
+                ended += 1
+                end_one(sid)
+        return ended
+
     def access_changed(campaign_id: str) -> None:
         hub.notify(campaign_id)     # subscribed tables: delivery's recheck sends revoked
         sweep(campaign_id)          # connected but unsubscribed ones too
+
+    from vtt.transport.pages import make_pages_blueprint
+    app.register_blueprint(make_pages_blueprint(
+        db=db, host=host,
+        dist_dir=dist_dir or Path(__file__).resolve().parents[2] / "frontend" / "vtt" / "dist"))
 
     from vtt.transport.pairing import make_blueprint
     app.register_blueprint(make_blueprint(
@@ -347,6 +389,15 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
         if principal is None or principal.kind == "table":
             disconnect()                # criterion 14: a table has no commands
             return None
+        if principal.session_ended:
+            # The app ended this member's session; the client signs in again and
+            # retries the same commandId (ADR-0002 section 8).
+            command_id = message.get("commandId") if isinstance(message, dict) else None
+            if isinstance(command_id, str) and OPAQUE.fullmatch(command_id):
+                hub.emit(sid, "vtt.ack", {"schemaVersion": 1, "commandId": command_id, "outcome": "rejected",
+                                          "code": "authentication-required"})
+            disconnect()
+            return None
         result = commands.handle(sid, principal, message)
         if result.ack is None:
             disconnect()
@@ -375,4 +426,5 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
         return None
 
     return VttService(socketio=socketio, hub=hub, principals=principals, commands=commands,
-                      heartbeat=lambda: sweep(None), sweep=sweep, sweep_stats=sweep_stats)
+                      heartbeat=lambda: sweep(None), sweep=sweep, sweep_stats=sweep_stats,
+                      end_member=end_member)

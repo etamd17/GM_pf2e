@@ -652,6 +652,11 @@ OPTIONAL_ROUTE_POLICIES: Mapping[str, RoutePolicy] = build_policy_registry((
     # Device pairing: the one-time code is the only authority; the view checks
     # same-origin, secure context and its own rate limits before reading it.
     (RoutePolicy.PUBLIC, ("vtt_pairing.redeem",)),
+    # The table page is a shell with no data, and the bundle's files are public
+    # build output (M4a).
+    (RoutePolicy.PUBLIC, ("vtt_pages.table_page", "vtt_pages.assets")),
+    # The views also require GM of the campaign named in the query.
+    (RoutePolicy.CAMPAIGN_GM, ("vtt_pages.gm_page", "vtt_pages.scene_list")),
     # The view also requires GM of the campaign named in the body.
     (RoutePolicy.CAMPAIGN_GM, ("vtt_pairing.issue", "vtt_pairing.list_grants", "vtt_pairing.revoke",
                                "vtt_pairing.revoke_all")),

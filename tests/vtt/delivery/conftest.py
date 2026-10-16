@@ -35,6 +35,9 @@ class FakeHost:
     def csrf_valid(self, token):
         return isinstance(token, str) and secrets.compare_digest(token, CSRF)
 
+    def csrf_token(self):
+        return CSRF
+
     def is_campaign_gm(self, session, user_id, campaign_id):
         return (user_id, campaign_id) in self.gms
 
@@ -65,8 +68,18 @@ def add_grant(db: Database, campaign_id: str = "camp_a", *, expires_in: timedelt
     return credential
 
 
+FAKE_INDEX = '<!doctype html><html><head><title>VTT - GM</title></head><body><div id="root"></div></body></html>'
+FAKE_TABLE = '<!doctype html><html><head><title>VTT - Table</title></head><body><div id="root"></div></body></html>'
+
+
 @pytest.fixture
-def stack():
+def stack(tmp_path):
+    # A fake client build, so page tests never depend on whether dist/ exists.
+    dist = tmp_path / "dist"
+    (dist / "assets").mkdir(parents=True)
+    (dist / "index.html").write_text(FAKE_INDEX, encoding="utf-8")
+    (dist / "table.html").write_text(FAKE_TABLE, encoding="utf-8")
+    (dist / "assets" / "app-abc123.js").write_text("console.log('vtt');", encoding="utf-8")
     db = _database()
     db.create_schema()
     seed_identity(db)
@@ -76,7 +89,7 @@ def stack():
     # Real time plus an adjustable offset, so a test can move past an expiry.
     offset = {"by": timedelta(0)}
     service = init_vtt(app, db=db, host=host, grant_key=GRANT_KEY, token_key=TokenKey.derive("test-secret"),
-                       async_mode="threading", start_heartbeat=False,
+                       async_mode="threading", start_heartbeat=False, dist_dir=dist,
                        now=lambda: datetime.now(timezone.utc) + offset["by"])
 
     class Stack:
@@ -84,6 +97,7 @@ def stack():
 
     s = Stack()
     s.db, s.app, s.host, s.service, s.hub = db, app, host, service, service.hub
+    s.dist = dist
     s.advance_clock = lambda delta: offset.__setitem__("by", offset["by"] + delta)
     s.now = lambda: datetime.now(timezone.utc) + offset["by"]
     # Every server emit, in order, readable even after a connection is closed.

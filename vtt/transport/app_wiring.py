@@ -18,6 +18,7 @@ import hashlib
 import hmac
 import os
 import secrets
+from pathlib import Path
 from typing import Any
 
 from flask import session as flask_session
@@ -39,6 +40,10 @@ class AppHost:
         # The app's per-session CSRF token (core.auth.csrf_token), sent in the Socket.IO auth payload.
         expected = flask_session.get("_csrf", "")
         return isinstance(token, str) and bool(token) and bool(expected) and secrets.compare_digest(token, expected)
+
+    def csrf_token(self) -> str:
+        # The app's per-session token (creates one if the session has none).
+        return _auth.csrf_token()
 
     def is_campaign_gm(self, session, user_id: str, campaign_id: str) -> bool:
         if _runtime.sql_enabled():
@@ -70,4 +75,5 @@ def init_from_app(app, *, environ=None) -> VttService | None:
         options["connect_args"] = {"connect_timeout": 4}
     return init_vtt(app, db=Database.from_env("DATABASE_URL", environ=env, engine_options=options), host=AppHost(),
                     grant_key=grant_key, token_key=TokenKey.derive(secret), allowed_origins=origins,
-                    async_mode=env.get("VTT_ASYNC_MODE") or None)
+                    async_mode=env.get("VTT_ASYNC_MODE") or None,
+                    dist_dir=Path(env["VTT_DIST_DIR"]) if env.get("VTT_DIST_DIR") else None)
