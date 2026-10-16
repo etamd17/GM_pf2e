@@ -219,6 +219,20 @@ describe('inspector and scene bar', () => {
     for (const i of issued) expect((i.draft as { expected: unknown }).expected).toEqual([{ kind: 'scene', id: 'scene_a', version: V1 }]);
   });
 
+  it('the scene picker refetches once a table command applies, not on other edits', async () => {
+    const { issued, interaction } = setup();
+    await act(async () => {});
+    const calls = () => (fetch as unknown as { mock: { calls: unknown[] } }).mock.calls.length;
+    const before = calls();
+    act(() => interaction.onTokenDrop?.('tok_hero', 160, 96));
+    act(() => useCommands.getState().notify({ kind: 'applied', commandId: 'cmd_0000000000000001' } as never));
+    expect(calls()).toBe(before);
+    fireEvent.click(screen.getByRole('button', { name: 'Show on table' }));
+    expect((issued[1]?.draft as { type: string }).type).toBe('table.show');
+    act(() => useCommands.getState().notify({ kind: 'applied', commandId: 'cmd_0000000000000002' } as never));
+    expect(calls()).toBe(before + 1);
+  });
+
   it('every editing control is disabled while not live', () => {
     const { interaction } = setup();
     act(() => interaction.onClick?.({ x: 96, y: 96 }, { kind: 'token', id: 'tok_hero' }));

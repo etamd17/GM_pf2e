@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ConnectionBanner } from '../components/ConnectionBanner';
 import { MapHost } from '../components/MapHost';
 import type { GmLive } from '../live/gm';
@@ -96,6 +96,7 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
     if (selection && !entityOf(selection.kind, selection.id)) setSelection(null);
   }, [entities, selection]);
 
+  const tableCommands = useRef(new Set<string>());
   // Every edit goes through here: it is issued, and its inverse is recorded so
   // it can be undone once applied (undo.ts).
   const send = useCallback(
@@ -104,6 +105,7 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
       const target = targetOf(draft);
       const before = target ? entityOf(target.kind, target.id) : undefined;
       const commandId = live.issue(draft, overlay);
+      if (commandId && (draft.type === 'table.show' || draft.type === 'table.clear')) tableCommands.current.add(commandId);
       const inverse = inverseFor(draft, before);
       if (commandId && inverse) live.undo.track(commandId, inverse, mode);
       return commandId;
@@ -170,6 +172,19 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
   useEffect(() => {
     void refreshScenes();
   }, [refreshScenes, sceneEntity?.version]);
+
+  // Showing or clearing the table moves the table pointer without changing
+  // this scene, so the picker's "(on the table)" would go stale: refetch once
+  // such a command is applied. Subscribed directly so no outcome is missed
+  // between renders.
+  useEffect(
+    () =>
+      useCommands.subscribe((state, previous) => {
+        const id = state.lastApplied;
+        if (id && id !== previous.lastApplied && tableCommands.current.delete(id)) void refreshScenes();
+      }),
+    [refreshScenes],
+  );
 
   const openScene = useCallback(
     (sceneId: string) => {
