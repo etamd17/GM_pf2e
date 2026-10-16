@@ -40,7 +40,7 @@ UI/UX design is Claude's by default; Codex implements mechanical parts from Clau
 | UI-08 | PF2e encounter tracker (B: combat first, setup folds away) | codex | strongest, high | done (accepted by Claude) | `tasks/UI-08-pf2e-tracker.md` |
 | UI-09 | PF2e party overview (A+B) + campaign management (B tabs) + My table (A) | codex | standard, high | done (accepted by Claude) | `tasks/UI-09-pf2e-party-and-campaign-pages.md` |
 | UI-10 | PF2e player sheet (A: compact header, CSS only) | codex | standard, high | done (accepted by Claude) | `tasks/UI-10-pf2e-player-sheet.md` |
-| UI-17 | PF2e sheet: Inventory "Add" row runs off-screen on phones (CSS only; inventory scope hold still applies) | codex | standard, low | ready after UI-10 | `tasks/UI-17-pf2e-sheet-inventory-add-row.md` |
+| UI-17 | PF2e sheet: Inventory "Add" row runs off-screen on phones (CSS only; inventory scope hold still applies) | codex | standard, low | accepted (Codex commits, merges after CI) | `tasks/UI-17-pf2e-sheet-inventory-add-row.md` |
 | UI-11 | PF2e level-up (B) + builder (B): roadmap and live preview | codex | strongest, high | ready | `tasks/UI-11-pf2e-levelup-and-builder.md` |
 | UI-12 | PF2e map (B: map first, right-side tabs) | claude | Opus, high | waiting on user (after the VTT plan) | `tasks/UI-12-pf2e-map.md` |
 | UI-13 | Cosmere GM dashboard (hybrid) + GM Screen (B) + 3 hub error-handling fixes | codex | standard, medium | ready | `tasks/UI-13-cosmere-dashboard-and-gmscreen.md` |
@@ -117,6 +117,8 @@ Accepted as a design checkpoint. Notes:
 
 Newest first. One plain line per handoff: who, what, what's next.
 
+- 2026-10-16 Claude: accepted UI-17. The phone Add row fits at 320px (two rows, 40px controls), 600px and desktop; it also fixes the Add button being clipped on desktop. 7 tests pass, 107 templates parse. Next: Codex commits, opens the PR and merges after CI.
+- 2026-10-16 Codex: made the PF2e sheet's Inventory Add row fit phones with 21 added CSS lines; 25 focused checks pass and real item additions save at 320px, 375px and 1440px. Next: Claude reviews UI-17's local diff and layout; changes are uncommitted and unpushed.
 - 2026-10-16 Codex: accepted UI-14 after rechecking all four fixes; 40 focused tests pass and 107 templates parse, with PF2e inventory and system separation intact. Next: Claude commits, opens the PR and merges after every CI job is green.
 - 2026-10-15 Claude: fixed the four UI-14 review items: the phase strip follows the turn, the initiative mode syncs to every open tracker, the Strike mapping is exact and custom adversaries load again, and the boundary tests are added. Focused run 143 passed. Next: Codex rechecks.
 - 2026-10-15 Codex: reviewed UI-14; the scoped layout and Archer mapping direction are sound, but live phase and initiative-mode state go stale across tracker clients, the broad Strike predicate breaks legacy custom-adversary normalization, and tracker deduplication/setup transitions need boundary tests. Next: Claude fixes the four focused review items and returns UI-14 for recheck.
