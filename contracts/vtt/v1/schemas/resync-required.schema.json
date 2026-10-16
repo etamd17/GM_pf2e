@@ -15,7 +15,7 @@
     },
     "subscriptionId": {
       "$ref": "common.schema.json#/definitions/OpaqueToken",
-      "description": "The subscription this resync ends. A client ignores a resync that names neither its live nor its pending subscription."
+      "description": "The subscription this resync ends. A client ignores a resync naming a subscription it has retired, or another subscription while it has a live one and no subscribe in flight."
     },
     "reason": {
       "$ref": "common.schema.json#/definitions/ResyncReason"

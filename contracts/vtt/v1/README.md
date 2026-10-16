@@ -93,9 +93,11 @@ Display text: `Label` and the scene `name` exclude C0/C1 controls, bidi override
 and Ajv's unicode regexps both see one code point for a surrogate pair, and a raw-text fixture pins
 the lone-surrogate case in both runtimes.
 
-`vtt.resync_required` now names the subscription it ends (`subscriptionId`, required). A client
-ignores a resync that names neither its live nor its pending subscription, so a late resync from
-a fan-out race cannot tear down a fresh one.
+`vtt.resync_required` now names the subscription it ends (`subscriptionId`, required). The server
+assigns subscription IDs, so a client learns a new one only from its snapshot. The client ignores
+a resync that names a subscription it has already retired, or that names another subscription
+while it has a live one and no subscribe in flight. A late resync from a fan-out race therefore
+cannot tear down a fresh subscription.
 
 Lint: every numeric schema needs `minimum` and `maximum`; every string needs `maxLength` unless it
 has `enum` or `const`; every array needs `maxItems`.
