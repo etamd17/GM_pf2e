@@ -1,135 +1,326 @@
 {% extends "_account_base.html" %}
 {% block title %}Manage campaign{% endblock %}
+{% block bodyclass %}wide campaign-management-page{% endblock %}
 {% block head %}
 <style>
-  .invite-row { align-items:flex-start; }
-  .invite-main { display:flex; gap:14px; align-items:flex-start; width:100%; }
-  .invite-main .qr { flex:0 0 auto; width:96px; height:96px; background:#f5efe0; border-radius:8px; padding:5px; box-sizing:border-box; }
-  .invite-main .qr svg { width:100%; height:100%; display:block; }
-  .invite-main .qr:empty { display:none; }
-  .invite-body { flex:1; min-width:0; display:flex; flex-direction:column; gap:7px; }
-  .invite-body .link { display:block; word-break:break-all; font-size:11px; }
-  .invite-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-  .copy-btn.copied { background:rgba(120,180,110,.18); border-color:rgba(150,200,120,.5); color:#bfe0a8; }
-  .ok-note { background:rgba(120,180,110,.14); border:1px solid rgba(150,200,120,.4); color:#bfe0a8; padding:10px 12px; border-radius:8px; font-size:13px; margin-bottom:10px; }
+  .campaign-management-page { padding-top:30px; --muted:#b5a98c; }
+  .campaign-management-page .box { max-width:1060px; padding:28px 30px; border-radius:8px; box-shadow:none; }
+  .campaign-management-page button { box-shadow:none; margin-top:12px; border-radius:4px; }
+  .campaign-management-page button:focus-visible,
+  .campaign-management-page a:focus-visible,
+  .campaign-management-page select:focus-visible,
+  .campaign-management-page input:focus-visible { outline:2px solid var(--gilt); outline-offset:4px; }
+  .campaign-management-page .campaign-management-header { display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px 24px; border-bottom:1px solid var(--line-strong); padding-bottom:18px; }
+  .campaign-management-page .campaign-management-header h1 { margin-bottom:0; }
+  .campaign-management-page .campaign-management-subtitle { color:var(--ink-2); font-size:12px; margin:7px 0 0; }
+  .campaign-management-page .campaign-context { color:var(--ink-2); font-size:12px; line-height:1.5; margin:7px 0 0; }
+  .campaign-management-page .campaign-tabs { display:flex; gap:22px; flex-wrap:wrap; border-bottom:1px solid var(--line-strong); margin:16px 0 20px; }
+  .campaign-management-page .campaign-tabs button { margin:0; padding:12px 0; min-height:44px; border:0; border-bottom:2px solid transparent; border-radius:0; background:none; color:var(--ink-2); font:500 14px var(--font-ui); letter-spacing:0; transform:none; }
+  .campaign-management-page .campaign-tabs button:hover { color:var(--ink); filter:none; transform:none; }
+  .campaign-management-page .campaign-tabs button[aria-selected="true"] { color:var(--gilt); border-bottom-color:var(--gilt); }
+  .campaign-management-page .campaign-tab-panel[hidden],
+  .campaign-management-page [hidden] { display:none !important; }
+  .campaign-management-page .campaign-people-grid { display:grid; grid-template-columns:minmax(0,1.08fr) minmax(0,1fr); gap:36px; }
+  .campaign-management-page .campaign-section { min-width:0; }
+  .campaign-management-page .section-title { font-size:17px; margin:10px 0 9px; }
+  .campaign-management-page .row { padding:12px 0; border:0; border-bottom:1px solid var(--line); border-radius:0; background:transparent; margin:0; flex-wrap:wrap; }
+  .campaign-management-page .row:hover { border-color:var(--line); }
+  .campaign-management-page .row strong { font-size:15px; }
+  .campaign-management-page .row button { min-height:36px; margin:0; padding:8px 12px; font-family:var(--font-ui); font-size:12px; letter-spacing:0; }
+  .campaign-management-page .member-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .campaign-management-page .campaign-inline-actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
+  .campaign-management-page .campaign-inline-actions form { width:auto; }
+  .campaign-management-page .invite-row { align-items:flex-start; }
+  .campaign-management-page .invite-main { display:flex; gap:12px; align-items:flex-start; width:100%; min-width:0; }
+  .campaign-management-page .invite-main .qr { flex:0 0 auto; width:78px; height:78px; background:#f5efe0; border-radius:3px; padding:5px; box-sizing:border-box; }
+  .campaign-management-page .invite-main .qr svg { width:100%; height:100%; display:block; }
+  .campaign-management-page .invite-main .qr:empty { display:none; }
+  .campaign-management-page .invite-body { flex:1; min-width:0; display:flex; flex-direction:column; gap:7px; }
+  .campaign-management-page .invite-body .link { display:block; word-break:break-all; font-size:12px; color:var(--ink-2); }
+  .campaign-management-page .invite-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .campaign-management-page .copy-btn.copied { background:rgba(120,180,110,.18); border-color:rgba(150,200,120,.5); color:#bfe0a8; }
+  .campaign-management-page .character-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 30px; }
+  .campaign-management-page .character-list .qr { width:80px; height:80px; }
+  .campaign-management-page .campaign-empty { padding:18px 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); color:var(--muted); font-size:13px; line-height:1.5; }
+  .campaign-management-page .settings-system { margin-bottom:30px; }
+  .campaign-management-page .system-form { max-width:680px; }
+  .campaign-management-page .system-form > button { width:auto; }
+  .campaign-management-page .danger-section { border-top:1px solid rgba(168,58,58,.25); padding-top:18px; }
+  .campaign-management-page .danger-section .section-title { color:#d36e6e; }
+  .campaign-management-page .danger-section form { max-width:420px; }
+  .campaign-management-page .secondary-btn { background:transparent; color:var(--ink-2); border-color:var(--line-strong); }
+  .campaign-management-page .danger-btn { background:transparent; color:#efaaaa; border-color:#77514a; }
+  .campaign-management-page .ok-note { background:rgba(120,180,110,.14); border:1px solid rgba(150,200,120,.4); color:#bfe0a8; padding:10px 12px; border-radius:8px; font-size:13px; margin-bottom:10px; }
+  .campaign-management-page .foot { margin-top:22px; }
+
+  @media (max-width:700px) {
+    body.campaign-management-page { padding:20px 14px 70px; }
+    .campaign-management-page .box { padding:20px 18px; }
+    .campaign-management-page .campaign-management-header { display:block; }
+    .campaign-management-page .campaign-management-header h1 { font-size:21px; }
+    .campaign-management-page .campaign-context { margin-top:10px; }
+    .campaign-management-page .campaign-tabs { gap:16px; }
+    .campaign-management-page .campaign-people-grid,
+    .campaign-management-page .character-list { grid-template-columns:1fr; gap:18px; }
+    .campaign-management-page .row > div { min-width:0; }
+    .campaign-management-page .member-actions { width:100%; }
+    .campaign-management-page .settings-system select { min-width:0 !important; width:100% !important; }
+  }
 </style>
 {% endblock %}
 {% block content %}
-<h1>{{ campaign.name }} &mdash; manage</h1>
-<p class="sub">Add players, hand out characters, and manage who's in your campaign.</p>
+{% set campaign_system = campaign.system or 'pf2e' %}
+{% if campaign_system == 'cosmere' %}
+  {% set campaign_system_label = 'Cosmere RPG' %}
+{% elif campaign_system == 'dnd5e' %}
+  {% set campaign_system_label = 'D&D 5th Edition' %}
+{% else %}
+  {% set campaign_system_label = 'Pathfinder 2e' %}
+{% endif %}
 
-<div class="section-title">Members</div>
-{% if members %}
-<ul class="list">
-  {% for m in members %}
-  <li class="row">
+<main class="campaign-management" aria-labelledby="campaign-management-title">
+  <header class="campaign-management-header">
     <div>
-      <strong>{{ m.name }}</strong>{% if m.is_self %} <span class="muted">(you)</span>{% endif %}
-      <div class="meta"><span class="badge">{{ m.role|upper }}</span></div>
+      <h1 id="campaign-management-title">{{ campaign.name }}</h1>
+      <p class="campaign-management-subtitle">Campaign management &middot; {{ campaign_system_label }}</p>
     </div>
-    {% if not m.is_self %}
-    <div style="display:flex;gap:8px;align-items:center;">
-      {% if m.role == 'player' %}
-      <form method="POST" action="/campaign/{{ campaign.id }}/members/{{ m.user_id }}/role"><input type="hidden" name="role" value="gm"><button type="submit" title="Promote to co-GM">Make GM</button></form>
-      {% elif gm_total > 1 %}
-      <form method="POST" action="/campaign/{{ campaign.id }}/members/{{ m.user_id }}/role"><input type="hidden" name="role" value="player"><button type="submit" title="Demote to player">Make player</button></form>
+    <p class="campaign-context">
+      {{ members|length }} member{% if members|length != 1 %}s{% endif %} &middot;
+      {{ gm_total }} GM{% if gm_total != 1 %}s{% endif %} &middot;
+      {{ rows|length }} character{% if rows|length != 1 %}s{% endif %} &middot;
+      {{ open_invites|length }} open invitation{% if open_invites|length != 1 %}s{% endif %}
+    </p>
+  </header>
+
+  <div class="campaign-tabs" role="tablist" aria-label="Campaign management sections" data-campaign-tablist>
+    <button type="button" id="campaign-tab-members" role="tab" aria-controls="members" aria-selected="true" tabindex="0" data-campaign-tab="members">Members &amp; invites</button>
+    <button type="button" id="campaign-tab-characters" role="tab" aria-controls="characters" aria-selected="false" tabindex="-1" data-campaign-tab="characters">Characters</button>
+    <button type="button" id="campaign-tab-settings" role="tab" aria-controls="settings" aria-selected="false" tabindex="-1" data-campaign-tab="settings">Settings</button>
+  </div>
+
+  <div class="campaign-panels">
+    <div class="campaign-panel campaign-tab-panel" id="members" role="tabpanel" aria-labelledby="campaign-tab-members" data-campaign-panel="members" tabindex="0">
+      <div class="campaign-people-grid">
+        <section class="campaign-section campaign-members" aria-labelledby="campaign-members-title">
+          <h2 class="section-title" id="campaign-members-title">Members</h2>
+          {% if members %}
+          <ul class="list">
+            {% for m in members %}
+            <li class="row">
+              <div>
+                <strong>{{ m.name }}</strong>{% if m.is_self %} <span class="muted">(you)</span>{% endif %}
+                <div class="meta"><span class="badge">{{ m.role|upper }}</span></div>
+              </div>
+              {% if not m.is_self %}
+              <div class="member-actions">
+                {% if m.role == 'player' %}
+                <form method="POST" action="/campaign/{{ campaign.id }}/members/{{ m.user_id }}/role"><input type="hidden" name="role" value="gm"><button type="submit" class="secondary-btn" title="Promote to co-GM">Make GM</button></form>
+                {% elif gm_total > 1 %}
+                <form method="POST" action="/campaign/{{ campaign.id }}/members/{{ m.user_id }}/role"><input type="hidden" name="role" value="player"><button type="submit" class="secondary-btn" title="Demote to player">Make player</button></form>
+                {% endif %}
+                {% set remove_confirm = 'Remove ' ~ m.name ~ ' from ' ~ campaign.name ~ '?' %}
+                <form method="POST" action="/campaign/{{ campaign.id }}/members/{{ m.user_id }}/remove" onsubmit="return confirm({{ remove_confirm|tojson|forceescape }});"><button type="submit" class="danger-btn">Remove</button></form>
+              </div>
+              {% endif %}
+            </li>
+            {% endfor %}
+          </ul>
+          {% else %}<p class="muted">No members yet.</p>{% endif %}
+        </section>
+
+        <section class="campaign-section campaign-invites" id="invites" aria-labelledby="campaign-invites-title">
+          <h2 class="section-title" id="campaign-invites-title">Invite people</h2>
+          <p class="sub">A campaign invite adds a member. A character link below claims that specific character.</p>
+          <div class="campaign-inline-actions">
+            <form method="POST" action="/campaign/{{ campaign.id }}/invite"><input type="hidden" name="role" value="player"><button type="submit">+ Player link</button></form>
+            <form method="POST" action="/campaign/{{ campaign.id }}/invite"><input type="hidden" name="role" value="gm"><button type="submit" class="secondary-btn">+ Co-GM link</button></form>
+          </div>
+          <p class="sub" style="margin-top:-4px;">Players can <strong>scan the QR</strong> off your screen &mdash; no typing the link.</p>
+          {% if open_invites %}
+          <ul class="list invite-list">
+            {% for inv in open_invites %}
+            {% set link = public_url_for('join', code=inv.code) %}
+            <li class="row invite-row">
+              <div class="invite-main">
+                <div class="qr">{{ qr_svg(link) | safe }}</div>
+                <div class="invite-body">
+                  <div class="meta"><span class="badge">{{ inv.role|upper }}</span></div>
+                  <code class="muted link" data-link="{{ link }}">{{ link }}</code>
+                  <div class="invite-actions">
+                    <button type="button" class="copy-btn secondary-btn" data-link="{{ link }}">Copy link</button>
+                    <form method="POST" action="/campaign/{{ campaign.id }}/invite/{{ inv.code }}/revoke" style="display:inline;"><button type="submit" class="danger-btn" title="Cancel this code">Revoke</button></form>
+                  </div>
+                </div>
+              </div>
+            </li>
+            {% endfor %}
+          </ul>
+          {% endif %}
+        </section>
+      </div>
+    </div>
+
+    <section class="campaign-panel campaign-tab-panel campaign-section campaign-characters" id="characters" role="tabpanel" aria-labelledby="campaign-tab-characters" data-campaign-panel="characters" tabindex="0" hidden>
+      <h2 class="section-title">Characters</h2>
+      <p class="sub">Claimed characters already have an owner. Share an unclaimed character&rsquo;s link to let a player claim it.</p>
+      {% if rows %}
+      <ul class="list invite-list character-list">
+        {% for r in rows %}
+        <li class="row invite-row">
+          {% if r.claimed %}
+          <div>
+            <strong>{{ r.name }}</strong>
+            <div class="meta"><span class="badge">claimed{% if r.owner %} &middot; {{ r.owner }}{% endif %}</span></div>
+          </div>
+          {% if r.kind == 'cosmere' %}
+          {% set release_confirm = 'Hand off ' ~ r.name ~ '? This frees their join link so a player can claim it.' %}
+          <form method="POST" action="/cosmere/pc/{{ r.id }}/release" onsubmit="return confirm({{ release_confirm|tojson|forceescape }});">
+            <button type="submit" class="secondary-btn" title="Clear ownership and mint a fresh join link">Hand off</button>
+          </form>
+          {% endif %}
+          {% else %}
+          {% set link = public_url_for('join', code=r.code) %}
+          <div class="invite-main">
+            <div class="qr">{{ qr_svg(link) | safe }}</div>
+            <div class="invite-body">
+              <strong>{{ r.name }}</strong>
+              <code class="muted link" data-link="{{ link }}">{{ link }}</code>
+              <div class="invite-actions"><button type="button" class="copy-btn secondary-btn" data-link="{{ link }}">Copy link</button></div>
+            </div>
+          </div>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="campaign-empty">No characters are available for this campaign yet.</p>
       {% endif %}
-      <form method="POST" action="/campaign/{{ campaign.id }}/members/{{ m.user_id }}/remove" onsubmit="return confirm('Remove {{ m.name }} from {{ campaign.name }}?');"><button type="submit">Remove</button></form>
+    </section>
+
+    <div class="campaign-panel campaign-tab-panel" id="settings" role="tabpanel" aria-labelledby="campaign-tab-settings" data-campaign-panel="settings" tabindex="0" hidden>
+      <section class="campaign-section settings-system" id="system" aria-labelledby="campaign-system-title">
+        <h2 class="section-title" id="campaign-system-title">Game system</h2>
+        <p class="sub">Changes the rules, sheets, and tools for the whole campaign.</p>
+        {% if request.args.get('system_set') %}<div class="ok-note">Game system set to <strong>{{ request.args.get('system_set')|upper }}</strong>.</div>{% endif %}
+        {% if request.args.get('system_error') %}<div class="err">That isn&rsquo;t a supported game system.</div>{% endif %}
+        {% set system_confirm = 'Switch ' ~ campaign.name ~ ' to the selected system? This changes the rules, sheets, and tools for the whole table.' %}
+        <form class="system-form" method="POST" action="/campaign/{{ campaign.id }}/system"
+              onsubmit="return confirm({{ system_confirm|tojson|forceescape }});"
+              style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+          <label class="sr-only" for="campaign-system-select">Game system</label>
+          <select id="campaign-system-select" name="system" style="width:auto;min-width:220px;">
+            <option value="pf2e"{% if (campaign.system or 'pf2e') == 'pf2e' %} selected{% endif %}>Pathfinder 2e</option>
+            <option value="cosmere"{% if campaign.system == 'cosmere' %} selected{% endif %}>Cosmere RPG (Stormlight)</option>
+            <option value="dnd5e"{% if campaign.system == 'dnd5e' %} selected{% endif %}>D&amp;D 5th Edition</option>
+          </select>
+          <button type="submit" class="secondary-btn">Change system</button>
+          <span class="muted" style="font-size:12px;">Currently <strong>{{ (campaign.system or 'pf2e')|upper }}</strong></span>
+        </form>
+      </section>
+
+      <section class="campaign-section danger-section" id="danger" aria-labelledby="campaign-danger-title">
+        <h2 class="section-title" id="campaign-danger-title">Danger zone</h2>
+        {% if request.args.get('delete_error') %}<div class="err">The name didn&rsquo;t match &mdash; the campaign was not moved to trash.</div>{% endif %}
+        <p class="muted" style="margin-bottom:12px;">Move <strong>{{ campaign.name }}</strong> and its characters, encounters, and data to trash. You can restore the campaign for {{ trash_ttl_days }} days.</p>
+        {% set trash_confirm = 'Move ' ~ campaign.name ~ ' and its data to trash? You can restore it for ' ~ trash_ttl_days ~ ' days.' %}
+        <form method="POST" action="/campaign/{{ campaign.id }}/delete"
+              onsubmit="return confirm({{ trash_confirm|tojson|forceescape }});">
+          <label for="campaign-delete-confirm">Type the campaign name to confirm</label>
+          <input id="campaign-delete-confirm" name="confirm_name" autocomplete="off" placeholder="{{ campaign.name }}">
+          <button type="submit" style="background:linear-gradient(180deg,#d36e6e,#a83a3a); border-color:rgba(211,110,110,.6); color:#fff;">Move to trash</button>
+        </form>
+      </section>
     </div>
-    {% endif %}
-  </li>
-  {% endfor %}
-</ul>
-{% else %}<p class="muted">No members yet.</p>{% endif %}
+  </div>
 
-<div class="section-title">Invite people</div>
-<p class="sub">Share a join link. They create an account (or sign in) and join your campaign.</p>
-<div style="display:flex;gap:10px;margin-bottom:12px;">
-  <form method="POST" action="/campaign/{{ campaign.id }}/invite"><input type="hidden" name="role" value="player"><button type="submit">+ Player link</button></form>
-  <form method="POST" action="/campaign/{{ campaign.id }}/invite"><input type="hidden" name="role" value="gm"><button type="submit">+ Co-GM link</button></form>
-</div>
-<p class="sub" style="margin-top:-4px;">Players can <strong>scan the QR</strong> off your screen &mdash; no typing the link.</p>
-{% if open_invites %}
-<ul class="list invite-list">
-  {% for inv in open_invites %}
-  {% set link = public_url_for('join', code=inv.code) %}
-  <li class="row invite-row">
-    <div class="invite-main">
-      <div class="qr">{{ qr_svg(link) | safe }}</div>
-      <div class="invite-body">
-        <div class="meta"><span class="badge">{{ inv.role|upper }}</span></div>
-        <code class="muted link" data-link="{{ link }}">{{ link }}</code>
-        <div class="invite-actions">
-          <button type="button" class="copy-btn" data-link="{{ link }}">Copy link</button>
-          <form method="POST" action="/campaign/{{ campaign.id }}/invite/{{ inv.code }}/revoke" style="display:inline;"><button type="submit" title="Cancel this code">Revoke</button></form>
-        </div>
-      </div>
-    </div>
-  </li>
-  {% endfor %}
-</ul>
-{% endif %}
+  <p class="foot muted"><a href="/me">&larr; Back to my table</a></p>
+</main>
 
-{% if rows %}
-<div class="section-title">Characters</div>
-<p class="sub">A character link claims that specific character. A character you built yourself can be <em>handed off</em> to free its link.</p>
-<ul class="list invite-list">
-  {% for r in rows %}
-  <li class="row invite-row">
-    {% if r.claimed %}
-    <div>
-      <strong>{{ r.name }}</strong>
-      <div class="meta"><span class="badge">claimed{% if r.owner %} &middot; {{ r.owner }}{% endif %}</span></div>
-    </div>
-    {% if r.kind == 'cosmere' %}
-    <form method="POST" action="/cosmere/pc/{{ r.id }}/release" onsubmit="return confirm('Hand off {{ r.name }}? This frees their join link so a player can claim it.');">
-      <button type="submit" title="Clear ownership and mint a fresh join link">Hand off</button>
-    </form>
-    {% endif %}
-    {% else %}
-    {% set link = public_url_for('join', code=r.code) %}
-    <div class="invite-main">
-      <div class="qr">{{ qr_svg(link) | safe }}</div>
-      <div class="invite-body">
-        <strong>{{ r.name }}</strong>
-        <code class="muted link" data-link="{{ link }}">{{ link }}</code>
-        <div class="invite-actions"><button type="button" class="copy-btn" data-link="{{ link }}">Copy link</button></div>
-      </div>
-    </div>
-    {% endif %}
-  </li>
-  {% endfor %}
-</ul>
-{% endif %}
+<script data-campaign-tabs>
+(function () {
+  'use strict';
 
-<div class="section-title">Game system</div>
-<p class="sub">The rules, sheets, and tools for the whole table. If this game is opening the wrong side &mdash; e.g. a Pathfinder campaign routing to the Cosmere screens &mdash; fix the stored system here.</p>
-{% if request.args.get('system_set') %}<div class="ok-note">Game system set to <strong>{{ request.args.get('system_set')|upper }}</strong>.</div>{% endif %}
-{% if request.args.get('system_error') %}<div class="err">That isn&rsquo;t a supported game system.</div>{% endif %}
-<form method="POST" action="/campaign/{{ campaign.id }}/system"
-      onsubmit="return confirm('Switch {{ campaign.name }} to the selected system? This changes the rules, sheets, and tools for the whole table.');"
-      style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-  <select name="system" style="width:auto;min-width:220px;">
-    <option value="pf2e"{% if (campaign.system or 'pf2e') == 'pf2e' %} selected{% endif %}>Pathfinder 2e</option>
-    <option value="cosmere"{% if campaign.system == 'cosmere' %} selected{% endif %}>Cosmere RPG (Stormlight)</option>
-    <option value="dnd5e"{% if campaign.system == 'dnd5e' %} selected{% endif %}>D&amp;D 5th Edition</option>
-  </select>
-  <button type="submit">Change system</button>
-  <span class="muted" style="font-size:12px;">Currently <strong>{{ (campaign.system or 'pf2e')|upper }}</strong></span>
-</form>
+  var tablist = document.querySelector('[data-campaign-tablist]');
+  if (!tablist) return;
 
-<div class="section-title" style="color:#d36e6e; border-top:1px solid rgba(168,58,58,.25); margin-top:30px; padding-top:18px;">Danger zone</div>
-{% if request.args.get('delete_error') %}<div class="err">The name didn&rsquo;t match &mdash; the campaign was not moved to trash.</div>{% endif %}
-<p class="muted" style="margin-bottom:12px;">Move <strong>{{ campaign.name }}</strong> and its characters, encounters, and data to trash. You can restore the campaign for {{ trash_ttl_days }} days.</p>
-{% set trash_confirm = 'Move ' ~ campaign.name ~ ' and its data to trash? You can restore it for ' ~ trash_ttl_days ~ ' days.' %}
-<form method="POST" action="/campaign/{{ campaign.id }}/delete"
-      onsubmit="return confirm({{ trash_confirm|tojson|forceescape }});">
-  <label>Type the campaign name to confirm</label>
-  <input name="confirm_name" autocomplete="off" placeholder="{{ campaign.name }}">
-  <button type="submit" style="background:linear-gradient(180deg,#d36e6e,#a83a3a); border-color:rgba(211,110,110,.6); color:#fff;">Move to trash</button>
-</form>
+  var tabs = Array.prototype.slice.call(tablist.querySelectorAll('[role="tab"]'));
+  var panels = Array.prototype.slice.call(document.querySelectorAll('[data-campaign-panel]'));
+  var hashMap = {
+    members: 'members',
+    invites: 'members',
+    characters: 'characters',
+    settings: 'settings',
+    system: 'settings',
+    danger: 'settings'
+  };
 
-<p class="foot muted"><a href="/me">&larr; Back to my table</a></p>
+  function activate(key, focusTab, updateHash) {
+    var selectedIndex = tabs.findIndex(function (tab) {
+      return tab.getAttribute('data-campaign-tab') === key;
+    });
+    if (selectedIndex < 0) selectedIndex = 0;
+
+    tabs.forEach(function (tab, index) {
+      var selected = index === selectedIndex;
+      tab.setAttribute('aria-selected', String(selected));
+      tab.tabIndex = selected ? 0 : -1;
+    });
+    panels.forEach(function (panel) {
+      panel.hidden = panel.getAttribute('data-campaign-panel') !== tabs[selectedIndex].getAttribute('data-campaign-tab');
+    });
+
+    if (focusTab) tabs[selectedIndex].focus();
+    if (updateHash) {
+      var nextHash = '#' + tabs[selectedIndex].getAttribute('data-campaign-tab');
+      if (window.location.hash !== nextHash) {
+        try {
+          window.history.replaceState(null, '', nextHash);
+        } catch (_) {
+          window.location.hash = nextHash;
+        }
+      }
+    }
+  }
+
+  function tabForHash() {
+    var fragment = window.location.hash.slice(1).toLowerCase();
+    return hashMap[fragment] || 'members';
+  }
+
+  function activateFromHash() {
+    var fragment = window.location.hash.slice(1).toLowerCase();
+    activate(tabForHash(), false, false);
+    if (fragment && hashMap[fragment]) {
+      var target = document.getElementById(fragment);
+      if (target && typeof target.scrollIntoView === 'function') {
+        var scrollToTarget = function () { target.scrollIntoView({ block: 'start' }); };
+        if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(scrollToTarget);
+        else scrollToTarget();
+      }
+    }
+  }
+
+  tabs.forEach(function (tab, index) {
+    tab.addEventListener('click', function () {
+      activate(tab.getAttribute('data-campaign-tab'), false, true);
+    });
+    tab.addEventListener('keydown', function (event) {
+      var nextIndex = index;
+      if (event.key === 'Home') nextIndex = 0;
+      else if (event.key === 'End') nextIndex = tabs.length - 1;
+      else if (event.key === 'ArrowRight' || event.key === 'ArrowDown') nextIndex = (index + 1) % tabs.length;
+      else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') nextIndex = (index - 1 + tabs.length) % tabs.length;
+      else return;
+
+      event.preventDefault();
+      activate(tabs[nextIndex].getAttribute('data-campaign-tab'), true, true);
+    });
+  });
+
+  activateFromHash();
+  window.addEventListener('hashchange', activateFromHash);
+})();
+</script>
 
 <script>
 // Copy-to-clipboard for the join links (so the GM can paste into chat). The QR

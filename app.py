@@ -9015,6 +9015,10 @@ def _build_party_skill_matrix(party):
 
 @app.route('/party')
 def party_view():
+    # The party overview is PF2e-specific. A stale bookmark must not expose
+    # PF2e attributes, Hero Points, or encounter controls inside another game.
+    if _active_system() == 'cosmere':
+        return redirect(url_for('cosmere_pcs'))
     _sync_party_from_disk()
     party = list(PARTY_LIBRARY.values())
     return render_template('party_view.html', party=party,
@@ -10812,7 +10816,7 @@ def campaign_set_system(cid):
         return jsonify({'error': 'GM only'}), 403
     new_system = (request.form.get('system') or '').strip().lower()
     if new_system not in _storage.SUPPORTED_SYSTEMS:
-        return redirect('/campaign/%s/invites?system_error=1' % cid)
+        return redirect('/campaign/%s/invites?system_error=1#system' % cid)
     old = camp.get('system') or 'pf2e'
     if old != new_system:
         if (_storage.get_live_campaign_id() == cid
@@ -10832,7 +10836,7 @@ def campaign_set_system(cid):
                 _campaigns.save_campaign(camp)
                 load_campaign(cid)
                 raise
-    return redirect('/campaign/%s/invites?system_set=%s' % (cid, new_system))
+    return redirect('/campaign/%s/invites?system_set=%s#system' % (cid, new_system))
 
 
 @app.route('/campaign/<cid>/delete', methods=['POST'])
@@ -10846,7 +10850,7 @@ def campaign_delete(cid):
     if not camp:
         return jsonify({'error': 'GM only'}), 403
     if (request.form.get('confirm_name') or '').strip() != (camp.get('name') or '').strip():
-        return redirect('/campaign/%s/invites?delete_error=1' % cid)
+        return redirect('/campaign/%s/invites?delete_error=1#danger' % cid)
     if (_storage.get_live_campaign_id() == cid
             and _flush_pending_persistence() is False):
         return _authorization_error(
@@ -16477,7 +16481,7 @@ def cosmere_pc_release(pid):
         _save_cosmere_pc(doc)
     if request.is_json:
         return jsonify({'ok': True})
-    return redirect('/campaign/%s/invites' % cid if cid else '/cosmere/pcs')
+    return redirect('/campaign/%s/invites#characters' % cid if cid else '/cosmere/pcs')
 
 
 @app.route('/cosmere/pc/<pid>/delete', methods=['POST'])

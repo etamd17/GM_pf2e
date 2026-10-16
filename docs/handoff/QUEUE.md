@@ -38,12 +38,12 @@ UI/UX design is Claude's by default; Codex implements mechanical parts from Clau
 | UI-06 | PF2e GM dashboard (B) + GM Screen (B). Holds the shared conventions for UI-06 to UI-12 | codex | standard, medium | done (accepted by Claude) | `tasks/UI-06-pf2e-gm-hub-and-gmscreen.md` |
 | UI-07 | PF2e generators (A) + loot ledger (B) | codex | standard, medium | done (accepted by Claude) | `tasks/UI-07-pf2e-generators-and-loot.md` |
 | UI-08 | PF2e encounter tracker (B: combat first, setup folds away) | codex | strongest, high | done (accepted by Claude) | `tasks/UI-08-pf2e-tracker.md` |
-| UI-09 | PF2e party overview (A+B) + campaign management (B tabs) + My table (A) | codex | standard, high | ready | `tasks/UI-09-pf2e-party-and-campaign-pages.md` |
+| UI-09 | PF2e party overview (A+B) + campaign management (B tabs) + My table (A) | codex | standard, high | done (accepted by Claude) | `tasks/UI-09-pf2e-party-and-campaign-pages.md` |
 | UI-10 | PF2e player sheet (A: compact header, CSS only) | codex | standard, high | ready | `tasks/UI-10-pf2e-player-sheet.md` |
 | UI-11 | PF2e level-up (B) + builder (B): roadmap and live preview | codex | strongest, high | ready | `tasks/UI-11-pf2e-levelup-and-builder.md` |
 | UI-12 | PF2e map (B: map first, right-side tabs) | codex | strongest, high | waiting on user (after the VTT plan) | `tasks/UI-12-pf2e-map.md` |
 | UI-13 | Cosmere GM dashboard (hybrid) + GM Screen (B) + 3 hub error-handling fixes | codex | standard, medium | ready | `tasks/UI-13-cosmere-dashboard-and-gmscreen.md` |
-| UI-14 | Cosmere tracker (B: phase/turn first, phase band) + check the Archer's missing strikes | codex | strongest, high | ready after UI-08 | `tasks/UI-14-cosmere-tracker.md` |
+| UI-14 | Cosmere tracker (B: phase/turn first, phase band) + check the Archer's missing strikes | codex | strongest, high | ready | `tasks/UI-14-cosmere-tracker.md` |
 | UI-15 | Cosmere Party Vitals (B) + roster (A cards + attention summary) | codex | standard, high | ready | `tasks/UI-15-cosmere-vitals-and-roster.md` |
 | UI-16 | Cosmere loot (B: form beside searchable history, draft worth from the server table) | codex | standard, medium | ready after UI-05 | `tasks/UI-16-cosmere-loot.md` |
 | UI-03 | Fix the seven confirmed bugs from the UI review | codex | standard | done (accepted by Claude) | `tasks/UI-03.md` |
@@ -116,6 +116,8 @@ Accepted as a design checkpoint. Notes:
 
 Newest first. One plain line per handoff: who, what, what's next.
 
+- 2026-10-15 Claude: checked UI-09 in the browser: the Party page's watch strip updates live and jumps to the character, campaign management's three tabs work by mouse, keyboard and link, and its notices stay visible; My Table only got styling. Accepted. Next: Codex commits and merges after CI, then UI-10 (player sheet).
+- 2026-10-15 Codex: built UI-09's PF2e Party watch and compact cards, three-tab campaign management and compact My table while preserving every role/form/control contract and isolating `/party` by system; the 82-check focused suite passed, final corrections passed 12 UI and 10 route checks, and all 107 templates parse. Next: Claude reviews the diff and checks all three pages at 1440px and 375px using a throwaway campaign.
 - 2026-10-15 Claude: checked UI-08 in the browser: the PF2e tracker now puts combat first, the setup panel opens and closes on its own as the fight starts and ends, keyboard shortcuts still work, and on a phone every row button is reachable by scrolling the table. Cosmere is unchanged. Accepted. Next: Codex commits and merges after CI, then UI-09.
 - 2026-10-15 Codex: built UI-08's PF2e combat-first tracker, live empty/populated setup disclosure and focusable phone scroll region without changing Cosmere or D&D; 134 focused checks pass, 21 skip and all 107 templates parse. Next: Claude reviews the diff and checks 1440px and 375px in the browser.
 - 2026-10-15 Claude: checked UI-07 in the browser: the PF2e generators (all 19 cards, pins, Rapid Fire, filters, reroll all) and loot page (form beside history, awards deposit to the sheet, delete only removes the log) work on desktop and phone. Accepted. Next: Codex deletes a stray test folder, commits, merges after CI, then UI-08.

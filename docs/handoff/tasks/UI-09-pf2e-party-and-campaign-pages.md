@@ -45,4 +45,58 @@
 
 ## Report
 
+- Ported the approved combined party view: Revision A's flatter cards keep attributes visible, while a server-rendered Party watch links low-HP and conditioned PCs to stable card anchors. Live HP and condition updates add, reorder and remove watch entries, announce changes politely, and move keyboard focus into the selected card without changing any PF2e controls. Boolean conditions render as labels without exposing their stored `True` value.
+- Rebuilt campaign management as three server-rendered tabs for Members & invites, Characters and Settings. Counts, existing anchors, hash navigation, roving arrow/Home/End keyboard focus, empty states, all 12 form contracts and the last-GM protection remain. System and delete responses return to the Settings subsection that contains their notice, and the existing Cosmere-only release returns to Characters. PF2e hand-off wording is gone. Confirmation prompts now safely encode campaign, member and character names.
+- Applied the selected compact My table styling without reordering its sections or changing behavior. The GM render keeps eight forms and management/backup links; the player render keeps five forms and has no GM-only links.
+- Kept system mechanics isolated: `/party` redirects Cosmere campaigns to their roster before loading PF2e data, while the existing D&D redirect continues to handle D&D campaigns.
+- Added `tests/test_pf2e_party_campaign_ui.py` with frozen rendered inventories for IDs, links and targets, every inline handler, full form/control contracts, ARIA, JS selector classes and data hooks, plus the live Party watch, campaign tabs, hostile-name escaping and cross-system route guards.
+
+### Verification
+
+- `python tools/check_templates.py` — **107 templates parse**.
+- `pytest -q tests/test_pf2e_party_campaign_ui.py tests/test_registration_and_members.py tests/test_onboarding.py tests/test_campaign_soft_delete.py tests/test_campaign_backup.py tests/test_scheduled_backups.py tests/test_switching_ux.py tests/test_switching_e2e.py tests/test_gm_system_repair.py tests/test_nav_home_and_session_entry.py tests/test_system_guards.py tests/test_inline_handler_escaping.py tests/test_route_policy_inventory.py` — **82 passed**.
+- Final correction reruns: `pytest -q tests/test_pf2e_party_campaign_ui.py` — **12 passed**; `pytest -q tests/test_gm_system_repair.py tests/test_campaign_soft_delete.py` — **10 passed**.
+- `git diff --check` — **passed**.
+- Claude browser review remains: use a throwaway campaign for the management page, then check all three pages at 1440px and 375px with no horizontal overflow.
+
 ## Review
+
+**Claude, 2026-10-15: accepted. No required fixes.**
+
+Read the diff (`app.py` redirects and anchors, the three templates, the new tests). Checked live
+on a local server on this tree at 1440px and 375px. Used a throwaway campaign, "UI09 throwaway",
+for the destructive actions. Did not rerun the test suite.
+
+**Party (PF2e, Kyle in a live encounter):**
+- At rest the Party watch is empty.
+- After 100 damage plus Prone and Frightened through the tracker routes, it updated without a
+  reload to "Kyle · 38 / 138 HP, Frightened 1, Prone" (no "Prone True").
+- Clicking the entry focuses Kyle's card (`#party-card-1`, in view).
+- Healing him and removing both conditions cleared the entry live.
+- No sideways scroll at 1440 or 375.
+- Not tested live: ordering, since the test party has one character. It's covered by Codex's
+  tests.
+
+**Campaign management (throwaway campaign):**
+- Three tabs (Members & invites / Characters / Settings). Mouse, ArrowRight, Home and End all
+  work, and the URL hash follows (`#characters`).
+- Loading the page with `#characters` opens that tab.
+- Empty states read "No characters are available for this campaign yet".
+- A wrong-name delete returns to `?delete_error=1#danger`, on the Settings tab, with "The name
+  didn't match -- the campaign was not moved to trash." visible.
+- Changing the system returns to `?system_set=pf2e#system`, with "Game system set to PF2E." in
+  view.
+- The empty campaign renders its 4 forms (invite x2, system, delete); the 12-form inventory is
+  covered by Codex's tests on a populated fixture.
+- No sideways scroll at 375px.
+- Not clicked: Cosmere "Hand off". It's a one-line redirect-anchor change (`#characters`), checked
+  in the code.
+
+**My Table:**
+- GM view: no sideways scroll at 375px.
+- The template change is CSS plus an `account-home` body class, with no change to any `{% if %}`
+  role branch, so the player view's separation is unchanged by construction. I couldn't view it as
+  a player (no player account in this test setup); Codex's role tests cover it.
+
+**System isolation:** `/party` in a Cosmere campaign redirects to `/cosmere/pcs` (0.7 s); in PF2e
+it renders the PF2e Party View.

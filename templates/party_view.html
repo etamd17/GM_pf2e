@@ -565,6 +565,146 @@
     .sm-cell.smp-L .sm-prof { color: #ef6b6b; }
     .sm-cell.smp-U { opacity: 0.5; }
     .sm-foot { padding: 8px 18px; border-top: 1px solid rgba(255,255,255,0.06); font-size: 10px; color: var(--text-on-dark-3); }
+
+    /* -------- UI-09 selected party composition -------- */
+    .party-header {
+        gap: 18px;
+        flex-wrap: wrap;
+    }
+    .party-header-actions {
+        flex-wrap: wrap;
+    }
+    .party-watch {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px 20px;
+        margin: 0 0 18px;
+        padding: 12px 0;
+        border-block: 1px solid var(--border-rule);
+    }
+    .party-watch[hidden],
+    .party-watch-item[hidden] {
+        display: none;
+    }
+    .party-watch-title {
+        color: var(--gilt-200);
+        font: 600 12px var(--font-display);
+    }
+    .party-watch-item {
+        display: inline-flex;
+        align-items: baseline;
+        gap: 0.25rem;
+        padding: 3px 0;
+        color: var(--text-on-dark-2);
+        font: 12px var(--font-ui);
+        text-decoration: none;
+    }
+    .party-watch-item:hover {
+        color: var(--gilt-100);
+    }
+    .party-watch-item:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 3px;
+        border-radius: 2px;
+    }
+    .pc-card {
+        border-radius: 5px;
+        scroll-margin-top: 5rem;
+    }
+    .pc-card:target {
+        border-color: rgba(201,163,78,0.48);
+    }
+    .pc-card:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 3px;
+    }
+    .pc-head {
+        padding: 18px 20px;
+    }
+    .pc-head a {
+        font-size: 18px;
+    }
+    .pc-body {
+        padding: 18px 20px;
+        gap: 14px;
+    }
+    .stat-strip {
+        gap: 0;
+        padding: 9px 0;
+        border-block: 1px solid var(--border-card);
+    }
+    .stat-chip,
+    .ability-chip {
+        background: transparent;
+        border: 0;
+        border-radius: 0;
+    }
+    .stat-chip .stat-lbl,
+    .ability-chip .ab-lbl {
+        font-size: 10px;
+        letter-spacing: 0.06em;
+    }
+    .stat-chip .stat-val {
+        font-size: 15px;
+    }
+    .pc-tab {
+        padding: 8px 10px;
+        font-size: 12px;
+    }
+    .pc-tab-panel {
+        padding: 10px 0;
+        background: transparent;
+        border: 0;
+        border-top: 1px solid var(--border-card);
+        border-radius: 0;
+    }
+    .hp-display {
+        font-size: 20px;
+        font-variant-numeric: tabular-nums;
+    }
+    .hero-adjust-btn {
+        width: 26px;
+        height: 26px;
+        font-size: 13px;
+    }
+    .conditions-row {
+        flex-wrap: wrap;
+        overflow: visible;
+    }
+    .conditions-row .condition-pill {
+        padding: 4px 8px;
+        font-size: 11px;
+    }
+    .spell-line-tag {
+        min-width: 48px;
+        white-space: nowrap;
+    }
+
+    @media (max-width: 600px) {
+        .pc-body,
+        .pc-head {
+            padding: 16px;
+        }
+        .pc-tab {
+            padding: 7px;
+        }
+        .party-header-actions {
+            width: 100%;
+        }
+        #loot-distribute-flyout,
+        #party-damage-flyout {
+            left: 0 !important;
+            right: auto !important;
+            width: calc(100vw - 2rem);
+            min-width: 0 !important;
+            max-width: calc(100vw - 2rem);
+            max-height: calc(100vh - 7rem);
+            box-sizing: border-box;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+        }
+    }
 {% endblock %}
 
 {% block content %}
@@ -578,12 +718,12 @@
 {% endif %}
 
 <!-- Header -->
-<div class="flex items-center justify-between mb-6">
+<div class="party-header flex items-center justify-between mb-6">
     <div>
         <h1 class="font-display text-xl text-accent-300 tracking-wide">Party Overview</h1>
         <p class="text-xs text-base-500 mt-0.5">Real-time character status &mdash; click a spell, feat, attack, or feature for details</p>
     </div>
-    <div class="flex gap-2 items-center" style="position:relative;">
+    <div class="party-header-actions flex gap-2 items-center" style="position:relative;">
         {% if skill_matrix and skill_matrix.rows %}
         <button type="button" id="skill-compare-toggle" class="text-xs font-medium text-base-400 hover:text-accent-300 px-3 py-1.5 rounded border border-white/[0.06] hover:border-accent-400/20 transition-colors" style="background:var(--bg-card); cursor:pointer;" onclick="openSkillMatrix()" title="Compare every PC's skills side by side — see who to call for a given check">
             Compare Skills
@@ -671,6 +811,48 @@
     </div>
 </div>
 
+{% set party_watch = namespace(has_attention=false) %}
+{% for pc in party %}
+    {% set watch_hp_pct = (pc.current_hp / pc.hp * 100) if pc.hp > 0 else 0 %}
+    {% if watch_hp_pct <= 50 %}{% set party_watch.has_attention = true %}{% endif %}
+    {% for cond, val in pc.conditions.items() %}
+        {% if val and val != 0 and val is not false %}{% set party_watch.has_attention = true %}{% endif %}
+    {% endfor %}
+{% endfor %}
+<section id="party-watch" class="party-watch" aria-label="Party attention" aria-live="polite"{% if not party_watch.has_attention %} hidden{% endif %}>
+    <strong class="party-watch-title">Party watch</strong>
+    {% for pc in party %}
+        {% set watch_hp_pct = (pc.current_hp / pc.hp * 100) if pc.hp > 0 else 0 %}
+        {% set watch_entry = namespace(has_attention=(watch_hp_pct <= 50)) %}
+        {% for cond, val in pc.conditions.items() %}
+            {% if val and val != 0 and val is not false %}{% set watch_entry.has_attention = true %}{% endif %}
+        {% endfor %}
+        {% if watch_entry.has_attention %}
+        <a id="party-watch-{{ loop.index }}"
+           class="party-watch-item"
+           href="#party-card-{{ loop.index }}"
+           data-party-card-id="party-card-{{ loop.index }}"
+           data-party-index="{{ loop.index }}">
+            <span class="party-watch-name">{{ pc.name }}</span>
+            <span aria-hidden="true">&middot;</span>
+            <span class="party-watch-notes">{%- set watch_note = namespace(has_note=false) -%}
+                {%- if watch_hp_pct <= 50 -%}
+                    {{- pc.current_hp }} / {{ pc.hp }} HP
+                    {%- set watch_note.has_note = true -%}
+                {%- endif -%}
+                {%- for cond, val in pc.conditions.items() -%}
+                    {%- if val and val != 0 and val is not false -%}
+                        {%- if watch_note.has_note %}, {% endif -%}
+                        {{- cond|replace('_', ' ')|capitalize }}{% if val is number and val is not boolean and val > 0 %} {{ val }}{% endif -%}
+                        {%- set watch_note.has_note = true -%}
+                    {%- endif -%}
+                {%- endfor -%}
+            </span>
+        </a>
+        {% endif %}
+    {% endfor %}
+</section>
+
 {% if not party %}
 <div class="pc-card p-10 text-center">
     <h2 class="font-display text-lg text-base-300 mb-2">No Characters Found</h2>
@@ -737,7 +919,14 @@
         {% endfor %}
     {% endif %}
 
-    <div class="pc-card{% if pc.conditions and pc.conditions.dying %} is-dying{% elif hp_pct <= 50 %} is-bloodied{% endif %}" data-pc-name="{{ pc.name }}">
+    <div id="party-card-{{ loop.index }}"
+         class="pc-card{% if pc.conditions and pc.conditions.dying %} is-dying{% elif hp_pct <= 50 %} is-bloodied{% endif %}"
+         tabindex="-1"
+         data-pc-name="{{ pc.name }}"
+         data-watch-id="party-watch-{{ loop.index }}"
+         data-party-index="{{ loop.index }}"
+         data-current-hp="{{ pc.current_hp }}"
+         data-max-hp="{{ pc.hp }}">
         <!-- Header -->
         <div class="pc-head flex items-center justify-between">
             <div class="flex items-center gap-3">
@@ -899,7 +1088,7 @@
                     {% if level.slots > 0 or level.spells %}
                     <div class="spell-level-row mb-1.5" data-spell-level="{{ level.level }}">
                         <div class="spell-line">
-                            <span class="spell-line-tag">{{ 'Cant' if level.level == 0 else level.label[:3] }}</span>
+                            <span class="spell-line-tag">{{ 'Cantrip' if level.level == 0 else 'Rank ' ~ level.level }}</span>
                             {% if level.slots > 0 %}
                             <span class="slot-pips flex gap-1">
                                 {% for i in range(level.slots) %}
@@ -1012,6 +1201,16 @@
 (function() {
     // ---------- Detail modal ----------
     const modal = document.getElementById('detail-modal');
+    const partyWatch = document.getElementById('party-watch');
+    if (partyWatch) {
+        partyWatch.addEventListener('click', function(event) {
+            const link = event.target.closest('.party-watch-item');
+            if (!link || !partyWatch.contains(link)) return;
+            const card = document.getElementById(link.dataset.partyCardId || '');
+            const focusTarget = card && (card.querySelector('.pc-head a') || card);
+            if (focusTarget) requestAnimationFrame(() => focusTarget.focus({ preventScroll: true }));
+        });
+    }
     const modalTitle = document.getElementById('detail-title');
     const modalMeta = document.getElementById('detail-meta');
     const modalBody = document.getElementById('detail-body');
@@ -1166,6 +1365,58 @@
         return 'text-danger-400';
     }
 
+    function refreshPartyAttention(card) {
+        if (!card) return;
+        const watch = document.getElementById('party-watch');
+        if (!watch) return;
+
+        const currentHP = Number(card.dataset.currentHp);
+        const maxHP = Number(card.dataset.maxHp);
+        const hpPct = maxHP > 0 ? (currentHP / maxHP * 100) : 0;
+        const notes = [];
+        if (hpPct <= 50) notes.push(currentHP + ' / ' + maxHP + ' HP');
+        card.querySelectorAll('.conditions-row .condition-pill').forEach(pill => {
+            const label = (pill.textContent || '').trim();
+            if (label) {
+                const readable = label.replace(/_/g, ' ');
+                notes.push(readable.charAt(0).toUpperCase() + readable.slice(1));
+            }
+        });
+
+        let entry = document.getElementById(card.dataset.watchId || '');
+        if (!notes.length) {
+            if (entry) entry.remove();
+            watch.hidden = !watch.querySelector('.party-watch-item');
+            return;
+        }
+        if (!entry) {
+            entry = document.createElement('a');
+            entry.id = card.dataset.watchId;
+            entry.className = 'party-watch-item';
+            entry.setAttribute('href', '#' + card.id);
+            entry.dataset.partyCardId = card.id;
+            entry.dataset.partyIndex = card.dataset.partyIndex;
+
+            const name = document.createElement('span');
+            name.className = 'party-watch-name';
+            name.textContent = card.dataset.pcName || '';
+            const separator = document.createElement('span');
+            separator.setAttribute('aria-hidden', 'true');
+            separator.textContent = '\u00b7';
+            const note = document.createElement('span');
+            note.className = 'party-watch-notes';
+            entry.append(name, separator, note);
+
+            const entryIndex = Number(card.dataset.partyIndex);
+            const nextEntry = Array.from(watch.querySelectorAll('.party-watch-item'))
+                .find(item => Number(item.dataset.partyIndex) > entryIndex);
+            watch.insertBefore(entry, nextEntry || null);
+        }
+        const note = entry.querySelector('.party-watch-notes');
+        if (note) note.textContent = notes.join(', ');
+        watch.hidden = false;
+    }
+
     // Brief flash so the GM gets visual confirmation that a damage / heal /
     // condition action landed on this specific card. Variant is 'dmg' | 'heal' | 'cond'.
     function flashCard(card, variant) {
@@ -1179,6 +1430,10 @@
 
     function updateCardHP(card, currentHP, maxHP, conditions, opts) {
         opts = opts || {};
+        card.dataset.currentHp = String(currentHP);
+        card.dataset.maxHp = String(maxHP);
+        const hpRow = card.querySelector('.hp-row');
+        if (hpRow) hpRow.dataset.maxHp = String(maxHP);
         const hpDisplay = card.querySelector('.hp-display');
         let prevHP = null;
         if (hpDisplay) {
@@ -1205,6 +1460,7 @@
         // Whole-card danger rail: dying wins; else bloodied at <=50% HP.
         const _dying = card.classList.contains('is-dying');
         card.classList.toggle('is-bloodied', !_dying && pct > 0 && pct <= 50);
+        refreshPartyAttention(card);
         // Flash unless caller explicitly suppresses (e.g. initial paint)
         if (!opts.noFlash) {
             if (prevHP !== null && currentHP < prevHP) flashCard(card, 'dmg');
@@ -1229,6 +1485,7 @@
         }
         row.innerHTML = html;
         row.style.display = html ? '' : 'none';
+        refreshPartyAttention(card);
     }
 
     function updateFocus(card, focusCurrent) {
