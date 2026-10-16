@@ -149,6 +149,7 @@ def test_schema_exposes_the_approved_additive_tables():
         "vtt_command_receipts",   # VTT commands (migration 20261016_0004)
         "vtt_entities",
         "vtt_outbox",
+        "vtt_pairing_challenges",  # VTT table pairing (migration 20261016_0005)
         "vtt_scenes",
         "vtt_table_grants",
         "vtt_table_pointers",

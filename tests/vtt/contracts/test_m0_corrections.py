@@ -57,11 +57,35 @@ def test_no_schema_uses_unique_items_and_the_keyword_is_refused(tmp_path: Path):
 def test_a_maximum_table_snapshot_validates_quickly():
     # 2,048 tokens: 886 ms in Ajv with uniqueItems (handoff 017). Python's jsonschema
     # is slower than Ajv; the bound guards against a quadratic check coming back.
+    #
+    # It measures scaling, not wall time. An absolute bound (it was 2 s) failed
+    # intermittently on a loaded machine with the code unchanged (2.36 s once in
+    # ten runs, 2026-10-16). Quadrupling the tokens costs about 4x when linear and
+    # about 16x when quadratic; the best of three runs at each size filters noise.
+    #
+    # The scaling is measured on the frame rules alone, because that is where a
+    # quadratic uniqueness check would live (the schemas carry no uniqueItems).
+    # Timed together with jsonschema's own linear cost, a pairwise check was
+    # swamped and passed (checked by mutation).
+    from vtt.protocol.semantics import check_frame
     registry = ContractRegistry()
+
+    def best(n):
+        frame = _table_snapshot([_token(i) for i in range(n)])
+        times = []
+        for _ in range(5):
+            start = time.perf_counter()
+            check_frame("table", frame)
+            times.append(time.perf_counter() - start)
+        return min(times)
+
+    small, large = best(512), best(2048)
+    assert large / small < 9, (small, large)
+    # and the whole validation stays far from pathological
     frame = _table_snapshot([_token(i) for i in range(2048)])
     start = time.perf_counter()
     registry.validate("table", frame)
-    assert time.perf_counter() - start < 2.0
+    assert time.perf_counter() - start < 10.0
 
 
 def test_same_key_with_different_fields_is_a_duplicate():

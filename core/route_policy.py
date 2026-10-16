@@ -645,6 +645,19 @@ _POLICY_GROUPS: tuple[PolicyGroup, ...] = (
 
 
 ROUTE_POLICIES = build_policy_registry(_POLICY_GROUPS)
+# Endpoints that exist only behind a feature flag (the VTT, VTT_ENABLED=1). They
+# are classified exactly like the rest when present, but their absence is not a
+# stale declaration. A name may not appear in both registries.
+OPTIONAL_ROUTE_POLICIES: Mapping[str, RoutePolicy] = build_policy_registry((
+    # Device pairing: the one-time code is the only authority; the view checks
+    # same-origin, secure context and its own rate limits before reading it.
+    (RoutePolicy.PUBLIC, ("vtt_pairing.redeem",)),
+    # The view also requires GM of the campaign named in the body.
+    (RoutePolicy.CAMPAIGN_GM, ("vtt_pairing.issue", "vtt_pairing.list_grants", "vtt_pairing.revoke",
+                               "vtt_pairing.revoke_all")),
+))
+if set(OPTIONAL_ROUTE_POLICIES) & set(ROUTE_POLICIES):
+    raise ValueError("an endpoint is declared in both route policy registries")
 
 
 # Most views have one minimum policy. This reviewed exception needs a stricter
@@ -742,8 +755,9 @@ def audit_url_map(
     actual_pairs = _registered_endpoint_methods(url_map)
     actual_endpoints = {endpoint for endpoint, _method in actual_pairs}
     declared_endpoints = set(policies)
+    optional = set(OPTIONAL_ROUTE_POLICIES) if policies is ROUTE_POLICIES else set()
     return RoutePolicyAudit(
-        unclassified_endpoints=tuple(sorted(actual_endpoints - declared_endpoints)),
+        unclassified_endpoints=tuple(sorted(actual_endpoints - declared_endpoints - optional)),
         stale_endpoints=tuple(sorted(declared_endpoints - actual_endpoints)),
         stale_method_overrides=tuple(sorted(set(method_overrides) - actual_pairs)),
     )
@@ -776,7 +790,10 @@ def policy_for(
     """Look up a declared policy without enforcing it."""
 
     method = method.upper()
-    return method_overrides.get((endpoint, method), policies.get(endpoint))
+    found = method_overrides.get((endpoint, method), policies.get(endpoint))
+    if found is None and policies is ROUTE_POLICIES:
+        found = OPTIONAL_ROUTE_POLICIES.get(endpoint)
+    return found
 
 
 @dataclass(frozen=True, order=True)

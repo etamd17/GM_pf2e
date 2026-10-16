@@ -123,6 +123,19 @@ class Hub:
     def subscription(self, sid: str) -> Subscription | None:
         return self._by_sid.get(sid)
 
+    def end(self, sid: str) -> bool:
+        """Access ended for this connection (heartbeat or revocation sweep): the
+        terminal ``revoked`` control, then close. False when it has no
+        subscription (the caller closes the bare connection)."""
+        sub = self._by_sid.get(sid)
+        if sub is None:
+            return False
+        with sub.lock:
+            if self._by_sid.get(sid) is not sub:
+                return False
+            self._end(sub)
+        return True
+
     def _new_subscription(self, sid, principal, audience, campaign_id, scene_id) -> Subscription:
         return Subscription(sid=sid, subscription_id="sub_" + secrets.token_urlsafe(18), audience=audience,
                             principal=principal, campaign_id=campaign_id, scene_id=scene_id)

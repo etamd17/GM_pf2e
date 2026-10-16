@@ -25,6 +25,18 @@ Events
   well-formed ``commandId`` cannot be acknowledged, so it disconnects.
 - Every other event is refused. A table sending anything but subscribe is
   disconnected: it has no command, transient or whisper capability (criterion 14).
+
+Table grants (M3)
+-----------------
+One rule (``vtt.storage.grants.grant_status``) decides a grant at connect, at
+every snapshot, at every live delivery and on the heartbeat: revoked, issued
+under an older campaign table epoch, or expired. Pairing and revocation are
+HTTP routes (``vtt.transport.pairing``). A revocation commits a
+``table-access`` outbox row, so the next delivery ends each matching live
+table with ``revoked``; the service also sweeps that campaign's tables at once.
+The heartbeat rechecks every connected table principal (subscribed or not)
+every ``HEARTBEAT_SECONDS``, which bounds delayed fan-out under 30 s even when
+nothing else commits (section 10).
 """
 
 from __future__ import annotations
@@ -41,6 +53,7 @@ from flask_socketio import ConnectionRefusedError, SocketIO, disconnect
 
 from core.persistence.database import Database
 from vtt.commands import CommandService, RateLimiter
+from vtt.storage import grants as G
 from vtt.delivery.hub import AccessLost, Hub, Principal
 from vtt.projection.serializers import TokenKey
 from vtt.protocol import ContractRegistry, ProtocolValidationError, StrictJSON
@@ -48,6 +61,8 @@ from vtt.storage.models import VttTableGrant
 
 NAMESPACE = "/vtt"
 TABLE_COOKIE = "vtt_table"
+# Section 10: each connected table is rechecked in PostgreSQL at least every 30 s.
+HEARTBEAT_SECONDS = 15
 
 
 class VttHost(Protocol):
@@ -62,16 +77,14 @@ def _rejection(reason: str) -> dict[str, Any]:
     return {"schemaVersion": 1, "reason": reason}
 
 
-def _utc(value: datetime) -> datetime:
-    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
-
-
 @dataclass
 class VttService:
     socketio: SocketIO
     hub: Hub
     principals: dict[str, Principal]
     commands: CommandService
+    heartbeat: Callable[[], int]
+    sweep: Callable[[str | None], int]
 
 
 def table_verifier(grant_key: bytes, credential: str) -> str:
@@ -81,7 +94,8 @@ def table_verifier(grant_key: bytes, credential: str) -> str:
 def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: TokenKey,
              registry: ContractRegistry | None = None, allowed_origins: list[str] | None = None,
              async_mode: str | None = None, now: Callable[[], datetime] | None = None,
-             rate_limiter: RateLimiter | None = None) -> VttService:
+             rate_limiter: RateLimiter | None = None, start_heartbeat: bool = True,
+             pairing_limits=None) -> VttService:
     registry = registry or ContractRegistry()
     clock = now or (lambda: datetime.now(timezone.utc))
     socketio = SocketIO(app, json=StrictJSON, async_mode=async_mode, manage_session=False,
@@ -95,8 +109,8 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
         if audience == "gm":
             return principal.kind == "member" and host.is_campaign_gm(session, principal.id, campaign_id)
         grant = session.get(VttTableGrant, principal.id)
-        return (grant is not None and grant.campaign_id == campaign_id and grant.revoked_at is None
-                and _utc(grant.expires_at) > clock())
+        return (grant is not None and grant.campaign_id == campaign_id
+                and G.grant_status(session, grant, clock()) == "ok")
 
     def close(sid: str) -> None:
         principals.pop(sid, None)
@@ -115,9 +129,10 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
                     verifier=table_verifier(grant_key, credential)).one_or_none()
                 if grant is None:
                     raise ConnectionRefusedError(_rejection("session-ended"))
-                if grant.revoked_at is not None:
+                status = G.grant_status(session, grant, clock())
+                if status == "revoked":
                     raise ConnectionRefusedError(_rejection("grant-revoked"))
-                if _utc(grant.expires_at) <= clock():
+                if status == "expired":
                     raise ConnectionRefusedError(_rejection("grant-expired"))
                 return Principal(kind="table", id=grant.id, campaign_id=grant.campaign_id)
         user_id = host.current_member_id()
@@ -125,6 +140,46 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
         if not user_id or not host.csrf_valid(token):
             raise ConnectionRefusedError(_rejection("session-ended"))
         return Principal(kind="member", id=user_id)
+
+    def sweep(campaign_id: str | None = None) -> int:
+        """Recheck connected table principals (one campaign, or all) and end each
+        whose grant no longer stands: ``revoked`` to a subscribed one, then close.
+        Returns how many were ended."""
+        tables = [(sid, p) for sid, p in list(principals.items())
+                  if p.kind == "table" and (campaign_id is None or p.campaign_id == campaign_id)]
+        if not tables:
+            return 0
+        ended = 0
+        current = clock()
+        with db.session() as session:
+            failing = [sid for sid, p in tables
+                       if G.grant_status(session, session.get(VttTableGrant, p.id), current) != "ok"]
+        for sid in failing:
+            ended += 1
+            if not hub.end(sid):
+                close(sid)
+        return ended
+
+    def heartbeat_loop():
+        while True:
+            socketio.sleep(HEARTBEAT_SECONDS)
+            try:
+                sweep(None)
+            except Exception:       # a database blip must not stop the heartbeat
+                pass
+
+    if start_heartbeat:
+        socketio.start_background_task(heartbeat_loop)
+
+    def access_changed(campaign_id: str) -> None:
+        hub.notify(campaign_id)     # subscribed tables: delivery's recheck sends revoked
+        sweep(campaign_id)          # connected but unsubscribed ones too
+
+    from vtt.transport.pairing import make_blueprint
+    app.register_blueprint(make_blueprint(
+        db=db, host=host, grant_key=hmac.new(grant_key, b"vtt-pairing-codes", hashlib.sha256).digest(),
+        cookie_name=TABLE_COOKIE, verifier=lambda credential: table_verifier(grant_key, credential),
+        on_access_change=access_changed, now=clock, allowed_origins=allowed_origins, limits=pairing_limits))
 
     @socketio.on("connect", namespace=NAMESPACE)
     def on_connect(auth=None):
@@ -198,4 +253,5 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
             disconnect()
         return None
 
-    return VttService(socketio=socketio, hub=hub, principals=principals, commands=commands)
+    return VttService(socketio=socketio, hub=hub, principals=principals, commands=commands,
+                      heartbeat=lambda: sweep(None), sweep=sweep)

@@ -36,7 +36,9 @@ from .models import VttCampaignStream, VttOutbox
 
 # Event kinds written to the outbox. Internal only: an outbox event is never
 # sent; delivery re-reads canonical state and projects it per audience.
-EVENT_KINDS = ("entities", "scene", "table-pointer")
+# "table-access" (M3): a table grant was revoked or the campaign table epoch
+# moved. It names nothing; delivery's access recheck does the rest.
+EVENT_KINDS = ("entities", "scene", "table-pointer", "table-access")
 
 
 def _ensure_stream_row(session: Session, campaign_id: str) -> None:

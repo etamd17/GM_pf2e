@@ -16,6 +16,8 @@ legacy ``/map``.
 - ``vtt_outbox``: one row per committed position, naming what changed.
 - ``vtt_table_grants``: table device credentials. Only a verifier is stored
   (section 10). M1 creates the table; pairing/redemption is M3.
+- ``vtt_pairing_challenges`` (M3): one short-lived pairing code per row, stored
+  only as a keyed HMAC of its normalized form (section 10).
 - ``vtt_command_receipts`` (M2): one durable receipt per
   ``(campaign, principal kind, principal id, commandId)`` (section 7), kept for
   the campaign's lifetime so an old retry can never apply twice.
@@ -66,8 +68,16 @@ class VttCampaignStream(Base):
     position: Mapped[int] = mapped_column(
         BigInteger, nullable=False, default=0, server_default=text("0")
     )
+    # M3: the campaign's table epoch. A table grant is valid only while its own
+    # epoch equals this; "revoke every table" bumps it in one row (section 10).
+    table_epoch: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
 
-    __table_args__ = (CheckConstraint("position >= 0", name="position_nonnegative"),)
+    __table_args__ = (
+        CheckConstraint("position >= 0", name="position_nonnegative"),
+        CheckConstraint("table_epoch >= 0", name="table_epoch_nonnegative"),
+    )
 
 
 class VttScene(Base):
@@ -211,3 +221,21 @@ class VttCommandReceipt(Base):
             name="outcome_code_consistent",
         ),
     )
+
+
+class VttPairingChallenge(Base):
+    __tablename__ = "vtt_pairing_challenges"
+
+    id: Mapped[int] = mapped_column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True,
+                                    autoincrement=True)
+    campaign_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False
+    )
+    # HMAC-SHA256 hex of the normalized code under a server key; never the code.
+    code_mac: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    created_by: Mapped[str] = mapped_column(String(128), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+    __table_args__ = (Index("ix_vtt_pairing_challenges_campaign_id", "campaign_id"),)

@@ -52,3 +52,35 @@ def test_app_host_csrf_matches_only_the_session_token():
         assert not host.csrf_valid(None)
         session.pop("_csrf")
         assert not host.csrf_valid("")
+
+
+def test_with_the_flag_on_the_real_app_classifies_and_reaches_the_pairing_routes(tmp_path):
+    # M3: the app's own guards run before any VTT view. An endpoint without a
+    # reviewed policy is a 500 and a session-less POST meets the CSRF guard, so
+    # the pairing routes are proved through the real app, not a bare Flask one.
+    url = f"sqlite+pysqlite:///{(tmp_path / 'w.sqlite').as_posix()}"
+    env = dict(os.environ, VTT_ENABLED="1", DATABASE_URL=url, DATA_DIR=str(tmp_path), GM_PASSWORD="")
+    code = r'''
+import json
+from core.persistence import Database
+Database(__import__("os").environ["DATABASE_URL"]).create_schema()
+import app
+from core.route_policy import require_complete_inventory, policy_for
+require_complete_inventory(app.app.url_map)
+client = app.app.test_client()
+redeem = client.post("/vtt/api/table-pairing/redeem", json={"code": "ZZZZ-ZZZZ"},
+                     headers={"Origin": "https://localhost"}, base_url="https://localhost")
+issue = client.post("/vtt/api/table-pairing", json={"campaignId": "camp_a"},
+                    headers={"Origin": "https://localhost"}, base_url="https://localhost")
+print(json.dumps({"redeem": [redeem.status_code, redeem.get_json()],
+                  "issue": issue.status_code, "issue_body": issue.get_json(),
+                  "policy": policy_for("vtt_pairing.redeem", "POST").value}))
+'''
+    out = subprocess.run([sys.executable, "-c", code], cwd=ROOT, env=env, check=True, capture_output=True,
+                         text=True, encoding="utf-8").stdout.strip().splitlines()[-1]
+    result = json.loads(out)
+    # The device route reaches its own handler: a wrong code, not a policy or CSRF refusal.
+    assert result["redeem"] == [400, {"error": "pairing-failed"}]
+    assert result["policy"] == "public"
+    # The GM route is reached too and refuses an anonymous caller itself (no 500).
+    assert result["issue"] in (401, 403), result

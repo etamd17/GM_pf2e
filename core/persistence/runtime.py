@@ -28,8 +28,8 @@ _T = TypeVar("_T")
 _cached_database: Database | None = None
 _cached_url: str | None = None
 _database_lock = threading.Lock()
-# Update alongside every schema migration (20261016_0004 adds VTT command receipts).
-_REQUIRED_REVISION = "20261016_0004"
+# Update alongside every schema migration (20261016_0005 adds VTT table pairing).
+_REQUIRED_REVISION = "20261016_0005"
 
 
 class StoreUnavailable(RuntimeError):
