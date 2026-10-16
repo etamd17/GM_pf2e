@@ -1625,6 +1625,139 @@ body.system-pf2e .trk .pf2e-combat-scroll-hint[hidden] {
   }
 }
 
+/* ═══ UI-14 · Cosmere phase-first layout (Revision B) ═══
+   Mirrors UI-08 for Cosmere only; every rule sits under the Cosmere body class
+   so the PF2e tracker is untouched. */
+body.system-cosmere .trk { min-width:0; max-width:100%; }
+body.system-cosmere .trk .hero-bar {
+  grid-template-columns:minmax(0, 1fr) auto;
+  row-gap:12px;
+  gap:18px;
+  padding:12px 14px;
+  border-radius:4px !important;
+}
+body.system-cosmere .trk .hb-turn { grid-column:1; grid-row:1; justify-self:start; }
+body.system-cosmere .trk .hb-right { grid-column:2; grid-row:1; gap:7px; }
+body.system-cosmere .trk .hb-left {
+  grid-column:1 / -1;
+  grid-row:2;
+  max-width:none;
+  gap:14px;
+  flex-wrap:wrap;
+}
+body.system-cosmere .trk #cos-init-toggle { white-space:normal; text-align:left; }
+body.system-cosmere .trk .turn-now .v { font-size:18px; }
+body.system-cosmere .trk .hb-btn { min-height:34px; font-size:12px; }
+body.system-cosmere .trk .combatant {
+  border:0 !important;
+  border-bottom:1px solid var(--border-card) !important;
+  min-height:90px;
+  padding:11px 12px;
+}
+body.system-cosmere .trk .combatant.active { box-shadow:inset 3px 0 var(--accent) !important; }
+body.system-cosmere .trk .nm { font-size:14px !important; }
+body.system-cosmere .trk .nm-sub { font-size:11px !important; }
+body.system-cosmere .trk .nm-sub button {
+  min-height:27px;
+  font-size:11px !important;
+  padding:3px 7px !important;
+}
+body.system-cosmere .trk .c-hp-quick { height:30px; }
+body.system-cosmere .trk .c-hp-quick .qhp { width:30px; }
+body.system-cosmere .trk .hero-stats { gap:0; border-block:1px solid var(--border-rule); }
+body.system-cosmere .trk .hs-box {
+  border:0 !important;
+  border-radius:0 !important;
+  background:none !important;
+  padding:10px 5px;
+}
+body.system-cosmere .trk .hp-ribbon { border-radius:4px !important; }
+body.system-cosmere .trk .section-h { font-size:12px; }
+
+body.system-cosmere .trk .cos-encounter-setup {
+  margin:10px 0 12px;
+  border-block:1px solid var(--border-card);
+}
+body.system-cosmere .trk .cos-encounter-setup > summary {
+  padding:12px 4px;
+  color:var(--text-on-dark-2);
+  font:12px/1.4 var(--font-ui);
+  cursor:pointer;
+}
+
+body.system-cosmere .trk .cos-phase-strip {
+  display:flex;
+  flex-wrap:wrap;
+  list-style:none;
+  margin:10px 0 12px;
+  padding:0;
+  border-bottom:1px solid var(--border-card);
+}
+body.system-cosmere .trk .cos-phase-strip[hidden] { display:none !important; }
+body.system-cosmere .trk .cos-phase-step {
+  flex:1;
+  min-width:145px;
+  padding:10px 12px;
+  color:var(--text-on-dark-2);
+  font:12px/1.4 var(--font-ui);
+  border-bottom:2px solid transparent;
+}
+body.system-cosmere .trk .cos-phase-step.empty { color:var(--text-on-dark-3); }
+body.system-cosmere .trk .cos-phase-step.active {
+  color:var(--text-on-dark);
+  border-color:var(--accent);
+  font-weight:700;
+}
+
+body.system-cosmere .trk .cos-combat-scroll { max-width:100%; min-width:0; border-radius:4px; }
+body.system-cosmere .trk .cos-combat-scroll:focus-visible {
+  outline:2px solid var(--accent);
+  outline-offset:2px;
+}
+body.system-cosmere .trk .cos-combat-scroll-hint {
+  display:none;
+  margin:8px 0;
+  color:var(--text-on-dark-3);
+  font:11px/1.5 var(--font-ui);
+}
+body.system-cosmere .trk .cos-combat-scroll-hint[hidden] { display:none !important; }
+
+@media (min-width:1280px) {
+  body.system-cosmere .trk .layout.has-active { grid-template-columns:minmax(0, 1fr) 335px; }
+  body.system-cosmere .trk .grid-head,
+  body.system-cosmere .trk .combatant {
+    grid-template-columns:24px 48px minmax(150px, 1fr) 85px 135px minmax(105px, .9fr) 62px;
+    gap:7px;
+  }
+  body.system-cosmere .trk .c-init input { width:100%; max-width:48px; padding-inline:3px; }
+}
+@media (max-width:1100px) {
+  body.system-cosmere .trk .hero-bar { grid-template-columns:1fr; }
+  body.system-cosmere .trk .hb-turn { grid-column:1; grid-row:1; }
+  body.system-cosmere .trk .hb-left { grid-column:1; grid-row:2; }
+  body.system-cosmere .trk .hb-right { grid-column:1; grid-row:3; justify-content:flex-start; }
+}
+@media (max-width:767px) {
+  body.system-cosmere .trk .hero-bar { padding:10px; }
+  body.system-cosmere .trk .hb-turn { width:100%; flex-wrap:wrap; gap:8px; padding-inline:8px; }
+  body.system-cosmere .trk .turn-now { min-width:0; flex:1 1 auto; }
+  body.system-cosmere .trk .tool-strip { flex-wrap:wrap; }
+  body.system-cosmere .trk .tool-strip select { min-width:0 !important; max-width:100%; }
+  body.system-cosmere .trk .cos-phase-step { min-width:50%; font-size:11px; }
+  body.system-cosmere .trk .cos-combat-scroll {
+    overflow-x:auto;
+    overscroll-behavior-inline:contain;
+    -webkit-overflow-scrolling:touch;
+  }
+  body.system-cosmere .trk .cos-combat-scroll-hint { display:block; }
+  body.system-cosmere .trk .cos-combat-scroll .grid-wrap { min-width:800px; }
+  body.system-cosmere .trk .cos-combat-scroll .grid-head,
+  body.system-cosmere .trk .cos-combat-scroll .combatant {
+    grid-template-columns:24px 48px minmax(150px, 1fr) 85px 135px minmax(105px, .9fr) 62px;
+    gap:7px;
+  }
+}
+
 /* Utility */
 .trk .hidden { display:none !important; }
 {% endblock %}
@@ -1677,6 +1810,13 @@ body.system-pf2e .trk .pf2e-combat-scroll-hint[hidden] {
             <span class="st-label">Turn</span>
             <span class="st-time" id="turn-timer-val">0:00</span>
         </span>
+        {% if active_system == 'cosmere' %}
+        {# UI-14: the initiative house-rule toggle lives with the turn controls. #}
+        <button class="ts-btn" id="cos-init-toggle" onclick="toggleCosmereInit()"
+                title="Cosmere initiative house-rule: rulebook Fast/Slow phases, or a traditional rolled d20+Speed order">
+            Initiative: <b id="cos-init-mode">{{ 'Traditional (d20+Speed)' if cosmere_initiative == 'traditional' else 'Fast / Slow phases' }}</b>
+        </button>
+        {% endif %}
     </div>
     <div class="hb-turn">
         <div class="round-block">
@@ -1720,6 +1860,13 @@ body.system-pf2e .trk .pf2e-combat-scroll-hint[hidden] {
     </div>
 </div>
 
+{% if active_system == 'cosmere' %}
+{# UI-14: read-only overview of the Cosmere fast/slow phase queue. It counts the
+   combatants in each phase and marks the acting one; it never orders or edits
+   initiative (the server's _sort_cosmere_phases does that). #}
+<ol id="cos-phase-strip" class="cos-phase-strip" aria-label="Cosmere turn phases" hidden></ol>
+{% endif %}
+
 {# The XP / encounter-budget bar is PF2e-specific (Trivial..Extreme); omit it in
    Cosmere mode (the JS below guards the now-absent element). #}
 {% if active_system != 'cosmere' %}
@@ -1741,6 +1888,9 @@ body.system-pf2e .trk .pf2e-combat-scroll-hint[hidden] {
 {% if active_system == 'pf2e' %}
 <details id="pf2e-encounter-setup" class="pf2e-encounter-setup"{% if not initial_state.combatants %} open{% endif %}>
     <summary>Encounter setup · add creatures, party, save/load, and mood</summary>
+{% elif active_system == 'cosmere' %}
+<details id="cos-encounter-setup" class="cos-encounter-setup"{% if not initial_state.combatants %} open{% endif %}>
+    <summary>Encounter setup · adversaries, party, custom foes, saved encounters and mood</summary>
 {% endif %}
 <div class="tool-strip">
     {% if active_system == 'cosmere' %}
@@ -1759,10 +1909,6 @@ body.system-pf2e .trk .pf2e-combat-scroll-hint[hidden] {
     </select>
     <button class="ts-btn" onclick="addCosmere('cos-pc-select')">+ PC</button>
     <button class="ts-btn primary" onclick="apiPost('/api/cosmere/add_party')">+ Party</button>
-    <button class="ts-btn" id="cos-init-toggle" onclick="toggleCosmereInit()"
-            title="Cosmere initiative house-rule: rulebook Fast/Slow phases, or a traditional rolled d20+Speed order">
-        Initiative: <b id="cos-init-mode">{{ 'Traditional (d20+Speed)' if cosmere_initiative == 'traditional' else 'Fast / Slow phases' }}</b>
-    </button>
     <button class="ts-btn" onclick="document.getElementById('cos-custom-adv').classList.toggle('hidden')" title="Stat a custom Cosmere adversary and add it to the encounter">+ Custom</button>
     <div id="cos-custom-adv" class="hidden" style="flex-basis:100%; display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:6px;">
         <input id="cca-name" class="ts-select" style="min-width:150px;" placeholder="Name">
@@ -1824,7 +1970,7 @@ body.system-pf2e .trk .pf2e-combat-scroll-hint[hidden] {
         <button type="button" id="mood-suggest" class="mood-suggest hidden" onclick="applyMoodSuggestion()" title="Apply the suggested mood"></button>
     </div>
 </div>
-{% if active_system == 'pf2e' %}
+{% if active_system in ('pf2e', 'cosmere') %}
 </details>
 {% endif %}
 
@@ -2126,6 +2272,14 @@ body.system-pf2e .trk .pf2e-combat-scroll-hint[hidden] {
             </div>
         </details>
         {% endif %}
+        {% if active_system == 'cosmere' %}
+        <div id="cos-tracker-scroll-hint" class="cos-combat-scroll-hint">
+            Swipe or scroll sideways to reach every combat control.
+        </div>
+        <div class="cos-combat-scroll" tabindex="0" role="region"
+             aria-label="Turn order" aria-describedby="cos-tracker-scroll-hint"
+             data-tracker-scroll>
+        {% endif %}
         {% if active_system == 'pf2e' %}
         <div id="pf2e-tracker-scroll-hint" class="pf2e-combat-scroll-hint">
             Swipe or scroll sideways to reach every combat control.
@@ -2153,7 +2307,7 @@ body.system-pf2e .trk .pf2e-combat-scroll-hint[hidden] {
                 No combatants yet. {% if active_system == 'cosmere' %}Add adversaries or your party above.{% else %}Search for monsters or add your party above.{% endif %}
             </div>
         </div>
-        {% if active_system == 'pf2e' %}
+        {% if active_system in ('pf2e', 'cosmere') %}
         </div>
         {% endif %}
 
@@ -2356,7 +2510,9 @@ let STATE = {
 // The disclosure follows encounter-shape transitions without fighting the GM:
 // adding the first combatant closes it, clearing the last opens it, and ordinary
 // HP/condition repaints preserve any manual choice made during combat.
-const _pf2eEncounterSetup = document.getElementById('pf2e-encounter-setup');
+// One disclosure per system (PF2e UI-08, Cosmere UI-14); the same rules apply.
+const _pf2eEncounterSetup = document.getElementById('pf2e-encounter-setup')
+    || document.getElementById('cos-encounter-setup');
 let _pf2eSetupWasEmpty = (STATE.combatants || []).length === 0;
 function _syncPf2eEncounterSetup(combatants) {
     if (!_pf2eEncounterSetup) return;
@@ -2547,6 +2703,7 @@ function applyState(data) {
     STATE.encounter_notes = data.encounter_notes ?? STATE.encounter_notes;
     STATE.session_timer_start = data.session_timer_start ?? STATE.session_timer_start;
     if (Array.isArray(data.round_events)) STATE.round_events = data.round_events;
+    if (data.cosmere_initiative) setCosmereInitMode(data.cosmere_initiative);
     render();
     renderEncounterNotes();
 }
@@ -2571,6 +2728,39 @@ function _renderNow() {
     syncMultiDamageTypes();
     applyCombatFlourishes();
     renderRoundEventsLane();
+    renderCosmerePhaseStrip();
+}
+
+// UI-14: the Cosmere four-phase overview (fast heroes -> fast NPCs -> slow
+// heroes -> slow NPCs, the order systems/cosmere/combat.py sorts by). Display
+// only: counts each phase from the combatants' own `cosmere.phase` and marks
+// the acting combatant's phase. Hidden in traditional initiative and when the
+// encounter is empty.
+const COSMERE_PHASES = [['fast_pc', 'Fast heroes'], ['fast_npc', 'Fast NPCs'],
+                        ['slow_pc', 'Slow heroes'], ['slow_npc', 'Slow NPCs']];
+function renderCosmerePhaseStrip() {
+    const strip = document.getElementById('cos-phase-strip');
+    if (!strip) return;
+    const combatants = (STATE.combatants || []).filter(c => c.system === 'cosmere' && c.cosmere);
+    const show = COSMERE_INIT_MODE === 'phases' && combatants.length > 0;
+    strip.hidden = !show;
+    if (!show) return;
+    const phaseOf = c => c.cosmere.phase
+        || ((c.cosmere.speed_choice === 'fast' ? 'fast' : 'slow') + '_' + (c.is_pc ? 'pc' : 'npc'));
+    // The acting combatant comes from turn_index: the same-shape SSE merge
+    // refreshes turn_index but not each row's is_active flag.
+    const cur = (STATE.combatants || [])[STATE.turn_index];
+    const active = cur && cur.system === 'cosmere' && cur.cosmere ? cur : null;
+    const activePhase = active ? phaseOf(active) : '';
+    strip.replaceChildren(...COSMERE_PHASES.map(([key, label]) => {
+        const item = document.createElement('li');
+        const count = combatants.filter(c => phaseOf(c) === key).length;
+        item.className = 'cos-phase-step' + (key === activePhase ? ' active' : '') + (count ? '' : ' empty');
+        item.dataset.phase = key;
+        if (key === activePhase) item.setAttribute('aria-current', 'step');
+        item.textContent = label + ' · ' + count;
+        return item;
+    }));
 }
 
 // The multi-target damage modal's type selector is static HTML; rebuild it to
@@ -3528,10 +3718,12 @@ function renderActivePanel() {
             </div>`;
     }
 
-    // NPC abilities
-    if (!c.is_pc && c.actions && c.actions.length) {
+    // NPC abilities. A Cosmere basic "Strike:" action already appears under
+    // Strikes (UI-14), so it is not listed twice.
+    const _abilities = (c.actions || []).filter(a => !(isCos && a.is_strike));
+    if (!c.is_pc && _abilities.length) {
         html += `<div class="section-h">Abilities</div>`;
-        c.actions.forEach(a => {
+        _abilities.forEach(a => {
             const desc = (a.description || '').replace(/<[^>]*>/g, '');
             const pips = costPips(a.actions);
             html += `<div class="abl-row">
@@ -4191,6 +4383,13 @@ function removeCombatant(id) {
 }
 
 let COSMERE_INIT_MODE = {{ cosmere_initiative|tojson }};
+// Also called from tracker state and encounter_update, so every open tracker
+// follows a mode switch made in another tab (UI-14). The caller renders.
+function setCosmereInitMode(mode) {
+    COSMERE_INIT_MODE = mode === 'traditional' ? 'traditional' : 'phases';
+    const el = document.getElementById('cos-init-mode');
+    if (el) el.textContent = COSMERE_INIT_MODE === 'traditional' ? 'Traditional (d20+Speed)' : 'Fast / Slow phases';
+}
 function toggleCosmereInit() {
     // Flip the campaign's Cosmere initiative house-rule (Fast/Slow phases <->
     // traditional d20+Speed). The server re-sorts + broadcasts; we update the
@@ -4200,9 +4399,7 @@ function toggleCosmereInit() {
         body: JSON.stringify({ mode: next }) })
         .then(r => r.json()).then(d => {
             if (!d || !d.ok) return;
-            COSMERE_INIT_MODE = d.mode;
-            const el = document.getElementById('cos-init-mode');
-            if (el) el.textContent = d.mode === 'traditional' ? 'Traditional (d20+Speed)' : 'Fast / Slow phases';
+            setCosmereInitMode(d.mode);
             try { if (typeof render === 'function') render(); } catch (_) {}
         }).catch(() => {});
 }
@@ -5188,6 +5385,7 @@ function connectSSE() {
             STATE.active_name = sse.active_name ?? null;
             if (sse.session_timer_start !== undefined) STATE.session_timer_start = sse.session_timer_start;
             if (Array.isArray(sse.round_events)) STATE.round_events = sse.round_events;
+            if (sse.cosmere_initiative) setCosmereInitMode(sse.cosmere_initiative);
             render();
         } catch(_) {
             apiGet('/api/tracker_state').then(data => applyState(data)).catch(()=>{});
@@ -5251,7 +5449,7 @@ function _trackerKeepsNativeKey(e) {
     const target = e.target;
     const activationKey = e.key === 'Enter' || e.key === ' ' || e.code === 'Space';
     const setupSummary = target.tagName === 'SUMMARY'
-        && target.closest?.('#pf2e-encounter-setup');
+        && target.closest?.('#pf2e-encounter-setup, #cos-encounter-setup');
     if (setupSummary && activationKey) return true;
 
     const scrollRegion = target.closest?.('[data-tracker-scroll]');
