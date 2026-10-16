@@ -169,7 +169,7 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
              registry: ContractRegistry | None = None, allowed_origins: list[str] | None = None,
              async_mode: str | None = None, now: Callable[[], datetime] | None = None,
              rate_limiter: RateLimiter | None = None, start_heartbeat: bool = True,
-             pairing_limits=None, dist_dir: Path | None = None) -> VttService:
+             pairing_limits=None, dist_dir: Path | None = None, legacy_source=None) -> VttService:
     registry = registry or ContractRegistry()
     clock = now or (lambda: datetime.now(timezone.utc))
     socketio = SocketIO(app, json=StrictJSON, async_mode=async_mode, manage_session=False,
@@ -342,7 +342,7 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
 
     from vtt.transport.pages import make_pages_blueprint
     app.register_blueprint(make_pages_blueprint(
-        db=db, host=host,
+        db=db, host=host, on_change=hub.notify, legacy_source=legacy_source,
         dist_dir=dist_dir or Path(__file__).resolve().parents[2] / "frontend" / "vtt" / "dist"))
 
     from vtt.transport.pairing import make_blueprint

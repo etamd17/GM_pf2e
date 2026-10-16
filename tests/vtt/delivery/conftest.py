@@ -89,8 +89,10 @@ def stack(tmp_path):
     host = FakeHost()
     # Real time plus an adjustable offset, so a test can move past an expiry.
     offset = {"by": timedelta(0)}
+    legacy: dict = {}       # campaign id -> (legacy scenes, legacy table scene id)
     service = init_vtt(app, db=db, host=host, grant_key=GRANT_KEY, token_key=TokenKey.derive("test-secret"),
                        async_mode="threading", start_heartbeat=False, dist_dir=dist,
+                       legacy_source=lambda cid: legacy.get(cid, ([], None)),
                        now=lambda: datetime.now(timezone.utc) + offset["by"])
 
     class Stack:
@@ -99,6 +101,7 @@ def stack(tmp_path):
     s = Stack()
     s.db, s.app, s.host, s.service, s.hub = db, app, host, service, service.hub
     s.dist = dist
+    s.legacy = legacy
     s.advance_clock = lambda delta: offset.__setitem__("by", offset["by"] + delta)
     s.now = lambda: datetime.now(timezone.utc) + offset["by"]
     # Every server emit, in order, readable even after a connection is closed.

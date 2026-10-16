@@ -52,6 +52,13 @@ class AppHost:
         return _campaigns.is_gm(_campaigns.get_campaign(campaign_id, refresh=True), user_id)
 
 
+def _legacy_scenes(campaign_id: str):
+    """The legacy /map store, read only, for the M5 import."""
+    from core import scenes as legacy
+    found = [legacy.normalize_scene(s) for s in legacy.list_scenes(campaign_id)]
+    return found, legacy.table_scene_id(campaign_id)
+
+
 def enabled(environ=None) -> bool:
     return (environ or os.environ).get("VTT_ENABLED") == "1"
 
@@ -76,4 +83,5 @@ def init_from_app(app, *, environ=None) -> VttService | None:
     return init_vtt(app, db=Database.from_env("DATABASE_URL", environ=env, engine_options=options), host=AppHost(),
                     grant_key=grant_key, token_key=TokenKey.derive(secret), allowed_origins=origins,
                     async_mode=env.get("VTT_ASYNC_MODE") or None,
-                    dist_dir=Path(env["VTT_DIST_DIR"]) if env.get("VTT_DIST_DIR") else None)
+                    dist_dir=Path(env["VTT_DIST_DIR"]) if env.get("VTT_DIST_DIR") else None,
+                    legacy_source=_legacy_scenes)
