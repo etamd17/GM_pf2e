@@ -44,7 +44,7 @@ UI/UX design is Claude's by default; Codex implements mechanical parts from Clau
 | UI-11 | PF2e level-up (B) + builder (B): roadmap and live preview | codex | strongest, high | ready | `tasks/UI-11-pf2e-levelup-and-builder.md` |
 | UI-12 | PF2e map (B: map first, right-side tabs) | claude | Opus, high | waiting on user (after the VTT plan) | `tasks/UI-12-pf2e-map.md` |
 | UI-13 | Cosmere GM dashboard (hybrid) + GM Screen (B) + 3 hub error-handling fixes | codex | standard, medium | ready | `tasks/UI-13-cosmere-dashboard-and-gmscreen.md` |
-| UI-14 | Cosmere tracker (B: phase/turn first, phase band) + check the Archer's missing strikes | claude | Opus, high | ready | `tasks/UI-14-cosmere-tracker.md` |
+| UI-14 | Cosmere tracker (B: phase/turn first, phase band) + check the Archer's missing strikes | claude | Opus, high | accepted (Claude commits; CI pending) | `tasks/UI-14-cosmere-tracker.md` |
 | UI-15 | Cosmere Party Vitals (B) + roster (A cards + attention summary) | codex | standard, high | ready | `tasks/UI-15-cosmere-vitals-and-roster.md` |
 | UI-16 | Cosmere loot (B: form beside searchable history, draft worth from the server table) | codex | standard, medium | ready after UI-05 | `tasks/UI-16-cosmere-loot.md` |
 | UI-03 | Fix the seven confirmed bugs from the UI review | codex | standard | done (accepted by Claude) | `tasks/UI-03.md` |
@@ -117,6 +117,10 @@ Accepted as a design checkpoint. Notes:
 
 Newest first. One plain line per handoff: who, what, what's next.
 
+- 2026-10-16 Codex: accepted UI-14 after rechecking all four fixes; 40 focused tests pass and 107 templates parse, with PF2e inventory and system separation intact. Next: Claude commits, opens the PR and merges after every CI job is green.
+- 2026-10-15 Claude: fixed the four UI-14 review items: the phase strip follows the turn, the initiative mode syncs to every open tracker, the Strike mapping is exact and custom adversaries load again, and the boundary tests are added. Focused run 143 passed. Next: Codex rechecks.
+- 2026-10-15 Codex: reviewed UI-14; the scoped layout and Archer mapping direction are sound, but live phase and initiative-mode state go stale across tracker clients, the broad Strike predicate breaks legacy custom-adversary normalization, and tracker deduplication/setup transitions need boundary tests. Next: Claude fixes the four focused review items and returns UI-14 for recheck.
+- 2026-10-15 Claude: built UI-14. The Cosmere tracker now puts the turn and phase controls first, with a four-phase strip (fast heroes, fast NPCs, slow heroes, slow NPCs) that follows the turn. Also fixed most bestiary adversaries showing no attacks (127 of 142 now list their strikes). Next: Codex reviews the diff.
 - 2026-10-15 User/Claude: new split. Claude builds the heavy or high-risk code (rules, saved data, live sync, the shared tracker and map, the VTT) and Codex reviews it; Codex keeps UI ports and smaller fixes. UI-14, UI-12 and MB-02 move to Claude; UI-11 stays with Codex (already started). Added UI-17 (phone Inventory Add button). Next: Codex continues UI-11.
 - 2026-10-15 Claude: checked UI-10 in the browser: the PF2e player sheet's new compact header and larger tap targets work on desktop and phone, and HP, hero points, spell slots and live updates from the tracker all still work. Accepted. Found an older bug: on a phone the Inventory 'Add' button is off-screen. Next: Codex commits and merges after CI, then UI-11.
 - 2026-10-15 Codex: built UI-10 as 75 additive PF2e sheet CSS lines with no template deletions or behavior changes; the rendered behavior inventory and 80 other focused checks pass, 4 local-only snapshots skip and all 107 templates parse. Next: Claude reviews the diff and checks the sheet at 1440px and 375px, including live repaint controls.
