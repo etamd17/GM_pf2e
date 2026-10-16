@@ -66,6 +66,12 @@ UI-03 bug list (from `tasks/UI-00.md` > Anything broken or risky; all checked on
 | Cosmere tracker shows PF2e-only controls (MAP/agile, PF2e quick conditions, Elite/Weak, persistent damage, basic saves) | user: hide all PF2e in Cosmere -> UI-04 |
 | Campaign delete: the wording says "permanently delete" but it's moved to the trash | fixed in UI-03 |
 
+## CI maintenance
+
+| ID | Task | Owner | Model | Status | Brief |
+|---|---|---|---|---|---|
+| CI-01 | Run PF2e rules tests once in CI, keeping the same coverage | codex | standard | accepted (Claude); publish after green CI | `tasks/CI-01-pf2e-once.md` |
+
 ## Cosmere: Mistborn
 
 | ID | Task | Owner | Model | Status | Brief |
@@ -134,6 +140,8 @@ Accepted as a design checkpoint. Notes:
 
 Newest first. One plain line per handoff: who, what, what's next.
 
+- 2026-10-16 Claude: accepted CI-01. The dedicated step selects the same 950 PF2e tests the full suite did (no markers, no 5e-data dependency, only host-capability skips), so coverage is unchanged. Next: Codex rebases after #209, publishes and merges after green CI.
+- 2026-10-16 Codex: removed the duplicate PF2e run from the later CI step; the dedicated 950-test selection stays, YAML and file coverage checks pass. Next: Claude reviews the one-line workflow change, then publish and merge after green CI.
 - 2026-10-16 Codex: accepted MAP-R2 and MAP-R3 together; 62 focused privacy/SSE/route checks pass, 107 templates parse, JavaScript syntax and diff checks pass. Next: publish the combined PR and merge only after every CI job is green.
 
 - 2026-10-16 Claude: MAP-R3 ready for review, stacked on MAP-R2 on `claude/map-r2-prep-scene-leak` (uncommitted). The TV now has a server-side table audience and its own read, so no GM payload reaches it; 11 new tests (8 fail without the fix), 489 map/scene/SSE/auth tests pass, browser-checked. VTT M2 is ready for review (handoff 029, commit `00815eac`).

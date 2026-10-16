@@ -151,7 +151,8 @@ jobs:
           cp dnd5e_data/resolved/_tags.json dnd5e_data/_tags.json
 
       - name: Run tests
-        run: python -m pytest -q -m "not postgresql and not browser" --strict-markers
+        # tests/pf2e_rules already ran in the dedicated contract step above.
+        run: python -m pytest -q --ignore=tests/pf2e_rules -m "not postgresql and not browser" --strict-markers
 
   browser:
     needs: changes
