@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import * as gm from './generated/gm.validators.mjs';
 import * as table from './generated/table.validators.mjs';
-import { hasDuplicateEntityKeys, type EntityKey } from './frames';
+import { frameRulesHold } from './semantics';
 import { decodeStrict } from './strictJson';
 
 // The generated validators and the strict decoder must agree with the shared
@@ -41,9 +41,9 @@ function verdict(c: Case): boolean {
   try {
     const message = c.raw !== undefined ? decodeStrict(c.raw) : c.message;
     if (validate(message) !== true) return false;
-    // S5: entity-key uniqueness is a code check, not a schema keyword.
-    const m = message as { entities?: EntityKey[]; upserted?: EntityKey[]; removed?: EntityKey[] };
-    return ![m.entities, m.upserted, m.removed].some((list) => list !== undefined && hasDuplicateEntityKeys(list));
+    // S5 and the other frame rules are code checks, not schema keywords.
+    if (c.schema === 'gm' || c.schema === 'table') return frameRulesHold(c.schema, message);
+    return true;
   } catch {
     return false;
   }

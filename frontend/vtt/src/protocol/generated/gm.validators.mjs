@@ -2,7 +2,7 @@
 import { ucs2length as func60 } from './ajv-runtime.mjs';
 "use strict";
 export const validateGm = validate10;
-const schema11 = {"$schema":"http://json-schema.org/draft-07/schema#","$id":"https://vtt.invalid/v1/gm.schema.json","title":"GmFrame","oneOf":[{"$ref":"#/definitions/Snapshot"},{"$ref":"#/definitions/Patch"}],"definitions":{"EntityRef":{"title":"GmEntityRef","type":"object","additionalProperties":false,"required":["kind","id"],"properties":{"kind":{"type":"string","enum":["scene","token","light","wall"]},"id":{"$ref":"common.schema.json#/definitions/Id"}}},"GmScene":{"title":"GmScene","type":"object","additionalProperties":false,"required":["kind","id","version","name","width","height","gridSize","showGrid","backgroundAssetId","published"],"properties":{"kind":{"const":"scene"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"name":{"type":"string","maxLength":120},"width":{"type":"number","minimum":1,"maximum":16384},"height":{"type":"number","minimum":1,"maximum":16384},"gridSize":{"type":"number","minimum":8,"maximum":1024},"showGrid":{"type":"boolean"},"backgroundAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"published":{"type":"boolean"}}},"GmToken":{"title":"GmToken","type":"object","additionalProperties":false,"required":["kind","id","version","x","y","size","label","color","artAssetId","actorId","hidden","locked","controllerIds"],"properties":{"kind":{"const":"token"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"x":{"$ref":"common.schema.json#/definitions/Coord"},"y":{"$ref":"common.schema.json#/definitions/Coord"},"size":{"type":"number","minimum":0.25,"maximum":10},"label":{"$ref":"common.schema.json#/definitions/Label"},"color":{"$ref":"common.schema.json#/definitions/Color"},"artAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"actorId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"hidden":{"type":"boolean"},"locked":{"type":"boolean"},"controllerIds":{"type":"array","maxItems":64,"items":{"$ref":"common.schema.json#/definitions/Id"}}}},"GmLight":{"title":"GmLight","type":"object","additionalProperties":false,"required":["kind","id","version","x","y","radius","color","hidden"],"properties":{"kind":{"const":"light"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"x":{"$ref":"common.schema.json#/definitions/Coord"},"y":{"$ref":"common.schema.json#/definitions/Coord"},"radius":{"type":"number","minimum":0,"maximum":16384},"color":{"$ref":"common.schema.json#/definitions/Color"},"hidden":{"type":"boolean"}}},"GmWall":{"title":"GmWall","type":"object","additionalProperties":false,"required":["kind","id","version","x1","y1","x2","y2","doorState"],"properties":{"kind":{"const":"wall"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"x1":{"$ref":"common.schema.json#/definitions/Coord"},"y1":{"$ref":"common.schema.json#/definitions/Coord"},"x2":{"$ref":"common.schema.json#/definitions/Coord"},"y2":{"$ref":"common.schema.json#/definitions/Coord"},"doorState":{"type":"string","enum":["none","open","closed","locked","secret"]}}},"Entity":{"title":"GmEntity","oneOf":[{"$ref":"#/definitions/GmScene"},{"$ref":"#/definitions/GmToken"},{"$ref":"#/definitions/GmLight"},{"$ref":"#/definitions/GmWall"}]},"Snapshot":{"title":"GmSnapshot","type":"object","additionalProperties":false,"required":["schemaVersion","frame","audience","subscriptionId","seq","campaignId","sceneId","principal","capabilities","entities"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"frame":{"const":"snapshot"},"audience":{"const":"gm"},"subscriptionId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"seq":{"type":"integer","minimum":0,"maximum":0,"const":0},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"principal":{"title":"GmPrincipal","type":"object","additionalProperties":false,"required":["kind","id","campaignRole"],"properties":{"kind":{"const":"member"},"id":{"$ref":"common.schema.json#/definitions/Id"},"campaignRole":{"const":"gm"}}},"capabilities":{"type":"array","maxItems":5,"items":{"$ref":"common.schema.json#/definitions/Capability"}},"entities":{"type":"array","maxItems":4096,"items":{"$ref":"#/definitions/Entity"}}}},"Patch":{"title":"GmPatch","type":"object","additionalProperties":false,"required":["schemaVersion","frame","subscriptionId","seq","upserted","removed"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"frame":{"const":"patch"},"subscriptionId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"seq":{"$ref":"common.schema.json#/definitions/Seq"},"upserted":{"type":"array","maxItems":4096,"items":{"$ref":"#/definitions/Entity"}},"removed":{"type":"array","maxItems":4096,"items":{"$ref":"#/definitions/EntityRef"}},"originCommandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"}}}}};
+const schema11 = {"$schema":"http://json-schema.org/draft-07/schema#","$id":"https://vtt.invalid/v1/gm.schema.json","title":"GmFrame","oneOf":[{"$ref":"#/definitions/Snapshot"},{"$ref":"#/definitions/Patch"}],"definitions":{"EntityRef":{"title":"GmEntityRef","type":"object","additionalProperties":false,"required":["kind","id"],"properties":{"kind":{"type":"string","enum":["scene","token","light","wall"]},"id":{"$ref":"common.schema.json#/definitions/Id"}}},"GmScene":{"title":"GmScene","type":"object","additionalProperties":false,"required":["kind","id","version","name","width","height","gridSize","showGrid","backgroundAssetId","published"],"properties":{"kind":{"const":"scene"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"name":{"type":"string","maxLength":120,"pattern":"^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])"},"width":{"type":"number","minimum":1,"maximum":16384},"height":{"type":"number","minimum":1,"maximum":16384},"gridSize":{"type":"number","minimum":8,"maximum":1024},"showGrid":{"type":"boolean"},"backgroundAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"published":{"type":"boolean"}}},"GmToken":{"title":"GmToken","type":"object","additionalProperties":false,"required":["kind","id","version","x","y","size","label","color","artAssetId","actorId","hidden","locked","controllerIds"],"properties":{"kind":{"const":"token"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"x":{"$ref":"common.schema.json#/definitions/Coord","description":"Token centre, in scene pixels."},"y":{"$ref":"common.schema.json#/definitions/Coord","description":"Token centre, in scene pixels."},"size":{"type":"number","minimum":0.25,"maximum":10},"label":{"$ref":"common.schema.json#/definitions/Label"},"color":{"$ref":"common.schema.json#/definitions/Color"},"artAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"actorId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"hidden":{"type":"boolean"},"locked":{"type":"boolean"},"controllerIds":{"type":"array","maxItems":64,"items":{"$ref":"common.schema.json#/definitions/Id"}}}},"GmLight":{"title":"GmLight","type":"object","additionalProperties":false,"required":["kind","id","version","x","y","radius","color","hidden"],"properties":{"kind":{"const":"light"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"x":{"$ref":"common.schema.json#/definitions/Coord"},"y":{"$ref":"common.schema.json#/definitions/Coord"},"radius":{"type":"number","minimum":0,"maximum":16384},"color":{"$ref":"common.schema.json#/definitions/Color"},"hidden":{"type":"boolean"}}},"GmWall":{"title":"GmWall","type":"object","additionalProperties":false,"required":["kind","id","version","x1","y1","x2","y2","doorState"],"properties":{"kind":{"const":"wall"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"x1":{"$ref":"common.schema.json#/definitions/Coord"},"y1":{"$ref":"common.schema.json#/definitions/Coord"},"x2":{"$ref":"common.schema.json#/definitions/Coord"},"y2":{"$ref":"common.schema.json#/definitions/Coord"},"doorState":{"type":"string","enum":["none","open","closed","locked","secret"]}},"description":"A wall segment; doorState other than \"none\" makes it a door. Zero-length segments are rejected by the semantic boundary."},"Entity":{"title":"GmEntity","oneOf":[{"$ref":"#/definitions/GmScene"},{"$ref":"#/definitions/GmToken"},{"$ref":"#/definitions/GmLight"},{"$ref":"#/definitions/GmWall"}]},"Snapshot":{"title":"GmSnapshot","type":"object","additionalProperties":false,"required":["schemaVersion","frame","audience","subscriptionId","seq","campaignId","sceneId","principal","capabilities","entities"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"frame":{"const":"snapshot"},"audience":{"const":"gm"},"subscriptionId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"seq":{"type":"integer","minimum":0,"maximum":0,"const":0},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"principal":{"title":"GmPrincipal","type":"object","additionalProperties":false,"required":["kind","id","campaignRole"],"properties":{"kind":{"const":"member"},"id":{"$ref":"common.schema.json#/definitions/Id"},"campaignRole":{"const":"gm"}}},"capabilities":{"type":"array","maxItems":5,"items":{"$ref":"common.schema.json#/definitions/Capability"}},"entities":{"type":"array","maxItems":4096,"items":{"$ref":"#/definitions/Entity"}}}},"Patch":{"title":"GmPatch","type":"object","additionalProperties":false,"required":["schemaVersion","frame","subscriptionId","seq","upserted","removed"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"frame":{"const":"patch"},"subscriptionId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"seq":{"$ref":"common.schema.json#/definitions/Seq"},"upserted":{"type":"array","maxItems":4096,"items":{"$ref":"#/definitions/Entity"}},"removed":{"type":"array","maxItems":4096,"items":{"$ref":"#/definitions/EntityRef"}},"originCommandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"}}}}};
 const schema12 = {"title":"GmSnapshot","type":"object","additionalProperties":false,"required":["schemaVersion","frame","audience","subscriptionId","seq","campaignId","sceneId","principal","capabilities","entities"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"frame":{"const":"snapshot"},"audience":{"const":"gm"},"subscriptionId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"seq":{"type":"integer","minimum":0,"maximum":0,"const":0},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"principal":{"title":"GmPrincipal","type":"object","additionalProperties":false,"required":["kind","id","campaignRole"],"properties":{"kind":{"const":"member"},"id":{"$ref":"common.schema.json#/definitions/Id"},"campaignRole":{"const":"gm"}}},"capabilities":{"type":"array","maxItems":5,"items":{"$ref":"common.schema.json#/definitions/Capability"}},"entities":{"type":"array","maxItems":4096,"items":{"$ref":"#/definitions/Entity"}}}};
 const schema14 = {"type":"integer","minimum":1,"maximum":1,"const":1};
 const schema15 = {"title":"OpaqueToken","type":"string","minLength":16,"maxLength":128,"pattern":"^[A-Za-z0-9_-]+(?![\\s\\S])"};
@@ -12,7 +12,8 @@ const func0 = Object.prototype.hasOwnProperty;
 
 const pattern0 = new RegExp("^[A-Za-z0-9_-]+(?![\\s\\S])", "u");
 const schema20 = {"title":"GmEntity","oneOf":[{"$ref":"#/definitions/GmScene"},{"$ref":"#/definitions/GmToken"},{"$ref":"#/definitions/GmLight"},{"$ref":"#/definitions/GmWall"}]};
-const schema21 = {"title":"GmScene","type":"object","additionalProperties":false,"required":["kind","id","version","name","width","height","gridSize","showGrid","backgroundAssetId","published"],"properties":{"kind":{"const":"scene"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"name":{"type":"string","maxLength":120},"width":{"type":"number","minimum":1,"maximum":16384},"height":{"type":"number","minimum":1,"maximum":16384},"gridSize":{"type":"number","minimum":8,"maximum":1024},"showGrid":{"type":"boolean"},"backgroundAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"published":{"type":"boolean"}}};
+const schema21 = {"title":"GmScene","type":"object","additionalProperties":false,"required":["kind","id","version","name","width","height","gridSize","showGrid","backgroundAssetId","published"],"properties":{"kind":{"const":"scene"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"name":{"type":"string","maxLength":120,"pattern":"^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])"},"width":{"type":"number","minimum":1,"maximum":16384},"height":{"type":"number","minimum":1,"maximum":16384},"gridSize":{"type":"number","minimum":8,"maximum":1024},"showGrid":{"type":"boolean"},"backgroundAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"published":{"type":"boolean"}}};
+const pattern6 = new RegExp("^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])", "u");
 
 function validate14(data, {instancePath="", parentData, parentDataProperty, rootData=data}={}){
 let vErrors = null;
@@ -122,6 +123,12 @@ if(typeof data3 === "string"){
 if(func60(data3) > 120){
 validate14.errors = [{instancePath:instancePath+"/name",schemaPath:"#/properties/name/maxLength",keyword:"maxLength",params:{limit: 120},message:"must NOT have more than 120 characters"}];
 return false;
+}
+else {
+if(!pattern6.test(data3)){
+validate14.errors = [{instancePath:instancePath+"/name",schemaPath:"#/properties/name/pattern",keyword:"pattern",params:{pattern: "^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])"},message:"must match pattern \""+"^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])"+"\""}];
+return false;
+}
 }
 }
 else {
@@ -361,9 +368,9 @@ validate14.errors = vErrors;
 return errors === 0;
 }
 
-const schema25 = {"title":"GmToken","type":"object","additionalProperties":false,"required":["kind","id","version","x","y","size","label","color","artAssetId","actorId","hidden","locked","controllerIds"],"properties":{"kind":{"const":"token"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"x":{"$ref":"common.schema.json#/definitions/Coord"},"y":{"$ref":"common.schema.json#/definitions/Coord"},"size":{"type":"number","minimum":0.25,"maximum":10},"label":{"$ref":"common.schema.json#/definitions/Label"},"color":{"$ref":"common.schema.json#/definitions/Color"},"artAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"actorId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"hidden":{"type":"boolean"},"locked":{"type":"boolean"},"controllerIds":{"type":"array","maxItems":64,"items":{"$ref":"common.schema.json#/definitions/Id"}}}};
+const schema25 = {"title":"GmToken","type":"object","additionalProperties":false,"required":["kind","id","version","x","y","size","label","color","artAssetId","actorId","hidden","locked","controllerIds"],"properties":{"kind":{"const":"token"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"x":{"$ref":"common.schema.json#/definitions/Coord","description":"Token centre, in scene pixels."},"y":{"$ref":"common.schema.json#/definitions/Coord","description":"Token centre, in scene pixels."},"size":{"type":"number","minimum":0.25,"maximum":10},"label":{"$ref":"common.schema.json#/definitions/Label"},"color":{"$ref":"common.schema.json#/definitions/Color"},"artAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"actorId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"hidden":{"type":"boolean"},"locked":{"type":"boolean"},"controllerIds":{"type":"array","maxItems":64,"items":{"$ref":"common.schema.json#/definitions/Id"}}}};
 const schema28 = {"type":"number","minimum":0,"maximum":16384};
-const schema30 = {"type":"string","maxLength":80};
+const schema30 = {"type":"string","maxLength":80,"pattern":"^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])","description":"Display text. Excludes C0/C1 controls, bidi overrides/isolates and unpaired surrogates; length counts code points."};
 const schema31 = {"type":"integer","minimum":0,"maximum":16777215};
 
 function validate16(data, {instancePath="", parentData, parentDataProperty, rootData=data}={}){
@@ -558,6 +565,12 @@ if(typeof data6 === "string"){
 if(func60(data6) > 80){
 validate16.errors = [{instancePath:instancePath+"/label",schemaPath:"common.schema.json#/definitions/Label/maxLength",keyword:"maxLength",params:{limit: 80},message:"must NOT have more than 80 characters"}];
 return false;
+}
+else {
+if(!pattern6.test(data6)){
+validate16.errors = [{instancePath:instancePath+"/label",schemaPath:"common.schema.json#/definitions/Label/pattern",keyword:"pattern",params:{pattern: "^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])"},message:"must match pattern \""+"^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])"+"\""}];
+return false;
+}
 }
 }
 else {
@@ -1149,7 +1162,7 @@ validate18.errors = vErrors;
 return errors === 0;
 }
 
-const schema41 = {"title":"GmWall","type":"object","additionalProperties":false,"required":["kind","id","version","x1","y1","x2","y2","doorState"],"properties":{"kind":{"const":"wall"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"x1":{"$ref":"common.schema.json#/definitions/Coord"},"y1":{"$ref":"common.schema.json#/definitions/Coord"},"x2":{"$ref":"common.schema.json#/definitions/Coord"},"y2":{"$ref":"common.schema.json#/definitions/Coord"},"doorState":{"type":"string","enum":["none","open","closed","locked","secret"]}}};
+const schema41 = {"title":"GmWall","type":"object","additionalProperties":false,"required":["kind","id","version","x1","y1","x2","y2","doorState"],"properties":{"kind":{"const":"wall"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"x1":{"$ref":"common.schema.json#/definitions/Coord"},"y1":{"$ref":"common.schema.json#/definitions/Coord"},"x2":{"$ref":"common.schema.json#/definitions/Coord"},"y2":{"$ref":"common.schema.json#/definitions/Coord"},"doorState":{"type":"string","enum":["none","open","closed","locked","secret"]}},"description":"A wall segment; doorState other than \"none\" makes it a door. Zero-length segments are rejected by the semantic boundary."};
 
 function validate20(data, {instancePath="", parentData, parentDataProperty, rootData=data}={}){
 let vErrors = null;
@@ -2881,8 +2894,8 @@ return errors === 0;
 }
 
 export const validateResyncRequired = validate35;
-const schema67 = {"$schema":"http://json-schema.org/draft-07/schema#","$id":"https://vtt.invalid/v1/resync-required.schema.json","title":"ResyncRequired","type":"object","additionalProperties":false,"required":["schemaVersion","reason"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"reason":{"$ref":"common.schema.json#/definitions/ResyncReason"}}};
-const schema69 = {"type":"string","enum":["scene-changed","reconnected","sequence-gap","buffer-overflow","state-lost","grant-changed","revoked","version-changed"]};
+const schema67 = {"$schema":"http://json-schema.org/draft-07/schema#","$id":"https://vtt.invalid/v1/resync-required.schema.json","title":"ResyncRequired","type":"object","additionalProperties":false,"required":["schemaVersion","subscriptionId","reason"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"subscriptionId":{"$ref":"common.schema.json#/definitions/OpaqueToken","description":"The subscription this resync ends. A client ignores a resync naming a subscription it has retired, or another subscription while it has a live one and no subscribe in flight."},"reason":{"$ref":"common.schema.json#/definitions/ResyncReason"}}};
+const schema70 = {"type":"string","enum":["scene-changed","reconnected","sequence-gap","buffer-overflow","state-lost","grant-changed","revoked","version-changed"]};
 
 function validate35(data, {instancePath="", parentData, parentDataProperty, rootData=data}={}){
 /*# sourceURL="https://vtt.invalid/v1/resync-required.schema.json" */;
@@ -2891,14 +2904,14 @@ let errors = 0;
 if(errors === 0){
 if(data && typeof data == "object" && !Array.isArray(data)){
 let missing0;
-if((((data.schemaVersion === undefined) || (!(func0.call(data, "schemaVersion")))) && (missing0 = "schemaVersion")) || (((data.reason === undefined) || (!(func0.call(data, "reason")))) && (missing0 = "reason"))){
+if(((((data.schemaVersion === undefined) || (!(func0.call(data, "schemaVersion")))) && (missing0 = "schemaVersion")) || (((data.subscriptionId === undefined) || (!(func0.call(data, "subscriptionId")))) && (missing0 = "subscriptionId"))) || (((data.reason === undefined) || (!(func0.call(data, "reason")))) && (missing0 = "reason"))){
 validate35.errors = [{instancePath,schemaPath:"#/required",keyword:"required",params:{missingProperty: missing0},message:"must have required property '"+missing0+"'"}];
 return false;
 }
 else {
 const _errs1 = errors;
 for(const key0 of Object.keys(data)){
-if(!((key0 === "schemaVersion") || (key0 === "reason"))){
+if(!(((key0 === "schemaVersion") || (key0 === "subscriptionId")) || (key0 === "reason"))){
 validate35.errors = [{instancePath,schemaPath:"#/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"}];
 return false;
 break;
@@ -2937,21 +2950,56 @@ else {
 var valid0 = true;
 }
 if(valid0){
-if(data.reason !== undefined && func0.call(data, "reason")){
-let data1 = data.reason;
+if(data.subscriptionId !== undefined && func0.call(data, "subscriptionId")){
+let data1 = data.subscriptionId;
 const _errs5 = errors;
-if(typeof data1 !== "string"){
-validate35.errors = [{instancePath:instancePath+"/reason",schemaPath:"common.schema.json#/definitions/ResyncReason/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+const _errs6 = errors;
+if(errors === _errs6){
+if(typeof data1 === "string"){
+if(func60(data1) > 128){
+validate35.errors = [{instancePath:instancePath+"/subscriptionId",schemaPath:"common.schema.json#/definitions/OpaqueToken/maxLength",keyword:"maxLength",params:{limit: 128},message:"must NOT have more than 128 characters"}];
 return false;
 }
-if(!((((((((data1 === "scene-changed") || (data1 === "reconnected")) || (data1 === "sequence-gap")) || (data1 === "buffer-overflow")) || (data1 === "state-lost")) || (data1 === "grant-changed")) || (data1 === "revoked")) || (data1 === "version-changed"))){
-validate35.errors = [{instancePath:instancePath+"/reason",schemaPath:"common.schema.json#/definitions/ResyncReason/enum",keyword:"enum",params:{allowedValues: schema69.enum},message:"must be equal to one of the allowed values"}];
+else {
+if(func60(data1) < 16){
+validate35.errors = [{instancePath:instancePath+"/subscriptionId",schemaPath:"common.schema.json#/definitions/OpaqueToken/minLength",keyword:"minLength",params:{limit: 16},message:"must NOT have fewer than 16 characters"}];
 return false;
+}
+else {
+if(!pattern0.test(data1)){
+validate35.errors = [{instancePath:instancePath+"/subscriptionId",schemaPath:"common.schema.json#/definitions/OpaqueToken/pattern",keyword:"pattern",params:{pattern: "^[A-Za-z0-9_-]+(?![\\s\\S])"},message:"must match pattern \""+"^[A-Za-z0-9_-]+(?![\\s\\S])"+"\""}];
+return false;
+}
+}
+}
+}
+else {
+validate35.errors = [{instancePath:instancePath+"/subscriptionId",schemaPath:"common.schema.json#/definitions/OpaqueToken/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
 }
 var valid0 = _errs5 === errors;
 }
 else {
 var valid0 = true;
+}
+if(valid0){
+if(data.reason !== undefined && func0.call(data, "reason")){
+let data2 = data.reason;
+const _errs8 = errors;
+if(typeof data2 !== "string"){
+validate35.errors = [{instancePath:instancePath+"/reason",schemaPath:"common.schema.json#/definitions/ResyncReason/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+if(!((((((((data2 === "scene-changed") || (data2 === "reconnected")) || (data2 === "sequence-gap")) || (data2 === "buffer-overflow")) || (data2 === "state-lost")) || (data2 === "grant-changed")) || (data2 === "revoked")) || (data2 === "version-changed"))){
+validate35.errors = [{instancePath:instancePath+"/reason",schemaPath:"common.schema.json#/definitions/ResyncReason/enum",keyword:"enum",params:{allowedValues: schema70.enum},message:"must be equal to one of the allowed values"}];
+return false;
+}
+var valid0 = _errs8 === errors;
+}
+else {
+var valid0 = true;
+}
 }
 }
 }
@@ -2967,8 +3015,8 @@ return errors === 0;
 }
 
 export const validateBootstrapRejection = validate36;
-const schema70 = {"$schema":"http://json-schema.org/draft-07/schema#","$id":"https://vtt.invalid/v1/bootstrap-rejection.schema.json","title":"BootstrapRejection","type":"object","additionalProperties":false,"required":["schemaVersion","reason"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"reason":{"$ref":"common.schema.json#/definitions/BootstrapRejectionReason"}}};
-const schema72 = {"type":"string","enum":["grant-revoked","grant-expired","session-ended","unsupported-version"]};
+const schema71 = {"$schema":"http://json-schema.org/draft-07/schema#","$id":"https://vtt.invalid/v1/bootstrap-rejection.schema.json","title":"BootstrapRejection","type":"object","additionalProperties":false,"required":["schemaVersion","reason"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"reason":{"$ref":"common.schema.json#/definitions/BootstrapRejectionReason"}}};
+const schema73 = {"type":"string","enum":["grant-revoked","grant-expired","session-ended","unsupported-version"]};
 
 function validate36(data, {instancePath="", parentData, parentDataProperty, rootData=data}={}){
 /*# sourceURL="https://vtt.invalid/v1/bootstrap-rejection.schema.json" */;
@@ -3031,7 +3079,7 @@ validate36.errors = [{instancePath:instancePath+"/reason",schemaPath:"common.sch
 return false;
 }
 if(!((((data1 === "grant-revoked") || (data1 === "grant-expired")) || (data1 === "session-ended")) || (data1 === "unsupported-version"))){
-validate36.errors = [{instancePath:instancePath+"/reason",schemaPath:"common.schema.json#/definitions/BootstrapRejectionReason/enum",keyword:"enum",params:{allowedValues: schema72.enum},message:"must be equal to one of the allowed values"}];
+validate36.errors = [{instancePath:instancePath+"/reason",schemaPath:"common.schema.json#/definitions/BootstrapRejectionReason/enum",keyword:"enum",params:{allowedValues: schema73.enum},message:"must be equal to one of the allowed values"}];
 return false;
 }
 var valid0 = _errs5 === errors;

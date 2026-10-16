@@ -146,7 +146,7 @@ describe('snapshot and patch sequencing (section 6)', () => {
     t.transport.subscribe(t.session);
     t.transport.push(snapshot('s1', [tok('a'), tok('b')]));
     t.transport.deliver(t.session);
-    t.session.onResyncRequired('reconnected');
+    t.session.onResyncRequired('reconnected', t.session.currentSubscriptionId ?? 'sub_in_flight_000000');
     t.transport.push(snapshot('s2', [tok('c')]));
     t.transport.deliver(t.session);
     expect(t.ids()).toEqual(['c']);
@@ -194,7 +194,7 @@ describe('command completion (section 7, criterion 15)', () => {
 
   it('a replacement snapshot supersedes overlays from the old subscription', () => {
     const t = live();
-    t.session.onResyncRequired('reconnected');
+    t.session.onResyncRequired('reconnected', t.session.currentSubscriptionId ?? 'sub_in_flight_000000');
     t.transport.push(snapshot('s2', [tok('a', 64)]));
     t.transport.deliver(t.session);
     expect(t.overlays().size).toBe(0);
@@ -228,7 +228,7 @@ describe('resync reasons (section 3, criterion 16)', () => {
     t.transport.subscribe(t.session);
     t.transport.push(snapshot('s1', [tok('a')]));
     t.transport.deliver(t.session);
-    t.session.onResyncRequired(reason);
+    t.session.onResyncRequired(reason, t.session.currentSubscriptionId ?? 'sub_in_flight_000000');
     if (reason === 'revoked' || reason === 'version-changed') {
       expect(t.session.isSealed).toBe(true);
       expect(t.scene()).toBeNull();
@@ -404,7 +404,7 @@ describe('old snapshots cannot revive a retired subscription (sections 6 and 10)
     'after resync %s, the old subscription snapshot is refused and a new one recovers',
     (reason) => {
       const { t } = liveTable();
-      t.session.onResyncRequired(reason);
+      t.session.onResyncRequired(reason, t.session.currentSubscriptionId ?? 'sub_in_flight_000000');
       t.transport.push(snapshot('s-old', [tok('a')]));
       t.transport.deliver(t.session);
       expect(t.session.currentSubscriptionId).toBeNull();
@@ -418,7 +418,7 @@ describe('old snapshots cannot revive a retired subscription (sections 6 and 10)
 
   it('a resync on a transport that is then lost voids the pending replacement', () => {
     const { t, first } = liveTable();
-    t.session.onResyncRequired('reconnected');
+    t.session.onResyncRequired('reconnected', t.session.currentSubscriptionId ?? 'sub_in_flight_000000');
     t.session.onTransportLost();
     t.transport.push({ ...snapshot('s-new', [tok('b')]), attempt: first });
     t.transport.deliver(t.session);
@@ -430,7 +430,7 @@ describe('old snapshots cannot revive a retired subscription (sections 6 and 10)
   it('a resync that arrives before the first snapshot keeps the in-flight subscribe valid', () => {
     const t = setup('table');
     t.transport.subscribe(t.session);
-    t.session.onResyncRequired('reconnected');
+    t.session.onResyncRequired('reconnected', t.session.currentSubscriptionId ?? 'sub_in_flight_000000');
     t.transport.push(snapshot('s1', [tok('a')]));
     t.transport.deliver(t.session);
     expect(t.ids()).toEqual(['a']);
@@ -444,7 +444,76 @@ describe('old snapshots cannot revive a retired subscription (sections 6 and 10)
   });
 });
 
-describe('duplicate entity keys (proposed S5)', () => {
+describe('a resync names the subscription it ends (M0, finding 5)', () => {
+  function live() {
+    const t = setup('table');
+    t.transport.subscribe(t.session);
+    t.transport.push(snapshot('s-old', [tok('a')]));
+    t.transport.deliver(t.session);
+    t.session.onTransportLost();
+    t.transport.subscribe(t.session);
+    t.transport.push(snapshot('s-new', [tok('b')]));
+    t.transport.deliver(t.session);
+    expect(t.session.currentSubscriptionId).toBe('s-new');
+    return t;
+  }
+
+  it('a late resync for a retired subscription cannot tear down the fresh one', () => {
+    const t = live();
+    t.transport.push({ type: 'resync_required', reason: 'state-lost', subscriptionId: 's-old' });
+    t.transport.deliver(t.session);
+    expect(t.status()).toBe('live');
+    expect(t.session.currentSubscriptionId).toBe('s-new');
+    expect(t.ids()).toEqual(['b']);
+    expect(t.session.stats.ignoredResyncs).toBe(1);
+  });
+
+  it('a resync naming an unknown subscription while one is live is ignored', () => {
+    const t = live();
+    t.session.onResyncRequired('scene-changed', 's-someone-else');
+    expect(t.status()).toBe('live');
+    expect(t.ids()).toEqual(['b']);
+  });
+
+  it('a resync for the live subscription is honoured', () => {
+    const t = live();
+    t.transport.push({ type: 'resync_required', reason: 'scene-changed', subscriptionId: 's-new' });
+    t.transport.deliver(t.session);
+    expect(t.status()).toBe('resyncing');
+    expect(t.scene()).toBeNull();
+  });
+
+  it('a resync for a subscribe still in flight (ID not yet seen) is honoured', () => {
+    const t = setup('table');
+    t.transport.subscribe(t.session);
+    t.session.onResyncRequired('reconnected', 's-not-yet-seen');
+    expect(t.status()).toBe('resyncing');
+    expect(t.session.stats.ignoredResyncs).toBe(0);
+  });
+});
+
+describe('frame rules (S5 and README "Corrections")', () => {
+  it('a patch that upserts and removes the same key is not applied', () => {
+    const t = setup();
+    t.transport.subscribe(t.session);
+    t.transport.push(snapshot('s1', [tok('a')]), patch('s1', 1, [tok('a', 5)], { removed: [{ kind: 'token', id: 'a' }] }));
+    t.transport.deliver(t.session);
+    expect(t.ids()).toEqual(['a']);
+    expect(t.session.stats.invalidFrames).toBe(1);
+    expect(t.transport.resubscribeRequests).toEqual(['state-lost']);
+  });
+
+  it('a snapshot whose scene entity is not its sceneId is not applied', () => {
+    const t = setup('table');
+    t.transport.subscribe(t.session);
+    const frame = { ...snapshot('s1', []).frame, sceneId: 'scene_a', entities: [{ kind: 'scene', id: 'scene_b', x: 0 }] };
+    t.session.onSnapshot(frame as never, t.transport.attempt);
+    expect(t.scene()).toBeNull();
+    expect(t.session.stats.invalidFrames).toBe(1);
+  });
+});
+
+describe('duplicate entity keys (S5)', () => {
   it('a snapshot naming an entity twice is not applied and triggers a resubscribe', () => {
     const t = setup();
     t.transport.subscribe(t.session);

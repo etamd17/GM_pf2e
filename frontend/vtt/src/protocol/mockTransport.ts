@@ -21,7 +21,7 @@ export type ServerEvent<E extends EntityKey> =
   | { type: 'snapshot'; frame: SnapshotFrame<E>; attempt?: SubscribeAttempt | null }
   | { type: 'patch'; frame: PatchFrame<E> }
   | { type: 'ack'; ack: AckFrame }
-  | { type: 'resync_required'; reason: ResyncReason }
+  | { type: 'resync_required'; reason: ResyncReason; subscriptionId: string }
   | { type: 'bootstrap_rejected'; reason: BootstrapRejectionReason }
   | { type: 'transport_lost' }
   | { type: 'subscribing' };
@@ -42,7 +42,7 @@ export function dispatch<E extends EntityKey, O>(
       session.onAck(event.ack);
       return;
     case 'resync_required':
-      session.onResyncRequired(event.reason);
+      session.onResyncRequired(event.reason, event.subscriptionId);
       return;
     case 'bootstrap_rejected':
       session.onBootstrapRejected(event.reason);

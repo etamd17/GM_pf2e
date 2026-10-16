@@ -41,9 +41,18 @@ export interface TableToken {
   kind: "token";
   id: Id;
   version: OpaqueToken;
+  /**
+   * Token centre, in scene pixels.
+   */
   x: number;
+  /**
+   * Token centre, in scene pixels.
+   */
   y: number;
   size: number;
+  /**
+   * Display text. Excludes C0/C1 controls, bidi overrides/isolates and unpaired surrogates; length counts code points.
+   */
   label: string;
   color: number;
   artAssetId: Id | null;

@@ -83,19 +83,7 @@ export type AckFrame =
 
 export const entityKey = (e: EntityKey): string => `${e.kind}\u0000${e.id}`;
 
-// Proposed amendment S5 (VTT-20261015-017): entity arrays carry no schema
-// uniqueItems (deep equality is O(n^2) and misses same-key different-field
-// duplicates). Uniqueness by entity key is checked here instead, for every
-// snapshot entities, patch upserted and patch removed list.
-export function hasDuplicateEntityKeys(list: readonly EntityKey[]): boolean {
-  const seen = new Set<string>();
-  for (const e of list) {
-    const key = entityKey(e);
-    if (seen.has(key)) return true;
-    seen.add(key);
-  }
-  return false;
-}
+// Entity-key uniqueness and the other frame rules live in ./semantics.ts.
 
 // ---- compile-time agreement with the generated contract types ----
 type Exactly<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;

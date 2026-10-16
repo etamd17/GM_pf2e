@@ -12,7 +12,8 @@ const func0 = Object.prototype.hasOwnProperty;
 
 const pattern0 = new RegExp("^[A-Za-z0-9_-]+(?![\\s\\S])", "u");
 const schema19 = {"title":"TableEntity","oneOf":[{"$ref":"common.schema.json#/definitions/TableScene"},{"$ref":"common.schema.json#/definitions/TableToken"},{"$ref":"common.schema.json#/definitions/TableLight"}]};
-const schema20 = {"title":"TableScene","type":"object","additionalProperties":false,"required":["kind","id","version","name","width","height","gridSize","showGrid","backgroundAssetId"],"properties":{"kind":{"const":"scene"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"name":{"type":"string","maxLength":120},"width":{"type":"number","minimum":1,"maximum":16384},"height":{"type":"number","minimum":1,"maximum":16384},"gridSize":{"type":"number","minimum":8,"maximum":1024},"showGrid":{"type":"boolean"},"backgroundAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]}}};
+const schema20 = {"title":"TableScene","type":"object","additionalProperties":false,"required":["kind","id","version","name","width","height","gridSize","showGrid","backgroundAssetId"],"properties":{"kind":{"const":"scene"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"name":{"type":"string","maxLength":120,"pattern":"^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])"},"width":{"type":"number","minimum":1,"maximum":16384},"height":{"type":"number","minimum":1,"maximum":16384},"gridSize":{"type":"number","minimum":8,"maximum":1024},"showGrid":{"type":"boolean"},"backgroundAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]}}};
+const pattern5 = new RegExp("^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])", "u");
 
 function validate14(data, {instancePath="", parentData, parentDataProperty, rootData=data}={}){
 let vErrors = null;
@@ -122,6 +123,12 @@ if(typeof data3 === "string"){
 if(func60(data3) > 120){
 validate14.errors = [{instancePath:instancePath+"/name",schemaPath:"#/properties/name/maxLength",keyword:"maxLength",params:{limit: 120},message:"must NOT have more than 120 characters"}];
 return false;
+}
+else {
+if(!pattern5.test(data3)){
+validate14.errors = [{instancePath:instancePath+"/name",schemaPath:"#/properties/name/pattern",keyword:"pattern",params:{pattern: "^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])"},message:"must match pattern \""+"^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])"+"\""}];
+return false;
+}
 }
 }
 else {
@@ -348,9 +355,9 @@ validate14.errors = vErrors;
 return errors === 0;
 }
 
-const schema24 = {"title":"TableToken","type":"object","additionalProperties":false,"required":["kind","id","version","x","y","size","label","color","artAssetId","actorId"],"properties":{"kind":{"const":"token"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"x":{"$ref":"common.schema.json#/definitions/Coord"},"y":{"$ref":"common.schema.json#/definitions/Coord"},"size":{"type":"number","minimum":0.25,"maximum":10},"label":{"$ref":"common.schema.json#/definitions/Label"},"color":{"$ref":"common.schema.json#/definitions/Color"},"artAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"actorId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]}}};
+const schema24 = {"title":"TableToken","type":"object","additionalProperties":false,"required":["kind","id","version","x","y","size","label","color","artAssetId","actorId"],"properties":{"kind":{"const":"token"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"x":{"$ref":"common.schema.json#/definitions/Coord","description":"Token centre, in scene pixels."},"y":{"$ref":"common.schema.json#/definitions/Coord","description":"Token centre, in scene pixels."},"size":{"type":"number","minimum":0.25,"maximum":10},"label":{"$ref":"common.schema.json#/definitions/Label"},"color":{"$ref":"common.schema.json#/definitions/Color"},"artAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"actorId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]}}};
 const schema27 = {"type":"number","minimum":0,"maximum":16384};
-const schema29 = {"type":"string","maxLength":80};
+const schema29 = {"type":"string","maxLength":80,"pattern":"^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])","description":"Display text. Excludes C0/C1 controls, bidi overrides/isolates and unpaired surrogates; length counts code points."};
 const schema30 = {"type":"integer","minimum":0,"maximum":16777215};
 
 function validate16(data, {instancePath="", parentData, parentDataProperty, rootData=data}={}){
@@ -545,6 +552,12 @@ if(typeof data6 === "string"){
 if(func60(data6) > 80){
 validate16.errors = [{instancePath:instancePath+"/label",schemaPath:"common.schema.json#/definitions/Label/maxLength",keyword:"maxLength",params:{limit: 80},message:"must NOT have more than 80 characters"}];
 return false;
+}
+else {
+if(!pattern5.test(data6)){
+validate16.errors = [{instancePath:instancePath+"/label",schemaPath:"common.schema.json#/definitions/Label/pattern",keyword:"pattern",params:{pattern: "^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])"},message:"must match pattern \""+"^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])"+"\""}];
+return false;
+}
 }
 }
 else {
@@ -1972,8 +1985,8 @@ return errors === 0;
 }
 
 export const validateResyncRequired = validate28;
-const schema47 = {"$schema":"http://json-schema.org/draft-07/schema#","$id":"https://vtt.invalid/v1/resync-required.schema.json","title":"ResyncRequired","type":"object","additionalProperties":false,"required":["schemaVersion","reason"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"reason":{"$ref":"common.schema.json#/definitions/ResyncReason"}}};
-const schema49 = {"type":"string","enum":["scene-changed","reconnected","sequence-gap","buffer-overflow","state-lost","grant-changed","revoked","version-changed"]};
+const schema47 = {"$schema":"http://json-schema.org/draft-07/schema#","$id":"https://vtt.invalid/v1/resync-required.schema.json","title":"ResyncRequired","type":"object","additionalProperties":false,"required":["schemaVersion","subscriptionId","reason"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"subscriptionId":{"$ref":"common.schema.json#/definitions/OpaqueToken","description":"The subscription this resync ends. A client ignores a resync naming a subscription it has retired, or another subscription while it has a live one and no subscribe in flight."},"reason":{"$ref":"common.schema.json#/definitions/ResyncReason"}}};
+const schema50 = {"type":"string","enum":["scene-changed","reconnected","sequence-gap","buffer-overflow","state-lost","grant-changed","revoked","version-changed"]};
 
 function validate28(data, {instancePath="", parentData, parentDataProperty, rootData=data}={}){
 /*# sourceURL="https://vtt.invalid/v1/resync-required.schema.json" */;
@@ -1982,14 +1995,14 @@ let errors = 0;
 if(errors === 0){
 if(data && typeof data == "object" && !Array.isArray(data)){
 let missing0;
-if((((data.schemaVersion === undefined) || (!(func0.call(data, "schemaVersion")))) && (missing0 = "schemaVersion")) || (((data.reason === undefined) || (!(func0.call(data, "reason")))) && (missing0 = "reason"))){
+if(((((data.schemaVersion === undefined) || (!(func0.call(data, "schemaVersion")))) && (missing0 = "schemaVersion")) || (((data.subscriptionId === undefined) || (!(func0.call(data, "subscriptionId")))) && (missing0 = "subscriptionId"))) || (((data.reason === undefined) || (!(func0.call(data, "reason")))) && (missing0 = "reason"))){
 validate28.errors = [{instancePath,schemaPath:"#/required",keyword:"required",params:{missingProperty: missing0},message:"must have required property '"+missing0+"'"}];
 return false;
 }
 else {
 const _errs1 = errors;
 for(const key0 of Object.keys(data)){
-if(!((key0 === "schemaVersion") || (key0 === "reason"))){
+if(!(((key0 === "schemaVersion") || (key0 === "subscriptionId")) || (key0 === "reason"))){
 validate28.errors = [{instancePath,schemaPath:"#/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"}];
 return false;
 break;
@@ -2028,21 +2041,56 @@ else {
 var valid0 = true;
 }
 if(valid0){
-if(data.reason !== undefined && func0.call(data, "reason")){
-let data1 = data.reason;
+if(data.subscriptionId !== undefined && func0.call(data, "subscriptionId")){
+let data1 = data.subscriptionId;
 const _errs5 = errors;
-if(typeof data1 !== "string"){
-validate28.errors = [{instancePath:instancePath+"/reason",schemaPath:"common.schema.json#/definitions/ResyncReason/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+const _errs6 = errors;
+if(errors === _errs6){
+if(typeof data1 === "string"){
+if(func60(data1) > 128){
+validate28.errors = [{instancePath:instancePath+"/subscriptionId",schemaPath:"common.schema.json#/definitions/OpaqueToken/maxLength",keyword:"maxLength",params:{limit: 128},message:"must NOT have more than 128 characters"}];
 return false;
 }
-if(!((((((((data1 === "scene-changed") || (data1 === "reconnected")) || (data1 === "sequence-gap")) || (data1 === "buffer-overflow")) || (data1 === "state-lost")) || (data1 === "grant-changed")) || (data1 === "revoked")) || (data1 === "version-changed"))){
-validate28.errors = [{instancePath:instancePath+"/reason",schemaPath:"common.schema.json#/definitions/ResyncReason/enum",keyword:"enum",params:{allowedValues: schema49.enum},message:"must be equal to one of the allowed values"}];
+else {
+if(func60(data1) < 16){
+validate28.errors = [{instancePath:instancePath+"/subscriptionId",schemaPath:"common.schema.json#/definitions/OpaqueToken/minLength",keyword:"minLength",params:{limit: 16},message:"must NOT have fewer than 16 characters"}];
 return false;
+}
+else {
+if(!pattern0.test(data1)){
+validate28.errors = [{instancePath:instancePath+"/subscriptionId",schemaPath:"common.schema.json#/definitions/OpaqueToken/pattern",keyword:"pattern",params:{pattern: "^[A-Za-z0-9_-]+(?![\\s\\S])"},message:"must match pattern \""+"^[A-Za-z0-9_-]+(?![\\s\\S])"+"\""}];
+return false;
+}
+}
+}
+}
+else {
+validate28.errors = [{instancePath:instancePath+"/subscriptionId",schemaPath:"common.schema.json#/definitions/OpaqueToken/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
 }
 var valid0 = _errs5 === errors;
 }
 else {
 var valid0 = true;
+}
+if(valid0){
+if(data.reason !== undefined && func0.call(data, "reason")){
+let data2 = data.reason;
+const _errs8 = errors;
+if(typeof data2 !== "string"){
+validate28.errors = [{instancePath:instancePath+"/reason",schemaPath:"common.schema.json#/definitions/ResyncReason/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+if(!((((((((data2 === "scene-changed") || (data2 === "reconnected")) || (data2 === "sequence-gap")) || (data2 === "buffer-overflow")) || (data2 === "state-lost")) || (data2 === "grant-changed")) || (data2 === "revoked")) || (data2 === "version-changed"))){
+validate28.errors = [{instancePath:instancePath+"/reason",schemaPath:"common.schema.json#/definitions/ResyncReason/enum",keyword:"enum",params:{allowedValues: schema50.enum},message:"must be equal to one of the allowed values"}];
+return false;
+}
+var valid0 = _errs8 === errors;
+}
+else {
+var valid0 = true;
+}
 }
 }
 }
@@ -2058,8 +2106,8 @@ return errors === 0;
 }
 
 export const validateBootstrapRejection = validate29;
-const schema50 = {"$schema":"http://json-schema.org/draft-07/schema#","$id":"https://vtt.invalid/v1/bootstrap-rejection.schema.json","title":"BootstrapRejection","type":"object","additionalProperties":false,"required":["schemaVersion","reason"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"reason":{"$ref":"common.schema.json#/definitions/BootstrapRejectionReason"}}};
-const schema52 = {"type":"string","enum":["grant-revoked","grant-expired","session-ended","unsupported-version"]};
+const schema51 = {"$schema":"http://json-schema.org/draft-07/schema#","$id":"https://vtt.invalid/v1/bootstrap-rejection.schema.json","title":"BootstrapRejection","type":"object","additionalProperties":false,"required":["schemaVersion","reason"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"reason":{"$ref":"common.schema.json#/definitions/BootstrapRejectionReason"}}};
+const schema53 = {"type":"string","enum":["grant-revoked","grant-expired","session-ended","unsupported-version"]};
 
 function validate29(data, {instancePath="", parentData, parentDataProperty, rootData=data}={}){
 /*# sourceURL="https://vtt.invalid/v1/bootstrap-rejection.schema.json" */;
@@ -2122,7 +2170,7 @@ validate29.errors = [{instancePath:instancePath+"/reason",schemaPath:"common.sch
 return false;
 }
 if(!((((data1 === "grant-revoked") || (data1 === "grant-expired")) || (data1 === "session-ended")) || (data1 === "unsupported-version"))){
-validate29.errors = [{instancePath:instancePath+"/reason",schemaPath:"common.schema.json#/definitions/BootstrapRejectionReason/enum",keyword:"enum",params:{allowedValues: schema52.enum},message:"must be equal to one of the allowed values"}];
+validate29.errors = [{instancePath:instancePath+"/reason",schemaPath:"common.schema.json#/definitions/BootstrapRejectionReason/enum",keyword:"enum",params:{allowedValues: schema53.enum},message:"must be equal to one of the allowed values"}];
 return false;
 }
 var valid0 = _errs5 === errors;

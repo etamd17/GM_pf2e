@@ -2,7 +2,6 @@ import type { ConnectionStatus } from '../state/connection';
 import type { ProjectionEpoch } from '../state/projection';
 import {
   entityKey,
-  hasDuplicateEntityKeys,
   type AckFrame,
   type BootstrapRejectionReason,
   type EntityKey,
@@ -11,6 +10,7 @@ import {
   type SnapshotFrame,
 } from './frames';
 import { REJECTION_ACTIONS, type RejectionAction } from './rejections';
+import { frameRulesHold } from './semantics';
 
 // Client side of the VTT-ADR-0002 delivery rules, independent of the socket
 // and of React. A transport feeds it server messages; it drives the projection
@@ -48,6 +48,7 @@ export interface SessionStats {
   gaps: number;
   refusedSnapshots: number;
   invalidFrames: number;
+  ignoredResyncs: number;
 }
 
 // Retired subscription IDs are remembered so a delayed duplicate can never
@@ -84,6 +85,7 @@ export class ProjectionSession<E extends EntityKey, O = unknown> {
     gaps: 0,
     refusedSnapshots: 0,
     invalidFrames: 0,
+    ignoredResyncs: 0,
   };
 
   constructor(
@@ -132,7 +134,9 @@ export class ProjectionSession<E extends EntityKey, O = unknown> {
       this.stats.refusedSnapshots += 1;
       return;
     }
-    if (hasDuplicateEntityKeys(frame.entities)) {
+    // Frame rules (README "Corrections"): repeated keys, scene/sceneId mismatch,
+    // GM controller/capability repeats, zero-length walls.
+    if (!frameRulesHold(this.surface, frame)) {
       this.invalidFrame();
       return;
     }
@@ -163,7 +167,7 @@ export class ProjectionSession<E extends EntityKey, O = unknown> {
       this.stats.duplicates += 1;
       return;
     }
-    if (hasDuplicateEntityKeys(frame.upserted) || hasDuplicateEntityKeys(frame.removed)) {
+    if (!frameRulesHold(this.surface, frame)) {
       this.invalidFrame();
       return;
     }
@@ -214,8 +218,22 @@ export class ProjectionSession<E extends EntityKey, O = unknown> {
   // Section 3. Terminal reasons seal and stop; scene-changed and
   // grant-changed clear the old projection first; the rest keep the current
   // scene on screen while the server sends a replacement snapshot.
-  onResyncRequired(reason: ResyncReason): void {
+  //
+  // The resync names the subscription it ends (M0, handoff 017 finding 5).
+  // Subscription IDs are server-issued, so a subscribe still in flight has an
+  // ID this client has not seen yet. A resync is ignored when it names a
+  // retired subscription, or another subscription while one is live and no
+  // subscribe is in flight: a late resync from a fan-out race must not tear
+  // down a fresh subscription.
+  onResyncRequired(reason: ResyncReason, subscriptionId: string): void {
     if (this.sealed) return;
+    if (
+      this.retired.has(subscriptionId) ||
+      (this.subscriptionId !== null && subscriptionId !== this.subscriptionId && this.pendingAttempt === null)
+    ) {
+      this.stats.ignoredResyncs += 1;
+      return;
+    }
     if (reason === 'revoked' || reason === 'version-changed') {
       this.terminate(reason === 'revoked' ? 'revoked' : 'version-mismatch');
       return;

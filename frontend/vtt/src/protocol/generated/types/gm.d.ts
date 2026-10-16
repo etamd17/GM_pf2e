@@ -68,9 +68,18 @@ export interface GmToken {
   kind: "token";
   id: Id;
   version: OpaqueToken;
+  /**
+   * Token centre, in scene pixels.
+   */
   x: number;
+  /**
+   * Token centre, in scene pixels.
+   */
   y: number;
   size: number;
+  /**
+   * Display text. Excludes C0/C1 controls, bidi overrides/isolates and unpaired surrogates; length counts code points.
+   */
   label: string;
   color: number;
   artAssetId: Id | null;
@@ -92,6 +101,9 @@ export interface GmLight {
   color: number;
   hidden: boolean;
 }
+/**
+ * A wall segment; doorState other than "none" makes it a door. Zero-length segments are rejected by the semantic boundary.
+ */
 export interface GmWall {
   kind: "wall";
   id: Id;
