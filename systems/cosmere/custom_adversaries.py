@@ -247,7 +247,10 @@ def _from_actor_document(document, binding):
         role = "ordinary"
     actions = []
     actor_actions = list(getattr(actor, "actions", []) or [])
-    actor_strikes = list(getattr(actor, "strikes", []) or [])
+    # A strike derived from a basic "Strike:" action (UI-14) carries that
+    # action's id; the action itself is already in the list, so skip it.
+    actor_strikes = [row for row in (getattr(actor, "strikes", []) or [])
+                     if not (isinstance(row, Mapping) and row.get("source_action"))]
     for row, action_kind in [*((row, "action") for row in actor_actions),
                              *((row, "weapon") for row in actor_strikes)]:
         action = deepcopy(row)

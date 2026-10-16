@@ -290,13 +290,15 @@ const button = {
   closest: selector => selector === '[data-tracker-scroll]' ? region
     : selector === 'button, a, [role="button"]' ? button : null,
 };
-const summary = {
-  tagName: 'SUMMARY',
-  closest: selector => selector === '#pf2e-encounter-setup' ? {} : null,
-};
+// closest() matches a selector list the way the DOM does: any member matches.
+const inSetup = id => selector => selector.split(',').map(s => s.trim()).includes(id) ? {} : null;
+const summary = {tagName: 'SUMMARY', closest: inSetup('#pf2e-encounter-setup')};
+const cosmereSummary = {tagName: 'SUMMARY', closest: inSetup('#cos-encounter-setup')};
 """ + helper + """
 assert.equal(_trackerKeepsNativeKey({target: summary, key: ' ', code: 'Space'}), true);
 assert.equal(_trackerKeepsNativeKey({target: summary, key: 'n', code: 'KeyN'}), false);
+assert.equal(_trackerKeepsNativeKey({target: cosmereSummary, key: ' ', code: 'Space'}), true);
+assert.equal(_trackerKeepsNativeKey({target: cosmereSummary, key: 'n', code: 'KeyN'}), false);
 assert.equal(_trackerKeepsNativeKey({target: button, key: ' ', code: 'Space'}), true);
 assert.equal(_trackerKeepsNativeKey({target: button, key: 'n', code: 'KeyN'}), false);
 assert.equal(_trackerKeepsNativeKey({target: button, key: 'Escape', code: 'Escape'}), false);

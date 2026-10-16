@@ -184,6 +184,31 @@ class CosmereActor:
                 action = normalize_action_item(it, actor_id=actor_source_id)
                 action['description'] = _enrich(_text(isys.get('description')), self.name)
                 self.actions.append(action)
+                # The bestiary records an adversary's basic attacks as actions
+                # named "Strike: <weapon>" (a weapon-skill test with a damage
+                # roll), not as weapon items -- most bestiary adversaries do. Expose
+                # them as strikes too, so the tracker and stat block show the
+                # attack line; the action stays in `actions` for the action
+                # engine and is flagged so displays can avoid listing it twice.
+                # Only the exact canonical "Strike:" prefix qualifies (case
+                # sensitive): other damaging abilities (Sweeping Strike, Bite,
+                # ...) and a "Strike:" without a damaging skill test remain
+                # abilities.
+                act = isys.get('activation', {}) if isinstance(isys.get('activation'), dict) else {}
+                dmg = isys.get('damage', {}) if isinstance(isys.get('damage'), dict) else {}
+                if (isinstance(iname, str) and iname.startswith('Strike:') and dmg.get('formula')
+                        and act.get('type') == 'skill_test'):
+                    skill = act.get('skill')
+                    _smod = self.skills.get(skill, {}).get('mod', 0) if skill else 0
+                    strike = dict(action)
+                    strike.update({'name': iname.split(':', 1)[1].strip() or iname,
+                                   'damage': dmg.get('formula', ''),
+                                   'damage_record': action.get('damage'),
+                                   'type': dmg.get('type', ''), 'skill': skill,
+                                   'mod': _smod, 'bonus': _smod,
+                                   'source_action': action.get('id')})
+                    self.strikes.append(strike)
+                    action['is_strike'] = True
             elif itype == 'weapon':
                 from systems.cosmere.actions import normalize_action_item
                 dmg = isys.get('damage', {}) if isinstance(isys.get('damage'), dict) else {}

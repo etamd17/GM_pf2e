@@ -3272,6 +3272,7 @@ def _do_broadcast_encounter_state():
             # inside the filter, which runs after ENCOUNTER_LOCK is released.
             '_active_visible': getattr(active_c, 'visible_to_players', True) if active_c else True,
         }
+        _add_cosmere_initiative_mode(payload)
 
     def _player_filter(p):
         # Strip any GM-only side-channel flags before the payload goes out.
@@ -4949,6 +4950,15 @@ def _cosmere_initiative_mode():
         return 'traditional' if m == 'traditional' else 'phases'
     except Exception:
         return 'phases'
+
+
+def _add_cosmere_initiative_mode(payload):
+    """Carry the Cosmere initiative house-rule in a tracker state payload, so
+    every open tracker follows a mode switch made in another tab (UI-14).
+    Only for an encounter with a Cosmere combatant; other systems' payloads
+    keep their shape. Call with ENCOUNTER_LOCK held."""
+    if any(getattr(c, 'system', 'pf2e') == 'cosmere' for c in ACTIVE_ENCOUNTER):
+        payload['cosmere_initiative'] = _cosmere_initiative_mode()
 
 
 def _cosmere_world():
@@ -12679,6 +12689,12 @@ def _get_tracker_state():
                      'category': a.get('category', ''), 'is_reaction': bool(a.get('is_reaction'))}
                     for a in getattr(c, 'actions', [])
                 ]
+                if getattr(c, 'system', 'pf2e') == 'cosmere':
+                    # A basic "Strike:" action is also a strike (UI-14); the
+                    # flag lets the inspector list it once. Cosmere only, so
+                    # PF2e action payloads keep their shape.
+                    for row, a in zip(entry['actions'], getattr(c, 'actions', [])):
+                        row['is_strike'] = bool(a.get('is_strike'))
                 entry['reactions'] = [a for a in entry['actions'] if a.get('is_reaction')]
                 entry['immunities'] = getattr(c, 'immunities', [])
                 entry['resistances'] = getattr(c, 'resistances', [])
@@ -12711,6 +12727,7 @@ def _get_tracker_state():
             'session_timer_start': SESSION_TIMER_START,
             'round_events': copy.deepcopy(ROUND_EVENTS),
         }
+        _add_cosmere_initiative_mode(result)
     _TRACKER_STATE_CACHE = result
     _TRACKER_STATE_CACHE_TIME = now
     return result
@@ -22464,10 +22481,12 @@ def _combatant_detail_payload(c, *, is_pc=None):
              'damage': s.get('damage', '')}
             for s in (getattr(c, 'strikes', None) or [])
         ]
+        # A basic "Strike:" action is already listed under attacks (UI-14).
         data['actions'] = [
             {'name': a.get('name', ''), 'description': a.get('description', ''),
              'actions': a.get('actions', '')}
             for a in (getattr(c, 'actions', None) or [])
+            if not a.get('is_strike')
         ]
         raw_skills = getattr(c, 'skills', None) or {}
         data['skills'] = [
