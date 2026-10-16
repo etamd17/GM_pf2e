@@ -2989,6 +2989,27 @@
                 min-width: 0 !important;
             }
         }
+        /* UI-17 ADD ROW — keep phone controls within the sheet. */
+        body .sheet-ember-host #add-item-name {
+            min-width: 0;
+        }
+        @media (max-width: 480px) {
+            body .sheet-ember-host div:has(> #add-item-name) {
+                flex-wrap: wrap;
+            }
+            body .sheet-ember-host #add-item-name {
+                flex-basis: 100%;
+            }
+            body .sheet-ember-host #add-item-name,
+            body .sheet-ember-host #add-item-qty,
+            body .sheet-ember-host #add-item-bulk,
+            body .sheet-ember-host div:has(> #add-item-name) > button {
+                min-height: 40px;
+            }
+            body .sheet-ember-host div:has(> #add-item-name) > button {
+                flex-shrink: 0;
+            }
+        }
     </style>
     <!-- Design system override (last in cascade — wins over inline styles) -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/system.css') }}">
