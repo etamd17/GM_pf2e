@@ -26,13 +26,23 @@ export function newEntityId(prefix: string): string {
 
 export const TOKEN_COLORS = [0xc9a34e, 0xa83a3a, 0x4a7c2a, 0x5a7fa8, 0x8a6a14, 0x7d5aa8] as const;
 
-export function createToken(id: string, at: Point, label: string, color: number): Draft {
+export interface TokenExtras {
+  size?: number;
+  hidden?: boolean;
+  locked?: boolean;
+  artAssetId?: string | null;
+  actorId?: string | null;
+  controllerIds?: string[];
+}
+
+export function createToken(id: string, at: Point, label: string, color: number, extras: TokenExtras = {}): Draft {
   return {
     type: 'token.create',
     expected: [],
     payload: {
-      id, x: at.x, y: at.y, size: 1, label, color, artAssetId: null, actorId: null,
-      hidden: false, locked: false, controllerIds: [],
+      id, x: at.x, y: at.y, size: extras.size ?? 1, label, color,
+      artAssetId: extras.artAssetId ?? null, actorId: extras.actorId ?? null,
+      hidden: extras.hidden ?? false, locked: extras.locked ?? false, controllerIds: extras.controllerIds ?? [],
     },
   };
 }

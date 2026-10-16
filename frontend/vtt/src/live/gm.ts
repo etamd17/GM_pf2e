@@ -10,6 +10,7 @@ import { useCommands } from '../state/commands';
 import { useConnection } from '../state/connection';
 import { useEntities } from '../state/entities';
 import type { TokenOverlay } from '../app/gmCommands';
+import { UndoManager } from '../app/undo';
 import { useOverlays } from '../state/overlays';
 import type { GmBoot } from './boot';
 import { browserClock } from './sessionClock';
@@ -21,6 +22,7 @@ import { browserClock } from './sessionClock';
 export interface GmLive {
   transport: SocketIoTransport<GmEntity, OverlayData>;
   queue: CommandQueue<GmEntity, OverlayData>;
+  undo: UndoManager;
   issue(draft: Omit<CommandDraft, 'campaignId' | 'sceneId'> & { sceneId?: string }, overlay?: OverlayData): string | null;
   boot: GmBoot;
 }
@@ -115,11 +117,14 @@ export function startGm(boot: GmBoot): GmLive {
     subscribeMessage: () => ({ schemaVersion: 1, audience: 'gm', campaignId: boot.campaignId, sceneId: boot.sceneId }),
     onAck: (ack) => queue.onAck(ack),
   });
+  const undo = new UndoManager(100, (state) => useCommands.getState().setUndo(state));
   const queue: CommandQueue<GmEntity, OverlayData> = new CommandQueue<GmEntity, OverlayData>({
     session,
     send: (command) => transport.sendCommand(command),
     validate: (command) => gm.validateCommand(command) && commandRulesHold(command),
     onOutcome: (outcome) => {
+      if (outcome.kind === 'applied') undo.applied(outcome.commandId);
+      else if (outcome.kind === 'rejected') undo.settled(outcome.commandId);
       if (outcome.kind === 'reauthenticate') park(queue.unresolved());
       useCommands.getState().notify(outcome);
     },
@@ -139,6 +144,7 @@ export function startGm(boot: GmBoot): GmLive {
   return {
     transport,
     queue,
+    undo,
     boot,
     issue: (draft, overlay = null) =>
       queue.issue({ ...draft, campaignId: boot.campaignId, sceneId: draft.sceneId ?? boot.sceneId ?? '' }, overlay),

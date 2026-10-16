@@ -30,7 +30,9 @@ import {
   type Draft,
   type TokenOverlay,
 } from './gmCommands';
+import { ImportPanel, PairingPanel } from './GmPanels';
 import { NoticeBar } from './NoticeBar';
+import { inverseFor, overlayFor, targetOf } from './undo';
 
 interface Props {
   sceneName: string;
@@ -94,10 +96,63 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
     if (selection && !entityOf(selection.kind, selection.id)) setSelection(null);
   }, [entities, selection]);
 
-  const issue = useCallback(
-    (draft: Draft, overlay: TokenOverlay | null = null) => (live ? live.issue(draft, overlay) : null),
+  // Every edit goes through here: it is issued, and its inverse is recorded so
+  // it can be undone once applied (undo.ts).
+  const send = useCallback(
+    (draft: Draft, overlay: TokenOverlay | null, mode: 'edit' | 'undo' | 'redo') => {
+      if (!live) return null;
+      const target = targetOf(draft);
+      const before = target ? entityOf(target.kind, target.id) : undefined;
+      const commandId = live.issue(draft, overlay);
+      const inverse = inverseFor(draft, before);
+      if (commandId && inverse) live.undo.track(commandId, inverse, mode);
+      return commandId;
+    },
     [live],
   );
+  const issue = useCallback(
+    (draft: Draft, overlay: TokenOverlay | null = null) => send(draft, overlay, 'edit'),
+    [send],
+  );
+
+  const step = useCallback(
+    (direction: 'undo' | 'redo') => {
+      if (!live || !inputEnabled) return;
+      const entry = direction === 'undo' ? live.undo.popUndo() : live.undo.popRedo();
+      if (!entry) return;
+      const draft = entry.make(entityOf(entry.kind, entry.id));
+      if (!draft) {
+        useCommands.getState().notify({
+          kind: 'info',
+          text: `Cannot ${direction} the last ${entry.label}: it was changed or removed since.`,
+        });
+        return;
+      }
+      send(draft, overlayFor(draft), direction);
+    },
+    [live, inputEnabled, send],
+  );
+  const undoState = useCommands((s) => s.undo);
+
+  // Ctrl+Z / Cmd+Z undo, with Shift (or Ctrl+Y) to redo. Not while typing in a
+  // field: there the browser's own text undo applies.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')) return;
+      const key = e.key.toLowerCase();
+      if (key === 'z') {
+        e.preventDefault();
+        step(e.shiftKey ? 'redo' : 'undo');
+      } else if (key === 'y') {
+        e.preventDefault();
+        step('redo');
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [step]);
 
   // --- scenes -------------------------------------------------------------------------------
   const refreshScenes = useCallback(async () => {
@@ -277,6 +332,24 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
             </button>
           </>
         )}
+        <button
+          type="button"
+          className="vtt-topbar-btn"
+          disabled={!inputEnabled || !undoState.canUndo}
+          title={undoState.next ? `Undo ${undoState.next} (Ctrl+Z)` : 'Undo (Ctrl+Z)'}
+          onClick={() => step('undo')}
+        >
+          Undo
+        </button>
+        <button
+          type="button"
+          className="vtt-topbar-btn"
+          disabled={!inputEnabled || !undoState.canRedo}
+          title="Redo (Ctrl+Shift+Z)"
+          onClick={() => step('redo')}
+        >
+          Redo
+        </button>
         <span className="vtt-topbar-spacer" />
         {pending.length > 0 && (
           <span className="vtt-pending" aria-live="polite">
@@ -351,6 +424,12 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
             onIssue={issue}
             onDeleted={() => setSelection(null)}
           />
+        )}
+        {dockOpen && live && (
+          <>
+            <PairingPanel boot={live.boot} />
+            <ImportPanel boot={live.boot} onImported={() => void refreshScenes()} />
+          </>
         )}
       </aside>
 

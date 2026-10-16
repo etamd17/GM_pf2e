@@ -38,6 +38,8 @@ export function noticeText(outcome: CommandOutcome): string | null {
       return null;
     case 'reauthenticate':
       return 'Your session ended. Sign in again in another tab, then retry here. Unsaved changes are kept and sent again.';
+    case 'info':
+      return outcome.text;
     case 'refused-locally':
       return `${TYPE_LABEL[outcome.type] ?? 'That change'} could not be sent: this page built an invalid command. Reload the page.`;
     case 'rejected': {

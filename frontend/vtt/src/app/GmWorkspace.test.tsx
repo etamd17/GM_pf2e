@@ -43,6 +43,7 @@ vi.mock('../scene/SceneRuntime', () => ({
 }));
 
 const { GmWorkspace } = await import('./GmWorkspace');
+const { UndoManager } = await import('./undo');
 
 type Of<K extends GmEntity['kind']> = Extract<GmEntity, { kind: K }>;
 const V1 = 'v' + 'A'.repeat(24);
@@ -73,6 +74,7 @@ function setup() {
       return `cmd_${issued.length.toString().padStart(16, '0')}`;
     },
     queue: { reauthenticated: vi.fn() },
+    undo: new UndoManager(),
     transport: { connected: true },
   } as unknown as GmLive;
   render(<GmWorkspace sceneName="Hall" live={live} />);
@@ -232,5 +234,72 @@ describe('inspector and scene bar', () => {
     const list = screen.getByRole('list', { name: 'Tokens on the map' });
     expect(list.textContent).toContain('Valeros');
     expect(list.textContent).toContain('Spy (hidden from the table)');
+  });
+});
+
+describe('undo', () => {
+  function setupWithUndo() {
+    const issued: Array<{ draft: Record<string, unknown>; overlay: unknown }> = [];
+    const undo = new UndoManager(100, (state) => useCommands.getState().setUndo(state));
+    const live = {
+      boot: { campaignId: 'camp_a', sceneId: 'scene_a', csrf: 'x' },
+      issue: (draft: Record<string, unknown>, overlay: unknown) => {
+        issued.push({ draft, overlay });
+        return `cmd_${issued.length.toString().padStart(16, '0')}`;
+      },
+      queue: { reauthenticated: vi.fn() },
+      undo,
+      transport: { connected: true },
+    } as unknown as GmLive;
+    render(<GmWorkspace sceneName="Hall" live={live} />);
+    const runtime = runtimes.at(-1);
+    if (!runtime?.interaction) throw new Error('map not mounted');
+    return { issued, undo, interaction: runtime.interaction };
+  }
+  const V2 = 'v' + 'B'.repeat(24);
+
+  it('Ctrl+Z after an applied move sends the move back against the version it now has', () => {
+    const { issued, undo, interaction } = setupWithUndo();
+    act(() => interaction.onTokenDrop?.('tok_hero', 160, 96));
+    // nothing to undo until the server applies it
+    fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
+    expect(issued).toHaveLength(1);
+    act(() => {
+      undo.applied('cmd_0000000000000001');
+      seed([scene, { ...hero, x: 160, version: V2 }, wall]);
+    });
+    expect((screen.getByRole('button', { name: /^Undo/ }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
+    expect(issued[1]?.draft).toEqual({
+      type: 'token.move',
+      expected: [{ kind: 'token', id: 'tok_hero', version: V2 }],
+      payload: { id: 'tok_hero', x: 96, y: 96 },
+    });
+    // once the undo applies, redo is offered
+    act(() => undo.applied('cmd_0000000000000002'));
+    expect(undo.canRedo).toBe(true);
+  });
+
+  it('an undo onto something deleted since says so and sends nothing', () => {
+    const { issued, undo, interaction } = setupWithUndo();
+    act(() => interaction.onTokenDrop?.('tok_hero', 160, 96));
+    act(() => {
+      undo.applied('cmd_0000000000000001');
+      seed([scene, wall]);
+    });
+    fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
+    expect(issued).toHaveLength(1);
+    expect(useCommands.getState().notice).toMatchObject({ kind: 'info' });
+  });
+
+  it('Ctrl+Z inside a text field is the browser\'s, not the map\'s', () => {
+    const { issued, undo, interaction } = setupWithUndo();
+    act(() => interaction.onTokenDrop?.('tok_hero', 160, 96));
+    act(() => undo.applied('cmd_0000000000000001'));
+    const field = document.createElement('input');
+    document.body.appendChild(field);
+    fireEvent.keyDown(field, { key: 'z', ctrlKey: true });
+    expect(issued).toHaveLength(1);
+    field.remove();
   });
 });

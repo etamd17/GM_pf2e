@@ -28,7 +28,9 @@ export type CommandOutcome =
   | { kind: 'applied'; commandId: string; type: string }
   | { kind: 'rejected'; commandId: string; type: string; code: RejectionCode; action: RejectionAction }
   | { kind: 'reauthenticate'; commandId: string }
-  | { kind: 'refused-locally'; type: string };
+  | { kind: 'refused-locally'; type: string }
+  // A plain message from the page itself (for example, nothing left to undo).
+  | { kind: 'info'; text: string };
 
 export interface CommandClock {
   setTimeout(fn: () => void, ms: number): unknown;

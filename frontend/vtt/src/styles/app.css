@@ -396,3 +396,52 @@ button:focus-visible,
   color: #e9a3a3;
   margin: 0;
 }
+
+/* --- M5: displays and import panels ------------------------------------- */
+
+.vtt-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-top: var(--sp-4);
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--border-card);
+}
+
+.vtt-code {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.vtt-code-value {
+  font-size: 26px;
+  letter-spacing: 0.15em;
+  color: var(--gilt-200);
+  font-variant-numeric: tabular-nums;
+}
+
+.vtt-code-hint,
+.vtt-import-dropped {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.vtt-grants,
+.vtt-import-report {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.vtt-grants li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--sp-2);
+}
