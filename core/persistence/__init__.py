@@ -41,6 +41,11 @@ from .services import (
     TransactionalStoreError,
 )
 
+# The VTT's tables live in this same transactional database (VTT-ADR-0002
+# sections 5 and 11). Registering them here keeps Base.metadata, the runtime
+# schema check and Alembic the same whatever the import order.
+from vtt.storage import models as _vtt_models  # noqa: E402,F401
+
 # Domain-friendly names matching the physical tables and migration language.
 Invite = Invitation
 CharacterDraft = Draft

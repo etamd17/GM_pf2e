@@ -25761,6 +25761,15 @@ _register_obsidian_sync(app, {
 _restore_encounter_autosave()
 
 
+# --- VTT (rebuild, side branch) ---
+# Off unless VTT_ENABLED=1; with it unset nothing VTT-related is even imported
+# and the app is exactly as before. See vtt/transport/app_wiring.py.
+VTT_SERVICE = None
+if os.environ.get('VTT_ENABLED') == '1':
+    from vtt.transport import app_wiring as _vtt_wiring  # noqa: E402
+    VTT_SERVICE = _vtt_wiring.init_from_app(app)
+
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5001))
     # Secure default: the interactive Werkzeug debugger (source view + an RCE

@@ -207,3 +207,7 @@ jobs:
 
       - name: Run PostgreSQL persistence tests
         run: python -m pytest -q tests/persistence -m postgresql --strict-markers
+
+      # Last: these drop and recreate the schema on the disposable CI database.
+      - name: Run VTT ordering tests (commit-ordered stream, REPEATABLE READ snapshot)
+        run: python -m pytest -q tests/vtt/delivery -m postgresql --strict-markers

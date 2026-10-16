@@ -144,6 +144,13 @@ def test_schema_exposes_the_approved_additive_tables():
         "invites",
         "migration_runs",
         "users",
+        # VTT read path (migration 20261016_0003)
+        "vtt_campaign_streams",
+        "vtt_entities",
+        "vtt_outbox",
+        "vtt_scenes",
+        "vtt_table_grants",
+        "vtt_table_pointers",
     }
 
 

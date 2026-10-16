@@ -28,8 +28,8 @@ _T = TypeVar("_T")
 _cached_database: Database | None = None
 _cached_url: str | None = None
 _database_lock = threading.Lock()
-# PR4B uses the unchanged PR4A schema. Update alongside future schema migrations.
-_REQUIRED_REVISION = "20261001_0002"
+# Update alongside every schema migration (20261016_0003 adds the VTT read path).
+_REQUIRED_REVISION = "20261016_0003"
 
 
 class StoreUnavailable(RuntimeError):
