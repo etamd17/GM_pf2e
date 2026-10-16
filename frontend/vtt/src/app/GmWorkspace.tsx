@@ -2,10 +2,14 @@ import { useState } from 'react';
 import { ConnectionBanner } from '../components/ConnectionBanner';
 import { MapHost } from '../components/MapHost';
 import { acceptsDurableInput, isTerminal, useConnection } from '../state/connection';
+import type { GmLive } from '../live/gm';
 import { useProjection } from '../state/projection';
 
 interface Props {
   sceneName: string;
+  // The live wiring when served by Flask; null on the Vite dev server. The GM
+  // tools (M4b) issue their commands through it.
+  live?: GmLive | null;
 }
 
 const TOOLS = [

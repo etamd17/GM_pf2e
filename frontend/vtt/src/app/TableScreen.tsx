@@ -1,4 +1,5 @@
 import { ConnectionBanner } from '../components/ConnectionBanner';
+import { PairingScreen } from './PairingScreen';
 import { MapHost } from '../components/MapHost';
 import { isTerminal, useConnection } from '../state/connection';
 import { useProjection } from '../state/projection';
@@ -16,6 +17,18 @@ export function TableScreen() {
   const renderer = useConnection((s) => s.renderer);
   const scene = useProjection((s) => s.scene);
   const showMap = scene !== null && !isTerminal(status);
+  // An unpaired display (no or unknown cookie: session-ended) and a revoked one
+  // both get the pairing form. The projection is already cleared and sealed.
+  if (status === 'session-ended' || status === 'revoked') {
+    return (
+      <div className="vtt-table is-pairing">
+        {/* A revoked display still states the terminal access-ended state
+            (section 3); a never-paired one has nothing to report but pairing. */}
+        {status === 'revoked' && <ConnectionBanner status={status} renderer={renderer} variant="table" />}
+        <PairingScreen reason={status === 'revoked' ? 'revoked' : 'unpaired'} />
+      </div>
+    );
+  }
   return (
     <div className="vtt-table">
       {showMap && <MapHost surface="table" scene={scene} label="Table display" />}

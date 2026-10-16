@@ -190,6 +190,14 @@ export class ProjectionSession<E extends EntityKey, O = unknown> {
     if (frame.originCommandId !== undefined) this.dropOverlays((id) => id === frame.originCommandId);
   }
 
+  // A message the transport could not decode or validate. Nothing from it is
+  // applied; as for a frame that breaks a rule, the client resubscribes for
+  // lost state and keeps the last good projection on screen.
+  onInvalidMessage(): void {
+    if (this.sealed) return;
+    this.invalidFrame();
+  }
+
   // An optimistic overlay for a command just sent on the current subscription.
   beginCommand(commandId: string, data: O): void {
     if (this.sealed || this.subscriptionId === null) return;
