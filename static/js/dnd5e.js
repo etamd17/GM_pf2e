@@ -211,4 +211,31 @@
   D5.debounce = function (fn, ms) {
     var t; return function () { var a = arguments, self = this; clearTimeout(t); t = setTimeout(function () { fn.apply(self, a); }, ms || 200); };
   };
+
+  // A small pick-one sheet (phone friendly, unlike window.prompt).
+  // options: [{value, label}] -> Promise resolving to the value, or null.
+  D5.choose = function (title, options) {
+    return new Promise(function (resolve) {
+      var wrap = document.createElement('div');
+      wrap.className = 'd5-choose';
+      wrap.setAttribute('role', 'dialog');
+      wrap.setAttribute('aria-modal', 'true');
+      wrap.setAttribute('aria-label', title);
+      wrap.innerHTML = '<div class="d5-choose-box"><div class="d5-choose-title">' + D5.esc(title) + '</div>' +
+        options.map(function (o, i) {
+          return '<button type="button" class="d5-btn d5-choose-opt" data-i="' + i + '">' + D5.esc(o.label) + '</button>';
+        }).join('') + '<button type="button" class="d5-btn is-ghost d5-choose-opt" data-i="-1">Cancel</button></div>';
+      function done(v) { document.removeEventListener('keydown', onKey); wrap.remove(); resolve(v); }
+      function onKey(e) { if (e.key === 'Escape') done(null); }
+      wrap.addEventListener('click', function (e) {
+        var b = e.target.closest('[data-i]');
+        if (b) { var i = +b.getAttribute('data-i'); done(i < 0 ? null : options[i].value); }
+        else if (e.target === wrap) done(null);
+      });
+      document.addEventListener('keydown', onKey);
+      document.body.appendChild(wrap);
+      var first = wrap.querySelector('.d5-choose-opt');
+      if (first) first.focus();
+    });
+  };
 })();

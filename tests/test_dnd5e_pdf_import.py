@@ -146,3 +146,56 @@ def test_ac_mismatch_is_reported_not_hidden():
     f = dict(FIGHTER, AC='21')
     rep = import_pdf(make_pdf(f))['report']
     assert any(m.startswith('AC: sheet 21') for m in rep['mismatches'])
+
+
+# A 2024 Paladin 9 / Warlock 1 shaped like D&D Beyond's export of the
+# rehearsal character: feat-granted skills, masteries listed as options,
+# "Weapon Mastery" printed under FEATS, and armour carried but not worn.
+PALADIN_WARLOCK = {
+    'CharacterName': 'Ser Test Vow',
+    'CLASS  LEVEL': 'Paladin 9 / Warlock 1',
+    'RACE': 'Human',
+    'BACKGROUND': 'Soldier',
+    'STR': '14', 'DEX': '12', 'CON': '12', 'INT': '10', 'WIS': '10', 'CHA': '20',
+    'ProfBonus': '+4',
+    'AthleticsProf': 'P', 'InsightProf': 'P', 'IntimidationProf': 'P', 'MedicineProf': 'P',
+    'PerceptionProf': 'P', 'PersuasionProf': 'E', 'StealthProf': 'P',
+    'ST Wisdom': '+4', 'ST Charisma': '+9',
+    'MaxHP': '80', 'AC': '11',
+    'ProficienciesLang': '=== LANGUAGES === \nCommon, Elvish, Dwarvish',
+    'FeaturesTraits1': '=== PALADIN FEATURES === \n\n* Lay On Hands • PHB-2024 109 \n'
+                       '* Weapon Mastery • PHB-2024 110 \n* Fighting Style • PHB-2024 110 \n'
+                       '* Vow of Enmity • PHB-2024 117 \n\n'
+                       '=== WARLOCK FEATURES === \n\n* Eldritch Invocations • PHB-2024 153 \n\n'
+                       '=== FEATS === \n\n* Alert • PHB-2024 \n* Savage Attacker • PHB-2024 \n'
+                       '* Observant • PHB-2024 \n* Skill Expert • PHB-2024 \n'
+                       '* Great Weapon Fighting • PHB-2024 \n* Weapon Mastery • PHB-2024 \n\n'
+                       '=== OPTIONS === \n\n* Greatsword (Graze) • \n* Warhammer (Push) • \n',
+    'Eq Name0': 'Chain Mail', 'Eq Qty0': '1',
+    'Eq Name1': 'Shield', 'Eq Qty1': '1',
+    'Eq Name2': 'Longsword', 'Eq Qty2': '1',
+    'Wpn Name': 'Longsword',
+}
+
+
+def test_multiclass_feat_skills_masteries_and_unworn_armor():
+    from systems.dnd5e.pdf_import import import_pdf
+    res = import_pdf(make_pdf(PALADIN_WARLOCK))
+    rep = res['report']
+    s = _sheet(res)
+    assert [lv['class'] for lv in res['build']['levels']].count('paladin|xphb') == 9
+    assert [lv['class'] for lv in res['build']['levels']].count('warlock|xphb') == 1
+    # skills granted by feats (Observant, Skill Expert) are placed, expertise too
+    assert {'perception', 'stealth'} <= set(s['proficiencies']['skills'])
+    assert 'persuasion' in s['proficiencies']['expertise']
+    assert not [w for w in rep['warnings'] if 'skill proficiency' in w], rep['warnings']
+    # the 2024 class feature listed under FEATS is not a missing feat
+    assert not [w for w in rep['warnings'] if 'Weapon Mastery' in w], rep['warnings']
+    assert res['build']['choices']['mastery:paladin|xphb'] == ['greatsword', 'warhammer']
+    # AC 11 on the sheet: the chain mail and shield are carried, not worn
+    assert s['ac']['value'] == 11
+    assert not [m for m in rep['mismatches'] if m.startswith('AC')]
+    assert any('carried, not worn' in w for w in rep['warnings'])
+    assert s['hp_max'] == 80
+    sc = s['spellcasting']
+    assert sc['slots'] == {'1': 4, '2': 3, '3': 2} or sc['slots'] == {1: 4, 2: 3, 3: 2}, sc['slots']

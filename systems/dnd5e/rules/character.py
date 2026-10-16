@@ -239,6 +239,32 @@ def multiclass_requirement(cls: dict) -> dict:
 
 # --- prerequisites ------------------------------------------------------------
 
+def _knows_spell_for(req, ctx: dict) -> bool:
+    """One ``spell`` prerequisite: "eldritch blast#c" (2014 Agonizing Blast) or
+    {"choose": "level=0|class=Warlock", "entry": "a Warlock Cantrip That Deals
+    Damage"} (2024). Checked against the spells the character actually has."""
+    known = ctx['known_spells']
+    names = {k.split('|')[0] for k in known}
+    if isinstance(req, str):
+        # 2014 "eldritch blast#c": the spell itself, from any source
+        return req.split('#')[0].split('|')[0].strip().lower() in names
+    if isinstance(req, dict) and isinstance(req.get('choose'), str):
+        from systems.dnd5e.rules.spells import spells_for_filter
+        # 2024 "a Warlock cantrip": it must be known *as* that class's spell. A
+        # Wizard 1 / Warlock 2 whose only damaging cantrip is a Wizard pick
+        # (Chill Touch is on both lists) does not qualify.
+        classes = [c.strip().lower() for part in req['choose'].split('|') if part.lower().startswith('class=')
+                   for c in part.split('=', 1)[1].split(';') if c.strip()]
+        if classes:
+            by_class = ctx.get('known_by_class') or {}
+            known = set().union(*(by_class.get(c, set()) for c in classes))
+        allowed = {r['id'] for r in spells_for_filter(req['choose'], ctx.get('edition') or 'one')} & known
+        if 'damage' in str(req.get('entry', '')).lower():
+            allowed = {sid for sid in allowed if (C.get('spell', sid) or {}).get('damageInflict')}
+        return bool(allowed)
+    return True
+
+
 def prereq_ok(prereq, ctx: dict) -> tuple:
     """(ok, unchecked_notes). ``ctx``: level, scores, spellcasting, armor, race."""
     if not prereq:
@@ -279,6 +305,16 @@ def prereq_ok(prereq, ctx: dict) -> tuple:
             elif k == 'background':
                 names = [b.get('name', '').lower() for b in v]
                 if ctx['background_name'].lower() not in names:
+                    ok = False
+            elif k == 'pact' and 'pact_names' in ctx:
+                # 2014 invocations: "Pact of the Blade" etc. is a class feature option
+                if f'pact of the {str(v).lower()}' not in ctx['pact_names']:
+                    ok = False
+            elif k == 'optionalfeature' and 'optfeature_ids' in ctx:
+                if not any(str(x).lower() in ctx['optfeature_ids'] for x in v):
+                    ok = False
+            elif k == 'spell' and 'known_spells' in ctx:
+                if not all(_knows_spell_for(req, ctx) for req in v):
                     ok = False
             elif k in ('other', 'otherSummary', 'campaign', 'exclusiveFeatCategory', 'note'):
                 notes.append(strip_tags(str(v if not isinstance(v, dict) else v.get('entry', v))))
@@ -411,6 +447,7 @@ def compute(doc: dict) -> dict:
 
     # ---- optional features (invocations, maneuvers, metamagic, styles) ----
     _apply_optional_features(ctx, classes, subclasses, level)
+    _check_optional_feature_prereqs(ctx, level, class_levels_by_name)
 
     feat_names = {f[0]['name'].lower() for f in ctx.feats}
     feature_names = {f['name'] for f in ctx.features} | {o['name'] for o in ctx.optfeatures}
@@ -703,7 +740,7 @@ def _apply_race(ctx: _Ctx, race: dict):
         choices = [r for r in race['resist'] if not isinstance(r, str)]
         G.expand_list('resist', choices, 'race:resist', org, ctx.picks, ctx.pools, g, ctx.choices)
     _feat_grants(ctx, race.get('feats'), 'race:feat', org)
-    _additional_spells(ctx, race.get('additionalSpells'), 'race:spells', org, None)
+    _additional_spells(ctx, race.get('additionalSpells'), 'race:spells', org, None, race.get('entries'))
     size = race.get('size') or ['M']
     if len(size) > 1:
         ctx.add_choice(G.Choice(id='race:size', kind='size', label=f'{org}: size', options=list(size), origin=org))
@@ -721,7 +758,7 @@ def _apply_background(ctx: _Ctx, bg: dict):
                       ('tool', 'toolProficiencies'), ('skillToolLanguage', 'skillToolLanguageProficiencies')):
         G.expand_list(kind, bg.get(fld), f'bg:{kind}', org, ctx.picks, ctx.pools, g, ctx.choices)
     _feat_grants(ctx, bg.get('feats'), 'bg:feat', org)
-    _additional_spells(ctx, bg.get('additionalSpells'), 'bg:spells', org, None)
+    _additional_spells(ctx, bg.get('additionalSpells'), 'bg:spells', org, None, bg.get('entries'))
     for e in bg.get('entries') or []:
         if isinstance(e, dict) and e.get('name') and e.get('type') != 'list':
             ctx.features.append({'name': e['name'], 'source': bg['source'], 'level': 1, 'origin': org,
@@ -767,7 +804,7 @@ def _feat_grants(ctx: _Ctx, feats_field, cid: str, origin: str, category_default
                     ctx.grants.feats.append((str(v[0] if isinstance(v, list) else v).lower(), origin, sub))
 
 
-def _additional_spells(ctx: _Ctx, field, cid, origin, class_level):
+def _additional_spells(ctx: _Ctx, field, cid, origin, class_level, owner_entries=None):
     """Record always-available spells from ``additionalSpells`` (fixed ones
     only; ``choose`` entries become spell choices)."""
     if not field:
@@ -820,7 +857,7 @@ def _additional_spells(ctx: _Ctx, field, cid, origin, class_level):
                     ctx.additional_spells.append({'spell': parse_ref(name, 'spell'), 'origin': origin,
                                                   'mode': mode, 'ability': ability,
                                                   'cantrip': sp.endswith('#c'), 'uses': uses,
-                                                  'recharge': recharge})
+                                                  'recharge': recharge, 'owner_entries': owner_entries})
                 elif isinstance(sp, dict) and 'choose' in sp:
                     sub = f'{cid}:{mode}:{n}'
                     n += 1
@@ -828,9 +865,23 @@ def _additional_spells(ctx: _Ctx, field, cid, origin, class_level):
                     count = int(sp.get('count', 1)) if isinstance(sp, dict) else 1
                     ctx.add_choice(G.Choice(id=sub, kind='spell', label=f'{origin}: choose a spell ({filt})',
                                             count=count, origin=origin, query={'filter': filt}))
+                    picked = [str(v).lower() for v in (ctx.picks.get(sub) or [])]
+                    if picked:
+                        from systems.dnd5e.rules.spells import spells_for_filter
+                        allowed = {r['id'] for r in spells_for_filter(filt, ctx.edition)}
+                        for v in picked:
+                            if v not in allowed:
+                                ctx.errors.append(f'{origin}: {v.split("|")[0].title()} is not a valid choice '
+                                                  f'({filt})')
+                        if len(picked) > count:
+                            ctx.errors.append(f'{origin}: pick at most {count}')
                     for v in (ctx.picks.get(sub) or []):
+                        vrec = C.get('spell', str(v).lower())
                         ctx.additional_spells.append({'spell': str(v).lower(), 'origin': origin, 'mode': mode,
-                                                      'ability': ability, 'cantrip': False})
+                                                      'ability': ability,
+                                                      'cantrip': bool(vrec) and vrec.get('level') == 0,
+                                                      'uses': uses, 'recharge': recharge,
+                                                      'owner_entries': owner_entries})
 
 
 def _iter_spell_uses(spells, uses=None, recharge=None):
@@ -1064,7 +1115,8 @@ def _apply_feats(ctx: _Ctx, level, base, class_levels_by_name):
             if rec.get('resist'):
                 G.expand_list('resist', [{r: True} if isinstance(r, str) else r for r in rec['resist']],
                               f'{prefix}:resist', org, ctx.picks, ctx.pools, g, ctx.choices)
-            _additional_spells(ctx, rec.get('additionalSpells'), f'{prefix}:spells', org, None)
+            _additional_spells(ctx, rec.get('additionalSpells'), f'{prefix}:spells', org, None,
+                               rec.get('entries'))
             for ofp in rec.get('optionalfeatureProgression') or []:
                 ctx.flags.add(f'featopt:{prefix}')
                 _optfeat_choice(ctx, ofp, f'{prefix}:opt', org, level, star_count=True)
@@ -1181,7 +1233,36 @@ def _optfeat_choice(ctx: _Ctx, ofp: dict, cid_prefix: str, origin: str, level: i
         ctx.optfeatures.append({'id': entity_id(rec['name'], rec['source']), 'name': rec['name'],
                                 'source': rec['source'], 'group': ofp.get('name'), 'origin': origin,
                                 'entries': rec.get('entries') or []})
-        _additional_spells(ctx, rec.get('additionalSpells'), f'{cid}:{rec["name"]}:spells', rec['name'], None)
+        _additional_spells(ctx, rec.get('additionalSpells'), f'{cid}:{rec["name"]}:spells', rec['name'], None,
+                           rec.get('entries'))
+
+
+def _check_optional_feature_prereqs(ctx: _Ctx, level, class_levels_by_name):
+    """Invocations and the like carry prerequisites (a Warlock level, a pact,
+    another invocation). Reported like feat prerequisites: a warning, so an
+    imported character that broke one still loads."""
+    names = {f['name'].lower() for f in ctx.features} | {o['name'].lower() for o in ctx.optfeatures}
+    ids = {o['id'] for o in ctx.optfeatures}
+    known = {str(x).lower() for k, v in ctx.picks.items() if k.startswith('spells:') and isinstance(v, list)
+             for x in v} | {a['spell'] for a in ctx.additional_spells if a['mode'] != 'expanded'}
+    # Which class each picked spell was learned as ("spells:warlock|xphb:cantrips").
+    # Only class casters count; a subclass caster key (Eldritch Knight) names
+    # the subclass, which no prerequisite asks for.
+    known_by_class = {}
+    for k, v in ctx.picks.items():
+        if k.startswith('spells:') and isinstance(v, list):
+            cname = k.split(':')[1].split('|')[0].lower()
+            known_by_class.setdefault(cname, set()).update(str(x).lower() for x in v)
+    for o in ctx.optfeatures:
+        rec = C.get('optionalfeature', o['id']) or {}
+        ok, _notes = prereq_ok(rec.get('prerequisite'), {
+            'level': level, 'scores': {}, 'spellcasting': True, 'armor': ctx.grants.armor,
+            'weapons': ctx.grants.weapons, 'race_name': '', 'feat_names': set(), 'background_name': '',
+            'class_levels_by_name': class_levels_by_name, 'pact_names': names, 'optfeature_ids': ids,
+            'known_spells': known, 'known_by_class': known_by_class, 'edition': ctx.edition,
+        })
+        if not ok:
+            ctx.warnings.append(f'{o["name"]}: prerequisite not met')
 
 
 def _apply_optional_features(ctx: _Ctx, classes, subclasses, level):
@@ -1228,7 +1309,41 @@ def _pact_slots(rec: dict, clv: int):
     return None
 
 
+def _free_cast_key(a) -> str:
+    """Resource key of one grant's free casts. Per grant, not per spell: a High
+    Elf with Fey-Touched has two separate Misty Step uses."""
+    slug = re.sub(r'[^a-z0-9]+', '-', str(a['origin']).lower()).strip('-')
+    return f"spell:{a['spell']}@{slug}"
+
+
+def _classify_grants(ctx: _Ctx, mods, pb):
+    """Fill in how each granted spell is paid for. Structured uses/recharge
+    from the data win. A plain innate entry says nothing, so the trait or
+    feature that grants it decides: a stated limit becomes uses, a stated cost
+    (ki...) is recorded as such, an explicit "at will" / "no slot" stays free;
+    anything else is left 'unknown' so the sheet says so rather than guess."""
+    for a in ctx.additional_spells:
+        if a['mode'] != 'innate' or a.get('cantrip') or a.get('classified'):
+            continue
+        a['classified'] = True
+        if a.get('uses') or a.get('recharge'):
+            continue
+        rec = C.get('spell', a['spell'])
+        if not rec or not rec.get('level'):
+            continue
+        terms = E.innate_terms(str(a['origin']), a.get('owner_entries') or [], rec['name'], mods=mods, pb=pb)
+        if terms is None:
+            a['cost'] = 'unknown'
+        elif terms[0] == 'limited':
+            a['uses'], a['recharge'] = terms[1], terms[2]
+        elif terms[0] == 'cost':
+            a['cost'] = terms[1]
+        else:
+            a['recharge'] = 'will'
+
+
 def _spellcasting(ctx: _Ctx, classes, subclasses, mods, pb) -> dict:
+    _classify_grants(ctx, mods, pb)
     ctx.expanded_ids = {a['spell'] for a in ctx.additional_spells if a['mode'] == 'expanded'}
     casters = []
     mc_parts = []
@@ -1259,7 +1374,7 @@ def _spellcasting(ctx: _Ctx, classes, subclasses, mods, pb) -> dict:
                 'name': src_rec['name'], 'ability': ab,
                 'dc': 8 + pb + mods[ab], 'attack': pb + mods[ab],
                 'cantrips_max': cantrips, 'prepared_max': prepared, 'known_max': known,
-                'max_spell_level': max_lvl, 'progression': prog,
+                'max_spell_level': max_lvl, 'progression': prog, 'class_level': clv,
                 'list': {'class': list_class, 'source': list_source},
                 'ritual_casting': src_rec.get('name') in ('Wizard', 'Cleric', 'Druid', 'Bard', 'Artificer')
                 or ctx.edition == 'one',
@@ -1294,7 +1409,10 @@ def _spellcasting(ctx: _Ctx, classes, subclasses, mods, pb) -> dict:
         rec = C.get('spell', a['spell'])
         always.append({'id': a['spell'], 'name': rec['name'] if rec else a['spell'].split('|')[0],
                        'level': rec.get('level') if rec else None, 'origin': a['origin'], 'mode': a['mode'],
-                       'ability': a.get('ability'), 'missing': rec is None})
+                       'ability': a.get('ability'), 'missing': rec is None,
+                       'uses': a.get('uses'), 'recharge': a.get('recharge'), 'cost': a.get('cost'),
+                       'free_key': (_free_cast_key(a) if a.get('uses') and a.get('recharge') in ('long', 'short')
+                                    and not a.get('cantrip') else None)})
     return {'casters': casters, 'slots': slots, 'pact': pact, 'always': always}
 
 
@@ -1302,6 +1420,9 @@ def _subclass_spell_list(sub: dict):
     # 2014 + 2024 third-casters both draw from the Wizard list.
     src = 'XPHB' if sub.get('classSource') == 'XPHB' else 'PHB'
     return 'Wizard', src
+
+
+ARCANUM_LEVELS = ((11, 6), (13, 7), (15, 8), (17, 9))   # (warlock level, spell level)
 
 
 def _spell_choices(ctx: _Ctx, entry: dict, rec: dict, cid: str, sub):
@@ -1320,6 +1441,15 @@ def _spell_choices(ctx: _Ctx, entry: dict, rec: dict, cid: str, sub):
                                 count=int(entry['cantrips_max']), origin=entry['name'],
                                 query=dict(q, levels=[0])))
         _validate_spells(ctx, f'{base}:cantrips', q, [0])
+    if entry['progression'] == 'pact' and entry['class'] == 'Warlock':
+        # Mystic Arcanum: one spell of each level 6-9 at Warlock 11/13/15/17,
+        # cast once per long rest without a slot (both editions).
+        for at, spl in ARCANUM_LEVELS:
+            if entry.get('class_level', 0) >= at:
+                aid = f'{base}:arcanum:{spl}'
+                ctx.add_choice(G.Choice(id=aid, kind='spell', label=f'{entry["name"]}: Mystic Arcanum (level {spl})',
+                                        count=1, origin=entry['name'], query=dict(q, levels=[spl], max_level=spl)))
+                _validate_spells(ctx, aid, q, [spl])
     levels = list(range(1, entry['max_spell_level'] + 1))
     if not levels:
         return
@@ -1814,8 +1944,14 @@ def _resources(ctx, classes, subclasses, mods, pb, feature_names, class_levels_b
             add('arcane_recovery', 'Arcane Recovery', 1, 'long', n)
         elif n == 'Ranger' and one:
             add('favored_enemy', "Favored Enemy (Hunter's Mark)", num('Favored Enemy') or 2, 'long', n)
-        elif n == 'Warlock' and one and clv >= 2:
-            add('magical_cunning', 'Magical Cunning', 1, 'long', n)
+        elif n == 'Warlock':
+            if one and clv >= 2:
+                add('magical_cunning', 'Magical Cunning', 1, 'long', n)
+            # Each arcanum spell (level 6 at 11, 7 at 13, 8 at 15, 9 at 17) is
+            # its own 1/long rest; the sheet's Cast button spends these.
+            for at, spl in ARCANUM_LEVELS:
+                if clv >= at:
+                    add(f'mystic_arcanum_{spl}', f'Mystic Arcanum (level {spl})', 1, 'long', n)
         sub = subclasses.get(cid)
         if sub and sub.get('shortName') == 'Battle Master':
             add('superiority', 'Superiority Dice', 6 if clv >= 15 else (5 if clv >= 7 else 4), 'short', sub['name'])
@@ -1846,12 +1982,23 @@ def _detected_resources(ctx, existing, mods, pb, race, scanned):
                         'auto': True})
 
     spell_origins = {a['origin'] for a in ctx.additional_spells}
+    # Spells with their own free-cast use (tracked per spell below). A feature
+    # whose limit is that same free cast ("you can cast Animate Dead without a
+    # slot ... once per Long Rest") must not be counted a second time.
+    free_cast_names = set()
+    for a in ctx.additional_spells:
+        if a.get('uses') and a.get('recharge') in ('long', 'short') and not a.get('cantrip'):
+            rec = C.get('spell', a['spell'])
+            if rec:
+                free_cast_names.add(rec['name'].lower())
     for f in ctx.features:
         # Traits that grant spells are tracked per spell below, not as a trait.
         if f.get('origin', '').startswith('Species') and _casts_spells(f) and \
                 any(o.startswith('Species') for o in spell_origins):
             continue
         res = E.detect_uses(f['name'], f.get('entries'), mods=mods, pb=pb)
+        if res and free_cast_names and set(E.free_cast_spells(f.get('entries'))) & free_cast_names:
+            res = None              # its limit is that spell's free cast, tracked per spell
         if res and f['name'] not in have:
             add(f'feature:{f["name"].lower()}', f['name'], res[0], res[1], f.get('origin') or '')
     for rec, origin, _prefix in ctx.feats:
@@ -1869,11 +2016,14 @@ def _detected_resources(ctx, existing, mods, pb, race, scanned):
         res = E.detect_uses(o['name'], o.get('entries'), mods=mods, pb=pb)
         if res:
             add(f'opt:{o["name"].lower()}', o['name'], res[0], res[1], o.get('group') or '')
-    for a in ctx.additional_spells:
-        if a.get('uses') and a.get('recharge') in ('long', 'short') and not a.get('cantrip'):
-            rec = C.get('spell', a['spell'])
-            nm = rec['name'] if rec else a['spell'].split('|')[0].title()
-            add(f'spell:{a["spell"]}', f'{nm} (free cast)', a['uses'], a['recharge'], a['origin'])
+    grants = [a for a in ctx.additional_spells
+              if a.get('uses') and a.get('recharge') in ('long', 'short') and not a.get('cantrip')]
+    for a in grants:
+        rec = C.get('spell', a['spell'])
+        nm = rec['name'] if rec else a['spell'].split('|')[0].title()
+        twin = sum(1 for b in grants if b['spell'] == a['spell']) > 1
+        label = f'{nm} (free cast, {a["origin"]})' if twin else f'{nm} (free cast)'
+        add(_free_cast_key(a), label, a['uses'], a['recharge'], a['origin'])
     for idx, ent, rec, _active in scanned:
         if not rec:
             continue

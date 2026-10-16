@@ -174,6 +174,7 @@
       '<div class="d5-row" style="margin-top:.35rem;"><span class="d5-muted">Exhaustion</span>' +
       '<input class="d5-input is-num" id="exh" type="number" min="0" max="6" value="' + (c.exhaustion || 0) + '">' +
       '<span class="d5-muted">Concentrating on</span><input class="d5-input" id="conc" style="width:9rem;" value="' + D5.esc(c.concentration || '') + '"></div>';
+    if (c.kind === 'pc') h += pcUses(c);
     if (c.legendary) {
       h += '<div class="d5-h3" style="margin-top:.8rem;">Legendary actions</div>' + pips('legendary', c.legendary);
     }
@@ -250,9 +251,35 @@
 
   // The same event arrives twice: in the action's HTTP response (instant) and
   // as the dnd5e_prompt SSE frame (which also reaches other GM tabs).
+  // The signature ignores key order: the HTTP reply's JSON is key-sorted and
+  // the SSE frame's is not, so plain JSON.stringify never matched them.
   var recentPrompts = {};
+  function canon(v) {
+    if (Array.isArray(v)) return '[' + v.map(canon).join(',') + ']';
+    if (v && typeof v === 'object') {
+      return '{' + Object.keys(v).sort().map(function (k) { return JSON.stringify(k) + ':' + canon(v[k]); }).join(',') + '}';
+    }
+    return JSON.stringify(v);
+  }
+  // A PC's spell slots and limited uses, read-only (the player marks them on
+  // the sheet; they arrive here live through dnd5e_pc).
+  function pcUses(c) {
+    var left = function (u) { return (u.max - u.used) + '/' + u.max; };
+    var parts = Object.keys(c.slots || {}).map(function (k) {
+      var u = c.slots[k];
+      return '<span class="d5-chip' + (u.used >= u.max ? ' is-plain' : '') + '" title="Level ' + k + ' slots left">L' + k + ' ' + left(u) + '</span>';
+    });
+    if (c.pact) parts.push('<span class="d5-chip' + (c.pact.used >= c.pact.max ? ' is-plain' : '') + '" title="Pact slots (level ' + c.pact.level + ') left">Pact L' + c.pact.level + ' ' + left(c.pact) + '</span>');
+    var res = (c.resources || []).map(function (r) {
+      return '<span class="d5-chip' + (r.used >= r.max ? ' is-plain' : '') + '" title="' + D5.esc(r.recharge) + '">' + D5.esc(r.name) + ' ' + left(r) + '</span>';
+    });
+    if (!parts.length && !res.length) return '';
+    return (parts.length ? '<div class="d5-h3" style="margin-top:.8rem;">Spell slots left</div><div class="d5-row">' + parts.join(' ') + '</div>' : '') +
+      (res.length ? '<div class="d5-h3" style="margin-top:.6rem;">Limited uses left</div><div class="d5-row">' + res.join(' ') + '</div>' : '');
+  }
+
   function prompt(e) {
-    var sig = JSON.stringify(e), now = Date.now();
+    var sig = canon(e), now = Date.now();
     if (recentPrompts[sig] && now - recentPrompts[sig] < 4000) return;
     recentPrompts[sig] = now;
     var box = document.getElementById('prompts');
@@ -381,7 +408,7 @@
     var changed = false;
     enc.combatants.forEach(function (c) {
       if (c.pc_id === p.id) {
-        ['hp', 'hp_max', 'temp_hp', 'conditions', 'exhaustion', 'death_saves', 'stable', 'dead', 'concentration', 'ac', 'effects', 'resist'].forEach(function (k) { c[k] = p[k]; });
+        ['hp', 'hp_max', 'temp_hp', 'conditions', 'exhaustion', 'death_saves', 'stable', 'dead', 'concentration', 'ac', 'effects', 'resist', 'slots', 'pact', 'resources'].forEach(function (k) { c[k] = p[k]; });
         changed = true;
       }
     });
