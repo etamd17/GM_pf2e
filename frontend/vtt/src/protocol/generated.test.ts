@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import * as gm from './generated/gm.validators.mjs';
 import * as table from './generated/table.validators.mjs';
-import { frameRulesHold } from './semantics';
+import { commandRulesHold, frameRulesHold } from './semantics';
 import { decodeStrict } from './strictJson';
 
 // The generated validators and the strict decoder must agree with the shared
@@ -24,6 +24,7 @@ const cases = JSON.parse(readFileSync(join(here, 'generated', 'fixtures.json'), 
 
 const VALIDATORS: Record<string, (data: unknown) => boolean> = {
   gm: gm.validateGm,
+  command: gm.validateCommand,
   'gm-subscribe': gm.validateGmSubscribe,
   acknowledgement: gm.validateAcknowledgement,
   'resync-required': table.validateResyncRequired,
@@ -43,6 +44,7 @@ function verdict(c: Case): boolean {
     if (validate(message) !== true) return false;
     // S5 and the other frame rules are code checks, not schema keywords.
     if (c.schema === 'gm' || c.schema === 'table') return frameRulesHold(c.schema, message);
+    if (c.schema === 'command') return commandRulesHold(message);
     return true;
   } catch {
     return false;
