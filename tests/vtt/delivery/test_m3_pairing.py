@@ -227,7 +227,7 @@ def test_reconnect_reasons_name_revocation_and_expiry(stack, monkeypatch):
 
     class Recording(socket_module.ConnectionRefusedError):
         def __init__(self, *args):
-            refusals.append(args[0] if args else None)
+            refusals.append(args[1] if len(args) > 1 else None)
             super().__init__(*args)
 
     monkeypatch.setattr(socket_module, "ConnectionRefusedError", Recording)

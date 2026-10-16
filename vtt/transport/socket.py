@@ -135,6 +135,16 @@ def _rejection(reason: str) -> dict[str, Any]:
     return {"schemaVersion": 1, "reason": reason}
 
 
+def _refused(reason: str) -> Exception:
+    """A handshake refusal carrying the v1 BootstrapRejection as its data.
+
+    python-socketio sends ``{"message": str(args[0])}`` for a one-argument
+    ConnectionRefusedError, which would put a Python repr of the rejection on
+    the wire. With two arguments it sends ``{"message": ..., "data": args[1]}``,
+    and socket.io-client exposes that object as ``err.data``."""
+    return ConnectionRefusedError("bootstrap-rejected", _rejection(reason))
+
+
 @dataclass
 class VttService:
     socketio: SocketIO
@@ -182,23 +192,23 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
         credential = request.cookies.get(TABLE_COOKIE)
         if credential:
             if not isinstance(credential, str) or not (16 <= len(credential) <= 256):
-                raise ConnectionRefusedError(_rejection("session-ended"))
+                raise _refused("session-ended")
             with db.session() as session:
                 grant = session.query(VttTableGrant).filter_by(
                     verifier=table_verifier(grant_key, credential)).one_or_none()
                 if grant is None:
-                    raise ConnectionRefusedError(_rejection("session-ended"))
+                    raise _refused("session-ended")
                 status = G.grant_status(session, grant, clock())
                 if status == "revoked":
-                    raise ConnectionRefusedError(_rejection("grant-revoked"))
+                    raise _refused("grant-revoked")
                 if status == "expired":
-                    raise ConnectionRefusedError(_rejection("grant-expired"))
+                    raise _refused("grant-expired")
                 return Principal(kind="table", id=grant.id, campaign_id=grant.campaign_id,
                                  verified_at=clock(), expires_at=G.utc(grant.expires_at))
         user_id = host.current_member_id()
         token = auth.get("csrf") if isinstance(auth, dict) else None
         if not user_id or not host.csrf_valid(token):
-            raise ConnectionRefusedError(_rejection("session-ended"))
+            raise _refused("session-ended")
         return Principal(kind="member", id=user_id)
 
     sweep_stats = {"unverifiable": 0, "end_errors": 0, "timeouts": 0, "loop_errors": 0}

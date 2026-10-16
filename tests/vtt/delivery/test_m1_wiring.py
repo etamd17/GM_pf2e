@@ -84,3 +84,44 @@ print(json.dumps({"redeem": [redeem.status_code, redeem.get_json()],
     assert result["policy"] == "public"
     # The GM route is reached too and refuses an anonymous caller itself (no 500).
     assert result["issue"] in (401, 403), result
+
+
+def test_a_refused_handshake_puts_the_v1_rejection_on_the_wire_as_json(tmp_path):
+    # M4a: the one-argument form put "{'schemaVersion': 1, ...}" (a Python repr)
+    # in the CONNECT_ERROR message. The packet itself is checked here.
+    from socketio import packet
+
+    from vtt.protocol import ContractRegistry
+    from vtt.transport.socket import NAMESPACE, TABLE_COOKIE
+
+    from .conftest import _database, seed_identity, FakeHost, GRANT_KEY
+    from vtt.projection.serializers import TokenKey
+    from vtt.transport.socket import init_vtt
+    db = _database()
+    db.create_schema()
+    seed_identity(db)
+    app = Flask(__name__)
+    app.config["SECRET_KEY"] = "w"
+    service = init_vtt(app, db=db, host=FakeHost(member_id=None), grant_key=GRANT_KEY,
+                       token_key=TokenKey.derive("w"), async_mode="threading", start_heartbeat=False)
+    flask_client = app.test_client()
+    flask_client.set_cookie(TABLE_COOKIE, "x" * 43)          # unknown credential
+    client = service.socketio.test_client(app, namespace=NAMESPACE, flask_test_client=flask_client)
+    assert not client.is_connected(NAMESPACE)
+    # The test client installs its own packet sender on creation; wrap that one
+    # and refuse a second handshake to see the encoded packet.
+    sent = []
+    mock = service.socketio.server._send_packet
+
+    def capture(eio_sid, pkt):
+        sent.append(pkt.encode())
+        return mock(eio_sid, pkt)
+
+    service.socketio.server._send_packet = capture
+    client.connect(namespace=NAMESPACE)
+    assert not client.is_connected(NAMESPACE)
+    [wire] = [e for e in sent if isinstance(e, str) and e.startswith(str(packet.CONNECT_ERROR))]
+    decoded = packet.Packet(encoded_packet=wire).data
+    assert decoded == {"message": "bootstrap-rejected", "data": {"schemaVersion": 1, "reason": "session-ended"}}
+    ContractRegistry().validate("bootstrap-rejection", decoded["data"])
+    db.dispose()
