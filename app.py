@@ -2647,6 +2647,15 @@ _SSE_CAMPAIGN_UNSET = object()
 _sse_event_seq = 0
 _sse_buffer = []            # list of (id, gm_frame, player_frame_or_None)
 _sse_event_campaigns = {}   # id -> exact campaign_id; None is legacy scope
+# id -> the table screen's frame (or None), only for events broadcast with a
+# table_filter. Every other event gives the table its player frame. Kept apart
+# from _sse_buffer so the buffer's (id, gm, player) shape does not change.
+_sse_table_frames = {}
+# A subscriber entry's optional fifth field. Only a GM-authenticated stream from
+# /map/table carries it: such a stream keeps its GM authority for revocation
+# (field 1 stays True) but is SENT table frames, never GM ones (MAP-R3).
+_SSE_TABLE_AUDIENCE = 'table'
+_SSE_FILTER_UNSET = object()
 _SSE_BUFFER_MAX = 256
 _SSE_MAX_SUBSCRIBERS = 200  # Hard cap to prevent memory leaks. Sized for a full
 # table across several devices, each tab holding multiple EventSource
@@ -2815,7 +2824,7 @@ def _ensure_sse_keepalive():
 
 
 def sse_broadcast(event_type, data, *, player_filter=None,
-                  campaign_id=_SSE_CAMPAIGN_UNSET):
+                  campaign_id=_SSE_CAMPAIGN_UNSET, table_filter=_SSE_FILTER_UNSET):
     """Emit against one stable campaign and stamp omitted scope as live."""
     with _LIVE_CAMPAIGN_DISPATCH_LOCK:
         resolved_campaign_id = (
@@ -2828,11 +2837,12 @@ def sse_broadcast(event_type, data, *, player_filter=None,
             data,
             player_filter=player_filter,
             campaign_id=resolved_campaign_id,
+            table_filter=table_filter,
         )
 
 
 def _sse_broadcast_locked(event_type, data, *, player_filter=None,
-                          campaign_id=None):
+                          campaign_id=None, table_filter=_SSE_FILTER_UNSET):
     """Push an event to all connected SSE clients.
 
     Parameters
@@ -2849,6 +2859,10 @@ def _sse_broadcast_locked(event_type, data, *, player_filter=None,
     campaign_id : Optional[str]
         Deliver and replay only to subscribers viewing this exact campaign.
         ``None`` is the explicit legacy single-table scope, not a wildcard.
+    table_filter : Optional[Callable[[dict], Optional[dict]]]
+        What the shared table screen (/map/table) receives, computed once like
+        ``player_filter``. Omitted: the table gets the player frame. The table is
+        GM-authenticated but is never sent a GM frame (MAP-R3).
     """
     global _sse_last_cleanup
     _bump_perf('sse_emit_total')
@@ -2867,6 +2881,17 @@ def _sse_broadcast_locked(event_type, data, *, player_filter=None,
         if filtered is not None and filtered is not False:
             player_msg = f"event: {event_type}\ndata: {json.dumps(filtered)}\n\n"
 
+    has_table_frame = table_filter is not _SSE_FILTER_UNSET
+    table_msg = None
+    if has_table_frame and table_filter is not None:
+        try:
+            table_payload = table_filter(copy.deepcopy(data))
+        except Exception as e:
+            print(f"[SSE TABLE FILTER] {event_type}: {e}")
+            table_payload = None
+        if table_payload is not None and table_payload is not False:
+            table_msg = f"event: {event_type}\ndata: {json.dumps(table_payload)}\n\n"
+
     global _sse_event_seq
     with _sse_lock:
         # Stamp a monotonic id on the frame (so the browser tracks lastEventId)
@@ -2876,6 +2901,11 @@ def _sse_broadcast_locked(event_type, data, *, player_filter=None,
         idln = "id: %d\n" % sid
         gm_msg = idln + gm_msg
         player_msg = (idln + player_msg) if player_msg else None
+        if has_table_frame:
+            table_msg = (idln + table_msg) if table_msg else None
+            _sse_table_frames[sid] = table_msg
+        else:
+            table_msg = player_msg
         _sse_buffer.append((sid, gm_msg, player_msg))
         _sse_event_campaigns[sid] = campaign_id
         if len(_sse_buffer) > _SSE_BUFFER_MAX:
@@ -2884,12 +2914,18 @@ def _sse_broadcast_locked(event_type, data, *, player_filter=None,
             for old_sid in list(_sse_event_campaigns):
                 if old_sid not in kept_ids:
                     _sse_event_campaigns.pop(old_sid, None)
+            for old_sid in list(_sse_table_frames):
+                if old_sid not in kept_ids:
+                    _sse_table_frames.pop(old_sid, None)
         dead = []
         for entry in _sse_subscribers:
             q, is_gm, subscriber_cid = entry[:3]
             if subscriber_cid != campaign_id:
                 continue
-            msg = gm_msg if is_gm else player_msg
+            if _sse_entry_is_table(entry):
+                msg = table_msg
+            else:
+                msg = gm_msg if is_gm else player_msg
             if msg is None:
                 continue  # Player filter dropped this message
             try:
@@ -2912,6 +2948,10 @@ def _sse_broadcast_locked(event_type, data, *, player_filter=None,
                 _terminate_sse_entry_locked(entry)
             if _sse_subscribers or stale:
                 print(f"[SSE] Active: {len(_sse_subscribers)}, Cleaned: {len(stale)}")
+
+def _sse_entry_is_table(entry):
+    return len(entry) >= 5 and entry[4] == _SSE_TABLE_AUDIENCE
+
 
 def sse_subscriber_count():
     """Return the number of active SSE subscribers."""
@@ -9174,12 +9214,32 @@ def _scene_payload(scene, *, player=False):
     return _scene_sync.project_scene(presentable, combatants, characters, player=player)
 
 
+def _scene_gm_only(_payload):
+    # Scene frames are for the GM-only map pages (/map and /map/table, both
+    # GM-authenticated). No player page consumes them, and a player connection
+    # must not learn prep scenes, which scene is on the table, or where the GM
+    # is pointing. Returning None drops the frame for every player subscriber.
+    return None
+
+
+def _scene_on_table(cid, scene_id):
+    try:
+        return bool(scene_id) and _scenes.table_scene_id(cid) == scene_id
+    except Exception:
+        return False
+
+
 def _broadcast_scene(scene):
     cid = scene['campaign_id']
     gm_payload = _scene_payload(scene, player=False)
-    player_payload = _scene_payload(scene, player=True)
+    # The TV gets the table projection (hidden tokens, GM-only lights and
+    # templates, account ids and exact NPC HP removed) and only for the scene it
+    # is showing; prep saves reach it not at all (MAP-R3).
+    table_payload = (_scene_payload(scene, player=True)
+                     if _scene_on_table(cid, scene.get('id')) else None)
     sse_broadcast('scene_update', gm_payload,
-                  player_filter=lambda _payload: player_payload,
+                  player_filter=_scene_gm_only,
+                  table_filter=lambda _payload: table_payload,
                   campaign_id=cid)
 
 
@@ -9359,6 +9419,24 @@ def api_scenes():
     return jsonify({'scene': _scene_payload(scene), 'success': True}), 201
 
 
+@app.route('/api/scenes/table', methods=['GET'])
+@gm_required
+def api_scene_table():
+    """The shared table screen's read: the table projection of the scene on the
+    table, never the GM payload (MAP-R3). The TV is GM-authenticated, so it
+    could read /api/scenes/<id> -- it must not, because that answer is built for
+    the GM's own window. 404 when nothing is on the table."""
+    cid = _active_campaign_id()
+    sid = _scenes.table_scene_id(cid)
+    try:
+        scene = _scenes.load_scene(cid, sid) if sid else None
+    except ValueError:
+        scene = None
+    if not scene:
+        return jsonify({'error': 'no scene on the table'}), 404
+    return jsonify({'scene': _scene_payload(scene, player=True)})
+
+
 @app.route('/api/scenes/<scene_id>', methods=['GET', 'PATCH'])
 def api_scene(scene_id):
     if not _scene_member_allowed():
@@ -9454,7 +9532,9 @@ def api_scene_activate(scene_id):
             _do_broadcast_encounter_state()
             for document in updated_documents:
                 _cosmere_advancement_broadcast(document)
-            sse_broadcast('scene_activated', {'scene_id': scene_id}, campaign_id=cid)
+            sse_broadcast('scene_activated', {'scene_id': scene_id},
+                          player_filter=_scene_gm_only,
+                          table_filter=lambda copy: copy, campaign_id=cid)
             _complete_cosmere_lifecycle_transition(
                 pending['boundary_id'], campaign_id=cid)
         else:
@@ -9463,7 +9543,9 @@ def api_scene_activate(scene_id):
             except ValueError:
                 return jsonify({'error': 'scene not found'}), 404
             _broadcast_scene(scene)
-            sse_broadcast('scene_activated', {'scene_id': scene_id}, campaign_id=cid)
+            sse_broadcast('scene_activated', {'scene_id': scene_id},
+                          player_filter=_scene_gm_only,
+                          table_filter=lambda copy: copy, campaign_id=cid)
     return jsonify({'success': True, 'active_scene_id': scene_id})
 
 
@@ -9894,10 +9976,12 @@ def api_scene_beacon(scene_id):
     except (TypeError, ValueError, OverflowError):
         return jsonify({'error': 'beacon coordinates must be valid numbers'}), 400
 
-    # Same payload to GMs and to the table. There is nothing to hide in a ring
-    # or a ruler -- the GM chose to point at it.
+    # Player connections get nothing: they have no map.
+    # The TV sees a ping or ruler only on the scene it is showing.
+    on_table = _scene_on_table(cid, scene_id)
     sse_broadcast('scene_beacon', payload,
-                  player_filter=lambda copy: copy,
+                  player_filter=_scene_gm_only,
+                  table_filter=lambda copy: copy if on_table else None,
                   campaign_id=cid)
     return jsonify({'success': True})
 
@@ -22363,6 +22447,10 @@ def sse_stream():
     # sse_broadcast() uses to decide whether this subscriber gets raw GM
     # data or the player-sanitized view.
     is_gm = _is_gm()
+    # The shared table screen asks for its own audience. Honoured only for a GM
+    # session (that is how the TV is authenticated): for anyone else it would
+    # ADD scene frames, and players get none (MAP-R2).
+    table_audience = bool(is_gm) and request.args.get('audience') == _SSE_TABLE_AUDIENCE
     subscriber_cid = _active_campaign_id()
     principal = getattr(g, 'principal', None)
     subscriber_user_id = getattr(principal, 'user_id', None)
@@ -22379,6 +22467,8 @@ def sse_stream():
     # validate for A, let B switch/close streams, then register stale A after it.
     q = queue.Queue(maxsize=50)
     entry = (q, is_gm, subscriber_cid, subscriber_user_id)
+    if table_audience:
+        entry = entry + (_SSE_TABLE_AUDIENCE,)
     with _sse_lock:
         if len(_sse_subscribers) >= _SSE_MAX_SUBSCRIBERS:
             stale = [s for s in _sse_subscribers if s[0].full()]
@@ -22391,7 +22481,8 @@ def sse_stream():
             _terminate_sse_entry_locked(old)
         _sse_subscribers.append(entry)
         start_id = _sse_event_seq
-        replay = ([(i, gm, pl) for (i, gm, pl) in _sse_buffer
+        replay = ([(i, gm, _sse_table_frames.get(i, pl) if table_audience else pl)
+                   for (i, gm, pl) in _sse_buffer
                    if last_seen < i <= start_id
                    and _sse_event_campaigns.get(i) == subscriber_cid]
                   if last_seen else [])
@@ -22406,7 +22497,8 @@ def sse_stream():
             # new process, which has zero subscribers at boot).
             yield "event: connected\ndata: " + json.dumps({"v": DEPLOY_VERSION}) + "\n\n"
             for (i, gm_frame, pl_frame) in replay:
-                frame = gm_frame if is_gm else pl_frame
+                # The table screen is GM-authenticated but replays table frames.
+                frame = gm_frame if (is_gm and not table_audience) else pl_frame
                 if frame is not None:
                     yield frame
             while True:
