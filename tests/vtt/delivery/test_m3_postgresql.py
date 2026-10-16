@@ -158,3 +158,18 @@ def test_no_frame_follows_the_revoked_control_when_revocation_races_commits(pg_s
         assert len(controls) == 1, mine
         assert all(e != "vtt.patch" for e, _ in mine[controls[0] + 1:])
         assert not table.is_connected(NAMESPACE)
+
+
+def test_the_heartbeat_sweep_runs_on_postgresql_with_its_timeouts(pg_stack):
+    # The sweep sets statement and lock timeouts that only PostgreSQL executes.
+    s = pg_stack
+    response = redeem(s, issue(s), "10.9.3.1")
+    credential = response.headers["Set-Cookie"].split(";")[0].split("=", 1)[1]
+    flask_client = s.app.test_client()
+    flask_client.set_cookie(TABLE_COOKIE, credential)
+    table = s.service.socketio.test_client(s.app, namespace=NAMESPACE, flask_test_client=flask_client)
+    assert s.service.heartbeat() == 0 and table.is_connected(NAMESPACE)
+    assert s.service.sweep_stats["unverifiable"] == 0
+    with s.db.transaction() as session:
+        G.revoke_all(session, "camp_a")
+    assert s.service.heartbeat() == 1 and not table.is_connected(NAMESPACE)

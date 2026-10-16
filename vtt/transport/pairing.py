@@ -60,8 +60,10 @@ class SlidingWindow:
         now = self.clock()
         with self._lock:
             if len(self._events) > self.MAX_KEYS:
-                # Random codes from many addresses must not grow this without
-                # bound: drop every key with nothing left in its window.
+                # Above MAX_KEYS, drop every key with nothing left in its window,
+                # so idle keys from random codes do not accumulate. This is
+                # pruning, not a hard cap: keys still active in their window
+                # (bounded by the per-IP limit times the addresses in use) stay.
                 for stale in [k for k, ev in self._events.items() if not ev or ev[-1] <= now - self.seconds]:
                     del self._events[stale]
             events = self._events.setdefault(key, deque())

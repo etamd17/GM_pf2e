@@ -313,3 +313,78 @@ def test_the_rate_limiter_does_not_grow_without_bound():
     clock["t"] = 301.0
     window.hit("fresh")
     assert len(window._events) == 1
+
+
+# --- the heartbeat when storage or a transport fails (handoff 035) --------------------------
+
+def _storage_down(monkeypatch):
+    def broken(*_args, **_kwargs):
+        raise OSError("database unreachable")
+    monkeypatch.setattr(G, "grant_status", broken)
+
+
+def test_an_expired_table_is_ended_even_while_storage_cannot_be_checked(stack, monkeypatch):
+    seed_scene(stack.db)
+    subscribed, _ = subscribe_table(stack, pair(stack))
+    sub = payload(received(subscribed, "vtt.snapshot")[0])["subscriptionId"]
+    idle = stack.table_client(pair(stack))                  # connected, never subscribed
+    stack.advance_clock(G.GRANT_LIFETIME + timedelta(seconds=1))
+    _storage_down(monkeypatch)
+    assert stack.service.heartbeat() == 2                   # one failed sweep is enough: expiry is known
+    _revoked_and_closed(stack, subscribed, sub)
+    assert not idle.is_connected(NAMESPACE)
+    assert stack.service.sweep_stats["unverifiable"] == 1
+
+
+def test_an_unseen_revocation_is_bounded_while_storage_stays_down(stack, monkeypatch):
+    seed_scene(stack.db)
+    subscribed, _ = subscribe_table(stack, pair(stack))
+    received(subscribed)
+    idle = stack.table_client(pair(stack))
+    with stack.db.transaction() as session:                 # revoked behind the hub's back
+        G.revoke_all(session, "camp_a")
+    _storage_down(monkeypatch)
+    stack.advance_clock(timedelta(seconds=socket_module.HEARTBEAT_SECONDS))
+    assert stack.service.heartbeat() == 0                   # first failed sweep: still inside the limit
+    assert subscribed.is_connected(NAMESPACE) and idle.is_connected(NAMESPACE)
+    stack.advance_clock(timedelta(seconds=socket_module.HEARTBEAT_SECONDS))
+    assert stack.service.heartbeat() == 2                   # second: 30 s unverified, ended
+    assert not subscribed.is_connected(NAMESPACE) and not idle.is_connected(NAMESPACE)
+    assert socket_module.HEARTBEAT_SECONDS * 2 <= 30
+    assert socket_module.HEARTBEAT_SECONDS < socket_module.UNVERIFIED_LIMIT.total_seconds() <= 30
+
+
+def test_a_successful_sweep_renews_verification(stack, monkeypatch):
+    seed_scene(stack.db)
+    table, _ = subscribe_table(stack, pair(stack))
+    received(table)
+    stack.advance_clock(timedelta(seconds=20))
+    assert stack.service.heartbeat() == 0                   # storage up: verified now
+    _storage_down(monkeypatch)
+    stack.advance_clock(timedelta(seconds=20))
+    assert stack.service.heartbeat() == 0                   # 20 s since the last good check
+    assert table.is_connected(NAMESPACE)
+    stack.advance_clock(timedelta(seconds=10))
+    assert stack.service.heartbeat() == 1                   # 30 s: ended
+    assert not table.is_connected(NAMESPACE)
+
+
+def test_failed_terminal_sends_do_not_stop_the_sweep(stack):
+    seed_scene(stack.db)
+    expiring = [subscribe_table(stack, pair(stack))[0] for _ in range(4)]
+    stack.advance_clock(G.GRANT_LIFETIME + timedelta(seconds=1))
+    valid, _ = subscribe_table(stack, pair(stack))          # paired after the jump: still good
+    for client in [*expiring, valid]:
+        received(client)
+    real = stack.hub.emit
+
+    def broken_controls(sid, event, data):
+        if event == "vtt.resync_required":
+            raise OSError("transport write failed")
+        real(sid, event, data)
+
+    stack.hub.emit = broken_controls
+    assert stack.service.heartbeat() == 4                   # one sweep ends all four
+    assert all(not c.is_connected(NAMESPACE) for c in expiring)
+    assert valid.is_connected(NAMESPACE)
+    assert stack.service.sweep_stats["end_errors"] >= 4

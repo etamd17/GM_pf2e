@@ -45,10 +45,11 @@ import hashlib
 import hmac
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Protocol
 
 from flask import request
+from sqlalchemy import text
 from flask_socketio import ConnectionRefusedError, SocketIO, disconnect
 
 from core.persistence.database import Database
@@ -63,6 +64,12 @@ NAMESPACE = "/vtt"
 TABLE_COOKIE = "vtt_table"
 # Section 10: each connected table is rechecked in PostgreSQL at least every 30 s.
 HEARTBEAT_SECONDS = 15
+# When storage cannot be checked, a table whose last successful verification is
+# older than this is ended anyway (fail closed). With the 15 s interval the
+# second consecutive failed sweep ends it, inside the 30 s bound.
+UNVERIFIED_LIMIT = timedelta(seconds=25)
+# Bound the sweep's own database waits so a hung query cannot stall it.
+SWEEP_STATEMENT_TIMEOUT_MS = 5000
 
 
 class VttHost(Protocol):
@@ -85,6 +92,7 @@ class VttService:
     commands: CommandService
     heartbeat: Callable[[], int]
     sweep: Callable[[str | None], int]
+    sweep_stats: dict
 
 
 def table_verifier(grant_key: bytes, credential: str) -> str:
@@ -134,12 +142,15 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
                     raise ConnectionRefusedError(_rejection("grant-revoked"))
                 if status == "expired":
                     raise ConnectionRefusedError(_rejection("grant-expired"))
-                return Principal(kind="table", id=grant.id, campaign_id=grant.campaign_id)
+                return Principal(kind="table", id=grant.id, campaign_id=grant.campaign_id,
+                                 verified_at=clock(), expires_at=G.utc(grant.expires_at))
         user_id = host.current_member_id()
         token = auth.get("csrf") if isinstance(auth, dict) else None
         if not user_id or not host.csrf_valid(token):
             raise ConnectionRefusedError(_rejection("session-ended"))
         return Principal(kind="member", id=user_id)
+
+    sweep_stats = {"unverifiable": 0, "end_errors": 0}
 
     def sweep(campaign_id: str | None = None) -> int:
         """Recheck connected table principals (one campaign, or all) and end each
@@ -149,16 +160,51 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
                   if p.kind == "table" and (campaign_id is None or p.campaign_id == campaign_id)]
         if not tables:
             return 0
-        ended = 0
         current = clock()
-        with db.session() as session:
+        try:
+            failing = verify(tables, current)
+        except Exception:
+            # Storage cannot be checked (handoff 035). Fail closed on what is known
+            # locally: a grant past its expiry, or one not verified within the
+            # limit. Nothing here waits for storage to come back.
+            sweep_stats["unverifiable"] += 1
             failing = [sid for sid, p in tables
-                       if G.grant_status(session, session.get(VttTableGrant, p.id), current) != "ok"]
+                       if (p.expires_at is not None and p.expires_at <= current)
+                       or p.verified_at is None or current - p.verified_at >= UNVERIFIED_LIMIT]
         for sid in failing:
-            ended += 1
-            if not hub.end(sid):
-                close(sid)
-        return ended
+            end_one(sid)
+        return len(failing)
+
+    def verify(tables, current) -> list[str]:
+        """One bounded read of every listed table's grant. Returns the failing
+        sids and stamps the rest as verified now. Raises if storage fails."""
+        with db.session() as session:
+            if session.get_bind().dialect.name == "postgresql":
+                session.execute(text(f"SET LOCAL statement_timeout = '{SWEEP_STATEMENT_TIMEOUT_MS}ms'"))
+                session.execute(text(f"SET LOCAL lock_timeout = '{SWEEP_STATEMENT_TIMEOUT_MS}ms'"))
+            failing, passing = [], []
+            for sid, p in tables:
+                grant = session.get(VttTableGrant, p.id)
+                if G.grant_status(session, grant, current) == "ok":
+                    passing.append((p, G.utc(grant.expires_at)))
+                else:
+                    failing.append(sid)
+        for p, expires_at in passing:
+            p.verified_at, p.expires_at = current, expires_at
+        return failing
+
+    def end_one(sid: str) -> None:
+        """End one connection; a failure here never stops the rest of the sweep
+        (handoff 035). The close is attempted whatever the control send did."""
+        try:
+            if hub.end(sid):
+                return
+        except Exception:
+            sweep_stats["end_errors"] += 1
+        try:
+            close(sid)
+        except Exception:
+            sweep_stats["end_errors"] += 1
 
     def heartbeat_loop():
         while True:
@@ -254,4 +300,4 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
         return None
 
     return VttService(socketio=socketio, hub=hub, principals=principals, commands=commands,
-                      heartbeat=lambda: sweep(None), sweep=sweep)
+                      heartbeat=lambda: sweep(None), sweep=sweep, sweep_stats=sweep_stats)

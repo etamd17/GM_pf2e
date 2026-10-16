@@ -29,6 +29,7 @@ import secrets
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import select, tuple_
@@ -51,6 +52,10 @@ class Principal:
     kind: str                      # "member" | "table"
     id: str                        # user id, or table grant id
     campaign_id: str | None = None  # a table's grant fixes its campaign
+    # Tables only (M3): when storage last confirmed the grant, and when it expires.
+    # The heartbeat uses them to fail closed when storage cannot be checked.
+    verified_at: datetime | None = None
+    expires_at: datetime | None = None
 
 
 @dataclass
