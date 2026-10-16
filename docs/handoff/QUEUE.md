@@ -41,9 +41,9 @@ UI/UX design is Claude's by default; Codex implements mechanical parts from Clau
 | UI-08 | PF2e encounter tracker (B: combat first, setup folds away) | codex | strongest, high | done (accepted by Claude) | `tasks/UI-08-pf2e-tracker.md` |
 | UI-09 | PF2e party overview (A+B) + campaign management (B tabs) + My table (A) | codex | standard, high | done (accepted by Claude) | `tasks/UI-09-pf2e-party-and-campaign-pages.md` |
 | UI-10 | PF2e player sheet (A: compact header, CSS only) | codex | standard, high | done (accepted by Claude) | `tasks/UI-10-pf2e-player-sheet.md` |
-| UI-17 | PF2e sheet: Inventory "Add" row runs off-screen on phones (CSS only; inventory scope hold still applies) | codex | standard, low | accepted (Codex commits, merges after CI) | `tasks/UI-17-pf2e-sheet-inventory-add-row.md` |
+| UI-17 | PF2e sheet: Inventory "Add" row runs off-screen on phones (CSS only; inventory scope hold still applies) | codex | standard, low | done (PR #207 merged after CI) | `tasks/UI-17-pf2e-sheet-inventory-add-row.md` |
 | UI-11 | PF2e level-up (B) + builder (B): roadmap and live preview | codex | strongest, high | ready | `tasks/UI-11-pf2e-levelup-and-builder.md` |
-| UI-12 | PF2e map (B: map first, right-side tabs) | claude | Opus, high | waiting on user (after the VTT plan) | `tasks/UI-12-pf2e-map.md` |
+| UI-12 | PF2e map (B: map first, right-side tabs) | claude | Opus, high | waiting on user: the VTT plan chose A, which replaces `/map` at M5. Is a redesign of the old map still wanted before then? | `tasks/UI-12-pf2e-map.md` |
 | UI-13 | Cosmere GM dashboard (hybrid) + GM Screen (B) + 3 hub error-handling fixes | codex | standard, medium | ready | `tasks/UI-13-cosmere-dashboard-and-gmscreen.md` |
 | UI-14 | Cosmere tracker (B: phase/turn first, phase band) + check the Archer's missing strikes | claude | Opus, high | done (PR #205 merged after CI) | `tasks/UI-14-cosmere-tracker.md` |
 | UI-15 | Cosmere Party Vitals (B) + roster (A cards + attention summary) | codex | standard, high | ready | `tasks/UI-15-cosmere-vitals-and-roster.md` |
@@ -87,19 +87,35 @@ UI-03 bug list (from `tasks/UI-00.md` > Anything broken or risky; all checked on
 
 ## VTT (table-top map rebuild)
 
-Decided 2026-10-14: the VTT lives **on the site**, not in Obsidian. It reuses the site's characters,
-tracker, live sync and the existing map (`/map`, `/map/table`). Obsidian stays the prep and control
-side through the Session Operations plugin.
+Decided 2026-10-14: the VTT lives **on the site**, not in Obsidian. It shares the site's accounts,
+campaigns and characters. Obsidian stays the prep and control side through the Session Operations
+plugin.
+
+Decided 2026-10-16 (plan `GM_pf2e_vtt/docs/vtt/design/vtt-alpha-plan.md`): the user chose
+**option A**, the full alpha as the ADRs describe, over Claude's recommendation (B, keep `/map`).
+- Milestones:
+  - M0: contracts;
+  - M1: backend read path;
+  - M2: commands;
+  - M3: table pairing;
+  - M4: client transport and GM tools;
+  - M5: import legacy scenes and replace `/map`;
+  - M6: Docker, CI and Playwright;
+  - M7: Railway staging, which needs the user's approval and spend at the time.
+- `/map` stays the live product until M5.
 
 This work runs on its **own channel**, not this queue: branch `side/vtt-rebuild`, handoffs in
 `GM_pf2e_vtt/docs/vtt/handoffs/` (rules in `docs/vtt/README.md`), decisions in `docs/vtt/decisions/`
-(ADR-0001 table-first, ADR-0002 wire protocol, ADR-0003 hosting). Codex owns `vtt/` and the backend,
-Claude owns `frontend/vtt/`. The rows below only track where it stands.
+(ADR-0001 table-first, ADR-0002 wire protocol, ADR-0003 hosting). Under the 2026-10-15 split Claude
+builds all of it, backend included, and Codex reviews each milestone (handoff 018). The rows below
+only track where it stands.
 
 | ID | Task | Owner | Model | Status | Where |
 |---|---|---|---|---|---|
 | VTT-017 | Fix the session issue Codex flagged; review Codex's first contract batch; publish handoff 017 | claude | Opus, high | done (handoff `VTT-20261015-017`, client commits `44650296`, `97f1eef9`); waiting on Codex's reply | `GM_pf2e_vtt/docs/vtt/handoffs/VTT-20261015-017-claude.md` |
-| VTT-ALPHA | First usable milestone: GM workspace + shared table display talking to the new backend, on a Railway **staging** environment of the same project (ADR-0003). Production untouched until the user merges | codex + claude | strongest / Opus high | needs plan (after VTT-017) | ADR-0003 |
+| VTT-ALPHA | First usable milestone: GM workspace + shared table display talking to the new backend, on a Railway **staging** environment of the same project (ADR-0003). Production untouched until the user merges | claude (Codex reviews) | Opus, high | in progress: M0 accepted (handoff 022); M1 built, fixes in recheck (handoffs 024-026) | `GM_pf2e_vtt/docs/vtt/design/vtt-alpha-plan.md` |
+| MAP-R2 | Live `/map`: prep scenes leak to the player event stream (`_broadcast_scene` sends every saved scene's player view, not only the active one) | claude (Codex reviews) | Opus, high | ready (plan section 5; needs a brief) | `vtt-alpha-plan.md` section 2 |
+| MAP-R3 | Live `/map`: the TV runs as a GM session and gets the GM payload (exact NPC HP, GM-only lights); give `/map/table` its own server-side table projection | claude (Codex reviews) | Opus, high | ready (plan section 5; needs a brief) | `vtt-alpha-plan.md` section 2 |
 | VTT-PLAYERS | Per-player screens and per-player vision | - | - | deferred by the user (ADR-0001) | - |
 
 Order: finish the Cosmere UI-02 screens first, then pick VTT back up at VTT-017. Creating the
@@ -118,6 +134,7 @@ Accepted as a design checkpoint. Notes:
 
 Newest first. One plain line per handoff: who, what, what's next.
 
+- 2026-10-16 Claude: updated the VTT rows. The user chose option A (full alpha), Claude builds it and Codex reviews; M0 is accepted and M1 is in recheck. Added MAP-R2/R3 for the live map, marked UI-17 done, and asked whether UI-12 is still wanted given `/map` is replaced at M5. Next: Codex rechecks M1 (handoff 026).
 - 2026-10-16 Claude: accepted UI-17. The phone Add row fits at 320px (two rows, 40px controls), 600px and desktop; it also fixes the Add button being clipped on desktop. 7 tests pass, 107 templates parse. Next: Codex commits, opens the PR and merges after CI.
 - 2026-10-16 Codex: made the PF2e sheet's Inventory Add row fit phones with 21 added CSS lines; 25 focused checks pass and real item additions save at 320px, 375px and 1440px. Next: Claude reviews UI-17's local diff and layout; changes are uncommitted and unpushed.
 - 2026-10-16 Codex: accepted 5E-07 after recheck 3; the actual cantrip handler and class-owned invocation prerequisites are fixed, all 40 rehearsal/PDF checks pass and 107 templates parse. Next: Claude commits the implementation and reviews, opens the PR and merges once every CI job is green.
