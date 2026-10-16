@@ -417,8 +417,11 @@ def import_character(raw, *, edition: str | None = None) -> dict:
     # What D&D Beyond had that this build couldn't place, so the player can
     # decide (a homebrew subclass's feat, a language the option list excludes).
     have_feats = {_norm(f['name']) for f in s['feats']}
+    # D&D Beyond's PDF lists some class features under FEATS (2024 "Weapon
+    # Mastery"); a feat that is one of this build's features is already here.
+    have_features = {_norm(f.get('name')) for f in s['features']}
     for f in ddb.feats:
-        if _norm(f) not in have_feats:
+        if _norm(f) not in have_feats and _norm(f) not in have_features:
             report['warnings'].append(f'Feat "{f}" was on D&D Beyond but has no slot here '
                                       '(it may come from homebrew); add it on the Choices step if it belongs.')
     final = {k: set(v) for k, v in s['proficiencies'].items()}
@@ -655,7 +658,9 @@ def _value_for(ch, s, ddb, prof, labels, feats_left, class_asi, group_bonus, spe
             return out[:count] or None
         if kind == 'size':
             return ['M'] if 'M' in opts else None
-        out = [o for o in opts if _norm(o) in labels or _norm(str(o).split(' (')[0]) in labels][:count]
+        # Weapon masteries come across as "Greatsword (Graze)": match the weapon.
+        bare = labels | {_norm(n.split(' (')[0]) for n in ddb.option_names}
+        out = [o for o in opts if _norm(o) in bare or _norm(str(o).split(' (')[0]) in bare][:count]
         return out or None
     if kind == 'spell':
         q = ch.get('query') or {}

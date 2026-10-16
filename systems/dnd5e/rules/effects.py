@@ -254,15 +254,19 @@ _PATTERNS = [
     (re.compile(r'number of times equal to (?:your|twice your) (proficiency bonus|(strength|dexterity|constitution|'
                 r'intelligence|wisdom|charisma) modifier)(?: \(minimum of (?:once|1)\))?', re.I), 'expr'),
     # "You can use this feature/trait twice/three times"
-    (re.compile(r'you can (?:use|do|cast) (?:this|it|the spell)[^.]{0,40}? (once|twice|three times|two times)', re.I), 'word'),
+    (re.compile(r'you can (?:also )?(?:use|do|cast) (?:this|it|the spell)[^.]{0,40}? (once|twice|three times|two times)', re.I), 'word'),
     # "... you can't use it again until you finish a Long Rest" (2014: "complete a short or long rest")
     (re.compile(r"(?:can't|cannot) (?:use|do|cast)[^.]{0,40}?again until you " + _FINISH + _REST, re.I), 'once'),
+    # 2024: "...you must finish a Long Rest before you can cast it in this way again"
+    (re.compile(r"you must " + _FINISH + _REST + r" before you can (?:use|do|cast)[^.]{0,40}?again", re.I), 'once'),
 ]
 
 # Tracked by character._resources with exact class-table numbers.
 HANDLED = {
     'Rage', 'Bardic Inspiration', 'Channel Divinity', 'Wild Shape', 'Action Surge', 'Indomitable',
     'Second Wind', 'Arcane Recovery', 'Favored Enemy', 'Magical Cunning', 'Lay on Hands', 'Divine Sense',
+    'Mystic Arcanum', 'Mystic Arcanum (6th level)', 'Mystic Arcanum (7th level)', 'Mystic Arcanum (8th level)',
+    'Mystic Arcanum (9th level)',
     'Font of Magic', 'Ki', 'Focus', "Monk's Focus", 'Combat Superiority', 'Superiority Dice', 'Pact Boon',
     'Pact Magic', 'Spellcasting',
 }
@@ -319,3 +323,88 @@ def _flatten(entries) -> str:
             walk(e.get('items'))
     walk(entries)
     return ' '.join(out)
+
+
+# --- free casts: which spell a feature lets you cast without a slot ----------------
+
+_NO_SLOT = re.compile(r'without (?:(?:expending|using|requiring) )?(?:a |any )?spell slots?', re.I)
+_SPELL_TAG = re.compile(r'\{@spell ([^}|]+)(?:\|[^}]*)?\}', re.I)
+_BACKREF = re.compile(r'\bcast (?:it|them|the spell|this spell|that spell|either spell|each spell|each of them|'
+                      r'the [a-z ]{1,30} version)\b', re.I)
+
+
+def _tagged(text: str) -> list:
+    return [m.group(1).strip().lower() for m in _SPELL_TAG.finditer(text)]
+
+
+def free_cast_spells(entries) -> list:
+    """Spell names (lower case) a feature explicitly lets you cast without a
+    spell slot. The grant must say so: the spell is tagged in the sentence that
+    says "without expending a spell slot", or that sentence says "cast it / the
+    spell" and the spell is tagged in one of the two sentences before. A spell
+    merely mentioned elsewhere in the feature is not a grant."""
+    sents = re.split(r'(?<=[.!?])\s+', _flatten(entries))
+    out = []
+    for i, s in enumerate(sents):
+        if not _NO_SLOT.search(s):
+            continue
+        names = _tagged(s)
+        if not names and _BACKREF.search(s):
+            for j in range(i - 1, max(-1, i - 3), -1):
+                names = _tagged(sents[j])
+                if names:
+                    break
+        out += [n for n in names if n not in out]
+    return out
+
+
+_COSTS = re.compile(r'\b(ki points?|focus points?|sorcery points?|psionic energy|superiority di(?:c)?e|'
+                    r'charges?|hit dice)\b', re.I)
+
+
+def _named_entries(entries):
+    if isinstance(entries, list):
+        for e in entries:
+            yield from _named_entries(e)
+    elif isinstance(entries, dict):
+        if e_name := entries.get('name'):
+            yield e_name, entries
+        yield from _named_entries(entries.get('entries'))
+
+
+def innate_terms(owner_name: str, owner_entries, spell_name: str, *, mods: dict, pb: int):
+    """How an innate spell with no structured uses is paid for, read from the
+    trait or feature that grants it:
+
+    ('limited', n, recharge) -- "once ... until you finish a Long Rest"
+    ('cost', label)          -- spends something we don't track per spell (ki...)
+    ('will',)                -- explicitly at will / no slot and no limit
+    None                     -- the text doesn't say (the sheet says so too)."""
+    nm = spell_name.lower()
+    pat = re.compile(r'\{@spell ' + re.escape(nm) + r'[|}]|\b' + re.escape(nm) + r'\b', re.I)
+    best = None
+    for name, e in [(owner_name, {'entries': owner_entries})] + list(_named_entries(owner_entries)):
+        text = _flatten([e])
+        if pat.search(text) and (best is None or len(text) < len(best[1])):
+            best = (name, text, e)
+    if best is None:
+        return None
+    name, text, e = best
+    # A trait can grant several spells (Merge with Stone: Blade Ward PB times,
+    # Pass without Trace once). Read the paragraph that names this spell, and
+    # the one after it, before falling back to the whole entry.
+    paras = [x for x in (e.get('entries') or []) if isinstance(x, str)]
+    hit = next((i for i, x in enumerate(paras) if pat.search(x)), None)
+    if hit is not None:
+        e = {'entries': paras[hit:hit + 2] if not _tagged(paras[hit + 1] if hit + 1 < len(paras) else '')
+             else paras[hit:hit + 1]}
+        text = _flatten([e])
+    uses = detect_uses('', [e], mods=mods, pb=pb)
+    if uses:
+        return ('limited', uses[0], uses[1])
+    m = _COSTS.search(strip_tags(text))
+    if m:
+        return ('cost', name)
+    if re.search(r'\bat will\b', text, re.I) or _NO_SLOT.search(text):
+        return ('will',)
+    return None

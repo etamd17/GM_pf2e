@@ -56,7 +56,7 @@
     <div class="d5-card"><h3>Proficiencies</h3><div id="sh-profs" class="d5-prose"></div></div>
   </div>
   <div>
-    <div class="d5-cols" style="grid-template-columns:240px minmax(0,1fr);">
+    <div class="d5-cols d5-cols--aside-left">
       <div class="d5-card"><h3>Skills</h3><div id="sh-skills"></div></div>
       <div>
         <div class="d5-tabs" id="tabs">
@@ -271,7 +271,7 @@
     if (l.pact) h += '<div class="d5-summary-row"><span>Pact slots (level ' + l.pact.level + ')</span>' + pips('pact', 'pact', l.pact.max, l.pact.used) + '</div>';
     h += '</div>';
     var byLevel = {};
-    data.spells.forEach(function (sp) { (byLevel[sp.level] = byLevel[sp.level] || []).push(sp); });
+    data.spells.forEach(function (sp, i) { sp._row = i; (byLevel[sp.level] = byLevel[sp.level] || []).push(sp); });
     h += '<div class="d5-card">';
     Object.keys(byLevel).sort(function (a, b) { return a - b; }).forEach(function (lvl) {
       h += '<div class="sh-spell-lvl"><span class="d5-h3">' + (lvl === '0' ? 'Cantrips' : 'Level ' + lvl) + '</span></div><table class="d5-table"><tbody>' +
@@ -282,9 +282,7 @@
             (sp.concentration ? ' <span class="d5-chip is-plain" title="Concentration">C</span>' : '') + (sp.ritual ? ' <span class="d5-chip is-plain" title="Ritual">R</span>' : '') +
             '<div class="d5-muted">' + D5.esc([sp.school, sp.caster_name].filter(Boolean).join(' · ')) + '</div></td>' +
             '<td class="d5-muted">' + D5.esc(sp.time) + '</td><td class="d5-muted">' + D5.esc(sp.range) + '</td><td>' + spellHit(sp) + '</td><td>' + spellEffect(sp) + '</td><td class="d5-muted">' + D5.esc(sp.duration) + '</td>' +
-            '<td>' + (CAN_EDIT && (sp.prepared || lvl === '0') ? '<button class="d5-btn is-sm" data-cast="' + D5.esc(sp.id) + '" data-lvl="' + lvl + '" data-conc="' + (sp.concentration ? 1 : 0) + '" data-name="' + D5.esc(sp.name) + '"' +
-            (sp.item ? ' data-item-key="' + D5.esc(sp.item.resource) + '" data-item-cost="' + (sp.item.cost || 0) + '"' : '') + '>Cast' +
-            (sp.item && sp.item.cost ? ' (' + sp.item.cost + ' ch.)' : '') + '</button>' : '') + '</td></tr>';
+            '<td>' + (CAN_EDIT ? castButtonHTML(sp, lvl) : '') + '</td></tr>';
         }).join('') + '</tbody></table>';
     });
     if (!data.spells.length) h += '<div class="d5-muted">No spells chosen yet.</div>';
@@ -530,36 +528,81 @@
       });
       return;
     }
-    var after = function () { if (btn.getAttribute('data-conc') === '1') vit('concentration', {spell: name}); D5.toast('Cast ' + D5.esc(name)); };
-    if (lvl === 0) {
-      after();
-      var c0 = data.spells.filter(function (x) { return x.id === btn.getAttribute('data-cast'); })[0];
-      if (c0 && c0.numbers && c0.numbers.dice) D5.doRoll(diceWithBonus(c0.numbers.dice.replace(/\s+/g, ''), c0.numbers.bonus), name);
-      return;
+    var after = function (how) {
+      if (btn.getAttribute('data-conc') === '1') vit('concentration', {spell: name});
+      D5.toast('Cast ' + D5.esc(name) + (how ? ' (' + D5.esc(how) + ')' : ''));
+    };
+    // The button names its exact row: two grants of one spell (High Elf and
+    // Fey-Touched Misty Step) are different rows with different free uses.
+    var sp = data.spells[parseInt(btn.getAttribute('data-row'), 10)];
+    if (!sp) return;
+    var rollFor = function (slotLevel) {
+      var n = sp.numbers;
+      if (n && n.dice) D5.doRoll(diceWithBonus(upcast(n.dice.replace(/\s+/g, ''), n.per_slot, slotLevel - lvl), n.bonus),
+                                 name + (slotLevel ? ' (level ' + slotLevel + ')' : ''));
+    };
+    var plan = castPlan(sp, lvl, L(), sp.caster ? casterOf(sp) : null);
+    if ('error' in plan) { D5.toast(D5.esc(plan.error), 'error'); return; }
+    if ('now' in plan) { after(plan.now); rollFor(lvl); return; }    // '' (a cantrip) is falsy
+    var go = function (o) {
+      if (!o) return;
+      var slotLevel = parseInt(o.level, 10) || lvl;
+      var spend = (o.kind === 'ritual' || o.kind === 'manual') ? Promise.resolve()
+        : api('resource', o.kind === 'slot' ? {kind: 'slot', level: o.level, delta: 1}
+          : o.kind === 'pact' ? {kind: 'pact', delta: 1} : {kind: 'resource', key: o.key, delta: 1});
+      spend.then(function () { after(o.how); rollFor(slotLevel); });
+    };
+    if (plan.opts.length === 1) go(plan.opts[0].value);
+    else D5.choose('Cast ' + name + ' using', plan.opts).then(go);
+  }
+
+  // ---- cast planning (pure; tests run these under node) ----
+  // The Cast/Ritual button for one spell row, or '' when it can't be cast here.
+  function castButtonHTML(sp, lvl) {
+    var bookRitual = !!sp.ritual_book && !sp.prepared;
+    if (!(sp.prepared || String(lvl) === '0' || bookRitual)) return '';
+    return '<button class="d5-btn is-sm" data-cast="' + D5.esc(sp.id) + '" data-row="' + sp._row + '" data-lvl="' + lvl +
+      '" data-conc="' + (sp.concentration ? 1 : 0) + '" data-name="' + D5.esc(sp.name) + '"' +
+      (sp.item ? ' data-item-key="' + D5.esc(sp.item.resource) + '" data-item-cost="' + (sp.item.cost || 0) + '"' : '') +
+      (bookRitual ? ' title="Cast from your spellbook as a ritual (no slot, +10 minutes)">Ritual' : '>Cast') +
+      (sp.item && sp.item.cost ? ' (' + sp.item.cost + ' ch.)' : '') + '</button>';
+  }
+  // How a cast is paid for: {now: how} (nothing to spend), {error}, or {opts}
+  // to pick from. l = the PC's live state (slots, pact, resources).
+  function castPlan(sp, lvl, l, caster) {
+    if (lvl === 0) return {now: ''};
+    if (sp.at_will) return {now: sp.how || 'at will, no slot'};
+    if (sp.ritual_book && !sp.prepared) return {now: 'ritual from the spellbook, no slot'};
+    var opts = [];
+    // A free use (Mystic Arcanum, Divine Smite once per long rest, a species
+    // or feat grant) is offered first and spends that use, never a slot.
+    var free = sp.free ? (l.resources || []).filter(function (r) { return r.key === sp.free.resource; })[0] : null;
+    if (free && free.used < free.max) {
+      opts.push({value: {kind: 'resource', key: free.key, level: lvl, how: free.name},
+                 label: free.name + ' (' + (free.max - free.used) + ' left, no slot)'});
     }
-    var l = L(), opts = [];
-    Object.keys(l.slots).forEach(function (k) { if (+k >= lvl && l.slots[k].used < l.slots[k].max) opts.push('slot:' + k); });
-    if (l.pact && l.pact.level >= lvl && l.pact.used < l.pact.max) opts.push('pact');
-    if (!opts.length) { D5.toast('No spell slots of level ' + lvl + '+ left', 'error'); return; }
-    var pick = opts[0];
-    if (opts.length > 1) {
-      var ans = window.prompt('Cast ' + name + ' using which slot? (' + opts.map(function (o) { return o === 'pact' ? 'pact' : o.split(':')[1]; }).join(', ') + ')', opts[0] === 'pact' ? 'pact' : opts[0].split(':')[1]);
-      if (ans == null) return;
-      pick = ans === 'pact' ? 'pact' : 'slot:' + ans;
-      if (opts.indexOf(pick) === -1) { D5.toast('That slot is not available', 'error'); return; }
+    if (sp.free && sp.free.only) {
+      return opts.length ? {opts: opts} : {error: 'No uses of ' + sp.free.name + ' left'};
     }
-    var body = pick === 'pact' ? {kind: 'pact', delta: 1} : {kind: 'slot', level: pick.split(':')[1], delta: 1};
-    var slotLevel = pick === 'pact' ? l.pact.level : parseInt(pick.split(':')[1], 10);
-    var sp = data.spells.filter(function (x) { return x.id === btn.getAttribute('data-cast'); })[0];
-    api('resource', body).then(function () {
-      after();
-      var n = sp && sp.numbers;
-      if (n && n.dice) {
-        var expr = diceWithBonus(upcast(n.dice, n.per_slot, slotLevel - lvl), n.bonus);
-        D5.doRoll(expr, name + ' (level ' + slotLevel + ')');
+    if (sp.cost_note) {
+      opts.push({value: {kind: 'manual', level: lvl, how: sp.cost_note}, label: 'Its own feature (' + sp.cost_note + ')'});
+    }
+    if (sp.ritual && caster && caster.ritual_casting) {
+      opts.push({value: {kind: 'ritual', level: lvl, how: 'ritual'}, label: 'As a ritual (no slot, +10 minutes)'});
+    }
+    Object.keys(l.slots || {}).forEach(function (k) {
+      if (+k >= lvl && l.slots[k].used < l.slots[k].max) {
+        opts.push({value: {kind: 'slot', level: k, how: 'level ' + k + ' slot'},
+                   label: 'Level ' + k + ' slot (' + (l.slots[k].max - l.slots[k].used) + ' left)'});
       }
     });
+    if (l.pact && l.pact.level >= lvl && l.pact.used < l.pact.max) {
+      opts.push({value: {kind: 'pact', level: l.pact.level, how: 'pact slot'},
+                 label: 'Pact slot, level ' + l.pact.level + ' (' + (l.pact.max - l.pact.used) + ' left)'});
+    }
+    return opts.length ? {opts: opts} : {error: 'No spell slots of level ' + lvl + '+ left'};
   }
+  // ---- end cast planning ----
 
   // ---------- live sync (tracker damage, GM edits, other devices) ----------
   D5.sse('dnd5e_pc', function (p) {

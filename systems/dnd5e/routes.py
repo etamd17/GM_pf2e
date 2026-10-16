@@ -31,6 +31,7 @@ from systems.dnd5e import datapack, ddb_import, dice, images, paths, pdf_import,
 from systems.dnd5e.ids import entity_id, parse_ref, subclass_id
 from systems.dnd5e.render import render_entries, render_text, strip_tags
 from systems.dnd5e.rules import character as ENG
+from systems.dnd5e.rules import effects as E
 from systems.dnd5e.rules import spells as SP
 from systems.dnd5e.rules.tables import (
     DIFFICULTY_2014, DIFFICULTY_2024, XP_BUDGET_2024, XP_THRESHOLDS_2014,
@@ -1029,17 +1030,81 @@ def _sheet_spells(doc, s) -> list:
             row = _spell_row(rec, sid, caster, prepared=(sid in prepared or sid in cantrips
                                                          or caster['prepared_max'] is None))
             row['numbers'] = numbers(rec, caster)
+            if not row['prepared'] and row['ritual'] and caster['class'] == 'Wizard':
+                # Wizards cast a ritual straight from the spellbook, prepared or
+                # not (2014 Ritual Casting, 2024 Ritual Adept) -- as a ritual only.
+                row['ritual_book'] = True
             out.append(row)
+        # Mystic Arcanum: cast without a slot, once per long rest each.
+        for _at, spl in ENG.ARCANUM_LEVELS:
+            for sid in picks.get(f'{base}:arcanum:{spl}') or []:
+                sid = str(sid).lower()
+                rec = C.get('spell', sid)
+                if not rec:
+                    continue
+                row = _spell_row(rec, sid, caster, prepared=True)
+                row['numbers'] = numbers(rec, caster)
+                row['free'] = {'resource': f'mystic_arcanum_{spl}', 'name': f'Mystic Arcanum (level {spl})',
+                               'only': True}
+                out.append(row)
+    # Spells a class or subclass always has prepared (Oath, Domain, Paladin's
+    # Smite...) use that class's spellcasting ability and DC.
+    caster_by_origin = {}
+    for cl in s['classes']:
+        cst = next((c for c in s['spellcasting']['casters'] if c['class_id'] == cl['id']), None)
+        if cst:
+            caster_by_origin[cl['name']] = cst
+            if cl.get('subclass'):
+                caster_by_origin[cl['subclass']['name']] = cst
     for a in s['spellcasting']['always']:
         rec = C.get('spell', a['id'])
         if rec:
             row = _spell_row(rec, a['id'], None, prepared=True, origin=a['origin'])
-            row['numbers'] = numbers(rec, None)
+            cst = caster_by_origin.get(a['origin'])
+            row['numbers'] = numbers(rec, cst)
             if a.get('ability') in mods:
                 row['ability'] = a['ability']
+            elif cst:
+                row['ability'] = cst['ability']
+                row['dc'] = cst['dc']
+            # How the grant is paid for was settled by the engine (_classify_grants):
+            # explicit at will, its own per-grant free use, a cost we don't track
+            # (ki...), or not stated. Only the first two skip the slot silently.
+            if a.get('recharge') == 'will':
+                row['at_will'] = True
+            elif a.get('recharge') == 'ritual':
+                row['at_will'] = True
+                row['how'] = 'ritual'
+            elif a.get('free_key') and rec.get('level'):
+                res = next((r for r in s['resources'] if r['key'] == a['free_key']), None)
+                if res:
+                    row['free'] = {'resource': res['key'], 'name': res['name']}
+            elif a.get('cost') and rec.get('level'):
+                row['cost_note'] = (f'{a["origin"]}: its cost is not tracked here' if a['cost'] == 'unknown'
+                                    else f'{a["cost"]}: spend its cost by hand')
             out.append(row)
+    _link_feature_free_casts(s, out)
     out += _item_spells(s, numbers)
     return out
+
+
+def _link_feature_free_casts(s, rows):
+    """A limited-use feature that explicitly grants a free cast ("you can cast
+    it without expending a spell slot", effects.free_cast_spells) lets the
+    sheet's Cast button spend that use instead of a slot. The resource is the
+    feature's own (Paladin's Smite) or a class-table one named after it
+    (Favored Enemy (Hunter's Mark)). A spell merely mentioned is never linked."""
+    for f in s['features']:
+        granted = set(E.free_cast_spells(f.get('entries')))
+        if not granted:
+            continue
+        res = next((r for r in s['resources'] if r['name'] == f['name']
+                    or str(r['name']).startswith(f['name'] + ' (')), None)
+        if not res:
+            continue
+        for row in rows:
+            if not row.get('free') and row.get('level', 0) and row['name'].lower() in granted:
+                row['free'] = {'resource': res['key'], 'name': res['name']}
 
 
 def _item_spells(s, numbers) -> list:
@@ -1359,12 +1424,9 @@ def _resolve_options(kind: str, query: dict, build: dict, choices: dict) -> list
                     out.append({'value': sid, 'label': r['name'], 'source': r['source'], 'level': r.get('level')})
             return out
         if query.get('filter'):
-            # "level=0|class=Wizard" style filters from additionalSpells
-            f = dict(p.split('=', 1) for p in query['filter'].split('|') if '=' in p)
-            levels = [int(x) for x in f.get('level', '').split(';') if x.isdigit()] or None
-            cls = f.get('class')
-            rows = C.search_spells(levels=levels, class_name=cls.title() if cls else None,
-                                   class_source='XPHB' if ed == 'one' else 'PHB', sources=sources, limit=500)
+            # "level=0;1|class=Cleric;Druid|school=V" style filters from additionalSpells
+            from systems.dnd5e.rules.spells import spells_for_filter
+            rows = spells_for_filter(query['filter'], ed, sources=sources)
         elif query.get('any_class') == '*':
             rows = C.search_spells(levels=query.get('levels'), sources=sources, limit=1500)
         elif query.get('any_class'):
