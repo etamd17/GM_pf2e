@@ -113,9 +113,9 @@ only track where it stands.
 | ID | Task | Owner | Model | Status | Where |
 |---|---|---|---|---|---|
 | VTT-017 | Fix the session issue Codex flagged; review Codex's first contract batch; publish handoff 017 | claude | Opus, high | done (handoff `VTT-20261015-017`, client commits `44650296`, `97f1eef9`); waiting on Codex's reply | `GM_pf2e_vtt/docs/vtt/handoffs/VTT-20261015-017-claude.md` |
-| VTT-ALPHA | First usable milestone: GM workspace + shared table display talking to the new backend, on a Railway **staging** environment of the same project (ADR-0003). Production untouched until the user merges | claude (Codex reviews) | Opus, high | in progress: M0 accepted (handoff 022); M1 built, fixes in recheck (handoffs 024-026) | `GM_pf2e_vtt/docs/vtt/design/vtt-alpha-plan.md` |
-| MAP-R2 | Live `/map`: prep scenes leak to the player event stream (`_broadcast_scene` sends every saved scene's player view, not only the active one) | claude (Codex reviews) | Opus, high | ready (plan section 5; needs a brief) | `vtt-alpha-plan.md` section 2 |
-| MAP-R3 | Live `/map`: the TV runs as a GM session and gets the GM payload (exact NPC HP, GM-only lights); give `/map/table` its own server-side table projection | claude (Codex reviews) | Opus, high | ready (plan section 5; needs a brief) | `vtt-alpha-plan.md` section 2 |
+| VTT-ALPHA | First usable milestone: GM workspace + shared table display talking to the new backend, on a Railway **staging** environment of the same project (ADR-0003). Production untouched until the user merges | claude (Codex reviews) | Opus, high | in progress: M0 accepted (handoff 022); M1 accepted (handoff 027); M2 in review (handoff 029) | `GM_pf2e_vtt/docs/vtt/design/vtt-alpha-plan.md` |
+| MAP-R2 | Live `/map`: prep scenes leak to the player event stream (`_broadcast_scene` sends every saved scene's player view, not only the active one) | claude (Codex reviews) | Opus, high | done (accepted by Codex; merge after green CI) | `tasks/MAP-R2-scene-frames-gm-only.md` |
+| MAP-R3 | Live `/map`: the TV runs as a GM session and gets the GM payload (exact NPC HP, GM-only lights); give `/map/table` its own server-side table projection | claude (Codex reviews) | Opus, high | done (accepted by Codex; merge after green CI), with MAP-R2 | `tasks/MAP-R3-table-screen-projection.md` |
 | VTT-PLAYERS | Per-player screens and per-player vision | - | - | deferred by the user (ADR-0001) | - |
 
 Order: finish the Cosmere UI-02 screens first, then pick VTT back up at VTT-017. Creating the
@@ -134,6 +134,10 @@ Accepted as a design checkpoint. Notes:
 
 Newest first. One plain line per handoff: who, what, what's next.
 
+- 2026-10-16 Codex: accepted MAP-R2 and MAP-R3 together; 62 focused privacy/SSE/route checks pass, 107 templates parse, JavaScript syntax and diff checks pass. Next: publish the combined PR and merge only after every CI job is green.
+
+- 2026-10-16 Claude: MAP-R3 ready for review, stacked on MAP-R2 on `claude/map-r2-prep-scene-leak` (uncommitted). The TV now has a server-side table audience and its own read, so no GM payload reaches it; 11 new tests (8 fail without the fix), 489 map/scene/SSE/auth tests pass, browser-checked. VTT M2 is ready for review (handoff 029, commit `00815eac`).
+- 2026-10-16 Claude: MAP-R2 ready for review on `claude/map-r2-prep-scene-leak` (uncommitted). Scene frames are now GM-only; 7 new tests fail on main and pass with the fix; 457 map/scene/SSE tests pass. VTT M1 accepted (handoff 027); M2 starting.
 - 2026-10-16 Claude: updated the VTT rows. The user chose option A (full alpha), Claude builds it and Codex reviews; M0 is accepted and M1 is in recheck. Added MAP-R2/R3 for the live map, marked UI-17 done, and asked whether UI-12 is still wanted given `/map` is replaced at M5. Next: Codex rechecks M1 (handoff 026).
 - 2026-10-16 Claude: accepted UI-17. The phone Add row fits at 320px (two rows, 40px controls), 600px and desktop; it also fixes the Add button being clipped on desktop. 7 tests pass, 107 templates parse. Next: Codex commits, opens the PR and merges after CI.
 - 2026-10-16 Codex: made the PF2e sheet's Inventory Add row fit phones with 21 added CSS lines; 25 focused checks pass and real item additions save at 320px, 375px and 1440px. Next: Claude reviews UI-17's local diff and layout; changes are uncommitted and unpushed.

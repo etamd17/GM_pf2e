@@ -685,6 +685,7 @@ _POLICY_GROUPS: tuple[PolicyGroup, ...] = (
             "api_scene_delete",
             "api_scene_elements",
             "api_scene_sync_encounter",
+            "api_scene_table",
             "api_scene_token",
             "api_scene_token_image",
             "api_scenes",

@@ -51,10 +51,21 @@
             backoff = Math.min(backoff * 2, BACKOFF_MAX);
             reconnectTimer = setTimeout(function () { reconnectTimer = null; connect(); }, delay);
         }
+        // The map's shared table screen asks for the table audience: the server
+        // then sends it table projections instead of the GM frames its GM session
+        // would otherwise get (MAP-R3). Decided by path, not by the DOM, because
+        // the socket can open before the page body exists. The server honours it
+        // only for a GM session, and it only ever narrows what is sent.
+        function streamUrl() {
+            var params = [];
+            if (location.pathname === '/map/table') params.push('audience=table');
+            if (lastId) params.push('last_event_id=' + encodeURIComponent(lastId));
+            return '/api/events' + (params.length ? '?' + params.join('&') : '');
+        }
         function connect() {
             if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
             lastConnectAt = Date.now();
-            try { es = new EventSource('/api/events' + (lastId ? ('?last_event_id=' + encodeURIComponent(lastId)) : '')); }
+            try { es = new EventSource(streamUrl()); }
             catch (e) { es = null; scheduleReconnect(); return; }
             es.onopen = function () { backoff = 2000; };
             es.addEventListener('connected', function (e) { backoff = 2000; checkVersion(e); });
