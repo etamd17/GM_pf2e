@@ -137,7 +137,7 @@ export class ProjectionSession<E extends EntityKey, O = unknown> {
     // Frame rules (README "Corrections"): repeated keys, scene/sceneId mismatch,
     // GM controller/capability repeats, zero-length walls.
     if (!frameRulesHold(this.surface, frame)) {
-      this.invalidFrame();
+      this.invalidFrame(frame.subscriptionId);
       return;
     }
     const epoch = this.sink.openProjection();
@@ -310,8 +310,12 @@ export class ProjectionSession<E extends EntityKey, O = unknown> {
   // A frame for the current subscription that names an entity twice cannot be
   // applied unambiguously. Nothing from it is applied; the client resubscribes
   // as for lost state and keeps the last good projection on screen.
-  private invalidFrame(): void {
+  // `offendingId` is the subscription ID a rejected snapshot carried. It never
+  // became live, so retireCurrent() would not remember it; without this a later
+  // snapshot could reuse the rejected ID and go live (Codex, handoff 020).
+  private invalidFrame(offendingId?: string): void {
     this.stats.invalidFrames += 1;
+    if (offendingId !== undefined) this.retireId(offendingId);
     this.retireCurrent();
     this.sink.setStatus('resyncing');
     this.sink.requestResubscribe('state-lost');
@@ -319,16 +323,18 @@ export class ProjectionSession<E extends EntityKey, O = unknown> {
 
   // Retire the live subscription ID (if any) and void every attempt.
   private retireCurrent(): void {
-    if (this.subscriptionId !== null) {
-      this.retired.add(this.subscriptionId);
-      if (this.retired.size > RETIRED_ID_MEMORY) {
-        const oldest = this.retired.values().next().value;
-        if (oldest !== undefined) this.retired.delete(oldest);
-      }
-    }
+    if (this.subscriptionId !== null) this.retireId(this.subscriptionId);
     this.subscriptionId = null;
     this.pendingAttempt = null;
     this.liveAttempt = null;
+  }
+
+  private retireId(id: string): void {
+    this.retired.add(id);
+    if (this.retired.size > RETIRED_ID_MEMORY) {
+      const oldest = this.retired.values().next().value;
+      if (oldest !== undefined) this.retired.delete(oldest);
+    }
   }
 
   private dropOverlays(match: (commandId: string) => boolean): void {

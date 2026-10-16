@@ -513,6 +513,52 @@ describe('frame rules (S5 and README "Corrections")', () => {
   });
 });
 
+describe('a rejected snapshot retires its subscription ID (handoff 020)', () => {
+  function rejected() {
+    const t = setup('table');
+    t.transport.subscribe(t.session);
+    t.transport.push(snapshot('s-bad', [tok('a'), tok('a', 9)]));
+    t.transport.deliver(t.session);
+    expect(t.session.stats.invalidFrames).toBe(1);
+    expect(t.status()).toBe('resyncing');
+    return t;
+  }
+
+  it('a later snapshot reusing the rejected ID is refused', () => {
+    const t = rejected();
+    t.transport.subscribe(t.session);
+    t.transport.push(snapshot('s-bad', [tok('b')]));
+    t.transport.deliver(t.session);
+    expect(t.session.currentSubscriptionId).toBeNull();
+    expect(t.session.stats.refusedSnapshots).toBe(1);
+    expect(t.scene()).toBeNull();
+    expect(t.status()).toBe('resyncing');
+  });
+
+  it('a genuinely new ID still recovers', () => {
+    const t = rejected();
+    t.transport.subscribe(t.session);
+    t.transport.push(snapshot('s-good', [tok('b')]));
+    t.transport.deliver(t.session);
+    expect(t.session.currentSubscriptionId).toBe('s-good');
+    expect(t.ids()).toEqual(['b']);
+    expect(t.status()).toBe('live');
+  });
+
+  it('late resyncs naming the rejected ID are ignored, while resyncing and once live again', () => {
+    const t = rejected();
+    t.transport.subscribe(t.session);
+    t.session.onResyncRequired('state-lost', 's-bad');           // subscribe in flight
+    expect(t.session.stats.ignoredResyncs).toBe(1);
+    t.transport.push(snapshot('s-good', [tok('b')]));
+    t.transport.deliver(t.session);
+    t.session.onResyncRequired('scene-changed', 's-bad');        // live again
+    expect(t.session.stats.ignoredResyncs).toBe(2);
+    expect(t.status()).toBe('live');
+    expect(t.ids()).toEqual(['b']);
+  });
+});
+
 describe('duplicate entity keys (S5)', () => {
   it('a snapshot naming an entity twice is not applied and triggers a resubscribe', () => {
     const t = setup();
