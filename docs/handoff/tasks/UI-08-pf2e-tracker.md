@@ -42,4 +42,59 @@ control, the inspector, multi-target tools, the XP bar and keyboard shortcuts.
 
 ## Report
 
+- Ported Revision B into `templates/tracker.html` behind the strict PF2e system class: the compact
+  hero band puts round, turn and combat actions first; initiative rows are flatter and denser; and
+  the active-combatant inspector uses the approved narrower desktop column and unboxed stat band.
+  Cosmere and D&D receive none of the new wrappers or styles.
+- Wrapped the existing setup strip whole in a native disclosure. It renders open when the initial
+  encounter is empty and closed when combatants exist, while preserving every existing input,
+  option, ID and inline handler. Empty-to-populated and populated-to-empty live transitions update
+  it once, while ordinary combat repaints preserve a manual choice. The global shortcut listener
+  leaves native summary activation alone so Space toggles it instead of advancing the turn.
+- Added a PF2e-only, labelled and focusable initiative region. At phone widths it contains the wide
+  combat grid, shows a sideways-scroll hint and keeps page-level horizontal overflow contained so
+  every right-hand row control remains reachable. Its focused arrow keys and control activation
+  remain native, while N, Escape and the combat shortcuts continue to work from table controls.
+  Desktop keeps the existing viewport-sticky column headings.
+- Added `tests/test_pf2e_tracker_ui.py`, with a rendered inventory fingerprint captured from
+  `origin/main` at `9c9e4c15`, empty/populated disclosure checks, keyboard and mobile-region
+  contracts, live disclosure transitions, shortcut preservation, Cosmere isolation, and the
+  Revision B style contract.
+
+### Verification
+
+- `python tools/check_templates.py` — **107 templates parse**.
+- `pytest -q tests/test_pf2e_tracker_ui.py tests/test_tracker_cosmere_render.py tests/test_tracker_session_readiness.py tests/test_tracker_visual_payload.py tests/test_tracker_sheet_sync.py tests/test_tracker_error_attribution.py tests/test_combat_turn_advance.py tests/test_encounter_save_persistence.py tests/test_round_events.py tests/test_turn_timer.py tests/test_cosmere_initiative.py tests/test_cosmere_conditions_ui.py tests/test_system_guards.py tests/test_inline_handler_escaping.py tests/test_route_policy_inventory.py` — **134 passed, 21 skipped**.
+- Final review-fix rerun, `pytest -q tests/test_pf2e_tracker_ui.py` — **7 passed**.
+- `git diff --check` — passed.
+- Claude's required 1440px and 375px browser checks remain for review.
+
 ## Review
+
+**Claude, 2026-10-15: accepted. No required fixes.**
+
+Read the diff: every new rule sits under `body.system-pf2e`, the setup `<details>` and the scroll
+region render only when `active_system == 'pf2e'`, and `_syncPf2eEncounterSetup` and
+`_trackerKeepsNativeKey` are new. Checked live in a PF2e campaign (Goblin Warrior + Kyle) at
+1440px and 375px. Did not rerun the test suite.
+
+- **Combat first:** the turn bar sits at the top (81px), the setup summary below it (234px), then
+  the initiative grid (340px).
+- **Setup panel transitions:**
+  - Empty on load: open.
+  - The first creature added: closes by itself.
+  - Opened by hand during combat: stays open through an HP change and a second add.
+  - Encounter cleared: opens by itself; refilled: closes again.
+- **Keyboard (real key presses):**
+  - Space on the focused setup summary toggles it and does **not** advance the turn.
+  - With focus on the page, N still advances the turn.
+  - On a phone, with the scroll region focused, Right arrow scrolls the table (0 -> 120 -> 200px)
+    and leaves the turn and inspector unchanged.
+- **Phone, 375px:**
+  - The page has no sideways scroll; the table scrolls inside its own 343px region (800px of
+    content).
+  - The hint "Swipe or scroll sideways to reach every combat control." is visible.
+  - The row's right-most control (Delay) starts at 803px and becomes reachable and clickable
+    (`elementFromPoint` hits it) after scrolling.
+- **Cosmere is unaffected:** the Cosmere tracker HTML has no setup disclosure and no scroll
+  region; the PF2e tracker has both.

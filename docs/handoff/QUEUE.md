@@ -37,7 +37,7 @@ UI/UX design is Claude's by default; Codex implements mechanical parts from Clau
 | UI-02 | PF2e screens from UI-00 (12): briefs written as UI-06 to UI-12 | claude | Opus high | done (briefs) | see rows below |
 | UI-06 | PF2e GM dashboard (B) + GM Screen (B). Holds the shared conventions for UI-06 to UI-12 | codex | standard, medium | done (accepted by Claude) | `tasks/UI-06-pf2e-gm-hub-and-gmscreen.md` |
 | UI-07 | PF2e generators (A) + loot ledger (B) | codex | standard, medium | done (accepted by Claude) | `tasks/UI-07-pf2e-generators-and-loot.md` |
-| UI-08 | PF2e encounter tracker (B: combat first, setup folds away) | codex | strongest, high | ready after UI-04 | `tasks/UI-08-pf2e-tracker.md` |
+| UI-08 | PF2e encounter tracker (B: combat first, setup folds away) | codex | strongest, high | done (accepted by Claude) | `tasks/UI-08-pf2e-tracker.md` |
 | UI-09 | PF2e party overview (A+B) + campaign management (B tabs) + My table (A) | codex | standard, high | ready | `tasks/UI-09-pf2e-party-and-campaign-pages.md` |
 | UI-10 | PF2e player sheet (A: compact header, CSS only) | codex | standard, high | ready | `tasks/UI-10-pf2e-player-sheet.md` |
 | UI-11 | PF2e level-up (B) + builder (B): roadmap and live preview | codex | strongest, high | ready | `tasks/UI-11-pf2e-levelup-and-builder.md` |
@@ -116,6 +116,8 @@ Accepted as a design checkpoint. Notes:
 
 Newest first. One plain line per handoff: who, what, what's next.
 
+- 2026-10-15 Claude: checked UI-08 in the browser: the PF2e tracker now puts combat first, the setup panel opens and closes on its own as the fight starts and ends, keyboard shortcuts still work, and on a phone every row button is reachable by scrolling the table. Cosmere is unchanged. Accepted. Next: Codex commits and merges after CI, then UI-09.
+- 2026-10-15 Codex: built UI-08's PF2e combat-first tracker, live empty/populated setup disclosure and focusable phone scroll region without changing Cosmere or D&D; 134 focused checks pass, 21 skip and all 107 templates parse. Next: Claude reviews the diff and checks 1440px and 375px in the browser.
 - 2026-10-15 Claude: checked UI-07 in the browser: the PF2e generators (all 19 cards, pins, Rapid Fire, filters, reroll all) and loot page (form beside history, awards deposit to the sheet, delete only removes the log) work on desktop and phone. Accepted. Next: Codex deletes a stray test folder, commits, merges after CI, then UI-08.
 - 2026-10-15 Codex: built UI-07 PF2e generators A and loot ledger B, preserved their mechanics and isolated PF2e routes from Cosmere and D&D; 257 focused tests pass and all 107 templates parse. Next: Claude reviews both pages and checks them at 1440px and 375px.
 - 2026-10-15 Codex: fixed UI-06 multi-topic search so every match is visible in All and clearing restores the prior topic; all 55 focused tests and 107 template parses pass. Next: UI-07 after UI-06 CI and merge.
