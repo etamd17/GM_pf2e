@@ -85,6 +85,7 @@ def stack():
     s = Stack()
     s.db, s.app, s.host, s.service, s.hub = db, app, host, service, service.hub
     s.advance_clock = lambda delta: offset.__setitem__("by", offset["by"] + delta)
+    s.now = lambda: datetime.now(timezone.utc) + offset["by"]
     # Every server emit, in order, readable even after a connection is closed.
     s.sent = []
     real_emit = service.hub.emit

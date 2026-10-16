@@ -45,6 +45,8 @@ import hashlib
 import hmac
 from collections.abc import Callable
 from dataclasses import dataclass
+import threading
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Protocol
 
@@ -62,14 +64,63 @@ from vtt.storage.models import VttTableGrant
 
 NAMESPACE = "/vtt"
 TABLE_COOKIE = "vtt_table"
-# Section 10: each connected table is rechecked in PostgreSQL at least every 30 s.
-HEARTBEAT_SECONDS = 15
-# When storage cannot be checked, a table whose last successful verification is
-# older than this is ended anyway (fail closed). With the 15 s interval the
-# second consecutive failed sweep ends it, inside the 30 s bound.
-UNVERIFIED_LIMIT = timedelta(seconds=25)
-# Bound the sweep's own database waits so a hung query cannot stall it.
-SWEEP_STATEMENT_TIMEOUT_MS = 5000
+# Section 10: no connected table may go more than AUTH_BOUND without its grant
+# being confirmed in storage, whatever storage is doing. The numbers are chosen so
+# the bound holds by construction (handoffs 035 and 037):
+#
+# - sweeps START on a fixed cadence of HEARTBEAT_SECONDS (a slow sweep does not
+#   push the next one back);
+# - the storage read is abandoned after VERIFY_TIMEOUT_SECONDS, however it is
+#   stuck (slow query, lock, or waiting for a connection);
+# - a successful read stamps verified_at with the time the read STARTED, and a
+#   failed read measures age AFTER it failed;
+# - after a failed read, a table unverified for UNVERIFIED_LIMIT is ended.
+#
+# Last good read starts at S. The sweep at S + H may fail as late as S + H + V
+# (15 s, under the limit: one failed sweep is tolerated). The sweep at S + 2H
+# fails no later than S + 2H + V = 25 s with age >= 20 s, so the table is ended
+# inside AUTH_BOUND. A test pins these inequalities.
+AUTH_BOUND = timedelta(seconds=30)
+HEARTBEAT_SECONDS = 10
+VERIFY_TIMEOUT_SECONDS = 5.0
+UNVERIFIED_LIMIT = timedelta(seconds=20)
+# The database's own waits stay inside the read timeout.
+SWEEP_STATEMENT_TIMEOUT_MS = 4000
+
+
+class VerifyTimeout(Exception):
+    """The storage read did not finish within VERIFY_TIMEOUT_SECONDS."""
+
+
+def run_bounded(fn, timeout: float):
+    """Run ``fn`` on a worker and wait at most ``timeout`` seconds. Raises
+    VerifyTimeout (the worker is left to finish on its own; its result is
+    discarded) or whatever ``fn`` raised."""
+    done = threading.Event()
+    box: dict = {}
+
+    def target():
+        try:
+            box["value"] = fn()
+        except BaseException as error:   # handed back to the caller
+            box["error"] = error
+        finally:
+            done.set()
+
+    worker = threading.Thread(target=target, name="vtt-table-verify", daemon=True)
+    worker.start()
+    if not done.wait(timeout):
+        raise VerifyTimeout(worker)
+    if "error" in box:
+        raise box["error"]
+    return box["value"]
+
+
+def next_start(scheduled: float, now: float, interval: float) -> float:
+    """The next sweep start on a fixed cadence. A sweep that ran long does not
+    push the cadence back; one that fell a whole interval behind runs at once."""
+    upcoming = scheduled + interval
+    return upcoming if upcoming > now else now
 
 
 class VttHost(Protocol):
@@ -150,7 +201,8 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
             raise ConnectionRefusedError(_rejection("session-ended"))
         return Principal(kind="member", id=user_id)
 
-    sweep_stats = {"unverifiable": 0, "end_errors": 0}
+    sweep_stats = {"unverifiable": 0, "end_errors": 0, "timeouts": 0, "loop_errors": 0}
+    verifying = {"worker": None}
 
     def sweep(campaign_id: str | None = None) -> int:
         """Recheck connected table principals (one campaign, or all) and end each
@@ -160,24 +212,37 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
                   if p.kind == "table" and (campaign_id is None or p.campaign_id == campaign_id)]
         if not tables:
             return 0
-        current = clock()
+        started = clock()
         try:
-            failing = verify(tables, current)
-        except Exception:
-            # Storage cannot be checked (handoff 035). Fail closed on what is known
-            # locally: a grant past its expiry, or one not verified within the
-            # limit. Nothing here waits for storage to come back.
+            if verifying["worker"] is not None and verifying["worker"].is_alive():
+                # The last read is still stuck: do not stack another on it.
+                raise VerifyTimeout(verifying["worker"])
+            failing, passing = run_bounded(lambda: verify(tables, started), VERIFY_TIMEOUT_SECONDS)
+        except Exception as error:
+            if isinstance(error, VerifyTimeout):
+                verifying["worker"] = error.args[0]
+                sweep_stats["timeouts"] += 1
+            # Storage cannot be checked (handoffs 035, 037). Fail closed on what
+            # is known locally, measured NOW, after the failed read: a grant past
+            # its expiry, or one not verified within the limit.
             sweep_stats["unverifiable"] += 1
+            now = clock()
             failing = [sid for sid, p in tables
-                       if (p.expires_at is not None and p.expires_at <= current)
-                       or p.verified_at is None or current - p.verified_at >= UNVERIFIED_LIMIT]
+                       if (p.expires_at is not None and p.expires_at <= now)
+                       or p.verified_at is None or now - p.verified_at >= UNVERIFIED_LIMIT]
+        else:
+            # Only a read that finished in time renews anything, and it renews
+            # to when it started.
+            for p, expires_at in passing:
+                p.verified_at, p.expires_at = started, expires_at
         for sid in failing:
             end_one(sid)
         return len(failing)
 
-    def verify(tables, current) -> list[str]:
-        """One bounded read of every listed table's grant. Returns the failing
-        sids and stamps the rest as verified now. Raises if storage fails."""
+    def verify(tables, current):
+        """Read every listed table's grant. Returns (failing sids, [(principal,
+        expires_at)] that passed); stamps nothing itself, so a read abandoned
+        by the timeout can never renew a table. Raises if storage fails."""
         with db.session() as session:
             if session.get_bind().dialect.name == "postgresql":
                 session.execute(text(f"SET LOCAL statement_timeout = '{SWEEP_STATEMENT_TIMEOUT_MS}ms'"))
@@ -189,9 +254,7 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
                     passing.append((p, G.utc(grant.expires_at)))
                 else:
                     failing.append(sid)
-        for p, expires_at in passing:
-            p.verified_at, p.expires_at = current, expires_at
-        return failing
+        return failing, passing
 
     def end_one(sid: str) -> None:
         """End one connection; a failure here never stops the rest of the sweep
@@ -207,12 +270,14 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
             sweep_stats["end_errors"] += 1
 
     def heartbeat_loop():
+        scheduled = time.monotonic() + HEARTBEAT_SECONDS
         while True:
-            socketio.sleep(HEARTBEAT_SECONDS)
+            socketio.sleep(max(0.0, scheduled - time.monotonic()))
+            scheduled = next_start(scheduled, time.monotonic(), HEARTBEAT_SECONDS)
             try:
                 sweep(None)
-            except Exception:       # a database blip must not stop the heartbeat
-                pass
+            except Exception:       # nothing may stop the heartbeat
+                sweep_stats["loop_errors"] += 1
 
     if start_heartbeat:
         socketio.start_background_task(heartbeat_loop)

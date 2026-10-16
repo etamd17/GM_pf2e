@@ -315,12 +315,29 @@ def test_the_rate_limiter_does_not_grow_without_bound():
     assert len(window._events) == 1
 
 
-# --- the heartbeat when storage or a transport fails (handoff 035) --------------------------
+# --- the heartbeat when storage or a transport fails (handoffs 035, 037) ---------------------
+# Clock-driven: the stack clock is real time plus an offset the tests move. A slow
+# read is modelled by advancing that clock inside the read itself.
 
-def _storage_down(monkeypatch):
+H = timedelta(seconds=socket_module.HEARTBEAT_SECONDS)
+
+
+def _storage_down(monkeypatch, stack=None, takes=timedelta(0)):
     def broken(*_args, **_kwargs):
+        if stack is not None and takes:
+            stack.advance_clock(takes)          # time spent waiting before the failure
         raise OSError("database unreachable")
     monkeypatch.setattr(G, "grant_status", broken)
+
+
+def test_the_constants_hold_the_thirty_second_bound_by_construction():
+    v = timedelta(seconds=socket_module.VERIFY_TIMEOUT_SECONDS)
+    limit, bound = socket_module.UNVERIFIED_LIMIT, socket_module.AUTH_BOUND
+    assert bound <= timedelta(seconds=30)
+    assert H + v < limit                        # one slow failed sweep is tolerated
+    assert limit <= 2 * H                       # the second sweep always sees the limit passed
+    assert 2 * H + v <= bound                   # and has finished, however slow, inside the bound
+    assert socket_module.SWEEP_STATEMENT_TIMEOUT_MS / 1000 < socket_module.VERIFY_TIMEOUT_SECONDS
 
 
 def test_an_expired_table_is_ended_even_while_storage_cannot_be_checked(stack, monkeypatch):
@@ -330,43 +347,107 @@ def test_an_expired_table_is_ended_even_while_storage_cannot_be_checked(stack, m
     idle = stack.table_client(pair(stack))                  # connected, never subscribed
     stack.advance_clock(G.GRANT_LIFETIME + timedelta(seconds=1))
     _storage_down(monkeypatch)
-    assert stack.service.heartbeat() == 2                   # one failed sweep is enough: expiry is known
+    assert stack.service.heartbeat() == 2                   # one failed sweep: expiry is known locally
     _revoked_and_closed(stack, subscribed, sub)
     assert not idle.is_connected(NAMESPACE)
     assert stack.service.sweep_stats["unverifiable"] == 1
 
 
-def test_an_unseen_revocation_is_bounded_while_storage_stays_down(stack, monkeypatch):
+def test_slow_failing_reads_still_end_an_unseen_revocation_inside_thirty_seconds(stack, monkeypatch):
+    # Codex's 037 case: each read fails only after the full read timeout.
     seed_scene(stack.db)
     subscribed, _ = subscribe_table(stack, pair(stack))
     received(subscribed)
     idle = stack.table_client(pair(stack))
     with stack.db.transaction() as session:                 # revoked behind the hub's back
         G.revoke_all(session, "camp_a")
-    _storage_down(monkeypatch)
-    stack.advance_clock(timedelta(seconds=socket_module.HEARTBEAT_SECONDS))
-    assert stack.service.heartbeat() == 0                   # first failed sweep: still inside the limit
+    slow = timedelta(seconds=socket_module.VERIFY_TIMEOUT_SECONDS)
+    _storage_down(monkeypatch, stack, takes=slow)
+    elapsed = timedelta(0)
+    stack.advance_clock(H); elapsed += H
+    assert stack.service.heartbeat() == 0                   # fails at 15 s: tolerated once
+    elapsed += slow
     assert subscribed.is_connected(NAMESPACE) and idle.is_connected(NAMESPACE)
-    stack.advance_clock(timedelta(seconds=socket_module.HEARTBEAT_SECONDS))
-    assert stack.service.heartbeat() == 2                   # second: 30 s unverified, ended
+    stack.advance_clock(2 * H - elapsed); elapsed = 2 * H   # the cadence does not drift
+    assert stack.service.heartbeat() == 2                   # fails at 25 s: ended
+    elapsed += slow
+    assert elapsed <= socket_module.AUTH_BOUND
     assert not subscribed.is_connected(NAMESPACE) and not idle.is_connected(NAMESPACE)
-    assert socket_module.HEARTBEAT_SECONDS * 2 <= 30
-    assert socket_module.HEARTBEAT_SECONDS < socket_module.UNVERIFIED_LIMIT.total_seconds() <= 30
 
 
-def test_a_successful_sweep_renews_verification(stack, monkeypatch):
+def test_a_stalled_read_is_abandoned_and_never_renews(stack, monkeypatch):
+    # Connection acquisition (or anything else) hangs: the sweep stops waiting
+    # after the read timeout, does not stack a second read on the stuck one, and
+    # the stuck read's late answer renews nothing.
     seed_scene(stack.db)
     table, _ = subscribe_table(stack, pair(stack))
     received(table)
-    stack.advance_clock(timedelta(seconds=20))
-    assert stack.service.heartbeat() == 0                   # storage up: verified now
+    principal = next(p for p in stack.service.principals.values() if p.kind == "table")
+    verified = principal.verified_at
+    release = __import__("threading").Event()
+    real_status = G.grant_status
+
+    def stalled(*args, **kwargs):
+        release.wait(10)
+        return real_status(*args, **kwargs)
+
+    monkeypatch.setattr(G, "grant_status", stalled)
+    monkeypatch.setattr(socket_module, "VERIFY_TIMEOUT_SECONDS", 0.2)
+    try:
+        stack.advance_clock(H)
+        assert stack.service.heartbeat() == 0               # abandoned at the timeout, tolerated
+        assert stack.service.sweep_stats["timeouts"] == 1 and table.is_connected(NAMESPACE)
+        stack.advance_clock(H)
+        assert stack.service.heartbeat() == 1               # still stuck: no new read, ended
+        assert stack.service.sweep_stats["timeouts"] == 2
+        assert not table.is_connected(NAMESPACE)
+    finally:
+        release.set()                                       # the stuck read finishes late
+    __import__("time").sleep(0.2)
+    assert principal.verified_at == verified                # and renewed nothing
+
+
+def test_a_successful_sweep_renews_verification_to_when_its_read_started(stack, monkeypatch):
+    seed_scene(stack.db)
+    table, _ = subscribe_table(stack, pair(stack))
+    received(table)
+    principal = next(p for p in stack.service.principals.values() if p.kind == "table")
+    real_status = G.grant_status
+
+    def slow_ok(*args, **kwargs):
+        stack.advance_clock(timedelta(seconds=3))
+        return real_status(*args, **kwargs)
+
+    stack.advance_clock(H)
+    read_start = stack.now()
+    monkeypatch.setattr(G, "grant_status", slow_ok)
+    assert stack.service.heartbeat() == 0
+    monkeypatch.setattr(G, "grant_status", real_status)
+    # stamped at the read's start, not after the 3 s it took
+    assert read_start <= principal.verified_at < read_start + timedelta(seconds=1)
+    assert stack.now() - principal.verified_at >= timedelta(seconds=3)
     _storage_down(monkeypatch)
-    stack.advance_clock(timedelta(seconds=20))
-    assert stack.service.heartbeat() == 0                   # 20 s since the last good check
-    assert table.is_connected(NAMESPACE)
-    stack.advance_clock(timedelta(seconds=10))
-    assert stack.service.heartbeat() == 1                   # 30 s: ended
-    assert not table.is_connected(NAMESPACE)
+    stack.advance_clock(H)
+    assert stack.service.heartbeat() == 0 and table.is_connected(NAMESPACE)
+    stack.advance_clock(H)
+    assert stack.service.heartbeat() == 1 and not table.is_connected(NAMESPACE)
+
+
+def test_the_cadence_is_fixed_and_a_slow_sweep_does_not_push_it_back():
+    nxt = socket_module.next_start
+    assert nxt(100.0, 103.0, 10.0) == 110.0                 # sweep took 3 s: next still at 110
+    assert nxt(100.0, 109.9, 10.0) == 110.0
+    assert nxt(100.0, 115.0, 10.0) == 115.0                 # fell behind: run at once
+
+
+def test_run_bounded_returns_raises_and_times_out():
+    assert socket_module.run_bounded(lambda: 7, 1.0) == 7
+    with pytest.raises(KeyError):
+        socket_module.run_bounded(lambda: {}["x"], 1.0)
+    gate = __import__("threading").Event()
+    with pytest.raises(socket_module.VerifyTimeout):
+        socket_module.run_bounded(lambda: gate.wait(5), 0.05)
+    gate.set()
 
 
 def test_failed_terminal_sends_do_not_stop_the_sweep(stack):

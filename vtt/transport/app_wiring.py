@@ -61,6 +61,13 @@ def init_from_app(app, *, environ=None) -> VttService | None:
     raw = secret.encode("utf-8") if isinstance(secret, str) else secret
     grant_key = hmac.new(raw, b"vtt-table-grant-v1", hashlib.sha256).digest()
     origins = [o.strip() for o in env.get("VTT_ALLOWED_ORIGINS", "").split(",") if o.strip()] or None
-    return init_vtt(app, db=Database.from_env("DATABASE_URL", environ=env), host=AppHost(),
+    # The VTT's own engine: waiting for a pooled connection, and opening a new
+    # one, are both bounded, so the table heartbeat's storage read cannot stall
+    # on them (handoff 037). The read is also abandoned after its own timeout.
+    url = env.get("DATABASE_URL", "")
+    options: dict[str, Any] = {"pool_timeout": 4}
+    if url.startswith(("postgres://", "postgresql")):
+        options["connect_args"] = {"connect_timeout": 4}
+    return init_vtt(app, db=Database.from_env("DATABASE_URL", environ=env, engine_options=options), host=AppHost(),
                     grant_key=grant_key, token_key=TokenKey.derive(secret), allowed_origins=origins,
                     async_mode=env.get("VTT_ASYNC_MODE") or None)
