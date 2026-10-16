@@ -67,7 +67,8 @@ def make_pages_blueprint(*, db: Database, host, dist_dir: Path) -> Blueprint:
     @bp.get("/vtt/gm")
     def gm_page():
         campaign_id = request.args.get("campaignId")
-        if gm_of(campaign_id) is None:
+        member_id = gm_of(campaign_id)
+        if member_id is None:
             abort(403)
         html = built("index.html")
         if html is None:
@@ -82,7 +83,11 @@ def make_pages_blueprint(*, db: Database, host, dist_dir: Path) -> Blueprint:
             scene_id = pointer.scene_id
         else:
             scene_id = ids[0] if ids else None
-        boot = _boot_script({"campaignId": campaign_id, "sceneId": scene_id, "csrf": host.csrf_token()})
+        boot = _boot_script({"campaignId": campaign_id, "sceneId": scene_id, "csrf": host.csrf_token(),
+                             # The stable member id: commands saved when a session ends
+                             # are resent only by the same member (handoff 043). Not
+                             # the CSRF token, which changes on reauthentication.
+                             "memberId": member_id})
         response = Response(html.replace("</head>", boot + "</head>", 1), mimetype="text/html")
         response.headers["Cache-Control"] = "no-store"
         return response

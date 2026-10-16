@@ -17,6 +17,10 @@ interface WireEntity {
   [field: string]: unknown;
 }
 
+const DOOR_STATES = ['none', 'open', 'closed', 'locked', 'secret'] as const;
+const isDoorState = (v: unknown): v is (typeof DOOR_STATES)[number] =>
+  typeof v === 'string' && (DOOR_STATES as readonly string[]).includes(v);
+
 const num = (v: unknown, fallback = 0): number => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
 
 export interface AdaptCache {
@@ -87,6 +91,7 @@ export function adaptEntities(entities: ReadonlyMap<string, WireEntity>, cache: 
         x2: num(e.x2),
         y2: num(e.y2),
         kind: e.doorState === 'none' || e.doorState === undefined ? 'wall' : 'door',
+        ...(isDoorState(e.doorState) ? { doorState: e.doorState } : {}),
       };
       cache.walls.set(e.id, { version: e.version, wall });
       walls.push(wall);

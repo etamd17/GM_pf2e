@@ -26,6 +26,8 @@ export interface RenderWall {
   readonly x2: number;
   readonly y2: number;
   readonly kind: 'wall' | 'door';
+  // GM only: which kind of door (walls.ts draws each differently).
+  readonly doorState?: 'none' | 'open' | 'closed' | 'locked' | 'secret';
 }
 
 export interface RenderLight {

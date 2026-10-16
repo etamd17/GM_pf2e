@@ -28,6 +28,41 @@ export interface GmLive {
 // What a pending command looks like on screen until its frame arrives.
 export type OverlayData = TokenOverlay | null;
 
+// One saved slot per tab. The envelope names who saved it; a reload by anyone
+// else (another account signing in on this tab) sends nothing, because the
+// server's receipts are per principal and the commands would run anew as the
+// new member (handoff 043).
+export const PARKED_KEY = 'vtt.parked';
+
+interface ParkedEnvelope {
+  v: 1;
+  memberId: string;
+  campaignId: string;
+  commands: Array<Record<string, unknown>>;
+}
+
+export function parkEnvelope(boot: GmBoot, commands: Array<Record<string, unknown>>): ParkedEnvelope {
+  return { v: 1, memberId: boot.memberId, campaignId: boot.campaignId, commands };
+}
+
+export function adoptableCommands(boot: GmBoot, saved: string | null): Array<Record<string, unknown>> {
+  if (!saved) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(saved);
+  } catch {
+    return [];
+  }
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return []; // unbound legacy form
+  const envelope = parsed as Partial<ParkedEnvelope>;
+  if (envelope.v !== 1 || envelope.memberId !== boot.memberId || envelope.campaignId !== boot.campaignId) return [];
+  if (!Array.isArray(envelope.commands)) return [];
+  return envelope.commands.filter(
+    (c): c is Record<string, unknown> =>
+      c !== null && typeof c === 'object' && (c as { campaignId?: unknown }).campaignId === boot.campaignId,
+  );
+}
+
 export function startGm(boot: GmBoot): GmLive {
   const cache = newAdaptCache();
   const sinkTransport = {
@@ -48,7 +83,7 @@ export function startGm(boot: GmBoot): GmLive {
     useEntities.getState().clear();
     baseSeal();
   };
-  const parkedKey = `vtt.parked.${boot.campaignId}`;
+  const parkedKey = PARKED_KEY;
   const baseStatus = sink.setStatus;
   sink.setStatus = (status) => {
     // The session ended: keep what has not been confirmed, so the reload after
@@ -60,7 +95,7 @@ export function startGm(boot: GmBoot): GmLive {
   function park(commands: Array<Record<string, unknown>>) {
     if (commands.length === 0) return;
     try {
-      sessionStorage.setItem(parkedKey, JSON.stringify(commands));
+      sessionStorage.setItem(parkedKey, JSON.stringify(parkEnvelope(boot, commands)));
     } catch {
       /* storage unavailable: nothing to retry after the reload */
     }
@@ -90,14 +125,12 @@ export function startGm(boot: GmBoot): GmLive {
     },
     onPendingChange: (pending) => useCommands.getState().setPending(pending),
   });
-  // Commands saved when the last session ended on this page.
+  // Commands saved when the last session ended on this page: resent only by
+  // the same member in the same campaign. Anything else is discarded unsent.
   try {
     const saved = sessionStorage.getItem(parkedKey);
     sessionStorage.removeItem(parkedKey);
-    const parsed: unknown = saved ? JSON.parse(saved) : [];
-    if (Array.isArray(parsed)) {
-      for (const command of parsed) if (command && typeof command === 'object') queue.adopt(command as Record<string, unknown>);
-    }
+    for (const command of adoptableCommands(boot, saved)) queue.adopt(command);
   } catch {
     /* nothing saved, or storage unavailable */
   }

@@ -41,7 +41,7 @@ def test_the_gm_page_carries_its_boot_data_and_is_never_cached(stack):
     response = get(stack, "/vtt/gm?campaignId=camp_a")
     assert response.status_code == 200 and response.headers["Cache-Control"] == "no-store"
     assert boot_of(response) == {"campaignId": "camp_a", "sceneId": "scene_a",
-                                 "csrf": "csrf-token-for-tests-000000000000"}
+                                 "csrf": "csrf-token-for-tests-000000000000", "memberId": "user_gm"}
     assert '<div id="root"></div>' in response.get_data(as_text=True)
 
 

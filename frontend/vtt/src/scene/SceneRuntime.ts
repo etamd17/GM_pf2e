@@ -20,6 +20,7 @@ import {
   type ZoomLimits,
 } from './viewport';
 import { hitTest, snapTokenCentre, type Hit, type Point } from './interaction';
+import { WALL_STYLES, wallPlan } from './walls';
 import { CANVAS_LABEL_FONT, ensureCanvasFont, uiFont } from '../ui/fonts';
 import type { RendererStatus } from '../state/connection';
 
@@ -61,7 +62,6 @@ const BG_COLOR = 0x0c0a07;
 const SCENE_COLOR = 0x1d1a14;
 const GRID_COLOR = 0xc9a34e;
 const WALL_COLOR = 0xede4cf;
-const DOOR_COLOR = 0xc9a34e;
 const KEY_PAN_PX = 64;
 const DRAG_THRESHOLD_PX = 4;
 const SELECT_COLOR = 0xede4cf;
@@ -440,7 +440,14 @@ export class SceneRuntime {
     this.drag = null;
     if (e.type !== 'pointerup') {
       // Cancelled: a dragged token goes back to where the projection has it.
-      if (drag.token && this.scene) this.syncTokens(this.scene, true);
+      // Rendering is event-driven, so the restored position (and the selection
+      // ring that follows it) must be redrawn and a frame requested, or the
+      // token stays painted where the drag left it (handoff 043).
+      if (drag.token && this.scene) {
+        this.syncTokens(this.scene, true);
+        this.drawOverlay();
+        this.scheduler.requestRender();
+      }
       return;
     }
     const interaction = this.options.interaction;
@@ -549,14 +556,12 @@ export class SceneRuntime {
   private drawWalls(scene: RenderScene): void {
     if (!this.layer('walls')) return;
     const g = new Graphics();
-    for (const w of scene.walls) {
-      if (w.kind === 'wall') g.moveTo(w.x1, w.y1).lineTo(w.x2, w.y2);
+    // One stroke per door state (walls.ts): open, closed, locked and secret
+    // doors each look different, so a change in the inspector shows on the map.
+    for (const { state, segments } of wallPlan(scene.walls)) {
+      for (const [x1, y1, x2, y2] of segments) g.moveTo(x1, y1).lineTo(x2, y2);
+      g.stroke(WALL_STYLES[state]);
     }
-    g.stroke({ width: 4, color: WALL_COLOR, alpha: 0.85, cap: 'round' });
-    for (const w of scene.walls) {
-      if (w.kind === 'door') g.moveTo(w.x1, w.y1).lineTo(w.x2, w.y2);
-    }
-    g.stroke({ width: 6, color: DOOR_COLOR, alpha: 0.95, cap: 'butt' });
     this.replaceLayerContent('walls', g);
   }
 
