@@ -81,6 +81,15 @@ def stack():
 
     s = Stack()
     s.db, s.app, s.host, s.service, s.hub = db, app, host, service, service.hub
+    # Every server emit, in order, readable even after a connection is closed.
+    s.sent = []
+    real_emit = service.hub.emit
+
+    def recording_emit(sid, event, data):
+        real_emit(sid, event, data)
+        s.sent.append((sid, event, data))
+
+    service.hub.emit = recording_emit
 
     def gm_client(csrf=CSRF):
         return service.socketio.test_client(app, namespace=NAMESPACE, auth={"csrf": csrf})

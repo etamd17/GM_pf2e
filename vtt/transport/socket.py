@@ -91,7 +91,11 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
         return (grant is not None and grant.campaign_id == campaign_id and grant.revoked_at is None
                 and _utc(grant.expires_at) > clock())
 
-    hub = Hub(db, registry, token_key, emit, access_check)
+    def close(sid: str) -> None:
+        principals.pop(sid, None)
+        socketio.server.disconnect(sid, namespace=NAMESPACE)
+
+    hub = Hub(db, registry, token_key, emit, access_check, disconnect=close)
 
     def authenticate(auth: Any) -> Principal:
         credential = request.cookies.get(TABLE_COOKIE)

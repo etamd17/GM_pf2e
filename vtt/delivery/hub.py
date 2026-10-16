@@ -35,7 +35,7 @@ from sqlalchemy import select, tuple_
 
 from core.persistence.database import Database
 from vtt.projection import serializers as S
-from vtt.protocol import ContractRegistry
+from vtt.protocol import ContractRegistry, ProtocolValidationError
 from vtt.storage.models import VttEntity, VttScene, VttTablePointer
 from vtt.storage.stream import committed_position, outbox_after, snapshot_transaction
 
@@ -69,23 +69,32 @@ class Subscription:
 
 
 class AccessLost(Exception):
-    """The recheck inside the snapshot transaction failed."""
+    """The access recheck failed (membership removed, grant revoked or expired)."""
+
+
+# A recovery that itself needs recovering this many times is ended instead:
+# bad canonical data must not make the server loop.
+MAX_RECOVERY_DEPTH = 2
 
 
 class Hub:
     """``access_check(session, principal, audience, campaign_id) -> bool`` is the
-    host's recheck, run inside the snapshot transaction."""
+    host's recheck. It runs inside the snapshot transaction and again before
+    every live delivery. ``disconnect(sid)`` closes a connection the hub has
+    ended (the transport supplies it)."""
 
     def __init__(self, db: Database, registry: ContractRegistry, key: S.TokenKey, emit: Emit,
-                 access_check: Callable[..., bool]):
+                 access_check: Callable[..., bool], disconnect: Callable[[str], None] = lambda sid: None):
         self.db = db
         self.registry = registry
         self.key = key
         self.emit = emit
         self.access_check = access_check
+        self.disconnect = disconnect
         self._by_sid: dict[str, Subscription] = {}
         self._lock = threading.Lock()
-        self.stats = {"snapshots": 0, "patches": 0, "suppressed": 0, "resyncs": 0}
+        self.stats = {"snapshots": 0, "patches": 0, "suppressed": 0, "resyncs": 0, "invalid": 0,
+                      "delivery_errors": 0, "ended": 0}
 
     # --- subscribe -------------------------------------------------------------------------
 
@@ -93,40 +102,15 @@ class Hub:
                   scene_id: str | None) -> Subscription:
         """Run the section 5 subscribe. Raises AccessLost (the transport answers with a
         bootstrap rejection); emits the snapshot, then replays, then goes live."""
-        sub = Subscription(sid=sid, subscription_id="sub_" + secrets.token_urlsafe(18), audience=audience,
-                           principal=principal, campaign_id=campaign_id, scene_id=scene_id)
-        with self._lock:
-            old = self._by_sid.get(sid)
-            self._by_sid[sid] = sub     # one active projection subscription per connection
-        if old is not None:
-            old.live = False
+        sub = self._new_subscription(sid, principal, audience, campaign_id, scene_id)
         with sub.lock:
-            with snapshot_transaction(self.db) as session:
-                if not self.access_check(session, principal, audience, campaign_id):
-                    self._drop(sid, sub)
-                    raise AccessLost()
-                if audience == "table":
-                    pointer = session.get(VttTablePointer, campaign_id)
-                    sub.scene_id = pointer.scene_id if pointer else None
-                scene = self._scene(session, campaign_id, sub.scene_id)
-                if audience == "gm" and sub.scene_id is not None and scene is None:
-                    self._drop(sid, sub)
-                    raise AccessLost()
-                rows = self._rows(session, campaign_id, sub.scene_id) if scene is not None else []
-                entities = (S.gm_entities(self.key, scene, rows) if audience == "gm"
-                            else S.table_entities(self.key, scene, rows))
-                if audience == "table" and not entities:
-                    sub.scene_id = None     # nothing published: the table sees no scene
-                cursor = committed_position(session, campaign_id)
-            frame = S.snapshot_frame(audience, sub.subscription_id, campaign_id, sub.scene_id,
-                                     self._principal_payload(principal, audience), entities)
-            self.registry.validate(audience, frame)
-            sub.cursor = cursor
-            sub.sent = {(e["kind"], e["id"]): e["version"] for e in entities}
-            sub.seq = 0
-            self.emit(sid, "vtt.snapshot", frame)
-            self.stats["snapshots"] += 1
-            sub.live = True
+            self._register(sub)
+            try:
+                self._snapshot_locked(sub)
+            except Exception:
+                sub.live = False
+                self._drop(sid, sub)
+                raise
             self._deliver_locked(sub)
         return sub
 
@@ -139,6 +123,49 @@ class Hub:
     def subscription(self, sid: str) -> Subscription | None:
         return self._by_sid.get(sid)
 
+    def _new_subscription(self, sid, principal, audience, campaign_id, scene_id) -> Subscription:
+        return Subscription(sid=sid, subscription_id="sub_" + secrets.token_urlsafe(18), audience=audience,
+                            principal=principal, campaign_id=campaign_id, scene_id=scene_id)
+
+    def _register(self, sub: Subscription) -> None:
+        with self._lock:
+            old = self._by_sid.get(sub.sid)
+            self._by_sid[sub.sid] = sub     # one active projection subscription per connection
+        if old is not None and old is not sub:
+            old.live = False
+
+    def _snapshot_locked(self, sub: Subscription) -> None:
+        """Section 5 steps 3-4 for a registered subscription: one consistent read
+        (recheck access, project, read the cursor), validate, emit. The
+        subscription's cursor, sent record and live flag change only after the
+        snapshot has been emitted. Raises AccessLost after dropping it."""
+        with snapshot_transaction(self.db) as session:
+            if not self.access_check(session, sub.principal, sub.audience, sub.campaign_id):
+                self._drop(sub.sid, sub)
+                raise AccessLost()
+            if sub.audience == "table":
+                pointer = session.get(VttTablePointer, sub.campaign_id)
+                sub.scene_id = pointer.scene_id if pointer else None
+            scene = self._scene(session, sub.campaign_id, sub.scene_id)
+            if sub.audience == "gm" and sub.scene_id is not None and scene is None:
+                self._drop(sub.sid, sub)
+                raise AccessLost()
+            rows = self._rows(session, sub.campaign_id, sub.scene_id) if scene is not None else []
+            entities = (S.gm_entities(self.key, scene, rows) if sub.audience == "gm"
+                        else S.table_entities(self.key, scene, rows))
+            if sub.audience == "table" and not entities:
+                sub.scene_id = None     # nothing published: the table sees no scene
+            cursor = committed_position(session, sub.campaign_id)
+        frame = S.snapshot_frame(sub.audience, sub.subscription_id, sub.campaign_id, sub.scene_id,
+                                 self._principal_payload(sub.principal, sub.audience), entities)
+        self.registry.validate(sub.audience, frame)
+        self.emit(sub.sid, "vtt.snapshot", frame)
+        sub.cursor = cursor
+        sub.sent = {(e["kind"], e["id"]): e["version"] for e in entities}
+        sub.seq = 0
+        sub.live = True
+        self.stats["snapshots"] += 1
+
     # --- delivery ----------------------------------------------------------------------------
 
     def notify(self, campaign_id: str) -> None:
@@ -149,18 +176,38 @@ class Hub:
             with sub.lock:
                 self._deliver_locked(sub)
 
-    def _deliver_locked(self, sub: Subscription) -> None:
+    def _deliver_locked(self, sub: Subscription, depth: int = 0) -> None:
+        """Deliver what committed after ``sub.cursor``. Any failure while projecting,
+        validating, serializing or emitting leaves cursor, seq and sent record
+        untouched and recovers the subscription with a fresh snapshot; it never
+        leaves a live subscription whose record has passed what the client holds."""
         if not sub.live or self._by_sid.get(sub.sid) is not sub:
             return
+        try:
+            self._deliver_once(sub, depth)
+        except Exception as error:
+            if isinstance(error, ProtocolValidationError):
+                self.stats["invalid"] += 1
+            self.stats["delivery_errors"] += 1
+            self._recover(sub, "state-lost", depth)
+
+    def _deliver_once(self, sub: Subscription, depth: int) -> None:
         rows = outbox_after(self.db, sub.campaign_id, sub.cursor, REPLAY_LIMIT + 1)
         if not rows:
             return
+        # Access is rechecked before anything else can leave (ADR-0002 sections
+        # 2 and 10): a removed GM or an expired/revoked table gets nothing more.
+        with self.db.session() as session:
+            allowed = self.access_check(session, sub.principal, sub.audience, sub.campaign_id)
+        if not allowed:
+            self._end(sub)
+            return
         if len(rows) > REPLAY_LIMIT:
-            self._resync(sub, "buffer-overflow")
+            self._recover(sub, "buffer-overflow", depth)
             return
         last = rows[-1].position
         if sub.audience == "table" and any(r.event.get("kind") == "table-pointer" for r in rows):
-            self._resync(sub, "scene-changed")
+            self._recover(sub, "scene-changed", depth)
             return
         keys: set[tuple[str, str]] = set()
         scene_changed = False
@@ -172,31 +219,82 @@ class Hub:
                 scene_changed = True
             elif ev.get("kind") == "entities":
                 keys.update((k, i) for k, i in ev.get("changed", []))
-        sub.cursor = last
         if not keys and not scene_changed:
+            sub.cursor = last           # nothing this subscription can see changed
             return
         diff = self._diff(sub, keys, scene_changed)
         if diff is None:
-            self._resync(sub, "scene-changed")
+            self._recover(sub, "scene-changed", depth)
             return
         upserted, removed, sent_after = diff
         if not upserted and not removed:
+            sub.cursor = last           # invisible change: no frame, no sequence number
             self.stats["suppressed"] += 1
             return
         frame = S.patch_frame(sub.subscription_id, sub.seq + 1, upserted, removed)
-        try:
-            self.registry.validate(sub.audience, frame)
-        except Exception:
-            # A frame the contract refuses is a server bug. Never send it, and
-            # never let this subscription's record drift from what the client
-            # holds: start it again from a fresh snapshot.
-            self.stats["invalid"] = self.stats.get("invalid", 0) + 1
-            self._resync(sub, "state-lost")
-            return
+        self.registry.validate(sub.audience, frame)
         self.emit(sub.sid, "vtt.patch", frame)
+        # Only now has the client been sent the change.
+        sub.cursor = last
         sub.seq += 1
         sub.sent = sent_after
         self.stats["patches"] += 1
+
+    # --- recovery and ending ---------------------------------------------------------------
+
+    def _recover(self, old: Subscription, reason: str, depth: int = 0) -> None:
+        """Recoverable resync (ADR-0002 section 3), completed by the server: retire
+        the old subscription, tell the client which one ended, then subscribe
+        again on the same connection (fresh ID, access recheck, snapshot at seq 0,
+        replay). The accepted client waits for exactly this replacement."""
+        old.live = False
+        self.stats["resyncs"] += 1
+        if depth >= MAX_RECOVERY_DEPTH:
+            self._terminate(old)
+            return
+        message = {"schemaVersion": 1, "subscriptionId": old.subscription_id, "reason": reason}
+        try:
+            self.registry.validate("resync-required", message)
+            self.emit(old.sid, "vtt.resync_required", message)
+        except Exception:
+            self._terminate(old)
+            return
+        scene_id = old.scene_id if old.audience == "gm" else None
+        new = self._new_subscription(old.sid, old.principal, old.audience, old.campaign_id, scene_id)
+        with new.lock:
+            with self._lock:
+                if self._by_sid.get(old.sid) is not old:
+                    return          # the connection subscribed again or went away meanwhile
+                self._by_sid[old.sid] = new
+            try:
+                self._snapshot_locked(new)
+            except AccessLost:
+                self._end(new)
+                return
+            except Exception:
+                self.stats["delivery_errors"] += 1
+                self._terminate(new)
+                return
+            self._deliver_locked(new, depth + 1)
+
+    def _end(self, sub: Subscription) -> None:
+        """Access ended on an established connection: the terminal ``revoked``
+        control (no detail), then close. No replacement is sent."""
+        sub.live = False
+        self._drop(sub.sid, sub)
+        self.stats["ended"] += 1
+        message = {"schemaVersion": 1, "subscriptionId": sub.subscription_id, "reason": "revoked"}
+        try:
+            self.emit(sub.sid, "vtt.resync_required", message)
+        finally:
+            self.disconnect(sub.sid)
+
+    def _terminate(self, sub: Subscription) -> None:
+        """Recovery itself failed: drop the subscription and close the connection.
+        The client sees a lost transport and reconnects through a new subscribe."""
+        sub.live = False
+        self._drop(sub.sid, sub)
+        self.disconnect(sub.sid)
 
     def _diff(self, sub: Subscription, keys: set[tuple[str, str]], scene_changed: bool):
         """Project the named entities now and compare with what this subscription holds.
@@ -237,14 +335,6 @@ class Hub:
                 upserted.append(now)
                 sent_after[key] = now["version"]
         return upserted, removed, sent_after
-
-    def _resync(self, sub: Subscription, reason: str) -> None:
-        message = {"schemaVersion": 1, "subscriptionId": sub.subscription_id, "reason": reason}
-        self.registry.validate("resync-required", message)
-        sub.live = False
-        self._drop(sub.sid, sub)
-        self.emit(sub.sid, "vtt.resync_required", message)
-        self.stats["resyncs"] += 1
 
     # --- helpers ------------------------------------------------------------------------------
 

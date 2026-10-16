@@ -158,34 +158,162 @@ def test_a_commit_before_the_snapshot_is_not_delivered_again(stack):
     assert received(gm, "vtt.patch") == []
 
 
-def test_publishing_another_scene_resyncs_only_the_table(stack):
+def test_publishing_another_scene_resyncs_the_table_and_the_server_sends_the_replacement(stack):
+    # Handoff 025 finding 1: a recoverable resync is completed by the server. The
+    # accepted client waits for the replacement on the same connection; it does
+    # not send another subscribe.
     seed_scene(stack.db)
     W.create_scene(stack.db, "camp_a", "scene_b", name="Docks", published=True)
+    W.upsert_entity(stack.db, "camp_a", "scene_b", "token", "tok_dock", {"x": 10, "y": 10, "label": "Crate"})
     gm, _ = subscribe_gm(stack)
     table, _ = subscribe_table(stack, add_grant(stack.db))
     table_sub = payload(received(table, "vtt.snapshot")[0])["subscriptionId"]
     received(gm)
     W.set_table_pointer(stack.db, "camp_a", "scene_b")
     stack.hub.notify("camp_a")
-    [resync] = [payload(m) for m in received(table, "vtt.resync_required")]
+    messages = received(table)
+    assert [m["name"] for m in messages] == ["vtt.resync_required", "vtt.snapshot"]
+    resync, snap = payload(messages[0]), payload(messages[1])
     REGISTRY.validate("resync-required", resync)
+    REGISTRY.validate("table", snap)
     assert resync == {"schemaVersion": 1, "subscriptionId": table_sub, "reason": "scene-changed"}
+    assert snap["sceneId"] == "scene_b" and snap["seq"] == 0 and snap["subscriptionId"] != table_sub
+    assert keys(snap) == [("scene", "scene_b"), ("token", "tok_dock")]
     assert received(gm) == []
-    # the table resubscribes and gets the new scene under a new subscription
-    table.emit("vtt.subscribe", {"schemaVersion": 1, "audience": "table"}, namespace=NAMESPACE, callback=True)
-    [snap] = [payload(m) for m in received(table, "vtt.snapshot")]
-    assert snap["sceneId"] == "scene_b" and snap["subscriptionId"] != table_sub
+    # live delivery resumes on the replacement subscription
+    W.upsert_entity(stack.db, "camp_a", "scene_b", "token", "tok_dock", {"x": 20, "y": 10, "label": "Crate"})
+    stack.hub.notify("camp_a")
+    [patch] = [payload(m) for m in received(table, "vtt.patch")]
+    assert patch["subscriptionId"] == snap["subscriptionId"] and patch["seq"] == 1
+    assert [e["x"] for e in patch["upserted"]] == [20]
 
 
-def test_falling_too_far_behind_resyncs_with_buffer_overflow(stack, monkeypatch):
+def test_falling_too_far_behind_resyncs_and_the_replacement_has_the_latest_state(stack, monkeypatch):
     seed_scene(stack.db)
     gm, _ = subscribe_gm(stack)
+    old_sub = payload(received(gm, "vtt.snapshot")[0])["subscriptionId"]
     monkeypatch.setattr(hub_module, "REPLAY_LIMIT", 3)
     for x in range(5):
         W.upsert_entity(stack.db, "camp_a", "scene_a", "token", "tok_hero", {"x": 100 + x, "y": 64})
     stack.hub.notify("camp_a")
-    assert [payload(m)["reason"] for m in received(gm, "vtt.resync_required")] == ["buffer-overflow"]
-    assert received(gm, "vtt.patch") == []
+    messages = received(gm)
+    assert [m["name"] for m in messages] == ["vtt.resync_required", "vtt.snapshot"]
+    assert payload(messages[0]) == {"schemaVersion": 1, "subscriptionId": old_sub, "reason": "buffer-overflow"}
+    snap = payload(messages[1])
+    assert snap["subscriptionId"] != old_sub
+    assert next(e for e in snap["entities"] if e["id"] == "tok_hero")["x"] == 104
+
+
+# --- access is rechecked on live delivery (handoff 025 finding 2) ---------------------------
+
+def _set_grant(db, **fields):
+    from vtt.storage.models import VttTableGrant
+    with db.transaction() as session:
+        for grant in session.query(VttTableGrant).all():
+            for name, value in fields.items():
+                setattr(grant, name, value)
+
+
+def _move_hero(db, x):
+    W.upsert_entity(db, "camp_a", "scene_a", "token", "tok_hero",
+                    {"x": x, "y": 64, "label": "Valeros", "color": 1, "controllerIds": ["user_p"]})
+
+
+def _assert_ended(stack, client, sub_id):
+    assert [(e, d) for _, e, d in stack.sent] == [
+        ("vtt.resync_required", {"schemaVersion": 1, "subscriptionId": sub_id, "reason": "revoked"})]
+    assert not client.is_connected(NAMESPACE)
+    assert stack.hub.stats["patches"] == 0 and stack.hub.stats["ended"] == 1
+    assert not stack.hub._by_sid
+    # and a further commit sends nothing anywhere
+    _move_hero(stack.db, 300)
+    stack.hub.notify("camp_a")
+    assert len(stack.sent) == 1
+
+
+def test_a_gm_who_loses_gm_access_gets_no_more_patches(stack):
+    seed_scene(stack.db)
+    gm, _ = subscribe_gm(stack)
+    sub_id = payload(received(gm, "vtt.snapshot")[0])["subscriptionId"]
+    stack.sent.clear()
+    stack.host.gms.clear()
+    _move_hero(stack.db, 128)
+    stack.hub.notify("camp_a")
+    _assert_ended(stack, gm, sub_id)
+
+
+@pytest.mark.parametrize("change", ["expired", "revoked"])
+def test_a_table_whose_grant_ends_gets_no_more_patches(stack, change):
+    from datetime import datetime, timedelta, timezone
+    seed_scene(stack.db)
+    table, _ = subscribe_table(stack, add_grant(stack.db))
+    sub_id = payload(received(table, "vtt.snapshot")[0])["subscriptionId"]
+    stack.sent.clear()
+    now = datetime.now(timezone.utc)
+    _set_grant(stack.db, **({"expires_at": now - timedelta(seconds=1)} if change == "expired"
+                            else {"revoked_at": now}))
+    _move_hero(stack.db, 128)
+    stack.hub.notify("camp_a")
+    _assert_ended(stack, table, sub_id)
+
+
+# --- the cursor moves only with a successful emit (handoff 025 finding 3) ------------------
+
+def test_a_failed_patch_emit_recovers_with_the_committed_state(stack):
+    seed_scene(stack.db)
+    gm, _ = subscribe_gm(stack)
+    old_sub = payload(received(gm, "vtt.snapshot")[0])["subscriptionId"]
+    stack.sent.clear()
+    real_emit = stack.hub.emit
+    failures = {"left": 1}
+
+    def fail_once(sid, event, data):
+        if event == "vtt.patch" and failures["left"]:
+            failures["left"] -= 1
+            raise OSError("transport write failed")
+        real_emit(sid, event, data)
+
+    stack.hub.emit = fail_once
+    _move_hero(stack.db, 128)
+    stack.hub.notify("camp_a")
+    events = [(e, d) for _, e, d in stack.sent]
+    assert [e for e, _ in events] == ["vtt.resync_required", "vtt.snapshot"]
+    assert events[0][1] == {"schemaVersion": 1, "subscriptionId": old_sub, "reason": "state-lost"}
+    snap = events[1][1]
+    assert next(e for e in snap["entities"] if e["id"] == "tok_hero")["x"] == 128   # not lost
+    assert stack.hub.stats["delivery_errors"] == 1
+    # and live delivery continues on the replacement
+    _move_hero(stack.db, 256)
+    stack.hub.notify("camp_a")
+    last = stack.sent[-1]
+    assert last[1] == "vtt.patch" and last[2]["seq"] == 1 and last[2]["subscriptionId"] == snap["subscriptionId"]
+    assert [e["x"] for e in last[2]["upserted"]] == [256]
+
+
+def test_a_projection_failure_never_leaves_a_stale_live_subscription(stack):
+    # Canonical data the serializer cannot project (a token without x). Recovery's
+    # snapshot fails the same way, so the connection is closed, not left live.
+    seed_scene(stack.db)
+    gm, _ = subscribe_gm(stack)
+    stack.sent.clear()
+    W.upsert_entity(stack.db, "camp_a", "scene_a", "token", "tok_hero", {"y": 64, "label": "Broken"})
+    stack.hub.notify("camp_a")
+    assert [e for _, e, _ in stack.sent] == ["vtt.resync_required"]
+    assert stack.hub.stats["delivery_errors"] >= 1 and stack.hub.stats["patches"] == 0
+    assert not stack.hub._by_sid
+    assert not gm.is_connected(NAMESPACE)
+
+
+def test_an_invisible_change_still_moves_the_cursor_without_a_frame(stack):
+    seed_scene(stack.db)
+    table, _ = subscribe_table(stack, add_grant(stack.db))
+    stack.sent.clear()
+    sub = next(iter(stack.hub._by_sid.values()))
+    before = sub.cursor
+    W.upsert_entity(stack.db, "camp_a", "scene_a", "token", "tok_ambush",
+                    {"x": 1, "y": 1, "label": "Hidden Assassin", "color": 2}, hidden=True)
+    stack.hub.notify("camp_a")
+    assert stack.sent == [] and sub.seq == 0 and sub.cursor == before + 1
 
 
 # --- refusal --------------------------------------------------------------------------------
@@ -249,17 +377,19 @@ def test_a_grant_for_another_campaign_never_sees_this_one(stack):
     assert snap["campaignId"] == "camp_b" and snap["entities"] == []
 
 
-def test_a_patch_the_contract_refuses_is_never_sent_and_forces_a_fresh_snapshot(stack):
+def test_a_patch_the_contract_refuses_is_never_sent_and_bad_data_cannot_loop(stack):
     # Canonical data the contract forbids (a control character in a label) is a
-    # server bug: no patch goes out, and the subscription resyncs rather than
-    # drifting from what the client holds. (M2 validates at write time.)
+    # server bug. No patch goes out. Recovery sends state-lost and tries a fresh
+    # snapshot; that snapshot carries the same bad data, so instead of looping the
+    # connection is closed. (M2 validates at write time so this cannot be stored.)
     seed_scene(stack.db)
     gm, _ = subscribe_gm(stack)
     sub_id = payload(received(gm, "vtt.snapshot")[0])["subscriptionId"]
+    stack.sent.clear()
     W.upsert_entity(stack.db, "camp_a", "scene_a", "token", "tok_hero",
                     {"x": 64, "y": 64, "label": "Vale\u0000ros", "color": 1})
     stack.hub.notify("camp_a")
-    messages = received(gm)
-    assert [m["name"] for m in messages] == ["vtt.resync_required"]
-    assert payload(messages[0]) == {"schemaVersion": 1, "subscriptionId": sub_id, "reason": "state-lost"}
+    assert [(e, d.get("reason")) for _, e, d in stack.sent] == [("vtt.resync_required", "state-lost")]
+    assert stack.sent[0][2]["subscriptionId"] == sub_id
     assert stack.hub.stats["invalid"] == 1 and stack.hub.stats["patches"] == 0
+    assert not gm.is_connected(NAMESPACE)
