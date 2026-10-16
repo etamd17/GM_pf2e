@@ -76,10 +76,11 @@ FAKE_TABLE = '<!doctype html><html><head><title>VTT - Table</title></head><body>
 def stack(tmp_path):
     # A fake client build, so page tests never depend on whether dist/ exists.
     dist = tmp_path / "dist"
-    (dist / "assets").mkdir(parents=True)
+    (dist / ".vite").mkdir(parents=True)
     (dist / "index.html").write_text(FAKE_INDEX, encoding="utf-8")
     (dist / "table.html").write_text(FAKE_TABLE, encoding="utf-8")
-    (dist / "assets" / "app-abc123.js").write_text("console.log('vtt');", encoding="utf-8")
+    (dist / "app-abc123.js").write_text("console.log('vtt');", encoding="utf-8")
+    (dist / ".vite" / "manifest.json").write_text("{}", encoding="utf-8")
     db = _database()
     db.create_schema()
     seed_identity(db)

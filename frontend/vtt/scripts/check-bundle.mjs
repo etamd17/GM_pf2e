@@ -98,18 +98,14 @@ try {
   // Origin boundary: every src/href in emitted HTML and every url()/@import
   // in emitted CSS must stay on the app origin, under the asset base.
   const base = resolveAssetBase(process.env.VTT_ASSET_BASE);
-  const emitted = [
-    ...readdirSync(outDir).filter((f) => f.endsWith('.html')),
-    ...readdirSync(join(outDir, 'assets'))
-      .filter((f) => f.endsWith('.css'))
-      .map((f) => `assets/${f}`),
-  ];
+  const built = new Set(readdirSync(outDir));
+  const emitted = [...built].filter((f) => f.endsWith('.html') || f.endsWith('.css'));
   for (const file of emitted) {
     const text = readFileSync(join(outDir, file), 'utf-8');
     // Resolve each reference against the URL its file is served from: pages
     // under a /vtt route, stylesheets under the asset base.
     const isHtml = file.endsWith('.html');
-    const documentPath = isHtml ? `/vtt/${file.replace(/\.html$/, '')}` : `${base}${file.slice('assets/'.length)}`;
+    const documentPath = isHtml ? `/vtt/${file.replace(/\.html$/, '')}` : `${base}${file}`;
     const scan = isHtml ? scanHtml(text) : { refs: cssRefs(text), problems: [] };
     for (const problem of scan.problems) {
       failed = true;
@@ -118,6 +114,18 @@ try {
     for (const ref of scan.refs.filter((r) => !isAllowedAssetRef(r, base, documentPath))) {
       failed = true;
       console.error(`FAIL: ${file} references an off-origin or out-of-base asset: ${JSON.stringify(ref)}`);
+    }
+    // Every in-base reference must name a file this build produced, at the root
+    // of the output (that is what the server serves under the base). A prefix
+    // check alone let /vtt/assets/assets/<file> through unnoticed.
+    for (const ref of scan.refs) {
+      const path = new URL(ref, `https://app.invalid${documentPath}`).pathname;
+      if (!path.startsWith(base)) continue;
+      const name = decodeURIComponent(path.slice(base.length));
+      if (name.includes('/') || !built.has(name)) {
+        failed = true;
+        console.error(`FAIL: ${file} references ${JSON.stringify(ref)}, which is not a built file under ${base}`);
+      }
     }
   }
   console.log(`origin check: ${emitted.length} HTML/CSS files under base ${base}`);

@@ -5,7 +5,7 @@
   scene to open, the app's CSRF token for the Socket.IO handshake).
 - ``GET /vtt/table``                    the table display. Public shell: it
   holds no data. With no valid cookie the client shows pairing.
-- ``GET /vtt/assets/<path>``            the built bundle's files.
+- ``GET /vtt/assets/<file>``            the built bundle's asset files.
 - ``GET /vtt/api/scenes?campaignId=``   the GM's scene list (id, name,
   published, on the table). Needs GM of that campaign.
 
@@ -26,6 +26,7 @@ from core.persistence.database import Database
 from vtt.storage.models import VttScene, VttTablePointer
 
 ID_MAX = 128
+ASSET_SUFFIXES = {".js", ".css", ".woff", ".woff2", ".ttf", ".png", ".svg", ".webp", ".jpg", ".jpeg"}
 
 
 def _boot_script(data: dict) -> str:
@@ -97,12 +98,17 @@ def make_pages_blueprint(*, db: Database, host, dist_dir: Path) -> Blueprint:
 
     @bp.get("/vtt/assets/<path:filename>")
     def assets(filename):
-        directory = dist_dir / "assets"
-        if not directory.is_dir():
+        if not dist_dir.is_dir():
             return not_built()
-        # send_from_directory refuses paths outside the directory. Built file
+        # The build puts every asset at the root of dist/ (vite.config.ts,
+        # assetsDir ''), beside the HTML entries. Only a single path segment
+        # with an asset extension is served: never the HTML (the GM page must
+        # go through its boot and authorization), never .vite/manifest.json.
+        if "/" in filename or "\\" in filename or Path(filename).suffix.lower() not in ASSET_SUFFIXES:
+            abort(404)
+        # send_from_directory also refuses anything outside dist/. Built file
         # names carry a content hash, so they can be cached for good.
-        response = send_from_directory(directory, filename, max_age=31_536_000)
+        response = send_from_directory(dist_dir, filename, max_age=31_536_000)
         response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
         return response
 

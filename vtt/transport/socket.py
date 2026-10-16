@@ -194,6 +194,17 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
     commands = CommandService(db, registry, token_key, hub, host.is_campaign_gm, rate_limiter=rate_limiter)
 
     def authenticate(auth: Any) -> Principal:
+        # The connection says what it is. A member page sends its CSRF token in
+        # the handshake auth; a table display sends none. A browser can hold both
+        # credentials (a GM laptop that was once paired as a table), so the table
+        # cookie is never consulted for a connection that presents a CSRF token,
+        # and a member session is never used for one that does not.
+        token = auth.get("csrf") if isinstance(auth, dict) else None
+        if token is not None:
+            user_id = host.current_member_id()
+            if not user_id or not host.csrf_valid(token):
+                raise _refused("session-ended")
+            return Principal(kind="member", id=user_id)
         credential = request.cookies.get(TABLE_COOKIE)
         if credential:
             if not isinstance(credential, str) or not (16 <= len(credential) <= 256):
@@ -210,11 +221,7 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
                     raise _refused("grant-expired")
                 return Principal(kind="table", id=grant.id, campaign_id=grant.campaign_id,
                                  verified_at=clock(), expires_at=G.utc(grant.expires_at))
-        user_id = host.current_member_id()
-        token = auth.get("csrf") if isinstance(auth, dict) else None
-        if not user_id or not host.csrf_valid(token):
-            raise _refused("session-ended")
-        return Principal(kind="member", id=user_id)
+        raise _refused("session-ended")
 
     sweep_stats = {"unverifiable": 0, "end_errors": 0, "timeouts": 0, "loop_errors": 0}
     verifying = {"worker": None}

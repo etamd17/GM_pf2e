@@ -82,6 +82,10 @@ def test_assets_are_served_immutable_and_cannot_escape_the_build(stack):
     assert get(stack, "/vtt/assets/../index.html").status_code == 404
     assert get(stack, "/vtt/assets/%2e%2e/index.html").status_code == 404
     assert get(stack, "/vtt/assets/missing.js").status_code == 404
+    # the HTML entries and Vite's manifest sit in dist/ too, and are never assets
+    assert get(stack, "/vtt/assets/index.html").status_code == 404
+    assert get(stack, "/vtt/assets/table.html").status_code == 404
+    assert get(stack, "/vtt/assets/.vite/manifest.json").status_code == 404
 
 
 def test_without_a_build_the_pages_say_so(stack):
@@ -177,3 +181,42 @@ def test_a_vtt_failure_never_breaks_the_apps_own_revocation(monkeypatch):
     monkeypatch.setattr(app, "VTT_SERVICE", Service())
     monkeypatch.setattr(app, "_sse_subscribers", [])
     assert app._close_sse_subscribers_for_user("camp_a", "user_1") == 0
+
+
+# --- a browser holding both credentials (found in the M4a end-to-end run) ------------------
+
+def test_a_member_page_in_a_browser_that_is_also_a_paired_table_connects_as_the_member(stack):
+    from .conftest import CSRF, add_grant
+    from vtt.transport.socket import TABLE_COOKIE
+    seed_scene(stack.db)
+    credential = add_grant(stack.db)
+    flask_client = stack.app.test_client()
+    flask_client.set_cookie(TABLE_COOKIE, credential)
+    member = stack.service.socketio.test_client(stack.app, namespace=NAMESPACE, flask_test_client=flask_client,
+                                                 auth={"csrf": CSRF})
+    table = stack.service.socketio.test_client(stack.app, namespace=NAMESPACE, flask_test_client=flask_client)
+    kinds = sorted(p.kind for p in stack.service.principals.values())
+    assert member.is_connected(NAMESPACE) and table.is_connected(NAMESPACE)
+    assert kinds == ["member", "table"]
+
+
+def test_a_revoked_table_cookie_does_not_refuse_a_member_page(stack):
+    from .conftest import CSRF, add_grant
+    from vtt.transport.socket import TABLE_COOKIE
+    credential = add_grant(stack.db, revoked=True)
+    flask_client = stack.app.test_client()
+    flask_client.set_cookie(TABLE_COOKIE, credential)
+    member = stack.service.socketio.test_client(stack.app, namespace=NAMESPACE, flask_test_client=flask_client,
+                                                 auth={"csrf": CSRF})
+    assert member.is_connected(NAMESPACE)
+
+
+def test_a_member_page_with_a_bad_token_is_refused_even_with_a_valid_table_cookie(stack):
+    from .conftest import add_grant
+    from vtt.transport.socket import TABLE_COOKIE
+    flask_client = stack.app.test_client()
+    flask_client.set_cookie(TABLE_COOKIE, add_grant(stack.db))
+    member = stack.service.socketio.test_client(stack.app, namespace=NAMESPACE, flask_test_client=flask_client,
+                                                 auth={"csrf": "wrong-token-0000000000000000000"})
+    assert not member.is_connected(NAMESPACE)
+    assert not stack.service.principals

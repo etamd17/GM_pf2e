@@ -28,6 +28,11 @@ export default defineConfig(({ command }) => {
     base: command === 'build' ? resolveAssetBase(env.VTT_ASSET_BASE) : '/',
     build: {
       outDir: env.VTT_OUT_DIR ?? 'dist',
+      // Assets sit at the root of dist/, beside the two HTML entries, so the
+      // base is literally where Flask serves them: /vtt/assets/<file> is
+      // dist/<file> (vtt/transport/pages.py). With Vite's default 'assets'
+      // directory every URL came out as /vtt/assets/assets/<file>.
+      assetsDir: '',
       emptyOutDir: true,
       manifest: true,
       sourcemap: env.VTT_SOURCEMAP === '1',
