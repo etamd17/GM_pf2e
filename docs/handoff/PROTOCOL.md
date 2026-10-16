@@ -20,14 +20,17 @@ once, in the brief, and the implementation is cheap.
 |---|---|
 | Open design question, or a choice the user must make | Claude writes the options; the **user** decides |
 | Writing a brief (files, approach, acceptance tests) | Claude |
-| Well-specified implementation from a brief | Codex |
+| Well-specified implementation from a brief (UI ports from approved mockups, content, small fixes) | Codex |
 | Mechanical refactors, renames, test backfill, CI/lint fixes | Codex |
-| Save formats, migrations, auth/route policy, anything that deletes or overwrites data | Claude implements, or Claude reviews Codex's diff adversarially |
+| **Heavy or high-risk coding** (user decision 2026-10-15): rules engines and stat derivation, save formats and migrations, live sync / SSE / persistence / concurrency, auth and route policy, the VTT client, and shared high-traffic files such as `tracker.html` and the map | **Claude implements**; Codex reviews the diff against the brief |
+| Anything that deletes or overwrites data | Claude implements, or Claude reviews Codex's diff adversarially |
 | UI/UX design: layout, hierarchy, mobile, visual polish | Claude designs and verifies in the browser; Codex may implement the mechanical parts from Claude's brief |
 | Browser/UI verification against a running server | Claude (has the browser pane) |
 | Review of the other agent's diff | the other agent, **against the brief's acceptance list only** |
 
 Either agent may take any task when the other is unavailable; the table is a default.
+When Claude builds, Codex reviews (the same review rules apply in the other direction), and
+the Model column in `QUEUE.md` still says how much reasoning the step needs.
 
 ## The cycle
 
