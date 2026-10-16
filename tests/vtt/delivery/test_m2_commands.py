@@ -539,3 +539,86 @@ def test_the_schema_entity_caps_are_enforced_at_write_time(stack, monkeypatch, c
     monkeypatch.setattr(service_module, cap, 5 if cap == "GM_ENTITY_CAP" else 3)
     cid, ack, _ = send(stack, client, "token.create", {"id": "tok_over", **TOKEN, "hidden": hidden})
     _rejected(stack, ack, cid, "validation-failed")
+
+
+# --- a failed acknowledgement never suppresses delivery (handoff 031) -----------------------
+
+def _fail_acks(stack, times=1):
+    real = stack.hub.emit
+    left = {"n": times}
+
+    def emit(sid, event, data):
+        if event == "vtt.ack" and left["n"]:
+            left["n"] -= 1
+            raise OSError("ack write failed")
+        real(sid, event, data)
+
+    stack.hub.emit = emit
+
+
+def test_a_failed_ack_emit_still_delivers_to_observers_and_completes_on_the_issuer(stack):
+    client = gm(stack)
+    observer, _ = subscribe_gm(stack)
+    received(observer)
+    issuer_sid = stack.sent[0][0]
+    stack.sent.clear()
+    _fail_acks(stack)
+    cid, ack, after = send(stack, client, "token.create", {"id": "tok_lost_ack", **TOKEN},
+                           command_id="cmd_fixed_lost_ack_01")
+    assert ack is None                                     # the ack never left
+    assert stack.service.commands.stats["ack_errors"] == 1
+    # without any further write: the observer has the change, the issuer its completion
+    [seen] = [payload(m) for m in received(observer, "vtt.patch")]
+    assert [e["id"] for e in seen["upserted"]] == ["tok_lost_ack"] and "originCommandId" not in seen
+    [done] = [d for sid, e, d in after if sid == issuer_sid and e == "vtt.patch"]
+    assert done["originCommandId"] == cid and done["seq"] == 1
+    assert stack.hub.subscription(issuer_sid).cursor == count(stack, VttOutbox)
+    # the client retries after its timeout: recorded outcome, nothing applied twice, no second frame
+    outbox = count(stack, VttOutbox)
+    _, retry, after = send(stack, client, "token.create", {"id": "tok_lost_ack", **TOKEN}, command_id=cid)
+    assert retry == {"schemaVersion": 1, "commandId": cid, "outcome": "applied"}
+    assert [e for _, e, _ in after] == ["vtt.ack"]
+    assert count(stack, VttOutbox) == outbox and count(stack, VttCommandReceipt, command_id=cid) == 1
+
+
+def test_an_uncertain_commit_with_a_failed_ack_still_delivers(stack, monkeypatch):
+    client = gm(stack)
+    observer, _ = subscribe_gm(stack)
+    received(observer)
+    from sqlalchemy.orm import Session
+    real_commit = Session.commit
+
+    def commit_then_raise(self):
+        real_commit(self)
+        raise RuntimeError("connection lost after commit")
+
+    monkeypatch.setattr(Session, "commit", commit_then_raise)
+    _fail_acks(stack)
+    send(stack, client, "token.create", {"id": "tok_uncertain", **TOKEN})
+    monkeypatch.setattr(Session, "commit", real_commit)
+    [seen] = [payload(m) for m in received(observer, "vtt.patch")]
+    assert [e["id"] for e in seen["upserted"]] == ["tok_uncertain"]
+
+
+def test_a_retry_repairs_a_lost_wake_up_without_reapplying(stack):
+    # Commit through the pipeline but drop its wake-up entirely (as if the process
+    # had failed between commit and notify). The retry's ack wakes delivery.
+    client = gm(stack)
+    issuer_sid = stack.sent[0][0]
+    sub = stack.hub.subscription(issuer_sid)
+    message = {"schemaVersion": 1, "commandId": "cmd_fixed_lost_wake_1", "campaignId": "camp_a",
+               "sceneId": "scene_a", "type": "token.create", "expected": [],
+               "payload": {"id": "tok_wake", **TOKEN}}
+    assert stack.service.commands.handle(issuer_sid, sub.principal, message).ack["outcome"] == "applied"
+    stack.sent.clear()
+    outbox = count(stack, VttOutbox)
+    _, retry, after = send(stack, client, "token.create", {"id": "tok_wake", **TOKEN},
+                           command_id="cmd_fixed_lost_wake_1")
+    assert retry["outcome"] == "applied"
+    patches = [d for _, e, d in after if e == "vtt.patch"]
+    assert len(patches) == 1 and patches[0]["originCommandId"] == "cmd_fixed_lost_wake_1"
+    assert count(stack, VttOutbox) == outbox
+    # and a further retry finds nothing left to send
+    _, _, after = send(stack, client, "token.create", {"id": "tok_wake", **TOKEN},
+                       command_id="cmd_fixed_lost_wake_1")
+    assert [e for _, e, _ in after] == ["vtt.ack"]

@@ -175,9 +175,19 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
         if result.ack is None:
             disconnect()
             return None
-        hub.emit(sid, "vtt.ack", result.ack)
-        if result.notify is not None:
-            hub.notify(result.notify)
+        # The ack goes first, but a failed ack emit must never suppress delivery of
+        # what already committed (handoff 031): the wake-up is in a finally. A lost
+        # ack needs nothing more here. The issuer's completion frame still comes
+        # through delivery, a retry of the same commandId gets the recorded
+        # outcome, and if the transport is really gone, delivery's own emit failure
+        # recovers or closes the subscription.
+        try:
+            hub.emit(sid, "vtt.ack", result.ack)
+        except Exception:
+            commands.stats["ack_errors"] += 1
+        finally:
+            if result.notify is not None:
+                hub.notify(result.notify)
         return None
 
     @socketio.on("*", namespace=NAMESPACE)

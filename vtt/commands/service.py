@@ -157,7 +157,7 @@ class CommandService:
             # Fail closed at start-up: a registered type without a policy, or a
             # policy for a type the contract does not publish.
             raise RuntimeError("command policies do not match the contract's commandVariants")
-        self.stats = {"applied": 0, "rejected": 0, "replayed": 0, "receipted_rejections": 0}
+        self.stats = {"applied": 0, "rejected": 0, "replayed": 0, "receipted_rejections": 0, "ack_errors": 0}
 
     # --- acks --------------------------------------------------------------------------------
 
@@ -231,6 +231,12 @@ class CommandService:
             status, value = self._in_transaction(principal, message, digest, lambda _session: code)
         if status == "ack":
             return Result(value)
+        if status == "replayed":
+            # A retry of an applied command. It applies nothing, but it wakes
+            # delivery: if the first attempt's wake-up was lost, this repairs it.
+            # Delivery only sends what is committed and not yet sent, so a
+            # healthy subscription gets nothing (no second completion).
+            return Result(value, notify=campaign_id)
         if status == "uncertain":
             # If it did commit, its frames must not wait for some later commit:
             # wake delivery anyway (it only ever sends what is committed).
@@ -245,7 +251,8 @@ class CommandService:
     def _in_transaction(self, principal, message, digest, body):
         """One command transaction: stream lock, receipt check, ``body``, receipt,
         commit. Returns ("committed", code), ("rejection", code) after a full
-        rollback, or ("ack", ack) for an answer that commits nothing."""
+        rollback, ("replayed", ack) for a retry of an applied receipt, or
+        ("ack", ack) for any other answer that commits nothing."""
         command_id = message["commandId"]
         campaign_id = message["campaignId"]
         session = self.db.session_factory()
@@ -268,7 +275,7 @@ class CommandService:
                     if receipt.digest != digest:
                         return "ack", self._ack(command_id, "command-id-reused")
                     self.stats["replayed"] += 1
-                    return "ack", self._ack(command_id, receipt.code)
+                    return ("replayed" if receipt.code is None else "ack"), self._ack(command_id, receipt.code)
                 try:
                     code = body(session)
                 except Rejection as rejection:
