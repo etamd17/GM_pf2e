@@ -14,10 +14,12 @@ import {
   fitToScreen,
   interactiveZoomLimits,
   panBy,
+  screenToWorld,
   zoomAt,
   type Viewport,
   type ZoomLimits,
 } from './viewport';
+import { hitTest, snapTokenCentre, type Hit, type Point } from './interaction';
 import { CANVAS_LABEL_FONT, ensureCanvasFont, uiFont } from '../ui/fonts';
 import type { RendererStatus } from '../state/connection';
 
@@ -26,8 +28,23 @@ import type { RendererStatus } from '../state/connection';
 // Input arrives from pointer/keyboard handlers attached here; durable intents
 // will leave through a callback once the transport exists (VTT-ADR-0002).
 
+// GM map input (M4b). The runtime decides what was hit and whether a gesture
+// was a click or a drag; the workspace decides what that means and issues the
+// command. Nothing here talks to the transport.
+export interface RuntimeInteraction {
+  onClick?(point: Point, hit: Hit | null): void;
+  // A token dragged and released: its snapped centre. The token stays where it
+  // was dropped until the projection (or an overlay) says otherwise.
+  onTokenDrop?(id: string, x: number, y: number): void;
+  canDragToken?(id: string): boolean;
+  onPointerMove?(point: Point): void;
+  // Return true when the key was handled (the runtime then does not pan).
+  onKey?(event: KeyboardEvent): boolean;
+}
+
 export interface SceneRuntimeOptions {
   surface: Surface;
+  interaction?: RuntimeInteraction;
   onRendererStatus?: (status: RendererStatus) => void;
   onViewportChange?: (viewport: Viewport) => void;
   // How long to wait for the browser to restore a lost WebGL context before
@@ -46,6 +63,8 @@ const GRID_COLOR = 0xc9a34e;
 const WALL_COLOR = 0xede4cf;
 const DOOR_COLOR = 0xc9a34e;
 const KEY_PAN_PX = 64;
+const DRAG_THRESHOLD_PX = 4;
+const SELECT_COLOR = 0xede4cf;
 const KEY_ZOOM = 1.2;
 
 export class SceneRuntime {
@@ -61,7 +80,18 @@ export class SceneRuntime {
   private restoreTimer: ReturnType<typeof setTimeout> | null = null;
   private destroyed = false;
   private rendererStatus: RendererStatus = 'ok';
-  private drag: { pointerId: number; lastX: number; lastY: number } | null = null;
+  private drag: {
+    pointerId: number;
+    lastX: number;
+    lastY: number;
+    startX: number;
+    startY: number;
+    moved: boolean;
+    token: { id: string; dx: number; dy: number } | null;
+    hit: Hit | null;
+  } | null = null;
+  private selection: Hit | null = null;
+  private wallDraft: { a: Point; b: Point } | null = null;
   private lastFrameMs = 0;
 
   constructor(
@@ -110,7 +140,26 @@ export class SceneRuntime {
     if (!prev || prev.walls !== next.walls) this.drawWalls(next);
     if (!prev || prev.lights !== next.lights) this.drawLights(next);
     this.syncTokens(next);
+    this.drawOverlay();
     this.scheduler.requestRender();
+  }
+
+  // GM only: what is selected, drawn on the authoring overlay.
+  setSelection(hit: Hit | null): void {
+    this.selection = hit;
+    this.drawOverlay();
+    this.scheduler.requestRender();
+  }
+
+  // GM only: the wall being drawn (from its first point to the pointer).
+  setWallDraft(draft: { a: Point; b: Point } | null): void {
+    this.wallDraft = draft;
+    this.drawOverlay();
+    this.scheduler.requestRender();
+  }
+
+  get currentViewport(): Viewport {
+    return this.viewport;
   }
 
   fit(): void {
@@ -292,9 +341,12 @@ export class SceneRuntime {
   // -- viewport and input ---------------------------------------------------
 
   private applyViewport(v: Viewport): void {
+    const rescaled = v.scale !== this.viewport.scale;
     this.viewport = v;
     this.world.position.set(v.x, v.y);
     this.world.scale.set(v.scale);
+    // Overlay strokes are sized in screen pixels, so a zoom redraws them.
+    if (rescaled) this.drawOverlay();
     this.options.onViewportChange?.(v);
     this.scheduler.requestRender();
   }
@@ -321,28 +373,89 @@ export class SceneRuntime {
     this.host.removeEventListener('keydown', this.onKeyDown);
   }
 
+  private worldPoint(e: { clientX: number; clientY: number }): Point {
+    const rect = this.host.getBoundingClientRect();
+    return screenToWorld(this.viewport, { x: e.clientX - rect.left, y: e.clientY - rect.top });
+  }
+
   private readonly onPointerDown = (e: PointerEvent): void => {
     if (e.button !== 0 && e.button !== 1) return;
     // Middle-button pan must not also start the browser's autoscroll.
     if (e.button === 1) e.preventDefault();
-    this.drag = { pointerId: e.pointerId, lastX: e.clientX, lastY: e.clientY };
+    const interaction = this.options.interaction;
+    let hit: Hit | null = null;
+    let token: { id: string; dx: number; dy: number } | null = null;
+    if (interaction && e.button === 0 && this.scene) {
+      const p = this.worldPoint(e);
+      hit = hitTest(this.scene, p, this.viewport.scale);
+      if (hit?.kind === 'token' && interaction.canDragToken?.(hit.id) !== false) {
+        const view = this.tokens.get(hit.id);
+        if (view) token = { id: hit.id, dx: p.x - view.root.x, dy: p.y - view.root.y };
+      }
+    }
+    this.drag = {
+      pointerId: e.pointerId,
+      lastX: e.clientX,
+      lastY: e.clientY,
+      startX: e.clientX,
+      startY: e.clientY,
+      moved: false,
+      token,
+      hit,
+    };
     (e.target as Element).setPointerCapture?.(e.pointerId);
     this.host.focus({ preventScroll: true });
   };
 
   private readonly onPointerMove = (e: PointerEvent): void => {
     const drag = this.drag;
-    if (!drag || drag.pointerId !== e.pointerId) return;
+    if (!drag || drag.pointerId !== e.pointerId) {
+      if (this.options.interaction?.onPointerMove) this.options.interaction.onPointerMove(this.worldPoint(e));
+      return;
+    }
+    if (Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) > DRAG_THRESHOLD_PX) drag.moved = true;
     const dx = e.clientX - drag.lastX;
     const dy = e.clientY - drag.lastY;
     drag.lastX = e.clientX;
     drag.lastY = e.clientY;
+    if (drag.token) {
+      if (!drag.moved) return;
+      const view = this.tokens.get(drag.token.id);
+      const p = this.worldPoint(e);
+      if (view) {
+        view.root.position.set(p.x - drag.token.dx, p.y - drag.token.dy);
+        this.drawOverlay();
+        this.scheduler.requestRender();
+      }
+      return;
+    }
+    if (!drag.moved) return;
     this.userMovedViewport = true;
     this.applyViewport(panBy(this.viewport, dx, dy));
   };
 
   private readonly onPointerUp = (e: PointerEvent): void => {
-    if (this.drag?.pointerId === e.pointerId) this.drag = null;
+    const drag = this.drag;
+    if (drag?.pointerId !== e.pointerId) return;
+    this.drag = null;
+    if (e.type !== 'pointerup') {
+      // Cancelled: a dragged token goes back to where the projection has it.
+      if (drag.token && this.scene) this.syncTokens(this.scene, true);
+      return;
+    }
+    const interaction = this.options.interaction;
+    if (!interaction) return;
+    if (drag.token && drag.moved && this.scene) {
+      const view = this.tokens.get(drag.token.id);
+      if (!view) return;
+      const snapped = snapTokenCentre({ x: view.root.x, y: view.root.y }, view.model.size, this.scene);
+      view.root.position.set(snapped.x, snapped.y);
+      this.drawOverlay();
+      this.scheduler.requestRender();
+      interaction.onTokenDrop?.(drag.token.id, snapped.x, snapped.y);
+      return;
+    }
+    if (!drag.moved) interaction.onClick?.(this.worldPoint(e), drag.hit);
   };
 
   private readonly onWheel = (e: WheelEvent): void => {
@@ -361,6 +474,10 @@ export class SceneRuntime {
   };
 
   private readonly onKeyDown = (e: KeyboardEvent): void => {
+    if (this.options.interaction?.onKey?.(e)) {
+      e.preventDefault();
+      return;
+    }
     const centre = { x: this.host.clientWidth / 2, y: this.host.clientHeight / 2 };
     let next: Viewport | null = null;
     switch (e.key) {
@@ -453,6 +570,41 @@ export class SceneRuntime {
     this.replaceLayerContent('lighting', g);
   }
 
+  // The authoring overlay (GM only; the table never builds this layer): light
+  // handles so lights can be picked, the selection, and a wall being drawn.
+  private drawOverlay(): void {
+    if (!this.layer('overlay') || !this.scene) return;
+    const g = new Graphics();
+    const s = this.viewport.scale > 0 ? this.viewport.scale : 1;
+    for (const l of this.scene.lights) {
+      g.circle(l.x, l.y, 6 / s).fill({ color: l.color, alpha: l.hidden ? 0.4 : 0.9 });
+      g.circle(l.x, l.y, 6 / s).stroke({ width: 1.5 / s, color: 0x0c0a07, alpha: 0.9 });
+    }
+    const sel = this.selection;
+    if (sel?.kind === 'token') {
+      const view = this.tokens.get(sel.id);
+      if (view) {
+        const r = tokenRadius(view.model.size, this.scene.gridSize) + 6;
+        g.circle(view.root.x, view.root.y, r).stroke({ width: 3 / s, color: SELECT_COLOR, alpha: 0.95 });
+      }
+    } else if (sel?.kind === 'light') {
+      const l = this.scene.lights.find((x) => x.id === sel.id);
+      if (l) {
+        g.circle(l.x, l.y, 11 / s).stroke({ width: 2.5 / s, color: SELECT_COLOR, alpha: 0.95 });
+        g.circle(l.x, l.y, l.radius).stroke({ width: 1.5 / s, color: SELECT_COLOR, alpha: 0.5 });
+      }
+    } else if (sel?.kind === 'wall') {
+      const w = this.scene.walls.find((x) => x.id === sel.id);
+      if (w) g.moveTo(w.x1, w.y1).lineTo(w.x2, w.y2).stroke({ width: 10 / s, color: SELECT_COLOR, alpha: 0.35 });
+    }
+    if (this.wallDraft) {
+      const { a, b } = this.wallDraft;
+      g.moveTo(a.x, a.y).lineTo(b.x, b.y).stroke({ width: 3 / s, color: WALL_COLOR, alpha: 0.6 });
+      g.circle(a.x, a.y, 4 / s).fill({ color: WALL_COLOR, alpha: 0.9 });
+    }
+    this.replaceLayerContent('overlay', g);
+  }
+
   private clearTokens(): void {
     for (const view of this.tokens.values()) {
       view.root.parent?.removeChild(view.root);
@@ -461,14 +613,22 @@ export class SceneRuntime {
     this.tokens.clear();
   }
 
-  private syncTokens(scene: RenderScene): void {
+  private syncTokens(scene: RenderScene, resetPositions = false): void {
     const layer = this.layer('tokens');
     if (!layer) return;
     const seen = new Set<string>();
     for (const model of scene.tokens) {
       seen.add(model.id);
       const view = this.tokens.get(model.id);
-      if (view && view.model === model) continue; // unchanged by identity
+      // A token mid-drag keeps following the pointer whatever arrives.
+      if (view && this.drag?.token?.id === model.id && !resetPositions) {
+        view.model = model;
+        continue;
+      }
+      if (view && view.model === model) {
+        if (resetPositions) view.root.position.set(model.x, model.y);
+        continue; // unchanged by identity
+      }
       if (view && sameAppearance(view.model, model)) {
         view.root.position.set(model.x, model.y);
         view.model = model;
@@ -494,7 +654,13 @@ export class SceneRuntime {
 // Only fields baked into the display objects. Grid size is handled by
 // setScene, which clears every token when it changes.
 function sameAppearance(a: RenderToken, b: RenderToken): boolean {
-  return a.size === b.size && a.label === b.label && a.color === b.color;
+  return (
+    a.size === b.size &&
+    a.label === b.label &&
+    a.color === b.color &&
+    a.hidden === b.hidden &&
+    a.pending === b.pending
+  );
 }
 
 function buildToken(model: RenderToken, gridSize: number): Container {
@@ -503,7 +669,11 @@ function buildToken(model: RenderToken, gridSize: number): Container {
   const body = new Graphics();
   body.circle(0, 0, radius).fill({ color: model.color, alpha: 0.9 });
   body.circle(0, 0, radius).stroke({ width: 3, color: 0x0c0a07, alpha: 0.9 });
+  // A pending command: a dashed-looking outer ring until its frame arrives.
+  if (model.pending) body.circle(0, 0, radius + 5).stroke({ width: 2, color: 0xede4cf, alpha: 0.7 });
   root.addChild(body);
+  // GM only: what the table cannot see is drawn dimmed, never hidden.
+  if (model.hidden) root.alpha = 0.45;
   const label = new Text({
     text: model.label,
     style: {

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { SceneRuntime } from '../scene/SceneRuntime';
+import { SceneRuntime, type RuntimeInteraction } from '../scene/SceneRuntime';
+import type { Hit, Point } from '../scene/interaction';
 import type { Surface } from '../scene/layers';
 import type { RenderScene } from '../scene/renderModel';
 import type { Viewport } from '../scene/viewport';
@@ -10,6 +11,10 @@ interface Props {
   scene: RenderScene;
   onViewportChange?: (viewport: Viewport) => void;
   label: string;
+  // GM only (M4b): map input, the selection and a wall being drawn.
+  interaction?: RuntimeInteraction;
+  selection?: Hit | null;
+  wallDraft?: { a: Point; b: Point } | null;
 }
 
 declare global {
@@ -21,13 +26,19 @@ declare global {
 // The only bridge between React and Pixi: one div, one SceneRuntime. React
 // re-renders never reach the scene graph; scene changes are pushed through
 // runtime.setScene, which diffs by object identity.
-export function MapHost({ surface, scene, onViewportChange, label }: Props) {
+export function MapHost({ surface, scene, onViewportChange, label, interaction, selection = null, wallDraft = null }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<SceneRuntime | null>(null);
   const viewportCb = useRef(onViewportChange);
   viewportCb.current = onViewportChange;
   const latestScene = useRef(scene);
   latestScene.current = scene;
+  // The runtime is built once per surface; it calls through this ref, so the
+  // workspace's latest callbacks apply without rebuilding the renderer.
+  const interactionRef = useRef(interaction);
+  interactionRef.current = interaction;
+  const latestSelection = useRef(selection);
+  latestSelection.current = selection;
 
   useEffect(() => {
     const host = hostRef.current;
@@ -46,10 +57,22 @@ export function MapHost({ surface, scene, onViewportChange, label }: Props) {
       onViewportChange: (v) => {
         if (isCurrent()) viewportCb.current?.(v);
       },
+      ...(surface === 'gm'
+        ? {
+            interaction: {
+              onClick: (p, hit) => interactionRef.current?.onClick?.(p, hit),
+              onTokenDrop: (id, x, y) => interactionRef.current?.onTokenDrop?.(id, x, y),
+              canDragToken: (id) => interactionRef.current?.canDragToken?.(id) ?? false,
+              onPointerMove: (p) => interactionRef.current?.onPointerMove?.(p),
+              onKey: (e) => interactionRef.current?.onKey?.(e) ?? false,
+            } satisfies RuntimeInteraction,
+          }
+        : {}),
     });
     runtimeRef.current = runtime;
     useConnection.getState().setRenderer('ok');
     runtime.setScene(latestScene.current);
+    runtime.setSelection(latestSelection.current);
     runtime.init().catch(() => {
       if (isCurrent()) useConnection.getState().setRenderer('failed');
     });
@@ -65,6 +88,14 @@ export function MapHost({ surface, scene, onViewportChange, label }: Props) {
   useEffect(() => {
     runtimeRef.current?.setScene(scene);
   }, [scene]);
+
+  useEffect(() => {
+    runtimeRef.current?.setSelection(selection);
+  }, [selection]);
+
+  useEffect(() => {
+    runtimeRef.current?.setWallDraft(wallDraft);
+  }, [wallDraft]);
 
   // The GM map is keyboard-focusable (arrows pan, +/- zoom, 0 fits). The table
   // has no operator, so it takes no focus.

@@ -9,6 +9,8 @@ import { adaptEntities, newAdaptCache } from '../scene/adapt';
 import { useCommands } from '../state/commands';
 import { useConnection } from '../state/connection';
 import { useEntities } from '../state/entities';
+import type { TokenOverlay } from '../app/gmCommands';
+import { useOverlays } from '../state/overlays';
 import type { GmBoot } from './boot';
 import { browserClock } from './sessionClock';
 
@@ -24,7 +26,7 @@ export interface GmLive {
 }
 
 // What a pending command looks like on screen until its frame arrives.
-export type OverlayData = { kind: string; id: string; patch?: Record<string, unknown> } | null;
+export type OverlayData = TokenOverlay | null;
 
 export function startGm(boot: GmBoot): GmLive {
   const cache = newAdaptCache();
@@ -46,12 +48,26 @@ export function startGm(boot: GmBoot): GmLive {
     useEntities.getState().clear();
     baseSeal();
   };
+  const parkedKey = `vtt.parked.${boot.campaignId}`;
   const baseStatus = sink.setStatus;
   sink.setStatus = (status) => {
+    // The session ended: keep what has not been confirmed, so the reload after
+    // signing in again retries it under the same ids.
+    if (status === 'session-ended') park(queue.unresolved());
     baseStatus(status);
     if (status === 'live') queue.resume();     // resend commands waiting for a socket
   };
-  const session = new ProjectionSession<GmEntity, OverlayData>('gm', sink, browserClock);
+  function park(commands: Array<Record<string, unknown>>) {
+    if (commands.length === 0) return;
+    try {
+      sessionStorage.setItem(parkedKey, JSON.stringify(commands));
+    } catch {
+      /* storage unavailable: nothing to retry after the reload */
+    }
+  }
+  const session = new ProjectionSession<GmEntity, OverlayData>('gm', sink, browserClock, (overlays) =>
+    useOverlays.getState().set(overlays),
+  );
   const transport: SocketIoTransport<GmEntity, OverlayData> = new SocketIoTransport<GmEntity, OverlayData>({
     session,
     csrf: boot.csrf,
@@ -68,9 +84,23 @@ export function startGm(boot: GmBoot): GmLive {
     session,
     send: (command) => transport.sendCommand(command),
     validate: (command) => gm.validateCommand(command) && commandRulesHold(command),
-    onOutcome: (outcome) => useCommands.getState().notify(outcome),
+    onOutcome: (outcome) => {
+      if (outcome.kind === 'reauthenticate') park(queue.unresolved());
+      useCommands.getState().notify(outcome);
+    },
     onPendingChange: (pending) => useCommands.getState().setPending(pending),
   });
+  // Commands saved when the last session ended on this page.
+  try {
+    const saved = sessionStorage.getItem(parkedKey);
+    sessionStorage.removeItem(parkedKey);
+    const parsed: unknown = saved ? JSON.parse(saved) : [];
+    if (Array.isArray(parsed)) {
+      for (const command of parsed) if (command && typeof command === 'object') queue.adopt(command as Record<string, unknown>);
+    }
+  } catch {
+    /* nothing saved, or storage unavailable */
+  }
   transport.connect();
   useConnection.getState().setStatus('connecting');
   return {

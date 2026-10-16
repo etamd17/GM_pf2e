@@ -13,9 +13,14 @@ export interface RenderToken {
   readonly size: number; // in grid squares (1 = medium)
   readonly label: string;
   readonly color: number; // 0xRRGGBB
+  // GM only: drawn dimmed so the GM can tell what the table cannot see.
+  readonly hidden?: boolean;
+  // GM only: a command for it is still waiting for its correlated frame.
+  readonly pending?: boolean;
 }
 
 export interface RenderWall {
+  readonly id?: string; // GM projection only; used for picking
   readonly x1: number;
   readonly y1: number;
   readonly x2: number;
@@ -29,6 +34,7 @@ export interface RenderLight {
   readonly y: number;
   readonly radius: number; // scene px
   readonly color: number;
+  readonly hidden?: boolean; // GM only
 }
 
 export interface RenderScene {

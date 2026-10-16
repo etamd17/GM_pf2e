@@ -52,6 +52,7 @@ export function adaptEntities(entities: ReadonlyMap<string, WireEntity>, cache: 
         size: num(e.size, 1),
         label: typeof e.label === 'string' ? e.label : '',
         color: num(e.color),
+        ...(e.hidden === true ? { hidden: true } : {}),
       };
       cache.tokens.set(e.id, { version: e.version, token });
       tokens.push(token);
@@ -62,7 +63,14 @@ export function adaptEntities(entities: ReadonlyMap<string, WireEntity>, cache: 
         lights.push(hit.light);
         continue;
       }
-      const light: RenderLight = { id: e.id, x: num(e.x), y: num(e.y), radius: num(e.radius), color: num(e.color) };
+      const light: RenderLight = {
+        id: e.id,
+        x: num(e.x),
+        y: num(e.y),
+        radius: num(e.radius),
+        color: num(e.color),
+        ...(e.hidden === true ? { hidden: true } : {}),
+      };
       cache.lights.set(e.id, { version: e.version, light });
       lights.push(light);
     } else if (e.kind === 'wall') {
@@ -73,6 +81,7 @@ export function adaptEntities(entities: ReadonlyMap<string, WireEntity>, cache: 
         continue;
       }
       const wall: RenderWall = {
+        id: e.id,
         x1: num(e.x1),
         y1: num(e.y1),
         x2: num(e.x2),

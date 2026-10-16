@@ -240,3 +240,159 @@ button:focus-visible,
   font-size: 12px;
   white-space: pre;
 }
+
+/* --- M4b: GM tools ------------------------------------------------------- */
+
+.vtt-scene-picker,
+.vtt-field input,
+.vtt-field select {
+  font: inherit;
+  color: var(--text-primary);
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--r-md);
+  padding: var(--sp-1) var(--sp-2);
+}
+
+.vtt-scene-picker {
+  max-width: 240px;
+}
+
+.vtt-topbar-btn {
+  padding: 2px var(--sp-2);
+  font-size: 13px;
+}
+
+.vtt-pending {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.vtt-tool.is-active {
+  border-color: var(--gilt-300);
+  color: var(--gilt-200);
+}
+
+.vtt-notice {
+  position: absolute;
+  top: var(--sp-2);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  max-width: min(640px, calc(100% - 2 * var(--sp-3)));
+  padding: var(--sp-2) var(--sp-3);
+  background: #2a2210;
+  border: 1px solid var(--border-rule);
+  border-radius: var(--r-md);
+}
+
+.vtt-notice-text {
+  flex: 1;
+}
+
+.vtt-notice-action {
+  color: var(--gilt-200);
+}
+
+.vtt-inspector {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.vtt-inspector-title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--gilt-300);
+  margin: var(--sp-2) 0 0;
+}
+
+.vtt-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.vtt-field--toggle {
+  flex-direction: row;
+  align-items: center;
+}
+
+.vtt-danger {
+  margin-top: var(--sp-3);
+  border-color: rgba(168, 58, 58, 0.6);
+}
+
+.vtt-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --- M4a: pairing a display ------------------------------------------------ */
+
+.vtt-table.is-pairing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.vtt-pairing {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  width: min(420px, calc(100% - 2 * var(--sp-4)));
+  padding: var(--sp-4);
+  background: var(--bg-card);
+  border: 1px solid var(--border-rule);
+  border-radius: var(--r-md);
+}
+
+.vtt-pairing-title {
+  font-family: var(--font-display);
+  font-weight: 400;
+  color: var(--gilt-300);
+  margin: 0;
+}
+
+.vtt-pairing-lead,
+.vtt-pairing-label {
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.vtt-pairing-input {
+  font: inherit;
+  font-size: 28px;
+  letter-spacing: 0.2em;
+  text-align: center;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  background: var(--ink-900);
+  border: 1px solid var(--border-rule);
+  border-radius: var(--r-md);
+  padding: var(--sp-2);
+}
+
+.vtt-pairing-submit {
+  padding: var(--sp-2);
+  font-size: 16px;
+}
+
+.vtt-pairing-error {
+  color: #e9a3a3;
+  margin: 0;
+}

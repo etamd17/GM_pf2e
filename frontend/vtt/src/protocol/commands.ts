@@ -154,6 +154,24 @@ export class CommandQueue<E extends EntityKey, O> {
     }
   }
 
+  // Every command not yet resolved, as sent on the wire. The page saves these
+  // when the session ends, so after signing in again they are retried with
+  // the SAME ids (ADR-0002 section 8) and the receipts settle each outcome.
+  unresolved(): Array<Record<string, unknown>> {
+    return [...this.pending.values()].map((p) => p.command);
+  }
+
+  // Take over a saved command after a reload. It is sent when the connection is
+  // live (resume), under its original id; a command that no longer passes the
+  // local checks is dropped.
+  adopt(command: Record<string, unknown>): boolean {
+    const id = command.commandId;
+    if (typeof id !== 'string' || this.pending.has(id) || !this.options.validate(command)) return false;
+    this.pending.set(id, { command, type: String(command.type), state: 'waiting', attempts: 0, timer: null });
+    this.changed();
+    return true;
+  }
+
   views(): PendingView[] {
     return [...this.pending].map(([commandId, p]) => ({ commandId, type: p.type, state: p.state }));
   }

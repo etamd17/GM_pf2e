@@ -7,6 +7,8 @@ import type { CommandOutcome, PendingView } from '../protocol/commands';
 interface CommandState {
   pending: ReadonlyArray<PendingView>;
   notice: CommandOutcome | null;
+  // The id of the most recent applied command (a scene create waits on it).
+  lastApplied: string | null;
   setPending(pending: ReadonlyArray<PendingView>): void;
   notify(outcome: CommandOutcome): void;
   dismiss(): void;
@@ -15,7 +17,9 @@ interface CommandState {
 export const useCommands = create<CommandState>()((set) => ({
   pending: [],
   notice: null,
+  lastApplied: null,
   setPending: (pending) => set({ pending }),
-  notify: (outcome) => set({ notice: outcome.kind === 'applied' ? null : outcome }),
+  notify: (outcome) =>
+    set(outcome.kind === 'applied' ? { notice: null, lastApplied: outcome.commandId } : { notice: outcome }),
   dismiss: () => set({ notice: null }),
 }));

@@ -171,6 +171,27 @@ describe('CommandQueue', () => {
   });
 });
 
+describe('surviving a reload after the session ended', () => {
+  it('unresolved commands are kept as sent, and adopted ones resend under the same id', () => {
+    const before = setup();
+    const id = before.queue.issue(before.draft, 'x') as string;
+    const saved = before.queue.unresolved();
+    expect(saved).toEqual([{ schemaVersion: 1, commandId: id, ...before.draft }]);
+    const after = setup({ online: false });
+    expect(after.queue.adopt(saved[0] as Record<string, unknown>)).toBe(true);
+    expect(after.queue.adopt(saved[0] as Record<string, unknown>)).toBe(false); // no duplicates
+    after.setOnline(true);
+    after.queue.resume();
+    expect(after.sent.map((c) => c.commandId)).toEqual([id]);
+  });
+
+  it('a saved command that no longer passes the local checks is dropped', () => {
+    const s = setup({ valid: false });
+    expect(s.queue.adopt({ commandId: 'cmd_0000000000000001', type: 'token.move' })).toBe(false);
+    expect(s.queue.size).toBe(0);
+  });
+});
+
 it('command ids are 128-bit opaque tokens', () => {
   const ids = new Set(Array.from({ length: 200 }, () => newCommandId()));
   expect(ids.size).toBe(200);
