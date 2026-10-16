@@ -9,7 +9,8 @@
     "gm": "schemas/gm.schema.json",
     "table": "schemas/table.schema.json",
     "gm-subscribe": "schemas/gm-subscribe.schema.json",
-    "table-subscribe": "schemas/table-subscribe.schema.json"
+    "table-subscribe": "schemas/table-subscribe.schema.json",
+    "command": "schemas/command.schema.json"
   },
   "events": {
     "vtt.subscribe": {
@@ -22,8 +23,10 @@
     },
     "vtt.command": {
       "direction": "client",
-      "schemas": {},
-      "status": "reserved"
+      "schemas": {
+        "gm": "command"
+      },
+      "status": "schema-ready"
     },
     "vtt.transient": {
       "direction": "both",
@@ -77,6 +80,7 @@
     "gm": {
       "types": [
         "gm",
+        "command",
         "gm-subscribe",
         "acknowledgement",
         "resync-required",
@@ -84,6 +88,7 @@
       ],
       "validators": [
         "gm",
+        "command",
         "gm-subscribe",
         "acknowledgement",
         "resync-required",
@@ -110,6 +115,19 @@
     "player",
     "observer"
   ],
-  "commandVariants": [],
+  "commandVariants": [
+    "scene.create",
+    "scene.update",
+    "table.show",
+    "table.clear",
+    "token.create",
+    "token.update",
+    "token.move",
+    "light.create",
+    "light.update",
+    "wall.create",
+    "wall.update",
+    "entity.delete"
+  ],
   "transientVariants": []
 }

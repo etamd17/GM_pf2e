@@ -60,7 +60,10 @@ def test_registry_fails_closed_for_reserved_events_and_audiences():
     api = boundary()
     registry = api.ContractRegistry()
     assert registry.schema_for_event("vtt.snapshot", "table") == "table"
-    for event, audience in (("vtt.command", "gm"), ("vtt.snapshot", "player"), ("bogus", "gm")):
+    # commands-1 makes vtt.command ready for the GM only; a table has no command schema.
+    assert registry.schema_for_event("vtt.command", "gm") == "command"
+    for event, audience in (("vtt.command", "table"), ("vtt.transient", "gm"), ("vtt.whisper.send", "gm"),
+                            ("vtt.snapshot", "player"), ("bogus", "gm")):
         with pytest.raises(api.ProtocolValidationError):
             registry.schema_for_event(event, audience)
 

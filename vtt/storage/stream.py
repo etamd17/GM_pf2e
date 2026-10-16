@@ -49,19 +49,35 @@ def _ensure_stream_row(session: Session, campaign_id: str) -> None:
     )
 
 
-def advance(session: Session, campaign_id: str, event: dict[str, Any]) -> int:
-    """Lock the campaign stream, take the next position and record ``event``
-    at it. Call inside the same transaction as the change itself."""
-    if event.get("kind") not in EVENT_KINDS:
-        raise ValueError("unknown outbox event kind")
-    # The row lock is the ordering guarantee. Lock the existing row directly;
-    # only a campaign's very first write inserts it (concurrent first writers
-    # meet on the insert's conflict, then both take the lock below).
+def lock_stream(session: Session, campaign_id: str) -> VttCampaignStream:
+    """Take the campaign's stream-row lock for the rest of the transaction.
+
+    The row lock is the ordering guarantee. Lock the existing row directly;
+    only a campaign's very first write inserts it (concurrent first writers
+    meet on the insert's conflict, then both take the lock below). Commands
+    take it first, before their receipt lookup, so it also serializes
+    concurrent use of one receipt key (section 7 step 4)."""
     locked = select(VttCampaignStream).where(VttCampaignStream.campaign_id == campaign_id).with_for_update()
     row = session.execute(locked).scalar_one_or_none()
     if row is None:
         _ensure_stream_row(session, campaign_id)
         row = session.execute(locked).scalar_one()
+    return row
+
+
+def advance(session: Session, campaign_id: str, event: dict[str, Any]) -> int:
+    """Lock the campaign stream, take the next position and record ``event``
+    at it. Call inside the same transaction as the change itself.
+
+    ``event["origin"]`` (commands only) is ``{"subscriptionId", "commandId"}``:
+    the subscription that issued the command, which alone receives the
+    correlated completion frame (section 7). Server-only, like the rest."""
+    if event.get("kind") not in EVENT_KINDS:
+        raise ValueError("unknown outbox event kind")
+    origin = event.get("origin")
+    if origin is not None and (not isinstance(origin, dict) or set(origin) != {"subscriptionId", "commandId"}):
+        raise ValueError("malformed command origin")
+    row = lock_stream(session, campaign_id)
     row.position += 1
     session.add(VttOutbox(campaign_id=campaign_id, position=row.position, event=event))
     session.flush()

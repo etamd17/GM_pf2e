@@ -1,4 +1,4 @@
-"""Socket.IO namespace ``/vtt`` (VTT-ADR-0002 sections 1, 2, 3 and 10), M1 read path.
+"""Socket.IO namespace ``/vtt`` (VTT-ADR-0002 sections 1, 2, 3, 7 and 10): M1 read path, M2 commands.
 
 Handshake
 ---------
@@ -19,7 +19,11 @@ Events
   audience comes from the authenticated principal, never from the request. A
   request for a version other than 1 gets the v1 ``unsupported-version``
   envelope. Any other invalid request disconnects (fail closed).
-- Every other event is refused in M1. A table sending anything but subscribe is
+- ``vtt.command`` (M2) runs the durable pipeline in ``vtt.commands`` and answers
+  with one ``vtt.ack`` event, emitted only after the outcome is committed; the
+  projection frames follow through ``Hub.notify``. A command without a
+  well-formed ``commandId`` cannot be acknowledged, so it disconnects.
+- Every other event is refused. A table sending anything but subscribe is
   disconnected: it has no command, transient or whisper capability (criterion 14).
 """
 
@@ -36,6 +40,7 @@ from flask import request
 from flask_socketio import ConnectionRefusedError, SocketIO, disconnect
 
 from core.persistence.database import Database
+from vtt.commands import CommandService, RateLimiter
 from vtt.delivery.hub import AccessLost, Hub, Principal
 from vtt.projection.serializers import TokenKey
 from vtt.protocol import ContractRegistry, ProtocolValidationError, StrictJSON
@@ -66,6 +71,7 @@ class VttService:
     socketio: SocketIO
     hub: Hub
     principals: dict[str, Principal]
+    commands: CommandService
 
 
 def table_verifier(grant_key: bytes, credential: str) -> str:
@@ -74,7 +80,8 @@ def table_verifier(grant_key: bytes, credential: str) -> str:
 
 def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: TokenKey,
              registry: ContractRegistry | None = None, allowed_origins: list[str] | None = None,
-             async_mode: str | None = None, now: Callable[[], datetime] | None = None) -> VttService:
+             async_mode: str | None = None, now: Callable[[], datetime] | None = None,
+             rate_limiter: RateLimiter | None = None) -> VttService:
     registry = registry or ContractRegistry()
     clock = now or (lambda: datetime.now(timezone.utc))
     socketio = SocketIO(app, json=StrictJSON, async_mode=async_mode, manage_session=False,
@@ -96,6 +103,7 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
         socketio.server.disconnect(sid, namespace=NAMESPACE)
 
     hub = Hub(db, registry, token_key, emit, access_check, disconnect=close)
+    commands = CommandService(db, registry, token_key, hub, host.is_campaign_gm, rate_limiter=rate_limiter)
 
     def authenticate(auth: Any) -> Principal:
         credential = request.cookies.get(TABLE_COOKIE)
@@ -126,6 +134,7 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
     def on_disconnect(*_args):
         principals.pop(request.sid, None)
         hub.unsubscribe(request.sid)
+        commands.rate.forget(request.sid)
 
     @socketio.on("vtt.subscribe", namespace=NAMESPACE)
     def on_subscribe(message=None):
@@ -155,6 +164,22 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
             return _rejection("session-ended")
         return None
 
+    @socketio.on("vtt.command", namespace=NAMESPACE)
+    def on_command(message=None):
+        sid = request.sid
+        principal = principals.get(sid)
+        if principal is None or principal.kind == "table":
+            disconnect()                # criterion 14: a table has no commands
+            return None
+        result = commands.handle(sid, principal, message)
+        if result.ack is None:
+            disconnect()
+            return None
+        hub.emit(sid, "vtt.ack", result.ack)
+        if result.notify is not None:
+            hub.notify(result.notify)
+        return None
+
     @socketio.on("*", namespace=NAMESPACE)
     def on_other(_event=None, *_args):
         # M1 registers no commands, transients or whispers. A table may never send them.
@@ -163,4 +188,4 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
             disconnect()
         return None
 
-    return VttService(socketio=socketio, hub=hub, principals=principals)
+    return VttService(socketio=socketio, hub=hub, principals=principals, commands=commands)

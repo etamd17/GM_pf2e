@@ -9,11 +9,38 @@
 //   sceneId null means no entities
 // - GM controllerIds and capabilities hold no repeats
 // - a GM wall is not zero-length
+// Commands: no repeated expected key; updates, moves, deletes and table
+// commands name their target's expected version; no repeated controller;
+// a created (or fully re-ended) wall is not zero-length.
 
 const key = (item) => JSON.stringify([item?.kind, item?.id]);
 const distinct = (values) => new Set(values).size === values.length;
 
+const TARGETED = {
+  'scene.update': 'scene', 'table.show': 'scene', 'table.clear': 'scene',
+  'token.update': 'token', 'token.move': 'token', 'light.update': 'light', 'wall.update': 'wall',
+  'entity.delete': null,
+};
+
+function checkCommand(message) {
+  const expected = (message.expected ?? []).map(key);
+  if (!distinct(expected)) return false;
+  const payload = message.payload ?? {};
+  if (Object.hasOwn(TARGETED, message.type)) {
+    const kind = TARGETED[message.type];
+    const target = kind === 'scene' ? ['scene', message.sceneId]
+      : kind === null ? [payload.kind, payload.id] : [kind, payload.id];
+    if (!expected.includes(key({ kind: target[0], id: target[1] }))) return false;
+  }
+  if (!distinct(payload.controllerIds ?? [])) return false;
+  if ((message.type === 'wall.create' || message.type === 'wall.update')
+      && ['x1', 'y1', 'x2', 'y2'].every((k) => Object.hasOwn(payload, k))
+      && payload.x1 === payload.x2 && payload.y1 === payload.y2) return false;
+  return true;
+}
+
 export function checkFrame(schemaKey, message) {
+  if (schemaKey === 'command' && message !== null && typeof message === 'object') return checkCommand(message);
   if ((schemaKey !== 'gm' && schemaKey !== 'table') || message === null || typeof message !== 'object') return true;
   let items;
   if (message.frame === 'snapshot') {

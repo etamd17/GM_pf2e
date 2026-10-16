@@ -94,7 +94,7 @@ class Hub:
         self._by_sid: dict[str, Subscription] = {}
         self._lock = threading.Lock()
         self.stats = {"snapshots": 0, "patches": 0, "suppressed": 0, "resyncs": 0, "invalid": 0,
-                      "delivery_errors": 0, "ended": 0}
+                      "delivery_errors": 0, "ended": 0, "completions": 0}
 
     # --- subscribe -------------------------------------------------------------------------
 
@@ -205,33 +205,55 @@ class Hub:
         if len(rows) > REPLAY_LIMIT:
             self._recover(sub, "buffer-overflow", depth)
             return
-        last = rows[-1].position
         if sub.audience == "table" and any(r.event.get("kind") == "table-pointer" for r in rows):
             self._recover(sub, "scene-changed", depth)
             return
+        # Section 7: exactly one frame carries a command's originCommandId, to the
+        # subscription that issued it. Split the batch after each row this
+        # subscription originated, so that row's completion frame is its own
+        # patch (empty when nothing visible here changed). Rows from other
+        # subscriptions, or from a subscription this one replaced, are ordinary.
+        start = 0
+        for index, row in enumerate(rows):
+            origin = row.event.get("origin")
+            if origin and origin.get("subscriptionId") == sub.subscription_id:
+                if not self._deliver_segment(sub, rows[start:index + 1], origin["commandId"], depth):
+                    return
+                start = index + 1
+        if start < len(rows):
+            self._deliver_segment(sub, rows[start:], None, depth)
+
+    def _deliver_segment(self, sub: Subscription, rows, origin_command_id: str | None, depth: int) -> bool:
+        """Deliver one run of committed rows as at most one patch. Returns False
+        when the subscription was replaced (resync) and delivery must stop."""
+        last = rows[-1].position
         keys: set[tuple[str, str]] = set()
         scene_changed = False
         for r in rows:
             ev = r.event
             if ev.get("sceneId") != sub.scene_id:
                 continue
-            if ev.get("kind") == "scene":
+            kind = ev.get("kind")
+            if kind == "scene" or (kind == "table-pointer" and ev.get("scene")):
                 scene_changed = True
-            elif ev.get("kind") == "entities":
+            elif kind == "entities":
                 keys.update((k, i) for k, i in ev.get("changed", []))
-        if not keys and not scene_changed:
+        if not keys and not scene_changed and origin_command_id is None:
             sub.cursor = last           # nothing this subscription can see changed
-            return
-        diff = self._diff(sub, keys, scene_changed)
-        if diff is None:
-            self._recover(sub, "scene-changed", depth)
-            return
-        upserted, removed, sent_after = diff
-        if not upserted and not removed:
+            return True
+        if keys or scene_changed:
+            diff = self._diff(sub, keys, scene_changed)
+            if diff is None:
+                self._recover(sub, "scene-changed", depth)
+                return False
+            upserted, removed, sent_after = diff
+        else:
+            upserted, removed, sent_after = [], [], sub.sent
+        if not upserted and not removed and origin_command_id is None:
             sub.cursor = last           # invisible change: no frame, no sequence number
             self.stats["suppressed"] += 1
-            return
-        frame = S.patch_frame(sub.subscription_id, sub.seq + 1, upserted, removed)
+            return True
+        frame = S.patch_frame(sub.subscription_id, sub.seq + 1, upserted, removed, origin_command_id)
         self.registry.validate(sub.audience, frame)
         self.emit(sub.sid, "vtt.patch", frame)
         # Only now has the client been sent the change.
@@ -239,6 +261,9 @@ class Hub:
         sub.seq += 1
         sub.sent = sent_after
         self.stats["patches"] += 1
+        if origin_command_id is not None:
+            self.stats["completions"] += 1
+        return True
 
     # --- recovery and ending ---------------------------------------------------------------
 
@@ -347,8 +372,7 @@ class Hub:
     def _scene(session, campaign_id: str, scene_id: str | None):
         if scene_id is None:
             return None
-        scene = session.get(VttScene, scene_id)
-        return scene if scene is not None and scene.campaign_id == campaign_id else None
+        return session.get(VttScene, (campaign_id, scene_id))
 
     @staticmethod
     def _rows(session, campaign_id: str, scene_id: str):

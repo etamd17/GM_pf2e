@@ -1,0 +1,995 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://vtt.invalid/v1/command.schema.json",
+  "title": "Command",
+  "description": "A GM command (VTT-ADR-0002 section 7). A table has no commands. Rules the schema cannot express are in vtt/protocol/semantics.py.",
+  "oneOf": [
+    {
+      "$ref": "#/definitions/SceneCreate"
+    },
+    {
+      "$ref": "#/definitions/SceneUpdate"
+    },
+    {
+      "$ref": "#/definitions/TableShow"
+    },
+    {
+      "$ref": "#/definitions/TableClear"
+    },
+    {
+      "$ref": "#/definitions/TokenCreate"
+    },
+    {
+      "$ref": "#/definitions/TokenUpdate"
+    },
+    {
+      "$ref": "#/definitions/TokenMove"
+    },
+    {
+      "$ref": "#/definitions/LightCreate"
+    },
+    {
+      "$ref": "#/definitions/LightUpdate"
+    },
+    {
+      "$ref": "#/definitions/WallCreate"
+    },
+    {
+      "$ref": "#/definitions/WallUpdate"
+    },
+    {
+      "$ref": "#/definitions/EntityDelete"
+    }
+  ],
+  "definitions": {
+    "ExpectedVersion": {
+      "title": "ExpectedVersion",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "version"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "scene",
+            "token",
+            "light",
+            "wall"
+          ]
+        },
+        "id": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "version": {
+          "$ref": "common.schema.json#/definitions/OpaqueToken"
+        }
+      }
+    },
+    "SceneCreatePayload": {
+      "title": "SceneCreatePayload",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "backgroundAssetId",
+        "gridSize",
+        "height",
+        "name",
+        "showGrid",
+        "width"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "maxLength": 120,
+          "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])"
+        },
+        "width": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 16384
+        },
+        "height": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 16384
+        },
+        "gridSize": {
+          "type": "number",
+          "minimum": 8,
+          "maximum": 1024
+        },
+        "showGrid": {
+          "type": "boolean"
+        },
+        "backgroundAssetId": {
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/definitions/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "SceneCreate": {
+      "title": "SceneCreate",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "campaignId",
+        "commandId",
+        "expected",
+        "payload",
+        "sceneId",
+        "schemaVersion",
+        "type"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "$ref": "common.schema.json#/definitions/SchemaVersion"
+        },
+        "commandId": {
+          "$ref": "common.schema.json#/definitions/OpaqueToken"
+        },
+        "campaignId": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "sceneId": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "type": {
+          "const": "scene.create"
+        },
+        "expected": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 0,
+          "items": {
+            "$ref": "#/definitions/ExpectedVersion"
+          }
+        },
+        "payload": {
+          "$ref": "#/definitions/SceneCreatePayload"
+        }
+      }
+    },
+    "SceneUpdatePayload": {
+      "title": "SceneUpdatePayload",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {
+        "name": {
+          "type": "string",
+          "maxLength": 120,
+          "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])"
+        },
+        "width": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 16384
+        },
+        "height": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 16384
+        },
+        "gridSize": {
+          "type": "number",
+          "minimum": 8,
+          "maximum": 1024
+        },
+        "showGrid": {
+          "type": "boolean"
+        },
+        "backgroundAssetId": {
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/definitions/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "published": {
+          "type": "boolean"
+        }
+      }
+    },
+    "SceneUpdate": {
+      "title": "SceneUpdate",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "campaignId",
+        "commandId",
+        "expected",
+        "payload",
+        "sceneId",
+        "schemaVersion",
+        "type"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "$ref": "common.schema.json#/definitions/SchemaVersion"
+        },
+        "commandId": {
+          "$ref": "common.schema.json#/definitions/OpaqueToken"
+        },
+        "campaignId": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "sceneId": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "type": {
+          "const": "scene.update"
+        },
+        "expected": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 1,
+          "items": {
+            "$ref": "#/definitions/ExpectedVersion"
+          }
+        },
+        "payload": {
+          "$ref": "#/definitions/SceneUpdatePayload"
+        }
+      }
+    },
+    "EmptyPayload": {
+      "title": "EmptyPayload",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {}
+    },
+    "TableShow": {
+      "title": "TableShow",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "campaignId",
+        "commandId",
+        "expected",
+        "payload",
+        "sceneId",
+        "schemaVersion",
+        "type"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "$ref": "common.schema.json#/definitions/SchemaVersion"
+        },
+        "commandId": {
+          "$ref": "common.schema.json#/definitions/OpaqueToken"
+        },
+        "campaignId": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "sceneId": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "type": {
+          "const": "table.show"
+        },
+        "expected": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 1,
+          "items": {
+            "$ref": "#/definitions/ExpectedVersion"
+          }
+        },
+        "payload": {
+          "$ref": "#/definitions/EmptyPayload"
+        }
+      }
+    },
+    "TableClear": {
+      "title": "TableClear",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "campaignId",
+        "commandId",
+        "expected",
+        "payload",
+        "sceneId",
+        "schemaVersion",
+        "type"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "$ref": "common.schema.json#/definitions/SchemaVersion"
+        },
+        "commandId": {
+          "$ref": "common.schema.json#/definitions/OpaqueToken"
+        },
+        "campaignId": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "sceneId": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "type": {
+          "const": "table.clear"
+        },
+        "expected": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 1,
+          "items": {
+            "$ref": "#/definitions/ExpectedVersion"
+          }
+        },
+        "payload": {
+          "$ref": "#/definitions/EmptyPayload"
+        }
+      }
+    },
+    "TokenCreatePayload": {
+      "title": "TokenCreatePayload",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actorId",
+        "artAssetId",
+        "color",
+        "controllerIds",
+        "hidden",
+        "id",
+        "label",
+        "locked",
+        "size",
+        "x",
+        "y"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "x": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "y": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "size": {
+          "type": "number",
+          "minimum": 0.25,
+          "maximum": 10
+        },
+        "label": {
+          "$ref": "common.schema.json#/definitions/Label"
+        },
+        "color": {
+          "$ref": "common.schema.json#/definitions/Color"
+        },
+        "artAssetId": {
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/definitions/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "actorId": {
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/definitions/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hidden": {
+          "type": "boolean"
+        },
+        "locked": {
+          "type": "boolean"
+        },
+        "controllerIds": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "common.schema.json#/definitions/Id"
+          }
+        }
+      }
+    },
+    "TokenCreate": {
+      "title": "TokenCreate",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "campaignId",
+        "commandId",
+        "expected",
+        "payload",
+        "sceneId",
+        "schemaVersion",
+        "type"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "$ref": "common.schema.json#/definitions/SchemaVersion"
+        },
+        "commandId": {
+          "$ref": "common.schema.json#/definitions/OpaqueToken"
+        },
+        "campaignId": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "sceneId": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "type": {
+          "const": "token.create"
+        },
+        "expected": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 0,
+          "items": {
+            "$ref": "#/definitions/ExpectedVersion"
+          }
+        },
+        "payload": {
+          "$ref": "#/definitions/TokenCreatePayload"
+        }
+      }
+    },
+    "TokenUpdatePayload": {
+      "title": "TokenUpdatePayload",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "x": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "y": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "size": {
+          "type": "number",
+          "minimum": 0.25,
+          "maximum": 10
+        },
+        "label": {
+          "$ref": "common.schema.json#/definitions/Label"
+        },
+        "color": {
+          "$ref": "common.schema.json#/definitions/Color"
+        },
+        "artAssetId": {
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/definitions/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "actorId": {
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/definitions/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hidden": {
+          "type": "boolean"
+        },
+        "locked": {
+          "type": "boolean"
+        },
+        "controllerIds": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "common.schema.json#/definitions/Id"
+          }
+        }
+      }
+    },
+    "TokenUpdate": {
+      "title": "TokenUpdate",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "campaignId",
+        "commandId",
+        "expected",
+        "payload",
+        "sceneId",
+        "schemaVersion",
+        "type"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "$ref": "common.schema.json#/definitions/SchemaVersion"
+        },
+        "commandId": {
+          "$ref": "common.schema.json#/definitions/OpaqueToken"
+        },
+        "campaignId": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "sceneId": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "type": {
+          "const": "token.update"
+        },
+        "expected": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 1,
+          "items": {
+            "$ref": "#/definitions/ExpectedVersion"
+          }
+        },
+        "payload": {
+          "$ref": "#/definitions/TokenUpdatePayload"
+        }
+      }
+    },
+    "TokenMovePayload": {
+      "title": "TokenMovePayload",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "x",
+        "y"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "x": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "y": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        }
+      }
+    },
+    "TokenMove": {
+      "title": "TokenMove",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "campaignId",
+        "commandId",
+        "expected",
+        "payload",
+        "sceneId",
+        "schemaVersion",
+        "type"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "$ref": "common.schema.json#/definitions/SchemaVersion"
+        },
+        "commandId": {
+          "$ref": "common.schema.json#/definitions/OpaqueToken"
+        },
+        "campaignId": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "sceneId": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "type": {
+          "const": "token.move"
+        },
+        "expected": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 1,
+          "items": {
+            "$ref": "#/definitions/ExpectedVersion"
+          }
+        },
+        "payload": {
+          "$ref": "#/definitions/TokenMovePayload"
+        }
+      }
+    },
+    "LightCreatePayload": {
+      "title": "LightCreatePayload",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "color",
+        "hidden",
+        "id",
+        "radius",
+        "x",
+        "y"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "x": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "y": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "radius": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 16384
+        },
+        "color": {
+          "$ref": "common.schema.json#/definitions/Color"
+        },
+        "hidden": {
+          "type": "boolean"
+        }
+      }
+    },
+    "LightCreate": {
+      "title": "LightCreate",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "campaignId",
+        "commandId",
+        "expected",
+        "payload",
+        "sceneId",
+        "schemaVersion",
+        "type"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "$ref": "common.schema.json#/definitions/SchemaVersion"
+        },
+        "commandId": {
+          "$ref": "common.schema.json#/definitions/OpaqueToken"
+        },
+        "campaignId": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "sceneId": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "type": {
+          "const": "light.create"
+        },
+        "expected": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 0,
+          "items": {
+            "$ref": "#/definitions/ExpectedVersion"
+          }
+        },
+        "payload": {
+          "$ref": "#/definitions/LightCreatePayload"
+        }
+      }
+    },
+    "LightUpdatePayload": {
+      "title": "LightUpdatePayload",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "x": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "y": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "radius": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 16384
+        },
+        "color": {
+          "$ref": "common.schema.json#/definitions/Color"
+        },
+        "hidden": {
+          "type": "boolean"
+        }
+      }
+    },
+    "LightUpdate": {
+      "title": "LightUpdate",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "campaignId",
+        "commandId",
+        "expected",
+        "payload",
+        "sceneId",
+        "schemaVersion",
+        "type"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "$ref": "common.schema.json#/definitions/SchemaVersion"
+        },
+        "commandId": {
+          "$ref": "common.schema.json#/definitions/OpaqueToken"
+        },
+        "campaignId": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "sceneId": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "type": {
+          "const": "light.update"
+        },
+        "expected": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 1,
+          "items": {
+            "$ref": "#/definitions/ExpectedVersion"
+          }
+        },
+        "payload": {
+          "$ref": "#/definitions/LightUpdatePayload"
+        }
+      }
+    },
+    "WallCreatePayload": {
+      "title": "WallCreatePayload",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "doorState",
+        "id",
+        "x1",
+        "x2",
+        "y1",
+        "y2"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "x1": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "y1": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "x2": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "y2": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "doorState": {
+          "type": "string",
+          "enum": [
+            "none",
+            "open",
+            "closed",
+            "locked",
+            "secret"
+          ]
+        }
+      }
+    },
+    "WallCreate": {
+      "title": "WallCreate",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "campaignId",
+        "commandId",
+        "expected",
+        "payload",
+        "sceneId",
+        "schemaVersion",
+        "type"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "$ref": "common.schema.json#/definitions/SchemaVersion"
+        },
+        "commandId": {
+          "$ref": "common.schema.json#/definitions/OpaqueToken"
+        },
+        "campaignId": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "sceneId": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "type": {
+          "const": "wall.create"
+        },
+        "expected": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 0,
+          "items": {
+            "$ref": "#/definitions/ExpectedVersion"
+          }
+        },
+        "payload": {
+          "$ref": "#/definitions/WallCreatePayload"
+        }
+      }
+    },
+    "WallUpdatePayload": {
+      "title": "WallUpdatePayload",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "x1": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "y1": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "x2": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "y2": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "doorState": {
+          "type": "string",
+          "enum": [
+            "none",
+            "open",
+            "closed",
+            "locked",
+            "secret"
+          ]
+        }
+      }
+    },
+    "WallUpdate": {
+      "title": "WallUpdate",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "campaignId",
+        "commandId",
+        "expected",
+        "payload",
+        "sceneId",
+        "schemaVersion",
+        "type"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "$ref": "common.schema.json#/definitions/SchemaVersion"
+        },
+        "commandId": {
+          "$ref": "common.schema.json#/definitions/OpaqueToken"
+        },
+        "campaignId": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "sceneId": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "type": {
+          "const": "wall.update"
+        },
+        "expected": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 1,
+          "items": {
+            "$ref": "#/definitions/ExpectedVersion"
+          }
+        },
+        "payload": {
+          "$ref": "#/definitions/WallUpdatePayload"
+        }
+      }
+    },
+    "EntityDeletePayload": {
+      "title": "EntityDeletePayload",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "token",
+            "light",
+            "wall"
+          ]
+        },
+        "id": {
+          "$ref": "common.schema.json#/definitions/Id"
+        }
+      }
+    },
+    "EntityDelete": {
+      "title": "EntityDelete",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "campaignId",
+        "commandId",
+        "expected",
+        "payload",
+        "sceneId",
+        "schemaVersion",
+        "type"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "$ref": "common.schema.json#/definitions/SchemaVersion"
+        },
+        "commandId": {
+          "$ref": "common.schema.json#/definitions/OpaqueToken"
+        },
+        "campaignId": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "sceneId": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "type": {
+          "const": "entity.delete"
+        },
+        "expected": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 1,
+          "items": {
+            "$ref": "#/definitions/ExpectedVersion"
+          }
+        },
+        "payload": {
+          "$ref": "#/definitions/EntityDeletePayload"
+        }
+      }
+    }
+  }
+}

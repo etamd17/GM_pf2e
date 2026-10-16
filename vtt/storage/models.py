@@ -1,4 +1,4 @@
-"""VTT storage (M1). PostgreSQL is authoritative (VTT-ADR-0002 sections 5, 10, 11).
+"""VTT storage (M1, M2). PostgreSQL is authoritative (VTT-ADR-0002 sections 5, 10, 11).
 
 These tables share the app's declarative ``Base`` so Alembic and the existing
 explicit ``Database.create_schema`` see them. Nothing here is read by the
@@ -16,6 +16,15 @@ legacy ``/map``.
 - ``vtt_outbox``: one row per committed position, naming what changed.
 - ``vtt_table_grants``: table device credentials. Only a verifier is stored
   (section 10). M1 creates the table; pairing/redemption is M3.
+- ``vtt_command_receipts`` (M2): one durable receipt per
+  ``(campaign, principal kind, principal id, commandId)`` (section 7), kept for
+  the campaign's lifetime so an old retry can never apply twice.
+
+Scene and entity ids are chosen by the client on create (so a retried create is
+idempotent), so they are unique per campaign, not globally: scenes are keyed
+``(campaign_id, id)`` and entities ``(campaign_id, scene_id, kind, id)``
+(migration 0004). A global key would let one campaign learn that an id exists
+in another.
 """
 
 from __future__ import annotations
@@ -34,6 +43,7 @@ from sqlalchemy import (
     ForeignKeyConstraint,
     Index,
     Integer,
+    PrimaryKeyConstraint,
     String,
     Text,
     UniqueConstraint,
@@ -44,6 +54,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from core.persistence.models import Base, utc_now
 
 ENTITY_KINDS = ("token", "light", "wall")
+RECEIPT_REJECTION_CODES = ("stale", "conflict", "validation-failed", "rule-violation")
 
 
 class VttCampaignStream(Base):
@@ -62,7 +73,7 @@ class VttCampaignStream(Base):
 class VttScene(Base):
     __tablename__ = "vtt_scenes"
 
-    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    id: Mapped[str] = mapped_column(String(128), nullable=False)
     campaign_id: Mapped[str] = mapped_column(
         String(64), ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False
     )
@@ -81,6 +92,9 @@ class VttScene(Base):
     )
 
     __table_args__ = (
+        PrimaryKeyConstraint("campaign_id", "id", name="pk_vtt_scenes"),
+        # Redundant with the key since 0004, kept because the entity and pointer
+        # foreign keys reference it.
         UniqueConstraint("campaign_id", "id", name="uq_vtt_scenes_campaign_scene"),
         CheckConstraint("width >= 1 AND width <= 16384", name="width_bounded"),
         CheckConstraint("height >= 1 AND height <= 16384", name="height_bounded"),
@@ -93,9 +107,9 @@ class VttEntity(Base):
     __tablename__ = "vtt_entities"
 
     campaign_id: Mapped[str] = mapped_column(String(64), nullable=False)
-    scene_id: Mapped[str] = mapped_column(String(128), primary_key=True)
-    kind: Mapped[str] = mapped_column(String(16), primary_key=True)
-    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    scene_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    id: Mapped[str] = mapped_column(String(128), nullable=False)
     hidden: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
@@ -105,6 +119,7 @@ class VttEntity(Base):
     )
 
     __table_args__ = (
+        PrimaryKeyConstraint("campaign_id", "scene_id", "kind", "id", name="pk_vtt_entities"),
         ForeignKeyConstraint(
             ["campaign_id", "scene_id"], ["vtt_scenes.campaign_id", "vtt_scenes.id"],
             name="fk_vtt_entities_scene", ondelete="CASCADE",
@@ -165,4 +180,34 @@ class VttTableGrant(Base):
     __table_args__ = (
         CheckConstraint("epoch >= 0", name="epoch_nonnegative"),
         Index("ix_vtt_table_grants_campaign_id", "campaign_id"),
+    )
+
+
+class VttCommandReceipt(Base):
+    __tablename__ = "vtt_command_receipts"
+
+    id: Mapped[int] = mapped_column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True,
+                                    autoincrement=True)
+    campaign_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False
+    )
+    principal_kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    principal_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    command_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    # SHA-256 hex of the canonical request (schemaVersion, campaign, scene, type,
+    # expected, payload); a retry with another digest is ``command-id-reused``.
+    digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    outcome: Mapped[str] = mapped_column(String(16), nullable=False)
+    code: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+    __table_args__ = (
+        UniqueConstraint("campaign_id", "principal_kind", "principal_id", "command_id",
+                         name="uq_vtt_command_receipts_key"),
+        CheckConstraint("principal_kind in ('member', 'table')", name="known_principal_kind"),
+        CheckConstraint(
+            "(outcome = 'applied' AND code IS NULL) OR (outcome = 'rejected' AND code in "
+            "('stale', 'conflict', 'validation-failed', 'rule-violation'))",
+            name="outcome_code_consistent",
+        ),
     )

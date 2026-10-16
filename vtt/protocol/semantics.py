@@ -18,6 +18,15 @@ Rules (each a ``ProtocolValidationError``):
   ``sceneId: null`` means no entities at all;
 * GM ``controllerIds`` and ``capabilities`` hold no repeats;
 * a GM wall is not zero-length.
+
+Commands (``command``, batch commands-1):
+
+* ``expected`` holds no repeated ``(kind, id)``;
+* an update, move, delete, ``table.show`` or ``table.clear`` names its target's
+  expected version: ``("scene", sceneId)`` for scene and table commands, the
+  payload's entity otherwise;
+* ``controllerIds`` hold no repeats;
+* a created wall, or an updated one naming all four ends, is not zero-length.
 """
 
 from __future__ import annotations
@@ -36,9 +45,48 @@ def _no_repeats(values, what):
         raise SemanticError(f'repeated {what}')
 
 
+_TARGETED = {
+    'scene.update': 'scene', 'table.show': 'scene', 'table.clear': 'scene',
+    'token.update': 'token', 'token.move': 'token', 'light.update': 'light', 'wall.update': 'wall',
+    'entity.delete': None,
+}
+
+
+def command_target(message) -> tuple[str, str] | None:
+    """The ``(kind, id)`` a schema-valid command must carry an expected version
+    for, or None for a create."""
+    kind = _TARGETED.get(message.get('type'), False)
+    payload = message.get('payload') or {}
+    if kind is False:
+        return None
+    if kind == 'scene':
+        return ('scene', message.get('sceneId'))
+    if kind is None:
+        return (payload.get('kind'), payload.get('id'))
+    return (kind, payload.get('id'))
+
+
+def check_command(message) -> None:
+    expected = message.get('expected') or []
+    keys = _keys(expected)
+    _no_repeats(keys, 'expected key')
+    target = command_target(message)
+    if target is not None and target not in keys:
+        raise SemanticError('missing expected version for the target')
+    payload = message.get('payload') or {}
+    _no_repeats(list(payload.get('controllerIds') or []), 'controller')
+    if message.get('type') in ('wall.create', 'wall.update') and all(
+            k in payload for k in ('x1', 'y1', 'x2', 'y2')):
+        if (payload['x1'], payload['y1']) == (payload['x2'], payload['y2']):
+            raise SemanticError('zero-length wall')
+
+
 def check_frame(schema_key: str, message) -> None:
-    """Raise SemanticError when a schema-valid gm/table frame breaks a rule.
-    Other schema keys have no extra rules."""
+    """Raise SemanticError when a schema-valid message breaks a rule. Only
+    gm/table frames and commands have extra rules."""
+    if schema_key == 'command' and isinstance(message, dict):
+        check_command(message)
+        return
     if schema_key not in ('gm', 'table') or not isinstance(message, dict):
         return
     frame = message.get('frame')

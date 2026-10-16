@@ -35,7 +35,7 @@ def update_scene(db: Database, campaign_id: str, scene_id: str, **fields: Any) -
     if set(fields) - allowed:
         raise ValueError("unknown scene field")
     with db.transaction() as session:
-        scene = session.get(VttScene, scene_id)
+        scene = session.get(VttScene, (campaign_id, scene_id))
         if scene is None or scene.campaign_id != campaign_id:
             raise LookupError("scene not found")
         for name, value in fields.items():
@@ -57,7 +57,7 @@ def set_table_pointer(db: Database, campaign_id: str, scene_id: str | None) -> i
 def upsert_entity(db: Database, campaign_id: str, scene_id: str, kind: str, entity_id: str,
                   data: dict[str, Any], *, hidden: bool = False) -> int:
     with db.transaction() as session:
-        row = session.get(VttEntity, (scene_id, kind, entity_id))
+        row = session.get(VttEntity, (campaign_id, scene_id, kind, entity_id))
         if row is None:
             session.add(VttEntity(campaign_id=campaign_id, scene_id=scene_id, kind=kind, id=entity_id,
                                   data=dict(data), hidden=hidden))

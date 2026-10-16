@@ -125,3 +125,32 @@ for case results and the identical schema digest. Type generation is proved in a
 directory; the real generator and committed browser outputs remain Claude's work.
 
 These checks do not read or change source scenes, assets, live campaigns, or credentials.
+
+## Commands, batch commands-1 (M2, Claude, 2026-10-16)
+
+Additive. `vtt.command` is `schema-ready` for the GM surface only, validated by `command`
+(`schemas/command.schema.json`); a table has no command schema and is disconnected if it sends one.
+Transients and whispers stay reserved. No existing schema or fixture changed.
+
+- The envelope is closed: `schemaVersion`, `commandId` (`OpaqueToken`), `campaignId`, `sceneId`,
+  `type`, `expected` and `payload`, as a `oneOf` over the twelve types in `commandVariants`:
+  `scene.create`, `scene.update`, `table.show`, `table.clear`, `token.create`, `token.update`,
+  `token.move`, `light.create`, `light.update`, `wall.create`, `wall.update`, `entity.delete`.
+- `expected` lists `{kind, id, version}` preconditions. A create carries none (`maxItems: 0`); every
+  other type carries at most one.
+- Ids for creates are chosen by the client, so a retried create is idempotent under its receipt and
+  the client knows the id without a new acknowledgement field. The server keys scenes and entities
+  per campaign, so the same id in two campaigns is two objects and reveals nothing.
+- `scene.update` fields are all optional; an empty update is a valid no-op that still completes.
+- Rules the schema cannot express (all three semantic runtimes; the client copy lands with M4):
+  - `expected` repeats no `(kind, id)`;
+  - an update, move or delete names its target's expected version, and so do `table.show` and
+    `table.clear` (`("scene", sceneId)`);
+  - `controllerIds` repeat nothing;
+  - a created wall, or an updated one naming all four ends, is not zero-length. A partial update
+    that makes a wall zero-length is refused by the server with `validation-failed`.
+- The acknowledgement schema is unchanged. Rejection codes and their receipt behaviour are
+  ADR-0002 section 8; the server's order of checks is documented in `vtt/commands/service.py`.
+- The 2 MiB rule from M0 is enforced at write time: a command that would make the scene's GM
+  snapshot exceed the frame limit or the 4,096 GM / 2,048 table entity caps is refused with
+  `validation-failed` and changes nothing.

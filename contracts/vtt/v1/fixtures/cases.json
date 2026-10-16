@@ -2988,5 +2988,903 @@
       "campaignId": "campaign_b",
       "sceneId": "scene_secret"
     }
+  },
+  {
+    "id": "command-scene-create",
+    "schema": "command",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "scene.create",
+      "expected": [],
+      "payload": {
+        "name": "Docks",
+        "width": 2048,
+        "height": 1024,
+        "gridSize": 64,
+        "showGrid": true,
+        "backgroundAssetId": null
+      }
+    }
+  },
+  {
+    "id": "command-scene-update-publish",
+    "schema": "command",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "scene.update",
+      "expected": [
+        {
+          "kind": "scene",
+          "id": "scene_a",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {
+        "published": true,
+        "name": "Docks at night"
+      }
+    }
+  },
+  {
+    "id": "command-scene-update-empty",
+    "schema": "command",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "scene.update",
+      "expected": [
+        {
+          "kind": "scene",
+          "id": "scene_a",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {}
+    }
+  },
+  {
+    "id": "command-table-show",
+    "schema": "command",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "table.show",
+      "expected": [
+        {
+          "kind": "scene",
+          "id": "scene_a",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {}
+    }
+  },
+  {
+    "id": "command-table-clear",
+    "schema": "command",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "table.clear",
+      "expected": [
+        {
+          "kind": "scene",
+          "id": "scene_a",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {}
+    }
+  },
+  {
+    "id": "command-token-create",
+    "schema": "command",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "token.create",
+      "expected": [],
+      "payload": {
+        "id": "tok_1",
+        "x": 64,
+        "y": 64,
+        "size": 1,
+        "label": "Valeros",
+        "color": 255,
+        "artAssetId": null,
+        "actorId": null,
+        "hidden": false,
+        "locked": false,
+        "controllerIds": [
+          "user_p"
+        ]
+      }
+    }
+  },
+  {
+    "id": "command-token-update",
+    "schema": "command",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "token.update",
+      "expected": [
+        {
+          "kind": "token",
+          "id": "tok_1",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {
+        "id": "tok_1",
+        "hidden": true,
+        "controllerIds": []
+      }
+    }
+  },
+  {
+    "id": "command-token-move",
+    "schema": "command",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "token.move",
+      "expected": [
+        {
+          "kind": "token",
+          "id": "tok_1",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {
+        "id": "tok_1",
+        "x": 128.5,
+        "y": 0
+      }
+    }
+  },
+  {
+    "id": "command-light-create",
+    "schema": "command",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "light.create",
+      "expected": [],
+      "payload": {
+        "id": "light_1",
+        "x": 10,
+        "y": 10,
+        "radius": 120,
+        "color": 16777215,
+        "hidden": true
+      }
+    }
+  },
+  {
+    "id": "command-light-update",
+    "schema": "command",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "light.update",
+      "expected": [
+        {
+          "kind": "light",
+          "id": "light_1",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {
+        "id": "light_1",
+        "radius": 0
+      }
+    }
+  },
+  {
+    "id": "command-wall-create",
+    "schema": "command",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "wall.create",
+      "expected": [],
+      "payload": {
+        "id": "wall_1",
+        "x1": 0,
+        "y1": 0,
+        "x2": 64,
+        "y2": 0,
+        "doorState": "closed"
+      }
+    }
+  },
+  {
+    "id": "command-wall-update-door",
+    "schema": "command",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "wall.update",
+      "expected": [
+        {
+          "kind": "wall",
+          "id": "wall_1",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {
+        "id": "wall_1",
+        "doorState": "open"
+      }
+    }
+  },
+  {
+    "id": "command-entity-delete",
+    "schema": "command",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "entity.delete",
+      "expected": [
+        {
+          "kind": "wall",
+          "id": "wall_1",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {
+        "kind": "wall",
+        "id": "wall_1"
+      }
+    }
+  },
+  {
+    "id": "command-invalid-unknown-type",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "token.teleport",
+      "expected": [
+        {
+          "kind": "token",
+          "id": "tok_1",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {
+        "id": "tok_1",
+        "x": 128.5,
+        "y": 0
+      }
+    }
+  },
+  {
+    "id": "command-invalid-version-2",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 2,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "token.move",
+      "expected": [
+        {
+          "kind": "token",
+          "id": "tok_1",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {
+        "id": "tok_1",
+        "x": 128.5,
+        "y": 0
+      }
+    }
+  },
+  {
+    "id": "command-invalid-extra-envelope-field",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "token.move",
+      "expected": [
+        {
+          "kind": "token",
+          "id": "tok_1",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {
+        "id": "tok_1",
+        "x": 128.5,
+        "y": 0
+      },
+      "audience": "gm"
+    }
+  },
+  {
+    "id": "command-invalid-extra-payload-field",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "token.move",
+      "expected": [
+        {
+          "kind": "token",
+          "id": "tok_1",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {
+        "id": "tok_1",
+        "x": 128.5,
+        "y": 0,
+        "hp": 10
+      }
+    }
+  },
+  {
+    "id": "command-invalid-table-show-with-payload",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "table.show",
+      "expected": [
+        {
+          "kind": "scene",
+          "id": "scene_a",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {
+        "sceneId": "scene_b"
+      }
+    }
+  },
+  {
+    "id": "command-invalid-create-with-expected",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "token.create",
+      "expected": [
+        {
+          "kind": "token",
+          "id": "tok_1",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {
+        "id": "tok_1",
+        "x": 64,
+        "y": 64,
+        "size": 1,
+        "label": "Valeros",
+        "color": 255,
+        "artAssetId": null,
+        "actorId": null,
+        "hidden": false,
+        "locked": false,
+        "controllerIds": [
+          "user_p"
+        ]
+      }
+    }
+  },
+  {
+    "id": "command-invalid-move-without-expected",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "token.move",
+      "expected": [],
+      "payload": {
+        "id": "tok_1",
+        "x": 128.5,
+        "y": 0
+      }
+    }
+  },
+  {
+    "id": "command-invalid-move-expects-other-token",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "token.move",
+      "expected": [
+        {
+          "kind": "token",
+          "id": "tok_2",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {
+        "id": "tok_1",
+        "x": 128.5,
+        "y": 0
+      }
+    }
+  },
+  {
+    "id": "command-invalid-delete-expects-wrong-kind",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "entity.delete",
+      "expected": [
+        {
+          "kind": "token",
+          "id": "wall_1",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {
+        "kind": "wall",
+        "id": "wall_1"
+      }
+    }
+  },
+  {
+    "id": "command-invalid-scene-update-without-expected",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "scene.update",
+      "expected": [],
+      "payload": {
+        "published": true,
+        "name": "Docks at night"
+      }
+    }
+  },
+  {
+    "id": "command-invalid-table-show-expects-other-scene",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "table.show",
+      "expected": [
+        {
+          "kind": "scene",
+          "id": "scene_b",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {}
+    }
+  },
+  {
+    "id": "command-invalid-repeated-expected",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "token.move",
+      "expected": [
+        {
+          "kind": "token",
+          "id": "tok_1",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "kind": "token",
+          "id": "tok_1",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {
+        "id": "tok_1",
+        "x": 128.5,
+        "y": 0
+      }
+    }
+  },
+  {
+    "id": "command-invalid-repeated-controller",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "token.create",
+      "expected": [],
+      "payload": {
+        "id": "tok_1",
+        "x": 64,
+        "y": 64,
+        "size": 1,
+        "label": "Valeros",
+        "color": 255,
+        "artAssetId": null,
+        "actorId": null,
+        "hidden": false,
+        "locked": false,
+        "controllerIds": [
+          "user_p",
+          "user_p"
+        ]
+      }
+    }
+  },
+  {
+    "id": "command-invalid-zero-length-wall-create",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "wall.create",
+      "expected": [],
+      "payload": {
+        "id": "wall_1",
+        "x1": 0,
+        "y1": 0,
+        "x2": 0,
+        "y2": 0,
+        "doorState": "closed"
+      }
+    }
+  },
+  {
+    "id": "command-invalid-zero-length-wall-update",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "wall.update",
+      "expected": [
+        {
+          "kind": "wall",
+          "id": "wall_1",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {
+        "id": "wall_1",
+        "doorState": "open",
+        "x1": 5,
+        "y1": 5,
+        "x2": 5,
+        "y2": 5
+      }
+    }
+  },
+  {
+    "id": "command-invalid-delete-scene-kind",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "entity.delete",
+      "expected": [
+        {
+          "kind": "wall",
+          "id": "wall_1",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {
+        "kind": "scene",
+        "id": "wall_1"
+      }
+    }
+  },
+  {
+    "id": "command-invalid-move-missing-y",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "token.move",
+      "expected": [
+        {
+          "kind": "token",
+          "id": "tok_1",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {
+        "id": "tok_1",
+        "x": 128.5
+      }
+    }
+  },
+  {
+    "id": "command-invalid-coord-out-of-range",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "token.move",
+      "expected": [
+        {
+          "kind": "token",
+          "id": "tok_1",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {
+        "id": "tok_1",
+        "x": 16385,
+        "y": 0
+      }
+    }
+  },
+  {
+    "id": "command-invalid-short-command-id",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "short",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "token.move",
+      "expected": [
+        {
+          "kind": "token",
+          "id": "tok_1",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {
+        "id": "tok_1",
+        "x": 128.5,
+        "y": 0
+      }
+    }
+  },
+  {
+    "id": "command-invalid-null-scene",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": null,
+      "type": "token.move",
+      "expected": [
+        {
+          "kind": "token",
+          "id": "tok_1",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {
+        "id": "tok_1",
+        "x": 128.5,
+        "y": 0
+      }
+    }
+  },
+  {
+    "id": "command-invalid-label-control-char",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "token.create",
+      "expected": [],
+      "payload": {
+        "id": "tok_1",
+        "x": 64,
+        "y": 64,
+        "size": 1,
+        "label": "Bad\u0007",
+        "color": 255,
+        "artAssetId": null,
+        "actorId": null,
+        "hidden": false,
+        "locked": false,
+        "controllerIds": [
+          "user_p"
+        ]
+      }
+    }
+  },
+  {
+    "id": "command-invalid-label-bidi-override",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "token.create",
+      "expected": [],
+      "payload": {
+        "id": "tok_1",
+        "x": 64,
+        "y": 64,
+        "size": 1,
+        "label": "a‮b",
+        "color": 255,
+        "artAssetId": null,
+        "actorId": null,
+        "hidden": false,
+        "locked": false,
+        "controllerIds": [
+          "user_p"
+        ]
+      }
+    }
+  },
+  {
+    "id": "command-invalid-create-missing-field",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "token.create",
+      "expected": [],
+      "payload": {
+        "id": "tok_1",
+        "x": 64,
+        "y": 64,
+        "size": 1,
+        "label": "Valeros",
+        "color": 255,
+        "artAssetId": null,
+        "actorId": null,
+        "hidden": false,
+        "controllerIds": [
+          "user_p"
+        ]
+      }
+    }
+  },
+  {
+    "id": "command-invalid-scene-create-bad-grid",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "scene.create",
+      "expected": [],
+      "payload": {
+        "name": "Docks",
+        "width": 2048,
+        "height": 1024,
+        "gridSize": 4,
+        "showGrid": true,
+        "backgroundAssetId": null
+      }
+    }
+  },
+  {
+    "id": "command-invalid-missing-expected-array",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "token.move",
+      "payload": {
+        "id": "tok_1",
+        "x": 128.5,
+        "y": 0
+      }
+    }
+  },
+  {
+    "id": "command-invalid-raw-duplicate-key",
+    "schema": "command",
+    "valid": false,
+    "raw": "{\"schemaVersion\": 1, \"commandId\": \"cmd_0123456789abcdef\", \"campaignId\": \"camp_a\", \"sceneId\": \"scene_a\", \"type\": \"token.move\", \"expected\": [{\"kind\": \"token\", \"id\": \"tok_1\", \"version\": \"vAAAAAAAAAAAAAAAAAAAAAAAA\"}], \"payload\": {\"id\": \"tok_1\", \"x\": 128.5, \"y\": 0, \"x\": 1}}"
   }
 ]
