@@ -32,7 +32,10 @@ def main(argv=None) -> int:
     scenes = [legacy.normalize_scene(s) for s in legacy.list_scenes(args.campaign)]
     db = Database.from_env("DATABASE_URL")
     try:
-        report = import_campaign(db, args.campaign, scenes, legacy.table_scene_id(args.campaign), apply=args.apply)
+        from vtt.assets.backends import from_env as asset_backend_from_env
+        from vtt.transport.app_wiring import _legacy_asset
+        report = import_campaign(db, args.campaign, scenes, legacy.table_scene_id(args.campaign), apply=args.apply,
+                                 read_asset=_legacy_asset, asset_backend=asset_backend_from_env())
     finally:
         db.dispose()
     print(json.dumps(report, indent=2))

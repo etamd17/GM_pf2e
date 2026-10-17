@@ -25,12 +25,19 @@ to an imported scene since.
 Lock order matches commands: the campaign stream row is locked first, before
 any destination row is read or written.
 
+Backgrounds and token art uploaded to /map (M6) are read from its asset files,
+checked with the asset store's own image rules, stored by content hash before
+the scene is written, and referenced by their asset ids. Content-addressed ids
+make a re-import of the same image the same asset, so assets need no
+provenance rows: identical bytes are the same asset by definition.
+
 The legacy store is only read. Nothing in it is changed.
 """
 
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 from dataclasses import dataclass, field
 from typing import Any
@@ -46,6 +53,8 @@ from vtt.storage.stream import advance, lock_stream
 ID_RE = re.compile(r"[A-Za-z0-9_-]{1,128}")
 PREFIX = "legacy_"
 HASHED_PREFIX = "legacyh_"
+ART_URL = re.compile(r"^/api/scenes/([^/?#]+)/tokens/([^/?#]+)/image(?:[?#].*)?$")
+ART_EXTENSIONS = (".png", ".jpg", ".webp")
 COORD_MAX = 16384.0
 LABEL_MAX = 80
 NAME_MAX = 120
@@ -63,6 +72,12 @@ class Plan:
     duplicates: list[str] = field(default_factory=list)  # mapped ids planned more than once
     dropped: list[str] = field(default_factory=list)
     clamped: list[str] = field(default_factory=list)
+    # Legacy image files that could supply a background or token art (M6).
+    # plan_scene only names them; resolve_assets reads and checks them.
+    background_files: list[str] = field(default_factory=list)
+    art_files: dict[str, list[str]] = field(default_factory=dict)  # token id -> candidate files
+    art_unsupported: int = 0          # token images that are not uploaded /map art
+    uploads: list[bytes] = field(default_factory=list)  # checked images to store before writing
 
 
 def vtt_id(legacy_id: Any) -> str:
@@ -140,9 +155,14 @@ def plan_scene(legacy: dict[str, Any]) -> Plan:
     if grid.get("offset_x") or grid.get("offset_y"):
         plan.dropped.append("grid offset (the VTT grid starts at the corner)")
 
+    background = legacy.get("background")
+    if background:
+        filename = (background or {}).get("filename") if isinstance(background, dict) else None
+        plan.background_files = [os.path.basename(str(filename))] if filename else []
+        if not plan.background_files:
+            plan.dropped.append("background image (no stored file)")
+
     # --- what has no VTT equivalent yet ------------------------------------------------------
-    if legacy.get("background"):
-        plan.dropped.append("background image (needs the asset store, M6)")
     fog = legacy.get("fog") or {}
     if fog.get("enabled") or _count(fog.get("operations")) or _count(fog.get("revealed_cells")):
         plan.dropped.append("fog and revealed areas")
@@ -155,7 +175,7 @@ def plan_scene(legacy: dict[str, Any]) -> Plan:
         plan.dropped.append("dynamic lighting and vision")
 
     # --- tokens --------------------------------------------------------------------------------
-    art = linked = vision = nameplates = 0
+    linked = vision = nameplates = 0
     for token in legacy.get("tokens") or []:
         if not isinstance(token, dict):
             continue
@@ -173,7 +193,16 @@ def plan_scene(legacy: dict[str, Any]) -> Plan:
             "locked": bool(token.get("locked", False)),
             "controllerIds": [],
         }
-        art += bool(token.get("image"))
+        image = token.get("image")
+        if image:
+            # Only art uploaded through /map is a file this import can read
+            # (app.py api_scene_token_image stores it as
+            # <scene>_token_<token><ext>); any other URL is reported.
+            uploaded = ART_URL.match(str(image))
+            if uploaded and uploaded.group(1) == legacy_id and uploaded.group(2) == str(token.get("id")):
+                plan.art_files[tid] = [f"{legacy_id}_token_{token.get('id')}{ext}" for ext in ART_EXTENSIONS]
+            else:
+                plan.art_unsupported += 1
         linked += bool(token.get("combatant_id") or token.get("character_id"))
         try:
             vision += float(token.get("vision_radius") or 0) > 0
@@ -185,8 +214,8 @@ def plan_scene(legacy: dict[str, Any]) -> Plan:
         plan.dropped.append(f"vision radius on {vision} token(s) (the VTT has no vision yet)")
     if nameplates:
         plan.dropped.append(f"hidden nameplate on {nameplates} token(s) (the VTT shows every label)")
-    if art:
-        plan.dropped.append(f"token art on {art} token(s)")
+    if plan.art_unsupported:
+        plan.dropped.append(f"token art on {plan.art_unsupported} token(s) (not an image uploaded to /map)")
     if linked:
         plan.dropped.append(f"tracker links (live HP and conditions) on {linked} token(s)")
 
@@ -317,16 +346,81 @@ def apply_plan(db: Database, campaign_id: str, plan: Plan, *, on_table: bool = F
     return counts
 
 
+def _store_uploads(db: Database, backend, campaign_id: str, plan: Plan) -> None:
+    from vtt.assets.backends import AssetBackendError
+    from vtt.assets.images import BadImage
+    from vtt.assets.service import store
+    if backend is None:
+        raise Refused(f"{plan.name}: images to import but no asset store is configured")
+    try:
+        for data in plan.uploads:
+            store(db, backend, campaign_id, "legacy-import", data)
+    except AssetBackendError as exc:
+        raise Refused(f"{plan.name}: the asset store is unavailable, try again") from exc
+    except BadImage as exc:  # already checked once; refuse rather than reference a missing asset
+        raise Refused(f"{plan.name}: an image could not be stored ({exc})") from exc
+
+
+def resolve_assets(plan: Plan, read_asset) -> None:
+    """Read and check the legacy images a plan names, and point the scene and
+    tokens at the asset ids they will have. ``read_asset(filename)`` returns
+    the file's bytes or None; without a reader every image is reported as not
+    brought across. Checked bytes are queued in ``plan.uploads``."""
+    from vtt.assets.images import BadImage, inspect
+    from vtt.assets.service import asset_id
+
+    def first_good(candidates: list[str]) -> tuple[bytes | None, str | None]:
+        problem = "file missing"
+        for name in candidates:
+            data = read_asset(name) if read_asset else None
+            if data is None:
+                continue
+            try:
+                inspect(data)
+            except BadImage as bad:
+                problem = str(bad)
+                continue
+            return data, None
+        return None, problem if read_asset else "no asset reader"
+
+    if plan.background_files:
+        data, problem = first_good(plan.background_files)
+        if data is None:
+            plan.dropped.append(f"background image ({problem})")
+        else:
+            plan.scene["background_asset_id"] = asset_id(hashlib.sha256(data).hexdigest())
+            plan.uploads.append(data)
+    missing = 0
+    by_id = {eid: data for kind, eid, data, _hidden in plan.entities if kind == "token"}
+    for tid, candidates in plan.art_files.items():
+        data, _problem = first_good(candidates)
+        if data is None or tid not in by_id:
+            missing += 1
+            continue
+        by_id[tid]["artAssetId"] = asset_id(hashlib.sha256(data).hexdigest())
+        plan.uploads.append(data)
+    if missing:
+        plan.dropped.append(f"token art on {missing} token(s) (file missing or unreadable)")
+
+
 def import_campaign(db: Database, campaign_id: str, legacy_scenes: list[dict[str, Any]],
-                    legacy_table_scene_id: str | None, *, apply: bool) -> dict[str, Any]:
+                    legacy_table_scene_id: str | None, *, apply: bool,
+                    read_asset=None, asset_backend=None) -> dict[str, Any]:
     """Plan (and with ``apply``, write) every legacy scene of a campaign. One
     transaction per scene: a refused scene leaves the others imported. The
-    legacy table scene becomes the VTT table scene."""
+    legacy table scene becomes the VTT table scene.
+
+    ``read_asset(campaign_id, filename)`` reads a /map image file and
+    ``asset_backend`` stores it (M6). An image is stored before its scene is
+    written; a scene that is then refused leaves an unreferenced asset, which
+    is harmless (content-addressed, and no row points at it)."""
     report: list[dict[str, Any]] = []
     for legacy in legacy_scenes:
         if not isinstance(legacy, dict) or legacy.get("campaign_id") not in (None, campaign_id):
             continue
         plan = plan_scene(legacy)
+        reader = (lambda name, _cid=campaign_id: read_asset(_cid, name)) if read_asset else None
+        resolve_assets(plan, reader)
         kinds: dict[str, int] = {}
         for kind, *_ in plan.entities:
             kinds[kind] = kinds.get(kind, 0) + 1
@@ -336,8 +430,12 @@ def import_campaign(db: Database, campaign_id: str, legacy_scenes: list[dict[str
             "onTable": bool(legacy_table_scene_id) and legacy.get("id") == legacy_table_scene_id,
             "status": "planned",
         }
+        if plan.uploads:
+            entry["images"] = len(plan.uploads)
         try:
             if apply:
+                if plan.uploads:
+                    _store_uploads(db, asset_backend, campaign_id, plan)
                 counts = apply_plan(db, campaign_id, plan, on_table=entry["onTable"])
                 entry["status"] = "imported"
                 entry.update(counts)

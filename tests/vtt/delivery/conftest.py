@@ -90,9 +90,14 @@ def stack(tmp_path):
     # Real time plus an adjustable offset, so a test can move past an expiry.
     offset = {"by": timedelta(0)}
     legacy: dict = {}       # campaign id -> (legacy scenes, legacy table scene id)
+    from vtt.assets.backends import LocalBackend
+    assets = LocalBackend(tmp_path / "vtt-assets")
+    legacy_files: dict = {}  # (campaign id, file name) -> bytes, the /map asset folder
     service = init_vtt(app, db=db, host=host, grant_key=GRANT_KEY, token_key=TokenKey.derive("test-secret"),
                        async_mode="threading", start_heartbeat=False, dist_dir=dist,
                        legacy_source=lambda cid: legacy.get(cid, ([], None)),
+                       asset_backend=assets,
+                       legacy_asset=lambda cid, name: legacy_files.get((cid, name)),
                        now=lambda: datetime.now(timezone.utc) + offset["by"])
 
     class Stack:
@@ -102,6 +107,8 @@ def stack(tmp_path):
     s.db, s.app, s.host, s.service, s.hub = db, app, host, service, service.hub
     s.dist = dist
     s.legacy = legacy
+    s.assets = assets
+    s.legacy_files = legacy_files
     s.advance_clock = lambda delta: offset.__setitem__("by", offset["by"] + delta)
     s.now = lambda: datetime.now(timezone.utc) + offset["by"]
     # Every server emit, in order, readable even after a connection is closed.

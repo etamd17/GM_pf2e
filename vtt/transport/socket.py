@@ -169,7 +169,8 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
              registry: ContractRegistry | None = None, allowed_origins: list[str] | None = None,
              async_mode: str | None = None, now: Callable[[], datetime] | None = None,
              rate_limiter: RateLimiter | None = None, start_heartbeat: bool = True,
-             pairing_limits=None, dist_dir: Path | None = None, legacy_source=None) -> VttService:
+             pairing_limits=None, dist_dir: Path | None = None, legacy_source=None,
+             legacy_asset=None, asset_backend=None) -> VttService:
     registry = registry or ContractRegistry()
     clock = now or (lambda: datetime.now(timezone.utc))
     socketio = SocketIO(app, json=StrictJSON, async_mode=async_mode, manage_session=False,
@@ -340,10 +341,27 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
         hub.notify(campaign_id)     # subscribed tables: delivery's recheck sends revoked
         sweep(campaign_id)          # connected but unsubscribed ones too
 
+    from vtt.assets.backends import from_env as asset_backend_from_env
+    asset_backend = asset_backend or asset_backend_from_env()
     from vtt.transport.pages import make_pages_blueprint
     app.register_blueprint(make_pages_blueprint(
-        db=db, host=host, on_change=hub.notify, legacy_source=legacy_source,
+        db=db, host=host, on_change=hub.notify, legacy_source=legacy_source, legacy_asset=legacy_asset,
+        asset_backend=asset_backend,
         dist_dir=dist_dir or Path(__file__).resolve().parents[2] / "frontend" / "vtt" / "dist"))
+
+    def table_campaign(session) -> str | None:
+        """The campaign of this request's table credential, while its grant stands."""
+        credential = request.cookies.get(TABLE_COOKIE)
+        if not isinstance(credential, str) or not (16 <= len(credential) <= 256):
+            return None
+        grant = session.query(VttTableGrant).filter_by(verifier=table_verifier(grant_key, credential)).one_or_none()
+        if grant is None or G.grant_status(session, grant, clock()) != "ok":
+            return None
+        return grant.campaign_id
+
+    from vtt.transport.assets import make_assets_blueprint
+    app.register_blueprint(make_assets_blueprint(
+        db=db, host=host, backend=asset_backend, table_campaign=table_campaign))
 
     from vtt.transport.pairing import make_blueprint
     app.register_blueprint(make_blueprint(

@@ -99,6 +99,16 @@ def _entities_event(ctx: Context, kind: str, entity_id: str) -> dict[str, Any]:
     return {"kind": "entities", "sceneId": ctx.scene_id, "changed": [[kind, entity_id]]}
 
 
+def _check_assets(ctx: Context) -> None:
+    """A scene background or token art must be an asset this campaign holds
+    (M6). Another campaign's asset, or none at all, is the same refusal."""
+    from vtt.assets.service import exists
+    for field in ("backgroundAssetId", "artAssetId"):
+        asset = ctx.payload.get(field)
+        if asset is not None and not exists(ctx.session, ctx.campaign_id, asset):
+            raise Rejection("rule-violation")
+
+
 def _check_wall(data: dict[str, Any]) -> None:
     if (data["x1"], data["y1"]) == (data["x2"], data["y2"]):
         raise Rejection("validation-failed")
@@ -113,6 +123,7 @@ def scene_create(ctx: Context) -> dict[str, Any]:
     ).scalar_one_or_none()
     if existing is not None:
         raise Rejection("conflict")
+    _check_assets(ctx)
     p = ctx.payload
     ctx.session.add(VttScene(campaign_id=ctx.campaign_id, id=ctx.scene_id, name=p["name"], width=p["width"],
                              height=p["height"], grid_size=p["gridSize"], show_grid=p["showGrid"],
@@ -130,6 +141,7 @@ def scene_update(ctx: Context) -> dict[str, Any]:
             # Unpublishing the scene the table is showing would leave the table
             # pointing at a hidden scene; clear the table first.
             raise Rejection("rule-violation")
+    _check_assets(ctx)
     for field, value in ctx.payload.items():
         setattr(scene, SCENE_COLUMNS[field], value)
     ctx.session.flush()
@@ -169,6 +181,7 @@ def _create(kind: str) -> Callable[[Context], dict[str, Any]]:
         p = ctx.payload
         if _lock_entity(ctx, kind, p["id"]) is not None:
             raise Rejection("conflict")
+        _check_assets(ctx)
         data = {name: p[name] for name in ENTITY_DATA[kind]}
         if kind == "wall":
             _check_wall(data)
@@ -184,6 +197,7 @@ def _update(kind: str, fields: tuple[str, ...] | None = None) -> Callable[[Conte
 
     def handler(ctx: Context) -> dict[str, Any]:
         row = _existing_entity(ctx, kind)
+        _check_assets(ctx)
         data = dict(row.data or {})
         for name in allowed:
             if name in ctx.payload:

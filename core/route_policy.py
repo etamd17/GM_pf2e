@@ -660,6 +660,13 @@ OPTIONAL_ROUTE_POLICIES: Mapping[str, RoutePolicy] = build_policy_registry((
     # The view also requires GM of the campaign named in the body.
     (RoutePolicy.CAMPAIGN_GM, ("vtt_pairing.issue", "vtt_pairing.list_grants", "vtt_pairing.revoke",
                                "vtt_pairing.revoke_all")),
+    # Asset upload (M6): the view also requires GM of the campaign in the query.
+    (RoutePolicy.CAMPAIGN_GM, ("vtt_assets.upload",)),
+    # Asset bytes (M6): read by a GM member OR a paired display, which has no
+    # member session, so no session policy can gate it. The view authorizes
+    # both itself (GM of the named campaign, or a standing table grant for it
+    # whose current projection shows the asset) and answers 404 otherwise.
+    (RoutePolicy.PUBLIC, ("vtt_assets.media",)),
 ))
 if set(OPTIONAL_ROUTE_POLICIES) & set(ROUTE_POLICIES):
     raise ValueError("an endpoint is declared in both route policy registries")

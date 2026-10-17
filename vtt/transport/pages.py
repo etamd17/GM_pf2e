@@ -43,9 +43,11 @@ def _valid_id(value) -> bool:
 
 
 def make_pages_blueprint(*, db: Database, host, dist_dir: Path, on_change=lambda campaign_id: None,
-                         legacy_source=None) -> Blueprint:
+                         legacy_source=None, legacy_asset=None, asset_backend=None) -> Blueprint:
     """``legacy_source(campaign_id) -> (scenes, table_scene_id)`` reads the
-    legacy /map store for the import route (core.scenes in the real app)."""
+    legacy /map store for the import route (core.scenes in the real app);
+    ``legacy_asset(campaign_id, filename) -> bytes | None`` reads one of its
+    image files, which the import stores in ``asset_backend`` (M6)."""
     bp = Blueprint("vtt_pages", __name__)
 
     def built(name: str) -> str | None:
@@ -148,7 +150,8 @@ def make_pages_blueprint(*, db: Database, host, dist_dir: Path, on_change=lambda
         from vtt.importer.legacy_scenes import import_campaign
         scenes, table_scene_id = legacy_source(campaign_id)
         apply = body.get("apply") is True
-        report = import_campaign(db, campaign_id, scenes, table_scene_id, apply=apply)
+        report = import_campaign(db, campaign_id, scenes, table_scene_id, apply=apply,
+                                 read_asset=legacy_asset, asset_backend=asset_backend)
         if apply:
             on_change(campaign_id)
         return jsonify(report)

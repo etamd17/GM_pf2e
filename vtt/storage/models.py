@@ -286,3 +286,33 @@ class VttImportedEntity(Base):
             name="fk_vtt_imported_entities_entity", ondelete="CASCADE",
         ),
     )
+
+
+class VttAsset(Base):
+    """An image in the campaign's asset store (M6): a scene background or token
+    art. The bytes live in the asset backend (local disk or S3-compatible),
+    keyed by campaign and content hash; this row is the campaign's claim on
+    them and what authorizes reading them. The id is derived from the content
+    hash, so uploading the same bytes twice is the same asset."""
+
+    __tablename__ = "vtt_assets"
+
+    campaign_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False
+    )
+    id: Mapped[str] = mapped_column(String(128), nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    media_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    width: Mapped[int] = mapped_column(Integer, nullable=False)
+    height: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_by: Mapped[str] = mapped_column(String(128), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+    __table_args__ = (
+        PrimaryKeyConstraint("campaign_id", "id", name="pk_vtt_assets"),
+        CheckConstraint("media_type in ('image/png', 'image/jpeg', 'image/webp')", name="known_media_type"),
+        CheckConstraint("byte_size > 0 AND byte_size <= 26214400", name="size_bounded"),
+        CheckConstraint("width >= 1 AND width <= 16384 AND height >= 1 AND height <= 16384",
+                        name="dimensions_bounded"),
+    )

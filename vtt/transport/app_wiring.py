@@ -52,11 +52,35 @@ class AppHost:
         return _campaigns.is_gm(_campaigns.get_campaign(campaign_id, refresh=True), user_id)
 
 
+def _legacy_asset(campaign_id: str, filename: str) -> bytes | None:
+    """One /map image file, read only, for the M6 import. Only a bare file name
+    inside the campaign's scene asset folder; nothing larger than the asset
+    store would accept."""
+    import os
+
+    from core import storage
+    from vtt.assets.images import MAX_BYTES
+    name = os.path.basename(filename or "")
+    if not name or name != filename:
+        return None
+    path = os.path.join(storage.scene_assets_dir(campaign_id), name)
+    try:
+        if os.path.getsize(path) > MAX_BYTES:
+            return None
+        with open(path, "rb") as handle:
+            return handle.read()
+    except OSError:
+        return None
+
+
 def _legacy_scenes(campaign_id: str):
     """The legacy /map store, read only, for the M5 import."""
     from core import scenes as legacy
     found = [legacy.normalize_scene(s) for s in legacy.list_scenes(campaign_id)]
     return found, legacy.table_scene_id(campaign_id)
+
+
+from vtt.assets import backends as asset_backends  # noqa: E402 - beside the wiring it serves
 
 
 def enabled(environ=None) -> bool:
@@ -84,4 +108,5 @@ def init_from_app(app, *, environ=None) -> VttService | None:
                     grant_key=grant_key, token_key=TokenKey.derive(secret), allowed_origins=origins,
                     async_mode=env.get("VTT_ASYNC_MODE") or None,
                     dist_dir=Path(env["VTT_DIST_DIR"]) if env.get("VTT_DIST_DIR") else None,
-                    legacy_source=_legacy_scenes)
+                    legacy_source=_legacy_scenes, legacy_asset=_legacy_asset,
+                    asset_backend=asset_backends.from_env(env))

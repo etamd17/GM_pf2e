@@ -80,7 +80,9 @@ def test_what_cannot_come_across_is_reported():
     scene["terrain"] = [{"kind": "lava"}]
     scene["grid"]["offset_x"] = 10
     scene["settings"]["dynamic_lighting"] = True
-    dropped = " | ".join(importer.plan_scene(scene).dropped)
+    plan = importer.plan_scene(scene)
+    importer.resolve_assets(plan, None)          # no /map file reader: the image cannot come across
+    dropped = " | ".join(plan.dropped)
     for words in ("background image", "fog", "1 template", "1 terrain", "grid offset", "dynamic lighting",
                   "token art on 1", "tracker links (live HP and conditions) on 1", "light intensity on 1",
                   "vision radius on 2"):
