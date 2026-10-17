@@ -25,9 +25,13 @@ COPY requirements.txt ./
 RUN python -m pip install --no-cache-dir --require-hashes -r requirements.txt
 COPY . .
 COPY --from=client /src/frontend/vtt/dist /app/frontend/vtt/dist
+# The entrypoint's line endings are normalized here as well as by
+# .gitattributes: a Windows working tree can still hold CRLF, and a CRLF
+# shebang makes the container fail with "no such file or directory".
 RUN useradd --system --uid 10001 --home-dir /app app \
     && mkdir -p /data \
     && chown -R app:app /data \
+    && sed -i 's/\r$//' /app/docker/entrypoint.sh \
     && chmod 0755 /app/docker/entrypoint.sh
 USER app
 ENV DATA_DIR=/data \

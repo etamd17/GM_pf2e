@@ -177,6 +177,9 @@ def screens(browser, site, request, tmp_path):
             page.locator("[name=password]").fill(site.password)
             page.get_by_role("button", name="Sign in", exact=True).click()
             page.wait_for_url("**/me")
+            # Pick the campaign, as a GM does: the VTT pages need it active.
+            page.locator(f'form[action="/campaign/{site.cid}/activate"] button').first.click()
+            page.wait_for_url(lambda url: not url.endswith("/me"))
         opened.append(page)
         return page
 

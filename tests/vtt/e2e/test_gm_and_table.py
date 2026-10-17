@@ -37,6 +37,13 @@ def token(state, token_id):
     return next((t for t in state["tokens"] if t["id"] == token_id), None)
 
 
+def click_scene(page, x, y):
+    """Click a scene point on the GM canvas (scene -> screen through the probe)."""
+    view = probe(page)["viewport"]
+    box = page.locator(".vtt-map-host canvas").bounding_box()
+    page.mouse.click(box["x"] + view["x"] + x * view["scale"], box["y"] + view["y"] + y * view["scale"])
+
+
 def click_token(page, token_id):
     """Click a token where the GM canvas draws it (scene -> screen through the
     probe's viewport)."""
@@ -79,14 +86,16 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
     wait_for(tv, lambda s: token(s, "tok_hero")["x"] == start_x + 64, "the TV sees the move")
 
     # --- hide it: gone from the TV, dimmed on the GM page ------------------------------------
-    gm.get_by_label("Hidden from the table").check()
+    # The toggle shows the server's state, so it flips when the frame lands.
+    gm.get_by_label("Hidden from the table").click()
     wait_for(tv, lambda s: token(s, "tok_hero") is None, "the hidden token leaves the TV")
     assert token(wait_for(gm, lambda s: token(s, "tok_hero")["hidden"], "dimmed for the GM"), "tok_hero")
-    gm.get_by_label("Hidden from the table").uncheck()
+    assert gm.get_by_label("Hidden from the table").is_checked()
+    gm.get_by_label("Hidden from the table").click()
     wait_for(tv, lambda s: token(s, "tok_hero") is not None, "back on the TV")
 
     # --- set a background: uploaded, then drawn on the TV -------------------------------------
-    gm.keyboard.press("Escape")                       # nothing selected: the Scene section
+    click_scene(gm, 1200, 900)                        # empty floor: nothing selected, the Scene section
     gm.get_by_label("Background file").set_input_files(
         files=[{"name": "hall.png", "mimeType": "image/png", "buffer": png()}])
     with_bg = wait_for(tv, lambda s: s["scene"]["background"] == "loaded", "the TV draws the background")
@@ -110,7 +119,7 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
     gm.get_by_role("button", name="Check what would import").click()
     gm.get_by_text("Old Crypt").wait_for()
     gm.get_by_role("button", name="Import 1 scene").click()
-    gm.get_by_text("imported", exact=False).wait_for()
+    gm.get_by_text("Done. Imported scenes are in the scene picker", exact=False).wait_for()
     imported = "legacy_" + site.legacy_scene
     gm.locator(".vtt-scene-picker").select_option(imported)
     gm.wait_for_url(f"**sceneId={imported}**")

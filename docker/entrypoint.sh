@@ -15,9 +15,11 @@ fi
 
 python -m alembic upgrade head
 
+# --no-control-socket: gunicorn's control socket would need a writable /app.
 exec gunicorn app:app \
   --bind "0.0.0.0:${PORT:-8000}" \
   --workers 1 \
   --worker-class gevent \
   --worker-connections 1000 \
-  --timeout 120
+  --timeout 120 \
+  --no-control-socket
