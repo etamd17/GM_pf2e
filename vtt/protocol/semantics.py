@@ -17,7 +17,12 @@ Rules (each a ``ProtocolValidationError``):
 * a snapshot carries at most one ``scene`` entity, and it is ``sceneId``'s;
   ``sceneId: null`` means no entities at all;
 * GM ``controllerIds`` and ``capabilities`` hold no repeats;
-* a GM wall is not zero-length.
+* a GM wall is not zero-length;
+* a ``fog`` entity (batch parity-1, GM and table): ``cols * rows`` is at most
+  262,144, and ``revealed`` is the canonical unpadded base64url of exactly
+  ``ceil(cols * rows / 8)`` bytes (decoding and re-encoding gives the same
+  string back, so lenient decoders cannot disagree), whose bits past
+  ``cols * rows`` are zero.
 
 Commands (``command``, batch commands-1):
 
@@ -26,10 +31,16 @@ Commands (``command``, batch commands-1):
   expected version: ``("scene", sceneId)`` for scene and table commands, the
   payload's entity otherwise;
 * ``controllerIds`` hold no repeats;
-* a created wall, or an updated one naming all four ends, is not zero-length.
+* a created wall, or an updated one naming all four ends, is not zero-length;
+* ``fog.update`` and ``fog.reset`` (parity-1) name ``("fog", "fog")``.
 """
 
 from __future__ import annotations
+
+import base64
+import binascii
+
+FOG_MAX_CELLS = 262144
 
 
 class SemanticError(ValueError):
@@ -49,6 +60,7 @@ _TARGETED = {
     'scene.update': 'scene', 'table.show': 'scene', 'table.clear': 'scene',
     'token.update': 'token', 'token.move': 'token', 'light.update': 'light', 'wall.update': 'wall',
     'entity.delete': None,
+    'fog.update': 'fog', 'fog.reset': 'fog',
 }
 
 
@@ -61,6 +73,8 @@ def command_target(message) -> tuple[str, str] | None:
         return None
     if kind == 'scene':
         return ('scene', message.get('sceneId'))
+    if kind == 'fog':
+        return ('fog', 'fog')
     if kind is None:
         return (payload.get('kind'), payload.get('id'))
     return (kind, payload.get('id'))
@@ -79,6 +93,26 @@ def check_command(message) -> None:
             k in payload for k in ('x1', 'y1', 'x2', 'y2')):
         if (payload['x1'], payload['y1']) == (payload['x2'], payload['y2']):
             raise SemanticError('zero-length wall')
+
+
+def fog_ok(item) -> bool:
+    """The parity-1 fog bitset rule (see the module docstring)."""
+    cols, rows, text = item.get('cols'), item.get('rows'), item.get('revealed')
+    if not isinstance(cols, int) or not isinstance(rows, int) or not isinstance(text, str):
+        return False
+    cells = cols * rows
+    if cells > FOG_MAX_CELLS:
+        return False
+    try:
+        data = base64.urlsafe_b64decode(text + '=' * (-len(text) % 4))
+    except (binascii.Error, ValueError):
+        return False
+    if len(data) != -(-cells // 8):
+        return False
+    if base64.urlsafe_b64encode(data).rstrip(b'=').decode('ascii') != text:
+        return False
+    spare = cells % 8
+    return spare == 0 or data[-1] >> spare == 0
 
 
 def check_frame(schema_key: str, message) -> None:
@@ -113,6 +147,9 @@ def check_frame(schema_key: str, message) -> None:
         items = upserted
     else:
         return
+    for item in items:
+        if item.get('kind') == 'fog' and not fog_ok(item):
+            raise SemanticError('malformed fog bitset')
     if schema_key == 'gm':
         for item in items:
             if item.get('kind') == 'token':

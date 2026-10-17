@@ -39,6 +39,15 @@
     },
     {
       "$ref": "#/definitions/EntityDelete"
+    },
+    {
+      "$ref": "#/definitions/FogUpdate"
+    },
+    {
+      "$ref": "#/definitions/FogReveal"
+    },
+    {
+      "$ref": "#/definitions/FogReset"
     }
   ],
   "definitions": {
@@ -58,7 +67,8 @@
             "scene",
             "token",
             "light",
-            "wall"
+            "wall",
+            "fog"
           ]
         },
         "id": {
@@ -988,6 +998,178 @@
         },
         "payload": {
           "$ref": "#/definitions/EntityDeletePayload"
+        }
+      }
+    },
+    "FogUpdatePayload": {
+      "title": "FogUpdatePayload",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      }
+    },
+    "FogUpdate": {
+      "title": "FogUpdate",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "campaignId",
+        "commandId",
+        "expected",
+        "payload",
+        "sceneId",
+        "schemaVersion",
+        "type"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "$ref": "common.schema.json#/definitions/SchemaVersion"
+        },
+        "commandId": {
+          "$ref": "common.schema.json#/definitions/OpaqueToken"
+        },
+        "campaignId": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "sceneId": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "type": {
+          "const": "fog.update"
+        },
+        "expected": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 1,
+          "items": {
+            "$ref": "#/definitions/ExpectedVersion"
+          }
+        },
+        "payload": {
+          "$ref": "#/definitions/FogUpdatePayload"
+        }
+      }
+    },
+    "FogRevealPayload": {
+      "title": "FogRevealPayload",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "cells"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "reveal",
+            "hide"
+          ]
+        },
+        "cells": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20000,
+          "items": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2047
+            }
+          }
+        }
+      }
+    },
+    "FogReveal": {
+      "title": "FogReveal",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "campaignId",
+        "commandId",
+        "expected",
+        "payload",
+        "sceneId",
+        "schemaVersion",
+        "type"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "$ref": "common.schema.json#/definitions/SchemaVersion"
+        },
+        "commandId": {
+          "$ref": "common.schema.json#/definitions/OpaqueToken"
+        },
+        "campaignId": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "sceneId": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "type": {
+          "const": "fog.reveal"
+        },
+        "expected": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 0,
+          "items": {
+            "$ref": "#/definitions/ExpectedVersion"
+          }
+        },
+        "payload": {
+          "$ref": "#/definitions/FogRevealPayload"
+        }
+      }
+    },
+    "FogReset": {
+      "title": "FogReset",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "campaignId",
+        "commandId",
+        "expected",
+        "payload",
+        "sceneId",
+        "schemaVersion",
+        "type"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "$ref": "common.schema.json#/definitions/SchemaVersion"
+        },
+        "commandId": {
+          "$ref": "common.schema.json#/definitions/OpaqueToken"
+        },
+        "campaignId": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "sceneId": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "type": {
+          "const": "fog.reset"
+        },
+        "expected": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 1,
+          "items": {
+            "$ref": "#/definitions/ExpectedVersion"
+          }
+        },
+        "payload": {
+          "$ref": "#/definitions/EmptyPayload"
         }
       }
     }

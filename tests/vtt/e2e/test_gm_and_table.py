@@ -54,6 +54,16 @@ def click_token(page, token_id):
     page.get_by_label("Label").wait_for()
 
 
+def shoot(page, name):
+    """Keep a screenshot for a human look when BROWSER_SHOTS_DIR is set (the
+    probe proves what is drawn; this shows how it looks)."""
+    import os
+    folder = os.environ.get("BROWSER_SHOTS_DIR")
+    if folder:
+        page.wait_for_timeout(300)
+        page.screenshot(path=os.path.join(folder, f"{name}.png"))
+
+
 def png(color=(30, 110, 200), size=(160, 120)) -> bytes:
     from PIL import Image
     out = io.BytesIO()
@@ -107,6 +117,26 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
     wait_for(tv, lambda s: s["scene"]["backgroundUrl"] is None, "undo removes it from the TV")
     gm.keyboard.press("Control+Shift+z")
     wait_for(tv, lambda s: s["scene"]["background"] == "loaded", "redo brings it back")
+
+    # --- fog of war (parity P1): applied on the server, so the TV never gets the token ------------
+    click_scene(gm, 1200, 900)                        # nothing selected: the Scene section
+    gm.get_by_label("Fog of war").click()
+    wait_for(tv, lambda s: s["scene"]["fog"] is not None and s["scene"]["fog"]["enabled"]
+             and token(s, "tok_hero") is None, "fog on hides the token from the TV")
+    gm.get_by_role("button", name="Reveal", exact=True).click()
+    hero = token(probe(gm), "tok_hero")
+    click_scene(gm, hero["x"], hero["y"])
+    # the room left of the wall: 10 of 20 columns, all 15 rows
+    wait_for(tv, lambda s: token(s, "tok_hero") is not None and s["scene"]["fog"]["revealed"] == 150,
+             "revealing its room (and only its room) brings it back")
+    gm.locator(".vtt-map-host").focus()
+    # undo waits until the reveal has landed in the GM's own projection
+    wait_for(gm, lambda s: s["scene"]["fog"]["revealed"] > 0, "the GM page shows the reveal")
+    shoot(gm, "fog-gm"), shoot(tv, "fog-tv")
+    gm.keyboard.press("Control+z")
+    wait_for(tv, lambda s: token(s, "tok_hero") is None and s["scene"]["fog"]["revealed"] == 0,
+             "undo covers the room again")
+    gm.get_by_role("button", name="Select", exact=True).click()
 
     # --- the table moves to another scene -------------------------------------------------------
     gm.locator(".vtt-scene-picker").select_option("scene_docks")

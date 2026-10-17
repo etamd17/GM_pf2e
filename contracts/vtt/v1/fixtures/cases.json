@@ -3886,5 +3886,441 @@
     "schema": "command",
     "valid": false,
     "raw": "{\"schemaVersion\": 1, \"commandId\": \"cmd_0123456789abcdef\", \"campaignId\": \"camp_a\", \"sceneId\": \"scene_a\", \"type\": \"token.move\", \"expected\": [{\"kind\": \"token\", \"id\": \"tok_1\", \"version\": \"vAAAAAAAAAAAAAAAAAAAAAAAA\"}], \"payload\": {\"id\": \"tok_1\", \"x\": 128.5, \"y\": 0, \"x\": 1}}"
+  },
+  {
+    "id": "parity1-table-fog-snapshot",
+    "schema": "table",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "snapshot",
+      "audience": "table",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 0,
+      "campaignId": "campaign_a",
+      "sceneId": "scene_a",
+      "principal": {
+        "kind": "table"
+      },
+      "capabilities": [],
+      "entities": [
+        {
+          "kind": "fog",
+          "id": "fog",
+          "version": "ver_FOGFOGFOGFOGFOGF",
+          "enabled": true,
+          "cols": 20,
+          "rows": 15,
+          "revealed": "BQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAg"
+        }
+      ]
+    }
+  },
+  {
+    "id": "parity1-gm-fog-patch",
+    "schema": "gm",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "patch",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 3,
+      "upserted": [
+        {
+          "kind": "fog",
+          "id": "fog",
+          "version": "ver_FOGFOGFOGFOGFOGF",
+          "enabled": true,
+          "cols": 20,
+          "rows": 15,
+          "revealed": "BQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAg"
+        }
+      ],
+      "removed": []
+    }
+  },
+  {
+    "id": "parity1-fog-all-hidden",
+    "schema": "table",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "snapshot",
+      "audience": "table",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 0,
+      "campaignId": "campaign_a",
+      "sceneId": "scene_a",
+      "principal": {
+        "kind": "table"
+      },
+      "capabilities": [],
+      "entities": [
+        {
+          "kind": "fog",
+          "id": "fog",
+          "version": "ver_FOGFOGFOGFOGFOGF",
+          "enabled": true,
+          "cols": 20,
+          "rows": 15,
+          "revealed": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ]
+    }
+  },
+  {
+    "id": "parity1-fog-wrong-length",
+    "schema": "table",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "snapshot",
+      "audience": "table",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 0,
+      "campaignId": "campaign_a",
+      "sceneId": "scene_a",
+      "principal": {
+        "kind": "table"
+      },
+      "capabilities": [],
+      "entities": [
+        {
+          "kind": "fog",
+          "id": "fog",
+          "version": "ver_FOGFOGFOGFOGFOGF",
+          "enabled": true,
+          "cols": 20,
+          "rows": 15,
+          "revealed": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ]
+    }
+  },
+  {
+    "id": "parity1-fog-spare-bits-set",
+    "schema": "table",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "snapshot",
+      "audience": "table",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 0,
+      "campaignId": "campaign_a",
+      "sceneId": "scene_a",
+      "principal": {
+        "kind": "table"
+      },
+      "capabilities": [],
+      "entities": [
+        {
+          "kind": "fog",
+          "id": "fog",
+          "version": "ver_FOGFOGFOGFOGFOGF",
+          "enabled": true,
+          "cols": 20,
+          "rows": 15,
+          "revealed": "BQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIg"
+        }
+      ]
+    }
+  },
+  {
+    "id": "parity1-fog-noncanonical",
+    "schema": "table",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "snapshot",
+      "audience": "table",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 0,
+      "campaignId": "campaign_a",
+      "sceneId": "scene_a",
+      "principal": {
+        "kind": "table"
+      },
+      "capabilities": [],
+      "entities": [
+        {
+          "kind": "fog",
+          "id": "fog",
+          "version": "ver_FOGFOGFOGFOGFOGF",
+          "enabled": true,
+          "cols": 20,
+          "rows": 15,
+          "revealed": "BQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAh"
+        }
+      ]
+    }
+  },
+  {
+    "id": "parity1-fog-over-cell-cap",
+    "schema": "gm",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "patch",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 3,
+      "upserted": [
+        {
+          "kind": "fog",
+          "id": "fog",
+          "version": "ver_FOGFOGFOGFOGFOGF",
+          "enabled": true,
+          "cols": 2048,
+          "rows": 2048,
+          "revealed": ""
+        }
+      ],
+      "removed": []
+    }
+  },
+  {
+    "id": "parity1-fog-bad-alphabet",
+    "schema": "table",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "snapshot",
+      "audience": "table",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 0,
+      "campaignId": "campaign_a",
+      "sceneId": "scene_a",
+      "principal": {
+        "kind": "table"
+      },
+      "capabilities": [],
+      "entities": [
+        {
+          "kind": "fog",
+          "id": "fog",
+          "version": "ver_FOGFOGFOGFOGFOGF",
+          "enabled": true,
+          "cols": 20,
+          "rows": 15,
+          "revealed": "BQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA+/"
+        }
+      ]
+    }
+  },
+  {
+    "id": "parity1-fog-wrong-id",
+    "schema": "table",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "snapshot",
+      "audience": "table",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 0,
+      "campaignId": "campaign_a",
+      "sceneId": "scene_a",
+      "principal": {
+        "kind": "table"
+      },
+      "capabilities": [],
+      "entities": [
+        {
+          "kind": "fog",
+          "id": "fog2",
+          "version": "ver_FOGFOGFOGFOGFOGF",
+          "enabled": true,
+          "cols": 20,
+          "rows": 15,
+          "revealed": "BQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAg"
+        }
+      ]
+    }
+  },
+  {
+    "id": "parity1-command-fog-update",
+    "schema": "command",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "fog.update",
+      "expected": [
+        {
+          "kind": "fog",
+          "id": "fog",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {
+        "enabled": true
+      }
+    }
+  },
+  {
+    "id": "parity1-command-fog-update-no-expected",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "fog.update",
+      "expected": [],
+      "payload": {
+        "enabled": true
+      }
+    }
+  },
+  {
+    "id": "parity1-command-fog-reveal",
+    "schema": "command",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "fog.reveal",
+      "expected": [],
+      "payload": {
+        "mode": "reveal",
+        "cells": [
+          [
+            0,
+            0
+          ],
+          [
+            19,
+            14
+          ]
+        ]
+      }
+    }
+  },
+  {
+    "id": "parity1-command-fog-reveal-with-expected",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "fog.reveal",
+      "expected": [
+        {
+          "kind": "fog",
+          "id": "fog",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {
+        "mode": "hide",
+        "cells": [
+          [
+            0,
+            0
+          ]
+        ]
+      }
+    }
+  },
+  {
+    "id": "parity1-command-fog-reveal-out-of-range",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "fog.reveal",
+      "expected": [],
+      "payload": {
+        "mode": "reveal",
+        "cells": [
+          [
+            2048,
+            0
+          ]
+        ]
+      }
+    }
+  },
+  {
+    "id": "parity1-command-fog-reveal-empty",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "fog.reveal",
+      "expected": [],
+      "payload": {
+        "mode": "reveal",
+        "cells": []
+      }
+    }
+  },
+  {
+    "id": "parity1-command-fog-reveal-bad-mode",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "fog.reveal",
+      "expected": [],
+      "payload": {
+        "mode": "toggle",
+        "cells": [
+          [
+            0,
+            0
+          ]
+        ]
+      }
+    }
+  },
+  {
+    "id": "parity1-command-fog-reset",
+    "schema": "command",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "fog.reset",
+      "expected": [
+        {
+          "kind": "fog",
+          "id": "fog",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {}
+    }
+  },
+  {
+    "id": "parity1-command-fog-reset-no-expected",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "fog.reset",
+      "expected": [],
+      "payload": {}
+    }
   }
 ]

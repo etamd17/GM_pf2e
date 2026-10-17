@@ -1,9 +1,14 @@
 import type { GmEntity } from '../protocol/frames';
+import { decodeFogBits } from '../protocol/semantics';
+import { FOG_CELLS_PER_COMMAND } from '../scene/fogFill';
 import {
   createLight,
   createToken,
   createWall,
   deleteEntity,
+  fogReveal,
+  fogUpdate,
+  type FogCell,
   moveToken,
   setDoorState,
   updateLight,
@@ -43,6 +48,9 @@ const LABELS: Record<string, string> = {
   'wall.create': 'new wall',
   'entity.delete': 'delete',
   'scene.update': 'scene change',
+  'fog.reveal': 'fog change',
+  'fog.update': 'fog on/off',
+  'fog.reset': 'fog reset',
 };
 
 function pick<T extends object>(source: T, keys: string[]): Record<string, unknown> {
@@ -134,9 +142,43 @@ export function inverseFor(draft: Draft, before: GmEntity | undefined): UndoEntr
       // with that id exists again.
       return { kind: snapshot.kind, id: snapshot.id, label, make: (now) => (now ? null : recreate(snapshot)) };
     }
+    case 'fog.reveal': {
+      // The command carries exactly the cells it changes (fogFill), so the
+      // inverse is the opposite mode on the same cells.
+      const cells = (payload.cells as FogCell[]).map(([c, r]) => [c, r] as FogCell);
+      const back = payload.mode === 'reveal' ? 'hide' : 'reveal';
+      return { kind: 'fog', id: 'fog', label, make: (now) => (now?.kind === 'fog' ? fogReveal(back, cells) : null) };
+    }
+    case 'fog.update': {
+      if (before?.kind !== 'fog') return null;
+      const back = before.enabled;
+      return { kind: 'fog', id: 'fog', label, make: (now) => (now?.kind === 'fog' ? fogUpdate(now, back) : null) };
+    }
+    case 'fog.reset': {
+      if (before?.kind !== 'fog') return null;
+      const cells = revealedCells(before);
+      // Nothing was revealed, or too much to restore in one command: not undoable.
+      if (cells === null || cells.length === 0) return null;
+      return { kind: 'fog', id: 'fog', label, make: (now) => (now?.kind === 'fog' ? fogReveal('reveal', cells) : null) };
+    }
     default:
       return null;
   }
+}
+
+// The revealed cells of a fog entity, or null when there are more than one
+// command may carry.
+function revealedCells(fog: Of<'fog'>): FogCell[] | null {
+  const bits = decodeFogBits(fog.revealed);
+  if (!bits) return null;
+  const cells: FogCell[] = [];
+  for (let index = 0; index < fog.cols * fog.rows; index += 1) {
+    if (((bits[index >> 3] ?? 0) >> (index & 7)) & 1) {
+      if (cells.length === FOG_CELLS_PER_COMMAND) return null;
+      cells.push([index % fog.cols, Math.floor(index / fog.cols)]);
+    }
+  }
+  return cells;
 }
 
 type Mode = 'edit' | 'undo' | 'redo';
@@ -304,6 +346,7 @@ export class UndoManager {
 export function targetOf(draft: Draft): { kind: GmEntity['kind']; id: string } | null {
   const payload = draft.payload as Record<string, unknown>;
   const [noun] = draft.type.split('.');
+  if (noun === 'fog') return { kind: 'fog', id: 'fog' };
   if (draft.type === 'entity.delete') return { kind: payload.kind as GmEntity['kind'], id: String(payload.id) };
   if (noun === 'token' || noun === 'light' || noun === 'wall') return { kind: noun, id: String(payload.id) };
   if (draft.type === 'scene.update' && draft.sceneId) return { kind: 'scene', id: draft.sceneId };

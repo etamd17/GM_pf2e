@@ -57,6 +57,9 @@ W.create_scene(db, cid, "scene_hall", name="Hall", width=1280, height=960, publi
 W.upsert_entity(db, cid, "scene_hall", "token", "tok_hero",
                 {"x": 224, "y": 224, "size": 1, "label": "Valeros", "color": 0x4F8A62, "artAssetId": None,
                  "actorId": None, "locked": False, "controllerIds": []})
+# A wall down the middle (x = 640): revealing the hero's room uncovers only the
+# left half, 10 of 20 columns.
+W.upsert_entity(db, cid, "scene_hall", "wall", "wall_mid", {"x1": 640, "y1": 0, "x2": 640, "y2": 960, "doorState": "none"})
 W.create_scene(db, cid, "scene_docks", name="Docks", width=1600, height=900, published=True)
 W.set_table_pointer(db, cid, "scene_hall")
 

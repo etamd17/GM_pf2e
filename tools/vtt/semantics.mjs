@@ -20,7 +20,25 @@ const TARGETED = {
   'scene.update': 'scene', 'table.show': 'scene', 'table.clear': 'scene',
   'token.update': 'token', 'token.move': 'token', 'light.update': 'light', 'wall.update': 'wall',
   'entity.delete': null,
+  'fog.update': 'fog', 'fog.reset': 'fog',
 };
+
+// Parity-1 fog bitset: cols*rows <= 262144, revealed is the canonical unpadded
+// base64url of exactly ceil(cols*rows/8) bytes (round trip gives the same
+// string), and bits past cols*rows are zero.
+const FOG_MAX_CELLS = 262144;
+export function fogOk(item) {
+  const { cols, rows, revealed } = item ?? {};
+  if (!Number.isInteger(cols) || !Number.isInteger(rows) || typeof revealed !== 'string') return false;
+  const cells = cols * rows;
+  if (cells > FOG_MAX_CELLS) return false;
+  if (!/^[A-Za-z0-9_-]*$/.test(revealed) || revealed.length % 4 === 1) return false;
+  const data = Buffer.from(revealed, 'base64url');
+  if (data.length !== Math.ceil(cells / 8)) return false;
+  if (data.toString('base64url') !== revealed) return false;
+  const spare = cells % 8;
+  return spare === 0 || data[data.length - 1] >> spare === 0;
+}
 
 function checkCommand(message) {
   const expected = (message.expected ?? []).map(key);
@@ -29,7 +47,8 @@ function checkCommand(message) {
   if (Object.hasOwn(TARGETED, message.type)) {
     const kind = TARGETED[message.type];
     const target = kind === 'scene' ? ['scene', message.sceneId]
-      : kind === null ? [payload.kind, payload.id] : [kind, payload.id];
+      : kind === 'fog' ? ['fog', 'fog']
+        : kind === null ? [payload.kind, payload.id] : [kind, payload.id];
     if (!expected.includes(key({ kind: target[0], id: target[1] }))) return false;
   }
   if (!distinct(payload.controllerIds ?? [])) return false;
@@ -63,6 +82,9 @@ export function checkFrame(schemaKey, message) {
     items = message.upserted ?? [];
   } else {
     return true;
+  }
+  for (const item of items) {
+    if (item.kind === 'fog' && !fogOk(item)) return false;
   }
   if (schemaKey === 'gm') {
     for (const item of items) {

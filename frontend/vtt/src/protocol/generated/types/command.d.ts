@@ -15,7 +15,10 @@ export type Command =
   | LightUpdate
   | WallCreate
   | WallUpdate
-  | EntityDelete;
+  | EntityDelete
+  | FogUpdate
+  | FogReveal
+  | FogReset;
 export type OpaqueToken = string;
 export type Id = string;
 
@@ -54,7 +57,7 @@ export interface SceneUpdate {
   payload: SceneUpdatePayload;
 }
 export interface ExpectedVersion {
-  kind: "scene" | "token" | "light" | "wall";
+  kind: "scene" | "token" | "light" | "wall" | "fog";
   id: Id;
   version: OpaqueToken;
 }
@@ -276,4 +279,54 @@ export interface EntityDelete {
 export interface EntityDeletePayload {
   kind: "token" | "light" | "wall";
   id: Id;
+}
+export interface FogUpdate {
+  schemaVersion: 1;
+  commandId: OpaqueToken;
+  campaignId: Id;
+  sceneId: Id;
+  type: "fog.update";
+  /**
+   * @minItems 0
+   * @maxItems 1
+   */
+  expected: [] | [ExpectedVersion];
+  payload: FogUpdatePayload;
+}
+export interface FogUpdatePayload {
+  enabled: boolean;
+}
+export interface FogReveal {
+  schemaVersion: 1;
+  commandId: OpaqueToken;
+  campaignId: Id;
+  sceneId: Id;
+  type: "fog.reveal";
+  /**
+   * @minItems 0
+   * @maxItems 0
+   */
+  expected: [];
+  payload: FogRevealPayload;
+}
+export interface FogRevealPayload {
+  mode: "reveal" | "hide";
+  /**
+   * @minItems 1
+   * @maxItems 20000
+   */
+  cells: [[number, number], ...[number, number][]];
+}
+export interface FogReset {
+  schemaVersion: 1;
+  commandId: OpaqueToken;
+  campaignId: Id;
+  sceneId: Id;
+  type: "fog.reset";
+  /**
+   * @minItems 0
+   * @maxItems 1
+   */
+  expected: [] | [ExpectedVersion];
+  payload: EmptyPayload;
 }

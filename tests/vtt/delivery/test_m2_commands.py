@@ -87,7 +87,7 @@ TOKEN = {"x": 300, "y": 300, "size": 1, "label": "Goblin", "color": 65280, "artA
 def test_every_contract_command_type_has_exactly_one_policy():
     variants = REGISTRY.manifest["commandVariants"]
     assert sorted(variants) == sorted(POLICIES)
-    assert len(variants) == 12
+    assert len(variants) == 15          # commands-1 (12) plus parity-1 fog (3)
 
 
 def test_the_service_refuses_to_start_when_policies_and_contract_disagree(stack, monkeypatch):
@@ -511,7 +511,9 @@ def test_the_sizing_estimate_bounds_the_real_encoded_snapshot(stack):
     # Same entities and fixed-length tokens; the estimate uses the longest ids, so
     # it is an upper bound that is tight to the id padding.
     assert real <= estimate <= real + 2 * 128 + 64
-    assert gm_count == 45 and table_count == 1 + 1 + 1 + 40
+    # scene + 4 seeded + 40 tokens + fog (parity-1); the table: scene, hero,
+    # torch, 40 tokens and fog
+    assert gm_count == 46 and table_count == 1 + 1 + 1 + 40 + 1
 
 
 def test_a_command_that_would_push_the_gm_snapshot_over_the_limit_is_refused(stack, monkeypatch):

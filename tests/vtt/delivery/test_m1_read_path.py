@@ -68,7 +68,7 @@ def test_gm_snapshot_carries_everything_the_gm_may_see(stack):
     REGISTRY.validate("gm", snap)
     assert snap["seq"] == 0 and snap["sceneId"] == "scene_a" and snap["audience"] == "gm"
     assert snap["principal"] == {"kind": "member", "id": "user_gm", "campaignRole": "gm"}
-    assert keys(snap) == [("light", "light_torch"), ("scene", "scene_a"), ("token", "tok_ambush"),
+    assert keys(snap) == [("fog", "fog"), ("light", "light_torch"), ("scene", "scene_a"), ("token", "tok_ambush"),
                           ("token", "tok_hero"), ("wall", "wall_secret")]
     ambush = next(e for e in snap["entities"] if e["id"] == "tok_ambush")
     assert ambush["hidden"] is True
@@ -81,7 +81,7 @@ def test_table_snapshot_is_its_own_projection_and_leaks_nothing(stack):
     [snap] = [payload(m) for m in received(client, "vtt.snapshot")]
     REGISTRY.validate("table", snap)
     assert snap["principal"] == {"kind": "table"} and snap["capabilities"] == []
-    assert keys(snap) == [("light", "light_torch"), ("scene", "scene_a"), ("token", "tok_hero")]
+    assert keys(snap) == [("fog", "fog"), ("light", "light_torch"), ("scene", "scene_a"), ("token", "tok_hero")]
     text = json.dumps(snap)
     for secret in ("tok_ambush", "Hidden Assassin", "wall_secret", "secret", "controllerIds", "user_p",
                    "hidden", "published", "locked"):
@@ -178,7 +178,7 @@ def test_publishing_another_scene_resyncs_the_table_and_the_server_sends_the_rep
     REGISTRY.validate("table", snap)
     assert resync == {"schemaVersion": 1, "subscriptionId": table_sub, "reason": "scene-changed"}
     assert snap["sceneId"] == "scene_b" and snap["seq"] == 0 and snap["subscriptionId"] != table_sub
-    assert keys(snap) == [("scene", "scene_b"), ("token", "tok_dock")]
+    assert keys(snap) == [("fog", "fog"), ("scene", "scene_b"), ("token", "tok_dock")]
     assert received(gm) == []
     # live delivery resumes on the replacement subscription
     W.upsert_entity(stack.db, "camp_a", "scene_b", "token", "tok_dock", {"x": 20, "y": 10, "label": "Crate"})

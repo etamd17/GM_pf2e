@@ -78,6 +78,9 @@ class Plan:
     art_files: dict[str, list[str]] = field(default_factory=dict)  # token id -> candidate files
     art_unsupported: int = 0          # token images that are not uploaded /map art
     uploads: list[bytes] = field(default_factory=list)  # checked images to store before writing
+    # Fog (parity P1): on/off and the revealed cells, or None when there is none
+    # to bring across.
+    fog: dict[str, Any] | None = None
 
 
 def vtt_id(legacy_id: Any) -> str:
@@ -139,6 +142,43 @@ def _count(items: Any) -> int:
     return len(items) if isinstance(items, list) else 0
 
 
+def _plan_fog(plan: Plan, legacy: dict[str, Any], grid: dict[str, Any]) -> None:
+    """/map fog: ``enabled`` and ``revealed_cells`` ("col,row" in grid cells)
+    map onto the VTT fog when the legacy grid starts at the corner, the VTT
+    grid starts there too; the old brush log (``operations``) is reported."""
+    from vtt import fog as fog_rules
+    legacy_fog = legacy.get("fog") or {}
+    if not isinstance(legacy_fog, dict):
+        return
+    if _count(legacy_fog.get("operations")):
+        plan.dropped.append(f"{_count(legacy_fog.get('operations'))} old fog brush stroke(s)")
+    cells_text = legacy_fog.get("revealed_cells") if isinstance(legacy_fog.get("revealed_cells"), list) else []
+    enabled = bool(legacy_fog.get("enabled"))
+    if not enabled and not cells_text:
+        return
+    if grid.get("offset_x") or grid.get("offset_y"):
+        plan.dropped.append("fog and revealed areas (the legacy grid is offset)")
+        return
+    cols, rows = fog_rules.grid_of(plan.scene["width"], plan.scene["height"], plan.scene["grid_size"])
+    if not fog_rules.available(cols, rows):
+        plan.dropped.append("fog and revealed areas (the scene's grid is too large for fog)")
+        return
+    cells, outside = [], 0
+    for text in cells_text:
+        try:
+            col, row = (int(part) for part in str(text).split(","))
+        except ValueError:
+            outside += 1
+            continue
+        if 0 <= col < cols and 0 <= row < rows:
+            cells.append((col, row))
+        else:
+            outside += 1
+    if outside:
+        plan.dropped.append(f"{outside} revealed fog cell(s) outside the scene")
+    plan.fog = {"enabled": enabled, "cells": cells}
+
+
 def plan_scene(legacy: dict[str, Any]) -> Plan:
     legacy_id = str(legacy.get("id") or "")
     plan = Plan(legacy_id=legacy_id, scene_id=vtt_id(legacy_id),
@@ -163,9 +203,7 @@ def plan_scene(legacy: dict[str, Any]) -> Plan:
             plan.dropped.append("background image (no stored file)")
 
     # --- what has no VTT equivalent yet ------------------------------------------------------
-    fog = legacy.get("fog") or {}
-    if fog.get("enabled") or _count(fog.get("operations")) or _count(fog.get("revealed_cells")):
-        plan.dropped.append("fog and revealed areas")
+    _plan_fog(plan, legacy, grid)
     if _count(legacy.get("templates")):
         plan.dropped.append(f"{_count(legacy.get('templates'))} template(s)")
     if _count(legacy.get("terrain")):
@@ -330,6 +368,9 @@ def apply_plan(db: Database, campaign_id: str, plan: Plan, *, on_table: bool = F
                 counts["updated"] += 1
             changed.append([kind, eid])
         session.flush()
+        if plan.fog is not None:            # written before sizing: its bitset counts too
+            _write_fog(session, campaign_id, plan)
+            changed.append(["fog", "fog"])
         size, gm_count, table_count = gm_snapshot_bytes(session, campaign_id, plan.scene_id)
         if size + FRAME_HEADROOM > MAX_JSON_BYTES or gm_count > GM_ENTITY_CAP or table_count > TABLE_ENTITY_CAP:
             raise Refused(f"{plan.name}: {gm_count} entities, {size} bytes; over the frame limit or entity caps")
@@ -401,6 +442,23 @@ def resolve_assets(plan: Plan, read_asset) -> None:
         plan.uploads.append(data)
     if missing:
         plan.dropped.append(f"token art on {missing} token(s) (file missing or unreadable)")
+
+
+def _write_fog(session, campaign_id: str, plan: Plan) -> None:
+    """The scene's fog as /map had it (a re-import replaces it: the legacy fog
+    is the source, like every other imported field)."""
+    from vtt import fog as fog_rules
+    from vtt.storage.models import VttFog
+    cols, rows = fog_rules.grid_of(plan.scene["width"], plan.scene["height"], plan.scene["grid_size"])
+    view = fog_rules.FogView(False, cols, rows, fog_rules.empty_bits(cols, rows), plan.scene["grid_size"])
+    bits = fog_rules.with_cells(view, plan.fog["cells"], True)
+    row = session.get(VttFog, (campaign_id, plan.scene_id))
+    if row is None:
+        session.add(VttFog(campaign_id=campaign_id, scene_id=plan.scene_id, enabled=plan.fog["enabled"],
+                           cols=cols, rows=rows, revealed=bits))
+    else:
+        row.enabled, row.cols, row.rows, row.revealed = plan.fog["enabled"], cols, rows, bits
+    session.flush()
 
 
 def import_campaign(db: Database, campaign_id: str, legacy_scenes: list[dict[str, Any]],

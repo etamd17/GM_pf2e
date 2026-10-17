@@ -14,6 +14,9 @@ import {
   updateToken,
   clearTable,
   createScene,
+  fogReset,
+  fogReveal,
+  fogUpdate,
   showOnTable,
   type Draft,
 } from './gmCommands';
@@ -301,5 +304,35 @@ describe('UndoManager', () => {
     const ids = [];
     for (let i = 0; i < 4; i += 1) ids.push(t.m.beginStep('undo')?.id);
     expect(ids).toEqual(['e4', 'e3', 'e2', undefined]);
+  });
+});
+
+describe('fog undo (parity P1)', () => {
+  const V1 = 'v' + 'A'.repeat(24);
+  const fogE = (revealed: string, enabled = true) =>
+    ({ kind: 'fog', id: 'fog', version: V1, enabled, cols: 4, rows: 3, revealed }) as Extract<GmEntity, { kind: 'fog' }>;
+
+  it('a reveal is undone by hiding exactly the same cells, with no version', () => {
+    const back = inverseFor(fogReveal('reveal', [[0, 0], [1, 1]]), fogE('AAA'))?.make(fogE('IQA'));
+    expect(back).toEqual({ type: 'fog.reveal', expected: [], payload: { mode: 'hide', cells: [[0, 0], [1, 1]] } });
+    expect(valid(back as Draft)).toBe(true);
+  });
+
+  it('turning fog on is undone by turning it off against the version after', () => {
+    const after = { ...fogE('AAA', true), version: 'v' + 'B'.repeat(24) };
+    const back = inverseFor(fogUpdate(fogE('AAA', false), true), fogE('AAA', false))?.make(after);
+    expect(back).toEqual({ type: 'fog.update', expected: [{ kind: 'fog', id: 'fog', version: after.version }], payload: { enabled: false } });
+    expect(valid(back as Draft)).toBe(true);
+  });
+
+  it('a reset is undone by revealing what was revealed; resetting nothing is not undoable', () => {
+    const back = inverseFor(fogReset(fogE('IQA')), fogE('IQA'))?.make(fogE('AAA'));
+    expect(back?.payload).toEqual({ mode: 'reveal', cells: [[0, 0], [1, 1]] }); // bits 0 and 5 of a 4-wide grid
+    expect(inverseFor(fogReset(fogE('AAA')), fogE('AAA'))).toBeNull();
+  });
+
+  it('fog commands target the fog entity and show no overlay', () => {
+    expect(targetOf(fogReveal('hide', [[0, 0]]))).toEqual({ kind: 'fog', id: 'fog' });
+    expect(overlayFor(fogReveal('hide', [[0, 0]]))).toBeNull();
   });
 });

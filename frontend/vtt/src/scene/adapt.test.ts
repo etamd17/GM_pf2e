@@ -77,3 +77,22 @@ describe('images (M6)', () => {
     expect(hostile.backgroundUrl).toBeUndefined();
   });
 });
+
+describe('fog (parity P1)', () => {
+  // 4 x 3 = 12 cells -> 2 bytes; cells 0 and 5 revealed.
+  const fogEntity = (version = 'vf1', revealed = 'IQA') => ({ kind: 'fog', id: 'fog', version, enabled: true, cols: 4, rows: 3, revealed });
+
+  it('decodes the fog entity into the render model and caches it by version', () => {
+    const cache = newAdaptCache();
+    const out = adaptEntities(map(scene, fogEntity()), cache);
+    expect(out.fog?.enabled).toBe(true);
+    expect([out.fog?.cols, out.fog?.rows, out.fog?.key]).toEqual([4, 3, 'vf1']);
+    expect(Array.from(out.fog?.bits ?? [])).toEqual([0b00100001, 0]);
+    const again = adaptEntities(map(scene, fogEntity()), cache);
+    expect(again.fog).toBe(out.fog); // same version: same object, so the mask is not rebuilt
+  });
+
+  it('a bitset of the wrong length draws no fog rather than misreading cells', () => {
+    expect(adaptEntities(map(scene, fogEntity('vf2', 'IQAA'))).fog).toBeUndefined();
+  });
+});

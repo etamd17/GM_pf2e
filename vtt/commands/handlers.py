@@ -21,8 +21,9 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from vtt import fog
 from vtt.projection import serializers as S
-from vtt.storage.models import VttEntity, VttScene, VttTablePointer
+from vtt.storage.models import VttEntity, VttFog, VttScene, VttTablePointer
 
 ENTITY_DATA = {
     "token": ("x", "y", "size", "label", "color", "artAssetId", "actorId", "locked", "controllerIds"),
@@ -135,6 +136,14 @@ def scene_create(ctx: Context) -> dict[str, Any]:
 def scene_update(ctx: Context) -> dict[str, Any]:
     scene = _lock_scene(ctx)
     _check_version(ctx, "scene", scene.id, S.gm_scene(ctx.key, scene))
+    geometry = {"width": scene.width, "height": scene.height, "gridSize": scene.grid_size}
+    if any(field in ctx.payload and ctx.payload[field] != value for field, value in geometry.items()):
+        # A reveal names grid cells; new geometry would make it mean other
+        # cells. Refused while anything is revealed: the GM resets fog first,
+        # so nothing they revealed is ever silently discarded (handoff 060).
+        _row, view = fog.load(ctx.session, scene, for_update=True)
+        if view is not None and view.any_revealed():
+            raise Rejection("rule-violation")
     if ctx.payload.get("published") is False:
         pointer = ctx.session.get(VttTablePointer, ctx.campaign_id, with_for_update=True)
         if pointer is not None and pointer.scene_id == scene.id:
@@ -171,6 +180,63 @@ def table_clear(ctx: Context) -> dict[str, Any]:
     pointer.scene_id = None
     ctx.session.flush()
     return {"kind": "table-pointer", "sceneId": scene.id}
+
+
+# --- fog (parity-1) ---------------------------------------------------------------------------
+
+def _fog_event(ctx: Context) -> dict[str, Any]:
+    """Fog changes what the table may see: name the fog and every token and
+    light of the scene, so delivery's per-key diff adds or removes exactly the
+    ones whose visibility changed."""
+    keys = ctx.session.execute(
+        select(VttEntity.kind, VttEntity.id).where(
+            VttEntity.campaign_id == ctx.campaign_id, VttEntity.scene_id == ctx.scene_id,
+            VttEntity.kind.in_(("token", "light"))).order_by(VttEntity.kind, VttEntity.id)
+    ).all()
+    return {"kind": "entities", "sceneId": ctx.scene_id, "changed": [["fog", "fog"]] + [[k, i] for k, i in keys]}
+
+
+def _fog(ctx: Context, *, versioned: bool):
+    scene = _lock_scene(ctx)
+    row, view = fog.load(ctx.session, scene, for_update=True)
+    if view is None:
+        raise Rejection("rule-violation")      # the scene's grid is too large for fog
+    if versioned:
+        _check_version(ctx, "fog", "fog", S.fog_entity(ctx.key, ctx.campaign_id, "gm", view))
+    return scene, row, view
+
+
+def _write_fog(ctx: Context, row: VttFog | None, view, *, enabled: bool, bits: bytes) -> None:
+    if row is None:
+        ctx.session.add(VttFog(campaign_id=ctx.campaign_id, scene_id=ctx.scene_id, enabled=enabled,
+                               cols=view.cols, rows=view.rows, revealed=bits))
+    else:
+        row.enabled, row.cols, row.rows, row.revealed = enabled, view.cols, view.rows, bits
+    ctx.session.flush()
+
+
+def fog_update(ctx: Context) -> dict[str, Any]:
+    _scene, row, view = _fog(ctx, versioned=True)
+    _write_fog(ctx, row, view, enabled=bool(ctx.payload["enabled"]), bits=view.bits)
+    return _fog_event(ctx)
+
+
+def fog_reveal(ctx: Context) -> dict[str, Any]:
+    # No version precondition: a reveal is a set operation, so concurrent
+    # reveals compose and a retry changes nothing.
+    _scene, row, view = _fog(ctx, versioned=False)
+    try:
+        bits = fog.with_cells(view, ctx.payload["cells"], ctx.payload["mode"] == "reveal")
+    except ValueError:
+        raise Rejection("validation-failed") from None
+    _write_fog(ctx, row, view, enabled=view.enabled, bits=bits)
+    return _fog_event(ctx)
+
+
+def fog_reset(ctx: Context) -> dict[str, Any]:
+    _scene, row, view = _fog(ctx, versioned=True)
+    _write_fog(ctx, row, view, enabled=view.enabled, bits=fog.empty_bits(view.cols, view.rows))
+    return _fog_event(ctx)
 
 
 # --- entities --------------------------------------------------------------------------------
@@ -246,4 +312,8 @@ POLICIES: dict[str, Policy] = {
     "wall.create": Policy(_caps("scene.prepare"), _create("wall")),
     "wall.update": Policy(_caps("scene.prepare"), _update("wall")),
     "entity.delete": Policy(_caps("scene.prepare"), entity_delete, sizes_scene=False),
+    # Fog changes what the table shows: the same capability as publishing.
+    "fog.update": Policy(_caps("scene.publish"), fog_update),
+    "fog.reveal": Policy(_caps("scene.publish"), fog_reveal),
+    "fog.reset": Policy(_caps("scene.publish"), fog_reset),
 }

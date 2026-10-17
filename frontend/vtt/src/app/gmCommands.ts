@@ -114,6 +114,23 @@ export function clearTable(scene: Of<'scene'>): Draft {
   return { type: 'table.clear', sceneId: scene.id, expected: expect(scene), payload: {} };
 }
 
+// --- fog (parity P1) --------------------------------------------------------------------------
+
+export type FogCell = [number, number];
+
+export function fogUpdate(fog: Of<'fog'>, enabled: boolean): Draft {
+  return { type: 'fog.update', expected: expect(fog), payload: { enabled } };
+}
+
+// A set operation: no version precondition (concurrent reveals compose).
+export function fogReveal(mode: 'reveal' | 'hide', cells: readonly FogCell[]): Draft {
+  return { type: 'fog.reveal', expected: [], payload: { mode, cells: cells.map(([c, r]) => [c, r]) } };
+}
+
+export function fogReset(fog: Of<'fog'>): Draft {
+  return { type: 'fog.reset', expected: expect(fog), payload: {} };
+}
+
 // --- optimistic overlays ---------------------------------------------------------------------
 // What a pending command shows until its correlated frame (or a replacement
 // snapshot) arrives. Only tokens get one: they are what moves under the GM's

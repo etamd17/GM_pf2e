@@ -24,6 +24,7 @@ async function call(fetcher: Fetcher, boot: GmBoot, path: string, body?: unknown
   }
 }
 
+export const PAIR_POLL_MS = 3000;
 const BUSY = 'The server is busy. Try again in a few seconds.';
 
 interface Grant {
@@ -38,7 +39,8 @@ const when = (iso: string) => {
 };
 
 export function PairingPanel({ boot, fetcher = fetch }: { boot: GmBoot; fetcher?: Fetcher }) {
-  const [code, setCode] = useState<{ code: string; until: number } | null>(null);
+  // `paired` is how many displays were paired when the code was issued.
+  const [code, setCode] = useState<{ code: string; until: number; paired: number } | null>(null);
   const [grants, setGrants] = useState<Grant[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -58,6 +60,16 @@ export function PairingPanel({ boot, fetcher = fetch }: { boot: GmBoot; fetcher?
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [code]);
+  // While a code is showing, look for the display that uses it, so the list
+  // fills in and the spent code goes away without a reload.
+  useEffect(() => {
+    if (!code) return;
+    const timer = setInterval(() => void refresh(), PAIR_POLL_MS);
+    return () => clearInterval(timer);
+  }, [code, refresh]);
+  useEffect(() => {
+    if (code && grants && grants.length > code.paired) setCode(null);
+  }, [code, grants]);
   const remaining = code ? Math.max(0, Math.round((code.until - now) / 1000)) : 0;
   useEffect(() => {
     if (code && remaining === 0) setCode(null);
@@ -75,7 +87,7 @@ export function PairingPanel({ boot, fetcher = fetch }: { boot: GmBoot; fetcher?
       return;
     }
     const data = result.data as { code: string; expiresInSeconds: number };
-    setCode({ code: data.code, until: Date.now() + data.expiresInSeconds * 1000 });
+    setCode({ code: data.code, until: Date.now() + data.expiresInSeconds * 1000, paired: grants?.length ?? 0 });
     setNow(Date.now());
   }
 

@@ -22,6 +22,42 @@ function distinct(values: readonly unknown[]): boolean {
 
 export type FrameSurface = 'gm' | 'table';
 
+// Parity-1 fog bitset (mirrors fog_ok / fogOk): cols*rows <= 262144, and
+// revealed is the canonical unpadded base64url of exactly ceil(cols*rows/8)
+// bytes (decode then re-encode gives the same string), with zero bits past
+// cols*rows.
+export const FOG_MAX_CELLS = 262144;
+
+export function decodeFogBits(text: string): Uint8Array | null {
+  if (!/^[A-Za-z0-9_-]*$/.test(text) || text.length % 4 === 1) return null;
+  try {
+    const binary = atob(text.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (text.length % 4)) % 4));
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  } catch {
+    return null;
+  }
+}
+
+export function encodeFogBits(bytes: Uint8Array): string {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i] as number);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+export function fogOk(item: Record<string, unknown>): boolean {
+  const { cols, rows, revealed } = item;
+  if (!Number.isInteger(cols) || !Number.isInteger(rows) || typeof revealed !== 'string') return false;
+  const cells = (cols as number) * (rows as number);
+  if (cells > FOG_MAX_CELLS) return false;
+  const data = decodeFogBits(revealed);
+  if (data === null || data.length !== Math.ceil(cells / 8)) return false;
+  if (encodeFogBits(data) !== revealed) return false;
+  const spare = cells % 8;
+  return spare === 0 || (data[data.length - 1] as number) >> spare === 0;
+}
+
 // True when a schema-valid frame passes every frame rule:
 // - snapshot entities / patch upserted / patch removed: no repeated (kind, id);
 // - a patch never upserts and removes the same key;
@@ -61,6 +97,9 @@ export function frameRulesHold(surface: FrameSurface, message: unknown): boolean
   } else {
     return true;
   }
+  for (const item of items) {
+    if (item.kind === 'fog' && !fogOk(item)) return false;
+  }
   if (surface === 'gm') {
     for (const item of items) {
       if (item.kind === 'token' && !distinct((item.controllerIds as readonly unknown[] | undefined) ?? [])) return false;
@@ -89,6 +128,8 @@ const TARGETED: Record<string, string | null> = {
   'light.update': 'light',
   'wall.update': 'wall',
   'entity.delete': null,
+  'fog.update': 'fog',
+  'fog.reset': 'fog',
 };
 
 export function commandRulesHold(message: unknown): boolean {
@@ -106,6 +147,7 @@ export function commandRulesHold(message: unknown): boolean {
     const kind = TARGETED[m.type];
     const target: Keyed =
       kind === 'scene' ? { kind: 'scene', id: m.sceneId }
+        : kind === 'fog' ? { kind: 'fog', id: 'fog' }
         : kind === null ? { kind: payload.kind, id: payload.id }
           : { kind, id: payload.id };
     if (!expected.includes(key(target))) return false;

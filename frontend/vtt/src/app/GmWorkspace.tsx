@@ -19,6 +19,9 @@ import {
   createToken,
   createWall,
   deleteEntity,
+  fogReset,
+  fogReveal,
+  fogUpdate,
   moveToken,
   newEntityId,
   setDoorState,
@@ -34,6 +37,8 @@ import type { GmBoot } from '../live/boot';
 import { ImportPanel, PairingPanel } from './GmPanels';
 import { ImagePicker } from './ImagePicker';
 import { NoticeBar } from './NoticeBar';
+import { decodeFogBits } from '../protocol/semantics';
+import { cellAt, chunk, floodRegion, type FillWall } from '../scene/fogFill';
 import { inverseFor, overlayFor, targetOf } from './undo';
 
 interface Props {
@@ -43,13 +48,15 @@ interface Props {
   live?: GmLive | null;
 }
 
-type Tool = 'select' | 'token' | 'light' | 'wall';
+type Tool = 'select' | 'token' | 'light' | 'wall' | 'fog-reveal' | 'fog-hide';
 
 const TOOLS: ReadonlyArray<{ id: Tool; label: string; hint: string }> = [
   { id: 'select', label: 'Select', hint: 'Select and drag tokens; arrows move the selected token' },
   { id: 'token', label: 'Token', hint: 'Click to place a token' },
   { id: 'light', label: 'Light', hint: 'Click to place a light' },
   { id: 'wall', label: 'Walls', hint: 'Click to start a wall, click again to end it; Esc stops' },
+  { id: 'fog-reveal', label: 'Reveal', hint: 'Click a room to reveal it on the table (walls and closed doors bound it)' },
+  { id: 'fog-hide', label: 'Hide', hint: 'Click a room to cover it with fog again' },
 ];
 
 type Of<K extends GmEntity['kind']> = Extract<GmEntity, { kind: K }>;
@@ -91,6 +98,7 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
     [projected, overlays],
   );
   const sceneEntity = useMemo(() => [...entities.values()].find((e): e is Of<'scene'> => e.kind === 'scene'), [entities]);
+  const fogEntity = useMemo(() => [...entities.values()].find((e): e is Of<'fog'> => e.kind === 'fog'), [entities]);
   const selected = selection ? (entityOf(selection.kind, selection.id) ?? null) : null;
 
   // A selection whose entity is gone (deleted here or elsewhere) is dropped.
@@ -224,6 +232,31 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
     if (commandId) setCreatingScene({ commandId, sceneId });
   }
 
+  // --- fog (parity P1) --------------------------------------------------------------------------
+  // One click reveals (or hides) the room under it: a flood bounded by walls
+  // and closed doors, sent as only the cells that change (fogFill.ts).
+  const revealRoom = (point: Point, mode: 'reveal' | 'hide') => {
+    if (!scene) return;
+    const notify = (text: string) => useCommands.getState().notify({ kind: 'info', text });
+    if (!fogEntity) {
+      notify('This scene is too large for fog.');
+      return;
+    }
+    const bits = decodeFogBits(fogEntity.revealed);
+    if (!bits) return;
+    const grid = { cols: fogEntity.cols, rows: fogEntity.rows, gridSize: scene.gridSize, bits };
+    const start = cellAt(grid, point.x, point.y);
+    if (!start) return;
+    const walls = [...entities.values()].filter((e): e is Of<'wall'> => e.kind === 'wall') as FillWall[];
+    const cells = floodRegion(grid, start, walls, mode);
+    if (cells.length === 0) {
+      notify(mode === 'reveal' ? 'That area is already revealed.' : 'That area is already hidden.');
+      return;
+    }
+    for (const part of chunk(cells)) issue(fogReveal(mode, part));
+    if (!fogEntity.enabled && mode === 'reveal') notify('Fog is off, so the table already shows everything. Turn it on in the Scene panel.');
+  };
+
   // --- map input ------------------------------------------------------------------------------
   const tokenCount = scene?.tokens.length ?? 0;
   const interaction: RuntimeInteraction = {
@@ -254,6 +287,8 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
         });
       } else if (tool === 'light') {
         issue(createLight(newEntityId('light'), snapToGrid(point, scene), scene.gridSize));
+      } else if (tool === 'fog-reveal' || tool === 'fog-hide') {
+        revealRoom(point, tool === 'fog-reveal' ? 'reveal' : 'hide');
       } else if (tool === 'wall') {
         const p = snapToGrid(point, scene);
         if (!wallStart) {
@@ -277,7 +312,7 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
       }
       if (!inputEnabled || !selected || !scene) return false;
       // Delete only: Backspace is too easy to hit by accident on a map.
-      if (e.key === 'Delete' && selected.kind !== 'scene') {
+      if (e.key === 'Delete' && selected.kind !== 'scene' && selected.kind !== 'fog') {
         issue(deleteEntity(selected), selected.kind === 'token' ? { kind: 'token', id: selected.id, deleted: true } : null);
         setSelection(null);
         return true;
@@ -446,6 +481,7 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
             onIssue={issue}
             onDeleted={() => setSelection(null)}
             scene={sceneEntity ?? null}
+            fog={fogEntity ?? null}
             {...(live ? { boot: live.boot } : {})}
           />
         )}
@@ -482,6 +518,8 @@ interface InspectorProps {
   // and how this page uploads and previews assets.
   scene?: Extract<GmEntity, { kind: 'scene' }> | null;
   boot?: Pick<GmBoot, 'campaignId' | 'csrf'>;
+  // Fog (parity P1): the scene's fog entity, absent when the grid is too large.
+  fog?: Extract<GmEntity, { kind: 'fog' }> | null;
 }
 
 const mediaUrl = (boot: Pick<GmBoot, 'campaignId'>, id: string | null) =>
@@ -491,8 +529,8 @@ const mediaUrl = (boot: Pick<GmBoot, 'campaignId'>, id: string | null) =>
 // on every keystroke; a field the GM is editing is not overwritten by a frame
 // until they leave it (the key resets the field when the entity's version
 // changes while it is not focused).
-export function Inspector({ entity, enabled, onIssue, onDeleted, scene, boot }: InspectorProps) {
-  if (!entity || entity.kind === 'scene') {
+export function Inspector({ entity, enabled, onIssue, onDeleted, scene, boot, fog }: InspectorProps) {
+  if (!entity || entity.kind === 'scene' || entity.kind === 'fog') {
     return (
       <div className="vtt-inspector">
         {scene && boot && (
@@ -507,6 +545,21 @@ export function Inspector({ entity, enabled, onIssue, onDeleted, scene, boot }: 
               onChange={(backgroundAssetId) => onIssue(updateScene(scene, { backgroundAssetId }))}
             />
           </>
+        )}
+        {fog ? (
+          <>
+            <Toggle label="Fog of war" checked={fog.enabled} disabled={!enabled} onChange={(on) => onIssue(fogUpdate(fog, on))} />
+            <button
+              type="button"
+              className="vtt-danger"
+              disabled={!enabled}
+              onClick={() => window.confirm('Cover the whole scene with fog again?') && onIssue(fogReset(fog))}
+            >
+              Reset fog
+            </button>
+          </>
+        ) : (
+          scene && <p className="vtt-empty">This scene is too large for fog.</p>
         )}
         <p className="vtt-empty">Select a token, light or wall to inspect it.</p>
       </div>

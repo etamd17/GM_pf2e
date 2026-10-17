@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ImportPanel, PairingPanel } from './GmPanels';
+import { ImportPanel, PAIR_POLL_MS, PairingPanel } from './GmPanels';
 
 afterEach(() => {
   cleanup();
@@ -136,5 +136,28 @@ describe('a busy server', () => {
       'The server is busy. Try again in a few seconds.',
       'The server is busy. Try again in a few seconds.',
     ]);
+  });
+});
+
+describe('pairing a display while the panel is open', () => {
+  it('the list fills in and the spent code goes away, with no reload', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    let grants: Array<{ id: string; createdAt: string; expiresAt: string }> = [];
+    const { fetcher } = server({
+      '/vtt/api/table-grants': () => [200, { grants }],
+      '/vtt/api/table-pairing': () => [200, { code: 'ABCD-EFGH', expiresInSeconds: 300 }],
+    });
+    render(<PairingPanel boot={boot} fetcher={fetcher} />);
+    await flush();
+    fireEvent.click(screen.getByRole('button', { name: 'Pair a display' }));
+    await flush();
+    expect(screen.getByText('ABCD-EFGH')).toBeTruthy();
+    grants = [{ id: 'grant_new', createdAt: '2026-10-17T18:00:00Z', expiresAt: '2026-10-18T06:00:00Z' }];
+    await act(async () => {
+      vi.advanceTimersByTime(PAIR_POLL_MS);
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(screen.queryByText('ABCD-EFGH')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Unpair' })).toBeTruthy();
   });
 });

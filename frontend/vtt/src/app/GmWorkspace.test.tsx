@@ -5,6 +5,7 @@ import type { GmLive } from '../live/gm';
 import type { GmEntity } from '../protocol/frames';
 import { adaptEntities } from '../scene/adapt';
 import type { RuntimeInteraction } from '../scene/SceneRuntime';
+import { encodeFogBits } from '../protocol/semantics';
 import { useCommands } from '../state/commands';
 import { useConnection } from '../state/connection';
 import { useEntities } from '../state/entities';
@@ -418,5 +419,56 @@ describe('undo', () => {
     fireEvent.keyDown(field, { key: 'z', ctrlKey: true });
     expect(issued).toHaveLength(1);
     field.remove();
+  });
+});
+
+describe('fog of war (parity P1)', () => {
+  // The 640 x 640 scene at 64 px is 10 x 10 cells: 13 bytes of bits.
+  const fogOf = (bits: Uint8Array, enabled = true) =>
+    ({ kind: 'fog', id: 'fog', version: V1, enabled, cols: 10, rows: 10, revealed: encodeFogBits(bits) }) as Of<'fog'>;
+  // A wall straight down the grid line x = 320, the full height: two rooms.
+  const divider = { kind: 'wall', id: 'wall_mid', version: V1, x1: 320, y1: 0, x2: 320, y2: 640, doorState: 'closed' } as Of<'wall'>;
+
+  it('the Reveal tool sends the room under the click, bounded by walls and closed doors', () => {
+    act(() => seed([scene, hero, wall, divider, fogOf(new Uint8Array(13))]));
+    const { issued, interaction } = setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Reveal' }));
+    act(() => interaction.onClick?.({ x: 96, y: 96 }, null));
+    const draft = issued.at(-1)?.draft as { type: string; expected: unknown[]; payload: { mode: string; cells: number[][] } };
+    expect(draft.type).toBe('fog.reveal');
+    expect(draft.expected).toEqual([]);
+    expect(draft.payload.mode).toBe('reveal');
+    expect(draft.payload.cells).toHaveLength(50); // the left room only
+    expect(draft.payload.cells.every(([c]) => (c as number) < 5)).toBe(true);
+  });
+
+  it('the Hide tool sends only cells that are revealed now', () => {
+    const bits = new Uint8Array(13);
+    bits[0] = 0b00000011; // cells (0,0) and (1,0)
+    act(() => seed([scene, hero, wall, divider, fogOf(bits)]));
+    const { issued, interaction } = setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Hide' }));
+    act(() => interaction.onClick?.({ x: 96, y: 96 }, null));
+    const payload = (issued.at(-1)?.draft as { payload: { mode: string; cells: number[][] } }).payload;
+    expect(payload.mode).toBe('hide');
+    expect(payload.cells.map((c) => c.join(',')).sort()).toEqual(['0,0', '1,0']); // flood order is BFS order
+  });
+
+  it('turns fog on against its version, and asks before a reset', () => {
+    act(() => seed([scene, hero, wall, fogOf(new Uint8Array(13), false)]));
+    const { issued } = setup();
+    fireEvent.click(screen.getByLabelText('Fog of war'));
+    expect(issued.at(-1)?.draft).toEqual({ type: 'fog.update', expected: [{ kind: 'fog', id: 'fog', version: V1 }], payload: { enabled: true } });
+    vi.stubGlobal('confirm', vi.fn(() => false));
+    fireEvent.click(screen.getByRole('button', { name: 'Reset fog' }));
+    expect((issued.at(-1)?.draft as { type: string }).type).toBe('fog.update'); // declined: nothing sent
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    fireEvent.click(screen.getByRole('button', { name: 'Reset fog' }));
+    expect(issued.at(-1)?.draft).toEqual({ type: 'fog.reset', expected: [{ kind: 'fog', id: 'fog', version: V1 }], payload: {} });
+  });
+
+  it('a scene without a fog entity says it is too large for fog', () => {
+    setup();
+    expect(screen.getByText('This scene is too large for fog.')).toBeTruthy();
   });
 });

@@ -131,13 +131,16 @@ def gm_snapshot_bytes(session, campaign_id: str, scene_id: str) -> tuple[int, in
         select(VttEntity).where(VttEntity.campaign_id == campaign_id, VttEntity.scene_id == scene_id)
         .order_by(VttEntity.kind, VttEntity.id)
     ).scalars().all()
-    entities = S.gm_entities(_SizingKey(), scene, rows)
+    from vtt import fog
+    fog_view = fog.load(session, scene)[1]
+    entities = S.gm_entities(_SizingKey(), scene, rows, fog_view)
     frame = S.snapshot_frame("gm", "s" * 128, campaign_id, scene_id,
                              {"kind": "member", "id": "u" * 128, "campaignRole": "gm"}, entities)
     # python-socketio encodes the packet's [event, payload] list through
     # StrictJSON.dumps with these separators; that string is what the limit counts.
     encoded = json.dumps(["vtt.snapshot", frame], separators=(",", ":"), allow_nan=False)
-    table_count = 1 + sum(1 for r in rows if not r.hidden and r.kind in ("token", "light"))
+    table_count = (1 + (fog_view is not None)
+                   + sum(1 for r in rows if not r.hidden and r.kind in ("token", "light")))
     return len(encoded.encode("utf-8")), len(entities), table_count
 
 

@@ -270,6 +270,50 @@
           "$ref": "common.schema.json#/definitions/Color"
         }
       }
+    },
+    "FogState": {
+      "title": "FogState",
+      "description": "One per scene (id \"fog\"), parity-1. revealed is a base64url bitset, row-major, least significant bit first, of exactly ceil(cols*rows/8) bytes with zero padding bits (a semantic rule). cols*rows is at most 262144.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "id",
+        "version",
+        "enabled",
+        "cols",
+        "rows",
+        "revealed"
+      ],
+      "properties": {
+        "kind": {
+          "const": "fog"
+        },
+        "id": {
+          "const": "fog"
+        },
+        "version": {
+          "$ref": "common.schema.json#/definitions/OpaqueToken"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "cols": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2048
+        },
+        "rows": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2048
+        },
+        "revealed": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]*$",
+          "maxLength": 43691
+        }
+      }
     }
   }
 }

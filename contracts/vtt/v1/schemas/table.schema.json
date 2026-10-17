@@ -25,7 +25,8 @@
           "enum": [
             "scene",
             "token",
-            "light"
+            "light",
+            "fog"
           ]
         },
         "id": {
@@ -44,6 +45,9 @@
         },
         {
           "$ref": "common.schema.json#/definitions/TableLight"
+        },
+        {
+          "$ref": "common.schema.json#/definitions/FogState"
         }
       ]
     },

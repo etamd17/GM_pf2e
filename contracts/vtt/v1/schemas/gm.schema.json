@@ -26,7 +26,8 @@
             "scene",
             "token",
             "light",
-            "wall"
+            "wall",
+            "fog"
           ]
         },
         "id": {
@@ -287,6 +288,9 @@
         },
         {
           "$ref": "#/definitions/GmWall"
+        },
+        {
+          "$ref": "common.schema.json#/definitions/FogState"
         }
       ]
     },

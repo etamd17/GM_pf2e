@@ -96,6 +96,10 @@ export class SceneRuntime {
   private lastFrameMs = 0;
   // Backgrounds and token art (M6). Owned by the runtime, not the Pixi app, so
   // a renderer rebuild after a lost context keeps what is already loaded.
+  // The fog mask (parity P1): a cols x rows alpha texture stretched over the
+  // scene, rebuilt only when the fog itself changes (its key is the projected
+  // version, which a token move does not touch: /map's revision trap avoided).
+  private fogMask: { key: string; texture: Texture } | null = null;
   private readonly textures = new TextureLoader<Texture>(
     { toTexture: (bitmap) => Texture.from(bitmap), destroy: (texture) => texture.destroy(true) },
     (url) => this.textureLoaded(url),
@@ -145,6 +149,7 @@ export class SceneRuntime {
       if (!this.userMovedViewport) this.fit();
     }
     else if (prev.backgroundUrl !== next.backgroundUrl) this.drawBackground(next);
+    if (geometryChanged || prev?.fog !== next.fog) this.drawFog(next);
     if (!prev || prev.walls !== next.walls) this.drawWalls(next);
     if (!prev || prev.lights !== next.lights) this.drawLights(next);
     this.syncTokens(next);
@@ -231,6 +236,8 @@ export class SceneRuntime {
     if (this.restoreTimer) clearTimeout(this.restoreTimer);
     this.teardownApplication();
     this.textures.dispose();
+    this.fogMask?.texture.destroy(true);
+    this.fogMask = null;
   }
 
   // Test probe (M6 harness): what this runtime is drawing. Only data the page
@@ -238,7 +245,14 @@ export class SceneRuntime {
   probe(): {
     surface: Surface;
     viewport: Viewport;
-    scene: { width: number; height: number; gridSize: number; backgroundUrl: string | null; background: string } | null;
+    scene: {
+      width: number;
+      height: number;
+      gridSize: number;
+      backgroundUrl: string | null;
+      background: string;
+      fog: { enabled: boolean; cols: number; rows: number; revealed: number } | null;
+    } | null;
     tokens: Array<{ id: string; x: number; y: number; label: string; hidden: boolean; artUrl: string | null; art: string }>;
   } {
     const scene = this.scene;
@@ -252,6 +266,18 @@ export class SceneRuntime {
             gridSize: scene.gridSize,
             backgroundUrl: scene.backgroundUrl ?? null,
             background: scene.backgroundUrl ? this.textures.state(scene.backgroundUrl) : 'none',
+            fog: scene.fog
+              ? {
+                  enabled: scene.fog.enabled,
+                  cols: scene.fog.cols,
+                  rows: scene.fog.rows,
+                  revealed: scene.fog.bits.reduce((n, byte) => {
+                    let count = n;
+                    for (let b = byte; b; b &= b - 1) count += 1;
+                    return count;
+                  }, 0),
+                }
+              : null,
           }
         : null,
       tokens: (scene?.tokens ?? []).map((t) => ({
@@ -640,6 +666,51 @@ export class SceneRuntime {
       g.stroke(WALL_STYLES[state]);
     }
     this.replaceLayerContent('walls', g);
+  }
+
+  // Unrevealed cells dark: near-opaque on the table, a haze on the GM page so
+  // the GM still sees what is under it. One pixel per cell, upscaled with
+  // linear filtering, which softens the stepped edge as /map's blur did.
+  private drawFog(scene: RenderScene): void {
+    const fog = scene.fog;
+    if (!fog || !fog.enabled) {
+      this.replaceLayerContent('fog', null);
+      return;
+    }
+    const key = `${fog.key}:${this.options.surface}`;
+    if (this.fogMask?.key !== key) {
+      const canvas = document.createElement('canvas');
+      canvas.width = fog.cols;
+      canvas.height = fog.rows;
+      const context = canvas.getContext('2d');
+      if (!context) return;
+      const image = context.createImageData(fog.cols, fog.rows);
+      const alpha = this.options.surface === 'table' ? 247 : 77;
+      for (let index = 0; index < fog.cols * fog.rows; index += 1) {
+        const lit = ((fog.bits[index >> 3] ?? 0) >> (index & 7)) & 1;
+        const at = index * 4;
+        image.data[at] = 12;
+        image.data[at + 1] = 10;
+        image.data[at + 2] = 7;
+        image.data[at + 3] = lit ? 0 : alpha;
+      }
+      context.putImageData(image, 0, 0);
+      this.fogMask?.texture.destroy(true);
+      const texture = Texture.from(canvas);
+      texture.source.scaleMode = 'linear';
+      this.fogMask = { key, texture };
+    }
+    const sprite = new Sprite(this.fogMask.texture);
+    sprite.width = fog.cols * scene.gridSize;
+    sprite.height = fog.rows * scene.gridSize;
+    const root = new Container({ label: 'fog' });
+    root.addChild(sprite);
+    // replaceLayerContent destroys the previous sprite but not the shared
+    // texture, which this runtime owns.
+    const layer = this.layer('fog');
+    if (!layer) return;
+    for (const old of layer.removeChildren()) old.destroy({ children: true, texture: false });
+    layer.addChild(root);
   }
 
   private drawLights(scene: RenderScene): void {

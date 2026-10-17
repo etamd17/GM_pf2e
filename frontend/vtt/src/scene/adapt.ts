@@ -1,5 +1,6 @@
 import type { RenderLight, RenderScene, RenderToken, RenderWall } from './renderModel';
-import { EMPTY_SCENE, isMediaUrl } from './renderModel';
+import { decodeFogBits } from '../protocol/semantics';
+import { EMPTY_SCENE, isMediaUrl, type RenderFog } from './renderModel';
 
 // The one adapter between projected wire entities and the renderer's model
 // (renderModel.ts). It reads only the fields its surface's projection carries,
@@ -24,6 +25,7 @@ const isDoorState = (v: unknown): v is (typeof DOOR_STATES)[number] =>
 const num = (v: unknown, fallback = 0): number => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
 
 export interface AdaptCache {
+  fog?: { version: string; fog: RenderFog };
   tokens: Map<string, { version: string; token: RenderToken }>;
   lights: Map<string, { version: string; light: RenderLight }>;
   walls: Map<string, { version: string; wall: RenderWall }>;
@@ -55,9 +57,24 @@ export function adaptEntities(
   const lights: RenderLight[] = [];
   const walls: RenderWall[] = [];
   const seen = { tokens: new Set<string>(), lights: new Set<string>(), walls: new Set<string>() };
+  let fog: RenderFog | undefined;
   for (const e of entities.values()) {
     if (e.kind === 'scene') {
       scene = e;
+    } else if (e.kind === 'fog') {
+      if (cache.fog?.version === e.version) {
+        fog = cache.fog.fog;
+        continue;
+      }
+      const cols = num(e.cols, 1);
+      const rows = num(e.rows, 1);
+      const bits = typeof e.revealed === 'string' ? decodeFogBits(e.revealed) : null;
+      // The frame rules already checked the length; a mismatch here draws no fog
+      // rather than misreading the cells.
+      if (bits && bits.length === Math.ceil((cols * rows) / 8)) {
+        fog = { enabled: e.enabled === true, cols, rows, bits, key: e.version };
+        cache.fog = { version: e.version, fog };
+      }
     } else if (e.kind === 'token') {
       seen.tokens.add(e.id);
       const hit = cache.tokens.get(e.id);
@@ -126,6 +143,7 @@ export function adaptEntities(
     gridSize: num(scene?.gridSize, EMPTY_SCENE.gridSize),
     showGrid: scene ? scene.showGrid === true : EMPTY_SCENE.showGrid,
     ...(assetUrl(media, scene?.backgroundAssetId) ? { backgroundUrl: assetUrl(media, scene?.backgroundAssetId) as string } : {}),
+    ...(fog ? { fog } : {}),
     tokens,
     walls,
     lights,

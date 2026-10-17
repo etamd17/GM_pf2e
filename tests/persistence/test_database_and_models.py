@@ -149,6 +149,7 @@ def test_schema_exposes_the_approved_additive_tables():
         "vtt_campaign_streams",
         "vtt_command_receipts",   # VTT commands (migration 20261016_0004)
         "vtt_entities",
+        "vtt_fog",                # VTT fog of war (migration 20261017_0008)
         "vtt_imported_entities",  # VTT import provenance (migration 20261016_0006)
         "vtt_imported_scenes",
         "vtt_outbox",

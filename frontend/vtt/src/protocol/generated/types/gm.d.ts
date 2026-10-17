@@ -3,7 +3,7 @@
 export type GmFrame = GmSnapshot | GmPatch;
 export type OpaqueToken = string;
 export type Id = string;
-export type GmEntity = GmScene | GmToken | GmLight | GmWall;
+export type GmEntity = GmScene | GmToken | GmLight | GmWall | FogState;
 
 export interface GmSnapshot {
   schemaVersion: 1;
@@ -114,6 +114,18 @@ export interface GmWall {
   y2: number;
   doorState: "none" | "open" | "closed" | "locked" | "secret";
 }
+/**
+ * One per scene (id "fog"), parity-1. revealed is a base64url bitset, row-major, least significant bit first, of exactly ceil(cols*rows/8) bytes with zero padding bits (a semantic rule). cols*rows is at most 262144.
+ */
+export interface FogState {
+  kind: "fog";
+  id: "fog";
+  version: OpaqueToken;
+  enabled: boolean;
+  cols: number;
+  rows: number;
+  revealed: string;
+}
 export interface GmPatch {
   schemaVersion: 1;
   frame: "patch";
@@ -130,6 +142,6 @@ export interface GmPatch {
   originCommandId?: OpaqueToken;
 }
 export interface GmEntityRef {
-  kind: "scene" | "token" | "light" | "wall";
+  kind: "scene" | "token" | "light" | "wall" | "fog";
   id: Id;
 }

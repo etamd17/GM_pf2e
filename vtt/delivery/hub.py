@@ -35,6 +35,7 @@ from typing import Any
 from sqlalchemy import select, tuple_
 
 from core.persistence.database import Database
+from vtt import fog
 from vtt.projection import serializers as S
 from vtt.protocol import ContractRegistry, ProtocolValidationError
 from vtt.storage.models import VttEntity, VttScene, VttTablePointer
@@ -172,8 +173,9 @@ class Hub:
                 self._drop(sub.sid, sub)
                 raise AccessLost()
             rows = self._rows(session, sub.campaign_id, sub.scene_id) if scene is not None else []
-            entities = (S.gm_entities(self.key, scene, rows) if sub.audience == "gm"
-                        else S.table_entities(self.key, scene, rows))
+            fog_view = fog.load(session, scene)[1] if scene is not None else None
+            entities = (S.gm_entities(self.key, scene, rows, fog_view) if sub.audience == "gm"
+                        else S.table_entities(self.key, scene, rows, fog_view))
             if sub.audience == "table" and not entities:
                 sub.scene_id = None     # nothing published: the table sees no scene
             cursor = committed_position(session, sub.campaign_id)
@@ -355,10 +357,26 @@ class Hub:
                 return None
             current: dict[tuple[str, str], dict[str, Any]] = {}
             if scene_changed:
+                # A scene change can move the grid, which moves the fog and what
+                # it covers: recheck the fog entity and, for the table, every
+                # token and light (scene changes are rare; this is bounded by
+                # the entity caps).
+                keys = keys | {("fog", "fog")}
+                if sub.audience == "table":
+                    keys = keys | {(k, i) for k, i in session.execute(
+                        select(VttEntity.kind, VttEntity.id).where(
+                            VttEntity.campaign_id == sub.campaign_id, VttEntity.scene_id == sub.scene_id,
+                            VttEntity.kind.in_(("token", "light")))).all()}
+            # Fog (parity-1) is read once: the table's tokens and lights are
+            # filtered by it, and the fog entity itself may be among the keys.
+            fog_view = fog.load(session, scene)[1] if (sub.audience == "table" or ("fog", "fog") in keys) else None
+            if ("fog", "fog") in keys and fog_view is not None:
+                current[("fog", "fog")] = S.fog_entity(self.key, sub.campaign_id, sub.audience, fog_view)
+            if scene_changed:
                 projected = S.gm_scene(self.key, scene) if sub.audience == "gm" else S.table_scene(self.key, scene)
                 current[("scene", scene.id)] = projected
                 keys = keys | {("scene", scene.id)}
-            entity_keys = [k for k in keys if k[0] != "scene"]
+            entity_keys = [k for k in keys if k[0] not in ("scene", "fog")]
             if entity_keys:
                 rows = session.execute(
                     select(VttEntity).where(
@@ -367,7 +385,8 @@ class Hub:
                     )
                 ).scalars().all()
                 for row in rows:
-                    projected = S.gm_entity(self.key, row) if sub.audience == "gm" else S.table_entity(self.key, row)
+                    projected = (S.gm_entity(self.key, row) if sub.audience == "gm"
+                                 else S.table_entity(self.key, row, fog_view))
                     if projected is not None:
                         current[(row.kind, row.id)] = projected
         for key in sorted(keys):

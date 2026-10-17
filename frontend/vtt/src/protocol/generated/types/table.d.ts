@@ -3,7 +3,7 @@
 export type TableFrame = TableSnapshot | TablePatch;
 export type OpaqueToken = string;
 export type Id = string;
-export type TableEntity = TableScene | TableToken | TableLight;
+export type TableEntity = TableScene | TableToken | TableLight | FogState;
 
 export interface TableSnapshot {
   schemaVersion: 1;
@@ -67,6 +67,18 @@ export interface TableLight {
   radius: number;
   color: number;
 }
+/**
+ * One per scene (id "fog"), parity-1. revealed is a base64url bitset, row-major, least significant bit first, of exactly ceil(cols*rows/8) bytes with zero padding bits (a semantic rule). cols*rows is at most 262144.
+ */
+export interface FogState {
+  kind: "fog";
+  id: "fog";
+  version: OpaqueToken;
+  enabled: boolean;
+  cols: number;
+  rows: number;
+  revealed: string;
+}
 export interface TablePatch {
   schemaVersion: 1;
   frame: "patch";
@@ -82,6 +94,6 @@ export interface TablePatch {
   removed: TableEntityRef[];
 }
 export interface TableEntityRef {
-  kind: "scene" | "token" | "light";
+  kind: "scene" | "token" | "light" | "fog";
   id: Id;
 }

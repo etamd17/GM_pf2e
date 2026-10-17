@@ -127,7 +127,10 @@
     "light.update",
     "wall.create",
     "wall.update",
-    "entity.delete"
+    "entity.delete",
+    "fog.update",
+    "fog.reveal",
+    "fog.reset"
   ],
   "transientVariants": []
 }

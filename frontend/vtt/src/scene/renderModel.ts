@@ -42,6 +42,17 @@ export interface RenderLight {
   readonly hidden?: boolean; // GM only
 }
 
+// Fog of war (parity P1): cols x rows grid cells, row-major bits, least
+// significant first; a set bit is revealed. `key` changes exactly when the fog
+// does (the projected version), so the drawn mask is cached on it.
+export interface RenderFog {
+  readonly enabled: boolean;
+  readonly cols: number;
+  readonly rows: number;
+  readonly bits: Uint8Array;
+  readonly key: string;
+}
+
 export interface RenderScene {
   readonly width: number;
   readonly height: number;
@@ -54,6 +65,7 @@ export interface RenderScene {
   // Background image (M6): a same-origin media URL, drawn under the grid and
   // stretched to the scene's size.
   readonly backgroundUrl?: string;
+  readonly fog?: RenderFog;
   readonly tokens: readonly RenderToken[];
   readonly walls: readonly RenderWall[];
   readonly lights: readonly RenderLight[];

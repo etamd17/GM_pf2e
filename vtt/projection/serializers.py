@@ -79,9 +79,18 @@ def gm_entity(key: TokenKey, row) -> dict[str, Any]:
     return _with_version(key, row.campaign_id, "gm", row.kind, row.id, fields)
 
 
-def gm_entities(key: TokenKey, scene, rows) -> list[dict[str, Any]]:
+def fog_entity(key: TokenKey, campaign_id: str, audience: str, fog) -> dict[str, Any]:
+    """The scene's fog entity (parity-1) from a ``vtt.fog.FogView``. Same shape
+    for both audiences; the version is per audience like every other entity."""
+    fields = {"enabled": fog.enabled, "cols": fog.cols, "rows": fog.rows, "revealed": fog.encoded}
+    return _with_version(key, campaign_id, audience, "fog", "fog", fields)
+
+
+def gm_entities(key: TokenKey, scene, rows, fog=None) -> list[dict[str, Any]]:
     out = [gm_scene(key, scene)] if scene is not None else []
     out += [gm_entity(key, row) for row in rows]
+    if scene is not None and fog is not None:
+        out.append(fog_entity(key, scene.campaign_id, "gm", fog))
     return out
 
 
@@ -97,11 +106,15 @@ def table_scene(key: TokenKey, scene) -> dict[str, Any]:
     return _with_version(key, scene.campaign_id, "table", "scene", scene.id, fields)
 
 
-def table_entity(key: TokenKey, row) -> dict[str, Any] | None:
-    """The table's view of one canonical entity, or None when the table may not see it."""
+def table_entity(key: TokenKey, row, fog=None) -> dict[str, Any] | None:
+    """The table's view of one canonical entity, or None when the table may not
+    see it: hidden, not a token or light, or (parity-1) its centre cell is
+    under fog."""
     if row.hidden or row.kind not in ("token", "light"):
         return None
     d = row.data or {}
+    if fog is not None and fog.hides(d.get("x", 0), d.get("y", 0)):
+        return None
     if row.kind == "token":
         fields = {
             "x": d["x"], "y": d["y"], "size": d.get("size", 1), "label": d.get("label", ""),
@@ -112,14 +125,16 @@ def table_entity(key: TokenKey, row) -> dict[str, Any] | None:
     return _with_version(key, row.campaign_id, "table", row.kind, row.id, fields)
 
 
-def table_entities(key: TokenKey, scene, rows) -> list[dict[str, Any]]:
+def table_entities(key: TokenKey, scene, rows, fog=None) -> list[dict[str, Any]]:
     if scene is None or not scene.published:
         return []
     out = [table_scene(key, scene)]
     for row in rows:
-        projected = table_entity(key, row)
+        projected = table_entity(key, row, fog)
         if projected is not None:
             out.append(projected)
+    if fog is not None:
+        out.append(fog_entity(key, scene.campaign_id, "table", fog))
     return out
 
 
