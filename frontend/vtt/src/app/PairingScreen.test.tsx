@@ -20,6 +20,8 @@ describe('redeemCode', () => {
     expect(await answer(429, { error: 'rate-limited' })).toBe('rate-limited');
     expect(await answer(400, { error: 'insecure-origin' })).toBe('insecure-origin');
     expect(await answer(403, { error: 'origin-refused' })).toBe('pairing-failed');
+    // a store outage is not a bad code
+    expect(await answer(503, { error: 'temporarily-unavailable' })).toBe('server-busy');
     expect(await redeemCode('x', (async () => { throw new TypeError('offline'); }) as never)).toBe('network');
   });
 });

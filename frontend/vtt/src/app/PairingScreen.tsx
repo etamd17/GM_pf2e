@@ -6,7 +6,7 @@ import { useState, type FormEvent } from 'react';
 // the credential itself: a successful redeem reloads the page, which then
 // connects with the cookie.
 
-export type RedeemResult = 'paired' | 'pairing-failed' | 'rate-limited' | 'insecure-origin' | 'network';
+export type RedeemResult = 'paired' | 'pairing-failed' | 'rate-limited' | 'insecure-origin' | 'server-busy' | 'network';
 
 export async function redeemCode(code: string, fetcher: typeof fetch = fetch): Promise<RedeemResult> {
   try {
@@ -17,6 +17,9 @@ export async function redeemCode(code: string, fetcher: typeof fetch = fetch): P
       body: JSON.stringify({ code }),
     });
     if (response.ok) return 'paired';
+    // The store is briefly unavailable. The code was most likely not used, so
+    // the same one is worth retrying (it can be spent if the outage hit the commit).
+    if (response.status === 503) return 'server-busy';
     const body = (await response.json().catch(() => ({}))) as { error?: unknown };
     if (body.error === 'rate-limited' || body.error === 'insecure-origin') return body.error;
     return 'pairing-failed';
@@ -30,6 +33,7 @@ const MESSAGES: Record<Exclude<RedeemResult, 'paired'>, string> = {
   'rate-limited': 'Too many attempts. Wait a few minutes, then try again.',
   'insecure-origin':
     'This display is not on a secure connection, so it cannot be paired. Open the table page over HTTPS.',
+  'server-busy': 'The server is busy. Try the same code again in a few seconds; if it is refused, ask the GM for a new one.',
   network: 'Could not reach the server. Check the connection and try again.',
 };
 

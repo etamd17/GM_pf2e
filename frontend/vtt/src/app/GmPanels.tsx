@@ -10,7 +10,7 @@ import type { GmBoot } from '../live/boot';
 
 type Fetcher = typeof fetch;
 
-async function call(fetcher: Fetcher, boot: GmBoot, path: string, body?: unknown): Promise<{ ok: boolean; data: unknown }> {
+async function call(fetcher: Fetcher, boot: GmBoot, path: string, body?: unknown): Promise<{ ok: boolean; data: unknown; busy?: boolean }> {
   try {
     const response = await fetcher(path, {
       method: body === undefined ? 'GET' : 'POST',
@@ -18,11 +18,13 @@ async function call(fetcher: Fetcher, boot: GmBoot, path: string, body?: unknown
       headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': boot.csrf },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
-    return { ok: response.ok, data: await response.json().catch(() => null) };
+    return { ok: response.ok, data: await response.json().catch(() => null), busy: response.status === 503 };
   } catch {
     return { ok: false, data: null };
   }
 }
+
+const BUSY = 'The server is busy. Try again in a few seconds.';
 
 interface Grant {
   id: string;
@@ -65,9 +67,11 @@ export function PairingPanel({ boot, fetcher = fetch }: { boot: GmBoot; fetcher?
     setError(null);
     const result = await call(fetcher, boot, '/vtt/api/table-pairing', { campaignId: boot.campaignId });
     if (!result.ok) {
-      setError(result.data && (result.data as { error?: string }).error === 'rate-limited'
-        ? 'Too many codes just now. Wait a few minutes.'
-        : 'Could not create a code.');
+      setError(result.busy
+        ? BUSY
+        : result.data && (result.data as { error?: string }).error === 'rate-limited'
+          ? 'Too many codes just now. Wait a few minutes.'
+          : 'Could not create a code.');
       return;
     }
     const data = result.data as { code: string; expiresInSeconds: number };
@@ -79,7 +83,7 @@ export function PairingPanel({ boot, fetcher = fetch }: { boot: GmBoot; fetcher?
     if (grantId === null && !window.confirm('Unpair every table display for this campaign?')) return;
     const path = grantId === null ? '/vtt/api/table-grants/revoke-all' : `/vtt/api/table-grants/${encodeURIComponent(grantId)}/revoke`;
     const result = await call(fetcher, boot, path, { campaignId: boot.campaignId });
-    if (!result.ok) setError('Could not unpair.');
+    if (!result.ok) setError(result.busy ? BUSY : 'Could not unpair.');
     await refresh();
   }
 
@@ -149,7 +153,7 @@ export function ImportPanel({ boot, fetcher = fetch, onImported }: { boot: GmBoo
     const result = await call(fetcher, boot, '/vtt/api/import-legacy', { campaignId: boot.campaignId, apply });
     setBusy(false);
     if (!result.ok) {
-      setError('The import could not run.');
+      setError(result.busy ? BUSY : 'The import could not run.');
       return;
     }
     setReport((result.data as { scenes: ImportScene[] }).scenes);

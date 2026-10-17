@@ -118,3 +118,23 @@ describe('ImportPanel', () => {
     expect(screen.getByText(/not imported: Crypt: over the frame limit/)).toBeTruthy();
   });
 });
+
+describe('a busy server', () => {
+  it('says so instead of blaming the request', async () => {
+    const { fetcher } = server({
+      '/vtt/api/table-grants': () => [200, { grants: [] }],
+      '/vtt/api/table-pairing': () => [503, { error: 'temporarily-unavailable' }],
+      '/vtt/api/import-legacy': () => [503, { error: 'temporarily-unavailable' }],
+    });
+    render(<PairingPanel boot={boot} fetcher={fetcher} />);
+    render(<ImportPanel boot={boot} fetcher={fetcher} />);
+    await flush();
+    fireEvent.click(screen.getByRole('button', { name: 'Pair a display' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Check what would import' }));
+    await flush();
+    expect(screen.getAllByRole('alert').map((a) => a.textContent)).toEqual([
+      'The server is busy. Try again in a few seconds.',
+      'The server is busy. Try again in a few seconds.',
+    ]);
+  });
+});

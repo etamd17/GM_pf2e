@@ -39,6 +39,7 @@ from flask import Blueprint, jsonify, make_response, request
 
 from core.persistence.database import Database
 from vtt.storage import grants as G
+from vtt.transport import outage
 
 GM_HEADER = "X-CSRF-Token"
 LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "[::1]", "::1"}
@@ -210,4 +211,4 @@ def make_blueprint(*, db: Database, host, grant_key: bytes, cookie_name: str, ve
         response.headers["Cache-Control"] = "no-store"
         return response
 
-    return bp
+    return outage.install(bp)

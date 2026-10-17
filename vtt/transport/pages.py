@@ -24,6 +24,7 @@ from sqlalchemy import select
 
 from core.persistence.database import Database
 from vtt.storage.models import VttScene, VttTablePointer
+from vtt.transport import outage
 
 ID_MAX = 128
 ASSET_SUFFIXES = {".js", ".css", ".woff", ".woff2", ".ttf", ".png", ".svg", ".webp", ".jpg", ".jpeg"}
@@ -152,4 +153,4 @@ def make_pages_blueprint(*, db: Database, host, dist_dir: Path, on_change=lambda
             on_change(campaign_id)
         return jsonify(report)
 
-    return bp
+    return outage.install(bp)
