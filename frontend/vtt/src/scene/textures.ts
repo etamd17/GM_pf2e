@@ -76,6 +76,13 @@ export class TextureLoader<T> {
     if (texture !== null) this.onLoaded(url);
   }
 
+  // For the test probe: where a URL stands.
+  state(url: string): 'loaded' | 'failed' | 'pending' | 'none' {
+    if (this.ready.has(url)) return this.ready.get(url) === null ? 'failed' : 'loaded';
+    if (this.loading.has(url)) return 'pending';
+    return this.failedAt.has(url) ? 'failed' : 'none';
+  }
+
   private clock(): number {
     return (this.deps.now ?? Date.now)();
   }

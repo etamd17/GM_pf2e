@@ -1,0 +1,8 @@
+# LAN HTTPS for the local stack (compose profile "lan"). Caddy issues a
+# certificate from its own local CA; install that CA's root certificate on the
+# TV (and any laptop) once, and the table's Secure pairing cookie works over
+# the LAN. See docs/vtt/local-stack.md.
+https://{$VTT_LAN_HOST} {
+	tls internal
+	reverse_proxy web:8000
+}

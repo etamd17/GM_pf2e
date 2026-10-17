@@ -1,0 +1,47 @@
+# An ALLOWLIST (M6, handoff 053). The build context starts empty and only what
+# the app needs at runtime is added back, so private data that lives in this
+# checkout (party_data, campaigns, users.json, invites.json, vault data,
+# uploads, PDFs, dnd5e_data, .env, venvs) can never reach an image by being
+# forgotten in a blocklist. Add a path here only if the running app reads it.
+*
+**
+
+!app.py
+!class_matrix.py
+!pf2e_generator.py
+!pf2e_database.db
+!alembic.ini
+!requirements.txt
+!core/
+!core/**
+!services/
+!services/**
+!systems/
+!systems/**
+!vtt/
+!vtt/**
+!migrations/
+!migrations/**
+!contracts/
+!contracts/**
+!templates/
+!templates/**
+!static/
+!static/**
+!compendium_data/
+!compendium_data/**
+!monster_data/
+!monster_data/**
+!maps/
+!maps/**
+!tools/vtt_import_scenes.py
+!docker/
+!docker/**
+!frontend/vtt/
+!frontend/vtt/**
+
+# ...minus build output and local caches inside the allowed folders.
+frontend/vtt/node_modules/
+frontend/vtt/dist/
+**/__pycache__/
+**/*.pyc

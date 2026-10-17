@@ -87,4 +87,15 @@ describe('TextureLoader', () => {
     expect(t.destroyed).toEqual(['texture', 'texture']);
     expect(t.loaded).toEqual([URL_GM]);
   });
+
+  it('reports each URL state for the test probe', async () => {
+    const t = setup([ok, () => new Response(null, { status: 503 })]);
+    expect(t.loader.state(URL_GM)).toBe('none');
+    t.loader.get(URL_GM);
+    expect(t.loader.state(URL_GM)).toBe('pending');
+    t.loader.get(URL_TABLE);
+    await t.settle();
+    expect(t.loader.state(URL_GM)).toBe('loaded');
+    expect(t.loader.state(URL_TABLE)).toBe('failed');
+  });
 });

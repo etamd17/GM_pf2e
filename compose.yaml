@@ -1,0 +1,104 @@
+# The VTT local stack (M6, handoff 053; VTT-ADR-0003).
+#
+#   cp docker/env.example .env      # then set the secrets in .env (gitignored)
+#   docker compose up --build       # http://localhost:8000
+#
+# Services: web (the whole Flask app with the VTT on), PostgreSQL, and an
+# S3-compatible store (SeaweedFS) for the asset store. Redis and a worker are
+# deliberately absent: with one gevent worker the VTT fans out in-process, and
+# they would first matter (and first be testable) with a second web process.
+# Their slot is marked below.
+#
+# A real TV needs HTTPS to keep its Secure pairing cookie: `--profile lan` adds
+# a Caddy proxy with a locally trusted certificate (docs/vtt/local-stack.md).
+
+name: gm-vtt
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: vtt
+      POSTGRES_PASSWORD: ${VTT_DB_PASSWORD:?set VTT_DB_PASSWORD in .env}
+      POSTGRES_DB: vtt
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vtt -d vtt"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # S3-compatible object storage for the asset store. ADR-0003 named MinIO,
+  # but MinIO no longer publishes community images (Docker Hub answers
+  # "access denied", quay.io has no tags), so the stack uses SeaweedFS's S3
+  # gateway. The app speaks plain S3 (SigV4) and does not care which.
+  assets:
+    image: chrislusf/seaweedfs:4.00
+    environment:
+      VTT_ASSETS_KEY: ${VTT_ASSETS_KEY:?set VTT_ASSETS_KEY in .env}
+      VTT_ASSETS_SECRET: ${VTT_ASSETS_SECRET:?set VTT_ASSETS_SECRET in .env}
+    entrypoint: >-
+      /bin/sh -c "printf '{\"identities\":[{\"name\":\"vtt\",\"credentials\":[{\"accessKey\":\"%s\",\"secretKey\":\"%s\"}],\"actions\":[\"Admin\",\"Read\",\"Write\",\"List\"]}]}'
+      \"$$VTT_ASSETS_KEY\" \"$$VTT_ASSETS_SECRET\" > /tmp/s3.json
+      && exec weed server -dir=/data -s3 -s3.port=8333 -s3.config=/tmp/s3.json -volume.max=0 -master.volumeSizeLimitMB=1024"
+    volumes:
+      - asset-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:9333/cluster/status || exit 1"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+
+  # One-shot: make sure the bucket exists, then exit.
+  assets-bucket:
+    image: chrislusf/seaweedfs:4.00
+    depends_on:
+      assets:
+        condition: service_healthy
+    entrypoint: >-
+      /bin/sh -c "echo 's3.bucket.create -name vtt-assets' | weed shell -master=assets:9333"
+
+  web:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+      assets-bucket:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgresql+psycopg://vtt:${VTT_DB_PASSWORD}@db:5432/vtt
+      SECRET_KEY: ${VTT_SECRET_KEY:?set VTT_SECRET_KEY in .env}
+      OWNERSHIP_BACKEND: sql
+      VTT_ASSETS_BACKEND: s3
+      VTT_ASSETS_S3_ENDPOINT: http://assets:8333
+      VTT_ASSETS_S3_BUCKET: vtt-assets
+      VTT_ASSETS_S3_ACCESS_KEY: ${VTT_ASSETS_KEY}
+      VTT_ASSETS_S3_SECRET_KEY: ${VTT_ASSETS_SECRET}
+      VTT_ALLOWED_ORIGINS: ${VTT_ALLOWED_ORIGINS:-http://localhost:8000}
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - app-data:/data
+
+  # Redis and the delivery worker go here when there is more than one web
+  # process (ADR-0002 section 5: Redis only wakes and fans out; PostgreSQL and
+  # the outbox stay the source of truth).
+
+  lan-proxy:
+    profiles: ["lan"]
+    image: caddy:2.10.2-alpine
+    depends_on: [web]
+    environment:
+      VTT_LAN_HOST: ${VTT_LAN_HOST:-vtt.localhost}
+    ports:
+      - "443:443"
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+
+volumes:
+  db-data:
+  asset-data:
+  app-data:
+  caddy-data:

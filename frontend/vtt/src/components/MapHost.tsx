@@ -20,6 +20,18 @@ interface Props {
 declare global {
   interface Window {
     __vttRuntime?: SceneRuntime;
+    __vttProbe?: () => ReturnType<SceneRuntime['probe']>;
+  }
+}
+
+// The browser harness sets localStorage "vtt.probe" to "1" before the page
+// loads; only then is the render probe exposed. It reads what the runtime is
+// drawing, nothing the page does not already hold.
+function probeEnabled(): boolean {
+  try {
+    return window.localStorage.getItem('vtt.probe') === '1';
+  } catch {
+    return false;
   }
 }
 
@@ -77,11 +89,13 @@ export function MapHost({ surface, scene, onViewportChange, label, interaction, 
       if (isCurrent()) useConnection.getState().setRenderer('failed');
     });
     if (import.meta.env.DEV) window.__vttRuntime = runtime;
+    if (probeEnabled()) window.__vttProbe = () => runtime.probe();
     return () => {
       alive = false;
       runtime.destroy();
       runtimeRef.current = null;
       if (window.__vttRuntime === runtime) delete window.__vttRuntime;
+      delete window.__vttProbe;
     };
   }, [surface]);
 

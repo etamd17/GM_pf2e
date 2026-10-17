@@ -231,6 +231,39 @@ export class SceneRuntime {
     this.textures.dispose();
   }
 
+  // Test probe (M6 harness): what this runtime is drawing. Only data the page
+  // already holds; MapHost exposes it when the probe flag is set.
+  probe(): {
+    surface: Surface;
+    viewport: Viewport;
+    scene: { width: number; height: number; gridSize: number; backgroundUrl: string | null; background: string } | null;
+    tokens: Array<{ id: string; x: number; y: number; label: string; hidden: boolean; artUrl: string | null; art: string }>;
+  } {
+    const scene = this.scene;
+    return {
+      surface: this.options.surface,
+      viewport: { ...this.viewport },
+      scene: scene
+        ? {
+            width: scene.width,
+            height: scene.height,
+            gridSize: scene.gridSize,
+            backgroundUrl: scene.backgroundUrl ?? null,
+            background: scene.backgroundUrl ? this.textures.state(scene.backgroundUrl) : 'none',
+          }
+        : null,
+      tokens: (scene?.tokens ?? []).map((t) => ({
+        id: t.id,
+        x: t.x,
+        y: t.y,
+        label: t.label,
+        hidden: t.hidden === true,
+        artUrl: t.artUrl ?? null,
+        art: t.artUrl ? this.textures.state(t.artUrl) : 'none',
+      })),
+    };
+  }
+
   // An image arrived: redraw whatever shows it.
   private textureLoaded(url: string): void {
     const scene = this.scene;
