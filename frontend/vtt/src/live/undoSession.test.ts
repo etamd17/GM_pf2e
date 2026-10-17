@@ -108,3 +108,58 @@ describe('undo through the live session', () => {
     expect(useCommands.getState().undo.canUndo).toBe(false);
   });
 });
+
+// Handoff 050: history keeps ACTION order, not the order acks arrive in.
+describe('history order under late acknowledgements', () => {
+  const v = (c: string) => 'v' + c.repeat(24);
+
+  // An undo or redo exactly as the workspace issues it.
+  function step(page: ReturnType<typeof live>['page'], direction: 'undo' | 'redo') {
+    const source = page.undo.beginStep(direction);
+    if (!source) throw new Error(`no ${direction} available`);
+    const before = entityOf('token', 'tok_hero');
+    const draft = source.make(before);
+    if (!draft) throw new Error('step cannot be built');
+    const id = page.issue(draft, null);
+    page.undo.stepIssued(direction, source, id, inverseFor(draft, before));
+    return { id: id as string, draft };
+  }
+  const xOf = (draft: { payload: Record<string, unknown> }) => draft.payload.x;
+
+  it('a redo whose ack arrives after a newer edit stays below it, and both undo in order', () => {
+    const { page, move, frame, ack } = live();
+    const first = move(160);
+    frame(first, { ...hero, x: 160, version: v('B') });
+    ack(first);
+    const undo = step(page, 'undo');                                  // 160 -> 96
+    frame(undo.id, { ...hero, x: 96, version: v('C') });
+    ack(undo.id);
+    const redo = step(page, 'redo');                                  // 96 -> 160; its ack is lost
+    frame(redo.id, { ...hero, x: 160, version: v('D') });
+    const newer = move(224);                                          // 160 -> 224, fully answered
+    frame(newer, { ...hero, x: 224, version: v('E') });
+    ack(newer);
+    ack(redo.id);                                                     // the receipt, on retry
+    const back1 = step(page, 'undo');
+    expect(xOf(back1.draft)).toBe(160);                               // the newest action first
+    frame(back1.id, { ...hero, x: 160, version: v('F') });
+    ack(back1.id);
+    const back2 = step(page, 'undo');
+    expect(xOf(back2.draft)).toBe(96);                                // then the redo itself
+  });
+
+  it('two edits answered in reverse order undo newest first', () => {
+    const { page, move, frame, ack } = live();
+    const a = move(160);
+    frame(a, { ...hero, x: 160, version: v('B') });                  // a: shown, ack delayed
+    const b = move(224);
+    frame(b, { ...hero, x: 224, version: v('C') });
+    ack(b);
+    ack(a);
+    const back1 = step(page, 'undo');
+    expect(xOf(back1.draft)).toBe(160);
+    frame(back1.id, { ...hero, x: 160, version: v('D') });
+    ack(back1.id);
+    expect(xOf(step(page, 'undo').draft)).toBe(96);
+  });
+});

@@ -258,6 +258,43 @@ describe('UndoManager', () => {
     expect(t.m.canUndo).toBe(true);
   });
 
+  it('a late redo ack keeps its entry below a newer edit (action order, not ack order)', () => {
+    const t = managed();
+    done(t, 'c1', entry('undo-original'));
+    stepOut(t, 'undo', 'u1', entry('redo-original'));
+    t.m.applied('u1');
+    t.land('u1');
+    stepOut(t, 'redo', 'r1', entry('undo-redo'));
+    t.land('r1');                                // shown, ack delayed
+    done(t, 'c2', entry('undo-newer'));
+    t.m.applied('r1');
+    expect(t.m.beginStep('undo')?.id).toBe('undo-newer');
+    expect(t.m.beginStep('undo')?.id).toBe('undo-redo');
+  });
+
+  it('edits settling out of order keep issue order', () => {
+    const t = managed();
+    t.issue('a');
+    t.m.edit('a', entry('a'));
+    t.issue('b');
+    t.m.edit('b', entry('b'));
+    t.land('b');
+    t.m.applied('b');
+    t.land('a');
+    t.m.applied('a');
+    expect([t.m.beginStep('undo')?.id, t.m.beginStep('undo')?.id]).toEqual(['b', 'a']);
+  });
+
+  it('a rejected step goes back to its own place', () => {
+    const t = managed();
+    done(t, 'c1');
+    done(t, 'c2');
+    const source = stepOut(t, 'undo', 'u1');
+    t.m.rejected('u1');
+    expect(t.m.beginStep('undo')).toBe(source);
+    expect(t.m.beginStep('undo')?.id).toBe('c1');
+  });
+
   it('is bounded', () => {
     const t = managed(3);
     for (let i = 0; i < 5; i += 1) done(t, `e${i}`);

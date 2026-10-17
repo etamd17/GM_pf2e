@@ -169,11 +169,18 @@ export interface UndoState {
 //   still on its way, so each one is built against settled state.
 // - A rejected step puts its entry back where it came from (if no new edit
 //   happened since), so a racing refusal does not silently lose history.
+// - Stacks keep ACTION order, not reply order (handoff 050): every entry is
+//   numbered when its command is issued and is inserted by that number when
+//   it settles. Edits may overlap a pending step or each other, so a late ack
+//   (a lost ack answered by the receipt on retry) must not put an older
+//   action's entry above a newer one.
 export class UndoManager {
   private undos: UndoEntry[] = [];
   private redos: UndoEntry[] = [];
   private readonly pending = new Map<string, Tracked>();
   private generation = 0;
+  private issued = 0;
+  private readonly order = new WeakMap<UndoEntry, number>();
 
   constructor(
     private readonly limit = 100,
@@ -252,6 +259,8 @@ export class UndoManager {
   }
 
   private track(commandId: string, t: Omit<Tracked, 'applied' | 'landed'>): void {
+    // Numbered at issue time: this is the entry's place in history.
+    if (t.entry) this.order.set(t.entry, ++this.issued);
     this.pending.set(commandId, { ...t, applied: false, landed: !this.hasOverlay(commandId) });
   }
 
@@ -276,8 +285,13 @@ export class UndoManager {
     this.changed();
   }
 
+  // Insert by issue order, so the top is always the latest ACTION, whatever
+  // order the replies came in. A returned (rejected) entry keeps its number.
   private push(stack: UndoEntry[], entry: UndoEntry): void {
-    stack.push(entry);
+    const rank = this.order.get(entry) ?? Number.MAX_SAFE_INTEGER;
+    let at = stack.length;
+    while (at > 0 && (this.order.get(stack[at - 1] as UndoEntry) ?? 0) > rank) at -= 1;
+    stack.splice(at, 0, entry);
     if (stack.length > this.limit) stack.splice(0, stack.length - this.limit);
   }
 
