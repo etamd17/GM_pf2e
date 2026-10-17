@@ -102,9 +102,17 @@ export function startGm(boot: GmBoot): GmLive {
       /* storage unavailable: nothing to retry after the reload */
     }
   }
-  const session = new ProjectionSession<GmEntity, OverlayData>('gm', sink, browserClock, (overlays) =>
-    useOverlays.getState().set(overlays),
+  // History waits for each command to land in the projection: its overlay
+  // ends only with the correlated frame or a replacement snapshot.
+  const undo = new UndoManager(
+    100,
+    (state) => useCommands.getState().setUndo(state),
+    (commandId) => useOverlays.getState().overlays.has(commandId),
   );
+  const session = new ProjectionSession<GmEntity, OverlayData>('gm', sink, browserClock, (overlays) => {
+    useOverlays.getState().set(overlays);
+    undo.overlaysChanged();
+  });
   const transport: SocketIoTransport<GmEntity, OverlayData> = new SocketIoTransport<GmEntity, OverlayData>({
     session,
     csrf: boot.csrf,
@@ -117,14 +125,13 @@ export function startGm(boot: GmBoot): GmLive {
     subscribeMessage: () => ({ schemaVersion: 1, audience: 'gm', campaignId: boot.campaignId, sceneId: boot.sceneId }),
     onAck: (ack) => queue.onAck(ack),
   });
-  const undo = new UndoManager(100, (state) => useCommands.getState().setUndo(state));
   const queue: CommandQueue<GmEntity, OverlayData> = new CommandQueue<GmEntity, OverlayData>({
     session,
     send: (command) => transport.sendCommand(command),
     validate: (command) => gm.validateCommand(command) && commandRulesHold(command),
     onOutcome: (outcome) => {
       if (outcome.kind === 'applied') undo.applied(outcome.commandId);
-      else if (outcome.kind === 'rejected') undo.settled(outcome.commandId);
+      else if (outcome.kind === 'rejected') undo.rejected(outcome.commandId);
       if (outcome.kind === 'reauthenticate') park(queue.unresolved());
       useCommands.getState().notify(outcome);
     },

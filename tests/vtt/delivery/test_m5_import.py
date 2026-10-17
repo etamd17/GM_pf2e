@@ -5,6 +5,8 @@ against the real format, not a guess at it."""
 
 from __future__ import annotations
 
+import hashlib
+
 from sqlalchemy import func, select
 
 from core import scenes as legacy
@@ -80,7 +82,8 @@ def test_what_cannot_come_across_is_reported():
     scene["settings"]["dynamic_lighting"] = True
     dropped = " | ".join(importer.plan_scene(scene).dropped)
     for words in ("background image", "fog", "1 template", "1 terrain", "grid offset", "dynamic lighting",
-                  "token art on 1", "tracker links (live HP and conditions) on 1", "light intensity on 1"):
+                  "token art on 1", "tracker links (live HP and conditions) on 1", "light intensity on 1",
+                  "vision radius on 2"):
         assert words in dropped, words
 
 
@@ -98,7 +101,7 @@ def test_out_of_range_and_broken_values_are_clamped_and_reported():
 def test_ids_are_stable_and_always_valid():
     assert importer.vtt_id("tok1") == "legacy_tok1"
     odd = importer.vtt_id("has space/and:colon")
-    assert odd.startswith("legacy_") and len(odd) == len("legacy_") + 40
+    assert odd.startswith("legacyh_") and len(odd) == len("legacyh_") + 40
     assert importer.vtt_id("has space/and:colon") == odd
     assert importer.vtt_id("x" * 200) != importer.vtt_id("x" * 199)
     assert len(importer.vtt_id("x" * 200)) <= 128
@@ -187,3 +190,114 @@ def test_an_applied_import_reaches_a_live_gm(stack):
     patches = [payload(m) for m in received(gm, "vtt.patch")]
     moved = [e for p in patches for e in p["upserted"] if e["id"] == "legacy_tok1"]
     assert moved and moved[-1]["x"] == 245
+
+
+def test_a_hidden_nameplate_is_reported():
+    scene = full_scene()
+    scene["tokens"][0]["show_nameplate"] = False
+    assert any("hidden nameplate on 1" in d for d in importer.plan_scene(scene).dropped)
+
+
+# --- collisions (handoff 048) --------------------------------------------------------------
+
+def _state(db):
+    with db.session() as session:
+        scenes = {(s.id, s.name, s.published) for s in session.execute(select(VttScene)).scalars()}
+        pointer = session.get(VttTablePointer, "camp_a")
+        pointed = pointer.scene_id if pointer else None
+    return scenes, rows(db), pointed, outbox(db)
+
+
+def test_a_native_scene_with_the_same_id_is_refused_never_overwritten(stack):
+    from vtt.storage import writes as W
+    W.create_scene(stack.db, "camp_a", "legacy_abc123", name="Native GM scene")
+    W.upsert_entity(stack.db, "camp_a", "legacy_abc123", "token", "legacy_tok1", {"x": 7, "y": 7})
+    before = _state(stack.db)
+    dry = importer.import_campaign(stack.db, "camp_a", [full_scene()], "abc123", apply=False)
+    assert dry["scenes"][0]["status"] == "refused" and "did not create" in dry["scenes"][0]["reason"]
+    report = importer.import_campaign(stack.db, "camp_a", [full_scene()], "abc123", apply=True)
+    assert report["scenes"][0]["status"] == "refused"
+    assert _state(stack.db) == before
+
+
+def test_a_native_entity_in_an_imported_scene_is_refused_never_overwritten(stack):
+    from vtt.storage import writes as W
+    importer.import_campaign(stack.db, "camp_a", [full_scene()], None, apply=True)
+    W.upsert_entity(stack.db, "camp_a", "legacy_abc123", "token", "legacy_tok9", {"x": 7, "y": 7})
+    before = _state(stack.db)
+    scene = full_scene()
+    extra = legacy.add_token(scene, name="Late")
+    extra["id"] = "tok9"
+    report = importer.import_campaign(stack.db, "camp_a", [scene], None, apply=True)
+    assert report["scenes"][0]["status"] == "refused"
+    assert "token id legacy_tok9" in report["scenes"][0]["reason"]
+    assert _state(stack.db) == before
+
+
+def test_an_imported_entity_deleted_then_recreated_natively_is_no_longer_the_imports(stack):
+    from vtt.storage import writes as W
+    from vtt.storage.models import VttImportedEntity
+    importer.import_campaign(stack.db, "camp_a", [full_scene()], None, apply=True)
+    with stack.db.transaction() as session:
+        session.delete(session.get(VttEntity, ("camp_a", "legacy_abc123", "token", "legacy_tok1")))
+    with stack.db.session() as session:      # its provenance went with it
+        assert session.get(VttImportedEntity, ("camp_a", "legacy_abc123", "token", "legacy_tok1")) is None
+    W.upsert_entity(stack.db, "camp_a", "legacy_abc123", "token", "legacy_tok1", {"x": 7, "y": 7})
+    report = importer.import_campaign(stack.db, "camp_a", [full_scene()], None, apply=True)
+    assert report["scenes"][0]["status"] == "refused"
+    assert rows(stack.db)[("token", "legacy_tok1")][0] == {"x": 7, "y": 7}
+
+
+def test_an_imported_entity_the_gm_deleted_comes_back_on_a_re_import(stack):
+    importer.import_campaign(stack.db, "camp_a", [full_scene()], None, apply=True)
+    with stack.db.transaction() as session:
+        session.delete(session.get(VttEntity, ("camp_a", "legacy_abc123", "token", "legacy_tok1")))
+    again = importer.import_campaign(stack.db, "camp_a", [full_scene()], None, apply=True)
+    assert again["scenes"][0]["status"] == "imported" and again["scenes"][0]["created"] == 1
+
+
+def test_raw_and_hashed_ids_never_alias():
+    raw = "has space"
+    digest = hashlib.sha1(raw.encode("utf-8")).hexdigest()
+    assert importer.vtt_id(raw) != importer.vtt_id(digest)
+    assert importer.vtt_id(digest) == "legacy_" + digest
+    assert importer.vtt_id(raw) == "legacyh_" + digest
+
+
+def test_another_source_mapping_to_an_imported_id_is_refused(stack):
+    # Provenance names the original source, so a different source landing on
+    # the same id cannot prove itself.
+    importer.import_campaign(stack.db, "camp_a", [full_scene()], None, apply=True)
+    before = _state(stack.db)
+    plan = importer.plan_scene(full_scene())
+    plan.legacy_id = "someone-else"
+    try:
+        importer.apply_plan(stack.db, "camp_a", plan)
+    except importer.Refused as refusal:
+        assert "did not create" in str(refusal)
+    else:
+        raise AssertionError("not refused")
+    assert _state(stack.db) == before
+
+
+def test_two_legacy_items_mapping_to_one_id_refuse_the_scene(stack):
+    scene = full_scene()
+    twin = legacy.add_token(scene, name="Twin")
+    twin["id"] = "tok1"
+    plan = importer.plan_scene(scene)
+    assert plan.duplicates == ["token legacy_tok1"]
+    report = importer.import_campaign(stack.db, "camp_a", [scene], None, apply=True)
+    assert report["scenes"][0]["status"] == "refused" and "more than one" in report["scenes"][0]["reason"]
+    assert rows(stack.db) == {} and outbox(stack.db) == 0
+
+
+def test_a_refused_re_import_leaves_the_earlier_import_and_outbox_unchanged(stack, monkeypatch):
+    importer.import_campaign(stack.db, "camp_a", [full_scene()], None, apply=True)
+    before = _state(stack.db)
+    changed = full_scene()
+    changed["name"] = "Replacement"
+    changed["tokens"][0]["x"] = 999
+    monkeypatch.setattr(importer, "GM_ENTITY_CAP", 1)
+    result = importer.import_campaign(stack.db, "camp_a", [changed], "abc123", apply=True)
+    assert result["scenes"][0]["status"] == "refused"
+    assert _state(stack.db) == before

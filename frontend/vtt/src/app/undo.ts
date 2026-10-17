@@ -141,59 +141,144 @@ export function inverseFor(draft: Draft, before: GmEntity | undefined): UndoEntr
 
 type Mode = 'edit' | 'undo' | 'redo';
 
-// Applied edits, in order. An entry joins a stack only when its command is
-// applied (an ack alone is enough: the change committed), so a rejected edit
-// never becomes undoable. A new edit clears redo.
+interface Tracked {
+  entry: UndoEntry | null; // what reverses this command, once it has landed
+  mode: Mode;
+  generation: number; // the edit generation it was issued in
+  source?: UndoEntry; // a history step: the entry it was taken from
+  applied: boolean; // the ack said applied
+  landed: boolean; // the projection shows it (its overlay ended)
+}
+
+export interface UndoState {
+  canUndo: boolean;
+  canRedo: boolean;
+  next: string | null;
+}
+
+// The page's edit history (handoff 048). The rules:
+// - An entry becomes undoable only when its command is applied AND the
+//   projection shows it (its overlay ended: the correlated frame or a
+//   replacement snapshot arrived, in either order with the ack). Undo is built
+//   against the projected entity, so before that it would carry the previous
+//   version and be refused as stale.
+// - Issuing a new edit invalidates redo at once, before any reply, and starts
+//   a new generation. A history step that completes in an older generation
+//   cannot put anything back on the redo stack.
+// - History steps are serialized: none starts while any tracked command is
+//   still on its way, so each one is built against settled state.
+// - A rejected step puts its entry back where it came from (if no new edit
+//   happened since), so a racing refusal does not silently lose history.
 export class UndoManager {
   private undos: UndoEntry[] = [];
   private redos: UndoEntry[] = [];
-  private readonly pending = new Map<string, { entry: UndoEntry; mode: Mode }>();
+  private readonly pending = new Map<string, Tracked>();
+  private generation = 0;
 
   constructor(
     private readonly limit = 100,
-    private readonly onChange: (state: { canUndo: boolean; canRedo: boolean; next: string | null }) => void = () => {},
+    private readonly onChange: (state: UndoState) => void = () => {},
+    // Whether a command's optimistic overlay is still open in the session.
+    private readonly hasOverlay: (commandId: string) => boolean = () => false,
   ) {}
 
-  track(commandId: string, entry: UndoEntry, mode: Mode): void {
-    this.pending.set(commandId, { entry, mode });
+  // An edit was issued (commandId null: it never left). Redo is obsolete from
+  // this moment, whether or not the edit itself can be undone.
+  edit(commandId: string | null, entry: UndoEntry | null): void {
+    if (commandId === null) return;
+    this.generation += 1;
+    this.redos = [];
+    if (entry) this.track(commandId, { entry, mode: 'edit', generation: this.generation });
+    this.changed();
+  }
+
+  // Take the next step, when one may start now; undefined otherwise. The
+  // caller then issues it and reports back with stepIssued (or stepFailed).
+  beginStep(direction: 'undo' | 'redo'): UndoEntry | undefined {
+    if (this.busy) return undefined;
+    const entry = (direction === 'undo' ? this.undos : this.redos).pop();
+    this.changed();
+    return entry;
+  }
+
+  // The step's command left as commandId; `reverse` undoes the step itself.
+  // commandId null: it never left, so the entry goes back.
+  stepIssued(direction: 'undo' | 'redo', source: UndoEntry, commandId: string | null, reverse: UndoEntry | null): void {
+    if (commandId === null) {
+      this.restore(direction, source);
+      return;
+    }
+    this.track(commandId, { entry: reverse, mode: direction, generation: this.generation, source });
+    this.changed();
   }
 
   applied(commandId: string): void {
     const p = this.pending.get(commandId);
     if (!p) return;
-    this.pending.delete(commandId);
-    if (p.mode === 'undo') this.redos.push(p.entry);
-    else {
-      this.undos.push(p.entry);
-      if (p.mode === 'edit') this.redos = [];
+    p.applied = true;
+    this.settle(commandId, p);
+  }
+
+  // The session's overlays changed: any tracked command whose overlay ended
+  // has landed in the projection.
+  overlaysChanged(): void {
+    for (const [id, p] of [...this.pending]) {
+      if (!p.landed && !this.hasOverlay(id)) {
+        p.landed = true;
+        this.settle(id, p);
+      }
     }
-    if (this.undos.length > this.limit) this.undos.splice(0, this.undos.length - this.limit);
-    if (this.redos.length > this.limit) this.redos.splice(0, this.redos.length - this.limit);
-    this.changed();
   }
 
-  settled(commandId: string): void {
+  rejected(commandId: string): void {
+    const p = this.pending.get(commandId);
+    if (!p) return;
     this.pending.delete(commandId);
+    if (p.source && p.mode !== 'edit' && p.generation === this.generation) this.restore(p.mode, p.source);
+    else this.changed();
   }
 
-  popUndo(): UndoEntry | undefined {
-    const entry = this.undos.pop();
-    this.changed();
-    return entry;
-  }
-
-  popRedo(): UndoEntry | undefined {
-    const entry = this.redos.pop();
-    this.changed();
-    return entry;
+  // Any tracked command still on its way: history waits for it.
+  get busy(): boolean {
+    return this.pending.size > 0;
   }
 
   get canUndo(): boolean {
-    return this.undos.length > 0;
+    return !this.busy && this.undos.length > 0;
   }
 
   get canRedo(): boolean {
-    return this.redos.length > 0;
+    return !this.busy && this.redos.length > 0;
+  }
+
+  private track(commandId: string, t: Omit<Tracked, 'applied' | 'landed'>): void {
+    this.pending.set(commandId, { ...t, applied: false, landed: !this.hasOverlay(commandId) });
+  }
+
+  private settle(commandId: string, p: Tracked): void {
+    if (!p.applied || !p.landed) {
+      this.changed();
+      return;
+    }
+    this.pending.delete(commandId);
+    if (p.entry) {
+      if (p.mode === 'undo') {
+        if (p.generation === this.generation) this.push(this.redos, p.entry);
+      } else {
+        this.push(this.undos, p.entry);
+      }
+    }
+    this.changed();
+  }
+
+  private restore(direction: 'undo' | 'redo', entry: UndoEntry): void {
+    this.push(direction === 'undo' ? this.undos : this.redos, entry);
+    this.changed();
+  }
+
+  private push(stack: UndoEntry[], entry: UndoEntry): void {
+    stack.push(entry);
+    if (stack.length > this.limit) stack.splice(0, stack.length - this.limit);
   }
 
   private changed(): void {

@@ -239,3 +239,50 @@ class VttPairingChallenge(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
 
     __table_args__ = (Index("ix_vtt_pairing_challenges_campaign_id", "campaign_id"),)
+
+
+class VttImportedScene(Base):
+    """Provenance (M5): this VTT scene was written by an import of ``source``.
+
+    The importer only ever updates a destination row that it can prove it wrote
+    from the same source; any other existing row with that id is a collision and
+    the scene is refused. The row cascades away with its scene, so a row created
+    natively with the same id later on carries no provenance."""
+
+    __tablename__ = "vtt_imported_scenes"
+
+    campaign_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    scene_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    source: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+    __table_args__ = (
+        PrimaryKeyConstraint("campaign_id", "scene_id", name="pk_vtt_imported_scenes"),
+        ForeignKeyConstraint(
+            ["campaign_id", "scene_id"], ["vtt_scenes.campaign_id", "vtt_scenes.id"],
+            name="fk_vtt_imported_scenes_scene", ondelete="CASCADE",
+        ),
+    )
+
+
+class VttImportedEntity(Base):
+    """Provenance (M5) for one imported entity; see ``VttImportedScene``. It
+    cascades away when the entity is deleted."""
+
+    __tablename__ = "vtt_imported_entities"
+
+    campaign_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    scene_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    id: Mapped[str] = mapped_column(String(128), nullable=False)
+    source: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+    __table_args__ = (
+        PrimaryKeyConstraint("campaign_id", "scene_id", "kind", "id", name="pk_vtt_imported_entities"),
+        ForeignKeyConstraint(
+            ["campaign_id", "scene_id", "kind", "id"],
+            ["vtt_entities.campaign_id", "vtt_entities.scene_id", "vtt_entities.kind", "vtt_entities.id"],
+            name="fk_vtt_imported_entities_entity", ondelete="CASCADE",
+        ),
+    )

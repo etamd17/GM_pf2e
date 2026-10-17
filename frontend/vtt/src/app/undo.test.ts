@@ -102,43 +102,167 @@ describe('inverseFor', () => {
 describe('UndoManager', () => {
   const entry = (id: string) => ({ kind: 'token' as const, id, label: 'move', make: () => null });
 
-  it('only applied edits become undoable; rejected ones never do', () => {
-    const m = new UndoManager();
-    m.track('c1', entry('a'), 'edit');
-    m.track('c2', entry('b'), 'edit');
-    m.settled('c2');
-    m.applied('c2');
-    expect(m.canUndo).toBe(false);
-    m.applied('c1');
-    expect(m.popUndo()?.id).toBe('a');
-    expect(m.canUndo).toBe(false);
+  // A manager whose overlays the test opens and closes, like the session does.
+  function managed(limit = 100) {
+    const open = new Set<string>();
+    const m = new UndoManager(limit, () => {}, (id) => open.has(id));
+    return {
+      m,
+      // issue a command: its overlay opens at once
+      issue: (id: string) => open.add(id),
+      // the correlated frame (or a snapshot) arrives: the overlay ends
+      land: (id: string) => {
+        open.delete(id);
+        m.overlaysChanged();
+      },
+    };
+  }
+
+  // An edit, applied and landed.
+  function done(t: ReturnType<typeof managed>, id: string, e = entry(id)) {
+    t.issue(id);
+    t.m.edit(id, e);
+    t.m.applied(id);
+    t.land(id);
+  }
+
+  // An undo or redo step, issued and left in flight.
+  function stepOut(t: ReturnType<typeof managed>, direction: 'undo' | 'redo', id: string, reverse = entry(`${id}-rev`)) {
+    const source = t.m.beginStep(direction);
+    if (!source) throw new Error(`no ${direction} available`);
+    t.issue(id);
+    t.m.stepIssued(direction, source, id, reverse);
+    return source;
+  }
+
+  it('an edit is undoable only once it is applied AND in the projection, in either order', () => {
+    const t = managed();
+    t.issue('c1');
+    t.m.edit('c1', entry('a'));
+    t.m.applied('c1');
+    expect(t.m.canUndo).toBe(false); // ack before patch: undo would be built on the old version
+    t.land('c1');
+    expect(t.m.canUndo).toBe(true);
+    t.issue('c2');
+    t.m.edit('c2', entry('b'));
+    t.land('c2');
+    expect(t.m.canUndo).toBe(false); // patch before ack
+    t.m.applied('c2');
+    expect(t.m.beginStep('undo')?.id).toBe('b');
   });
 
-  it('undo feeds redo, and a new edit clears redo', () => {
-    const m = new UndoManager();
-    m.track('c1', entry('a'), 'edit');
-    m.applied('c1');
-    m.popUndo();
-    m.track('u1', entry('a-inverse'), 'undo');
-    m.applied('u1');
-    expect(m.canRedo).toBe(true);
-    m.track('r1', entry('a-again'), 'redo');
-    m.popRedo();
-    m.applied('r1');
-    expect(m.canUndo).toBe(true);
-    m.track('u2', entry('x'), 'undo');
-    m.applied('u2');
-    m.track('c2', entry('b'), 'edit');
-    m.applied('c2');
-    expect(m.canRedo).toBe(false);
+  it('a rejected edit never becomes undoable', () => {
+    const t = managed();
+    t.issue('c1');
+    t.m.edit('c1', entry('a'));
+    t.m.rejected('c1');
+    expect(t.m.canUndo).toBe(false);
+    expect(t.m.busy).toBe(false);
+  });
+
+  it('a new edit invalidates redo as soon as it is issued, before any reply', () => {
+    const t = managed();
+    done(t, 'c1');
+    stepOut(t, 'undo', 'u1');
+    t.m.applied('u1');
+    t.land('u1');
+    expect(t.m.canRedo).toBe(true);
+    t.issue('c2');
+    t.m.edit('c2', entry('b'));
+    expect(t.m.canRedo).toBe(false);
+    t.m.applied('c2');
+    t.land('c2');
+    expect(t.m.canRedo).toBe(false);
+  });
+
+  it('an edit with nothing to undo (scene create, table) still invalidates redo', () => {
+    const t = managed();
+    done(t, 'c1');
+    stepOut(t, 'undo', 'u1');
+    t.m.applied('u1');
+    t.land('u1');
+    t.m.edit('show-table', null);
+    expect(t.m.canRedo).toBe(false);
+  });
+
+  it('a late undo reply after a new edit cannot resurrect redo', () => {
+    const t = managed();
+    done(t, 'c1');
+    stepOut(t, 'undo', 'u1');
+    t.issue('c2');
+    t.m.edit('c2', entry('b'));
+    t.m.applied('c2');
+    t.land('c2');
+    t.m.applied('u1');
+    t.land('u1');
+    expect(t.m.canRedo).toBe(false);
+  });
+
+  it('history steps are serialized: none starts while a command is on its way', () => {
+    const t = managed();
+    done(t, 'c1');
+    done(t, 'c2');
+    stepOut(t, 'undo', 'u1');
+    expect(t.m.canUndo).toBe(false);
+    expect(t.m.beginStep('undo')).toBeUndefined();
+    t.m.applied('u1');
+    expect(t.m.beginStep('undo')).toBeUndefined(); // applied but not yet in the projection
+    t.land('u1');
+    expect(t.m.beginStep('undo')?.id).toBe('c1');
+  });
+
+  it('a rejected undo puts its entry back; a step that never left does too', () => {
+    const t = managed();
+    done(t, 'c1');
+    const source = stepOut(t, 'undo', 'u1');
+    t.m.rejected('u1');
+    expect(t.m.canUndo).toBe(true);
+    expect(t.m.beginStep('undo')).toBe(source);
+    t.m.stepIssued('undo', source, null, null);
+    expect(t.m.beginStep('undo')).toBe(source);
+  });
+
+  it('a rejected undo after a new edit is dropped, not put back out of order', () => {
+    const t = managed();
+    done(t, 'c1');
+    stepOut(t, 'undo', 'u1');
+    t.issue('c2');
+    t.m.edit('c2', entry('b'));
+    t.m.rejected('u1');
+    t.m.applied('c2');
+    t.land('c2');
+    expect(t.m.beginStep('undo')?.id).toBe('b');
+    expect(t.m.beginStep('undo')).toBeUndefined();
+  });
+
+  it('undo feeds redo and redo feeds undo', () => {
+    const t = managed();
+    done(t, 'c1');
+    stepOut(t, 'undo', 'u1', entry('redo-a'));
+    t.m.applied('u1');
+    t.land('u1');
+    expect(t.m.canUndo).toBe(false);
+    stepOut(t, 'redo', 'r1', entry('undo-a'));
+    t.m.applied('r1');
+    t.land('r1');
+    expect(t.m.canRedo).toBe(false);
+    expect(t.m.beginStep('undo')?.id).toBe('undo-a');
+  });
+
+  it('a replacement snapshot lands everything in flight', () => {
+    const t = managed();
+    t.issue('c1');
+    t.m.edit('c1', entry('a'));
+    t.m.applied('c1');
+    t.land('c1'); // a snapshot drops every overlay
+    expect(t.m.canUndo).toBe(true);
   });
 
   it('is bounded', () => {
-    const m = new UndoManager(3);
-    for (let i = 0; i < 5; i += 1) {
-      m.track(`c${i}`, entry(`e${i}`), 'edit');
-      m.applied(`c${i}`);
-    }
-    expect([m.popUndo()?.id, m.popUndo()?.id, m.popUndo()?.id, m.popUndo()]).toEqual(['e4', 'e3', 'e2', undefined]);
+    const t = managed(3);
+    for (let i = 0; i < 5; i += 1) done(t, `e${i}`);
+    const ids = [];
+    for (let i = 0; i < 4; i += 1) ids.push(t.m.beginStep('undo')?.id);
+    expect(ids).toEqual(['e4', 'e3', 'e2', undefined]);
   });
 });

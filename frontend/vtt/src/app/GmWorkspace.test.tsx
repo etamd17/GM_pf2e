@@ -252,14 +252,19 @@ describe('inspector and scene bar', () => {
 });
 
 describe('undo', () => {
-  function setupWithUndo() {
+  // `open` mirrors the session's overlays: an issued command's overlay stays
+  // open until the test lands it (its correlated frame), when `track` is set.
+  function setupWithUndo({ track = false } = {}) {
     const issued: Array<{ draft: Record<string, unknown>; overlay: unknown }> = [];
-    const undo = new UndoManager(100, (state) => useCommands.getState().setUndo(state));
+    const open = new Set<string>();
+    const undo = new UndoManager(100, (state) => useCommands.getState().setUndo(state), (id) => open.has(id));
     const live = {
       boot: { campaignId: 'camp_a', sceneId: 'scene_a', csrf: 'x' },
       issue: (draft: Record<string, unknown>, overlay: unknown) => {
         issued.push({ draft, overlay });
-        return `cmd_${issued.length.toString().padStart(16, '0')}`;
+        const id = `cmd_${issued.length.toString().padStart(16, '0')}`;
+        if (track) open.add(id);
+        return id;
       },
       queue: { reauthenticated: vi.fn() },
       undo,
@@ -268,9 +273,80 @@ describe('undo', () => {
     render(<GmWorkspace sceneName="Hall" live={live} />);
     const runtime = runtimes.at(-1);
     if (!runtime?.interaction) throw new Error('map not mounted');
-    return { issued, undo, interaction: runtime.interaction };
+    const land = (id: string) => {
+      open.delete(id);
+      undo.overlaysChanged();
+    };
+    return { issued, undo, interaction: runtime.interaction, land };
   }
   const V2 = 'v' + 'B'.repeat(24);
+  const V3 = 'v' + 'C'.repeat(24);
+  const cmd = (n: number) => `cmd_${n.toString().padStart(16, '0')}`;
+  const undoButton = () => screen.getByRole('button', { name: /^Undo/ }) as HTMLButtonElement;
+
+  it('ack before patch: undo waits for the frame, then uses the version the frame brought', () => {
+    const { issued, undo, interaction, land } = setupWithUndo({ track: true });
+    act(() => interaction.onTokenDrop?.('tok_hero', 160, 96));
+    act(() => undo.applied(cmd(1)));                       // the ack...
+    expect(undoButton().disabled).toBe(true);
+    fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
+    expect(issued).toHaveLength(1);                         // ...is not enough: the projection is behind
+    act(() => {
+      seed([scene, { ...hero, x: 160, version: V2 }, wall]); // the correlated frame
+      land(cmd(1));
+    });
+    expect(undoButton().disabled).toBe(false);
+    fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
+    expect(issued[1]?.draft).toMatchObject({ type: 'token.move', expected: [{ id: 'tok_hero', version: V2 }] });
+  });
+
+  it('a second undo waits until the first has landed, and a new edit ends redo at once', () => {
+    const { issued, undo, interaction, land } = setupWithUndo({ track: true });
+    act(() => interaction.onTokenDrop?.('tok_hero', 160, 96));
+    act(() => {
+      undo.applied(cmd(1));
+      seed([scene, { ...hero, x: 160, version: V2 }, wall]);
+      land(cmd(1));
+    });
+    act(() => interaction.onTokenDrop?.('tok_hero', 224, 96));
+    act(() => {
+      undo.applied(cmd(2));
+      seed([scene, { ...hero, x: 224, version: V3 }, wall]);
+      land(cmd(2));
+    });
+    fireEvent.keyDown(window, { key: 'z', ctrlKey: true });   // undo the second move
+    expect(issued).toHaveLength(3);
+    fireEvent.keyDown(window, { key: 'z', ctrlKey: true });   // the first undo is still on its way
+    expect(issued).toHaveLength(3);
+    act(() => {
+      undo.applied(cmd(3));
+      seed([scene, { ...hero, x: 160, version: 'v' + 'D'.repeat(24) }, wall]);
+      land(cmd(3));
+    });
+    expect(undo.canRedo).toBe(true);
+    act(() => interaction.onTokenDrop?.('tok_hero', 288, 96)); // a new edit, not yet answered
+    expect(undo.canRedo).toBe(false);
+    expect((screen.getByRole('button', { name: /^Redo/ }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('a rejected undo keeps the entry, so the GM can try again', () => {
+    const { issued, undo, interaction, land } = setupWithUndo({ track: true });
+    act(() => interaction.onTokenDrop?.('tok_hero', 160, 96));
+    act(() => {
+      undo.applied(cmd(1));
+      seed([scene, { ...hero, x: 160, version: V2 }, wall]);
+      land(cmd(1));
+    });
+    fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
+    act(() => {
+      undo.rejected(cmd(2));                                  // e.g. stale: someone moved it
+      land(cmd(2));
+      seed([scene, { ...hero, x: 192, version: V3 }, wall]);
+    });
+    expect(undoButton().disabled).toBe(false);
+    fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
+    expect(issued[2]?.draft).toMatchObject({ type: 'token.move', expected: [{ version: V3 }], payload: { x: 96, y: 96 } });
+  });
 
   it('Ctrl+Z after an applied move sends the move back against the version it now has', () => {
     const { issued, undo, interaction } = setupWithUndo();

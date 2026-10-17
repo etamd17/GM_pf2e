@@ -97,30 +97,34 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
   }, [entities, selection]);
 
   const tableCommands = useRef(new Set<string>());
-  // Every edit goes through here: it is issued, and its inverse is recorded so
-  // it can be undone once applied (undo.ts).
+  // Issue a command, with what would reverse it (read from the entity as it is
+  // just before), for the edit history (undo.ts).
   const send = useCallback(
-    (draft: Draft, overlay: TokenOverlay | null, mode: 'edit' | 'undo' | 'redo') => {
-      if (!live) return null;
+    (draft: Draft, overlay: TokenOverlay | null) => {
+      if (!live) return { commandId: null, inverse: null };
       const target = targetOf(draft);
       const before = target ? entityOf(target.kind, target.id) : undefined;
       const commandId = live.issue(draft, overlay);
       if (commandId && (draft.type === 'table.show' || draft.type === 'table.clear')) tableCommands.current.add(commandId);
-      const inverse = inverseFor(draft, before);
-      if (commandId && inverse) live.undo.track(commandId, inverse, mode);
-      return commandId;
+      return { commandId, inverse: commandId ? inverseFor(draft, before) : null };
     },
     [live],
   );
+  // Every edit goes through here. Issuing one makes redo obsolete at once.
   const issue = useCallback(
-    (draft: Draft, overlay: TokenOverlay | null = null) => send(draft, overlay, 'edit'),
-    [send],
+    (draft: Draft, overlay: TokenOverlay | null = null) => {
+      const { commandId, inverse } = send(draft, overlay);
+      live?.undo.edit(commandId, inverse);
+      return commandId;
+    },
+    [live, send],
   );
 
   const step = useCallback(
     (direction: 'undo' | 'redo') => {
       if (!live || !inputEnabled) return;
-      const entry = direction === 'undo' ? live.undo.popUndo() : live.undo.popRedo();
+      // Nothing starts while a command of this page is still on its way.
+      const entry = live.undo.beginStep(direction);
       if (!entry) return;
       const draft = entry.make(entityOf(entry.kind, entry.id));
       if (!draft) {
@@ -130,7 +134,8 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
         });
         return;
       }
-      send(draft, overlayFor(draft), direction);
+      const { commandId, inverse } = send(draft, overlayFor(draft));
+      live.undo.stepIssued(direction, entry, commandId, inverse);
     },
     [live, inputEnabled, send],
   );
