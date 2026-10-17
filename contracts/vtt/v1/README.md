@@ -154,3 +154,40 @@ Transients and whispers stay reserved. No existing schema or fixture changed.
 - The 2 MiB rule from M0 is enforced at write time: a command that would make the scene's GM
   snapshot exceed the frame limit or the 4,096 GM / 2,048 table entity caps is refused with
   `validation-failed` and changes nothing.
+
+## Fog of war, batch parity-1 (P1, Claude, 2026-10-17)
+
+Additive for clients that ignore unknown entity kinds; a v1 client built
+before this batch rejects a frame carrying `fog`, so the GM and table clients
+ship with it. Digest `607148b1...`.
+
+- **Entity `fog`** (`common.schema.json#/definitions/FogState`), one per scene,
+  id `fog`, in both the GM and table projections. It has these fields:
+  - `enabled`;
+  - `cols` and `rows`: the scene's grid, `ceil(width/gridSize)` by
+    `ceil(height/gridSize)`;
+  - `revealed`: a base64url bitset, row-major, least significant bit first.
+    A set bit is a revealed cell.
+
+  The server sends it even before any fog command (fog off, nothing
+  revealed). A scene with more than 262,144 cells has no fog entity.
+- **Commands:**
+  - `fog.update {enabled}`, against the fog version.
+  - `fog.reset {}`, against the fog version.
+  - `fog.reveal {mode: reveal|hide, cells: [[col,row], ...]}`, with 1 to
+    20,000 cells. It carries no precondition (`expected` has `maxItems: 0`).
+    It is a set operation, so concurrent reveals compose and a retry changes
+    nothing. The server refuses a cell outside the grid (`validation-failed`).
+- **Semantic rules**, in all three runtimes:
+  - a fog entity's `cols * rows` is at most 262,144;
+  - its `revealed` is the canonical unpadded base64url of exactly
+    `ceil(cols*rows/8)` bytes. Decoding and re-encoding gives the same string
+    back, so lenient decoders cannot disagree;
+  - the bits past `cols*rows` are zero;
+  - `fog.update` and `fog.reset` name `("fog", "fog")` in `expected`.
+- **Server rules the schema does not carry:**
+  - The table projection leaves out every token and light whose centre cell
+    is not revealed while fog is on.
+  - A `scene.update` that changes the grid is refused (`rule-violation`)
+    while any cell is revealed.
+  - A scene too large for fog answers `rule-violation` to any fog command.
