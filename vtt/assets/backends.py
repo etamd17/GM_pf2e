@@ -55,19 +55,29 @@ class LocalBackend:
         key_for(campaign_id, sha)                      # validates both parts
         return self.root / campaign_id / sha
 
+    # Disk trouble (full, unwritable, unreadable) is an AssetBackendError like
+    # an S3 outage, so routes answer a retryable 503 and the import refuses
+    # the scene, instead of a raw 500 (handoff 055). A bad key stays ValueError.
     def put(self, key: str, data: bytes, media_type: str) -> None:
         path = self._path(key)
-        if path.is_file() and path.stat().st_size == len(data):
-            return                                      # same content hash: already stored
-        path.parent.mkdir(parents=True, exist_ok=True)
-        fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".upload")
+        tmp: str | None = None
         try:
+            if path.is_file() and path.stat().st_size == len(data):
+                return                                  # same content hash: already stored
+            path.parent.mkdir(parents=True, exist_ok=True)
+            fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".upload")
             with os.fdopen(fd, "wb") as handle:
                 handle.write(data)
             os.replace(tmp, path)
+            tmp = None
+        except OSError as exc:
+            raise AssetBackendError(f"asset store write failed: {type(exc).__name__}") from exc
         finally:
-            if os.path.exists(tmp):
-                os.unlink(tmp)
+            if tmp is not None:
+                try:
+                    os.unlink(tmp)
+                except OSError:
+                    pass                                # best effort; the error above is what matters
 
     def get(self, key: str) -> bytes | None:
         path = self._path(key)
@@ -75,6 +85,8 @@ class LocalBackend:
             return path.read_bytes()
         except FileNotFoundError:
             return None
+        except OSError as exc:
+            raise AssetBackendError(f"asset store read failed: {type(exc).__name__}") from exc
 
 
 class S3Backend:

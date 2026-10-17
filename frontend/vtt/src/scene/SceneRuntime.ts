@@ -148,6 +148,8 @@ export class SceneRuntime {
     if (!prev || prev.walls !== next.walls) this.drawWalls(next);
     if (!prev || prev.lights !== next.lights) this.drawLights(next);
     this.syncTokens(next);
+    // Images the scene still uses keep retrying after a failure; others stop.
+    this.textures.keep(sceneImageUrls(next));
     this.drawOverlay();
     this.scheduler.requestRender();
   }
@@ -782,4 +784,12 @@ function buildToken(model: RenderToken, gridSize: number, art: Texture | null = 
   root.addChild(label);
   root.position.set(model.x, model.y);
   return root;
+}
+
+// Every image URL a scene draws: its background and each token's art.
+export function sceneImageUrls(scene: RenderScene): string[] {
+  const urls: string[] = [];
+  if (scene.backgroundUrl) urls.push(scene.backgroundUrl);
+  for (const token of scene.tokens) if (token.artUrl) urls.push(token.artUrl);
+  return urls;
 }

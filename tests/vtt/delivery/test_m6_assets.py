@@ -408,3 +408,50 @@ def test_the_import_route_reads_the_legacy_files(stack):
     stack.legacy["camp_a"] = ([scene], "abc123")
     report = post(stack, {"campaignId": "camp_a", "apply": True}).get_json()
     assert report["scenes"][0]["images"] == 2 and _asset_count(stack) == 2
+
+
+# --- real local-disk failures are retryable, not 500s (handoff 055) --------------------------
+
+def _fail(*_args, **_kwargs):
+    raise OSError("disk unavailable")
+
+
+def test_a_local_disk_failure_on_upload_is_a_retryable_503(stack, monkeypatch):
+    monkeypatch.setattr("vtt.assets.backends.tempfile.mkstemp", _fail)
+    response = upload(stack, picture())
+    assert response.status_code == 503 and response.headers["Retry-After"] == "5"
+    with stack.db.session() as session:
+        assert session.execute(select(func.count()).select_from(VttAsset)).scalar_one() == 0
+
+
+def test_a_failed_write_leaves_no_temporary_file(stack, monkeypatch):
+    monkeypatch.setattr("vtt.assets.backends.os.replace", _fail)
+    assert upload(stack, picture()).status_code == 503
+    leftovers = [p for p in stack.assets.root.rglob("*") if p.is_file()]
+    assert leftovers == []
+
+
+def test_a_local_disk_failure_on_read_is_a_retryable_503(stack, monkeypatch):
+    asset = stored(stack)
+    import pathlib
+    monkeypatch.setattr(pathlib.Path, "read_bytes", _fail)
+    response = fetch(stack, "camp_a", asset)
+    assert response.status_code == 503 and response.headers["Retry-After"] == "5"
+
+
+def test_a_missing_file_is_still_a_404_not_an_outage(stack):
+    asset = stored(stack)
+    for path in stack.assets.root.rglob("*"):
+        if path.is_file():
+            path.unlink()
+    assert fetch(stack, "camp_a", asset).status_code == 404
+
+
+def test_a_local_disk_failure_during_import_refuses_the_scene(stack, monkeypatch):
+    scene = _legacy_with_images(stack, art_bytes=picture("JPEG"), background_bytes=picture())
+    monkeypatch.setattr("vtt.assets.backends.tempfile.mkstemp", _fail)
+    report = _import(stack, scene, apply=True)
+    assert report["status"] == "refused" and "asset store is unavailable" in report["reason"]
+    from vtt.storage.models import VttScene
+    with stack.db.session() as session:
+        assert session.get(VttScene, ("camp_a", "legacy_abc123")) is None

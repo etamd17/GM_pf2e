@@ -1,36 +1,43 @@
-import { describe, expect, it, vi } from 'vitest';
-import { RETRY_MS, TextureLoader } from './textures';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { MAX_RETRY_MS, RETRY_MS, TextureLoader } from './textures';
 
 const URL_GM = '/vtt/media/camp_a/asset_abc';
 const URL_TABLE = '/vtt/table-media/asset_abc';
 
+// Plain response objects: a real Response body is read on Node's I/O queue,
+// which fake time does not drive.
+const ok = () => ({ ok: true, status: 200, blob: async () => new Blob([new Uint8Array([1, 2, 3])]) }) as Response;
+const fail = (status: number) => () => ({ ok: false, status, blob: async () => new Blob([]) }) as Response;
+
 function setup(responses: Array<() => Response | Promise<Response>>, decode?: () => Promise<ImageBitmap>) {
-  let now = 0;
   const loaded: string[] = [];
   const destroyed: string[] = [];
-  const fetcher = vi.fn(async () => (responses.shift() ?? (() => new Response(null, { status: 404 })))());
+  const fetcher = vi.fn(async () => (responses.shift() ?? ok)());
   const loader = new TextureLoader<string>(
     {
       fetcher: fetcher as unknown as typeof fetch,
       decode: decode ?? (async () => ({ width: 1 }) as unknown as ImageBitmap),
       toTexture: () => 'texture',
       destroy: (t) => destroyed.push(t),
-      now: () => now,
     },
     (url) => loaded.push(url),
   );
-  const settle = () => new Promise((r) => setTimeout(r, 0));
-  return { loader, fetcher, loaded, destroyed, settle, advance: (ms: number) => (now += ms) };
+  return { loader, fetcher, loaded, destroyed };
 }
 
-const ok = () => new Response(new Blob([new Uint8Array([1, 2, 3])]), { status: 200 });
+// Let pending promise callbacks run without moving the clock.
+const settle = () => vi.advanceTimersByTimeAsync(0);
+
+// Only the timers the loader uses: Node's Response.blob() needs real setImmediate.
+beforeEach(() => vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] }));
+afterEach(() => vi.useRealTimers());
 
 describe('TextureLoader', () => {
   it('loads a media URL once, same-origin, and announces it', async () => {
     const t = setup([ok]);
     expect(t.loader.get(URL_GM)).toBeNull();
     expect(t.loader.get(URL_GM)).toBeNull(); // still loading: not fetched twice
-    await t.settle();
+    await settle();
     expect(t.loader.get(URL_GM)).toBe('texture');
     expect(t.loaded).toEqual([URL_GM]);
     expect(t.fetcher).toHaveBeenCalledTimes(1);
@@ -45,56 +52,87 @@ describe('TextureLoader', () => {
     expect(t.fetcher).not.toHaveBeenCalled();
   });
 
-  it('a refused or failed load retries after a while (a TV has nobody to reload it)', async () => {
-    const t = setup([() => new Response(null, { status: 404 }), () => new Response(null, { status: 503 }), ok]);
-    t.loader.get(URL_TABLE);
-    await t.settle();
-    expect(t.loader.get(URL_TABLE)).toBeNull();
-    expect(t.fetcher).toHaveBeenCalledTimes(1); // not hammered
-    t.advance(RETRY_MS);
-    t.loader.get(URL_TABLE);
-    await t.settle();
-    t.advance(RETRY_MS);
-    t.loader.get(URL_TABLE);
-    await t.settle();
+  it('an idle display recovers on its own after a transient failure (handoff 055)', async () => {
+    const t = setup([fail(503), ok]);
+    t.loader.get(URL_TABLE); // asked once, never again
+    await settle();
+    expect(t.fetcher).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(RETRY_MS);
+    expect(t.fetcher).toHaveBeenCalledTimes(2);
+    expect(t.loaded).toEqual([URL_TABLE]);
     expect(t.loader.get(URL_TABLE)).toBe('texture');
-    expect(t.fetcher).toHaveBeenCalledTimes(3);
   });
 
-  it('a network error is retried too; an undecodable image is not', async () => {
-    const t = setup([() => Promise.reject(new TypeError('offline')), ok], async () => {
+  it('retries back off and are bounded, and a lookup does not fetch early', async () => {
+    const t = setup([fail(404), fail(503), () => Promise.reject(new TypeError('offline')), fail(503), fail(503), ok]);
+    t.loader.get(URL_TABLE);
+    await settle();
+    t.loader.get(URL_TABLE); // waiting for its retry: no extra fetch
+    expect(t.fetcher).toHaveBeenCalledTimes(1);
+    // 10 s, 20 s, 40 s, then capped at 60 s
+    for (const [wait, calls] of [[RETRY_MS, 2], [2 * RETRY_MS, 3], [4 * RETRY_MS, 4], [MAX_RETRY_MS, 5], [MAX_RETRY_MS, 6]] as const) {
+      await vi.advanceTimersByTimeAsync(wait - 1);
+      expect(t.fetcher).toHaveBeenCalledTimes(calls - 1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(t.fetcher).toHaveBeenCalledTimes(calls);
+    }
+    expect(t.loaded).toEqual([URL_TABLE]);
+  });
+
+  it('an undecodable image is final and is not retried', async () => {
+    const t = setup([ok], async () => {
       throw new Error('bad image');
     });
     t.loader.get(URL_GM);
-    await t.settle();
-    t.advance(RETRY_MS);
-    t.loader.get(URL_GM);
-    await t.settle(); // arrived but cannot be decoded: final
-    t.advance(RETRY_MS);
+    await settle();
+    await vi.advanceTimersByTimeAsync(10 * MAX_RETRY_MS);
+    expect(t.fetcher).toHaveBeenCalledTimes(1);
     expect(t.loader.get(URL_GM)).toBeNull();
-    expect(t.fetcher).toHaveBeenCalledTimes(2);
+    expect(t.loader.state(URL_GM)).toBe('failed');
     expect(t.loaded).toEqual([]);
   });
 
-  it('textures loaded after disposal are destroyed, and dispose destroys the rest', async () => {
-    const t = setup([ok, ok]);
-    t.loader.get(URL_GM);
-    await t.settle();
+  it('an image the scene no longer uses stops retrying', async () => {
+    const t = setup([fail(503), fail(503)]);
     t.loader.get(URL_TABLE);
+    await settle();
+    t.loader.keep([]); // it left the scene
+    await vi.advanceTimersByTimeAsync(10 * MAX_RETRY_MS);
+    expect(t.fetcher).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('an image the scene still uses keeps its retry', async () => {
+    const t = setup([fail(503), ok]);
+    t.loader.get(URL_TABLE);
+    await settle();
+    t.loader.keep([URL_TABLE]);
+    await vi.advanceTimersByTimeAsync(RETRY_MS);
+    expect(t.loaded).toEqual([URL_TABLE]);
+  });
+
+  it('disposal cancels pending retries and destroys textures, including late ones', async () => {
+    const t = setup([ok, fail(503)]);
+    t.loader.get(URL_GM);
+    await settle();
+    t.loader.get(URL_TABLE);
+    await settle();
+    expect(vi.getTimerCount()).toBe(1); // URL_TABLE waiting to retry
     t.loader.dispose();
+    expect(vi.getTimerCount()).toBe(0);
     expect(t.destroyed).toEqual(['texture']);
-    await t.settle();
-    expect(t.destroyed).toEqual(['texture', 'texture']);
+    await vi.advanceTimersByTimeAsync(10 * MAX_RETRY_MS);
+    expect(t.fetcher).toHaveBeenCalledTimes(2);
     expect(t.loaded).toEqual([URL_GM]);
   });
 
   it('reports each URL state for the test probe', async () => {
-    const t = setup([ok, () => new Response(null, { status: 503 })]);
+    const t = setup([ok, fail(503)]);
     expect(t.loader.state(URL_GM)).toBe('none');
     t.loader.get(URL_GM);
     expect(t.loader.state(URL_GM)).toBe('pending');
     t.loader.get(URL_TABLE);
-    await t.settle();
+    await settle();
     expect(t.loader.state(URL_GM)).toBe('loaded');
     expect(t.loader.state(URL_TABLE)).toBe('failed');
   });
