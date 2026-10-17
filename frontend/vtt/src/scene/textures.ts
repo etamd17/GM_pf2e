@@ -34,6 +34,11 @@ export class TextureLoader<T> {
   private readonly loading = new Set<string>();
   // A transient failure: how many in a row, and the retry waiting for it.
   private readonly retries = new Map<string, { attempts: number; timer: unknown }>();
+  // URLs the runtime currently draws (null until the first keep(): everything
+  // asked for is wanted). A failure schedules a retry, and a retry fires, only
+  // for a wanted URL, so an image that left the scene while its fetch was in
+  // flight is not revived when that fetch fails (handoff 057).
+  private wanted: Set<string> | null = null;
   private disposed = false;
 
   constructor(
@@ -46,6 +51,7 @@ export class TextureLoader<T> {
   get(url: string | undefined): T | null {
     if (!url || !isMediaUrl(url)) return null;
     if (this.ready.has(url)) return this.ready.get(url) ?? null;
+    this.wanted?.add(url); // asked for again: wanted again
     if (!this.loading.has(url) && !this.retries.has(url)) void this.load(url);
     return null;
   }
@@ -54,6 +60,7 @@ export class TextureLoader<T> {
   // that left the scene is not fetched forever.
   keep(urls: Iterable<string>): void {
     const wanted = new Set(urls);
+    this.wanted = wanted;
     for (const [url, retry] of this.retries) {
       if (wanted.has(url)) continue;
       this.clear(retry.timer);
@@ -84,7 +91,8 @@ export class TextureLoader<T> {
       return;
     }
     if (texture === null && !permanent) {
-      this.scheduleRetry(url);
+      if (this.isWanted(url)) this.scheduleRetry(url);
+      else this.retries.delete(url); // left the scene while in flight: forget it
       return;
     }
     this.retries.delete(url);
@@ -97,7 +105,11 @@ export class TextureLoader<T> {
     const delay = Math.min(RETRY_MS * 2 ** (attempts - 1), MAX_RETRY_MS);
     const timer = (this.deps.setTimer ?? ((fn, ms) => setTimeout(fn, ms)))(() => {
       const retry = this.retries.get(url);
-      if (this.disposed || !retry || retry.timer !== timer) return; // cancelled, or no longer wanted
+      if (this.disposed || !retry || retry.timer !== timer) return; // cancelled
+      if (!this.isWanted(url)) {
+        this.retries.delete(url); // not wanted: a later get() starts fresh
+        return;
+      }
       retry.timer = null;
       void this.load(url);
     }, delay);
@@ -109,6 +121,10 @@ export class TextureLoader<T> {
     if (this.ready.has(url)) return this.ready.get(url) === null ? 'failed' : 'loaded';
     if (this.loading.has(url)) return 'pending';
     return this.retries.has(url) ? 'failed' : 'none';
+  }
+
+  private isWanted(url: string): boolean {
+    return this.wanted === null || this.wanted.has(url);
   }
 
   private clear(timer: unknown): void {

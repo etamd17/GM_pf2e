@@ -136,4 +136,59 @@ describe('TextureLoader', () => {
     expect(t.loader.state(URL_GM)).toBe('loaded');
     expect(t.loader.state(URL_TABLE)).toBe('failed');
   });
+
+  // Handoff 057: an image that leaves the scene while a fetch is in flight
+  // must not be revived when that fetch fails.
+  function deferred() {
+    const gates: Array<(r: Response) => void> = [];
+    const fetcher = vi.fn(() => new Promise<Response>((resolve) => gates.push(resolve)));
+    const loaded: string[] = [];
+    const loader = new TextureLoader<string>(
+      { fetcher: fetcher as unknown as typeof fetch, decode: async () => ({}) as ImageBitmap, toTexture: () => 'texture' },
+      (url) => loaded.push(url),
+    );
+    const answer = async (r: Response) => {
+      (gates.shift() as (r: Response) => void)(r);
+      await settle();
+    };
+    return { loader, fetcher, loaded, answer };
+  }
+
+  it('leaving during the first fetch: its failure schedules nothing', async () => {
+    const t = deferred();
+    t.loader.get(URL_TABLE);
+    t.loader.keep([]);
+    await t.answer(fail(503)());
+    await vi.advanceTimersByTimeAsync(4 * MAX_RETRY_MS);
+    expect(t.fetcher).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('leaving during a retry fetch: its failure schedules nothing', async () => {
+    const t = deferred();
+    t.loader.get(URL_TABLE);
+    await t.answer(fail(503)());
+    await vi.advanceTimersByTimeAsync(RETRY_MS); // the retry fetch is now in flight
+    expect(t.fetcher).toHaveBeenCalledTimes(2);
+    t.loader.keep([]);
+    await t.answer(fail(503)());
+    await vi.advanceTimersByTimeAsync(4 * MAX_RETRY_MS);
+    expect(t.fetcher).toHaveBeenCalledTimes(2);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('an image that comes back into the scene recovers again', async () => {
+    const t = deferred();
+    t.loader.get(URL_TABLE);
+    t.loader.keep([]);
+    await t.answer(fail(503)());
+    t.loader.keep([URL_TABLE]);
+    t.loader.get(URL_TABLE); // the runtime draws it again
+    expect(t.fetcher).toHaveBeenCalledTimes(2);
+    await t.answer(fail(503)());
+    await vi.advanceTimersByTimeAsync(RETRY_MS);
+    expect(t.fetcher).toHaveBeenCalledTimes(3);
+    await t.answer(ok());
+    expect(t.loaded).toEqual([URL_TABLE]);
+  });
 });
