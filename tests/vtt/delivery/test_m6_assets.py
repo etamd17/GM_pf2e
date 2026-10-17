@@ -45,14 +45,17 @@ def upload(stack, data, campaign="camp_a", csrf=CSRF, content_type="image/png"):
 
 
 def fetch(stack, campaign, asset, table_credential=None, member=True, **headers):
+    """A GM read (``/vtt/media/<campaign>/<asset>``), or with a table credential
+    a display read (``/vtt/table-media/<asset>``, campaign from the grant)."""
     client = stack.app.test_client()
     if table_credential:
         client.set_cookie("vtt_table", table_credential)
     previous = stack.host.member_id
     if not member:
         stack.host.member_id = None
+    path = f"/vtt/table-media/{asset}" if table_credential else f"/vtt/media/{campaign}/{asset}"
     try:
-        return client.get(f"/vtt/media/{campaign}/{asset}", base_url=ORIGIN, headers=headers)
+        return client.get(path, base_url=ORIGIN, headers=headers)
     finally:
         stack.host.member_id = previous
 
@@ -258,6 +261,21 @@ def test_a_display_loses_access_when_the_table_moves_or_the_grant_ends(stack):
     assert fetch(stack, "camp_a", background, revoked, member=False).status_code == 404
     other = add_grant(stack.db, "camp_b")
     assert fetch(stack, "camp_a", background, other, member=False).status_code == 404
+
+
+def test_the_two_read_routes_do_not_cross(stack):
+    background = stored(stack)
+    _table_scene(stack, background=background)
+    table = add_grant(stack.db)
+    client = stack.app.test_client()
+    client.set_cookie("vtt_table", table)
+    stack.host.member_id = None
+    # a display cannot use the GM route, even for an asset it may see
+    assert client.get(f"/vtt/media/camp_a/{background}", base_url=ORIGIN).status_code == 404
+    # and a GM without a table credential cannot use the display route
+    stack.host.member_id = "user_gm"
+    gm_client = stack.app.test_client()
+    assert gm_client.get(f"/vtt/table-media/{background}", base_url=ORIGIN).status_code == 404
 
 
 def test_an_unpublished_table_scene_shows_the_display_nothing(stack):

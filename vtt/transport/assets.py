@@ -4,12 +4,15 @@
   as the raw request body, with the page's CSRF token. The type is decided by
   the bytes. Answers the asset's description; the same bytes again answer the
   same asset (200 instead of 201).
-- ``GET /vtt/media/<campaign>/<asset>``: the bytes. A GM member of that
-  campaign may read any of its assets. A paired display may read only what the
-  current table projection shows (``service.table_may_read``). Everyone else,
-  and anything refused, gets the same 404, so the route does not reveal
-  whether an asset exists. Not under ``/vtt/assets/``, which serves the client
-  bundle.
+- ``GET /vtt/media/<campaign>/<asset>``: the bytes, for a GM member of that
+  campaign (any of its assets).
+- ``GET /vtt/table-media/<asset>``: the bytes, for a paired display. The
+  campaign comes from its grant, never from the request, exactly as a table
+  never chooses its campaign or scene; and only what the current table
+  projection shows may be read (``service.table_may_read``).
+
+Anything refused, on either route, is the same 404, so neither reveals whether
+an asset exists. Not under ``/vtt/assets/``, which serves the client bundle.
 
 Responses are private (authorized content), immutable (the id is the content
 hash) and sandboxed, so an image URL opened directly can never run anything.
@@ -68,24 +71,16 @@ def make_assets_blueprint(*, db: Database, host, backend: AssetBackend,
             return jsonify({"error": "temporarily-unavailable"}), 503, {"Retry-After": "5"}
         return jsonify({"asset": described}), 201 if created else 200
 
-    @bp.get("/vtt/media/<campaign_id>/<asset_id>")
-    def media(campaign_id: str, asset_id: str):
-        if not _ID.fullmatch(campaign_id) or not _ID.fullmatch(asset_id):
+    def serve(session, campaign_id: str, asset_id: str):
+        try:
+            found = service.read(session, backend, campaign_id, asset_id)
+        except AssetBackendError:
+            log.warning("VTT asset backend unavailable on read")
+            return jsonify({"error": "temporarily-unavailable"}), 503, {"Retry-After": "5"}
+        if found is None:
             abort(404)
-        with db.session() as session:
-            allowed = gm_of(session, campaign_id) is not None or (
-                table_campaign(session) == campaign_id and service.table_may_read(session, campaign_id, asset_id))
-            if not allowed:
-                abort(404)
-            try:
-                found = service.read(session, backend, campaign_id, asset_id)
-            except AssetBackendError:
-                log.warning("VTT asset backend unavailable on read")
-                return jsonify({"error": "temporarily-unavailable"}), 503, {"Retry-After": "5"}
-            if found is None:
-                abort(404)
-            row, data = found
-            etag = row.sha256
+        row, data = found
+        etag = row.sha256
         if request.if_none_match and etag in request.if_none_match:
             response = Response(status=304)
         else:
@@ -96,5 +91,24 @@ def make_assets_blueprint(*, db: Database, host, backend: AssetBackend,
         response.headers["Content-Security-Policy"] = "default-src 'none'; sandbox"
         response.headers["Content-Disposition"] = "inline"
         return response
+
+    @bp.get("/vtt/media/<campaign_id>/<asset_id>")
+    def media(campaign_id: str, asset_id: str):
+        if not _ID.fullmatch(campaign_id) or not _ID.fullmatch(asset_id):
+            abort(404)
+        with db.session() as session:
+            if gm_of(session, campaign_id) is None:
+                abort(404)
+            return serve(session, campaign_id, asset_id)
+
+    @bp.get("/vtt/table-media/<asset_id>")
+    def table_media(asset_id: str):
+        if not _ID.fullmatch(asset_id):
+            abort(404)
+        with db.session() as session:
+            campaign_id = table_campaign(session)
+            if campaign_id is None or not service.table_may_read(session, campaign_id, asset_id):
+                abort(404)
+            return serve(session, campaign_id, asset_id)
 
     return outage.install(bp)
