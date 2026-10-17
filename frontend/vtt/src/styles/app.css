@@ -445,3 +445,24 @@ button:focus-visible,
   align-items: center;
   gap: var(--sp-2);
 }
+
+/* M6: choosing a background or token art */
+.vtt-image-picker {
+  display: grid;
+  gap: var(--sp-2);
+}
+.vtt-image-preview {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border-card);
+}
+.vtt-image-actions {
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+.vtt-image-picker input[hidden] {
+  display: none;
+}

@@ -1,5 +1,5 @@
 import type { RenderLight, RenderScene, RenderToken, RenderWall } from './renderModel';
-import { EMPTY_SCENE } from './renderModel';
+import { EMPTY_SCENE, isMediaUrl } from './renderModel';
 
 // The one adapter between projected wire entities and the renderer's model
 // (renderModel.ts). It reads only the fields its surface's projection carries,
@@ -33,7 +33,23 @@ export function newAdaptCache(): AdaptCache {
   return { tokens: new Map(), lights: new Map(), walls: new Map() };
 }
 
-export function adaptEntities(entities: ReadonlyMap<string, WireEntity>, cache: AdaptCache = newAdaptCache()): RenderScene {
+// Asset id -> the URL this surface reads it from (M6): the GM page reads
+// /vtt/media/<campaign>/<asset>, the table /vtt/table-media/<asset>. Without
+// one, no image is drawn.
+export type MediaUrl = (assetId: string) => string;
+
+const ASSET_ID = /^[A-Za-z0-9_-]{1,128}$/;
+const assetUrl = (media: MediaUrl | undefined, id: unknown): string | undefined => {
+  if (!media || typeof id !== 'string' || !ASSET_ID.test(id)) return undefined;
+  const url = media(id);
+  return isMediaUrl(url) ? url : undefined;
+};
+
+export function adaptEntities(
+  entities: ReadonlyMap<string, WireEntity>,
+  cache: AdaptCache = newAdaptCache(),
+  media?: MediaUrl,
+): RenderScene {
   let scene: WireEntity | undefined;
   const tokens: RenderToken[] = [];
   const lights: RenderLight[] = [];
@@ -56,6 +72,7 @@ export function adaptEntities(entities: ReadonlyMap<string, WireEntity>, cache: 
         size: num(e.size, 1),
         label: typeof e.label === 'string' ? e.label : '',
         color: num(e.color),
+        ...(assetUrl(media, e.artAssetId) ? { artUrl: assetUrl(media, e.artAssetId) as string } : {}),
         ...(e.hidden === true ? { hidden: true } : {}),
       };
       cache.tokens.set(e.id, { version: e.version, token });
@@ -108,6 +125,7 @@ export function adaptEntities(entities: ReadonlyMap<string, WireEntity>, cache: 
     height: num(scene?.height, EMPTY_SCENE.height),
     gridSize: num(scene?.gridSize, EMPTY_SCENE.gridSize),
     showGrid: scene ? scene.showGrid === true : EMPTY_SCENE.showGrid,
+    ...(assetUrl(media, scene?.backgroundAssetId) ? { backgroundUrl: assetUrl(media, scene?.backgroundAssetId) as string } : {}),
     tokens,
     walls,
     lights,

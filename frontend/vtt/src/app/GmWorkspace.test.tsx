@@ -233,6 +233,33 @@ describe('inspector and scene bar', () => {
     expect(calls()).toBe(before + 1);
   });
 
+  it('images: token art and the scene background upload, then point at the new asset', async () => {
+    const { issued, interaction } = setup();
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => (url.startsWith('/vtt/api/assets')
+      ? { ok: true, status: 201, json: async () => ({ asset: { id: 'asset_new' } }) }
+      : { ok: true, status: 200, json: async () => ({ scenes: [] }) })));
+    const file = new File([new Uint8Array(8)], 'a.png', { type: 'image/png' });
+    // nothing selected: the scene section offers the background
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Background file'), { target: { files: [file] } });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(issued.at(-1)?.draft).toEqual({
+      type: 'scene.update', sceneId: 'scene_a', expected: [{ kind: 'scene', id: 'scene_a', version: V1 }],
+      payload: { backgroundAssetId: 'asset_new' },
+    });
+    // a token: its art, with no optimistic overlay (the frame brings the image)
+    act(() => interaction.onClick?.({ x: 96, y: 96 }, { kind: 'token', id: 'tok_hero' }));
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Art file'), { target: { files: [file] } });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(issued.at(-1)).toEqual({
+      draft: { type: 'token.update', expected: [{ kind: 'token', id: 'tok_hero', version: V1 }], payload: { id: 'tok_hero', artAssetId: 'asset_new' } },
+      overlay: null,
+    });
+  });
+
   it('every editing control is disabled while not live', () => {
     const { interaction } = setup();
     act(() => interaction.onClick?.({ x: 96, y: 96 }, { kind: 'token', id: 'tok_hero' }));

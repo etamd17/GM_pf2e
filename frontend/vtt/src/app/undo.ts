@@ -315,7 +315,10 @@ export function overlayFor(draft: Draft): import('./gmCommands').TokenOverlay | 
   const payload = draft.payload as Record<string, unknown>;
   const id = String(payload.id);
   if (draft.type === 'token.move' || draft.type === 'token.update') {
-    const { id: _id, ...patch } = payload;
+    // Only what the render model draws directly; art waits for its frame (the
+    // URL is built by the adapter from the projected asset id).
+    const { id: _id, artAssetId: _art, locked: _locked, controllerIds: _c, actorId: _a, ...patch } = payload;
+    if (Object.keys(patch).length === 0) return null;
     return { kind: 'token', id, patch: patch as Record<string, number> };
   }
   if (draft.type === 'entity.delete' && payload.kind === 'token') return { kind: 'token', id, deleted: true };

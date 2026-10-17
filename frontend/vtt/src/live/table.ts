@@ -17,7 +17,11 @@ export function startTable(): SocketIoTransport<TableEntity> {
   };
   const session = new ProjectionSession<TableEntity>(
     'table',
-    storeSink<TableEntity>((entities) => adaptEntities(entities as never, cache), sinkTransport),
+    storeSink<TableEntity>(
+      // The table reads images by asset id alone: its grant decides the campaign.
+      (entities) => adaptEntities(entities as never, cache, (id) => `/vtt/table-media/${encodeURIComponent(id)}`),
+      sinkTransport,
+    ),
     browserClock,
   );
   const transport: SocketIoTransport<TableEntity> = new SocketIoTransport<TableEntity>({

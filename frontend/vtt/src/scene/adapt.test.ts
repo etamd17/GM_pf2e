@@ -44,3 +44,36 @@ describe('adaptEntities', () => {
     expect(cache.tokens.size).toBe(0);
   });
 });
+
+describe('images (M6)', () => {
+  const gmMedia = (id: string) => `/vtt/media/camp_a/${id}`;
+  const tableMedia = (id: string) => `/vtt/table-media/${id}`;
+
+  it('maps a background and token art to this surface media URL', () => {
+    const out = adaptEntities(
+      map({ ...scene, backgroundAssetId: 'asset_bg' }, { ...token('a', 'v1'), artAssetId: 'asset_art' }),
+      newAdaptCache(),
+      gmMedia,
+    );
+    expect(out.backgroundUrl).toBe('/vtt/media/camp_a/asset_bg');
+    expect(out.tokens[0]?.artUrl).toBe('/vtt/media/camp_a/asset_art');
+    const table = adaptEntities(map({ ...scene, backgroundAssetId: 'asset_bg' }), newAdaptCache(), tableMedia);
+    expect(table.backgroundUrl).toBe('/vtt/table-media/asset_bg');
+  });
+
+  it('draws no image without a media mapping, for a missing id, or for an id that is not one', () => {
+    const entities = map({ ...scene, backgroundAssetId: 'asset_bg' }, { ...token('a', 'v1'), artAssetId: 'asset_art' });
+    expect(adaptEntities(entities).backgroundUrl).toBeUndefined();
+    expect(adaptEntities(entities).tokens[0]).not.toHaveProperty('artUrl');
+    const odd = adaptEntities(
+      map({ ...scene, backgroundAssetId: '../../etc/passwd' }, { ...token('a', 'v1'), artAssetId: null }),
+      newAdaptCache(),
+      gmMedia,
+    );
+    expect(odd.backgroundUrl).toBeUndefined();
+    expect(odd.tokens[0]).not.toHaveProperty('artUrl');
+    // a mapping that builds anything but a media URL is ignored too
+    const hostile = adaptEntities(map({ ...scene, backgroundAssetId: 'asset_bg' }), newAdaptCache(), () => 'https://evil.example/x');
+    expect(hostile.backgroundUrl).toBeUndefined();
+  });
+});

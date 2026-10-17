@@ -67,13 +67,14 @@ export function adoptableCommands(boot: GmBoot, saved: string | null): Array<Rec
 
 export function startGm(boot: GmBoot): GmLive {
   const cache = newAdaptCache();
+  const media = (id: string) => `/vtt/media/${encodeURIComponent(boot.campaignId)}/${encodeURIComponent(id)}`;
   const sinkTransport = {
     requestResubscribe: (reason: 'sequence-gap' | 'state-lost') => transport.requestResubscribe(reason),
     stopRetrying: () => transport.stopRetrying(),
   };
   const sink = storeSink<GmEntity>((entities) => {
     useEntities.getState().set(entities);
-    return adaptEntities(entities as never, cache);
+    return adaptEntities(entities as never, cache, media);
   }, sinkTransport);
   const baseClear = sink.clearProjection;
   const baseSeal = sink.sealProjection;

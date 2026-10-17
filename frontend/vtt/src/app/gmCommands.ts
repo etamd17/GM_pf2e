@@ -51,7 +51,7 @@ export function moveToken(token: Of<'token'>, x: number, y: number): Draft {
   return { type: 'token.move', expected: expect(token), payload: { id: token.id, x, y } };
 }
 
-export type TokenPatch = Partial<Pick<Of<'token'>, 'label' | 'size' | 'color' | 'hidden' | 'locked'>>;
+export type TokenPatch = Partial<Pick<Of<'token'>, 'label' | 'size' | 'color' | 'hidden' | 'locked' | 'artAssetId'>>;
 
 export function updateToken(token: Of<'token'>, patch: TokenPatch): Draft {
   return { type: 'token.update', expected: expect(token), payload: { id: token.id, ...patch } };
@@ -98,7 +98,9 @@ export function createScene(sceneId: string, name: string): Draft {
   };
 }
 
-export type ScenePatch = Partial<Pick<Of<'scene'>, 'name' | 'width' | 'height' | 'gridSize' | 'showGrid' | 'published'>>;
+export type ScenePatch = Partial<
+  Pick<Of<'scene'>, 'name' | 'width' | 'height' | 'gridSize' | 'showGrid' | 'published' | 'backgroundAssetId'>
+>;
 
 export function updateScene(scene: Of<'scene'>, patch: ScenePatch): Draft {
   return { type: 'scene.update', sceneId: scene.id, expected: expect(scene), payload: { ...patch } };
@@ -118,7 +120,7 @@ export function clearTable(scene: Of<'scene'>): Draft {
 // hand. Everything else waits for its frame.
 
 export type TokenOverlay =
-  | { kind: 'token'; id: string; patch: { x?: number; y?: number } & TokenPatch }
+  | { kind: 'token'; id: string; patch: { x?: number; y?: number } & Omit<TokenPatch, 'artAssetId'> }
   | { kind: 'token'; id: string; create: RenderToken }
   | { kind: 'token'; id: string; deleted: true };
 

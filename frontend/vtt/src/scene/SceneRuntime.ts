@@ -1,4 +1,4 @@
-import { Application, Container, Graphics, Text, type WebGLRenderer } from 'pixi.js';
+import { Application, Container, Graphics, Sprite, Text, Texture, type WebGLRenderer } from 'pixi.js';
 import { layersFor, type LayerName, type Surface } from './layers';
 import { RenderScheduler } from './renderScheduler';
 import {
@@ -20,6 +20,7 @@ import {
   type ZoomLimits,
 } from './viewport';
 import { hitTest, snapTokenCentre, type Hit, type Point } from './interaction';
+import { TextureLoader } from './textures';
 import { WALL_STYLES, wallPlan } from './walls';
 import { CANVAS_LABEL_FONT, ensureCanvasFont, uiFont } from '../ui/fonts';
 import type { RendererStatus } from '../state/connection';
@@ -93,6 +94,12 @@ export class SceneRuntime {
   private selection: Hit | null = null;
   private wallDraft: { a: Point; b: Point } | null = null;
   private lastFrameMs = 0;
+  // Backgrounds and token art (M6). Owned by the runtime, not the Pixi app, so
+  // a renderer rebuild after a lost context keeps what is already loaded.
+  private readonly textures = new TextureLoader<Texture>(
+    { toTexture: (bitmap) => Texture.from(bitmap), destroy: (texture) => texture.destroy(true) },
+    (url) => this.textureLoaded(url),
+  );
 
   constructor(
     private readonly host: HTMLElement,
@@ -137,6 +144,7 @@ export class SceneRuntime {
       this.drawGrid(next);
       if (!this.userMovedViewport) this.fit();
     }
+    else if (prev.backgroundUrl !== next.backgroundUrl) this.drawBackground(next);
     if (!prev || prev.walls !== next.walls) this.drawWalls(next);
     if (!prev || prev.lights !== next.lights) this.drawLights(next);
     this.syncTokens(next);
@@ -220,6 +228,29 @@ export class SceneRuntime {
     this.resizeObserver?.disconnect();
     if (this.restoreTimer) clearTimeout(this.restoreTimer);
     this.teardownApplication();
+    this.textures.dispose();
+  }
+
+  // An image arrived: redraw whatever shows it.
+  private textureLoaded(url: string): void {
+    const scene = this.scene;
+    if (!this.app || !scene) return;
+    if (scene.backgroundUrl === url) this.drawBackground(scene);
+    const layer = this.layer('tokens');
+    if (layer) {
+      for (const [id, view] of this.tokens) {
+        if (view.model.artUrl !== url) continue;
+        const root = buildToken(view.model, scene.gridSize, this.textures.get(url));
+        // A token mid-drag keeps where the pointer has it.
+        if (this.drag?.token?.id === id) root.position.copyFrom(view.root.position);
+        layer.addChildAt(root, layer.getChildIndex(view.root));
+        layer.removeChild(view.root);
+        view.root.destroy({ children: true });
+        view.root = root;
+      }
+    }
+    this.drawOverlay();
+    this.scheduler.requestRender();
   }
 
   // -- application lifecycle ------------------------------------------------
@@ -534,9 +565,20 @@ export class SceneRuntime {
   }
 
   private drawBackground(scene: RenderScene): void {
+    const root = new Container({ label: 'scene-background' });
     const g = new Graphics();
     g.rect(0, 0, scene.width, scene.height).fill(SCENE_COLOR);
-    this.replaceLayerContent('background', g);
+    root.addChild(g);
+    // The image is stretched to the scene, as /map does; until it loads (or if
+    // it never does) the plain scene colour shows.
+    const texture = this.textures.get(scene.backgroundUrl);
+    if (texture) {
+      const image = new Sprite(texture);
+      image.width = scene.width;
+      image.height = scene.height;
+      root.addChild(image);
+    }
+    this.replaceLayerContent('background', root);
   }
 
   private drawGrid(scene: RenderScene): void {
@@ -643,7 +685,7 @@ export class SceneRuntime {
         layer.removeChild(view.root);
         view.root.destroy({ children: true });
       }
-      const root = buildToken(model, scene.gridSize);
+      const root = buildToken(model, scene.gridSize, this.textures.get(model.artUrl));
       layer.addChild(root);
       this.tokens.set(model.id, { model, root });
     }
@@ -663,20 +705,34 @@ function sameAppearance(a: RenderToken, b: RenderToken): boolean {
     a.size === b.size &&
     a.label === b.label &&
     a.color === b.color &&
+    a.artUrl === b.artUrl &&
     a.hidden === b.hidden &&
     a.pending === b.pending
   );
 }
 
-function buildToken(model: RenderToken, gridSize: number): Container {
+function buildToken(model: RenderToken, gridSize: number, art: Texture | null = null): Container {
   const root = new Container({ label: `token:${model.id}` });
   const radius = tokenRadius(model.size, gridSize);
   const body = new Graphics();
   body.circle(0, 0, radius).fill({ color: model.color, alpha: 0.9 });
-  body.circle(0, 0, radius).stroke({ width: 3, color: 0x0c0a07, alpha: 0.9 });
-  // A pending command: a dashed-looking outer ring until its frame arrives.
-  if (model.pending) body.circle(0, 0, radius + 5).stroke({ width: 2, color: 0xede4cf, alpha: 0.7 });
   root.addChild(body);
+  // Token art (M6) fills the disc, cropped to a circle: scaled to cover, so a
+  // portrait or a landscape image both fill it without stretching.
+  if (art && art.width > 0 && art.height > 0) {
+    const image = new Sprite(art);
+    image.anchor.set(0.5);
+    const scale = (2 * radius) / Math.min(art.width, art.height);
+    image.scale.set(scale);
+    const mask = new Graphics().circle(0, 0, radius).fill(0xffffff);
+    image.mask = mask;
+    root.addChild(mask, image);
+  }
+  const ring = new Graphics();
+  ring.circle(0, 0, radius).stroke({ width: 3, color: 0x0c0a07, alpha: 0.9 });
+  // A pending command: a dashed-looking outer ring until its frame arrives.
+  if (model.pending) ring.circle(0, 0, radius + 5).stroke({ width: 2, color: 0xede4cf, alpha: 0.7 });
+  root.addChild(ring);
   // GM only: what the table cannot see is drawn dimmed, never hidden.
   if (model.hidden) root.alpha = 0.45;
   const label = new Text({

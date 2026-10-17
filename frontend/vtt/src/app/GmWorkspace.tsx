@@ -30,7 +30,9 @@ import {
   type Draft,
   type TokenOverlay,
 } from './gmCommands';
+import type { GmBoot } from '../live/boot';
 import { ImportPanel, PairingPanel } from './GmPanels';
+import { ImagePicker } from './ImagePicker';
 import { NoticeBar } from './NoticeBar';
 import { inverseFor, overlayFor, targetOf } from './undo';
 
@@ -443,6 +445,8 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
             enabled={inputEnabled}
             onIssue={issue}
             onDeleted={() => setSelection(null)}
+            scene={sceneEntity ?? null}
+            {...(live ? { boot: live.boot } : {})}
           />
         )}
         {dockOpen && live && (
@@ -474,14 +478,40 @@ interface InspectorProps {
   enabled: boolean;
   onIssue(draft: Draft, overlay?: TokenOverlay | null): string | null;
   onDeleted(): void;
+  // Images (M6): the open scene, for its background when nothing is selected,
+  // and how this page uploads and previews assets.
+  scene?: Extract<GmEntity, { kind: 'scene' }> | null;
+  boot?: Pick<GmBoot, 'campaignId' | 'csrf'>;
 }
+
+const mediaUrl = (boot: Pick<GmBoot, 'campaignId'>, id: string | null) =>
+  id ? `/vtt/media/${encodeURIComponent(boot.campaignId)}/${encodeURIComponent(id)}` : null;
 
 // The selected entity's fields. A text field commits on blur or Enter, never
 // on every keystroke; a field the GM is editing is not overwritten by a frame
 // until they leave it (the key resets the field when the entity's version
 // changes while it is not focused).
-export function Inspector({ entity, enabled, onIssue, onDeleted }: InspectorProps) {
-  if (!entity || entity.kind === 'scene') return <p className="vtt-empty">Select a token, light or wall to inspect it.</p>;
+export function Inspector({ entity, enabled, onIssue, onDeleted, scene, boot }: InspectorProps) {
+  if (!entity || entity.kind === 'scene') {
+    return (
+      <div className="vtt-inspector">
+        {scene && boot && (
+          <>
+            <h2 className="vtt-inspector-title">Scene</h2>
+            <ImagePicker
+              label="Background"
+              boot={boot}
+              current={scene.backgroundAssetId}
+              previewUrl={mediaUrl(boot, scene.backgroundAssetId)}
+              disabled={!enabled}
+              onChange={(backgroundAssetId) => onIssue(updateScene(scene, { backgroundAssetId }))}
+            />
+          </>
+        )}
+        <p className="vtt-empty">Select a token, light or wall to inspect it.</p>
+      </div>
+    );
+  }
   const remove = () => {
     onIssue(deleteEntity(entity), entity.kind === 'token' ? { kind: 'token', id: entity.id, deleted: true } : null);
     onDeleted();
@@ -529,6 +559,16 @@ export function Inspector({ entity, enabled, onIssue, onDeleted }: InspectorProp
             disabled={!enabled}
             onChange={(locked) => onIssue(updateToken(entity, { locked }))}
           />
+          {boot && (
+            <ImagePicker
+              label="Art"
+              boot={boot}
+              current={entity.artAssetId}
+              previewUrl={mediaUrl(boot, entity.artAssetId)}
+              disabled={!enabled}
+              onChange={(artAssetId) => onIssue(updateToken(entity, { artAssetId }))}
+            />
+          )}
         </>
       )}
       {entity.kind === 'light' && (

@@ -13,6 +13,9 @@ export interface RenderToken {
   readonly size: number; // in grid squares (1 = medium)
   readonly label: string;
   readonly color: number; // 0xRRGGBB
+  // Token art (M6): a same-origin media URL built by the adapter, drawn inside
+  // the ring; the colour disc shows until it loads, and if it never does.
+  readonly artUrl?: string;
   // GM only: drawn dimmed so the GM can tell what the table cannot see.
   readonly hidden?: boolean;
   // GM only: a command for it is still waiting for its correlated frame.
@@ -48,6 +51,9 @@ export interface RenderScene {
   // False for a gridless scene. Gridless is explicit, never encoded as a zero
   // or negative gridSize.
   readonly showGrid: boolean;
+  // Background image (M6): a same-origin media URL, drawn under the grid and
+  // stretched to the scene's size.
+  readonly backgroundUrl?: string;
   readonly tokens: readonly RenderToken[];
   readonly walls: readonly RenderWall[];
   readonly lights: readonly RenderLight[];
@@ -114,6 +120,13 @@ export function gridLines(length: number, step: number): number[] {
   const lines: number[] = [];
   for (let i = 0; i * step <= length; i += 1) lines.push(i * step);
   return lines;
+}
+
+// Only a same-origin media URL the adapter could have built (M6); anything
+// else is never handed to the loader.
+const MEDIA_URL = /^\/vtt\/(?:media\/[A-Za-z0-9_-]{1,64}|table-media)\/[A-Za-z0-9_-]{1,128}$/;
+export function isMediaUrl(url: unknown): url is string {
+  return typeof url === 'string' && MEDIA_URL.test(url);
 }
 
 // Token radius in scene px, never negative or non-finite.
