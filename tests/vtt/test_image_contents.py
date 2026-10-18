@@ -33,3 +33,20 @@ def test_every_root_module_the_app_imports_is_in_the_image():
     missing = [name for name in needed if name not in _allowed()]
     assert not missing, f"imported but left out of the image by .dockerignore: {missing}"
     assert "pf2e_pdf_import.py" in needed       # the case that broke staging is still covered
+
+
+def _account_home(**extra):
+    import app
+    import flask
+    campaign = {'id': 'c' * 32, 'name': 'Saga', 'system': 'pf2e', 'members': [{'user_id': 'u1', 'role': 'gm'}]}
+    with app.app.test_request_context('/me'):
+        return flask.render_template(
+            'account_home.html', user={'id': 'u1', 'username': 'gm', 'is_admin': False},
+            campaigns=[campaign], gm_campaign_ids=['c' * 32], characters=[], active_campaign_id=None,
+            live_campaign_id=None, last_campaign=None, trashed_campaigns=[], trash_ttl_days=30, **extra)
+
+
+def test_the_campaign_card_links_the_gm_to_the_tabletop_only_where_it_is_on():
+    assert f'href="/vtt/gm?campaignId={"c" * 32}"' in _account_home(vtt_enabled=True)
+    assert '/vtt/gm' not in _account_home(vtt_enabled=False)
+    assert '/vtt/gm' not in _account_home()            # production's context has no flag

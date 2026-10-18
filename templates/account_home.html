@@ -113,7 +113,8 @@
         <div class="cc-actions">
           <form method="POST" action="/campaign/{{ c.id }}/activate"><button type="submit">{% if c.id == live_campaign_id %}Join session{% elif c.id == active_campaign_id %}Resume{% else %}Enter{% endif %}</button></form>
           {% if is_gm %}<a class="manage" href="/campaign/{{ c.id }}/invites">Manage</a>
-          <a class="manage" href="/campaign/{{ c.id }}/export" title="Download a full .zip backup of this campaign">Backup</a>{% endif %}
+          <a class="manage" href="/campaign/{{ c.id }}/export" title="Download a full .zip backup of this campaign">Backup</a>
+          {% if vtt_enabled|default(false) %}<a class="manage" href="/vtt/gm?campaignId={{ c.id|urlencode }}" title="Open this campaign on the virtual tabletop">Tabletop</a>{% endif %}{% endif %}
         </div>
       </div>
     </div>
