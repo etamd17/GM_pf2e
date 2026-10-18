@@ -27,7 +27,7 @@ from typing import Any
 
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
@@ -119,14 +119,20 @@ OUTBOX_MIN_AGE = timedelta(minutes=10)
 
 
 def prune_outbox(db: Database, *, keep: int = OUTBOX_KEEP, min_age: timedelta = OUTBOX_MIN_AGE,
-                 now: datetime | None = None) -> int:
+                 now: datetime | None = None, statement_timeout_ms: int | None = None) -> int:
     """Delete outbox rows more than ``keep`` positions behind their campaign's
-    latest and older than ``min_age``. Returns how many were deleted."""
+    latest and older than ``min_age``. Returns how many were deleted. On
+    PostgreSQL, ``statement_timeout_ms`` bounds both the statement and its
+    lock waits, so a stuck prune fails instead of waiting indefinitely."""
     cutoff = (now or datetime.now(timezone.utc)) - min_age
     latest = (select(VttCampaignStream.position)
               .where(VttCampaignStream.campaign_id == VttOutbox.campaign_id)
               .scalar_subquery())
     with db.transaction() as session:
+        if statement_timeout_ms is not None and session.get_bind().dialect.name == "postgresql":
+            ms = int(statement_timeout_ms)
+            session.execute(text(f"SET LOCAL statement_timeout = '{ms}ms'"))
+            session.execute(text(f"SET LOCAL lock_timeout = '{ms}ms'"))
         result = session.execute(
             delete(VttOutbox)
             .where(VttOutbox.created_at < cutoff, VttOutbox.position <= latest - keep)

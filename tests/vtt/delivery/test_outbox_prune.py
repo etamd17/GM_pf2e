@@ -52,7 +52,7 @@ def test_prune_is_per_campaign(stack):
         W.upsert_entity(stack.db, "camp_a", "scene_a", "token", "tok_hero", {"x": x, "y": 64})
     W.create_scene(stack.db, "camp_b", "scene_z", name="Other")
     age_all(stack.db, 60)
-    stream.prune_outbox(stack.db, keep=2)
+    stream.prune_outbox(stack.db, keep=2, statement_timeout_ms=5000)   # SET LOCAL timeouts on PostgreSQL
     assert len(positions(stack.db, "camp_a")) == 2
     assert len(positions(stack.db, "camp_b")) >= 1                 # its own latest is kept
 
@@ -67,7 +67,7 @@ def test_a_subscription_whose_next_rows_were_pruned_resyncs_instead_of_skipping(
         W.upsert_entity(stack.db, "camp_a", "scene_a", "token", "tok_hero", {"x": 200 + x, "y": 64})
     # ... and the first ones after its cursor are pruned away.
     age_all(stack.db, 60)
-    stream.prune_outbox(stack.db, keep=2)
+    stream.prune_outbox(stack.db, keep=2, statement_timeout_ms=5000)   # SET LOCAL timeouts on PostgreSQL
     assert positions(stack.db)[0] > sub.cursor + 1
     stack.hub.notify("camp_a")
     messages = received(gm)
@@ -86,3 +86,55 @@ def test_contiguous_rows_are_delivered_normally(stack):
     assert [m["name"] for m in received(gm)] == ["vtt.patch"]
     with stack.db.session() as session:
         assert session.execute(select(func.count()).select_from(VttOutbox)).scalar_one() > 0
+
+
+# --- maintenance never delays the authorization heartbeat (handoff 078) ------------------------
+
+def test_a_stalled_prune_cannot_delay_revocation_past_the_bound(stack, monkeypatch):
+    """The real heartbeat loop, at a 0.05 s beat, with the prune stuck for
+    good: a table revoked behind the hub's back is still ended within a few
+    beats (AUTH_BOUND is three beats plus the verify timeout), and no second
+    prune starts while the first is stuck."""
+    import threading
+    import time
+    from vtt.storage import grants as G
+    from vtt.transport import socket as socket_module
+    from .conftest import NAMESPACE
+    from .test_m1_read_path import subscribe_table
+    from .test_m3_pairing import pair
+
+    seed_scene(stack.db)
+    table, _ = subscribe_table(stack, pair(stack))
+    received(table)
+    stall, started = threading.Event(), []
+
+    def stuck(db, **kwargs):
+        started.append(time.monotonic())
+        stall.wait(30)                       # a DELETE that never finishes
+        return 0
+
+    monkeypatch.setattr(socket_module, "prune_outbox", stuck)
+    monkeypatch.setattr(socket_module, "HEARTBEAT_SECONDS", 0.05)
+    monkeypatch.setattr(socket_module, "PRUNE_EVERY_BEATS", 1)
+    stop = threading.Event()
+    loop = threading.Thread(target=stack.service.run_heartbeat, args=(stop,), daemon=True)
+    loop.start()
+    try:
+        deadline = time.monotonic() + 5
+        while not started and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert started, "the prune never started"
+        with stack.db.transaction() as session:
+            G.revoke_all(session, "camp_a")
+        revoked = time.monotonic()
+        while table.is_connected(NAMESPACE) and time.monotonic() < revoked + 5:
+            time.sleep(0.01)
+        took = time.monotonic() - revoked
+        assert not table.is_connected(NAMESPACE)
+        assert took < 1.0, f"revocation took {took:.2f}s with the prune stalled"   # a few 0.05 s beats
+        assert len(started) == 1                                                  # no overlapping prune
+        assert stack.service.sweep_stats.get("prune_skipped", 0) >= 1
+    finally:
+        stop.set()
+        stall.set()
+        loop.join(5)

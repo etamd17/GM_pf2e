@@ -89,6 +89,7 @@ AUTH_BOUND = timedelta(seconds=30)
 HEARTBEAT_SECONDS = 10
 # The outbox is pruned about hourly from the heartbeat (vtt.storage.stream).
 PRUNE_EVERY_BEATS = 360
+PRUNE_STATEMENT_TIMEOUT_MS = 20000
 VERIFY_TIMEOUT_SECONDS = 5.0
 UNVERIFIED_LIMIT = timedelta(seconds=20)
 # The database's own waits stay inside the read timeout.
@@ -165,6 +166,9 @@ class VttService:
     end_member: Callable[..., int]
     # Parity P3: mirror app.py's live tracker indexes for one campaign.
     sync_live: Callable[[str, dict, dict], list] = None
+    # The heartbeat loop itself (started by init_vtt unless start_heartbeat is
+    # False); a test can run it with a stop event.
+    run_heartbeat: Callable[..., None] = None
 
 
 def table_verifier(grant_key: bytes, credential: str) -> str:
@@ -298,10 +302,44 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
         except Exception:
             sweep_stats["end_errors"] += 1
 
-    def heartbeat_loop():
+    # Outbox maintenance (handoff 078) never runs on the heartbeat itself: a
+    # slow or stalled DELETE must not push the next authorization sweep past
+    # AUTH_BOUND. It runs as its own background task (a greenlet under gevent,
+    # where psycopg's socket waits yield), at most one at a time, and its
+    # transaction carries PostgreSQL statement and lock timeouts.
+    prune_state = {"running": False}
+    prune_lock = threading.Lock()
+
+    def prune_job():
+        try:
+            sweep_stats["pruned"] = sweep_stats.get("pruned", 0) + prune_outbox(
+                db, statement_timeout_ms=PRUNE_STATEMENT_TIMEOUT_MS)
+        except Exception:
+            sweep_stats["prune_errors"] = sweep_stats.get("prune_errors", 0) + 1
+        finally:
+            with prune_lock:
+                prune_state["running"] = False
+
+    def start_prune() -> bool:
+        """Start one prune unless one is still running. Never waits on it."""
+        with prune_lock:
+            if prune_state["running"]:
+                sweep_stats["prune_skipped"] = sweep_stats.get("prune_skipped", 0) + 1
+                return False
+            prune_state["running"] = True
+        try:
+            socketio.start_background_task(prune_job)
+        except Exception:
+            with prune_lock:
+                prune_state["running"] = False
+            sweep_stats["prune_errors"] = sweep_stats.get("prune_errors", 0) + 1
+            return False
+        return True
+
+    def heartbeat_loop(stop: threading.Event | None = None):
         scheduled = time.monotonic() + HEARTBEAT_SECONDS
         beats = 0
-        while True:
+        while stop is None or not stop.is_set():
             socketio.sleep(max(0.0, scheduled - time.monotonic()))
             scheduled = next_start(scheduled, time.monotonic(), HEARTBEAT_SECONDS)
             try:
@@ -310,10 +348,7 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
                 sweep_stats["loop_errors"] += 1
             beats += 1
             if beats % PRUNE_EVERY_BEATS == 0:
-                try:
-                    sweep_stats["pruned"] = sweep_stats.get("pruned", 0) + prune_outbox(db)
-                except Exception:
-                    sweep_stats["loop_errors"] += 1
+                start_prune()       # hands off; the next sweep is not delayed
 
     if start_heartbeat:
         socketio.start_background_task(heartbeat_loop)
@@ -472,4 +507,4 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
 
     return VttService(socketio=socketio, hub=hub, principals=principals, commands=commands,
                       heartbeat=lambda: sweep(None), sweep=sweep, sweep_stats=sweep_stats,
-                      end_member=end_member, sync_live=sync_live)
+                      end_member=end_member, sync_live=sync_live, run_heartbeat=heartbeat_loop)
