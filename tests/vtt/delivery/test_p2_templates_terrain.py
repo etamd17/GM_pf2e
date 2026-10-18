@@ -10,7 +10,6 @@ import base64
 from vtt import terrain as terrain_rules
 from vtt.commands import handlers
 
-
 from .test_m1_read_path import subscribe_gm
 from .test_m2_commands import send
 from .test_p1_fog import Table, expect, gm_sid, setup
@@ -186,7 +185,6 @@ def test_a_fresh_gm_snapshot_carries_templates_and_terrain(stack):
     [snap] = [payload(m) for m in received(fresh, "vtt.snapshot")]
     held = {(e["kind"], e["id"]): e for e in snap["entities"]}
     assert ("template", "tpl_b") in held and kinds(held[("terrain", "terrain")]).kind_at(2, 2) == 2
-
 
 
 # --- the /map import brings templates and terrain across ------------------------------------
