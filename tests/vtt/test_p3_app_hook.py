@@ -97,3 +97,79 @@ def test_a_flush_runs_where_the_tracker_helpers_can_build_sheet_links(vtt, monke
     worker.join(10)
     assert seen["context"] is True and "pc_1" in seen["url"]
     assert vtt.calls == [("camp_a", {}, {})]
+
+
+# --- the snapshot is taken under the campaign dispatch lock (handoff 072, finding 2) ------------
+
+def test_a_flush_waits_for_the_campaign_dispatch_lock(vtt, monkeypatch):
+    import threading
+    entered = threading.Event()
+    monkeypatch.setattr(app_module, "_loaded_campaign_id", lambda: "camp_a")
+    monkeypatch.setattr(app_module, "_scene_live_indexes", lambda cid: (entered.set() or {}, {}))
+    with app_module._LIVE_CAMPAIGN_DISPATCH_LOCK:
+        worker = threading.Thread(target=app_module._vtt_live_flush)
+        worker.start()
+        raced = entered.wait(1)
+    worker.join(10)
+    assert not raced, "read tracker state while the campaign dispatch lock was held"
+    assert entered.is_set() and vtt.calls == [("camp_a", {}, {})]
+
+
+def test_a_flush_never_sees_a_half_rebound_campaign(vtt, monkeypatch):
+    """load_campaign binds the new campaign before it reloads that campaign's
+    state, under the dispatch lock. A flush that starts in between must see
+    only the finished switch."""
+    import threading
+    state = {"cid": "camp_a", "encounter": "camp_a fight"}
+    monkeypatch.setattr(app_module, "_loaded_campaign_id", lambda: state["cid"])
+    monkeypatch.setattr(app_module, "_scene_live_indexes",
+                        lambda cid: ({"c1": {"name": state["encounter"]}}, {}))
+    with app_module._LIVE_CAMPAIGN_DISPATCH_LOCK:
+        state["cid"] = "camp_b"                         # bound ...
+        worker = threading.Thread(target=app_module._vtt_live_flush)
+        worker.start()
+        worker.join(0.5)
+        state["encounter"] = "camp_b fight"             # ... and then reloaded
+    worker.join(10)
+    assert vtt.calls == [("camp_b", {"c1": {"name": "camp_b fight"}}, {})]
+
+
+def test_an_older_snapshot_never_commits_after_a_newer_one(vtt, monkeypatch):
+    import threading
+    state = {"hp": 20}
+    first_writing, release_first = threading.Event(), threading.Event()
+    order = []
+
+    def sync(campaign_id, combatants, characters):
+        hp = combatants["c1"]["hp"]
+        if hp == 20:
+            first_writing.set()
+            release_first.wait(10)                      # a slow database write
+        order.append(hp)
+        return []
+
+    vtt.sync_live = sync
+    monkeypatch.setattr(app_module, "_loaded_campaign_id", lambda: "camp_a")
+    monkeypatch.setattr(app_module, "_scene_live_indexes", lambda cid: ({"c1": {"hp": state["hp"]}}, {}))
+    first = threading.Thread(target=app_module._vtt_live_flush)
+    first.start()
+    assert first_writing.wait(10)
+    state["hp"] = 5                                     # the tracker moves on, unblocked
+    with app_module._LIVE_CAMPAIGN_DISPATCH_LOCK:
+        pass                                            # the dispatch lock is free during the write
+    second = threading.Thread(target=app_module._vtt_live_flush)
+    second.start()
+    second.join(0.5)
+    release_first.set()
+    first.join(10)
+    second.join(10)
+    assert order == [20, 5]
+
+
+def test_the_snapshot_is_detached_from_the_tracker(vtt, monkeypatch):
+    shared = {"c1": {"name": "Skeleton", "conditions": {"prone": True}}}
+    monkeypatch.setattr(app_module, "_loaded_campaign_id", lambda: "camp_a")
+    monkeypatch.setattr(app_module, "_scene_live_indexes", lambda cid: (shared, {}))
+    app_module._vtt_live_flush()
+    sent = vtt.calls[0][1]
+    assert sent == shared and sent is not shared and sent["c1"]["conditions"] is not shared["c1"]["conditions"]

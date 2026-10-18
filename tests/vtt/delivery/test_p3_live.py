@@ -242,3 +242,39 @@ def test_sizing_reserves_a_full_live_block_for_every_linked_token(stack):
         linked, _, _ = gm_snapshot_bytes(session, "camp_a", "scene_a")
     # 200 linked tokens on the table outgrow the GM frame and its actor reserve.
     assert linked > unlinked and linked > 200 * 1000
+
+
+# --- table-media follows the tracker's hidden flag (handoff 072, finding 1) ---------------------
+
+def _art(stack, token_id, asset):
+    with stack.db.transaction() as session:
+        row = session.get(VttEntity, ("camp_a", "scene_a", "token", token_id))
+        row.data = {**row.data, "artAssetId": asset}
+
+
+def test_art_of_a_token_whose_actor_is_hidden_is_not_readable_by_the_table(stack):
+    from .test_m6_assets import fetch, stored
+    gm, table_client = setup(stack)
+    asset = stored(stack)
+    link(stack, gm, "tok_hero", "cmb_skel")
+    _art(stack, "tok_hero", asset)
+    credential = add_grant(stack.db)
+    mirror(stack, {"skel": SKELETON})
+    assert fetch(stack, "camp_a", asset, credential, member=False).status_code == 200
+    mirror(stack, {"skel": {**SKELETON, "visible_to_players": False}})
+    assert ("token", "tok_hero") not in Table(table_client).now()
+    assert fetch(stack, "camp_a", asset, credential, member=False).status_code == 404
+    mirror(stack, {"skel": SKELETON})                                          # shown again
+    assert fetch(stack, "camp_a", asset, credential, member=False).status_code == 200
+
+
+def test_art_shared_with_a_visible_token_stays_readable(stack):
+    from .test_m6_assets import fetch, stored
+    gm, _ = setup(stack)
+    asset = stored(stack)
+    link(stack, gm, "tok_hero", "cmb_skel")
+    _art(stack, "tok_hero", asset)
+    _, ack, _ = send(stack, gm, "token.create", {**TOKEN, "id": "tok_twin", "artAssetId": asset})
+    assert ack["outcome"] == "applied"
+    mirror(stack, {"skel": {**SKELETON, "visible_to_players": False}})
+    assert fetch(stack, "camp_a", asset, add_grant(stack.db), member=False).status_code == 200

@@ -9186,18 +9186,27 @@ def _vtt_live_flush():
     service = globals().get('VTT_SERVICE')
     if service is None or service.sync_live is None:
         return
-    # A timer thread has no request, but the live-index helpers assume one:
-    # account-mode sheet links go through url_for, and identity reads memoize
-    # on flask.g. A throwaway request context gives them exactly that (and a
-    # fresh g, so nothing is memoized across flushes).
-    with _VTT_LIVE_FLUSH_LOCK, app.test_request_context('/'):
+    # Lock order: the flush lock, then the campaign dispatch lock; nothing that
+    # holds the dispatch lock ever waits for the flush lock.
+    with _VTT_LIVE_FLUSH_LOCK:
         try:
-            cid = _loaded_campaign_id()
+            # 1. A consistent, detached snapshot of the tracker, taken under the
+            #    same lock tracker requests and load_campaign mutate under, so it
+            #    can never see a half-applied change or a half-rebound campaign.
+            #    A timer thread has no request, but the live-index helpers assume
+            #    one (account-mode sheet links go through url_for; identity reads
+            #    memoize on flask.g), so a throwaway request context supplies it.
+            with app.test_request_context('/'), _LIVE_CAMPAIGN_DISPATCH_LOCK:
+                cid = _loaded_campaign_id()
+                combatants, characters = _scene_live_indexes(cid) if cid else ({}, {})
+                combatants, characters = copy.deepcopy(combatants), copy.deepcopy(characters)
+            # 2. The database write and delivery after releasing it (tracker
+            #    requests never wait on PostgreSQL), but still inside the flush
+            #    lock, so an older snapshot can never commit after a newer one.
             previous = _VTT_LIVE_LAST_CID
             if previous and previous != cid:
                 service.sync_live(previous, {}, {})
             if cid:
-                combatants, characters = _scene_live_indexes(cid)
                 service.sync_live(cid, combatants, characters)
             _VTT_LIVE_LAST_CID = cid
         except Exception:

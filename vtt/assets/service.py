@@ -83,8 +83,9 @@ def table_may_read(session: Session, campaign_id: str, asset: str) -> bool:
         return False
     if scene.background_asset_id == asset:
         return True
-    from vtt import fog
+    from vtt import fog, live
     fog_view = fog.load(session, scene)[1]
+    actors = None
     tokens = session.execute(
         select(VttEntity).where(VttEntity.campaign_id == campaign_id, VttEntity.scene_id == scene.id,
                                 VttEntity.kind == "token", VttEntity.hidden.is_(False))
@@ -93,6 +94,14 @@ def table_may_read(session: Session, campaign_id: str, asset: str) -> bool:
         data = row.data or {}
         if data.get("artAssetId") != asset:
             continue
-        if fog_view is None or not fog_view.hides(data.get("x", 0), data.get("y", 0)):
-            return True                      # the same rule as the table projection
+        if fog_view is not None and fog_view.hides(data.get("x", 0), data.get("y", 0)):
+            continue
+        # The same rules as the table projection, parity P3 included: a token
+        # whose tracker actor is hidden is not on the table, so neither is its art.
+        if data.get("actorId"):
+            if actors is None:
+                actors = live.load(session, campaign_id)
+            if (actors.get(data["actorId"]) or {}).get("hidden"):
+                continue
+        return True
     return False
