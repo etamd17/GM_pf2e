@@ -144,6 +144,14 @@ def scene_update(ctx: Context) -> dict[str, Any]:
         _row, view = fog.load(ctx.session, scene, for_update=True)
         if view is not None and view.any_revealed():
             raise Rejection("rule-violation")
+        # Nor may new geometry silently turn fog off: a grid too large for fog
+        # has no fog, which would show the table everything it covered
+        # (handoff 062). The GM turns fog off first, deliberately.
+        width = ctx.payload.get("width", scene.width)
+        height = ctx.payload.get("height", scene.height)
+        grid_size = ctx.payload.get("gridSize", scene.grid_size)
+        if view is not None and view.enabled and not fog.available(*fog.grid_of(width, height, grid_size)):
+            raise Rejection("rule-violation")
     if ctx.payload.get("published") is False:
         pointer = ctx.session.get(VttTablePointer, ctx.campaign_id, with_for_update=True)
         if pointer is not None and pointer.scene_id == scene.id:

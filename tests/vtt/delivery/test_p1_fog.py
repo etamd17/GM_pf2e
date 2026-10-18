@@ -267,3 +267,82 @@ def test_no_legacy_fog_writes_no_fog_row(stack):
     from .test_m5_import import full_scene
     assert _import(stack, full_scene())["status"] == "imported"
     assert _fog_row(stack) is None
+
+
+# --- handoff 062 ------------------------------------------------------------------------------
+
+def test_art_of_a_token_under_fog_is_not_readable_by_the_table(stack):
+    from .test_m6_assets import fetch, stored
+    from vtt.storage.models import VttEntity
+    gm, table_client = setup(stack)
+    art = stored(stack)
+    with stack.db.transaction() as session:
+        hero = session.get(VttEntity, ("camp_a", "scene_a", "token", "tok_hero"))
+        hero.data = {**hero.data, "artAssetId": art}
+    credential = add_grant(stack.db)
+    assert fetch(stack, "camp_a", art, credential, member=False).status_code == 200     # fog off
+    send(stack, gm, "fog.update", {"enabled": True}, expected=expect(stack, "fog", "fog"))
+    assert fetch(stack, "camp_a", art, credential, member=False).status_code == 404     # covered
+    send(stack, gm, "fog.reveal", {"mode": "reveal", "cells": [[1, 1]]})
+    assert fetch(stack, "camp_a", art, credential, member=False).status_code == 200     # revealed
+    send(stack, gm, "fog.reveal", {"mode": "hide", "cells": [[1, 1]]})
+    assert fetch(stack, "camp_a", art, credential, member=False).status_code == 404
+    # the same image on a visible token stays readable even while the hero is covered
+    send(stack, gm, "fog.reveal", {"mode": "reveal", "cells": [[20, 20]]})
+    send(stack, gm, "token.create", {**TOKEN, "id": "tok_twin", "x": 1312, "y": 1312, "artAssetId": art})
+    assert fetch(stack, "camp_a", art, credential, member=False).status_code == 200
+
+
+def test_a_grid_too_large_for_fog_is_refused_while_fog_is_on(stack):
+    gm, table_client = setup(stack)
+    table = Table(table_client)
+    send(stack, gm, "fog.update", {"enabled": True}, expected=expect(stack, "fog", "fog"))
+    huge = {"width": 16384, "height": 16384, "gridSize": 8}
+    _, ack, _ = send(stack, gm, "scene.update", huge, expected=expect(stack, "scene", "scene_a"))
+    assert ack["outcome"] == "rejected" and ack["code"] == "rule-violation"
+    held = table.now()
+    assert ("token", "tok_hero") not in held and held[("fog", "fog")]["enabled"] is True
+    # a grid that still fits is fine while fog is on (nothing revealed)
+    _, ack, _ = send(stack, gm, "scene.update", {"gridSize": 128}, expected=expect(stack, "scene", "scene_a"))
+    assert ack["outcome"] == "applied"
+    # the deliberate path: fog off first, then the huge grid; the table sees it all
+    send(stack, gm, "fog.update", {"enabled": False}, expected=expect(stack, "fog", "fog"))
+    _, ack, _ = send(stack, gm, "scene.update", huge, expected=expect(stack, "scene", "scene_a"))
+    assert ack["outcome"] == "applied"
+    held = table.now()
+    assert ("token", "tok_hero") in held and ("fog", "fog") not in held
+    fresh, _ = subscribe_table(stack, add_grant(stack.db))
+    [snap] = [payload(m) for m in received(fresh, "vtt.snapshot")]
+    assert {(e["kind"], e["id"]) for e in snap["entities"]} >= {("token", "tok_hero")}
+    assert all(e["kind"] != "fog" for e in snap["entities"])
+
+
+def test_reimporting_fog_off_and_empty_replaces_the_earlier_fog_live(stack):
+    from vtt.importer import legacy_scenes as importer
+    from vtt.storage import writes as W
+    from .test_m5_import import full_scene
+    scene = full_scene()
+    scene["fog"] = {"enabled": True, "operations": [], "revealed_cells": ["1,1"]}
+    assert _import(stack, scene)["status"] == "imported"
+    W.set_table_pointer(stack.db, "camp_a", "legacy_abc123")
+    W.update_scene(stack.db, "camp_a", "legacy_abc123", published=True)
+    W.upsert_entity(stack.db, "camp_a", "legacy_abc123", "token", "gm_added", {"x": 900, "y": 900, "label": "Later"})
+    table = Table(subscribe_table(stack, add_grant(stack.db))[0])
+    held = table.now()
+    assert held[("fog", "fog")]["enabled"] is True and ("token", "gm_added") not in held   # under fog
+    scene["fog"] = {"enabled": False, "operations": [], "revealed_cells": []}
+    report = importer.import_campaign(stack.db, "camp_a", [scene], None, apply=True)["scenes"][0]
+    assert report["status"] == "imported"
+    assert _fog_row(stack) is None                                # off and empty: no row at all
+    stack.service.hub.notify("camp_a")
+    held = table.now()
+    assert held[("fog", "fog")]["enabled"] is False and not any(bits(held[("fog", "fog")]))
+    assert ("token", "gm_added") in held                          # the GM's token, rechecked too
+
+
+def test_an_off_and_empty_source_writes_no_fog_row_for_a_new_scene(stack):
+    from .test_m5_import import full_scene
+    scene = full_scene()
+    scene["fog"] = {"enabled": False, "operations": [], "revealed_cells": []}
+    assert _import(stack, scene)["status"] == "imported"
+    assert _fog_row(stack) is None

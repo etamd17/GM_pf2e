@@ -155,6 +155,10 @@ def _plan_fog(plan: Plan, legacy: dict[str, Any], grid: dict[str, Any]) -> None:
     cells_text = legacy_fog.get("revealed_cells") if isinstance(legacy_fog.get("revealed_cells"), list) else []
     enabled = bool(legacy_fog.get("enabled"))
     if not enabled and not cells_text:
+        # Fog off and nothing revealed is still the source's fog: on a re-import
+        # it replaces whatever an earlier import wrote (handoff 062). A new scene
+        # needs no row for it ("replace_only").
+        plan.fog = {"enabled": False, "cells": [], "replace_only": True}
         return
     if grid.get("offset_x") or grid.get("offset_y"):
         plan.dropped.append("fog and revealed areas (the legacy grid is offset)")
@@ -368,9 +372,18 @@ def apply_plan(db: Database, campaign_id: str, plan: Plan, *, on_table: bool = F
                 counts["updated"] += 1
             changed.append([kind, eid])
         session.flush()
-        if plan.fog is not None:            # written before sizing: its bitset counts too
-            _write_fog(session, campaign_id, plan)
+        if plan.fog is not None and _write_fog(session, campaign_id, plan):
+            # Written before sizing (its bitset counts too). Fog decides what the
+            # table sees, so every token and light of the scene is rechecked,
+            # including ones the GM added since the last import.
+            known = {(k, i) for k, i in changed}
             changed.append(["fog", "fog"])
+            for kind, eid in session.execute(
+                select(VttEntity.kind, VttEntity.id).where(
+                    VttEntity.campaign_id == campaign_id, VttEntity.scene_id == plan.scene_id,
+                    VttEntity.kind.in_(("token", "light")))).all():
+                if (kind, eid) not in known:
+                    changed.append([kind, eid])
         size, gm_count, table_count = gm_snapshot_bytes(session, campaign_id, plan.scene_id)
         if size + FRAME_HEADROOM > MAX_JSON_BYTES or gm_count > GM_ENTITY_CAP or table_count > TABLE_ENTITY_CAP:
             raise Refused(f"{plan.name}: {gm_count} entities, {size} bytes; over the frame limit or entity caps")
@@ -444,21 +457,32 @@ def resolve_assets(plan: Plan, read_asset) -> None:
         plan.dropped.append(f"token art on {missing} token(s) (file missing or unreadable)")
 
 
-def _write_fog(session, campaign_id: str, plan: Plan) -> None:
+def _write_fog(session, campaign_id: str, plan: Plan) -> bool:
     """The scene's fog as /map had it (a re-import replaces it: the legacy fog
-    is the source, like every other imported field)."""
+    is the source, like every other imported field). Returns whether anything
+    was written: an off-and-empty source fog writes nothing for a scene that
+    has no fog row yet."""
     from vtt import fog as fog_rules
     from vtt.storage.models import VttFog
+    row = session.get(VttFog, (campaign_id, plan.scene_id))
+    if plan.fog.get("replace_only"):
+        # No row means fog off and nothing revealed: exactly the source's fog,
+        # and it holds on any grid (a row cannot exist for one too large).
+        if row is None:
+            return False
+        session.delete(row)
+        session.flush()
+        return True
     cols, rows = fog_rules.grid_of(plan.scene["width"], plan.scene["height"], plan.scene["grid_size"])
     view = fog_rules.FogView(False, cols, rows, fog_rules.empty_bits(cols, rows), plan.scene["grid_size"])
     bits = fog_rules.with_cells(view, plan.fog["cells"], True)
-    row = session.get(VttFog, (campaign_id, plan.scene_id))
     if row is None:
         session.add(VttFog(campaign_id=campaign_id, scene_id=plan.scene_id, enabled=plan.fog["enabled"],
                            cols=cols, rows=rows, revealed=bits))
     else:
         row.enabled, row.cols, row.rows, row.revealed = plan.fog["enabled"], cols, rows, bits
     session.flush()
+    return True
 
 
 def import_campaign(db: Database, campaign_id: str, legacy_scenes: list[dict[str, Any]],

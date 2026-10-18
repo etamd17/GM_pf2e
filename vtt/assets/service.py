@@ -8,7 +8,9 @@
   this campaign holds.
 - ``table_may_read`` is the table's read rule. A paired display may read only
   an asset the current table projection shows: the published table scene's
-  background, or the art of a token in it that is not hidden. A content-hash id
+  background, or the art of a token in it that is not hidden and (parity P1)
+  not under fog. The same image on a visible token, or as the background,
+  stays readable even if a covered token also uses it. A content-hash id
   is not a secret (anyone holding the image can compute it), so a hidden
   token's art must be refused by rule, not by obscurity.
 """
@@ -81,8 +83,16 @@ def table_may_read(session: Session, campaign_id: str, asset: str) -> bool:
         return False
     if scene.background_asset_id == asset:
         return True
+    from vtt import fog
+    fog_view = fog.load(session, scene)[1]
     tokens = session.execute(
         select(VttEntity).where(VttEntity.campaign_id == campaign_id, VttEntity.scene_id == scene.id,
                                 VttEntity.kind == "token", VttEntity.hidden.is_(False))
     ).scalars()
-    return any((row.data or {}).get("artAssetId") == asset for row in tokens)
+    for row in tokens:
+        data = row.data or {}
+        if data.get("artAssetId") != asset:
+            continue
+        if fog_view is None or not fog_view.hides(data.get("x", 0), data.get("y", 0)):
+            return True                      # the same rule as the table projection
+    return False
