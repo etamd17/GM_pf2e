@@ -7,7 +7,8 @@ and temp-condition auto-expiry timers (a frightened-2-for-3-rounds becomes a
 permanent frightened 2). The Cosmere restore path also never restored `delaying`
 (so a delayed Cosmere combatant lost it even across a Railway restart). Fixed by
 mirroring the autosave field set into save_encounter + restoring `delaying` in
-both the PF2e and Cosmere restore paths.
+both the PF2e and Cosmere restore paths. Cosmere now migrates the historical
+timer into its canonical EffectInstance rather than preserving two authorities.
 """
 import os
 import sys
@@ -51,7 +52,15 @@ def test_manual_save_load_preserves_delaying_and_condition_expiry():
         assert A.ACTIVE_ENCOUNTER, 'nothing restored'
         for cb in A.ACTIVE_ENCOUNTER:
             assert getattr(cb, 'delaying', False) is True, ('delaying lost', cb.name)
-            assert dict(getattr(cb, 'condition_expiry', {})).get('frightened') == 5, ('expiry lost', cb.name)
+            if getattr(cb, 'system', 'pf2e') == 'cosmere':
+                assert getattr(cb, 'condition_expiry', {}) == {}, ('legacy timer retained', cb.name)
+                matching = [row for row in getattr(cb, 'effect_instances', [])
+                            if (row.get('parameters') or {}).get('condition') == 'frightened']
+                assert len(matching) == 1, ('canonical timer lost', cb.name)
+                assert matching[0]['remaining_duration'] == 5, ('duration lost', cb.name)
+                assert matching[0]['trigger'] == 'turn_end', ('trigger lost', cb.name)
+            else:
+                assert dict(getattr(cb, 'condition_expiry', {})).get('frightened') == 5, ('expiry lost', cb.name)
         print('SAVE_PERSIST_OK count=%d' % len(A.ACTIVE_ENCOUNTER))
     ''')
     assert 'SAVE_PERSIST_OK' in r.stdout, "stdout:\\n%s\\nstderr:\\n%s" % (r.stdout, r.stderr)

@@ -16,11 +16,12 @@ DEFLECTABLE = frozenset({'impact', 'keen', 'energy'})
 DAMAGE_TYPES = ('impact', 'keen', 'energy', 'spirit', 'vital')
 
 
-def apply_damage(health, amount, dtype='impact', deflect=0):
+def apply_damage(health, amount, dtype='impact', deflect=0, deflect_types=None):
     """Apply `amount` of `dtype` damage to `health`, subtracting Deflect for
     deflectable types only. Returns (new_health, damage_taken, reduced_to_zero)."""
     amount = max(0, int(amount or 0))
-    if dtype in DEFLECTABLE:
+    protected_types = DEFLECTABLE if deflect_types is None else frozenset(deflect_types)
+    if dtype in protected_types:
         amount = max(0, amount - max(0, int(deflect or 0)))
     health = int(health or 0)
     new = health - amount
@@ -168,3 +169,64 @@ def order_combatants(combatants):
         phase = turn_phase(bool(c.get('is_pc')), c.get('choice', 'slow'))
         return (_PHASE_RANK[phase], -int(c.get('speed', 0) or 0), -int(c.get('tiebreak', 0) or 0))
     return sorted(combatants, key=key)
+
+
+def turn_schedule(combatants):
+    """Return phase slots, expanding each Boss into a fast and slow turn.
+
+    The same actor identity appears in both slots.  This avoids cloning runtime
+    state while making the Boss rule explicit for tracker orchestration.
+    """
+    slots = []
+    for combatant in combatants:
+        source = dict(combatant)
+        choices = ('fast', 'slow') if str(source.get('role') or '').lower() == 'boss' \
+            else (source.get('choice', 'slow'),)
+        for choice in choices:
+            slot = dict(source)
+            slot['choice'] = choice
+            slot['phase'] = turn_phase(bool(slot.get('is_pc')), choice)
+            slots.append(slot)
+    return order_combatants(slots)
+
+
+def turn_permissions(choice, conditions=None):
+    """Action/reaction permissions for the active Cosmere conditions."""
+    conditions = conditions or {}
+    selected = 'fast' if choice == 'fast' else 'slow'
+    if conditions.get('unconscious'):
+        return {'choice': 'slow', 'actions': 0, 'reaction': False}
+    if conditions.get('surprised'):
+        selected = 'slow'
+    actions = fast_slow_actions(selected)
+    if conditions.get('surprised'):
+        actions = max(0, actions - 1)
+    if conditions.get('stunned'):
+        actions = max(0, actions - 2)
+    reaction = not any(conditions.get(name) for name in
+                       ('stunned', 'surprised', 'unconscious', 'disoriented'))
+    return {'choice': selected, 'actions': actions, 'reaction': reaction}
+
+
+def defeat_outcome(role, health, *, suffered_injury=False,
+                   significant_npc_injuries=False, nonlethal=False):
+    """Resolve adversary defeat without silently granting the PC injury spiral.
+
+    Foundry's raw roles are minion/rival/boss; ``ordinary`` is retained as the
+    service-layer alias for a standard Rival.  A significant NPC uses injuries
+    only when explicitly opted in.  Bosses have no generic defeat immunity.
+    """
+    role = str(role or 'rival').lower()
+    # Minions are defeated by suffering an injury; the significant-NPC opt-in
+    # cannot turn that defining role rule into a multi-injury spiral.
+    use_spiral = bool(significant_npc_injuries and role != 'minion')
+    defeated = bool(role == 'minion' and suffered_injury)
+    if int(health or 0) <= 0 and not use_spiral:
+        defeated = True
+    unconscious = bool((defeated and nonlethal) or (use_spiral and int(health or 0) <= 0))
+    return {
+        'defeated': defeated,
+        'unconscious': unconscious,
+        'dead': bool(defeated and not nonlethal),
+        'use_injury_spiral': use_spiral,
+    }

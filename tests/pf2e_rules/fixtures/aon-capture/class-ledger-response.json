@@ -1,0 +1,31 @@
+{
+  "took": 3,
+  "timed_out": false,
+  "_shards": {"total": 1, "successful": 1, "skipped": 0, "failed": 0},
+  "hits": {
+    "total": {"value": 2, "relation": "eq"},
+    "max_score": null,
+    "hits": [
+      {
+        "_index": "aon-20261007-063536",
+        "_id": "class-20",
+        "_score": 0.0,
+        "_source": {
+          "category": "class",
+          "id": "class-20",
+          "url": "/Classes.aspx?ID=20"
+        }
+      },
+      {
+        "_index": "aon-20261007-063536",
+        "_id": "class-21",
+        "_score": 0.0,
+        "_source": {
+          "category": "class",
+          "id": "class-21",
+          "url": "/Classes.aspx?ID=21"
+        }
+      }
+    ]
+  }
+}

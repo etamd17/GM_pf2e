@@ -2914,6 +2914,102 @@
            height/font-size aren't touched by system.css's own .dice-face rule
            (background/border/color only), so this still controls their size. */
         .dice-face { width: 26px; height: 26px; font-size: 12px; margin: 1.5px; }
+
+        /* ══════════════════════════════════════════════════════════════════
+           UI-10 REVISION A — compact familiar sheet, strictly additive CSS.
+           The shared stylesheet loads after this block and already keeps the
+           character name (18px) and portrait (44px) smaller than the old
+           mockup's 26px / 54px targets, so those current compact values stay.
+           Higher-specificity rules below carry the remaining approved A
+           refinements through that later cascade without moving any markup.
+           ══════════════════════════════════════════════════════════════════ */
+
+        body .char-header .mobile-actions {
+            gap: 8px !important;
+        }
+        body .char-header .resource-chip {
+            padding: 4px 8px !important;
+            border-radius: 4px !important;
+        }
+
+        /* Attributes remain in the header as one flat six-cell strip. */
+        body .char-header .ability-row-wrap {
+            gap: 0 !important;
+            border-bottom: 1px solid var(--border-strong) !important;
+            padding-top: 6px !important;
+            padding-bottom: 6px !important;
+        }
+        body .char-header .ability-block {
+            background: transparent !important;
+            border: 0 !important;
+            border-right: 1px solid var(--border-strong) !important;
+            border-radius: 0 !important;
+            padding: 7px 12px !important;
+        }
+        body .char-header .ability-block:last-child {
+            border-right: 0 !important;
+        }
+        body .char-header .ability-block .mod {
+            font-size: 22px !important;
+        }
+
+        body .char-header .stats-strip .ss-lbl {
+            font-size: 10px !important;
+            letter-spacing: 0.08em !important;
+        }
+        body .char-header .stats-strip .ss-val {
+            font-size: 24px !important;
+        }
+
+        /* Larger interaction targets without changing any controls. */
+        body .sheet-ember-host .tab-btn {
+            letter-spacing: 0.04em !important;
+            min-height: 40px !important;
+        }
+        body .sheet-ember-host .panel-card {
+            border-radius: 4px !important;
+        }
+        body .sheet-ember-host .section-header {
+            font-size: 15px !important;
+            letter-spacing: 0.04em !important;
+        }
+        body .sheet-ember-host .skill-row {
+            min-height: 40px !important;
+        }
+        body .sheet-ember-host [data-strike-btn] {
+            min-height: 70px !important;
+        }
+
+        @media (max-width: 700px) {
+            body .char-header .mobile-actions {
+                gap: 6px !important;
+            }
+            body .char-header .ability-block {
+                padding: 6px !important;
+                min-width: 0 !important;
+            }
+        }
+        /* UI-17 ADD ROW — keep phone controls within the sheet. */
+        body .sheet-ember-host #add-item-name {
+            min-width: 0;
+        }
+        @media (max-width: 480px) {
+            body .sheet-ember-host div:has(> #add-item-name) {
+                flex-wrap: wrap;
+            }
+            body .sheet-ember-host #add-item-name {
+                flex-basis: 100%;
+            }
+            body .sheet-ember-host #add-item-name,
+            body .sheet-ember-host #add-item-qty,
+            body .sheet-ember-host #add-item-bulk,
+            body .sheet-ember-host div:has(> #add-item-name) > button {
+                min-height: 40px;
+            }
+            body .sheet-ember-host div:has(> #add-item-name) > button {
+                flex-shrink: 0;
+            }
+        }
     </style>
     <!-- Design system override (last in cascade — wins over inline styles) -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/system.css') }}">

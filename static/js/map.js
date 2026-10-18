@@ -6,6 +6,7 @@
     const sceneId = cfg.sceneId;
     const canvas = document.getElementById('map-canvas');
     const viewport = document.getElementById('map-viewport');
+    let toastTimer = null;
     if (!sceneId || !canvas || !viewport) {
         wireCreateForm();
         // A table screen opened BEFORE a scene is pushed used to stop here, and
@@ -71,7 +72,6 @@
     let measurement = null;
     let background = null;
     let backgroundKey = '';
-    let toastTimer = null;
 
     function toast(message, error) {
         const el = document.getElementById('map-toast');
@@ -157,9 +157,19 @@
         focusActiveTurn();
     }
 
+    // The table screen reads its own projection (MAP-R3). It is a GM session,
+    // so /api/scenes/<id> would answer -- with the GM's payload: hidden tokens,
+    // GM-only lights, exact NPC HP. /api/scenes/table serves the table scene
+    // as the room may see it, and nothing else.
     async function fetchScene() {
         try {
-            const data = await request('/api/scenes/' + encodeURIComponent(sceneId));
+            const data = await request(cfg.tableView
+                ? '/api/scenes/table'
+                : '/api/scenes/' + encodeURIComponent(sceneId));
+            if (cfg.tableView && data.scene && data.scene.id !== sceneId) {
+                window.location.reload();      // the table moved on to another scene
+                return;
+            }
             applyScene(data.scene);
         } catch (error) {
             toast(error.message, true);
@@ -3519,6 +3529,12 @@
         window.appSSE('scene_activated', function (event) {
             try {
                 const data = JSON.parse(event.data);
+                // The TV follows a pushed scene. It used to keep showing the old
+                // one until someone reloaded it; only the empty screen reloaded.
+                if (cfg.tableView && (data.scene_id || null) !== sceneId) {
+                    window.location.reload();
+                    return;
+                }
                 tableSceneId = data.scene_id || null;
                 // The GM's view deliberately does NOT follow. Only the table
                 // screen should jump when a scene is pushed; yanking the GM's

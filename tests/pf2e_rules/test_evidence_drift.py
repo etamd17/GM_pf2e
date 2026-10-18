@@ -61,6 +61,63 @@ def test_audit_proves_complete_independent_coverage_with_stable_counts():
     ]
 
 
+def test_v2_census_and_v1_ledger_produce_v2_audit_with_unverified_coverage():
+    census, ledger = documents()
+    census["schema_version"] = 2
+    census["records"][0]["rules_era"] = "unverified"
+    census["records"][0]["fingerprint"] = evidence().evidence_fingerprint(
+        census["records"][0], schema_version=2
+    )
+
+    report = snapshot(census, ledger)
+
+    assert ledger["schema_version"] == 1
+    assert report["schema_version"] == 2
+    assert report["coverage"]["by_rules_era"]["unverified"] == {
+        "excluded": 0, "mapped": 1, "missing": 0, "pending": 0,
+        "observed": 1,
+    }
+
+
+def test_diff_accepts_v1_to_v2_audit_transition_without_false_drift():
+    census, ledger = documents()
+    before = snapshot(census, ledger)
+    census["schema_version"] = 2
+    for record in census["records"]:
+        record["fingerprint"] = evidence().evidence_fingerprint(
+            record, schema_version=2
+        )
+    after = snapshot(census, ledger)
+
+    result = evidence().diff_evidence_inventories(before, after)
+
+    assert before["schema_version"] == 1
+    assert after["schema_version"] == 2
+    assert all(result[field] == [] for field in (
+        "added", "removed", "evidence_changed", "newly_excluded", "restored",
+        "exclusion_changed", "disposition_changed", "review_changed",
+    ))
+
+
+def test_v2_verified_era_change_is_evidence_drift():
+    census, ledger = documents()
+    census["schema_version"] = 2
+    census["records"][0]["rules_era"] = "unverified"
+    census["records"][0]["fingerprint"] = evidence().evidence_fingerprint(
+        census["records"][0], schema_version=2
+    )
+    before = snapshot(census, ledger)
+    census["records"][0]["rules_era"] = "remaster"
+    census["records"][0]["fingerprint"] = evidence().evidence_fingerprint(
+        census["records"][0], schema_version=2
+    )
+    after = snapshot(census, ledger)
+
+    result = evidence().diff_evidence_inventories(before, after)
+
+    assert result["evidence_changed"] == ["Classes.aspx:7"]
+
+
 def test_missing_observed_identity_is_reported_instead_of_hidden():
     census, ledger = documents()
     ledger["entries"].pop(1)

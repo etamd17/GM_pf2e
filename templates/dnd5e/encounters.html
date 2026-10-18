@@ -1,0 +1,196 @@
+{% extends "dnd5e/_base.html" %}
+{% block title %}D&amp;D 5e &middot; Encounter Builder{% endblock %}
+{% block d5_content %}
+<div class="d5-head">
+  <span class="d5-title">Encounter Builder</span>
+  <span class="d5-sub">4,900+ statblocks &middot; 2014 and 2024 budgets side by side</span>
+</div>
+
+<div class="d5-cols-3">
+  <!-- filters + results -->
+  <div class="d5-card">
+    <h3>Monsters</h3>
+    <input class="d5-input" id="q" placeholder="Name" style="width:100%;">
+    <div class="d5-row" style="margin-top:.4rem;">
+      <select class="d5-select" id="cr-min"><option value="">CR min</option>{% for c in crs %}<option value="{{ c }}">{{ c }}</option>{% endfor %}</select>
+      <select class="d5-select" id="cr-max"><option value="">CR max</option>{% for c in crs %}<option value="{{ c }}">{{ c }}</option>{% endfor %}</select>
+    </div>
+    <div class="d5-row" style="margin-top:.4rem;">
+      <select class="d5-select" id="type"><option value="">Any type</option>{% for t in facets.types %}<option value="{{ t }}">{{ t }}</option>{% endfor %}</select>
+      <select class="d5-select" id="ed"><option value="">Both editions</option><option value="one">2024</option><option value="classic">2014</option></select>
+    </div>
+    <div class="d5-row" style="margin-top:.4rem;">
+      <select class="d5-select" id="env"><option value="">Any environment</option>
+        {% for e in ['arctic','coastal','desert','forest','grassland','hill','mountain','swamp','underdark','underwater','urban','planar'] %}<option value="{{ e }}">{{ e }}</option>{% endfor %}
+      </select>
+      <label class="d5-check"><input type="checkbox" id="leg"> legendary only</label>
+    </div>
+    <div id="results" class="d5-list-pick" style="max-height:560px;"></div>
+  </div>
+
+  <!-- the encounter -->
+  <div>
+    <div class="d5-card">
+      <div class="d5-row" style="justify-content:space-between;">
+        <input class="d5-input" id="plan-name" placeholder="Encounter name" style="flex:1;">
+        <button class="d5-btn" id="save">Save</button>
+        <button class="d5-btn is-primary" id="stage">Send to tracker</button>
+      </div>
+      <div id="roster" style="margin-top:.7rem;"></div>
+      <textarea class="d5-textarea" id="plan-notes" placeholder="Notes (tactics, terrain, treasure)" style="min-height:70px; margin-top:.6rem;"></textarea>
+    </div>
+    <div class="d5-card">
+      <h3>Party</h3>
+      <div id="party" class="d5-row"></div>
+      <div class="d5-row" style="margin-top:.4rem;"><span class="d5-muted">Add a level:</span>
+        <input class="d5-input is-num" id="extra-lvl" type="number" min="1" max="20" value="1"><button class="d5-btn is-sm" id="add-lvl">+ PC</button></div>
+    </div>
+    <div class="d5-cols">
+      <div class="d5-card"><h3>2024 rules</h3><div id="diff-one"></div></div>
+      <div class="d5-card"><h3>2014 rules</h3><div id="diff-classic"></div></div>
+    </div>
+    <div class="d5-card">
+      <h3>Saved</h3>
+      <div id="plans"></div>
+    </div>
+  </div>
+
+  <!-- statblock preview -->
+  <div class="d5-card" id="preview"><div class="d5-muted">Click a monster to preview its statblock.</div></div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var party = {{ party|tojson }};
+  var levels = party.map(function (p) { return p.level; });
+  var plans = {{ plans|tojson }};
+  var roster = [];      // [{id, name, cr, count, hidden}]
+  var planId = null;
+
+  function paintParty() {
+    document.getElementById('party').innerHTML = levels.map(function (l, i) {
+      var nm = party[i] ? party[i].name : 'PC';
+      return '<span class="d5-chip is-plain">' + D5.esc(nm) + ' L' + l + ' <button data-rm-lvl="' + i + '">&times;</button></span>';
+    }).join(' ') || '<span class="d5-muted">No party &mdash; add levels below.</span>';
+  }
+  function paintRoster() {
+    document.getElementById('roster').innerHTML = roster.length ? '<table class="d5-table"><thead><tr><th>Creature</th><th>CR</th><th>#</th><th>Hidden</th><th></th></tr></thead><tbody>' +
+      roster.map(function (m, i) {
+        return '<tr><td><span class="d5-ref" data-kind="monster" data-id="' + D5.esc(m.id) + '">' + D5.esc(m.name) + '</span></td><td>' + D5.esc(m.cr) + '</td>' +
+          '<td><input class="d5-input is-num" type="number" min="1" max="20" value="' + m.count + '" data-count="' + i + '"></td>' +
+          '<td><input type="checkbox" data-hide="' + i + '"' + (m.hidden ? ' checked' : '') + '></td><td><button class="d5-btn is-sm is-ghost" data-rm="' + i + '">&times;</button></td></tr>';
+      }).join('') + '</tbody></table>' : '<div class="d5-muted">Add monsters from the left.</div>';
+    rate();
+  }
+  var rate = D5.debounce(function () {
+    D5.post('/api/dnd5e/gm/difficulty', {party_levels: levels, monsters: roster}).then(function (d) {
+      ['one', 'classic'].forEach(function (ed) {
+        var r = d[ed];
+        var th = (r.order || Object.keys(r.thresholds)).map(function (k) {
+          return '<div class="d5-summary-row"><span>' + D5.title(k) + '</span><span>' + r.thresholds[k].toLocaleString() + ' XP</span></div>';
+        }).join('');
+        document.getElementById('diff-' + ed).innerHTML = '<div style="font-family:var(--font-display); font-size:1.3rem; color:var(--d5-2);">' + D5.title(r.rating) + '</div>' +
+          '<div class="d5-muted">' + r.base_xp.toLocaleString() + ' XP' + (r.multiplier !== 1 ? ' &times; ' + r.multiplier + ' = ' + r.adjusted_xp.toLocaleString() + ' adjusted' : '') + '</div>' + th;
+      });
+    }).catch(D5.fail);
+  }, 150);
+  function paintPlans() {
+    document.getElementById('plans').innerHTML = plans.map(function (p) {
+      return '<div class="d5-summary-row"><a href="#" data-load="' + p.id + '" class="d5-ref">' + D5.esc(p.name) + '</a>' +
+        '<span class="d5-row"><span class="d5-muted">' + p.monsters.length + '</span><button class="d5-btn is-sm is-ghost" data-del="' + p.id + '">&times;</button></span></div>';
+    }).join('') || '<div class="d5-muted">Nothing saved.</div>';
+  }
+
+  var search = D5.debounce(function () {
+    var p = new URLSearchParams({limit: '120'});
+    var v = function (id) { return document.getElementById(id).value; };
+    if (v('q')) p.set('q', v('q'));
+    var cr = function (s) { if (!s) return ''; var f = s.split('/'); return f.length > 1 ? String(f[0] / f[1]) : s; };
+    if (v('cr-min')) p.set('cr_min', cr(v('cr-min')));
+    if (v('cr-max')) p.set('cr_max', cr(v('cr-max')));
+    if (v('type')) p.set('types', v('type'));
+    if (v('ed')) p.set('edition', v('ed'));
+    if (v('env')) p.set('environment', v('env'));
+    if (document.getElementById('leg').checked) p.set('legendary', '1');
+    D5.get('/api/dnd5e/content/monster?' + p.toString()).then(function (d) {
+      document.getElementById('results').innerHTML = d.results.map(function (m) {
+        return '<label data-preview="' + D5.esc(m.id) + '">' + D5.tokenHTML(m.token, m.name) + '<span style="flex:1;"><b>' + D5.esc(m.name) + '</b><span class="d5-src">' + D5.esc(m.source) + '</span>' +
+          '<span class="d5-muted">CR ' + D5.esc(m.cr == null ? '?' : m.cr) + ' (' + (m.xp == null ? '?' : m.xp.toLocaleString()) + ' XP) &middot; ' + D5.esc(m.type) + '</span></span>' +
+          '<button class="d5-btn is-sm" data-add="' + D5.esc(m.id) + '" data-name="' + D5.esc(m.name) + '" data-cr="' + D5.esc(m.cr) + '">+</button></label>';
+      }).join('') || '<div class="d5-muted" style="padding:.5rem;">No matches.</div>';
+    }).catch(D5.fail);
+  }, 220);
+  ['q', 'cr-min', 'cr-max', 'type', 'ed', 'env', 'leg'].forEach(function (id) {
+    document.getElementById(id).addEventListener(id === 'q' ? 'input' : 'change', search);
+  });
+
+  document.addEventListener('click', function (ev) {
+    var t = ev.target;
+    var add = t.closest('[data-add]');
+    if (add) {
+      ev.preventDefault();
+      var id = add.getAttribute('data-add');
+      var ex = roster.filter(function (m) { return m.id === id; })[0];
+      if (ex) ex.count = Math.min(20, ex.count + 1);
+      else roster.push({id: id, name: add.getAttribute('data-name'), cr: add.getAttribute('data-cr'), count: 1, hidden: false});
+      paintRoster();
+      return;
+    }
+    var pv = t.closest('[data-preview]');
+    if (pv) {
+      D5.get('/api/dnd5e/content/monster/' + encodeURIComponent(pv.getAttribute('data-preview'))).then(function (d) {
+        document.getElementById('preview').innerHTML = D5.statblock(d.statblock);
+      });
+      return;
+    }
+    var rm = t.closest('[data-rm]');
+    if (rm) { roster.splice(parseInt(rm.getAttribute('data-rm'), 10), 1); paintRoster(); return; }
+    var rl = t.closest('[data-rm-lvl]');
+    if (rl) { var i = parseInt(rl.getAttribute('data-rm-lvl'), 10); levels.splice(i, 1); party.splice(i, 1); paintParty(); rate(); return; }
+    if (t.id === 'add-lvl') { levels.push(parseInt(document.getElementById('extra-lvl').value || '1', 10)); paintParty(); rate(); return; }
+    var ld = t.closest('[data-load]');
+    if (ld) {
+      ev.preventDefault();
+      var p = plans.filter(function (x) { return x.id === ld.getAttribute('data-load'); })[0];
+      planId = p.id;
+      document.getElementById('plan-name').value = p.name;
+      document.getElementById('plan-notes').value = p.notes || '';
+      roster = p.monsters.map(function (m) { return {id: m.id, name: m.name, cr: '', count: m.count, hidden: m.hidden}; });
+      paintRoster();
+      return;
+    }
+    var del = t.closest('[data-del]');
+    if (del && confirm('Delete this saved encounter?')) {
+      D5.post('/api/dnd5e/gm/plans/' + del.getAttribute('data-del') + '/delete').then(function () {
+        plans = plans.filter(function (x) { return x.id !== del.getAttribute('data-del'); });
+        paintPlans();
+      }).catch(D5.fail);
+    }
+  });
+  document.addEventListener('change', function (ev) {
+    var t = ev.target;
+    if (t.matches('[data-count]')) { roster[parseInt(t.getAttribute('data-count'), 10)].count = Math.max(1, Math.min(20, parseInt(t.value || '1', 10))); rate(); }
+    if (t.matches('[data-hide]')) roster[parseInt(t.getAttribute('data-hide'), 10)].hidden = t.checked;
+  });
+  function save() {
+    return D5.post('/api/dnd5e/gm/plans', {id: planId, name: document.getElementById('plan-name').value || 'Encounter',
+      notes: document.getElementById('plan-notes').value, monsters: roster}).then(function (r) {
+      planId = r.plan.id;
+      plans = plans.filter(function (p) { return p.id !== planId; }).concat([r.plan]);
+      paintPlans();
+      return r.plan;
+    });
+  }
+  document.getElementById('save').addEventListener('click', function () { save().then(function () { D5.toast('Saved'); }).catch(D5.fail); });
+  document.getElementById('stage').addEventListener('click', function () {
+    if (!roster.length) return D5.toast('Add some monsters first', 'error');
+    var replace = confirm('Replace whatever is in the tracker now? (Cancel adds to it.)');
+    save().then(function (p) {
+      return D5.post('/api/dnd5e/gm/combat/stage_plan', {plan_id: p.id, replace: replace});
+    }).then(function () { location.href = '/dnd5e/tracker'; }).catch(D5.fail);
+  });
+  paintParty(); paintRoster(); paintPlans(); search();
+})();
+</script>
+{% endblock %}

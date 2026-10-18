@@ -34,6 +34,41 @@ assert.equal(saved.ui.ancestryMethod,'alternate'); assert.equal(saved.ui.step,'s
 ''')
 
 
+def test_pf2e_review_uses_the_saved_builder_state():
+    source = (ROOT / 'templates' / 'player_builder.html').read_text(encoding='utf-8')
+    start = ('function pf2eTrainedSkills()' if 'function pf2eTrainedSkills()' in source
+             else 'function _builderValidationWarnings()')
+    review = source[source.index(start):source.index('function collectPf2eSubmission()')]
+    node(r'''
+const fields = {
+  'inp-name': {value: 'Review Hero'},
+  'inp-deity': {value: 'Iomedae'},
+  'ui-builder-review': {innerHTML: ''},
+};
+document.getElementById = id => fields[id];
+let bData = {
+  classes: {wizard: {base_skills: ['Society']}},
+  subclass_matrix: {'Spell School': {skills: ['Crafting']}},
+};
+let state = {
+  ancestry: 'Elf', heritage: 'Ancient Elf', ancFeat: {name: 'Nimble Elf'},
+  background: 'Scholar', cls: 'wizard', subclass: 'Spell School', keyStat: 'int',
+  clsFeats: {}, ancBoosts: [], bgBoosts: [], freeBoosts: [],
+  bgSkills: ['arcana'], freeSkills: ['occultism'], bgLores: [], customLores: [],
+  spells: [{name: 'Shield', level: 1}], languages: [], customLanguages: [],
+  selectedWeapon: null, selectedArmor: null, adventurerPack: false,
+};
+''' + review + r'''
+renderBuilderReview();
+const html = fields['ui-builder-review'].innerHTML;
+for (const expected of ['Nimble Elf', 'Wizard', 'Shield', 'society', 'arcana', 'occultism', 'crafting']) {
+  assert.ok(html.includes(expected), expected + ' missing from Review');
+}
+''')
+    for stale in ('state.className', 'state.selectedSpells', 'state.trainedSkills'):
+        assert stale not in review
+
+
 def test_cosmere_restore_suppresses_initialization_saves():
     source = adapter('cosmere_builder.html')
     node(r'''

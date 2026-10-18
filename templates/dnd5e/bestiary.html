@@ -1,0 +1,41 @@
+{% extends "dnd5e/_base.html" %}
+{% block title %}D&amp;D 5e &middot; Bestiary{% endblock %}
+{% block d5_content %}
+<div class="d5-head">
+  <span class="d5-title">Bestiary</span>
+  <span class="d5-spacer"></span>
+  <input class="d5-input" id="q" placeholder="Search by name" style="min-width:220px;">
+  <select class="d5-select" id="type"><option value="">Any type</option>{% for t in facets.types %}<option value="{{ t }}">{{ t }}</option>{% endfor %}</select>
+  <select class="d5-select" id="ed"><option value="">Both editions</option><option value="one">2024</option><option value="classic">2014</option></select>
+</div>
+<div class="d5-cols">
+  <div class="d5-card"><div id="results" class="d5-list-pick" style="max-height:75vh; border:0;"></div></div>
+  <div class="d5-card" id="sb"><div class="d5-muted">Pick a creature.</div></div>
+</div>
+<script>
+(function () {
+  var run = D5.debounce(function () {
+    var p = new URLSearchParams({limit: '200'});
+    ['q', 'ed', 'type'].forEach(function (id) {
+      var v = document.getElementById(id).value;
+      if (v) p.set(id === 'ed' ? 'edition' : (id === 'type' ? 'types' : id), v);
+    });
+    D5.get('/api/dnd5e/content/monster?' + p).then(function (d) {
+      document.getElementById('results').innerHTML = d.results.map(function (m) {
+        return '<label data-id="' + D5.esc(m.id) + '">' + D5.tokenHTML(m.token, m.name) + '<span><b>' + D5.esc(m.name) + '</b><span class="d5-src">' + D5.esc(m.source) +
+          '</span><span class="d5-muted">CR ' + D5.esc(m.cr == null ? '?' : m.cr) + ' &middot; ' + D5.esc(m.type) + '</span></span></label>';
+      }).join('');
+    }).catch(D5.fail);
+  }, 220);
+  ['q', 'ed', 'type'].forEach(function (id) { document.getElementById(id).addEventListener(id === 'q' ? 'input' : 'change', run); });
+  document.getElementById('results').addEventListener('click', function (ev) {
+    var l = ev.target.closest('[data-id]');
+    if (!l) return;
+    D5.get('/api/dnd5e/content/monster/' + encodeURIComponent(l.getAttribute('data-id'))).then(function (d) {
+      document.getElementById('sb').innerHTML = D5.statblock(d.statblock);
+    }).catch(D5.fail);
+  });
+  run();
+})();
+</script>
+{% endblock %}

@@ -13,9 +13,56 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
+  changes:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 5
+    outputs:
+      run_product_checks: ${{ steps.filter.outputs.run_product_checks }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Classify pull request files
+        id: filter
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        shell: bash
+        run: |
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            echo "run_product_checks=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          python - <<'PY'
+          import os
+          import subprocess
+
+          parents = subprocess.check_output(
+              ['git', 'rev-list', '--parents', '-n', '1', 'HEAD'], text=True
+          ).split()
+          if len(parents) != 3:
+              raise RuntimeError('Expected a pull request merge commit with two parents')
+          changed = subprocess.check_output(
+              ['git', 'diff', '--name-only', '-z', 'HEAD^1', 'HEAD']
+          ).split(b'\0')
+          paths = [os.fsdecode(path) for path in changed if path]
+          if not paths:
+              raise RuntimeError('Pull request diff was empty; cannot classify safely')
+          docs_only = all(
+              path.startswith('docs/') or path.endswith('.md')
+              for path in paths
+          )
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write(f'run_product_checks={str(not docs_only).lower()}\n')
+          print(f'Files: {len(paths)}; docs only: {docs_only}')
+          PY
+
+  test:
+    needs: changes
+    if: needs.changes.outputs.run_product_checks == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
     env:
       PYTHONHASHSEED: "0"
       PYTHONDONTWRITEBYTECODE: "1"
@@ -93,10 +140,23 @@ jobs:
       - name: Verify deterministic PF2e package contracts
         run: python -m pytest -q tests/pf2e_rules --strict-markers
 
+      - name: Build D&D 5e rules data (not in git; from the public 5etools source)
+        # dnd5e_data/ is gitignored (public repo, non-SRD content). Without it
+        # every 5e test would skip, so CI builds it from the pinned release.
+        run: |
+          git clone --quiet --depth 1 --branch v2.37.0 https://github.com/5etools-mirror-3/5etools-src.git "$RUNNER_TEMP/5etools-src"
+          test "$(git -C "$RUNNER_TEMP/5etools-src" rev-parse HEAD)" = "8c026b807fac21862a309379a0c3228a0683198b"
+          node tools/dnd5e/export_5etools.mjs "$RUNNER_TEMP/5etools-src" dnd5e_data/resolved
+          python tools/dnd5e/build_dnd5e_db.py
+          cp dnd5e_data/resolved/_tags.json dnd5e_data/_tags.json
+
       - name: Run tests
-        run: python -m pytest -q -m "not postgresql and not browser" --strict-markers
+        # tests/pf2e_rules already ran in the dedicated contract step above.
+        run: python -m pytest -q --ignore=tests/pf2e_rules -m "not postgresql and not browser" --strict-markers
 
   browser:
+    needs: changes
+    if: needs.changes.outputs.run_product_checks == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:
@@ -146,6 +206,8 @@ jobs:
           retention-days: 7
 
   postgresql:
+    needs: changes
+    if: needs.changes.outputs.run_product_checks == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:

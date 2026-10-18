@@ -117,8 +117,13 @@ class WorkflowService:
                     character_id + '.json', {}, owner, frozenset(), frozenset())
                 if created and self.files.read(record) is not None:
                     raise repair_required()
+                if fresh.system == 'cosmere':
+                    from systems.cosmere.documents import CHARACTER_SCHEMA_VERSION
+                    character_schema_version = CHARACTER_SCHEMA_VERSION
+                else:
+                    character_schema_version = 1
                 document.update(id=character_id, campaign_id=fresh.campaign_id,
-                    system=fresh.system, schema_version=1, owner_user_id=owner,
+                    system=fresh.system, schema_version=character_schema_version, owner_user_id=owner,
                     editor_user_ids=sorted(record.editor_ids), viewer_user_ids=sorted(record.viewer_ids))
                 document = self.files.prepare(record, document)
                 receipt = WorkflowReceipt(uuid4().hex, fresh.campaign_id, fresh.principal.user_id,

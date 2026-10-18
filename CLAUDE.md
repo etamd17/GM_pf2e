@@ -24,8 +24,18 @@ python tools/check_templates.py   # Jinja parse check (CI runs this) — run aft
 
 ## Working agreements
 
+- **Claude and Codex share work through `docs/handoff/`** (`PROTOCOL.md`, `QUEUE.md`, one brief
+  + report per task in `tasks/`). Check the queue before starting; write a brief before handing
+  work over, and a report with real test numbers when finishing.
+
 - **No emojis** in code, UI strings, comments, or commit messages unless explicitly asked.
-- **Commit/push only when the user asks.** Never commit directly on `main` — branch off it; the user decides when to merge/push. Co-author trailer on commits:
+- **When to commit, push and merge.** Never commit directly on `main`; branch off it, one branch
+  per task. For a handoff task, once the reviewer accepts it, commit, push, open the PR and merge
+  it with `gh pr merge <n> --merge` as soon as **every** CI job is green, without waiting to be
+  asked (standing rule from the user, 2026-10-15; details in `docs/handoff/PROTOCOL.md` step 6).
+  Never merge while a job is running or red, and never use `--auto`: the repo has no required
+  checks, so it merges at once. Docs-only PRs merge once `changes` passes. For anything outside a
+  handoff task, commit/push only when the user asks. Co-author trailer on commits:
   `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`
 - **Verify prod-facing fixes on Railway**, not just locally — local-green has missed prod-only failures before.
 - This is a **single-GM, in-person** tool (4 players + 1 GM). Snappiness with that table + tracker↔sheet sync is the priority.
@@ -55,7 +65,7 @@ python tools/check_templates.py   # Jinja parse check (CI runs this) — run aft
 - **`app.py` is a ~22k-line monolith** — all Flask routes plus the `Character` (PF2e) and `Monster` classes. Live combat state is held in **process globals** (`ACTIVE_ENCOUNTER`, `ROUND_NUMBER`, `TURN_INDEX`, `PARTY_LIBRARY`, …), flushed to `server_state.json` (`_persist_encounter_state`) and re-hydrated on boot. There is **one live campaign slot** at a time; `load_campaign(cid)` rebinds the globals.
 - **Server-rendered Jinja + vanilla JS.** No build step, no SPA framework.
 - **SSE** (`/api/events`): every page subscribes through the shared hub `window.appSSE(eventName, handler)` in `templates/_sse_hub.html` — **never** `new EventSource('/api/events')` directly (one socket per tab; the hub multiplexes + reconnects). Broadcast from the server with `sse_broadcast(event, data, player_filter=...)`: `data` goes to GMs, and `player_filter(copy)` returns the player-facing payload (or `None` to drop it for players entirely) — computed once and shared by all player subscribers.
-  - **`?audience=table` is NOT a server-side feature.** Its only use is client-side in `_sse_hub.html`: a passive table screen has no operator, so it self-reloads on a new deploy instead of showing the "New version" toast. There is no audience concept in `app.py` (the one hit is a comment). **A shared-table frame now EXISTS** — `/map/table` (map audit stage 6b) — but it is a view mode of `map.html`, not a generic frame. It does not use `?audience=table`; instead the hub's deploy self-reload now recognises *two* passive screens, that query param and `.map-page.is-table-screen`, because the table view has no operator either and a deploy was leaving a "New version" bar on the TV that nobody in the room could click. The Campaign Hub's Stage, which was going to build a generic one, is still cancelled.
+  - **The SSE stream has a server-side `table` audience (MAP-R3), used only by `/map/table`.** The TV runs in a GM session, so it used to receive the GM's frames and read `/api/scenes/<id>` (hidden tokens, GM-only lights, exact NPC HP). Now the hub adds `audience=table` when `location.pathname === '/map/table'`, and `/api/events` honours it **only for a GM session** (for a player it would ADD scene frames). Such a subscriber entry carries a fifth field `'table'` and keeps field 1 True, so every GM revocation still closes it. It is sent `table_filter` frames where a broadcast supplies one (`scene_update` = the player projection of the scene on the table only; `scene_beacon` only for that scene; `scene_activated` so it can follow a push) and the player frame for everything else, never the GM frame; replay uses `_sse_table_frames`. It reads its scene from `GET /api/scenes/table`. Map scene frames never reach players at all (MAP-R2, guarded by an AST test). The query param on other pages is still only the client-side passive-screen self-reload in `_sse_hub.html`, which also recognises `.map-page.is-table-screen`. `/map/table` is a view mode of `map.html`, not a generic frame; the Campaign Hub's Stage stays cancelled.
 - **The Chronicle has TWO publishing lanes**, and they share storage with nothing.
   - **Vault lane** (original): `tools/chronicle_build.py` runs on the GM's machine, derives a spoiler-safe player vault from the Obsidian GM vault, hard-aborts on a surviving `[!danger]`/`[!secret]`/`[!gm]` marker, zips it and POSTs to `/api/chronicle/publish`. Whole-tree replace via `content/<hash>` + `current`/`previous` symlinks (`_chronicle_swap`).
   - **Doc lane** (`core/chronicle_docs.py`): the GM uploads a `.docx`/`.md`/`.txt` at `/chronicle/manage`, previews it, then toggles `published`. Stored at `chronicle/docs/` — a **sibling** of `content/`, never inside it, because `_chronicle_swap`'s prune deletes every content dir it doesn't point at. No symlinks, no rotation; the toggle *is* the rollback.
@@ -63,7 +73,12 @@ python tools/check_templates.py   # Jinja parse check (CI runs this) — run aft
   - **They union at read time in `_chronicle_visible_pages`**, and `_chronicle_fragment` dispatches by lane. Those two plus `_chronicle_render`'s manifest gate are the entire merge surface — every `/chronicle*` route funnels through them.
   - **`.docx` is parsed with the stdlib** (`zipfile` + `ElementTree` over OOXML) — no new production dependency on a service that auto-deploys `main`. Handles headings, emphasis, lists, tables and links; Word styling with no allowlisted equivalent is dropped, which the sanitizer would do anyway.
   - **Every converted byte goes through `_chronicle_sanitize_html` at WRITE time.** `_chronicle_fragment` hands fragments straight to `|safe` with no checks, so that call is the only thing between GM-pasted markup and the table. Sanitize before writing, never on read.
+- **D&D 5e** (`systems/dnd5e/`, blueprint `dnd5e.*`, pages under `/dnd5e/`) is the third system. It is self-contained: it never reads the PF2e live globals, keeps its state in `campaigns/<cid>/dnd5e/`, and gets its rules content from 5etools data that is **not in git** (public repo, non-SRD): `systems/dnd5e/paths.py` finds it (the Railway volume in prod, installed by a site admin at `/dnd5e/admin/data`; the gitignored `dnd5e_data/` in dev; CI builds it). Never commit `dnd5e_data/` contents. Start at `docs/dnd5e/HANDOFF.md` — architecture, data regeneration, and the honest list of what is not automated yet.
 - **Multi-system**: `systems/` registry; `_active_system()` / `_active_campaign_id()` are request/session-scoped. Templates branch on `body.system-pf2e` / `body.system-cosmere`. Cosmere actors are `systems/cosmere/actor.py::CosmereActor` (reads the Foundry `cosmere-rpg` schema); Cosmere combat is flat-integer, defenses are static (phy/cog/spi), conditions are mostly advantage/disadvantage + Exhausted (a flat test penalty).
+  **Systems never share mechanics** (user decision 2026-10-15): PF2e, Cosmere and D&D 5e each show
+  only their own rules. A shared page (the tracker, for one) must hide another system's controls,
+  vocabulary and conditions, not just relabel them, and its routes must refuse the wrong system's
+  combatant. When you touch a shared page, check it for bleed.
 - **Obsidian Session Operations** — the GM drives the live site from a pane inside their own prep.
   Two halves, and BOTH live in this repo now:
   - **Server**: `services/obsidian_sync.py` (bearer-authed blueprint at

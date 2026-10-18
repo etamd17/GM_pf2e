@@ -6,6 +6,8 @@ permanent delete; expired trash self-cleans by trashed-dir mtime.
 from __future__ import annotations
 
 import os
+import re
+from html import unescape
 
 import pytest
 
@@ -89,3 +91,77 @@ def test_account_home_renders_trash_section():
             trash_ttl_days=30)
     assert 'Recently deleted' in html and 'Fallen Saga' in html
     assert '/restore' in html and '/purge' in html and 'purgeConfirm' in html
+
+
+def test_campaign_manage_describes_restorable_trash_with_configured_ttl():
+    import app
+    import flask
+
+    cid = 'c' * 32
+    campaign_name = "GM's Last Stand"
+    with app.app.test_request_context(f'/campaign/{cid}/invites'):
+        rendered = flask.render_template(
+            'campaign_invites.html',
+            campaign={
+                'id': cid,
+                'name': campaign_name,
+                'system': 'pf2e',
+                'members': [{'user_id': 'u1', 'role': 'gm'}],
+            },
+            rows=[],
+            members=[],
+            gm_total=1,
+            open_invites=[],
+            trash_ttl_days=C.TRASH_TTL_DAYS,
+        )
+
+    lowered = rendered.lower()
+    assert 'trash' in lowered
+    assert 'restore' in lowered
+    assert f'{C.TRASH_TTL_DAYS} days' in rendered
+    assert '>Move to trash<' in rendered
+    assert 'cannot be undone' not in lowered
+    assert 'permanent' not in lowered
+
+    delete_form = re.search(
+        rf'<form method="POST" action="/campaign/{cid}/delete"\s+'
+        r'onsubmit="([^"]*)"',
+        rendered,
+    )
+    assert delete_form, 'the trash confirmation form must retain an onsubmit guard'
+    handler = unescape(delete_form.group(1))
+    assert r"GM\u0027s Last Stand" in handler
+    assert campaign_name not in handler
+
+
+def test_campaign_invites_route_passes_the_configured_trash_ttl(tmp_path, monkeypatch):
+    import app
+
+    cid = 'c' * 32
+    campaign = {
+        'id': cid,
+        'name': 'Restorable Saga',
+        'system': 'pf2e',
+        'members': [{'user_id': 'u1', 'role': 'gm'}],
+    }
+    captured = {}
+
+    monkeypatch.setattr(app._auth, 'current_user', lambda: {'id': 'u1', 'is_admin': False})
+    monkeypatch.setattr(app._auth, 'list_active_invites', lambda _cid: [])
+    monkeypatch.setattr(app._campaigns, 'get_campaign', lambda _cid: campaign)
+    monkeypatch.setattr(app._campaigns, 'is_gm', lambda _campaign, _uid: True)
+    monkeypatch.setattr(app._storage, 'party_dir', lambda _cid: str(tmp_path / 'party'))
+    monkeypatch.setattr(app._storage, 'cosmere_pc_dir', lambda _cid: str(tmp_path / 'cosmere'))
+
+    def capture_template(name, **context):
+        captured['name'] = name
+        captured.update(context)
+        return 'rendered'
+
+    monkeypatch.setattr(app, 'render_template', capture_template)
+    with app.app.test_request_context(f'/campaign/{cid}/invites'):
+        response = app.campaign_invites.__wrapped__(cid)
+
+    assert response == 'rendered'
+    assert captured['name'] == 'campaign_invites.html'
+    assert captured['trash_ttl_days'] == C.TRASH_TTL_DAYS

@@ -1,0 +1,212 @@
+{
+  "artifacts": [
+    {
+      "authority_tier": "handbook",
+      "basename": "invented-test-source.pdf",
+      "byte_count": 1,
+      "edition": "fictional",
+      "extraction_class": "rules",
+      "page_count": 1,
+      "product_id": "fixture.original-rules",
+      "rights_state": "private",
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "spoiler_scope": "player"
+    }
+  ],
+  "packs": [
+    {
+      "audit_status": "provisional",
+      "dependencies": [],
+      "eras": [],
+      "id": "cosmere.core",
+      "kind": "core",
+      "records": [],
+      "sources": [
+        "fixture.original-rules"
+      ],
+      "spoiler_scope": "player",
+      "version": "1.0.0",
+      "worlds": [
+        "cosmere"
+      ]
+    },
+    {
+      "audit_status": "provisional",
+      "dependencies": [
+        "cosmere.core"
+      ],
+      "eras": [],
+      "id": "cosmere.stormlight.legacy",
+      "kind": "compatibility",
+      "records": [],
+      "sources": [
+        "fixture.original-rules"
+      ],
+      "spoiler_scope": "player",
+      "version": "1.0.0",
+      "worlds": [
+        "roshar"
+      ]
+    },
+    {
+      "audit_status": "provisional",
+      "dependencies": [
+        "cosmere.core"
+      ],
+      "eras": [],
+      "id": "cosmere.mistborn.core",
+      "kind": "world",
+      "records": [
+        {
+          "audit_status": "provisional",
+          "automation": "tracked",
+          "citations": [
+            {
+              "artifact_id": "fixture.original-rules",
+              "page_end": 1,
+              "page_start": 1
+            }
+          ],
+          "eras": [],
+          "id": "fixture.mistborn.training-resource",
+          "kind": "resource",
+          "name": "Training resource",
+          "parameters": {
+            "max": 3
+          },
+          "spoiler_scope": "player",
+          "summary": "Invented training resource for automated tests only.",
+          "version": "1.1.0",
+          "worlds": [
+            "scadrial"
+          ]
+        },
+        {
+          "audit_status": "provisional",
+          "automation": "tracked",
+          "citations": [
+            {
+              "artifact_id": "fixture.original-rules",
+              "page_end": 1,
+              "page_start": 1
+            }
+          ],
+          "eras": [],
+          "id": "fixture.mistborn.practice-action",
+          "kind": "action",
+          "name": "Practice action",
+          "parameters": {
+            "cost": 1
+          },
+          "spoiler_scope": "player",
+          "summary": "Invented practice action for automated tests only.",
+          "version": "1.1.0",
+          "worlds": [
+            "scadrial"
+          ]
+        }
+      ],
+      "sources": [
+        "fixture.original-rules"
+      ],
+      "spoiler_scope": "player",
+      "version": "1.1.0",
+      "worlds": [
+        "scadrial"
+      ]
+    },
+    {
+      "audit_status": "provisional",
+      "dependencies": [
+        "cosmere.core",
+        "cosmere.mistborn.core"
+      ],
+      "eras": [
+        "era-1"
+      ],
+      "id": "cosmere.mistborn.era-1",
+      "kind": "world",
+      "records": [
+        {
+          "audit_status": "provisional",
+          "automation": "tracked",
+          "citations": [
+            {
+              "artifact_id": "fixture.original-rules",
+              "page_end": 1,
+              "page_start": 1
+            }
+          ],
+          "eras": [
+            "era-1"
+          ],
+          "id": "fixture.mistborn.era-1.path",
+          "kind": "path",
+          "name": "Invented first era path",
+          "parameters": {},
+          "spoiler_scope": "player",
+          "summary": "Invented invented first era path for automated tests only.",
+          "version": "1.1.0",
+          "worlds": [
+            "scadrial"
+          ]
+        }
+      ],
+      "sources": [
+        "fixture.original-rules"
+      ],
+      "spoiler_scope": "player",
+      "version": "1.1.0",
+      "worlds": [
+        "scadrial"
+      ]
+    },
+    {
+      "audit_status": "provisional",
+      "dependencies": [
+        "cosmere.core",
+        "cosmere.mistborn.core"
+      ],
+      "eras": [
+        "era-2"
+      ],
+      "id": "cosmere.mistborn.era-2",
+      "kind": "world",
+      "records": [
+        {
+          "audit_status": "provisional",
+          "automation": "tracked",
+          "citations": [
+            {
+              "artifact_id": "fixture.original-rules",
+              "page_end": 1,
+              "page_start": 1
+            }
+          ],
+          "eras": [
+            "era-2"
+          ],
+          "id": "fixture.mistborn.era-2.path",
+          "kind": "path",
+          "name": "Invented second era path",
+          "parameters": {},
+          "spoiler_scope": "player",
+          "summary": "Invented invented second era path for automated tests only.",
+          "version": "1.1.0",
+          "worlds": [
+            "scadrial"
+          ]
+        }
+      ],
+      "sources": [
+        "fixture.original-rules"
+      ],
+      "spoiler_scope": "player",
+      "version": "1.1.0",
+      "worlds": [
+        "scadrial"
+      ]
+    }
+  ],
+  "schema_version": 1
+}

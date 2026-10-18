@@ -1,0 +1,78 @@
+{% extends "dnd5e/_base.html" %}
+{% block title %}D&amp;D 5e &middot; GM Hub{% endblock %}
+{% block d5_content %}
+<div class="d5-head">
+  <span class="d5-title">GM Hub</span>
+  <span class="d5-sub">D&amp;D 5th Edition</span>
+  <span class="d5-spacer"></span>
+  <a class="d5-btn is-primary" href="/dnd5e/tracker">Open tracker</a>
+  <a class="d5-btn" href="/dnd5e/encounters">Build an encounter</a>
+</div>
+
+<div class="d5-cols">
+  <div>
+    <div class="d5-card">
+      <h3>Party</h3>
+      <div id="party" class="d5-stack">
+        {% for p in party %}
+        <div class="d5-row" data-pc="{{ p.id }}" style="justify-content:space-between;">
+          <div style="min-width:0; flex:1;">
+            <a href="/dnd5e/character/{{ p.id }}" style="font-weight:600; color:var(--text-on-dark); text-decoration:none;">{{ p.name }}</a>
+            <span class="d5-muted">{{ p.classes }}</span>
+            <div class="js-hp" style="margin-top:4px;"></div>
+          </div>
+          <div class="d5-row">
+            <div class="d5-stat"><div class="lbl">AC</div><div class="val">{{ p.ac }}</div></div>
+            <div class="d5-stat"><div class="lbl">PP</div><div class="val">{{ p.passive_perception }}</div></div>
+          </div>
+        </div>
+        {% else %}
+        <div class="d5-muted">No characters yet. <a class="d5-ref" href="/dnd5e/characters">Create one</a>.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  <div>
+    <div class="d5-card">
+      <h3>Live encounter</h3>
+      {% if encounter.combatants %}
+        <div class="d5-muted">{{ encounter.combatants|length }} combatants &middot; {% if encounter.started %}round {{ encounter.round }}{% else %}not started{% endif %}</div>
+        <a class="d5-btn" style="margin-top:.5rem;" href="/dnd5e/tracker">Go to tracker</a>
+      {% else %}
+        <div class="d5-muted">Nothing staged.</div>
+      {% endif %}
+    </div>
+    <div class="d5-card">
+      <h3>Saved encounters</h3>
+      {% for p in plans %}
+        <div class="d5-summary-row"><span>{{ p.name }}</span><span class="d5-muted">{{ p.monsters|length }} entries</span></div>
+      {% else %}
+        <div class="d5-muted">None yet.</div>
+      {% endfor %}
+    </div>
+    <div class="d5-card">
+      <h3>Reference</h3>
+      <div class="d5-row">
+        <a class="d5-btn" href="/dnd5e/bestiary">Bestiary</a>
+        <a class="d5-btn" href="/dnd5e/compendium">Compendium</a>
+        <a class="d5-btn" href="/dnd5e/characters">Characters</a>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  var party = {{ party|tojson }};
+  function paint(p) {
+    var row = document.querySelector('[data-pc="' + p.id + '"] .js-hp');
+    if (!row) return;
+    var conds = Object.keys(p.conditions || {}).map(function (c) { return '<span class="d5-chip is-cond">' + D5.esc(c) + '</span>'; }).join(' ');
+    if (p.exhaustion) conds += ' <span class="d5-chip is-cond">exhaustion ' + p.exhaustion + '</span>';
+    if (p.concentration) conds += ' <span class="d5-chip is-plain">conc: ' + D5.esc(p.concentration) + '</span>';
+    row.innerHTML = D5.hpBar(p.hp, p.hp_max, p.temp_hp) + '<div class="d5-row" style="margin-top:3px;">' + conds + '</div>';
+  }
+  party.forEach(paint);
+  D5.sse('dnd5e_pc', paint);
+})();
+</script>
+{% endblock %}

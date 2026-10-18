@@ -10,3 +10,8 @@ docker/** text eol=lf
 Dockerfile text eol=lf
 compose.yaml text eol=lf
 .dockerignore text eol=lf
+
+# From main.
+systems/pf2e/rules/evidence/** text eol=lf
+compendium_data/classes/*.json text eol=lf
+systems/pf2e/rules/reviews/**/*.json text eol=lf

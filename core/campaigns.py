@@ -344,6 +344,22 @@ def characters_for_user(user_id):
                         'id': doc.get('id'),
                         'name': doc.get('name') or (doc.get('build') or {}).get('name') or '?',
                     })
+        # D&D 5e PCs (campaign-scoped dnd5e/characters/ store).
+        ddir = storage.dnd5e_pc_dir(cid)
+        if os.path.isdir(ddir):
+            for fn in os.listdir(ddir):
+                if not fn.endswith('.json'):
+                    continue
+                doc = storage.load_json(os.path.join(ddir, fn))
+                if isinstance(doc, dict) and doc.get('owner_user_id') == user_id:
+                    out.append({
+                        'campaign_id': cid,
+                        'campaign_name': c.get('name'),
+                        'system': 'dnd5e',
+                        'file': fn,
+                        'id': doc.get('id'),
+                        'name': doc.get('name') or '?',
+                    })
     return out
 
 

@@ -1,0 +1,424 @@
+{% extends "dnd5e/_base.html" %}
+{% block title %}D&amp;D 5e &middot; Tracker{% endblock %}
+{% block d5_content %}
+<div class="d5-head">
+  <span class="d5-title">Combat Tracker</span>
+  <span class="d5-round" id="round-label"></span>
+  <span class="d5-spacer"></span>
+  <button class="d5-btn" data-act="prev" title="Previous turn">&larr; Prev</button>
+  <button class="d5-btn is-primary" data-act="next" id="btn-next" title="End turn (N)">Next turn &rarr;</button>
+  <button class="d5-btn" data-act="start" id="btn-start">Start combat</button>
+  <button class="d5-btn is-ghost" data-act="end" id="btn-end">End combat</button>
+</div>
+
+<div class="d5-cols-3">
+  <!-- left: add creatures -->
+  <div>
+    <div class="d5-card">
+      <h3>Add</h3>
+      <div class="d5-row">
+        <button class="d5-btn" data-act="add_party">Add party</button>
+        <select class="d5-select" id="pc-pick">
+          <option value="">Add one PC&hellip;</option>
+          {% for p in party %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div style="margin-top:.7rem;">
+        <input class="d5-input" id="mon-q" placeholder="Search monsters (name)" style="width:100%;">
+        <div class="d5-row" style="margin-top:.4rem;">
+          <select class="d5-select" id="mon-ed"><option value="">Both editions</option><option value="one">2024 (XMM)</option><option value="classic">2014 (MM etc.)</option></select>
+          <input class="d5-input is-num" id="mon-count" type="number" min="1" max="20" value="1" title="How many">
+          <label class="d5-check"><input type="checkbox" id="mon-hidden"> hidden</label>
+          <label class="d5-check"><input type="checkbox" id="mon-roll"> roll HP</label>
+        </div>
+        <div id="mon-results" class="d5-list-pick" style="max-height:300px;"></div>
+      </div>
+      <details style="margin-top:.7rem;">
+        <summary class="d5-muted" style="cursor:pointer;">Quick combatant</summary>
+        <div class="d5-row" style="margin-top:.4rem;">
+          <input class="d5-input" id="q-name" placeholder="Name" style="flex:1;">
+          <input class="d5-input is-num" id="q-hp" type="number" placeholder="HP">
+          <input class="d5-input is-num" id="q-ac" type="number" placeholder="AC">
+          <input class="d5-input is-num" id="q-init" type="number" placeholder="Init">
+          <button class="d5-btn" id="q-add">Add</button>
+        </div>
+      </details>
+      <div class="d5-row" style="margin-top:.8rem;">
+        <button class="d5-btn" data-act="roll_initiative">Roll NPC initiative</button>
+        <label class="d5-check"><input type="checkbox" id="group-init"> group by type</label>
+      </div>
+      <div class="d5-row" style="margin-top:.5rem;">
+        <button class="d5-btn is-ghost is-danger" data-act="clear" id="btn-clear">Clear encounter</button>
+      </div>
+    </div>
+    <div class="d5-card">
+      <h3>Prompts</h3>
+      <div id="prompts"><div class="d5-muted">Concentration checks and death saves appear here.</div></div>
+    </div>
+  </div>
+
+  <!-- middle: initiative order -->
+  <div>
+    <div id="turns" class="d5-turns"></div>
+    <div class="d5-card" style="margin-top:.8rem;">
+      <h3>Log</h3>
+      <div id="log" class="d5-log"></div>
+    </div>
+  </div>
+
+  <!-- right: selected creature -->
+  <div>
+    <div class="d5-card" id="detail"><div class="d5-muted">Select a combatant.</div></div>
+    <div class="d5-card" id="statblock" hidden></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var CONDITIONS = {{ conditions|tojson }};
+  var DTYPES = ['', 'acid', 'bludgeoning', 'cold', 'fire', 'force', 'lightning', 'necrotic', 'piercing', 'poison', 'psychic', 'radiant', 'slashing', 'thunder'];
+  var enc = {{ boot|tojson }};
+  var selected = null;
+  var statCache = {};
+
+  function act(action, body) {
+    return D5.post('/api/dnd5e/gm/combat/' + action, body || {}).then(function (r) {
+      apply(r.encounter);
+      (r.events || []).forEach(prompt);
+      return r;
+    }).catch(D5.fail);
+  }
+
+  function apply(view) {
+    if (!view || (enc && view.revision < enc.revision)) return;
+    enc = view;
+    paint();
+  }
+
+  function cur() { return enc.started ? enc.combatants[enc.turn] : null; }
+
+  function condChips(c, removable) {
+    var out = '';
+    Object.keys(c.conditions || {}).forEach(function (k) {
+      var e = c.conditions[k] || {};
+      out += '<span class="d5-chip is-cond">' + D5.esc(k) + (e.rounds ? ' ' + e.rounds + 'r' : '') +
+        (removable ? '<button data-cond-off="' + D5.esc(k) + '" title="Remove">&times;</button>' : '') + '</span> ';
+    });
+    if (c.exhaustion) out += '<span class="d5-chip is-cond">exh ' + c.exhaustion + '</span> ';
+    if (c.concentration) out += '<span class="d5-chip is-plain">&#9673; ' + D5.esc(c.concentration) + '</span> ';
+    (c.effects || []).forEach(function (k) { out += '<span class="d5-chip is-good">' + D5.esc(k.replace(/_/g, ' ')) + '</span> '; });
+    return out;
+  }
+
+  function paint() {
+    document.getElementById('round-label').textContent = enc.started ? 'Round ' + enc.round : (enc.combatants.length ? 'Not started' : '');
+    document.getElementById('btn-start').hidden = enc.started;
+    document.getElementById('btn-end').hidden = !enc.started;
+    var turns = document.getElementById('turns');
+    if (!enc.combatants.length) {
+      turns.innerHTML = '<div class="d5-card d5-muted">No combatants. Add the party and some monsters.</div>';
+    } else {
+      turns.innerHTML = enc.combatants.map(function (c) {
+        var cls = 'd5-turn' + (c.active ? ' is-active' : '') + (c.cid === selected ? ' is-sel' : '') +
+          (c.dead ? ' is-dead' : '') + (c.hidden ? ' is-hidden' : '');
+        var init = '<input class="d5-input" data-init="' + c.cid + '" type="number" value="' + (c.initiative == null ? '' : c.initiative) + '" title="Initiative (bonus ' + D5.mod(c.init_bonus) + ')">';
+        var leg = c.legendary ? ' <span class="d5-chip is-plain" title="Legendary actions">LA ' + (c.legendary.max - c.legendary.used) + '/' + c.legendary.max + '</span>' : '';
+        var ds = (c.kind === 'pc' && c.hp <= 0 && !c.dead) ? ' <span class="d5-chip">' + (c.stable ? 'stable' : 'DS ' + c.death_saves.success + '&#10003; ' + c.death_saves.failure + '&#10007;') + '</span>' : '';
+        return '<div class="' + cls + '" data-sel="' + c.cid + '"><div class="d5-init">' + init + '</div>' +
+          '<div style="min-width:0;"><div class="d5-turn-name">' + D5.tokenHTML(c.image, c.name, 'is-sm') + '<span class="d5-kind ' + c.kind + '">' + c.kind + '</span>' + D5.esc(c.name) +
+          (c.hidden ? ' <span class="d5-chip is-plain">hidden</span>' : '') + leg + ds + '</div>' +
+          D5.hpBar(c.hp || 0, c.hp_max || 1, c.temp_hp) +
+          '<div class="d5-turn-meta"><span>AC ' + D5.esc(c.ac) + '</span>' + (c.cr != null ? '<span>CR ' + D5.esc(c.cr) + '</span>' : '') +
+          (c.reaction_used ? '<span>reaction used</span>' : '') + '</div><div class="d5-row" style="margin-top:3px;">' + condChips(c) + '</div></div>' +
+          '<div class="d5-row" style="flex-direction:column;">' +
+          '<button class="d5-btn is-sm" data-quick="damage" data-cid="' + c.cid + '">&minus; HP</button>' +
+          '<button class="d5-btn is-sm" data-quick="heal" data-cid="' + c.cid + '">+ HP</button></div></div>';
+      }).join('');
+    }
+    document.getElementById('log').innerHTML = (enc.log || []).slice().reverse().map(function (l) {
+      return '<div><span class="d5-muted">R' + l.round + '</span> ' + D5.esc(l.text) + '</div>';
+    }).join('');
+    paintDetail();
+  }
+
+  function paintDetail() {
+    var box = document.getElementById('detail');
+    var c = enc.combatants.filter(function (x) { return x.cid === selected; })[0];
+    var sb = document.getElementById('statblock');
+    if (!c) { box.innerHTML = '<div class="d5-muted">Select a combatant.</div>'; sb.hidden = true; return; }
+    var h = '<div class="d5-row" style="justify-content:space-between;"><div class="d5-row">' + D5.tokenHTML(c.image, c.name, 'is-lg') +
+      '<div style="font-family:var(--font-display); font-size:1.2rem;">' + D5.esc(c.name) + '</div></div>' +
+      '<div class="d5-stat"><div class="lbl">AC</div><div class="val">' + D5.esc(c.ac) + '</div></div></div>' +
+      D5.hpBar(c.hp || 0, c.hp_max || 1, c.temp_hp) +
+      '<div class="d5-row" style="margin-top:.6rem;"><input class="d5-input is-num" id="amt" type="number" min="0" placeholder="0">' +
+      '<select class="d5-select" id="dtype">' + DTYPES.map(function (t) { return '<option value="' + t + '">' + (t || 'type&hellip;') + '</option>'; }).join('') + '</select>' +
+      '<label class="d5-check"><input type="checkbox" id="crit"> crit</label></div>' +
+      '<div class="d5-row" style="margin-top:.4rem;"><button class="d5-btn is-primary" data-hp="damage">Damage</button>' +
+      '<button class="d5-btn" data-hp="heal">Heal</button><button class="d5-btn" data-hp="temp_hp">Temp HP</button>' +
+      '<button class="d5-btn is-ghost" data-hp="set_hp">Set HP</button></div>';
+    if (c.resist && c.resist.length) h += '<div class="d5-muted" style="margin-top:.3rem;">Resist: ' + D5.esc(c.resist.join(', ')) + '</div>';
+    if (c.immune && c.immune.length) h += '<div class="d5-muted">Immune: ' + D5.esc(c.immune.join(', ')) + '</div>';
+    if (c.vulnerable && c.vulnerable.length) h += '<div class="d5-muted">Vulnerable: ' + D5.esc(c.vulnerable.join(', ')) + '</div>';
+    if (c.kind === 'pc' && c.hp <= 0 && !c.dead) {
+      h += '<div class="d5-prompt" style="margin-top:.6rem;"><b>Dying</b> &mdash; ' + c.death_saves.success + ' successes, ' + c.death_saves.failure + ' failures' +
+        '<div class="d5-row" style="margin-top:.3rem;"><button class="d5-btn is-sm" data-ds="roll">Roll death save</button>' +
+        '<button class="d5-btn is-sm" data-ds="stabilize">Stabilize</button></div></div>';
+    }
+    h += '<div class="d5-h3" style="margin-top:.8rem;">Conditions</div><div class="d5-row">' + condChips(c, true) + '</div>' +
+      '<div class="d5-row" style="margin-top:.35rem;"><select class="d5-select" id="cond">' +
+      CONDITIONS.filter(function (k) { return k !== 'exhaustion'; }).map(function (k) { return '<option>' + k + '</option>'; }).join('') +
+      '</select><input class="d5-input is-num" id="cond-r" type="number" min="0" placeholder="rds" title="Rounds (blank = until removed)">' +
+      '<select class="d5-select" id="cond-until"><option value="end">end of turn</option><option value="start">start of turn</option></select>' +
+      '<button class="d5-btn" id="cond-add">Apply</button></div>' +
+      '<div class="d5-row" style="margin-top:.35rem;"><span class="d5-muted">Exhaustion</span>' +
+      '<input class="d5-input is-num" id="exh" type="number" min="0" max="6" value="' + (c.exhaustion || 0) + '">' +
+      '<span class="d5-muted">Concentrating on</span><input class="d5-input" id="conc" style="width:9rem;" value="' + D5.esc(c.concentration || '') + '"></div>';
+    if (c.kind === 'pc') h += pcUses(c);
+    if (c.legendary) {
+      h += '<div class="d5-h3" style="margin-top:.8rem;">Legendary actions</div>' + pips('legendary', c.legendary);
+    }
+    if (c.legendary_resistance) {
+      h += '<div class="d5-h3" style="margin-top:.6rem;">Legendary resistance</div>' + pips('legendary_resistance', c.legendary_resistance);
+    }
+    var rc = c.recharge || {};
+    if (Object.keys(rc).length) {
+      h += '<div class="d5-h3" style="margin-top:.6rem;">Recharge</div><div class="d5-row">' + Object.keys(rc).map(function (k) {
+        return '<label class="d5-check"><input type="checkbox" data-recharge="' + D5.esc(k) + '"' + (rc[k].ready ? ' checked' : '') + '> ' + D5.esc(k) + ' (' + rc[k].min + '-6)</label>';
+      }).join(' ') + '</div>';
+    }
+    h += '<div class="d5-row" style="margin-top:.8rem;"><label class="d5-check"><input type="checkbox" id="reaction"' + (c.reaction_used ? ' checked' : '') + '> reaction used</label>' +
+      '<label class="d5-check"><input type="checkbox" id="hidden"' + (c.hidden ? ' checked' : '') + '> hidden from players</label></div>' +
+      '<textarea class="d5-textarea" id="notes" style="min-height:60px; margin-top:.5rem;" placeholder="Notes">' + D5.esc(c.notes || '') + '</textarea>' +
+      (c.kind !== 'pc' ? '<div class="d5-row" style="margin-top:.5rem;"><label class="d5-btn is-sm is-ghost" style="cursor:pointer;">Set picture' +
+        '<input type="file" id="img-file" accept="image/png,image/jpeg,image/webp,image/gif" hidden></label>' +
+        '<button class="d5-btn is-sm is-ghost" id="img-clear" type="button">Default picture</button></div>' : '') +
+      '<div class="d5-row" style="margin-top:.5rem;">' + (c.kind === 'pc' ? '<a class="d5-btn" href="/dnd5e/character/' + c.pc_id + '" target="_blank">Open sheet</a>' : '') +
+      '<button class="d5-btn is-ghost is-danger" id="remove">Remove</button></div>';
+    box.innerHTML = h;
+    var imgFile = document.getElementById('img-file');
+    if (imgFile) {
+      var sendImg = function (fd) {
+        fd.append('cid', c.cid);
+        D5.upload('/api/dnd5e/gm/combat/image', fd).then(function () { D5.toast('Picture updated'); }).catch(D5.fail);
+      };
+      imgFile.addEventListener('change', function () {
+        if (!imgFile.files[0]) return;
+        var fd = new FormData(); fd.append('file', imgFile.files[0]); sendImg(fd);
+      });
+      document.getElementById('img-clear').addEventListener('click', function () {
+        var fd = new FormData(); fd.append('clear', '1'); sendImg(fd);
+      });
+    }
+    if (c.kind === 'monster') loadStatblock(c.cid);
+    else if (c.kind === 'pc') loadStatblock(c.cid);
+    else sb.hidden = true;
+  }
+
+  function pips(kind, v) {
+    var h = '<div class="d5-pips">';
+    for (var i = 0; i < v.max; i++) h += '<button class="d5-pip' + (i < v.used ? ' is-used' : '') + '" data-pip="' + kind + '" data-i="' + i + '"></button>';
+    return h + '</div>';
+  }
+
+  function loadStatblock(ccid) {
+    var sb = document.getElementById('statblock');
+    var paintIt = function (d) {
+      if (selected !== ccid) return;
+      if (d.kind === 'monster' && d.record) sb.innerHTML = D5.statblock(d.record.statblock);
+      else if (d.kind === 'pc' && d.sheet) sb.innerHTML = pcSummary(d.sheet.sheet);
+      else { sb.hidden = true; return; }
+      sb.hidden = false;
+    };
+    if (statCache[ccid]) return paintIt(statCache[ccid]);
+    D5.get('/api/dnd5e/gm/combatant/' + ccid).then(function (d) { if (d.kind === 'monster') statCache[ccid] = d; paintIt(d); });
+  }
+
+  function pcSummary(s) {
+    var h = '<div class="d5-sb-name">' + D5.esc(s.name) + '</div><div class="d5-sb-line">Level ' + s.level + ' ' +
+      D5.esc(s.classes.map(function (c) { return c.name + ' ' + c.level; }).join(' / ')) + '</div><hr><div class="d5-sb-abil">';
+    D5.abilities.forEach(function (a) {
+      var x = s.abilities[a];
+      h += '<div><div class="d5-sb-ab">' + a.toUpperCase() + '</div><div>' + x.score + ' (' + D5.mod(x.mod) + ')</div><div class="d5-muted">save ' + D5.mod(x.save) + '</div></div>';
+    });
+    h += '</div><hr><div><b>Passive</b> Perception ' + s.passive.perception + ', Insight ' + s.passive.insight + ', Investigation ' + s.passive.investigation + '</div>';
+    h += '<div><b>Speed</b> ' + s.speed.walk + ' ft.</div>';
+    if (s.resist.length) h += '<div><b>Resist</b> ' + D5.esc(s.resist.join(', ')) + '</div>';
+    var sc = s.spellcasting.casters;
+    if (sc.length) h += '<div><b>Spell DC</b> ' + sc.map(function (c) { return D5.esc(c.name) + ' ' + c.dc; }).join(', ') + '</div>';
+    return h;
+  }
+
+  // The same event arrives twice: in the action's HTTP response (instant) and
+  // as the dnd5e_prompt SSE frame (which also reaches other GM tabs).
+  // The signature ignores key order: the HTTP reply's JSON is key-sorted and
+  // the SSE frame's is not, so plain JSON.stringify never matched them.
+  var recentPrompts = {};
+  function canon(v) {
+    if (Array.isArray(v)) return '[' + v.map(canon).join(',') + ']';
+    if (v && typeof v === 'object') {
+      return '{' + Object.keys(v).sort().map(function (k) { return JSON.stringify(k) + ':' + canon(v[k]); }).join(',') + '}';
+    }
+    return JSON.stringify(v);
+  }
+  // A PC's spell slots and limited uses, read-only (the player marks them on
+  // the sheet; they arrive here live through dnd5e_pc).
+  function pcUses(c) {
+    var left = function (u) { return (u.max - u.used) + '/' + u.max; };
+    var parts = Object.keys(c.slots || {}).map(function (k) {
+      var u = c.slots[k];
+      return '<span class="d5-chip' + (u.used >= u.max ? ' is-plain' : '') + '" title="Level ' + k + ' slots left">L' + k + ' ' + left(u) + '</span>';
+    });
+    if (c.pact) parts.push('<span class="d5-chip' + (c.pact.used >= c.pact.max ? ' is-plain' : '') + '" title="Pact slots (level ' + c.pact.level + ') left">Pact L' + c.pact.level + ' ' + left(c.pact) + '</span>');
+    var res = (c.resources || []).map(function (r) {
+      return '<span class="d5-chip' + (r.used >= r.max ? ' is-plain' : '') + '" title="' + D5.esc(r.recharge) + '">' + D5.esc(r.name) + ' ' + left(r) + '</span>';
+    });
+    if (!parts.length && !res.length) return '';
+    return (parts.length ? '<div class="d5-h3" style="margin-top:.8rem;">Spell slots left</div><div class="d5-row">' + parts.join(' ') + '</div>' : '') +
+      (res.length ? '<div class="d5-h3" style="margin-top:.6rem;">Limited uses left</div><div class="d5-row">' + res.join(' ') + '</div>' : '');
+  }
+
+  function prompt(e) {
+    var sig = canon(e), now = Date.now();
+    if (recentPrompts[sig] && now - recentPrompts[sig] < 4000) return;
+    recentPrompts[sig] = now;
+    var box = document.getElementById('prompts');
+    if (box.querySelector('.d5-muted')) box.innerHTML = '';
+    var msg = null;
+    if (e.type === 'concentration_check') msg = '<b>' + D5.esc(e.name) + '</b>: Constitution save DC ' + e.dc + ' to keep <i>' + D5.esc(e.spell) + '</i>';
+    else if (e.type === 'death_save_due') msg = '<b>' + D5.esc(e.name) + '</b> must make a death saving throw';
+    else if (e.type === 'dying') msg = '<b>' + D5.esc(e.name) + '</b> is dying';
+    else if (e.type === 'death') msg = '<b>' + D5.esc(e.name) + '</b> died (' + D5.esc(e.reason) + ')';
+    else if (e.type === 'save_ends_reminder') msg = '<b>' + D5.esc(e.name) + '</b>: ' + D5.esc(e.save.ability).toUpperCase() + ' save DC ' + e.save.dc + ' vs ' + D5.esc(e.condition);
+    if (!msg) return;
+    var div = document.createElement('div');
+    div.className = 'd5-prompt';
+    div.innerHTML = msg + ' <button class="d5-btn is-sm is-ghost" style="float:right;">&times;</button>';
+    div.querySelector('button').addEventListener('click', function () { div.remove(); });
+    box.insertBefore(div, box.firstChild);
+    while (box.children.length > 8) box.lastChild.remove();
+  }
+
+  // ---- events ----
+  document.addEventListener('click', function (ev) {
+    var t = ev.target;
+    var a = t.closest('[data-act]');
+    if (a) {
+      var action = a.getAttribute('data-act');
+      if (action === 'clear' && !confirm('Remove every combatant?')) return;
+      var body = {};
+      if (action === 'roll_initiative') body.group = document.getElementById('group-init').checked;
+      act(action, body);
+      return;
+    }
+    var q = t.closest('[data-quick]');
+    if (q) {
+      var n = prompt_number(q.getAttribute('data-quick') === 'damage' ? 'Damage' : 'Healing');
+      if (n) act(q.getAttribute('data-quick'), {cid: q.getAttribute('data-cid'), amount: n});
+      ev.stopPropagation();
+      return;
+    }
+    if (t.matches('input[data-init]')) return;
+    var s = t.closest('[data-sel]');
+    if (s) { selected = s.getAttribute('data-sel'); paint(); return; }
+    var hp = t.closest('[data-hp]');
+    if (hp && selected) {
+      var amt = parseInt(document.getElementById('amt').value || '0', 10);
+      var kind = hp.getAttribute('data-hp');
+      var b = {cid: selected, amount: amt, type: document.getElementById('dtype').value, crit: document.getElementById('crit').checked};
+      if (kind === 'set_hp') b.hp = amt;
+      act(kind, b);
+      return;
+    }
+    var off = t.closest('[data-cond-off]');
+    if (off && selected) { act('condition', {cid: selected, condition: off.getAttribute('data-cond-off'), on: false}); return; }
+    if (t.id === 'cond-add' && selected) {
+      act('condition', {cid: selected, condition: document.getElementById('cond').value, on: true,
+        rounds: parseInt(document.getElementById('cond-r').value || '0', 10) || null,
+        until: document.getElementById('cond-until').value});
+      return;
+    }
+    var pip = t.closest('[data-pip]');
+    if (pip && selected) {
+      var c = enc.combatants.filter(function (x) { return x.cid === selected; })[0];
+      var kindp = pip.getAttribute('data-pip'), i = parseInt(pip.getAttribute('data-i'), 10);
+      var used = c[kindp].used;
+      act(kindp, {cid: selected, delta: (i < used) ? -1 : 1});
+      return;
+    }
+    var ds = t.closest('[data-ds]');
+    if (ds && selected) { act(ds.getAttribute('data-ds') === 'roll' ? 'death_save' : 'stabilize', {cid: selected}); return; }
+    if (t.id === 'remove' && selected) { act('remove', {cid: selected}); selected = null; return; }
+  });
+  document.addEventListener('change', function (ev) {
+    var t = ev.target;
+    if (t.matches('input[data-init]')) { act('set_initiative', {cid: t.getAttribute('data-init'), initiative: parseInt(t.value || '0', 10)}); return; }
+    if (!selected) return;
+    if (t.id === 'exh') act('exhaustion', {cid: selected, level: parseInt(t.value || '0', 10)});
+    else if (t.id === 'conc') act('concentration', {cid: selected, spell: t.value});
+    else if (t.id === 'reaction') act('reaction', {cid: selected, used: t.checked});
+    else if (t.id === 'hidden') act('hide', {cid: selected, hidden: t.checked});
+    else if (t.id === 'notes') act('notes', {cid: selected, notes: t.value});
+    else if (t.matches('[data-recharge]')) act('recharge', {cid: selected, name: t.getAttribute('data-recharge'), ready: t.checked});
+  });
+  document.getElementById('pc-pick').addEventListener('change', function (ev) {
+    if (ev.target.value) { act('add_pc', {pc_id: ev.target.value}); ev.target.value = ''; }
+  });
+  function prompt_number(label) {
+    var v = window.prompt(label + ' amount:');
+    var n = parseInt(v || '', 10);
+    return isNaN(n) ? 0 : n;
+  }
+  document.getElementById('q-add').addEventListener('click', function () {
+    act('add_quick', {name: document.getElementById('q-name').value, hp: document.getElementById('q-hp').value,
+      ac: document.getElementById('q-ac').value, init_bonus: document.getElementById('q-init').value});
+  });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.target.matches('input, textarea, select')) return;
+    if (ev.key === 'n' || ev.key === 'N') act('next');
+  });
+
+  // monster search
+  var search = D5.debounce(function () {
+    var q = document.getElementById('mon-q').value.trim();
+    var box = document.getElementById('mon-results');
+    if (q.length < 2) { box.innerHTML = ''; return; }
+    var ed = document.getElementById('mon-ed').value;
+    D5.get('/api/dnd5e/content/monster?limit=40&q=' + encodeURIComponent(q) + (ed ? '&edition=' + ed : '')).then(function (d) {
+      box.innerHTML = d.results.map(function (m) {
+        return '<label data-mon="' + D5.esc(m.id) + '"><span style="flex:1;"><b>' + D5.esc(m.name) + '</b> <span class="d5-src">' + D5.esc(m.source) +
+          '</span><span class="d5-muted">CR ' + D5.esc(m.cr == null ? '?' : m.cr) + ' &middot; ' + D5.esc(m.type) + ' &middot; HP ' + D5.esc(m.hp) + ' AC ' + D5.esc(m.ac) + '</span></span>' +
+          '<button class="d5-btn is-sm" data-add-mon="' + D5.esc(m.id) + '">Add</button></label>';
+      }).join('') || '<div class="d5-muted" style="padding:.5rem;">No matches.</div>';
+    });
+  }, 220);
+  document.getElementById('mon-q').addEventListener('input', search);
+  document.getElementById('mon-ed').addEventListener('change', search);
+  document.getElementById('mon-results').addEventListener('click', function (ev) {
+    var b = ev.target.closest('[data-add-mon]');
+    if (!b) return;
+    ev.preventDefault();
+    act('add_monster', {monster_id: b.getAttribute('data-add-mon'), count: parseInt(document.getElementById('mon-count').value || '1', 10),
+      hidden: document.getElementById('mon-hidden').checked, roll_hp: document.getElementById('mon-roll').checked});
+  });
+
+  // live sync: players editing their own sheets + other GM tabs
+  D5.sse('dnd5e_encounter', apply);
+  D5.sse('dnd5e_pc', function (p) {
+    var changed = false;
+    enc.combatants.forEach(function (c) {
+      if (c.pc_id === p.id) {
+        ['hp', 'hp_max', 'temp_hp', 'conditions', 'exhaustion', 'death_saves', 'stable', 'dead', 'concentration', 'ac', 'effects', 'resist', 'slots', 'pact', 'resources'].forEach(function (k) { c[k] = p[k]; });
+        changed = true;
+      }
+    });
+    if (changed) paint();
+  });
+  D5.sse('dnd5e_prompt', function (d) { (d.events || []).forEach(function (e) { if (e.type !== 'turn') prompt(e); }); });
+  D5.sse('dnd5e_roll', function (r) {
+    D5.toast('<b>' + D5.esc(r.name) + '</b> ' + D5.esc(r.label) + ': <span class="d5-toast-roll ' + (r.natural === 20 ? 'crit' : r.natural === 1 ? 'fumble' : '') + '">' + D5.esc(r.total) + '</span>', 'roll');
+  });
+  paint();
+})();
+</script>
+{% endblock %}

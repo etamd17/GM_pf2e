@@ -61,6 +61,7 @@ class CharacterOwnerSource(str, Enum):
     ROUTE_COSMERE_PID = "route_cosmere_pid"
     QUERY_COSMERE_PID = "query_cosmere_pid"
     JSON_COSMERE_PID = "json_cosmere_pid"
+    ROUTE_DND5E_PID = "route_dnd5e_pid"
     SESSION_PC_NAME = "session_pc_name"
     JSON_PC_NAME = "json_pc_name"
 
@@ -177,6 +178,37 @@ def build_character_owner_resolution_registry(
     return MappingProxyType(registry)
 
 
+# Every D&D 5e endpoint addressed by a character id in the URL (``<pid>``):
+# owner or campaign GM. One list feeds both the policy and its resolver so the
+# two cannot drift.
+DND5E_PID_ENDPOINTS: tuple[str, ...] = (
+    "dnd5e.api_pc_build",
+    "dnd5e.api_pc_currency",
+    "dnd5e.api_pc_custom_resource",
+    "dnd5e.api_pc_effect",
+    "dnd5e.api_pc_extras",
+    "dnd5e.api_pc_delete",
+    "dnd5e.api_pc_equipment",
+    "dnd5e.api_pc_equipment_take",
+    "dnd5e.api_pc_get",
+    "dnd5e.api_pc_initiative",
+    "dnd5e.api_pc_inventory",
+    "dnd5e.api_pc_leveldown",
+    "dnd5e.api_pc_levelup",
+    "dnd5e.api_pc_notes",
+    "dnd5e.api_pc_portrait",
+    "dnd5e.api_pc_preview",
+    "dnd5e.api_pc_resource",
+    "dnd5e.api_pc_rest",
+    "dnd5e.api_pc_roll",
+    "dnd5e.api_pc_roll_scores",
+    "dnd5e.api_pc_setting",
+    "dnd5e.api_pc_vitals",
+    "dnd5e.character_builder",
+    "dnd5e.character_sheet",
+)
+
+
 _CHARACTER_OWNER_RESOLUTION_GROUPS: tuple[CharacterResolutionGroup, ...] = (
     (CharacterOwnerSource.ROUTE_CHARACTER_ID, 'character_id', ('character_workflows.character_sheet',)),
     (
@@ -246,12 +278,19 @@ _CHARACTER_OWNER_RESOLUTION_GROUPS: tuple[CharacterResolutionGroup, ...] = (
         CharacterOwnerSource.ROUTE_COSMERE_PID,
         "pid",
         (
+            "api_cosmere_character_export",
+            "api_cosmere_pc_action",
             "cosmere_pc_delete",
             "cosmere_pc_notes",
             "cosmere_pc_rest",
             "cosmere_pc_sheet",
             "cosmere_pc_state",
         ),
+    ),
+    (
+        CharacterOwnerSource.ROUTE_DND5E_PID,
+        "pid",
+        DND5E_PID_ENDPOINTS,
     ),
     (
         CharacterOwnerSource.QUERY_COSMERE_PID,
@@ -262,6 +301,9 @@ _CHARACTER_OWNER_RESOLUTION_GROUPS: tuple[CharacterResolutionGroup, ...] = (
         CharacterOwnerSource.JSON_COSMERE_PID,
         "pid",
         (
+            "api_cosmere_advancement_commit",
+            "api_cosmere_advancement_preview",
+            "api_cosmere_advancement_revert",
             "api_cosmere_my_initiative",
             "api_cosmere_my_speed",
             "api_cosmere_roll",
@@ -332,6 +374,7 @@ _POLICY_GROUPS: tuple[PolicyGroup, ...] = (
         RoutePolicy.AUTHENTICATED,
         (
             "account_home",
+            "dnd5e.dnd5e_art",
             "api_active_system",
             "api_my_campaigns",
             "backup_now",
@@ -345,6 +388,10 @@ _POLICY_GROUPS: tuple[PolicyGroup, ...] = (
         RoutePolicy.SITE_ADMIN,
         (
             "admin_campaigns",
+            "dnd5e.admin_data",
+            "dnd5e.api_admin_data",
+            "cosmere_admin_data",
+            "api_cosmere_admin_data",
             "admin_reset_password",
             "admin_set_campaign_system",
             "admin_users",
@@ -415,6 +462,7 @@ _POLICY_GROUPS: tuple[PolicyGroup, ...] = (
         RoutePolicy.LIVE_CHARACTER_OWNER_PRIVATE,
         (
             "cosmere_pc_notes",
+            "api_cosmere_character_export",
             "delete_session_note",
             "export_character",
             "save_notes",
@@ -430,6 +478,7 @@ _POLICY_GROUPS: tuple[PolicyGroup, ...] = (
             not in {
                 "character_workflows.character_sheet",
                 "cosmere_pc_notes",
+                "api_cosmere_character_export",
                 "delete_session_note",
                 "export_character",
                 "save_notes",
@@ -453,6 +502,9 @@ _POLICY_GROUPS: tuple[PolicyGroup, ...] = (
             "api_chat_get",
             "api_chat_send",
             "api_cosmere_combat_state",
+            "api_cosmere_character_import",
+            "api_cosmere_compendium_detail",
+            "api_cosmere_compendium_search",
             "api_exploration_activities",
             "api_leave_campaign",
             "api_safety",
@@ -503,13 +555,28 @@ _POLICY_GROUPS: tuple[PolicyGroup, ...] = (
             "api_campaign_hero_image",
             "api_campaign_stats",
             "api_cosmere_combatant_condition",
+            "api_cosmere_custom_adversaries",
+            "api_cosmere_custom_adversary",
+            "api_cosmere_encounter_preview",
+            "api_cosmere_encounter_stage",
             "api_cosmere_generate",
             "api_cosmere_hub_status",
             "api_cosmere_initiative_mode",
             "api_cosmere_loot",
             "api_cosmere_loot_add",
             "api_cosmere_loot_delete",
+            "api_cosmere_narrative_scene_close",
+            "api_cosmere_narrative_scene_create",
+            "api_cosmere_narrative_scene_update",
+            "api_cosmere_narrative_contribution",
+            "api_cosmere_narrative_scenes",
+            "api_cosmere_party_capabilities",
+            "api_cosmere_table_history",
+            "api_cosmere_table_pins",
+            "api_cosmere_table_roll",
             "api_cosmere_world",
+            "api_cosmere_rules_catalog",
+            "api_cosmere_character_migration",
             "api_encounter_template_creatures",
             "api_generate",
             "api_list_pinned_generators",
@@ -618,6 +685,7 @@ _POLICY_GROUPS: tuple[PolicyGroup, ...] = (
             "api_scene_delete",
             "api_scene_elements",
             "api_scene_sync_encounter",
+            "api_scene_table",
             "api_scene_token",
             "api_scene_token_image",
             "api_scenes",
@@ -639,6 +707,46 @@ _POLICY_GROUPS: tuple[PolicyGroup, ...] = (
             "update_round_event",
             "upload_handout_image",
             "use_action",
+        ),
+    ),
+    # --- D&D 5e (systems/dnd5e/routes.py) ------------------------------------
+    # The blueprint keeps its state per campaign on disk and never touches the
+    # process-wide live slot. Its <pid> character routes still get the
+    # LIVE_CHARACTER_OWNER_OR_GM policy every character route has (assigned
+    # above from CHARACTER_OWNER_RESOLUTIONS via DND5E_PID_ENDPOINTS).
+    (
+        RoutePolicy.CAMPAIGN_MEMBER,
+        (
+            "dnd5e.api_combat_state",
+            "dnd5e.api_content_get",
+            "dnd5e.api_content_search",
+            "dnd5e.api_import_ddb",
+            "dnd5e.api_import_pdf",
+            "dnd5e.api_options",
+            "dnd5e.api_party",
+            "dnd5e.character_create",
+            "dnd5e.characters",
+            "dnd5e.combat_view",
+            "dnd5e.compendium",
+            "dnd5e.dnd5e_image",
+            "dnd5e.player_home",
+        ),
+    ),
+    (
+        RoutePolicy.CAMPAIGN_GM,
+        (
+            "dnd5e.api_gm_combat",
+            "dnd5e.api_gm_combat_image",
+            "dnd5e.api_gm_combatant",
+            "dnd5e.api_gm_difficulty",
+            "dnd5e.api_gm_pc_owner",
+            "dnd5e.api_gm_plan_delete",
+            "dnd5e.api_gm_plans",
+            "dnd5e.bestiary",
+            "dnd5e.encounters",
+            "dnd5e.gm_hub",
+            "dnd5e.gmscreen",
+            "dnd5e.tracker",
         ),
     ),
 )

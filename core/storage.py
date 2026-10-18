@@ -43,7 +43,7 @@ SERVER_STATE_LOCK = threading.RLock()
 SYSTEMS_DIR = os.path.join(DATA_DIR, 'systems')
 
 SCHEMA_VERSION = 1
-SUPPORTED_SYSTEMS = ('pf2e', 'cosmere')
+SUPPORTED_SYSTEMS = ('pf2e', 'cosmere', 'dnd5e')
 
 # IDs are uuid4 hex (dash-less, 32 chars). Validated on every path build so a
 # campaign_id can never escape CAMPAIGNS_DIR (no traversal from user input).
@@ -89,8 +89,37 @@ def calendar_file(cid):            return os.path.join(campaign_dir(cid), 'calen
 def handouts_file(cid):            return os.path.join(campaign_dir(cid), 'handouts.json')
 def cosmere_adversaries_file(cid): return os.path.join(campaign_dir(cid), 'cosmere_adversaries.json')
 def cosmere_pc_dir(cid):           return os.path.join(campaign_dir(cid), 'cosmere_pcs')
+def dnd5e_dir(cid):                return os.path.join(campaign_dir(cid), 'dnd5e')
+def dnd5e_pc_dir(cid):             return os.path.join(dnd5e_dir(cid), 'characters')
+def cosmere_table_state_file(cid): return os.path.join(campaign_dir(cid), 'cosmere_table_state.json')
+def cosmere_encounter_stage_file(cid): return os.path.join(campaign_dir(cid), 'cosmere_encounter_stage.json')
+def cosmere_narrative_scenes_file(cid): return os.path.join(campaign_dir(cid), 'cosmere_narrative_scenes.json')
 def homebrew_file(cid):            return os.path.join(campaign_dir(cid), 'homebrew.json')
 def chronicle_dir(cid):            return os.path.join(campaign_dir(cid), 'chronicle')
+
+
+def campaign_runtime_dir(cid):
+    """Private durable runtime state, outside portable campaign content.
+
+    Runtime recovery records must be campaign scoped without becoming ordinary
+    encounters, handouts, or other GM-managed content. Keeping this root next
+    to ``character_drafts`` also prevents an interrupted transition from being
+    copied into a campaign export and replayed under a new campaign identity.
+    """
+    scope = _check_id(cid, 'campaign_id') if cid is not None else 'legacy'
+    return os.path.join(DATA_DIR, 'campaign_runtime', scope)
+
+
+def cosmere_lifecycle_transition_file(cid):
+    return os.path.join(
+        campaign_runtime_dir(cid), 'cosmere_lifecycle_transition.json')
+
+
+def cosmere_narrative_transaction_file(cid):
+    return os.path.join(
+        campaign_runtime_dir(cid), 'cosmere_narrative_transaction.json')
+
+
 # GM-uploaded Chronicle documents. A sibling of the vault lane's content/ +
 # current/previous symlinks, NOT a child of them -- _chronicle_swap prunes
 # every content/<hash> it does not point at, so docs kept there would be
@@ -254,6 +283,12 @@ def load_json(path, default=None):
             return json.load(f)
     except (OSError, json.JSONDecodeError):
         return default
+
+
+def load_json_strict(path):
+    """Load required JSON while preserving I/O and decode failures for callers."""
+    with open(path, encoding='utf-8') as f:
+        return json.load(f)
 
 
 # --------------------------------------------------------------------------

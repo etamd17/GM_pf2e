@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% block title %}Cosmere Character Builder{% endblock %}
 {% block extra_head %}
+  body:has(.bld.wiz) { height:100vh; overflow:hidden; }
+  body:has(.bld.wiz) > .overflow-y-auto { min-height:0; }
   .bld { --ac:var(--accent); --ac2:var(--accent); color:#e8eef5; max-width:1100px; }
   .bld h2 { font-family:var(--font-display,serif); font-size:1.5rem; color:var(--ac2); }
   .bld .sec-h { font-size:12px; text-transform:uppercase; letter-spacing:.1em; color:var(--text-on-dark-3);
@@ -43,6 +45,7 @@
   .cb-glossary > summary::-webkit-details-marker { display:none; }
   .cb-glossary > summary::before { content:'\25B8'; margin-right:.5rem; color:var(--text-on-dark-3); font-size:11px; }
   .cb-glossary[open] > summary::before { content:'\25BE'; }
+  .cb-glossary > p.muted { margin:.3rem 1rem .6rem; }
   .cb-gloss-grid { display:grid; grid-template-columns:1fr; gap:.5rem .9rem; padding:.2rem 1rem 1rem; }
   @media (min-width:680px){ .cb-gloss-grid { grid-template-columns:1fr 1fr; } }
   .cb-gloss-grid dt { font-weight:700; color:var(--text-on-dark); font-size:12.5px; }
@@ -99,14 +102,14 @@
   .chip-row { display:flex; gap:.4rem; flex-wrap:wrap; margin-top:.5rem; }
   .chip { font-size:12px; padding:3px 9px; border-radius:7px; background:color-mix(in srgb, var(--accent) 10%, transparent); border:1px solid var(--border-card); display:flex; gap:.4rem; align-items:center; }
   .chip b { color:var(--ac2); } .chip .x { cursor:pointer; color:#f87171; font-weight:700; background:none; border:0; padding:0; font:inherit; line-height:1; }
-  .topbar { position:sticky; top:0; z-index:5; background:var(--bg-page,#0d1117); padding:.7rem 0; border-bottom:1px solid var(--border-card);
+  .topbar { position:sticky; top:0; z-index:6; background:var(--bg-page,#0d1117); padding:.7rem 0; border-bottom:1px solid var(--border-card);
             display:flex; gap:1rem; align-items:flex-end; flex-wrap:wrap; }
   .inv-row { display:flex; align-items:center; gap:.6rem; padding:.35rem .5rem; border-bottom:1px solid var(--border-card); font-size:13px; }
   .inv-row .gname { flex:1; }
   .muted { color:var(--text-on-dark-3); font-size:11.5px; }
 
   /* ── walkthrough wizard chrome ── */
-  .wiz-rail { display:flex; gap:.4rem; flex-wrap:wrap; margin:1rem 0 1.2rem; }
+  .wiz-rail { display:flex; gap:.4rem; flex-wrap:wrap; margin:1rem 0 .4rem; position:sticky; top:var(--builder-topbar-height,76px); z-index:5; background:var(--bg-page,#0d1117); padding:.45rem 0; }
   .wiz-tab { font-family:inherit; font-size:11.5px; line-height:1.2; padding:.38rem .7rem; border-radius:999px; background:var(--bg-sunken,#131922);
              border:1px solid var(--border-card); color:var(--text-on-dark-3); cursor:pointer; white-space:nowrap;
              display:inline-flex; gap:.4rem; align-items:center; }
@@ -118,8 +121,17 @@
   .wiz-tab .wiz-chk:empty { display:none; }
   .wiz-tab .wiz-chk.over { color:#f87171; }
   .wiz-tab .wiz-chk.done { color:var(--ac2); }
-  .wiz-body { display:grid; grid-template-columns:1fr 290px; gap:1.4rem; align-items:start; }
-  @media (max-width:840px){ .wiz-body { grid-template-columns:1fr; } .wiz-side { position:static !important; } }
+  .wiz-tab .wiz-left { font-size:10.5px; font-weight:700; color:#f2c66d; }
+  .wiz-left:empty { display:none; }
+  .wiz-body { display:grid; grid-template-columns:minmax(0,1fr) 290px; gap:1.4rem; align-items:start; }
+  .wiz-main { min-width:0; }
+  @media (max-width:760px){
+    .wiz-body { grid-template-columns:minmax(0,1fr); }
+    .topbar { position:static; }
+    .wiz-side { position:static !important; }
+    .wiz-rail { top:0; overflow-x:auto; flex-wrap:nowrap; }
+    .wiz-tab { flex-shrink:0; }
+  }
   .step { display:none; }
   .step.active { display:block; animation:stepIn .18s ease; }
   @keyframes stepIn { from { opacity:.3; transform:translateY(4px); } to { opacity:1; transform:none; } }
@@ -130,7 +142,16 @@
   .info-line b { color:var(--accent); }
   .wiz-nav { display:flex; justify-content:space-between; align-items:center; gap:1rem; margin-top:1.5rem; padding-top:1rem; border-top:1px solid var(--border-card); }
   .wiz-nav .count { font-size:12px; color:var(--text-on-dark-3); }
-  .wiz-side { position:sticky; top:62px; background:var(--bg-sunken,#131922); border:1px solid var(--border-card); border-radius:12px; padding:.9rem 1rem; transition:box-shadow .2s ease, border-color .2s ease; }
+  .wiz-side { position:sticky; top:calc(var(--builder-topbar-height,76px) + var(--builder-rail-height,36px) + 1rem); background:var(--bg-sunken,#131922); border:1px solid var(--border-card); border-radius:12px; padding:.9rem 1rem; transition:box-shadow .2s ease, border-color .2s ease; }
+  .builder-todo { margin:0 0 .8rem; padding:.6rem .7rem; border-radius:8px; border:1px solid color-mix(in srgb, var(--accent) 35%, transparent); background:color-mix(in srgb, var(--accent) 7%, transparent); }
+  .builder-todo h3 { margin-bottom:.35rem; }
+  .builder-todo ul { list-style:none; margin:0; padding:0; display:grid; gap:.3rem; }
+  .builder-todo li { display:flex; align-items:center; justify-content:space-between; gap:.5rem; font-size:13px; }
+  .builder-todo button { font:600 11.5px var(--font-ui); padding:.2rem .6rem; border-radius:6px; cursor:pointer; background:none; color:var(--accent); border:1px solid color-mix(in srgb, var(--accent) 45%, transparent); }
+  .builder-todo p { margin:0; font-size:12.5px; color:var(--text-on-dark-3); }
+  .topbar .stepper { display:inline-flex; vertical-align:middle; }
+  .level-up-badge { display:inline-block; vertical-align:middle; margin-left:.6rem; font:600 12px var(--font-ui); color:#6ee7a8; padding:.2rem .55rem; border-radius:999px; border:1px solid rgba(110,231,168,.45); }
+  .level-up-badge[hidden] { display:none; }
   /* Pulse the live character panel when a point changes it (cause -> effect). */
   .wiz-side.just-updated { border-color:color-mix(in srgb, var(--accent) 55%, transparent); box-shadow:0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent), 0 0 18px color-mix(in srgb, var(--accent) 22%, transparent); }
   @media (prefers-reduced-motion: reduce){ .wiz-side { transition:none; } }
@@ -184,18 +205,19 @@
       <div class="stepper"><button type="button" aria-label="Decrease level" onclick="bumpLevel(-1)">&minus;</button>
         <input id="f-level" type="number" min="1" max="30" value="{{ build.level }}" onchange="onLevel()">
         <button type="button" aria-label="Increase level" onclick="bumpLevel(1)">+</button></div>
+      <span id="level-up-badge" class="level-up-badge" aria-live="polite" hidden></span>
     </div>
     <div style="flex:1;"></div>
     <div id="validity" class="muted"></div>
     <button class="btn primary" id="btn-save-top" data-workflow-finish onclick="save()">{% if workflow.enabled %}Finish character{% else %}Save{% endif %}</button>
   </div>
 
-  <h2 style="margin-top:1rem;">{{ 'Edit' if pid else 'New' }} Cosmere Character</h2>
-  <p class="muted">A guided, step-by-step build. Caps and budgets are enforced &mdash; you can't exceed a per-attribute cap, a skill's tier max, or any point budget (your GM can override). Your character updates live on the right.</p>
+  <h2 style="margin-top:1rem;">{{ 'Edit or level up' if pid else 'New Cosmere Character' }}</h2>
 
   {# First-timer glossary — rulebook-accurate one-liners (Stormlight RPG Ch.3-6). #}
   <details class="cb-glossary">
-    <summary>New to the Cosmere? &mdash; key terms</summary>
+    <summary>How this builder works, and key terms</summary>
+    <p class="muted">A guided, step-by-step build. Caps and budgets are enforced &mdash; you can't exceed a per-attribute cap, a skill's tier max, or any point budget (your GM can override). Your character updates live on the right.</p>
     <dl class="cb-gloss-grid">
       <div><dt>Ancestry</dt><dd>The species you descend from (human or singer); guides your look and grants ancestry talents.</dd></div>
       <div><dt>Culture</dt><dd>The society you were raised in; grants its cultural Expertise.</dd></div>
@@ -432,6 +454,7 @@
     </div>
 
     <aside class="wiz-side">
+      <div id="still-to-choose" class="builder-todo" aria-live="polite"></div>
       <h3 id="cs-name">New Hero</h3>
       <div class="who" id="cs-who">Cosmere character</div>
       <div class="cs-defs">
@@ -457,6 +480,7 @@
 
 <script>
 const PID = {{ pid|tojson }};
+const INITIAL_LEVEL = {{ build.level|tojson }};
 const workflowConfig = {{ workflow|tojson }};
 let draftController=null, draftRestoring=false;
 const SKILL_ATTR = {{ skill_attr|tojson }};
@@ -511,7 +535,7 @@ const v=id=>document.getElementById(id).value;
 const lvl=()=>Math.max(1,+document.getElementById('f-level').value||1);
 
 function bumpLevel(d){const e=document.getElementById('f-level');e.value=Math.max(1,(+e.value||1)+d);onLevel();}
-function onLevel(){if(typeof renderIdeals==='function')renderIdeals(); recompute();}
+function onLevel(){paintLevelBadge(); if(typeof renderIdeals==='function')renderIdeals(); recompute();}
 function onPath(){
   const p=v('f-path'); const sel=document.getElementById('talent-pick');
   const list=(PATH_TALENTS[p]||[]);
@@ -945,12 +969,8 @@ function recompute(){
   const okAll=okA&&okS&&okE&&okT;
   document.getElementById('validity').textContent =
     okAll ? 'On budget · tier '+tierOf(L) : 'Over budget — reduce to save';
-  // Mirror the per-step budget/validity state onto the rail tabs (needs-attention /
-  // complete). Only the budgeted steps + Review carry a marker; the rest stay neutral.
+  // Review retains its local validity marker; budgeted steps use the engine preview.
   if(typeof setRailStatus==='function'){
-    setRailStatus(1, !okA ? 'over' : (aSum>0 ? 'done' : ''));
-    setRailStatus(2, (!okS||!okE) ? 'over' : ((sSum>0||exp>0) ? 'done' : ''));
-    setRailStatus(3, !okT ? 'over' : (v('f-path') ? 'done' : ''));
     setRailStatus(8, !okAll ? 'over' : ((v('f-name')&&v('f-ancestry')&&v('f-path')) ? 'done' : ''));
   }
   if(typeof renderPathTree==='function'){ renderPathTree(); renderRadiantTree(); }   // refresh node availability
@@ -962,10 +982,10 @@ const STEPS = ['Identity','Attributes','Skills','Heroic Path','Radiant','Infecte
 let STEP = 0;
 function buildRail(){
   document.getElementById('wiz-rail').innerHTML = STEPS.map((s,i)=>
-    `<button type="button" class="wiz-tab" data-i="${i}" aria-label="${i+1}. ${s}" onclick="goStep(${i})"><span class="n">${i+1}</span><span>${s}</span><span class="wiz-chk" data-chk="${i}" aria-hidden="true"></span></button>`).join('');
+    `<button type="button" class="wiz-tab" data-i="${i}" aria-label="${i+1}. ${s}" onclick="goStep(${i})"><span class="n">${i+1}</span><span>${s}</span><span class="wiz-chk" data-chk="${i}" aria-hidden="true"></span><span class="wiz-left"></span></button>`).join('');
 }
 // Per-step status marker on the rail (mirrors the PF2e sibling's needs-attention /
-// complete ticks), driven off the same budget/validity state recompute() computes.
+// complete ticks). Budgeted steps are painted from the engine preview below.
 function setRailStatus(i, status){
   const btn=document.querySelector('.wiz-tab[data-i="'+i+'"]'); if(!btn) return;
   const chk=btn.querySelector('.wiz-chk');
@@ -975,6 +995,38 @@ function setRailStatus(i, status){
   }
   btn.setAttribute('aria-label', (i+1)+'. '+STEPS[i]
     + (status==='over' ? ' — needs attention' : status==='done' ? ' — complete' : ''));
+}
+const GUIDE_BUDGETS = [
+  ['attr', 'attribute point', 'attribute points', 1],
+  ['skills', 'skill rank', 'skill ranks', 2],
+  ['expertises', 'expertise', 'expertises', 2],
+  ['talents', 'talent', 'talents', 3]
+];
+function budgetGuide(budgets){
+  const rows=[], steps={1:{left:0,over:false},2:{left:0,over:false},3:{left:0,over:false}};
+  GUIDE_BUDGETS.forEach(([key, singular, plural, step])=>{
+    const [spent, available]=budgets[key], left=Math.max(0, available-spent);
+    steps[step].left+=left;
+    steps[step].over ||= spent>available;
+    if(left>0) rows.push({key, step, label:`${left} ${left===1?singular:plural}`});
+  });
+  return {rows, steps};
+}
+function paintBudgetGuide(budgets){
+  const guide=budgetGuide(budgets);
+  document.getElementById('still-to-choose').innerHTML = '<h3>Still to choose</h3>' +
+    (guide.rows.length ? '<ul>'+guide.rows.map(r=>`<li><span>${r.label}</span><button type="button" onclick="goStep(${r.step})">Go</button></li>`).join('')+'</ul>' : '<p>Nothing left to choose.</p>');
+  Object.entries(guide.steps).forEach(([i, state])=>{
+    setRailStatus(+i, state.over ? 'over' : state.left===0 ? 'done' : '');
+    const tab=document.querySelector('.wiz-tab[data-i="'+i+'"]');
+    tab.querySelector('.wiz-left').textContent=state.left ? `${state.left} left` : '';
+    if(state.left) tab.setAttribute('aria-label', tab.getAttribute('aria-label')+` — ${state.left} left`);
+  });
+}
+function paintLevelBadge(){
+  const current=lvl(), badge=document.getElementById('level-up-badge');
+  badge.textContent=current>INITIAL_LEVEL ? `Leveling up: ${INITIAL_LEVEL} -> ${current}` : '';
+  badge.hidden=!(current>INITIAL_LEVEL);
 }
 function goStep(i){
   if(draftController && !draftRestoring) draftController.changed();
@@ -986,18 +1038,32 @@ function goStep(i){
   document.getElementById('wiz-next').style.visibility = STEP===STEPS.length-1 ? 'hidden' : 'visible';
   document.getElementById('wiz-count').textContent = `Step ${STEP+1} of ${STEPS.length} · ${STEPS[STEP]}`;
   if(STEP===STEPS.length-1) renderReview();
-  window.scrollTo({top:0, behavior:'smooth'});
+  const scroller=document.querySelector('.bld.wiz').closest('.overflow-y-auto');
+  (scroller||window).scrollTo({top:0, behavior:'smooth'});
+}
+function setupBuilderScroll(){
+  const builder=document.querySelector('.bld.wiz'), topbar=builder.querySelector('.topbar'), rail=document.getElementById('wiz-rail');
+  const sync=()=>{
+    builder.style.setProperty('--builder-topbar-height', topbar.offsetHeight+'px');
+    builder.style.setProperty('--builder-rail-height', rail.offsetHeight+'px');
+  };
+  sync();
+  const observer=new ResizeObserver(sync);
+  observer.observe(topbar); observer.observe(rail);
 }
 
 let _pvTimer=null;
 function refreshPreview(){ clearTimeout(_pvTimer); _pvTimer=setTimeout(doPreview, 250); }
 function doPreview(){
+  const request=doPreview.request=(doPreview.request||0)+1;
   fetch('/cosmere/builder/preview',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({build:collect()})})
-  .then(r=>r.json()).then(p=>{ LAST_PREVIEW=p; paintPreview(p); }).catch(()=>{});
+    body:JSON.stringify({id:PID, build:collect()})})
+  .then(r=>r.json()).then(p=>{ if(request===doPreview.request){ LAST_PREVIEW=p; paintPreview(p); } }).catch(()=>{});
 }
 let LAST_PREVIEW=null;
 function paintPreview(p){
+  paintBudgetGuide(p.budgets);
+  paintLevelBadge();
   document.getElementById('cs-name').textContent = v('f-name') || 'New Hero';
   const order = ORDERS[v('f-order')];
   const sub = order ? order.name : (v('f-path') ? v('f-path').charAt(0).toUpperCase()+v('f-path').slice(1) : 'Cosmere');
@@ -1224,6 +1290,7 @@ async function restoreCosmereDraft(inputs){
 }
 // DRAFT ADAPTER END
 buildRail();
+setupBuilderScroll();
 mergeHomebrew();
 onPath(); onAncestry(); paintCultureInfo(); onOrder();
 (function(){ const vs=document.getElementById('f-variant'); if(vs && BUILD_SEL.variant && [...vs.options].some(o=>o.value===BUILD_SEL.variant)){ vs.value=BUILD_SEL.variant; onVariant(); } })();

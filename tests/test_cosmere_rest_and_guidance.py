@@ -55,7 +55,7 @@ def test_sheet_has_rest_ui():
 
 def test_builder_glossary_present():
     h = _read('templates/cosmere_builder.html')
-    assert 'cb-glossary' in h and 'New to the Cosmere' in h
+    assert 'cb-glossary' in h and 'How this builder works, and key terms' in h
     for term in ('Investiture', 'Surge', 'Radiant Order', 'Ideals', 'Spren', 'Expertise', 'Heroic Path'):
         assert ('<dt>%s</dt>' % term) in h, 'glossary missing %s' % term
 

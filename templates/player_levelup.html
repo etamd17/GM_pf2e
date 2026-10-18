@@ -187,10 +187,12 @@
         #gains-rail-body { display: flex; flex-wrap: wrap; }
         /* While a picker modal is open (body.picker-open, set by the shared
            partial's visibility observer) the rail sits ABOVE the overlay, so
-           its step-jump rows would intercept clicks meant for the modal
-           header. Gate the BODY only -- the GM-override switch lives in
-           #gains-rail-header and must stay reachable mid-pick. */
-        body.picker-open #gains-rail-body { pointer-events: none; opacity: .45; transition: opacity .2s ease; }
+           its box and step-jump rows would intercept clicks meant for the
+           modal. Gate the whole rail, then opt only the GM override switch
+           back in so the rest of the header cannot start another picker. */
+        body.picker-open #gains-rail { pointer-events: none; }
+        body.picker-open #gm-override-switch { pointer-events: auto; }
+        body.picker-open #gains-rail-body { opacity: .45; transition: opacity .2s ease; }
         @media (prefers-reduced-motion: reduce) { body.picker-open #gains-rail-body { transition: none; } }
         #lvl-page-main { width: 100%; }
         @media (min-width: 900px) {

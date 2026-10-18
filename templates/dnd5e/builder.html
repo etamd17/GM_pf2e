@@ -1,0 +1,608 @@
+{% extends "dnd5e/_base.html" %}
+{% block title %}D&amp;D 5e &middot; Character Builder{% endblock %}
+{% block d5_content %}
+<div class="d5-head">
+  <span class="d5-title" id="b-title">Character Builder</span>
+  <span class="d5-sub" id="b-sub"></span>
+  <span class="d5-spacer"></span>
+  <a class="d5-btn" id="to-sheet" href="/dnd5e/character/{{ pid }}">View sheet &rarr;</a>
+</div>
+<div class="d5-card" id="import-report" hidden></div>
+<div class="d5-steps" id="steps"></div>
+<div class="d5-errors" id="errors" hidden></div>
+<div class="d5-cols d5-cols--aside-right">
+  <div id="panel"></div>
+  <div>
+    <div class="d5-card" id="summary"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var PID = {{ pid|tojson }};
+  var CAN_EDIT = {{ 'true' if can_edit else 'false' }};
+  var CLASSES = {{ classes|tojson }};
+  var RACES = {{ races|tojson }};
+  var BGS = {{ backgrounds|tojson }};
+  var SOURCES = {{ sources|tojson }};
+  var STD = {{ standard_array|tojson }};
+  var PB_COST = {{ point_buy_cost|tojson }};
+  var PB_BUDGET = {{ point_buy_budget|tojson }};
+  var data = {{ boot|tojson }};       // _sheet_payload: build, sheet, ...
+  var step = 'basics';
+  var asiMode = {};
+  var optCache = {};
+  var STEPS = [['basics', 'Basics'], ['class', 'Class'], ['species', 'Species'], ['background', 'Background'],
+               ['abilities', 'Abilities'], ['choices', 'Choices'], ['levels', 'Levels'], ['equipment', 'Equipment'], ['details', 'Details']];
+  var CORE = {one: ['XPHB', 'XDMG', 'XMM'], classic: ['PHB', 'DMG', 'MM']};
+
+  var B = function () { return data.build; };
+  var S = function () { return data.sheet; };
+  var ed = function () { return B().edition === 'classic' ? 'classic' : 'one'; };
+
+  function save(patch) {
+    if (!CAN_EDIT) return Promise.reject(new Error('Read only'));
+    return D5.post('/api/dnd5e/pc/' + PID + '/build', {patch: patch, revision: data.build_rev}).then(function (d) {
+      data = d; paint(); return d;
+    }).catch(function (e) { showErrors([e.message]); throw e; });
+  }
+  function setChoice(id, value) {
+    var ch = Object.assign({}, B().choices || {});
+    if (value === null || value === undefined || (Array.isArray(value) && !value.length)) delete ch[id];
+    else ch[id] = value;
+    return save({choices: ch});
+  }
+  function showErrors(list) {
+    var box = document.getElementById('errors');
+    box.hidden = !list || !list.length;
+    box.innerHTML = (list || []).map(D5.esc).join('<br>');
+  }
+
+  function srcOk(src) {
+    var s = B().sources || [];
+    return !s.length || s.indexOf(src) !== -1;
+  }
+
+  // ---------- painting ----------
+  function paint() {
+    var s = S();
+    document.getElementById('b-title').textContent = data.name || 'New Character';
+    document.getElementById('b-sub').textContent = (s.level ? 'Level ' + s.level + ' ' + s.classes.map(function (c) { return c.name + ' ' + c.level; }).join(' / ') : 'Not built yet') +
+      ' · ' + (ed() === 'one' ? '2024 rules' : '2014 rules');
+    document.getElementById('to-sheet').hidden = !s.level;
+    var pendingByStep = {choices: s.pending.length};
+    document.getElementById('steps').innerHTML = STEPS.map(function (st) {
+      var n = pendingByStep[st[0]];
+      return '<button class="d5-step' + (st[0] === step ? ' is-on' : '') + '" data-step="' + st[0] + '">' + st[1] + (n ? '<span class="n">' + n + '</span>' : '') + '</button>';
+    }).join('');
+    showErrors(s.errors);
+    paintSummary();
+    ({basics: pBasics, class: pClass, species: pSpecies, background: pBackground, abilities: pAbilities,
+      choices: pChoices, levels: pLevels, equipment: pEquipment, details: pDetails})[step]();
+  }
+
+  function paintSummary() {
+    var s = S();
+    var h = '<h3>Summary</h3>';
+    h += row('Species', s.race ? s.race.name : '—') + row('Background', s.background ? s.background.name : '—');
+    h += row('Hit Points', s.hp_max || '—') + row('Armor Class', s.ac.value) + row('Initiative', D5.mod(s.initiative)) +
+      row('Proficiency', D5.mod(s.proficiency_bonus)) + row('Speed', s.speed.walk + ' ft.');
+    h += '<div class="d5-abils" style="grid-template-columns:repeat(3,1fr); margin-top:.6rem;">' + D5.abilities.map(function (a) {
+      var x = s.abilities[a];
+      return '<div class="d5-abil"><div class="lbl">' + a + '</div><div class="mod" style="font-size:1.1rem;">' + D5.mod(x.mod) + '</div><div class="score">' + x.score + '</div></div>';
+    }).join('') + '</div>';
+    if (s.pending.length) h += '<div class="d5-prompt" style="margin-top:.7rem;">' + s.pending.length + ' choice' + (s.pending.length > 1 ? 's' : '') + ' still to make. <a href="#" class="d5-ref" data-step="choices">Go to choices</a></div>';
+    (s.warnings || []).forEach(function (w) { h += '<div class="d5-muted" style="margin-top:.3rem;">&#9888; ' + D5.esc(w) + '</div>'; });
+    document.getElementById('summary').innerHTML = h;
+  }
+  function row(k, v) { return '<div class="d5-summary-row"><span class="d5-muted">' + D5.esc(k) + '</span><span>' + D5.esc(v) + '</span></div>'; }
+
+  // ---------- steps ----------
+  function pBasics() {
+    var b = B();
+    var picked = b.sources || [];
+    var h = '<div class="d5-card"><h3>Basics</h3>' +
+      '<div class="d5-row"><input class="d5-input" id="name" value="' + D5.esc(data.name) + '" style="flex:1;" placeholder="Character name"></div>' +
+      '<div class="d5-row" style="margin-top:.7rem;"><span class="d5-muted">Rules</span>' +
+      '<button class="d5-opt' + (ed() === 'one' ? ' is-on' : '') + '" data-ed="one">2024 (Player\'s Handbook 2024)</button>' +
+      '<button class="d5-opt' + (ed() === 'classic' ? ' is-on' : '') + '" data-ed="classic">2014 (Player\'s Handbook 2014)</button></div>' +
+      '<div class="d5-muted" style="margin-top:.3rem;">Content from both editions stays selectable (like D&amp;D Beyond\'s legacy toggle); the edition decides the core rules: where ability increases come from, languages, exhaustion, multiclass rounding.</div>' +
+      '<div class="d5-row" style="margin-top:.8rem;"><label class="d5-check"><input type="checkbox" id="ocf"' + (b.optional_class_features ? ' checked' : '') + '> Optional class features (Tasha\'s)</label>' +
+      (ed() === 'classic' ? '<label class="d5-check"><input type="checkbox" id="custom-origin"' + (b.custom_origin ? ' checked' : '') + '> Customize origin (move racial ability increases)</label>' : '') + '</div></div>';
+    h += '<div class="d5-card"><h3>Sources</h3><div class="d5-muted">Leave everything unticked to allow every book. Tick books to restrict choices to them.</div>' +
+      '<div class="d5-row" style="margin:.5rem 0;"><button class="d5-btn is-sm" data-srcset="core">Core only</button><button class="d5-btn is-sm" data-srcset="all">Everything</button></div>' +
+      '<div class="d5-list-pick" style="max-height:300px;">' + SOURCES.map(function (s) {
+        return '<label><input type="checkbox" data-src="' + D5.esc(s.source) + '"' + (picked.indexOf(s.source) !== -1 ? ' checked' : '') + '> <span>' + D5.esc(s.full) +
+          ' <span class="d5-src">' + D5.esc(s.abv) + (s.date ? ' · ' + D5.esc(s.date.slice(0, 4)) : '') + '</span></span></label>';
+      }).join('') + '</div></div>';
+    if (CAN_EDIT) h += '<div class="d5-card"><h3>Danger zone</h3><button class="d5-btn is-danger" id="delete-pc">Delete this character</button>' +
+      '<span class="d5-muted" style="margin-left:.5rem;">Permanent. It is also removed from the tracker.</span></div>';
+    panel(h);
+  }
+
+  function pickGrid(list, current, attr, filterText) {
+    var q = (filterText || '').toLowerCase();
+    return '<div class="d5-pick">' + list.filter(function (r) {
+      return (!q || r.name.toLowerCase().indexOf(q) !== -1) && srcOk(r.source);
+    }).map(function (r) {
+      var id = r.id;
+      return '<button class="d5-pick-item' + (id === current ? ' is-on' : '') + (r.image ? ' has-img' : '') + '" ' + attr + '="' + D5.esc(id) + '">' +
+        (r.image ? '<img class="d5-pick-img" src="' + D5.esc(r.image) + '" alt="" loading="lazy">' : '') + '<div class="nm">' + D5.esc(r.name) +
+        '</div><div class="meta">' + D5.esc(r.source) + (r.meta ? ' · ' + D5.esc(r.meta) : '') + '</div></button>';
+    }).join('') + '</div>';
+  }
+
+  function pClass() {
+    var lv = B().levels || [];
+    var cur = lv.length ? lv[0]['class'] : null;
+    var list = CLASSES.filter(function (c) { return !c.sidekick; }).map(function (c) {
+      return {id: c.id, name: c.name, source: c.source, image: c.image, meta: 'd' + c.hd + (c.caster ? ' · ' + c.caster + ' caster' : '') + ((c.edition || 'classic') === ed() ? '' : ' · other edition')};
+    });
+    list.sort(function (a, b) { return (a.meta.indexOf('other edition') !== -1) - (b.meta.indexOf('other edition') !== -1) || a.name.localeCompare(b.name); });
+    var h = '<div class="d5-card"><h3>Class</h3><div class="d5-muted" style="margin-bottom:.5rem;">Your starting class. Multiclass from the Levels step.</div>' +
+      '<input class="d5-input" id="filter" placeholder="Filter" style="margin-bottom:.6rem;">' + '<div id="grid">' + pickGrid(list, cur, 'data-class') + '</div></div>';
+    if (cur) h += '<div class="d5-card" id="class-info"><div class="d5-muted">Loading class&hellip;</div></div>';
+    panel(h);
+    document.getElementById('filter').addEventListener('input', function (e) { document.getElementById('grid').innerHTML = pickGrid(list, cur, 'data-class', e.target.value); });
+    if (cur) D5.get('/api/dnd5e/content/class/' + encodeURIComponent(cur)).then(function (d) {
+      var el = document.getElementById('class-info');
+      if (el) el.innerHTML = '<h3>' + D5.esc(d.name) + ' features</h3><div class="d5-prose">' + d.html + '</div>';
+    });
+  }
+
+  function pSpecies() {
+    var cur = B().race || null;
+    var list = RACES.filter(function (r) { return !r._versionBase_isVersion && !r._builderHideScaffold; }).map(function (r) { return {id: r.id, name: r.name, source: r.source, image: r.image, meta: r.edition === 'one' ? '2024' : ''}; });
+    var h = '<div class="d5-card"><h3>Species</h3><input class="d5-input" id="filter" placeholder="Filter (e.g. elf)" style="margin-bottom:.6rem;">' +
+      '<div id="grid">' + pickGrid(list, cur, 'data-race') + '</div></div>';
+    if (cur) h += '<div class="d5-card" id="info"></div>';
+    panel(h);
+    document.getElementById('filter').addEventListener('input', function (e) { document.getElementById('grid').innerHTML = pickGrid(list, cur, 'data-race', e.target.value); });
+    if (cur) D5.get('/api/dnd5e/content/race/' + encodeURIComponent(cur)).then(function (d) { var el = document.getElementById('info'); if (el) el.innerHTML = D5.recordHTML(d); });
+  }
+
+  function pBackground() {
+    var cur = B().background || null;
+    var list = BGS.map(function (r) { return {id: r.id, name: r.name, source: r.source, image: r.image, meta: r.edition === 'one' ? '2024' : ''}; });
+    var h = '<div class="d5-card"><h3>Background</h3><input class="d5-input" id="filter" placeholder="Filter" style="margin-bottom:.6rem;">' +
+      '<div id="grid">' + pickGrid(list, cur, 'data-bg') + '</div></div>';
+    if (cur) h += '<div class="d5-card" id="info"></div>';
+    panel(h);
+    document.getElementById('filter').addEventListener('input', function (e) { document.getElementById('grid').innerHTML = pickGrid(list, cur, 'data-bg', e.target.value); });
+    if (cur) D5.get('/api/dnd5e/content/background/' + encodeURIComponent(cur)).then(function (d) { var el = document.getElementById('info'); if (el) el.innerHTML = D5.recordHTML(d); });
+  }
+
+  var draftScores = null;
+  function pAbilities() {
+    var b = B();
+    var method = b.ability_method || 'standard';
+    var sc = draftScores || Object.assign({}, b.base_scores || {});
+    var h = '<div class="d5-card"><h3>Ability Scores</h3><div class="d5-row">' +
+      [['standard', 'Standard array'], ['pointbuy', 'Point buy'], ['roll', 'Roll 4d6'], ['manual', 'Manual']].map(function (m) {
+        return '<button class="d5-opt' + (m[0] === method ? ' is-on' : '') + '" data-method="' + m[0] + '">' + m[1] + '</button>';
+      }).join('') + '</div>';
+    if (method === 'pointbuy') {
+      var spent = D5.abilities.reduce(function (t, a) { return t + (PB_COST[sc[a]] == null ? 99 : PB_COST[sc[a]]); }, 0);
+      h += '<div class="d5-muted" style="margin-top:.5rem;">Points: ' + spent + ' / ' + PB_BUDGET + '</div>';
+    }
+    if (method === 'roll') {
+      h += '<div class="d5-row" style="margin-top:.5rem;"><button class="d5-btn" id="roll-scores">Roll 4d6 drop lowest &times; 6</button>' +
+        (b.rolled_scores ? '<span class="d5-muted">Rolled: ' + b.rolled_scores.join(', ') + '</span>' : '') + '</div>';
+    }
+    h += '<table class="d5-table" style="margin-top:.7rem;"><thead><tr><th>Ability</th><th>Base</th><th>Bonuses</th><th>Total</th><th>Mod</th></tr></thead><tbody>';
+    var pool = method === 'standard' ? STD : (method === 'roll' ? (b.rolled_scores || []) : null);
+    D5.abilities.forEach(function (a) {
+      var x = S().abilities[a];
+      var input;
+      if (pool) {
+        input = '<select class="d5-select" data-score="' + a + '"><option value="">—</option>' + pool.map(function (v, i) {
+          return '<option value="' + v + '"' + (Number(sc[a]) === Number(v) ? ' selected' : '') + '>' + v + '</option>';
+        }).join('') + '</select>';
+      } else {
+        var mn = method === 'pointbuy' ? 8 : 1, mx = method === 'pointbuy' ? 15 : 30;
+        input = '<input class="d5-input is-num" type="number" min="' + mn + '" max="' + mx + '" data-score="' + a + '" value="' + (sc[a] || '') + '">';
+      }
+      h += '<tr><td>' + D5.abilityNames[a] + '</td><td>' + input + '</td><td>' + D5.mod(x.score - x.base) + '</td><td>' + x.score + '</td><td>' + D5.mod(x.mod) + '</td></tr>';
+    });
+    h += '</tbody></table><div class="d5-row" style="margin-top:.6rem;"><button class="d5-btn is-primary" id="save-scores">Save scores</button>' +
+      '<span class="d5-muted">Bonuses come from your ' + (ed() === 'one' ? 'background (2024)' : 'species (2014)') + ' and feats; set them on the Choices step.</span></div></div>';
+    panel(h);
+  }
+
+  // ---------- choices ----------
+  function choiceValue(c) { return (B().choices || {})[c.id]; }
+  function pChoices() {
+    var s = S();
+    if (!s.choices.length) return panel('<div class="d5-card d5-muted">Pick a class, species and background first.</div>');
+    var groups = {};
+    s.choices.forEach(function (c) { (groups[c.origin || 'Other'] = groups[c.origin || 'Other'] || []).push(c); });
+    var h = '';
+    Object.keys(groups).forEach(function (g) {
+      h += '<div class="d5-card"><h3>' + D5.esc(g) + '</h3>' + groups[g].map(choiceHTML).join('') + '</div>';
+    });
+    panel(h);
+    // async option lists
+    s.choices.forEach(function (c) { if (needsQuery(c)) loadOptions(c); });
+  }
+  function needsQuery(c) { return ['feat', 'optionalfeature', 'spell'].indexOf(c.kind) !== -1 && !(c.options && c.options.length); }
+
+  function choiceHTML(c) {
+    var v = choiceValue(c);
+    var head = '<div class="d5-choice-head"><span>' + D5.esc(c.label.replace(/^[^:]+: /, '')) + '</span><span class="d5-muted">' +
+      (c.complete ? '&#10003;' : 'choose ' + c.count) + '</span></div>';
+    var body = '';
+    var vals = Array.isArray(v) ? v.map(String) : (v != null && typeof v !== 'object' ? [String(v)] : []);
+    if (c.kind === 'ability') {
+      var picked = v && typeof v === 'object' ? v : {};
+      body = '<div class="d5-row">' + (c.weights || []).map(function (w, i) {
+        var curAb = Object.keys(picked).filter(function (a) { return picked[a] === w; })[c.weights.slice(0, i).filter(function (x) { return x === w; }).length] || '';
+        return '<label class="d5-check">+' + w + ' <select class="d5-select" data-ab-choice="' + D5.esc(c.id) + '" data-slot="' + i + '"><option value="">—</option>' +
+          c.options.map(function (a) { return '<option value="' + a + '"' + (a === curAb ? ' selected' : '') + '>' + a.toUpperCase() + '</option>'; }).join('') + '</select></label>';
+      }).join('') + '</div>';
+    } else if (c.kind === 'alternative') {
+      body = '<div>' + c.options.map(function (o) {
+        return '<button class="d5-opt' + (vals.indexOf(String(o.value)) !== -1 ? ' is-on' : '') + '" data-alt="' + D5.esc(c.id) + '" data-v="' + o.value + '">' + D5.esc(o.label) + '</button>';
+      }).join('') + '</div>';
+    } else if (c.kind === 'asi') {
+      var av = v || {};
+      var mode = av.feat ? 'feat' : (av.asi ? 'asi' : (asiMode[c.id] || ''));
+      body = '<div class="d5-row"><button class="d5-opt' + (mode === 'asi' ? ' is-on' : '') + '" data-asi-mode="' + D5.esc(c.id) + '" data-m="asi">Ability Score Improvement</button>' +
+        '<button class="d5-opt' + (mode === 'feat' ? ' is-on' : '') + '" data-asi-mode="' + D5.esc(c.id) + '" data-m="feat">Feat</button></div>';
+      if (mode === 'asi') {
+        var inc = av.asi || {};
+        var a2 = Object.keys(inc).filter(function (k) { return inc[k] === 2; })[0] || '';
+        var a1 = Object.keys(inc).filter(function (k) { return inc[k] === 1; });
+        body += '<div class="d5-row" style="margin-top:.4rem;"><label class="d5-check">+2 <select class="d5-select" data-asi2="' + D5.esc(c.id) + '"><option value="">—</option>' +
+          D5.abilities.map(function (a) { return '<option value="' + a + '"' + (a === a2 ? ' selected' : '') + '>' + a.toUpperCase() + '</option>'; }).join('') + '</select></label>' +
+          '<span class="d5-muted">or +1 / +1</span>' + [0, 1].map(function (i) {
+            return '<select class="d5-select" data-asi1="' + D5.esc(c.id) + '" data-i="' + i + '"><option value="">—</option>' +
+              D5.abilities.map(function (a) { return '<option value="' + a + '"' + (a === a1[i] ? ' selected' : '') + '>' + a.toUpperCase() + '</option>'; }).join('') + '</select>';
+          }).join('') + '</div>';
+      }
+      if (mode === 'feat') {
+        body += '<div id="opts-' + cssId(c.id) + '" data-feat-for="' + D5.esc(c.id) + '" data-current="' + D5.esc(av.feat || '') + '"><div class="d5-muted">Loading feats&hellip;</div></div>';
+        setTimeout(function () { loadOptions({id: c.id, kind: 'feat', query: {}, count: 1, _asi: true}); }, 0);
+      }
+    } else if (needsQuery(c)) {
+      body = '<div id="opts-' + cssId(c.id) + '"><div class="d5-muted">Loading options&hellip;</div></div>';
+    } else {
+      // Something you already have from another source can't be picked again
+      // (D&D Beyond greys these out too).
+      var prof = S().proficiencies;
+      var have = {skill: prof.skills, language: prof.languages, tool: prof.tools, expertise: prof.expertise}[c.kind] || [];
+      body = '<div>' + (c.options || []).map(function (o) {
+        var val = typeof o === 'object' ? o.value : o;
+        var label = typeof o === 'object' ? o.label : (c.kind === 'subclass' ? D5.title(String(o).split('|')[0]) + ' (' + String(o).split('|')[1].toUpperCase() + ')' : D5.title(o));
+        var on = vals.indexOf(String(val)) !== -1;
+        var dup = !on && have.indexOf(String(val)) !== -1;
+        return '<button class="d5-opt' + (on ? ' is-on' : '') + '" data-multi="' + D5.esc(c.id) + '" data-v="' + D5.esc(val) + '" data-count="' + c.count + '"' +
+          (dup ? ' disabled title="Already proficient from another source"' : (!on && vals.length >= c.count && c.count > 1 ? ' disabled' : '')) + '>' + D5.esc(label) + '</button>';
+      }).join('') + '</div>';
+    }
+    return '<div class="d5-choice' + (c.complete ? '' : ' is-todo') + '">' + head + body + '</div>';
+  }
+  function cssId(s) { return String(s).replace(/[^a-z0-9]/gi, '_'); }
+
+  function loadOptions(c) {
+    var key = c.kind + ':' + JSON.stringify(c.query || {}) + (c.query && c.query.from_choice ? JSON.stringify((B().choices || {})[c.query.from_choice] || []) : '');
+    var paintIt = function (opts) {
+      var el = document.getElementById('opts-' + cssId(c.id));
+      if (!el) return;
+      var v = c._asi ? [((B().choices || {})[c.id] || {}).feat].filter(Boolean) : ((B().choices || {})[c.id] || []);
+      v = (Array.isArray(v) ? v : [v]).map(String);
+      var filterId = 'f-' + cssId(c.id);
+      var prev = document.getElementById(filterId);
+      var q = prev ? prev.value.toLowerCase() : '';
+      var grouped = c.kind === 'spell';
+      var listHTML = function (q) {
+        var out = '', lastLvl = null;
+        opts.filter(function (o) { return (!q || o.label.toLowerCase().indexOf(q) !== -1) && srcOk(o.source); }).forEach(function (o) {
+          if (grouped && o.level !== lastLvl) { lastLvl = o.level; out += '<div class="d5-muted" style="padding:.3rem .55rem; background:rgba(255,255,255,.03);">' + (o.level === 0 ? 'Cantrips' : 'Level ' + o.level) + '</div>'; }
+          var on = v.indexOf(String(o.value)) !== -1;
+          out += '<label><input type="' + (c.count > 1 ? 'checkbox' : 'radio') + '" name="r-' + cssId(c.id) + '" data-qpick="' + D5.esc(c.id) + '" data-asi-feat="' + (c._asi ? '1' : '') +
+            '" data-count="' + c.count + '" value="' + D5.esc(o.value) + '"' + (on ? ' checked' : '') + '> <span><b>' + D5.esc(o.label) + '</b> <span class="d5-src">' + D5.esc(o.source || '') + '</span>' +
+            (o.school ? '<span class="d5-muted">' + D5.esc(o.school) + '</span>' : '') +
+            (o.prerequisite ? '<span class="d5-muted">Prereq: ' + D5.esc(o.prerequisite) + '</span>' : '') +
+            (o.summary ? '<span class="d5-muted">' + D5.esc(o.summary) + '</span>' : '') + '</span>' +
+            ' <a class="d5-ref" data-kind="' + (c.kind === 'feat' || c._asi ? 'feat' : c.kind) + '" data-id="' + D5.esc(o.value) + '" style="margin-left:auto;">info</a></label>';
+        });
+        return out || '<div class="d5-muted" style="padding:.5rem;">No options (check your source filter).</div>';
+      };
+      el.innerHTML = '<input class="d5-input" id="' + filterId + '" placeholder="Filter ' + opts.length + ' options" value="' + D5.esc(q) + '" style="width:100%; margin-top:.3rem;">' +
+        '<div class="d5-list-pick">' + listHTML(q) + '</div>';
+      document.getElementById(filterId).addEventListener('input', function (e) { el.querySelector('.d5-list-pick').innerHTML = listHTML(e.target.value.toLowerCase()); });
+    };
+    if (optCache[key]) return paintIt(optCache[key]);
+    D5.post('/api/dnd5e/options', {kind: c.kind, query: c.query || {}, build: B(), choices: B().choices || {}}).then(function (d) {
+      optCache[key] = d.options; paintIt(d.options);
+    }).catch(D5.fail);
+  }
+
+  // ---------- levels ----------
+  function pLevels() {
+    var b = B(), s = S();
+    var lv = b.levels || [];
+    var h = '<div class="d5-card"><h3>Levels</h3>';
+    if (!lv.length) h += '<div class="d5-muted">Choose a class first.</div>';
+    else {
+      h += '<table class="d5-table"><thead><tr><th>Level</th><th>Class</th><th>Hit points gained</th></tr></thead><tbody>' + lv.map(function (l, i) {
+        var c = CLASSES.filter(function (x) { return x.id === l['class']; })[0] || {name: l['class'], hd: 8};
+        var hp = i === 0 ? 'max (' + c.hd + ')' : (l.hp == null ? 'average (' + (Math.floor(c.hd / 2) + 1) + ')' : l.hp + ' (rolled)');
+        return '<tr><td>' + (i + 1) + '</td><td>' + D5.esc(c.name) + ' <span class="d5-src">' + D5.esc(c.source || '') + '</span></td><td>' + hp + ' + CON</td></tr>';
+      }).join('') + '</tbody></table>';
+    }
+    if (lv.length && lv.length < 20) {
+      var own = {};
+      lv.forEach(function (l) { own[l['class']] = true; });
+      h += '<div class="d5-h3" style="margin-top:1rem;">Level up</div><div class="d5-row"><select class="d5-select" id="lu-class">' +
+        Object.keys(own).map(function (id) { var c = CLASSES.filter(function (x) { return x.id === id; })[0]; return '<option value="' + id + '">' + D5.esc(c ? c.name : id) + '</option>'; }).join('') +
+        '<optgroup label="Multiclass into">' + CLASSES.filter(function (c) { return !own[c.id] && !c.sidekick && srcOk(c.source); }).map(function (c) {
+          return '<option value="' + c.id + '">' + D5.esc(c.name) + ' (' + D5.esc(c.source) + ')</option>';
+        }).join('') + '</optgroup></select>' +
+        '<select class="d5-select" id="lu-hp"><option value="avg">Take average HP</option><option value="roll">Roll HP</option><option value="manual">Enter rolled HP</option></select>' +
+        '<input class="d5-input is-num" id="lu-manual" type="number" min="1" placeholder="HP">' +
+        '<button class="d5-btn is-primary" id="lu-go">Level up</button></div>';
+    }
+    if (lv.length) h += '<div class="d5-row" style="margin-top:.8rem;"><button class="d5-btn is-ghost is-danger" id="ld-go">Remove last level</button></div>';
+    h += '</div>';
+    panel(h);
+  }
+
+  // ---------- equipment ----------
+  function pEquipment() {
+    panel('<div class="d5-card"><h3>Starting equipment</h3><div id="eq"><div class="d5-muted">Loading&hellip;</div></div></div>');
+    D5.get('/api/dnd5e/pc/' + PID + '/equipment').then(function (d) {
+      var el = document.getElementById('eq');
+      if (!el) return;
+      if (d.taken) { el.innerHTML = '<div class="d5-muted">Starting equipment already added. Manage gear on the sheet&rsquo;s Inventory tab.</div>'; return; }
+      if (!d.groups.length) { el.innerHTML = '<div class="d5-muted">Choose a class and background first.</div>'; return; }
+      var h = '';
+      d.groups.forEach(function (g, gi) {
+        var keys = Object.keys(g.options);
+        h += '<div class="d5-choice"><div class="d5-choice-head"><span>' + D5.esc(g.origin) + '</span></div>';
+        keys.forEach(function (k, ki) {
+          var always = k === '_';
+          h += '<label class="d5-check" style="display:flex; align-items:flex-start; margin:.3rem 0;">' +
+            (always ? '<span class="d5-chip is-plain">always</span>' : '<input type="radio" name="eq-' + gi + '" value="' + k + '"' + (ki === 0 || (keys[0] === '_' && ki === 1) ? ' checked' : '') + '>') +
+            '<span>' + (always ? '' : '(' + D5.esc(k) + ') ') + g.options[k].map(function (e, ei) {
+              if (e.choose) return D5.esc(e.qty > 1 ? e.qty + ' × ' : '') + '<select class="d5-select" data-eq-choose="' + gi + ':' + k + ':' + ei + '">' +
+                e.options.map(function (o) { return '<option value="' + D5.esc(o.id) + '">' + D5.esc(o.name) + '</option>'; }).join('') + '</select>';
+              return D5.esc((e.qty > 1 ? e.qty + ' × ' : '') + e.name);
+            }).join(', ') + '</span></label>';
+        });
+        h += '</div>';
+      });
+      h += '<div class="d5-row" style="margin-top:.6rem;"><button class="d5-btn is-primary" id="eq-take">Add to inventory</button></div>';
+      el.innerHTML = h;
+      document.getElementById('eq-take').addEventListener('click', function () {
+        var items = [], gold = 0;
+        d.groups.forEach(function (g, gi) {
+          var sel = document.querySelector('input[name="eq-' + gi + '"]:checked');
+          var keys = ['_'].concat(sel ? [sel.value] : []);
+          keys.forEach(function (k) {
+            (g.options[k] || []).forEach(function (e, ei) {
+              if (e.gold_cp) gold += e.gold_cp;
+              else if (e.choose) {
+                var s = document.querySelector('[data-eq-choose="' + gi + ':' + k + ':' + ei + '"]');
+                if (s && s.value) items.push({id: s.value, qty: e.qty});
+              } else items.push({id: e.id, name: e.name, qty: e.qty});
+              if (e.contains_cp) gold += e.contains_cp;
+            });
+          });
+        });
+        D5.post('/api/dnd5e/pc/' + PID + '/equipment', {items: items, gold_cp: gold}).then(function (r) { data = r; D5.toast('Equipment added'); paint(); }).catch(D5.fail);
+      });
+    }).catch(D5.fail);
+  }
+
+  function pDetails() {
+    var d = data.details || {};
+    var f = function (k, label, ta) {
+      return '<div style="margin-top:.5rem;"><div class="d5-muted">' + label + '</div>' + (ta ? '<textarea class="d5-textarea" data-detail="' + k + '">' + D5.esc(d[k] || '') + '</textarea>' :
+        '<input class="d5-input" style="width:100%;" data-detail="' + k + '" value="' + D5.esc(d[k] || '') + '">') + '</div>';
+    };
+    panel('<div class="d5-card"><h3>Details</h3><div class="d5-cols">' +
+      '<div>' + f('alignment', 'Alignment') + f('faith', 'Faith') + f('age', 'Age') + f('height', 'Height') + f('weight', 'Weight') + '</div>' +
+      '<div>' + f('eyes', 'Eyes') + f('hair', 'Hair') + f('skin', 'Skin') + f('gender', 'Gender') +
+      '<div style="margin-top:.5rem;"><div class="d5-muted">Portrait</div><div class="d5-row">' +
+      ((data.live || {}).portrait ? '<img class="d5-portrait" src="' + D5.esc(data.live.portrait) + '" alt="" style="width:64px;height:64px;">' : '') +
+      '<label class="d5-btn is-sm" style="cursor:pointer;">Upload picture<input type="file" id="portrait-file" accept="image/png,image/jpeg,image/webp,image/gif" hidden></label>' +
+      ((data.live || {}).portrait ? '<button class="d5-btn is-sm is-ghost" id="portrait-clear" type="button">Remove</button>' : '') +
+      '</div></div></div></div>' +
+      f('personality', 'Personality traits', true) + f('ideals', 'Ideals', true) + f('bonds', 'Bonds', true) + f('flaws', 'Flaws', true) +
+      f('appearance', 'Appearance', true) + f('backstory', 'Backstory', true) +
+      '<div class="d5-row" style="margin-top:.7rem;"><button class="d5-btn is-primary" id="save-details">Save details</button></div></div>');
+    var sendPortrait = function (fd) {
+      D5.upload('/api/dnd5e/pc/' + PID + '/portrait', fd).then(function (r) {
+        data.live = data.live || {}; data.live.portrait = r.portrait; pDetails();
+      }).catch(D5.fail);
+    };
+    var pfile = document.getElementById('portrait-file');
+    if (pfile) pfile.addEventListener('change', function () {
+      if (!pfile.files[0]) return;
+      var fd = new FormData(); fd.append('file', pfile.files[0]); sendPortrait(fd);
+    });
+    var pclr = document.getElementById('portrait-clear');
+    if (pclr) pclr.addEventListener('click', function () { var fd = new FormData(); fd.append('clear', '1'); sendPortrait(fd); });
+  }
+
+  function panel(h) { document.getElementById('panel').innerHTML = h; }
+
+  // ---------- events ----------
+  document.addEventListener('click', function (ev) {
+    var t = ev.target;
+    var st = t.closest('[data-step]');
+    if (st) { ev.preventDefault(); step = st.getAttribute('data-step'); draftScores = null; paint(); return; }
+    var e = t.closest('[data-ed]');
+    if (e) { save({edition: e.getAttribute('data-ed')}); return; }
+    var ss = t.closest('[data-srcset]');
+    if (ss) { save({sources: ss.getAttribute('data-srcset') === 'core' ? CORE.one.concat(CORE.classic) : []}); return; }
+    var c = t.closest('[data-class]');
+    if (c) {
+      var lv = (B().levels || []).slice();
+      var id = c.getAttribute('data-class');
+      if (!lv.length) lv = [{'class': id, hp: null}];
+      else if (lv[0]['class'] !== id) {
+        if (lv.some(function (l) { return l['class'] !== lv[0]['class']; }) && !confirm('Changing your starting class resets multiclass levels. Continue?')) return;
+        lv = lv.map(function () { return {'class': id, hp: null}; });
+      }
+      save({levels: lv}); return;
+    }
+    var r = t.closest('[data-race]');
+    if (r) {
+      var raceId = r.getAttribute('data-race');
+      if (raceId === B().race) return;
+      var choices = Object.assign({}, B().choices || {});
+      delete choices['race:version'];
+      save({race: raceId, choices: choices}); return;
+    }
+    var bg = t.closest('[data-bg]');
+    if (bg) { save({background: bg.getAttribute('data-bg')}); return; }
+    var m = t.closest('[data-method]');
+    if (m) {
+      var meth = m.getAttribute('data-method');
+      var base = meth === 'pointbuy' ? {str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8} : (meth === 'standard' ? {str: 15, dex: 14, con: 13, int: 12, wis: 10, cha: 8} : Object.assign({}, B().base_scores));
+      if (meth === 'roll' && !B().rolled_scores) { draftScores = null; rollScores(); return; }
+      if (meth === 'roll') base = Object.assign({}, B().base_scores);
+      draftScores = null;
+      save({ability_method: meth, base_scores: base}); return;
+    }
+    if (t.id === 'roll-scores') { rollScores(); return; }
+    if (t.id === 'save-scores') {
+      var sc = {};
+      document.querySelectorAll('[data-score]').forEach(function (i) { sc[i.getAttribute('data-score')] = parseInt(i.value || '0', 10); });
+      save({base_scores: sc}).then(function () { draftScores = null; D5.toast('Scores saved'); }); return;
+    }
+    var mu = t.closest('[data-multi]');
+    if (mu) {
+      var cid = mu.getAttribute('data-multi'), v = mu.getAttribute('data-v'), count = parseInt(mu.getAttribute('data-count'), 10);
+      var cur = (B().choices || {})[cid] || [];
+      cur = (Array.isArray(cur) ? cur : [cur]).map(String);
+      if (cur.indexOf(v) !== -1) cur = cur.filter(function (x) { return x !== v; });
+      else cur = count === 1 ? [v] : cur.concat([v]).slice(0, count);
+      setChoice(cid, cur); return;
+    }
+    var al = t.closest('[data-alt]');
+    if (al) { setChoice(al.getAttribute('data-alt'), [parseInt(al.getAttribute('data-v'), 10)]); return; }
+    var am = t.closest('[data-asi-mode]');
+    if (am) {
+      var acid = am.getAttribute('data-asi-mode');
+      asiMode[acid] = am.getAttribute('data-m');
+      var cv = (B().choices || {})[acid];
+      // Switching modes clears the other mode's pick; the new one saves on selection.
+      if (cv && ((asiMode[acid] === 'asi' && cv.feat) || (asiMode[acid] === 'feat' && cv.asi))) setChoice(acid, null);
+      else pChoices();
+      return;
+    }
+    if (t.id === 'lu-go') {
+      var hpMode = document.getElementById('lu-hp').value;
+      var body = {'class': document.getElementById('lu-class').value};
+      if (hpMode === 'roll') body.roll = true;
+      if (hpMode === 'manual') body.hp = parseInt(document.getElementById('lu-manual').value || '0', 10);
+      D5.post('/api/dnd5e/pc/' + PID + '/levelup', body).then(function (d) { data = d; D5.toast('Level ' + d.sheet.level + '!'); if (d.sheet.pending.length) step = 'choices'; paint(); window.scrollTo(0, 0); }).catch(D5.fail);
+      return;
+    }
+    if (t.id === 'ld-go') {
+      if (!confirm('Remove your highest level? Choices made at that level are discarded.')) return;
+      D5.post('/api/dnd5e/pc/' + PID + '/leveldown', {}).then(function (d) { data = d; paint(); }).catch(D5.fail);
+      return;
+    }
+    if (t.id === 'delete-pc') {
+      if (!confirm('Delete ' + (data.name || 'this character') + ' permanently? This cannot be undone.')) return;
+      D5.post('/api/dnd5e/pc/' + PID + '/delete', {}).then(function () { location.href = '/dnd5e/characters'; }).catch(D5.fail);
+      return;
+    }
+    if (t.id === 'save-details') {
+      var det = {};
+      document.querySelectorAll('[data-detail]').forEach(function (i) { det[i.getAttribute('data-detail')] = i.value; });
+      save({details: det}).then(function () { D5.toast('Saved'); }); return;
+    }
+  });
+
+  document.addEventListener('change', function (ev) {
+    var t = ev.target;
+    if (t.id === 'name') { save({name: t.value}); return; }
+    if (t.id === 'ocf') { save({optional_class_features: t.checked}); return; }
+    if (t.id === 'custom-origin') { save({custom_origin: t.checked}); return; }
+    if (t.matches('[data-src]')) {
+      var srcs = [];
+      document.querySelectorAll('[data-src]:checked').forEach(function (i) { srcs.push(i.getAttribute('data-src')); });
+      save({sources: srcs}); return;
+    }
+    if (t.matches('[data-score]')) {
+      draftScores = draftScores || Object.assign({}, B().base_scores);
+      draftScores[t.getAttribute('data-score')] = parseInt(t.value || '0', 10);
+      if (B().ability_method === 'pointbuy') pAbilities();
+      return;
+    }
+    if (t.matches('[data-ab-choice]')) {
+      var cid = t.getAttribute('data-ab-choice');
+      var c = S().choices.filter(function (x) { return x.id === cid; })[0];
+      var out = {}, ok = true;
+      document.querySelectorAll('[data-ab-choice="' + cssEsc(cid) + '"]').forEach(function (sel) {
+        var w = c.weights[parseInt(sel.getAttribute('data-slot'), 10)];
+        if (!sel.value) { ok = false; return; }
+        if (out[sel.value]) { ok = false; return; }
+        out[sel.value] = w;
+      });
+      if (ok) setChoice(cid, out);
+      return;
+    }
+    if (t.matches('[data-asi2]') || t.matches('[data-asi1]')) {
+      var acid = t.getAttribute('data-asi2') || t.getAttribute('data-asi1');
+      var two = document.querySelector('[data-asi2="' + cssEsc(acid) + '"]').value;
+      var ones = [].map.call(document.querySelectorAll('[data-asi1="' + cssEsc(acid) + '"]'), function (s) { return s.value; }).filter(Boolean);
+      var inc = {};
+      if (t.matches('[data-asi2]') && two) inc[two] = 2;
+      else if (ones.length === 2 && ones[0] !== ones[1]) { inc[ones[0]] = 1; inc[ones[1]] = 1; }
+      else return;
+      setChoice(acid, {asi: inc});
+      return;
+    }
+    if (t.matches('[data-qpick]')) {
+      var qid = t.getAttribute('data-qpick');
+      if (t.getAttribute('data-asi-feat')) { setChoice(qid, {feat: t.value}); return; }
+      var count = parseInt(t.getAttribute('data-count'), 10);
+      var vals = [].map.call(document.querySelectorAll('[data-qpick="' + cssEsc(qid) + '"]:checked'), function (i) { return i.value; });
+      if (vals.length > count) { t.checked = false; D5.toast('Pick at most ' + count, 'error'); return; }
+      setChoice(qid, count === 1 ? vals.slice(0, 1) : vals);
+    }
+  });
+  function cssEsc(s) { return window.CSS && CSS.escape ? CSS.escape(s) : String(s).replace(/"/g, '\\"'); }
+
+  function rollScores() {
+    // Rolled on the server (and shown to the GM) so a set can't be re-rolled quietly.
+    if (B().rolled_scores && !confirm('Re-roll your ability scores? The GM sees every roll.')) return;
+    D5.post('/api/dnd5e/pc/' + PID + '/roll_scores', {}).then(function (d) {
+      data = d; draftScores = null; paint();
+      D5.toast('Rolled ' + d.build.rolled_scores.join(', ') + ' — assign them below');
+    }).catch(D5.fail);
+  }
+
+  (function importReport() {
+    var rep = data.import_report, box = document.getElementById('import-report');
+    var key = 'd5-import-seen-' + PID;
+    var seen = false;
+    try { seen = localStorage.getItem(key) === '1'; } catch (e) {}
+    if (!rep || seen) return;
+    var list = function (title, xs) {
+      return xs && xs.length ? '<div style="margin-top:.4rem;"><b>' + title + '</b><ul class="d5-list" style="margin:.2rem 0 0 1.1rem; list-style:disc;">' +
+        xs.map(function (x) { return '<li>' + D5.esc(x) + '</li>'; }).join('') + '</ul></div>' : '';
+    };
+    box.innerHTML = '<div class="d5-row" style="justify-content:space-between;"><h3 style="margin:0;">Imported from ' + D5.esc(rep.source || 'D&D Beyond') +
+      ' (' + (rep.edition === 'one' ? '2024' : '2014') + ' rules)</h3><button class="d5-btn is-sm is-ghost" id="import-hide">Hide</button></div>' +
+      list('Matched', rep.mapped) + list('Not matched', rep.unmatched) + list('Check these', (rep.warnings || []).concat(rep.mismatches || [])) +
+      list('Still to choose here', rep.pending);
+    box.hidden = false;
+    document.getElementById('import-hide').addEventListener('click', function () {
+      try { localStorage.setItem(key, '1'); } catch (e) {}
+      box.hidden = true;
+    });
+  })();
+  if (!(B().levels || []).length) step = 'basics';
+  else if (location.hash === '#choices') step = 'choices';
+  paint();
+})();
+</script>
+{% endblock %}

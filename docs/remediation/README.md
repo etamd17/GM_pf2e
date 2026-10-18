@@ -45,6 +45,27 @@ PR6B3A establishes the offline accounting boundary for the comprehensive rules
 program. See [the evidence inventory and measured corpus report](pr6b3a-aon-evidence.md).
 It deliberately makes no rule-correctness or distribution-rights claim.
 
+PR6B3C adds the first immutable review overlay: all 29 frozen class identities
+now have explicit stable IDs and local reconciliation metadata across eight
+source groups. The artifact activates zero mechanics, leaves every base review
+pending, and adds 45 separate pending source, license, and rules gates. See
+[the class-review overlay record](pr6b3c-class-review-overlay.md).
+
+PR6B3D retains eight canonical Paizo publication dossiers and publishes an
+immutable schema-v2 child bound to the exact PR6B3C parent and evidence bundle.
+It approves only the eight publication-identity gates; eight redistribution
+reviews and 29 class-rules reviews remain pending, with zero enabled mechanics
+and no runtime or UI change. See
+[the class-source review record](pr6b3d-class-source-license-review.md).
+
+PR6B3E1 retains the immutable legal-readiness inventory for those eight
+publications: one artifact hash/legal notice observed, seven final artifacts
+and legal notices missing, and all eight readiness states blocked. All eight
+license reviews and all 29 class mechanics reviews remain pending, with zero
+enabled mechanics and no runtime or UI change. See
+[the class legal-readiness blockers](pr6b3e1-class-legal-readiness.md).
+The next mechanics slice remains gated by PR6B3E2 legal approval.
+
 ## Pull-request gate
 
 Every implementation pull request must include the applicable subset of:

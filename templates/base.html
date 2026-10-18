@@ -59,7 +59,7 @@
        late @import inside the block above could not (cascade drops it). #}
     {% block head_extra %}{% endblock %}
 </head>
-<body data-active-system="{{ active_system }}" class="min-h-screen flex flex-col system-{{ active_system }}{% if active_system == 'cosmere' %} cosmere-{{ cosmere_world }}{% endif %}{% if not is_gm and (player_name or active_system == 'cosmere') %} has-player-nav{% endif %}">
+<body data-active-system="{{ active_system }}" class="min-h-screen flex flex-col system-{{ active_system }}{% if active_system == 'cosmere' %} cosmere-{{ cosmere_world }}{% endif %}{% if not is_gm and (player_name or active_system in ('cosmere', 'dnd5e')) %} has-player-nav{% endif %}">
 
     <nav class="border-b shrink-0" style="background:var(--bg-sunken); border-color:var(--border-card);">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -88,18 +88,6 @@
                     {% for ln in (system_ui.gm_nav if is_gm else system_ui.player_nav) %}
                     <a href="{{ ln.url }}" class="{{ 'text-accent-300 hover:text-accent-200' if ln.accent else 'text-base-300 hover:text-base-100' }} px-3 py-1.5 rounded transition-colors whitespace-nowrap"{% if ln.title %} title="{{ ln.title }}"{% endif %}>{{ ln.label }}</a>
                     {% endfor %}
-                    {# Chronicle is NOT in the registry nav: NavLink is plain data with no
-                       conditional. Shared here, so both systems get it with no per-system edit.
-
-                       UNCONDITIONAL for the GM. It used to be gated on `chronicle_published`,
-                       which was a chicken-and-egg: the GM's only way in appeared after a first
-                       publish, but /chronicle/manage is where a publish is made. Published ->
-                       the player-facing Chronicle; not yet -> straight to the manage screen.
-                       The PLAYER nav keeps the published gate (_player_nav.html) so players
-                       never see an empty tab. #}
-                    {% if is_gm %}
-                    <a href="{{ '/chronicle' if chronicle_published else '/chronicle/manage' }}" class="{% if request.path.startswith('/chronicle') %}text-accent-300 hover:text-accent-200{% else %}text-base-300 hover:text-base-100{% endif %} px-3 py-1.5 rounded transition-colors whitespace-nowrap" title="{{ 'The published player Chronicle -- what your players can read' if chronicle_published else 'Publish documents to your players' }}">Chronicle</a>
-                    {% endif %}
                     {% if is_gm %}
                     <button type="button" onclick="window._qsOpen && window._qsOpen()" class="text-base-400 hover:text-base-200 px-2 py-1.5 rounded transition-colors whitespace-nowrap flex items-center gap-1" title="Quick Search (Cmd+K)">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -115,6 +103,7 @@
          can't run a PF2e check in the Cosmere game (and vice versa). */
       body.system-pf2e nav { box-shadow: inset 0 -2px 0 rgba(240,216,138,.45); }
       body.system-cosmere nav { box-shadow: inset 0 -2px 0 rgba(159,210,242,.5); }
+      body.system-dnd5e nav { box-shadow: inset 0 -2px 0 rgba(217,83,79,.55); }
     </style>
     {% if account_user %}
     <script>
@@ -126,8 +115,9 @@
       if (!menu || !btn) return;
       function esc(s){ var d=document.createElement('span'); d.textContent=String(s==null?'':s); return d.innerHTML; }
       function badge(sys){
-        var on = sys==='cosmere'; var col = on ? '#9fd2f2' : '#f0d88a';
-        return '<span style="font-size:9px;font-weight:700;letter-spacing:.08em;padding:2px 5px;border-radius:3px;border:1px solid '+col+'55;color:'+col+';">'+(on?'COSMERE':'PF2E')+'</span>';
+        var col = sys==='cosmere' ? '#9fd2f2' : (sys==='dnd5e' ? '#f08d84' : '#f0d88a');
+        var lbl = sys==='cosmere' ? 'COSMERE' : (sys==='dnd5e' ? 'D&amp;D 5E' : 'PF2E');
+        return '<span style="font-size:9px;font-weight:700;letter-spacing:.08em;padding:2px 5px;border-radius:3px;border:1px solid '+col+'55;color:'+col+';">'+lbl+'</span>';
       }
       function row(c){
         var live = c.is_live ? ' <span style="color:#6ee7a8;">&#9679; LIVE</span>' : '';
@@ -550,6 +540,10 @@
 
     {# Cosmere player bottom nav -- the Cosmere sibling, for joined Cosmere
        players (no player_name session; system-driven). No PF2e bleed. #}
+    {% if not is_gm and active_system == 'dnd5e' %}
+    {% include "_dnd5e_player_nav.html" %}
+    {% endif %}
+
     {% if not is_gm and active_system == 'cosmere' %}
     {% set active_player_tab = 'party' if request.path.startswith('/cosmere/pcs') else ('combat' if request.path.startswith('/cosmere/combat') else ('notes' if request.path.startswith('/notes') else 'sheet')) %}
     {% include "_cosmere_player_nav.html" %}

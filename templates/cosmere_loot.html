@@ -53,9 +53,9 @@
     <div class="cl-sub">A running ledger of loot awarded to the party &mdash; by broam, mark, and chip.</div>
   </div>
   <div class="cl-total">
-    <span class="cl-total-val" id="cl-total">0</span>
-    <span class="cl-total-lbl">clearchips earned</span>
-    <div class="cl-total-break" id="cl-total-break"></div>
+    <span class="cl-total-val" id="cl-total" role="status" aria-live="polite" aria-atomic="true">0</span>
+    <span class="cl-total-lbl">diamond marks earned</span>
+    <div class="cl-total-break" id="cl-total-break">Exact sphere worth across all gem types</div>
   </div>
 </div>
 
@@ -86,23 +86,31 @@
 <script>
 (function(){
   const $ = id => document.getElementById(id);
-  const DENOM = [['broam',20],['mark',5],['chip',1]];
+  const DENOMINATIONS = ['broam','mark','chip'];
 
-  function breakdown(chips){
-    let n = chips, out = [];
-    for (const [name, val] of DENOM){
-      const c = Math.floor(n / val); n -= c * val;
-      if (c) out.push(c + ' ' + name + (c===1?'':'s'));
-    }
-    return out.length ? out.join(', ') : '0 chips';
+  function hasSpheres(s){
+    return DENOMINATIONS.some(k => (parseInt(s[k] || 0, 10) || 0) > 0);
   }
-  function sphereValue(s){ return DENOM.reduce((t,[k,v]) => t + (parseInt(s[k]||0)||0)*v, 0); }
   function fmtSpheres(s, gem){
     const parts = [];
-    for (const [k] of DENOM){ const c = parseInt(s[k]||0)||0; if (c) parts.push(c + ' ' + gem + ' ' + k + (c===1?'':'s')); }
+    for (const k of DENOMINATIONS){ const c = parseInt(s[k]||0, 10)||0; if (c) parts.push(c + ' ' + esc(gem) + ' ' + k + (c===1?'':'s')); }
     return parts.join(', ');
   }
   function esc(t){ const d = document.createElement('div'); d.textContent = t==null?'':String(t); return d.innerHTML; }
+  function escAttr(t){ return esc(t).replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+
+  async function postJSON(url, body){
+    const response = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    let data = {};
+    try { data = await response.json(); } catch (_error) {}
+    if (!response.ok || !data.success) throw new Error(data.error || data.message || 'The loot change could not be saved.');
+    return data;
+  }
+  function showError(error){
+    const message = error && error.message ? error.message : 'The loot change could not be saved.';
+    if (window.pf2eToast) window.pf2eToast(message, 'danger');
+    else window.alert(message);
+  }
 
   function addItemRow(name, qty){
     const row = document.createElement('div');
@@ -119,14 +127,16 @@
     const rec = $('cl-recipient');
     const cur = rec.value;
     rec.innerHTML = '<option value="The Party">The Party</option>'
-      + (data.party||[]).map(p => '<option value="'+esc(p.name)+'">'+esc(p.name)+'</option>').join('');
+      + (data.party||[]).map(p => '<option value="'+escAttr(p.name)+'">'+esc(p.name)+'</option>').join('');
     if ([...rec.options].some(o => o.value === cur)) rec.value = cur;
     // gem options
-    if (!$('cl-gem').options.length)
-      $('cl-gem').innerHTML = (data.gems||['diamond']).map(g => '<option value="'+g+'">'+g+'</option>').join('');
+    if (!$('cl-gem').options.length){
+      const gems = data.gems || ['diamond'];
+      $('cl-gem').innerHTML = gems.map(g => '<option value="'+escAttr(g)+'">'+esc(g.charAt(0).toUpperCase()+g.slice(1))+'</option>').join('');
+      $('cl-gem').value = gems.includes('diamond') ? 'diamond' : (gems[0] || '');
+    }
     // total
-    $('cl-total').textContent = data.total_chips || 0;
-    $('cl-total-break').textContent = breakdown(data.total_chips || 0);
+    $('cl-total').textContent = data.total_marks == null ? '0' : data.total_marks;
     // entries (newest first)
     const wrap = $('cl-entries');
     const entries = (data.entries||[]).slice().reverse();
@@ -135,15 +145,17 @@
     for (const e of entries){
       const items = (e.items||[]).map(i => esc(i.name) + (i.qty>1 ? ' &times;'+i.qty : '')).join(', ');
       const sph = fmtSpheres(e.spheres||{}, e.gem||'diamond');
+      const worth = e.value_marks == null ? '0' : String(e.value_marks);
       const when = e.timestamp ? new Date(e.timestamp).toLocaleDateString() : '';
       const loot = [items, sph ? '<span class="cl-entry-sph">'+sph+'</span>' : ''].filter(Boolean).join(' &middot; ') || '&mdash;';
       const div = document.createElement('div');
       div.className = 'cl-entry';
       div.innerHTML = '<div><div class="cl-entry-who">'+esc(e.recipient)+'</div>'
         + '<div class="cl-entry-loot">'+loot+'</div>'
+        + '<div class="cl-entry-meta">Worth '+esc(worth)+' mk</div>'
         + (e.note ? '<div class="cl-entry-note">'+esc(e.note)+'</div>' : '')
         + '<div class="cl-entry-meta">'+when+'</div></div>'
-        + '<button class="cl-del" data-id="'+esc(e.id)+'">Remove</button>';
+        + '<button class="cl-del" data-id="'+escAttr(e.id)+'">Remove</button>';
       div.querySelector('.cl-del').onclick = () => del(e.id);
       wrap.appendChild(div);
     }
@@ -152,26 +164,32 @@
   function load(){
     fetch('/api/cosmere/loot').then(r => r.json()).then(render).catch(()=>{});
   }
-  function del(id){
-    fetch('/api/cosmere/loot/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})})
-      .then(() => load());
+  async function del(id){
+    try {
+      await postJSON('/api/cosmere/loot/delete', {id});
+      load();
+    } catch (error) {
+      showError(error);
+    }
   }
 
   $('cl-additem').onclick = () => addItemRow('', 1);
-  $('cl-form').onsubmit = function(ev){
+  $('cl-form').onsubmit = async function(ev){
     ev.preventDefault();
     const items = [...document.querySelectorAll('#cl-items .cl-item')].map(r => ({
       name: r.querySelector('.nm').value.trim(),
       qty: parseInt(r.querySelector('.qty').value||1)||1,
     })).filter(i => i.name);
     const spheres = {broam: +$('cl-broam').value||0, mark: +$('cl-mark').value||0, chip: +$('cl-chip').value||0};
-    if (!items.length && !sphereValue(spheres) && !$('cl-note').value.trim()) return;
-    fetch('/api/cosmere/loot/add', {method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({recipient: $('cl-recipient').value, gem: $('cl-gem').value, items, spheres, note: $('cl-note').value.trim()})})
-      .then(r => r.json()).then(() => {
-        $('cl-items').innerHTML = ''; $('cl-broam').value = $('cl-mark').value = $('cl-chip').value = 0; $('cl-note').value = '';
-        load();
-      });
+    if (!items.length && !hasSpheres(spheres) && !$('cl-note').value.trim()) return;
+    try {
+      await postJSON('/api/cosmere/loot/add', {recipient: $('cl-recipient').value, gem: $('cl-gem').value,
+        items, spheres, note: $('cl-note').value.trim()});
+      $('cl-items').innerHTML = ''; $('cl-broam').value = $('cl-mark').value = $('cl-chip').value = 0; $('cl-note').value = '';
+      load();
+    } catch (error) {
+      showError(error);
+    }
   };
 
   load();

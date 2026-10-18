@@ -192,6 +192,11 @@ def test_the_only_activation_reload_is_the_table_screens():
     assert early.index('if (!sceneId') < early.index('window.location.reload();')
 
 
+def test_create_form_can_use_toast_before_the_no_scene_return():
+    early_return = _JS.index('if (!sceneId')
+    assert _JS.index('let toastTimer = null;') < early_return
+
+
 def test_the_sidebar_says_whether_this_scene_is_live():
     assert 'function paintTableState(' in _JS
     for phrase in ('On the table now', 'Another scene is on the table', 'Not on the table'):

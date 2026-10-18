@@ -124,3 +124,17 @@ session_notes/
 
 # Brainstorming visual-companion session artifacts
 .superpowers/
+
+# D&D 5e rules data, built from 5etools. NOT committed: this repo is public and the
+# data is mostly non-SRD. See dnd5e_data/README.md and systems/dnd5e/paths.py.
+dnd5e_data/*
+!dnd5e_data/README.md
+!dnd5e_data/VERSION
+# Book-derived Cosmere rules packages are installed separately from this public repo.
+/cosmere_data/
+/data/cosmere/rules/
+dist/
+
+# Handoff review bundles (mockups, screenshots): large and local-only. Keep the
+# task .md files in git; share the bundles outside it.
+docs/handoff/assets/

@@ -1,0 +1,54 @@
+{% extends "_account_base.html" %}
+{% block title %}D&amp;D 5e rules data{% endblock %}
+{% block content %}
+<h1>D&amp;D 5e rules data</h1>
+<p class="sub">The 5e rules content and art are not part of the code repository. Build the bundle on a
+machine that has the data (<code>python tools/dnd5e/bundle.py</code>) and upload its parts here,
+the <b>core</b> part first. Image parts can follow in any order; re-uploading a part is harmless.</p>
+
+<ul class="list">
+  <li class="row"><div><strong>Status</strong>
+    <div class="meta" id="status">
+      {% if st.installed %}Installed &middot; {{ st.version or 'unknown version' }} &middot; database {{ st.db_mb }} MB
+      &middot; {{ st.tokens }} tokens &middot; {{ st.art }} art images{% else %}<b>Not installed</b> &mdash; the 5e pages are unavailable until the core part is uploaded.{% endif %}
+    </div>
+    <div class="meta">Directory: <code>{{ st.dir }}</code></div>
+  </div></li>
+</ul>
+
+<label for="parts">Bundle parts (.tar / .tar.gz)</label>
+<input type="file" id="parts" multiple accept=".tar,.gz,.tgz,application/gzip,application/x-tar">
+<div style="margin-top:12px;"><button type="button" id="go">Upload and install</button></div>
+<pre id="log" class="muted" style="white-space:pre-wrap;margin-top:12px;font-size:12px;"></pre>
+<p class="foot muted"><a href="/me">&larr; Back</a></p>
+
+<script>
+(function () {
+  var log = document.getElementById('log');
+  function line(t) { log.textContent += t + '\n'; }
+  document.getElementById('go').addEventListener('click', function () {
+    var btn = this;
+    // core first, then the rest by name
+    var files = Array.prototype.slice.call(document.getElementById('parts').files)
+      .sort(function (a, b) { return (b.name.indexOf('core') !== -1) - (a.name.indexOf('core') !== -1) || (a.name < b.name ? -1 : 1); });
+    if (!files.length) { line('Choose the bundle parts first.'); return; }
+    btn.disabled = true;
+    var i = 0;
+    (function next() {
+      if (i >= files.length) { line('Done.'); btn.disabled = false; setTimeout(function () { location.reload(); }, 800); return; }
+      var f = files[i++];
+      line('Uploading ' + f.name + ' (' + (f.size / 1e6).toFixed(1) + ' MB)...');
+      var fd = new FormData(); fd.append('file', f);
+      fetch('/api/dnd5e/admin/data', {method: 'POST', body: fd, credentials: 'same-origin'})
+        .then(function (r) { return r.json().catch(function () { return {error: 'HTTP ' + r.status}; }).then(function (j) { return {ok: r.ok, j: j}; }); })
+        .then(function (res) {
+          if (!res.ok) { line('  failed: ' + (res.j.error || 'error')); btn.disabled = false; return; }
+          line('  installed: ' + (res.j.core.length ? res.j.core.join(', ') + '; ' : '') + res.j.images + ' images');
+          next();
+        })
+        .catch(function (e) { line('  failed: ' + e); btn.disabled = false; });
+    })();
+  });
+})();
+</script>
+{% endblock %}

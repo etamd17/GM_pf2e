@@ -1,0 +1,47 @@
+{% extends "dnd5e/_base.html" %}
+{% block title %}D&amp;D 5e &middot; Compendium{% endblock %}
+{% block d5_content %}
+<div class="d5-head">
+  <span class="d5-title">Compendium</span>
+  <span class="d5-spacer"></span>
+  <select class="d5-select" id="kind">
+    {% for k in kinds %}<option value="{{ k }}">{{ {'spell':'Spells','item':'Items','feat':'Feats','race':'Species / Races','background':'Backgrounds','class':'Classes','subclass':'Subclasses','optionalfeature':'Class options (invocations, maneuvers...)','condition':'Conditions','disease':'Diseases','status':'Statuses','action':'Actions','variantrule':'Rules glossary','language':'Languages','skill':'Skills','sense':'Senses','monster':'Monsters','itemMastery':'Weapon masteries','itemProperty':'Weapon properties','legendaryGroup':'Lair actions'}.get(k, k) }}</option>{% endfor %}
+  </select>
+  <select class="d5-select" id="ed"><option value="">Both editions</option><option value="one">2024</option><option value="classic">2014</option></select>
+  <input class="d5-input" id="q" placeholder="Search" style="min-width:220px;">
+</div>
+<div class="d5-cols">
+  <div class="d5-card"><div id="results" class="d5-list-pick" style="max-height:75vh; border:0;"></div></div>
+  <div class="d5-card" id="detail"><div class="d5-muted">Pick an entry.</div></div>
+</div>
+<script>
+(function () {
+  var run = D5.debounce(function () {
+    var kind = document.getElementById('kind').value;
+    var p = new URLSearchParams({limit: '300'});
+    var q = document.getElementById('q').value.trim(), ed = document.getElementById('ed').value;
+    if (q) p.set('q', q);
+    if (ed) p.set('edition', ed);
+    D5.get('/api/dnd5e/content/' + kind + '?' + p).then(function (d) {
+      document.getElementById('results').innerHTML = d.results.map(function (r) {
+        var extra = r.level != null ? (r.level === 0 ? 'Cantrip' : 'Level ' + r.level) + (r.school_name ? ' ' + r.school_name : '') :
+          (r.rarity && r.rarity !== 'none' ? r.rarity : (r.cr != null ? 'CR ' + r.cr : ''));
+        return '<label data-kind="' + kind + '" data-id="' + D5.esc(r.id) + '"><span><b>' + D5.esc(r.name) + '</b><span class="d5-src">' + D5.esc(r.source || '') +
+          '</span>' + (extra ? '<span class="d5-muted">' + D5.esc(extra) + '</span>' : '') + '</span></label>';
+      }).join('') || '<div class="d5-muted" style="padding:.5rem;">Nothing found.</div>';
+    }).catch(D5.fail);
+  }, 220);
+  document.getElementById('q').addEventListener('input', run);
+  document.getElementById('kind').addEventListener('change', run);
+  document.getElementById('ed').addEventListener('change', run);
+  document.getElementById('results').addEventListener('click', function (ev) {
+    var l = ev.target.closest('[data-id]');
+    if (!l) return;
+    D5.get('/api/dnd5e/content/' + l.getAttribute('data-kind') + '/' + encodeURIComponent(l.getAttribute('data-id'))).then(function (d) {
+      document.getElementById('detail').innerHTML = D5.recordHTML(d);
+    }).catch(D5.fail);
+  });
+  run();
+})();
+</script>
+{% endblock %}

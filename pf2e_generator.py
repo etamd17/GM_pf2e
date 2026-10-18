@@ -884,7 +884,7 @@ class RobustPF2eGenerator:
         self.magical_puzzles = [
             "An illusion conceals the true path. Three doors appear identical but only one is real. <b>Solution:</b> DC {dc} Perception (disbelieve) or DC {dc_easy} Arcana to detect illusion school. Touching a false door deals {dd}d6 force damage (basic Reflex DC {dc}).",
             "A ward requires a specific spell tradition to open. Four runes glow: Arcane (blue), Divine (gold), Occult (purple), Primal (green). <b>Solution:</b> Cast any spell of the matching tradition near the correct rune. DC {dc} Arcana/Religion/Occultism/Nature to identify which rune matches. Non-spellcasters can use DC {dc_hard} Thievery to bypass.",
-            "A mirror dimension duplicates the party. Copies mimic movements inversely. The party must perform actions their copies cannot mirror. <b>Solution:</b> Speak a palindrome (automatic), perform an asymmetric action (DC {dc} Performance), or break the mirror (AC 15, Hardness 5, HP {level * 5}). The copies attack if provoked: use party's stats at -2 to all DCs.",
+            "A mirror dimension duplicates the party. Copies mimic movements inversely. The party must perform actions their copies cannot mirror. <b>Solution:</b> Speak a palindrome (automatic), perform an asymmetric action (DC {dc} Performance), or break the mirror (AC 15, Hardness 5, HP {hp}). The copies attack if provoked: use party's stats at -2 to all DCs.",
             "A sentient door demands a 'worthy offering.' It rejects gold, gems, and weapons. <b>Solution:</b> Offer a memory (Will save DC {dc}, lose a skill proficiency for 24 hours), a secret (Diplomacy DC {dc} to convince it of value), or blood (take {dd}d4 damage, no save). DC {dc_hard} Arcana to find a loophole in the enchantment.",
         ]
 
@@ -1922,7 +1922,14 @@ class RobustPF2eGenerator:
             )
 
         elif puzzle_type == "magical":
-            puzzle = random.choice(self.magical_puzzles).format(dc=dc, dc_hard=dc_hard, dd=dd, level=level)
+            puzzle = random.choice(self.magical_puzzles).format(
+                dc=dc,
+                dc_easy=dc_easy,
+                dc_hard=dc_hard,
+                dd=dd,
+                level=level,
+                hp=level * 5,
+            )
             return (
                 f"<b>Magical Puzzle</b><br>{puzzle}<br>"
                 f"<b>Reward:</b> {reward_template}"

@@ -1,7 +1,7 @@
 """Cosmere loot ledger -- the Rosharan sibling of the PF2e /gm/loot ledger.
 
 Spheres & spoils awarded to the party, persisted in the campaign-scoped ledger,
-with a clearchips total. GM-only and Cosmere-mode-gated (redirects out in PF2e).
+with exact gem-aware diamond-mark totals. GM-only and Cosmere-mode-gated.
 Runs in a subprocess with a throwaway DATA_DIR (mirrors the other Cosmere e2e
 tests) so it's CI-safe.
 """
@@ -9,6 +9,7 @@ import os
 import sys
 import textwrap
 import subprocess
+from pathlib import Path
 
 _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -34,7 +35,7 @@ def test_cosmere_loot_ledger_end_to_end():
         page = c.get('/cosmere/loot')
         assert page.status_code == 200 and b'Spheres' in page.data and b'COSMERE' in page.data
 
-        # record an award: 1 broam + 2 marks + 3 chips = 33 clearchips, plus an item
+        # Diamond award: 1 broam + 2 marks + 3 chips = 33 diamond chips = 6.6 mk.
         add = c.post('/api/cosmere/loot/add', json={
             'recipient': 'Kaladin', 'gem': 'diamond',
             'items': [{'name': 'Shardblade', 'qty': 1}],
@@ -44,10 +45,14 @@ def test_cosmere_loot_ledger_end_to_end():
         data = c.get('/api/cosmere/loot').get_json()
         assert len(data['entries']) == 1
         assert data['total_chips'] == 33, data['total_chips']
+        assert data['total_marks'] == '6.6'
         e = data['entries'][0]
         assert e['recipient'] == 'Kaladin' and e['spheres'] == {'broam': 1, 'mark': 2, 'chip': 3}
         assert e['items'][0]['name'] == 'Shardblade' and e['gem'] == 'diamond'
-        assert data['gems'] and 'diamond' in data['gems']
+        assert e['value_chips'] == 33 and e['value_marks'] == '6.6'
+        assert data['gems'] == [
+            'diamond', 'garnet', 'heliodor', 'topaz', 'ruby',
+            'smokestone', 'zircon', 'amethyst', 'sapphire', 'emerald']
 
         # the ledger persists under THIS campaign (campaign-scoped storage)
         led = storage.load_json(storage.loot_ledger_file(cid))
@@ -80,6 +85,25 @@ def test_cosmere_loot_redirects_out_in_pf2e_mode():
         assert c.post('/campaign/' + cid + '/activate').status_code == 302
         assert c.get('/cosmere/loot').status_code == 302           # redirects out
         assert c.post('/api/cosmere/loot/add', json={'recipient': 'X', 'spheres': {'chip': 1}}).status_code == 400
+        assert c.post('/api/cosmere/loot/delete', json={'id': 'old-entry'}).status_code == 400
         print('COSMERE_LOOT_GATED_OK')
     ''')
     assert 'COSMERE_LOOT_GATED_OK' in r.stdout, "stdout:\n%s\nstderr:\n%s" % (r.stdout, r.stderr)
+
+
+def test_cosmere_loot_client_keeps_form_state_and_reports_api_errors():
+    source = Path(_REPO, 'templates', 'cosmere_loot.html').read_text(encoding='utf-8')
+    helper = source[source.index('async function postJSON'):source.index('function load()')]
+    assert '!response.ok' in helper
+    assert '!data.success' in helper
+    assert 'data.error || data.message' in helper
+
+    delete = source[source.index('async function del(id)'):source.index("$('cl-additem').onclick")]
+    assert 'await postJSON' in delete
+    assert 'showError(error)' in delete
+
+    submit = source[source.index("$('cl-form').onsubmit"):source.index('load();\n})()')]
+    assert 'await postJSON' in submit
+    assert 'showError(error)' in submit
+    assert submit.index("await postJSON") < submit.index("$('cl-items').innerHTML = ''")
+    assert submit.index("$('cl-items').innerHTML = ''") < submit.index('} catch (error)')

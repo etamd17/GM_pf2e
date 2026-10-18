@@ -1,13 +1,22 @@
-"""Cosmere (Stormlight) GM generators -- random tables for at-the-table prep.
+"""Cosmere GM generators -- random tables for at-the-table prep.
 
 Mirrors the PF2e generator pattern: each ``gen_*`` returns a small HTML snippet,
 and ``GENERATORS`` maps a type key -> (label, fn) for the route + reroll API.
-Content is Rosharan-flavored (Stormlight Archive); it's GM color, not canon
-mechanics, so it's free to be evocative. No app/Foundry dependency.
+Stormlight retains its original Roshar tables; Mistborn campaigns use original
+Scadrial-flavored tables. This is GM color rather than rules content and has no
+app or Foundry dependency.
 """
 from __future__ import annotations
 
 import random
+
+from systems.cosmere import generator_scadrial as _scadrial
+from systems.cosmere.spheres import (
+    DENOMINATIONS,
+    GEMS,
+    format_marks,
+    value_in_chips,
+)
 
 # ── Names by Rosharan culture ──────────────────────────────────────────────
 # Recognizably-flavored given names + lighteyed/family names per culture.
@@ -95,8 +104,8 @@ WEATHER = [
 ]
 
 # ── Spheres (Rosharan currency) ─────────────────────────────────────────────
-_SPHERE_GEMS = ['diamond', 'garnet', 'ruby', 'sapphire', 'smokestone', 'emerald']
-_SPHERE_DENOM = [('chip', 1), ('mark', 5), ('broam', 20)]
+_SPHERE_GEMS = GEMS
+_SPHERE_DENOM = DENOMINATIONS
 
 # ── Loot / fabrials / finds ─────────────────────────────────────────────────
 LOOT = [
@@ -189,7 +198,9 @@ def _muted(s):
     return '<span class="muted">%s</span>' % s
 
 
-def gen_name(culture=None):
+def gen_name(culture=None, world='stormlight', era='era-1'):
+    if world == 'mistborn':
+        return _scadrial.gen_name(culture, era=era)
     culture = culture if culture in NAMES else random.choice(_CULTURES)
     pool = NAMES[culture]
     gender = random.choice(['male', 'female'])
@@ -201,7 +212,9 @@ def gen_name(culture=None):
     return '<b>%s</b> %s' % (given, _muted('&middot; %s, %s' % (culture, gender)))
 
 
-def gen_npc():
+def gen_npc(world='stormlight', era='era-1'):
+    if world == 'mistborn':
+        return _scadrial.gen_npc(era=era)
     culture = random.choice(_CULTURES)
     pool = NAMES[culture]
     gender = random.choice(['male', 'female'])
@@ -212,44 +225,59 @@ def gen_npc():
         _muted('Hook: ' + random.choice(NPC_HOOKS) + '.')))
 
 
-def gen_weather():
+def gen_weather(world='stormlight', era='era-1'):
+    if world == 'mistborn':
+        return _scadrial.gen_weather(era=era)
     title, body = random.choice(WEATHER)
     return '%s<br>%s' % (title, _muted(body))
 
 
-def gen_spheres():
+def gen_spheres(world='stormlight', era='era-1'):
+    if world == 'mistborn':
+        return _scadrial.gen_coins(era=era)
     bits = []
     total = 0
     for _ in range(random.randint(2, 3)):
         gem = random.choice(_SPHERE_GEMS)
-        denom, val = random.choice(_SPHERE_DENOM)
+        denom = random.choice(_SPHERE_DENOM)
         n = random.randint(1, 9)
-        total += n * val
+        total += n * value_in_chips(gem, denom)
         bits.append('%d %s %s%s' % (n, gem, denom, '' if n == 1 else 's'))
     return ('A pouch of <b>%s</b>.<br>%s' % (
-        ', '.join(bits), _muted('Roughly %d clearchips’ worth, if the gems were spent for their Light.' % total)))
+        ', '.join(bits), _muted('Roughly %s diamond marks’ worth, if the gems were spent for their Light.'
+                                % format_marks(total))))
 
 
-def gen_loot():
+def gen_loot(world='stormlight', era='era-1'):
+    if world == 'mistborn':
+        return _scadrial.gen_loot(era=era)
     if random.random() < 0.12:
         return random.choice(RARE_LOOT) + '.<br>' + _muted('A rare, dangerous find &mdash; everyone will want it.')
     return random.choice(LOOT).capitalize() + '.'
 
 
-def gen_location():
+def gen_location(world='stormlight', era='era-1'):
+    if world == 'mistborn':
+        return _scadrial.gen_location(era=era)
     title, body = random.choice(LOCATIONS)
     return '<b>%s</b><br>%s' % (title, _muted(body))
 
 
-def gen_hook():
+def gen_hook(world='stormlight', era='era-1'):
+    if world == 'mistborn':
+        return _scadrial.gen_hook(era=era)
     return random.choice(HOOKS)
 
 
-def gen_rumor():
+def gen_rumor(world='stormlight', era='era-1'):
+    if world == 'mistborn':
+        return _scadrial.gen_rumor(era=era)
     return _muted('&ldquo;') + random.choice(RUMORS) + _muted('&rdquo;')
 
 
-def gen_dressing():
+def gen_dressing(world='stormlight', era='era-1'):
+    if world == 'mistborn':
+        return _scadrial.gen_dressing(era=era)
     return random.choice(DRESSING)
 
 
@@ -267,7 +295,21 @@ GENERATORS = {
 }
 
 
-def generate(gtype):
-    """Return a fresh HTML snippet for a generator type (or '' if unknown)."""
+def label_for(gtype, world='stormlight'):
+    """Return a world-appropriate label, defaulting unknown worlds to Roshar."""
     entry = GENERATORS.get(gtype)
-    return entry[1]() if entry else ''
+    if not entry:
+        return ''
+    if world == 'mistborn':
+        return _scadrial.LABELS.get(gtype, entry[0])
+    return entry[0]
+
+
+def generate(gtype, world='stormlight', era='era-1'):
+    """Return a world-appropriate HTML snippet (or '' for an unknown type)."""
+    entry = GENERATORS.get(gtype)
+    if not entry:
+        return ''
+    normalized_world = 'mistborn' if world == 'mistborn' else 'stormlight'
+    normalized_era = 'era-2' if era == 'era-2' else 'era-1'
+    return entry[1](world=normalized_world, era=normalized_era)

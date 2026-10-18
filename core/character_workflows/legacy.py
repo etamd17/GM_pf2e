@@ -25,6 +25,7 @@ set_combatant_tactics api_scene_combatant_action
 
 COSMERE_PID_WRITES = frozenset('''
 cosmere_pc_notes cosmere_pc_state cosmere_pc_rest cosmere_pc_release cosmere_pc_delete
+api_cosmere_pc_action
 '''.split())
 
 PARTY_WRITES = frozenset('''

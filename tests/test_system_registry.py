@@ -46,10 +46,10 @@ def test_system_for_doc_is_strict_about_unknowns():
     # A stamped-but-unregistered system must raise, never silently fall back
     # to pf2e (that would mis-load a Cosmere PC as a Pathfinder one).
     with pytest.raises(systems.UnknownSystemError):
-        systems.system_for_doc({'system': 'dnd5e'})
+        systems.system_for_doc({'system': 'starfinder'})
     # An unregistered default is equally strict.
     with pytest.raises(systems.UnknownSystemError):
-        systems.system_for_doc({}, default='dnd5e')
+        systems.system_for_doc({}, default='starfinder')
 
 
 def test_register_rejects_non_systems():
