@@ -39,5 +39,6 @@ ENV DATA_DIR=/data \
     VTT_DIST_DIR=/app/frontend/vtt/dist \
     PORT=8000
 EXPOSE 8000
-VOLUME ["/data"]
+# /data is mounted by compose (app-data) or a Railway volume. No VOLUME
+# instruction: Railway refuses Dockerfiles that declare one.
 ENTRYPOINT ["/app/docker/entrypoint.sh"]
