@@ -36,8 +36,9 @@ here.
 - **Deployed from `agent/claude-vtt-platform`, not `side/vtt-rebuild`.** The VTT code lives on the
   platform branch; `side/vtt-rebuild` holds only the docs. Merging the two, or merging `main`
   in, is integration work the user has not approved.
-- **The branch is 144 commits behind `main`.** Staging therefore runs an older copy of the rest
-  of the site.
+- **The rest of the site follows `main` only when it is merged in.** `main` was merged into the
+  branch on 2026-10-18 at `a9be6450`, with the user's approval. Merge again to bring staging's
+  copy of the site up to date.
 - **No Redis.** One web process; ADR-0002 brings Redis in only with a second process.
 - **`RAILWAY_RUN_UID=0`.** Railway mounts volumes owned by root, and the image's `app` user
   (uid 10001) could not write `/data`. The container runs as root on staging only. Locally,
