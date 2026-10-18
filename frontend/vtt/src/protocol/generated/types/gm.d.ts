@@ -3,7 +3,7 @@
 export type GmFrame = GmSnapshot | GmPatch;
 export type OpaqueToken = string;
 export type Id = string;
-export type GmEntity = GmScene | GmToken | GmLight | GmWall | FogState;
+export type GmEntity = GmScene | GmToken | GmLight | GmWall | FogState | GmTemplate | TerrainState;
 
 export interface GmSnapshot {
   schemaVersion: 1;
@@ -126,6 +126,30 @@ export interface FogState {
   rows: number;
   revealed: string;
 }
+export interface GmTemplate {
+  kind: "template";
+  id: Id;
+  version: OpaqueToken;
+  shape: "burst" | "emanation" | "cone" | "line";
+  x: number;
+  y: number;
+  aimX: number;
+  aimY: number;
+  size: number;
+  color: number;
+  hidden: boolean;
+}
+/**
+ * One per scene (id "terrain"), parity-2. cells is a base64url run of 4-bit kinds, two cells per byte, low nibble first, exactly ceil(cols*rows/2) bytes; 0 none, 1 lava, 2 water, 3 poison, 4 blood; 5-15 reserved (a semantic rule). cols*rows is at most 262144.
+ */
+export interface TerrainState {
+  kind: "terrain";
+  id: "terrain";
+  version: OpaqueToken;
+  cols: number;
+  rows: number;
+  cells: string;
+}
 export interface GmPatch {
   schemaVersion: 1;
   frame: "patch";
@@ -142,6 +166,6 @@ export interface GmPatch {
   originCommandId?: OpaqueToken;
 }
 export interface GmEntityRef {
-  kind: "scene" | "token" | "light" | "wall" | "fog";
+  kind: "scene" | "token" | "light" | "wall" | "fog" | "template" | "terrain";
   id: Id;
 }

@@ -472,3 +472,81 @@ describe('fog of war (parity P1)', () => {
     expect(screen.getByText('This scene is too large for fog.')).toBeTruthy();
   });
 });
+
+describe('templates and terrain (parity P2)', () => {
+  // 640 x 640 at 64 px: 10 x 10 cells, 50 bytes of 4-bit kinds.
+  const terrainOf = (cells: Uint8Array) =>
+    ({ kind: 'terrain', id: 'terrain', version: V1, cols: 10, rows: 10, cells: encodeFogBits(cells) }) as Of<'terrain'>;
+  const divider = { kind: 'wall', id: 'wall_mid', version: V1, x1: 320, y1: 0, x2: 320, y2: 640, doorState: 'none' } as Of<'wall'>;
+  const lastDraft = (issued: Array<{ draft: Record<string, unknown> }>) =>
+    issued.at(-1)?.draft as { type: string; payload: Record<string, unknown> };
+
+  it('a burst is placed with one click at the grid point, sized in squares', () => {
+    const { issued, interaction } = setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Template' }));
+    fireEvent.change(screen.getByLabelText('Size (squares)'), { target: { value: '4' } });
+    act(() => interaction.onClick?.({ x: 130, y: 190 }, null));
+    const draft = lastDraft(issued);
+    expect(draft.type).toBe('template.create');
+    expect(draft.payload).toMatchObject({ shape: 'burst', x: 128, y: 192, aimX: 128, aimY: 192, size: 4, hidden: false });
+  });
+
+  it('a cone takes two clicks: the origin, then the aim', () => {
+    const { issued, interaction } = setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Template' }));
+    fireEvent.change(screen.getByLabelText('Shape'), { target: { value: 'cone' } });
+    act(() => interaction.onClick?.({ x: 64, y: 64 }, null));
+    expect(issued).toHaveLength(0);
+    act(() => interaction.onClick?.({ x: 300, y: 64 }, null));
+    expect(lastDraft(issued).payload).toMatchObject({ shape: 'cone', x: 64, y: 64, aimX: 300, aimY: 64, size: 3 });
+  });
+
+  it('an emanation started on a token is centred on it and grown by its footprint', () => {
+    const { issued, interaction } = setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Template' }));
+    fireEvent.change(screen.getByLabelText('Shape'), { target: { value: 'emanation' } });
+    act(() => interaction.onClick?.({ x: 100, y: 100 }, { kind: 'token', id: 'tok_hero' }));
+    expect(lastDraft(issued).payload).toMatchObject({ shape: 'emanation', x: 96, y: 96, size: 4 }); // 3 + ceil(1/2)
+  });
+
+  it('arrow keys move a selected template one square, aim and all', () => {
+    const tpl = { kind: 'template', id: 'tpl_a', version: V1, shape: 'cone', x: 64, y: 64, aimX: 192, aimY: 64, size: 3, color: 7, hidden: false } as Of<'template'>;
+    act(() => seed([scene, hero, wall, tpl]));
+    const { issued, interaction } = setup();
+    act(() => interaction.onClick?.({ x: 100, y: 64 }, { kind: 'template', id: 'tpl_a' }));
+    act(() => interaction.onKey?.(new KeyboardEvent('keydown', { key: 'ArrowDown' })));
+    expect(lastDraft(issued)).toEqual({
+      type: 'template.update',
+      expected: [{ kind: 'template', id: 'tpl_a', version: V1 }],
+      payload: { id: 'tpl_a', x: 64, y: 128, aimX: 192, aimY: 128 },
+    });
+  });
+
+  it('terrain paints the room under the click, and Alt-click paints one square', () => {
+    act(() => seed([scene, hero, wall, divider, terrainOf(new Uint8Array(50))]));
+    const { issued, interaction } = setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Terrain' }));
+    fireEvent.change(screen.getByLabelText('Paint'), { target: { value: '2' } });
+    act(() => interaction.onClick?.({ x: 96, y: 96 }, null, { alt: false }));
+    const cells = lastDraft(issued).payload.cells as number[][];
+    expect(lastDraft(issued).type).toBe('terrain.paint');
+    expect(cells).toHaveLength(50); // the left half, bounded by the wall
+    expect(cells.every(([c, , k]) => (c as number) < 5 && k === 2)).toBe(true);
+    act(() => interaction.onClick?.({ x: 500, y: 500 }, null, { alt: true }));
+    expect(lastDraft(issued).payload).toEqual({ cells: [[7, 7, 2]] });
+  });
+
+  it('the template inspector changes size and visibility', () => {
+    const tpl = { kind: 'template', id: 'tpl_a', version: V1, shape: 'burst', x: 64, y: 64, aimX: 64, aimY: 64, size: 3, color: 7, hidden: false } as Of<'template'>;
+    act(() => seed([scene, hero, wall, tpl]));
+    const { issued, interaction } = setup();
+    act(() => interaction.onClick?.({ x: 64, y: 64 }, { kind: 'template', id: 'tpl_a' }));
+    const size = screen.getByLabelText('Size (squares)') as HTMLInputElement;
+    fireEvent.focus(size);
+    fireEvent.change(size, { target: { value: '6' } });
+    fireEvent.blur(size);
+    expect(lastDraft(issued).payload).toEqual({ id: 'tpl_a', size: 6 });
+    fireEvent.click(screen.getByLabelText('Hidden from the table'));
+    expect(lastDraft(issued).payload).toEqual({ id: 'tpl_a', hidden: true });
+  });
+});

@@ -314,6 +314,104 @@
           "maxLength": 43691
         }
       }
+    },
+    "TableTemplate": {
+      "title": "TableTemplate",
+      "description": "An area template (parity-2) as the table sees it: never hidden ones, never one anchored under fog.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "id",
+        "version",
+        "shape",
+        "x",
+        "y",
+        "aimX",
+        "aimY",
+        "size",
+        "color"
+      ],
+      "properties": {
+        "kind": {
+          "const": "template"
+        },
+        "id": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "version": {
+          "$ref": "common.schema.json#/definitions/OpaqueToken"
+        },
+        "shape": {
+          "type": "string",
+          "enum": [
+            "burst",
+            "emanation",
+            "cone",
+            "line"
+          ]
+        },
+        "x": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "y": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "aimX": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "aimY": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 60
+        },
+        "color": {
+          "$ref": "common.schema.json#/definitions/Color"
+        }
+      }
+    },
+    "TerrainState": {
+      "title": "TerrainState",
+      "description": "One per scene (id \"terrain\"), parity-2. cells is a base64url run of 4-bit kinds, two cells per byte, low nibble first, exactly ceil(cols*rows/2) bytes; 0 none, 1 lava, 2 water, 3 poison, 4 blood; 5-15 reserved (a semantic rule). cols*rows is at most 262144.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "id",
+        "version",
+        "cols",
+        "rows",
+        "cells"
+      ],
+      "properties": {
+        "kind": {
+          "const": "terrain"
+        },
+        "id": {
+          "const": "terrain"
+        },
+        "version": {
+          "$ref": "common.schema.json#/definitions/OpaqueToken"
+        },
+        "cols": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2048
+        },
+        "rows": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2048
+        },
+        "cells": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]*$",
+          "maxLength": 174763
+        }
+      }
     }
   }
 }

@@ -3,7 +3,7 @@
 export type TableFrame = TableSnapshot | TablePatch;
 export type OpaqueToken = string;
 export type Id = string;
-export type TableEntity = TableScene | TableToken | TableLight | FogState;
+export type TableEntity = TableScene | TableToken | TableLight | FogState | TableTemplate | TerrainState;
 
 export interface TableSnapshot {
   schemaVersion: 1;
@@ -79,6 +79,32 @@ export interface FogState {
   rows: number;
   revealed: string;
 }
+/**
+ * An area template (parity-2) as the table sees it: never hidden ones, never one anchored under fog.
+ */
+export interface TableTemplate {
+  kind: "template";
+  id: Id;
+  version: OpaqueToken;
+  shape: "burst" | "emanation" | "cone" | "line";
+  x: number;
+  y: number;
+  aimX: number;
+  aimY: number;
+  size: number;
+  color: number;
+}
+/**
+ * One per scene (id "terrain"), parity-2. cells is a base64url run of 4-bit kinds, two cells per byte, low nibble first, exactly ceil(cols*rows/2) bytes; 0 none, 1 lava, 2 water, 3 poison, 4 blood; 5-15 reserved (a semantic rule). cols*rows is at most 262144.
+ */
+export interface TerrainState {
+  kind: "terrain";
+  id: "terrain";
+  version: OpaqueToken;
+  cols: number;
+  rows: number;
+  cells: string;
+}
 export interface TablePatch {
   schemaVersion: 1;
   frame: "patch";
@@ -94,6 +120,6 @@ export interface TablePatch {
   removed: TableEntityRef[];
 }
 export interface TableEntityRef {
-  kind: "scene" | "token" | "light" | "fog";
+  kind: "scene" | "token" | "light" | "fog" | "template" | "terrain";
   id: Id;
 }

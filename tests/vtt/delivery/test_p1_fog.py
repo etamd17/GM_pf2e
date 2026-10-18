@@ -151,7 +151,7 @@ def test_the_table_snapshot_with_fog_on_leaves_covered_entities_out(stack):
     [snap] = [payload(m) for m in received(client, "vtt.snapshot")]
     REGISTRY.validate("table", snap)
     kinds = {(e["kind"], e["id"]) for e in snap["entities"]}
-    assert kinds == {("scene", "scene_a"), ("fog", "fog")}
+    assert kinds == {("scene", "scene_a"), ("fog", "fog"), ("terrain", "terrain")}
     assert "Valeros" not in str(snap) and "light_torch" not in str(snap)
 
 

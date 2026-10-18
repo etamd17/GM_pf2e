@@ -72,7 +72,7 @@ export function MapHost({ surface, scene, onViewportChange, label, interaction, 
       ...(surface === 'gm'
         ? {
             interaction: {
-              onClick: (p, hit) => interactionRef.current?.onClick?.(p, hit),
+              onClick: (p, hit, modifiers) => interactionRef.current?.onClick?.(p, hit, modifiers),
               onTokenDrop: (id, x, y) => interactionRef.current?.onTokenDrop?.(id, x, y),
               canDragToken: (id) => interactionRef.current?.canDragToken?.(id) ?? false,
               onPointerMove: (p) => interactionRef.current?.onPointerMove?.(p),

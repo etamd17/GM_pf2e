@@ -18,7 +18,11 @@ export type Command =
   | EntityDelete
   | FogUpdate
   | FogReveal
-  | FogReset;
+  | FogReset
+  | TemplateCreate
+  | TemplateUpdate
+  | TerrainPaint
+  | TerrainReset;
 export type OpaqueToken = string;
 export type Id = string;
 
@@ -57,7 +61,7 @@ export interface SceneUpdate {
   payload: SceneUpdatePayload;
 }
 export interface ExpectedVersion {
-  kind: "scene" | "token" | "light" | "wall" | "fog";
+  kind: "scene" | "token" | "light" | "wall" | "fog" | "template" | "terrain";
   id: Id;
   version: OpaqueToken;
 }
@@ -277,7 +281,7 @@ export interface EntityDelete {
   payload: EntityDeletePayload;
 }
 export interface EntityDeletePayload {
-  kind: "token" | "light" | "wall";
+  kind: "token" | "light" | "wall" | "template";
   id: Id;
 }
 export interface FogUpdate {
@@ -323,6 +327,89 @@ export interface FogReset {
   campaignId: Id;
   sceneId: Id;
   type: "fog.reset";
+  /**
+   * @minItems 0
+   * @maxItems 1
+   */
+  expected: [] | [ExpectedVersion];
+  payload: EmptyPayload;
+}
+export interface TemplateCreate {
+  schemaVersion: 1;
+  commandId: OpaqueToken;
+  campaignId: Id;
+  sceneId: Id;
+  type: "template.create";
+  /**
+   * @minItems 0
+   * @maxItems 0
+   */
+  expected: [];
+  payload: TemplateCreatePayload;
+}
+export interface TemplateCreatePayload {
+  id: Id;
+  shape: "burst" | "emanation" | "cone" | "line";
+  x: number;
+  y: number;
+  aimX: number;
+  aimY: number;
+  size: number;
+  color: number;
+  hidden: boolean;
+}
+export interface TemplateUpdate {
+  schemaVersion: 1;
+  commandId: OpaqueToken;
+  campaignId: Id;
+  sceneId: Id;
+  type: "template.update";
+  /**
+   * @minItems 0
+   * @maxItems 1
+   */
+  expected: [] | [ExpectedVersion];
+  payload: TemplateUpdatePayload;
+}
+export interface TemplateUpdatePayload {
+  id: Id;
+  x?: number;
+  y?: number;
+  aimX?: number;
+  aimY?: number;
+  size?: number;
+  color?: number;
+  hidden?: boolean;
+}
+export interface TerrainPaint {
+  schemaVersion: 1;
+  commandId: OpaqueToken;
+  campaignId: Id;
+  sceneId: Id;
+  type: "terrain.paint";
+  /**
+   * @minItems 0
+   * @maxItems 0
+   */
+  expected: [];
+  payload: TerrainPaintPayload;
+}
+/**
+ * Each cell is [col, row, kind]; kind is 0-4 (a semantic rule: 0 none, 1 lava, 2 water, 3 poison, 4 blood).
+ */
+export interface TerrainPaintPayload {
+  /**
+   * @minItems 1
+   * @maxItems 20000
+   */
+  cells: [[number, number, number], ...[number, number, number][]];
+}
+export interface TerrainReset {
+  schemaVersion: 1;
+  commandId: OpaqueToken;
+  campaignId: Id;
+  sceneId: Id;
+  type: "terrain.reset";
   /**
    * @minItems 0
    * @maxItems 1

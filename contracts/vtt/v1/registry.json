@@ -130,7 +130,11 @@
     "entity.delete",
     "fog.update",
     "fog.reveal",
-    "fog.reset"
+    "fog.reset",
+    "template.create",
+    "template.update",
+    "terrain.paint",
+    "terrain.reset"
   ],
   "transientVariants": []
 }

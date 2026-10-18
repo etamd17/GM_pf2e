@@ -46,6 +46,23 @@ export function encodeFogBits(bytes: Uint8Array): string {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
+// Parity-2 terrain (mirrors terrain_ok / terrainOk): canonical base64url of
+// exactly ceil(cols*rows/2) bytes of 4-bit kinds, low nibble first, each <= 4
+// (5-15 reserved), spare nibble zero.
+export const TERRAIN_MAX_KIND = 4;
+
+export function terrainOk(item: Record<string, unknown>): boolean {
+  const { cols, rows, cells: text } = item;
+  if (!Number.isInteger(cols) || !Number.isInteger(rows) || typeof text !== 'string') return false;
+  const cells = (cols as number) * (rows as number);
+  if (cells > FOG_MAX_CELLS) return false;
+  const data = decodeFogBits(text);
+  if (data === null || data.length !== Math.ceil(cells / 2)) return false;
+  if (encodeFogBits(data) !== text) return false;
+  for (const byte of data) if ((byte & 0x0f) > TERRAIN_MAX_KIND || byte >> 4 > TERRAIN_MAX_KIND) return false;
+  return cells % 2 === 0 || (data[data.length - 1] as number) >> 4 === 0;
+}
+
 export function fogOk(item: Record<string, unknown>): boolean {
   const { cols, rows, revealed } = item;
   if (!Number.isInteger(cols) || !Number.isInteger(rows) || typeof revealed !== 'string') return false;
@@ -99,6 +116,7 @@ export function frameRulesHold(surface: FrameSurface, message: unknown): boolean
   }
   for (const item of items) {
     if (item.kind === 'fog' && !fogOk(item)) return false;
+    if (item.kind === 'terrain' && !terrainOk(item)) return false;
   }
   if (surface === 'gm') {
     for (const item of items) {
@@ -130,6 +148,8 @@ const TARGETED: Record<string, string | null> = {
   'entity.delete': null,
   'fog.update': 'fog',
   'fog.reset': 'fog',
+  'template.update': 'template',
+  'terrain.reset': 'terrain',
 };
 
 export function commandRulesHold(message: unknown): boolean {
@@ -147,7 +167,7 @@ export function commandRulesHold(message: unknown): boolean {
     const kind = TARGETED[m.type];
     const target: Keyed =
       kind === 'scene' ? { kind: 'scene', id: m.sceneId }
-        : kind === 'fog' ? { kind: 'fog', id: 'fog' }
+        : kind === 'fog' || kind === 'terrain' ? { kind, id: kind }
         : kind === null ? { kind: payload.kind, id: payload.id }
           : { kind, id: payload.id };
     if (!expected.includes(key(target))) return false;
@@ -156,5 +176,7 @@ export function commandRulesHold(message: unknown): boolean {
   if ((m.type === 'wall.create' || m.type === 'wall.update')
     && ['x1', 'y1', 'x2', 'y2'].every((k) => Object.hasOwn(payload, k))
     && payload.x1 === payload.x2 && payload.y1 === payload.y2) return false;
+  if (m.type === 'terrain.paint'
+    && ((payload.cells as ReadonlyArray<readonly number[]> | undefined) ?? []).some((cell) => (cell[2] as number) > TERRAIN_MAX_KIND)) return false;
   return true;
 }

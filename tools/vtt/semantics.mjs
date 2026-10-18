@@ -21,7 +21,24 @@ const TARGETED = {
   'token.update': 'token', 'token.move': 'token', 'light.update': 'light', 'wall.update': 'wall',
   'entity.delete': null,
   'fog.update': 'fog', 'fog.reset': 'fog',
+  'template.update': 'template', 'terrain.reset': 'terrain',
 };
+
+// Parity-2 terrain: cols*rows <= 262144, cells is the canonical unpadded
+// base64url of exactly ceil(cols*rows/2) bytes of 4-bit kinds (low nibble
+// first), each nibble <= 4, the spare nibble zero.
+export function terrainOk(item) {
+  const { cols, rows, cells: text } = item ?? {};
+  if (!Number.isInteger(cols) || !Number.isInteger(rows) || typeof text !== 'string') return false;
+  const cells = cols * rows;
+  if (cells > FOG_MAX_CELLS) return false;
+  if (!/^[A-Za-z0-9_-]*$/.test(text) || text.length % 4 === 1) return false;
+  const data = Buffer.from(text, 'base64url');
+  if (data.length !== Math.ceil(cells / 2)) return false;
+  if (data.toString('base64url') !== text) return false;
+  for (const byte of data) if ((byte & 0x0f) > 4 || byte >> 4 > 4) return false;
+  return cells % 2 === 0 || data[data.length - 1] >> 4 === 0;
+}
 
 // Parity-1 fog bitset: cols*rows <= 262144, revealed is the canonical unpadded
 // base64url of exactly ceil(cols*rows/8) bytes (round trip gives the same
@@ -47,7 +64,7 @@ function checkCommand(message) {
   if (Object.hasOwn(TARGETED, message.type)) {
     const kind = TARGETED[message.type];
     const target = kind === 'scene' ? ['scene', message.sceneId]
-      : kind === 'fog' ? ['fog', 'fog']
+      : kind === 'fog' || kind === 'terrain' ? [kind, kind]
         : kind === null ? [payload.kind, payload.id] : [kind, payload.id];
     if (!expected.includes(key({ kind: target[0], id: target[1] }))) return false;
   }
@@ -55,6 +72,7 @@ function checkCommand(message) {
   if ((message.type === 'wall.create' || message.type === 'wall.update')
       && ['x1', 'y1', 'x2', 'y2'].every((k) => Object.hasOwn(payload, k))
       && payload.x1 === payload.x2 && payload.y1 === payload.y2) return false;
+  if (message.type === 'terrain.paint' && (payload.cells ?? []).some((cell) => cell[2] > 4)) return false;
   return true;
 }
 
@@ -85,6 +103,7 @@ export function checkFrame(schemaKey, message) {
   }
   for (const item of items) {
     if (item.kind === 'fog' && !fogOk(item)) return false;
+    if (item.kind === 'terrain' && !terrainOk(item)) return false;
   }
   if (schemaKey === 'gm') {
     for (const item of items) {

@@ -138,6 +138,23 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
              "undo covers the room again")
     gm.get_by_role("button", name="Select", exact=True).click()
 
+    # --- terrain and templates (parity P2), still under fog ---------------------------------------
+    gm.get_by_role("button", name="Terrain", exact=True).click()
+    hero = token(probe(gm), "tok_hero")
+    click_scene(gm, hero["x"], hero["y"])            # lava, the hero's room: 150 cells
+    wait_for(gm, lambda s: s["scene"]["terrainPainted"] == 150, "the GM sees the painted room")
+    tv.wait_for_timeout(500)
+    assert probe(tv)["scene"]["terrainPainted"] == 0  # all of it is under fog: never sent to the TV
+    gm.get_by_role("button", name="Reveal", exact=True).click()
+    click_scene(gm, hero["x"], hero["y"])
+    wait_for(tv, lambda s: s["scene"]["terrainPainted"] == 150, "revealing the room shows its terrain")
+    gm.get_by_role("button", name="Template", exact=True).click()
+    click_scene(gm, hero["x"], hero["y"])            # a 3-square burst on the hero
+    wait_for(tv, lambda s: len(s["templates"]) == 1 and s["templates"][0]["shape"] == "burst",
+             "the burst appears on the TV")
+    shoot(gm, "p2-gm"), shoot(tv, "p2-tv")
+    gm.get_by_role("button", name="Select", exact=True).click()
+
     # --- the table moves to another scene -------------------------------------------------------
     gm.locator(".vtt-scene-picker").select_option("scene_docks")
     gm.wait_for_url("**sceneId=scene_docks**")

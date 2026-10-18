@@ -20,6 +20,7 @@ import {
   type ZoomLimits,
 } from './viewport';
 import { hitTest, snapTokenCentre, type Hit, type Point } from './interaction';
+import { templateOutline } from './templates';
 import { TextureLoader } from './textures';
 import { WALL_STYLES, wallPlan } from './walls';
 import { CANVAS_LABEL_FONT, ensureCanvasFont, uiFont } from '../ui/fonts';
@@ -34,7 +35,8 @@ import type { RendererStatus } from '../state/connection';
 // was a click or a drag; the workspace decides what that means and issues the
 // command. Nothing here talks to the transport.
 export interface RuntimeInteraction {
-  onClick?(point: Point, hit: Hit | null): void;
+  // `alt`: the Alt key was held (terrain paints one square instead of a room).
+  onClick?(point: Point, hit: Hit | null, modifiers?: { alt: boolean }): void;
   // A token dragged and released: its snapped centre. The token stays where it
   // was dropped until the projection (or an overlay) says otherwise.
   onTokenDrop?(id: string, x: number, y: number): void;
@@ -60,6 +62,13 @@ interface TokenView {
 }
 
 const BG_COLOR = 0x0c0a07;
+// Terrain kinds 1-4 (lava, water, poison, blood) as RGBA, about half opaque.
+const TERRAIN_COLORS: Record<number, [number, number, number, number]> = {
+  1: [214, 78, 26, 150],
+  2: [46, 120, 196, 140],
+  3: [104, 168, 44, 140],
+  4: [138, 18, 28, 150],
+};
 const SCENE_COLOR = 0x1d1a14;
 const GRID_COLOR = 0xc9a34e;
 const WALL_COLOR = 0xede4cf;
@@ -100,6 +109,8 @@ export class SceneRuntime {
   // scene, rebuilt only when the fog itself changes (its key is the projected
   // version, which a token move does not touch: /map's revision trap avoided).
   private fogMask: { key: string; texture: Texture } | null = null;
+  // Painted terrain (parity P2), the same one-pixel-per-cell approach.
+  private terrainMask: { key: string; texture: Texture } | null = null;
   private readonly textures = new TextureLoader<Texture>(
     { toTexture: (bitmap) => Texture.from(bitmap), destroy: (texture) => texture.destroy(true) },
     (url) => this.textureLoaded(url),
@@ -148,7 +159,8 @@ export class SceneRuntime {
       this.drawGrid(next);
       if (!this.userMovedViewport) this.fit();
     }
-    else if (prev.backgroundUrl !== next.backgroundUrl) this.drawBackground(next);
+    else if (prev.backgroundUrl !== next.backgroundUrl || prev.terrain !== next.terrain) this.drawBackground(next);
+    if (geometryChanged || prev?.templates !== next.templates) this.drawTemplates(next);
     if (geometryChanged || prev?.fog !== next.fog) this.drawFog(next);
     if (!prev || prev.walls !== next.walls) this.drawWalls(next);
     if (!prev || prev.lights !== next.lights) this.drawLights(next);
@@ -238,6 +250,8 @@ export class SceneRuntime {
     this.textures.dispose();
     this.fogMask?.texture.destroy(true);
     this.fogMask = null;
+    this.terrainMask?.texture.destroy(true);
+    this.terrainMask = null;
   }
 
   // Test probe (M6 harness): what this runtime is drawing. Only data the page
@@ -252,7 +266,9 @@ export class SceneRuntime {
       backgroundUrl: string | null;
       background: string;
       fog: { enabled: boolean; cols: number; rows: number; revealed: number } | null;
+      terrainPainted: number;
     } | null;
+    templates: Array<{ id: string; shape: string; size: number; hidden: boolean }>;
     tokens: Array<{ id: string; x: number; y: number; label: string; hidden: boolean; artUrl: string | null; art: string }>;
   } {
     const scene = this.scene;
@@ -278,8 +294,15 @@ export class SceneRuntime {
                   }, 0),
                 }
               : null,
+            terrainPainted: scene.terrain
+              ? Array.from({ length: scene.terrain.cols * scene.terrain.rows }).reduce<number>((n, _v, index) => {
+                  const byte = scene.terrain?.cells[index >> 1] ?? 0;
+                  return n + ((index & 1 ? byte >> 4 : byte & 0x0f) ? 1 : 0);
+                }, 0)
+              : 0,
           }
         : null,
+      templates: (scene?.templates ?? []).map((t) => ({ id: t.id, shape: t.shape, size: t.size, hidden: t.hidden === true })),
       tokens: (scene?.tokens ?? []).map((t) => ({
         id: t.id,
         x: t.x,
@@ -554,7 +577,7 @@ export class SceneRuntime {
       interaction.onTokenDrop?.(drag.token.id, snapped.x, snapped.y);
       return;
     }
-    if (!drag.moved) interaction.onClick?.(this.worldPoint(e), drag.hit);
+    if (!drag.moved) interaction.onClick?.(this.worldPoint(e), drag.hit, { alt: e.altKey });
   };
 
   private readonly onWheel = (e: WheelEvent): void => {
@@ -639,7 +662,66 @@ export class SceneRuntime {
       image.height = scene.height;
       root.addChild(image);
     }
-    this.replaceLayerContent('background', root);
+    // Terrain over the image and under the grid, as /map draws it.
+    const terrain = this.terrainSprite(scene);
+    if (terrain) root.addChild(terrain);
+    const layer = this.layer('background');
+    if (!layer) return;
+    // The shared terrain texture belongs to this runtime: keep it on replace.
+    for (const old of layer.removeChildren()) old.destroy({ children: true, texture: false });
+    layer.addChild(root);
+  }
+
+  private terrainSprite(scene: RenderScene): Sprite | null {
+    const terrain = scene.terrain;
+    if (!terrain || !terrain.cells.some((b) => b !== 0)) return null;
+    if (this.terrainMask?.key !== terrain.key) {
+      const canvas = document.createElement('canvas');
+      canvas.width = terrain.cols;
+      canvas.height = terrain.rows;
+      const context = canvas.getContext('2d');
+      if (!context) return null;
+      const image = context.createImageData(terrain.cols, terrain.rows);
+      for (let index = 0; index < terrain.cols * terrain.rows; index += 1) {
+        const byte = terrain.cells[index >> 1] ?? 0;
+        const kind = index & 1 ? byte >> 4 : byte & 0x0f;
+        const colour = TERRAIN_COLORS[kind];
+        if (!colour) continue;
+        const at = index * 4;
+        image.data[at] = colour[0];
+        image.data[at + 1] = colour[1];
+        image.data[at + 2] = colour[2];
+        image.data[at + 3] = colour[3];
+      }
+      context.putImageData(image, 0, 0);
+      this.terrainMask?.texture.destroy(true);
+      const texture = Texture.from(canvas);
+      texture.source.scaleMode = 'linear';
+      this.terrainMask = { key: terrain.key, texture };
+    }
+    const sprite = new Sprite(this.terrainMask.texture);
+    sprite.width = terrain.cols * scene.gridSize;
+    sprite.height = terrain.rows * scene.gridSize;
+    return sprite;
+  }
+
+  // Area templates (parity P2): a translucent fill and a stroke in their
+  // colour; hidden ones dimmed for the GM, never drawn on the table.
+  private drawTemplates(scene: RenderScene): void {
+    const templates = scene.templates ?? [];
+    if (templates.length === 0) {
+      this.replaceLayerContent('templates', null);
+      return;
+    }
+    const g = new Graphics();
+    for (const t of templates) {
+      const outline = templateOutline(t, scene.gridSize);
+      const alpha = t.hidden ? 0.45 : 1;
+      if (outline.kind === 'circle') g.circle(outline.x, outline.y, outline.r);
+      else g.poly(outline.points.flatMap((p) => [p.x, p.y]));
+      g.fill({ color: t.color, alpha: 0.2 * alpha }).stroke({ width: 3, color: t.color, alpha: 0.9 * alpha });
+    }
+    this.replaceLayerContent('templates', g);
   }
 
   private drawGrid(scene: RenderScene): void {

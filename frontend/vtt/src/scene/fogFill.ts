@@ -63,7 +63,7 @@ function crosses(ax: number, ay: number, bx: number, by: number, w: FillWall): b
 // Walls bucketed by the cells their bounding box touches, so each step only
 // tests the walls near it (a scene can have hundreds of walls and a quarter of
 // a million cells).
-function indexWalls(grid: FogGrid, walls: readonly FillWall[]): Map<number, FillWall[]> {
+function indexWalls(grid: Pick<FogGrid, 'cols' | 'rows' | 'gridSize'>, walls: readonly FillWall[]): Map<number, FillWall[]> {
   const buckets = new Map<number, FillWall[]>();
   const g = grid.gridSize;
   for (const w of walls) {
@@ -87,6 +87,12 @@ function indexWalls(grid: FogGrid, walls: readonly FillWall[]): Map<number, Fill
 // The connected region around `start`, bounded by blocking walls and the grid
 // edge, as the cells whose state `mode` would change.
 export function floodRegion(grid: FogGrid, start: Cell, walls: readonly FillWall[], mode: 'reveal' | 'hide'): Cell[] {
+  return regionCells(grid, start, walls).filter(([c, r]) => isRevealed(grid, c, r) !== (mode === 'reveal'));
+}
+
+// Every cell of the connected region around `start` (fog reveal and terrain
+// paint both use it; each keeps only the cells it would change).
+export function regionCells(grid: Pick<FogGrid, 'cols' | 'rows' | 'gridSize'>, start: Cell, walls: readonly FillWall[]): Cell[] {
   const buckets = indexWalls(grid, walls);
   const g = grid.gridSize;
   const centre = (c: number) => c * g + g / 2;
@@ -98,7 +104,7 @@ export function floodRegion(grid: FogGrid, start: Cell, walls: readonly FillWall
     const index = queue[head] as number;
     const col = index % grid.cols;
     const row = (index - col) / grid.cols;
-    if (isRevealed(grid, col, row) !== (mode === 'reveal')) changed.push([col, row]);
+    changed.push([col, row]);
     const near = buckets.get(index) ?? [];
     for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
       const nc = col + dc;
@@ -113,6 +119,13 @@ export function floodRegion(grid: FogGrid, start: Cell, walls: readonly FillWall
     }
   }
   return changed;
+}
+
+// The kind (0-4) of one cell of a 4-bit terrain grid (parity P2).
+export function terrainKindAt(cells: Uint8Array, cols: number, col: number, row: number): number {
+  const index = row * cols + col;
+  const byte = cells[index >> 1] ?? 0;
+  return index & 1 ? byte >> 4 : byte & 0x0f;
 }
 
 // A command carries at most this many cells (the contract's cap).

@@ -22,7 +22,11 @@ Rules (each a ``ProtocolValidationError``):
   262,144, and ``revealed`` is the canonical unpadded base64url of exactly
   ``ceil(cols * rows / 8)`` bytes (decoding and re-encoding gives the same
   string back, so lenient decoders cannot disagree), whose bits past
-  ``cols * rows`` are zero.
+  ``cols * rows`` are zero;
+* a ``terrain`` entity (batch parity-2): ``cols * rows`` is at most 262,144,
+  and ``cells`` is the canonical unpadded base64url of exactly
+  ``ceil(cols * rows / 2)`` bytes of 4-bit kinds (low nibble first), every
+  nibble at most 4 (5-15 are reserved), the spare nibble zero.
 
 Commands (``command``, batch commands-1):
 
@@ -32,7 +36,10 @@ Commands (``command``, batch commands-1):
   payload's entity otherwise;
 * ``controllerIds`` hold no repeats;
 * a created wall, or an updated one naming all four ends, is not zero-length;
-* ``fog.update`` and ``fog.reset`` (parity-1) name ``("fog", "fog")``.
+* ``fog.update`` and ``fog.reset`` (parity-1) name ``("fog", "fog")``;
+* ``template.update`` (parity-2) names its template, ``terrain.reset`` names
+  ``("terrain", "terrain")``;
+* every ``terrain.paint`` cell's kind (its third number) is at most 4.
 """
 
 from __future__ import annotations
@@ -61,6 +68,7 @@ _TARGETED = {
     'token.update': 'token', 'token.move': 'token', 'light.update': 'light', 'wall.update': 'wall',
     'entity.delete': None,
     'fog.update': 'fog', 'fog.reset': 'fog',
+    'template.update': 'template', 'terrain.reset': 'terrain',
 }
 
 
@@ -73,8 +81,8 @@ def command_target(message) -> tuple[str, str] | None:
         return None
     if kind == 'scene':
         return ('scene', message.get('sceneId'))
-    if kind == 'fog':
-        return ('fog', 'fog')
+    if kind in ('fog', 'terrain'):
+        return (kind, kind)
     if kind is None:
         return (payload.get('kind'), payload.get('id'))
     return (kind, payload.get('id'))
@@ -93,6 +101,9 @@ def check_command(message) -> None:
             k in payload for k in ('x1', 'y1', 'x2', 'y2')):
         if (payload['x1'], payload['y1']) == (payload['x2'], payload['y2']):
             raise SemanticError('zero-length wall')
+    if message.get('type') == 'terrain.paint':
+        if any(cell[2] > 4 for cell in payload.get('cells') or []):
+            raise SemanticError('reserved terrain kind')
 
 
 def fog_ok(item) -> bool:
@@ -113,6 +124,27 @@ def fog_ok(item) -> bool:
         return False
     spare = cells % 8
     return spare == 0 or data[-1] >> spare == 0
+
+
+def terrain_ok(item) -> bool:
+    """The parity-2 terrain rule (see the module docstring)."""
+    cols, rows, text = item.get('cols'), item.get('rows'), item.get('cells')
+    if not isinstance(cols, int) or not isinstance(rows, int) or not isinstance(text, str):
+        return False
+    cells = cols * rows
+    if cells > FOG_MAX_CELLS:
+        return False
+    try:
+        data = base64.urlsafe_b64decode(text + '=' * (-len(text) % 4))
+    except (binascii.Error, ValueError):
+        return False
+    if len(data) != -(-cells // 2):
+        return False
+    if base64.urlsafe_b64encode(data).rstrip(b'=').decode('ascii') != text:
+        return False
+    if any((byte & 0x0F) > 4 or (byte >> 4) > 4 for byte in data):
+        return False
+    return cells % 2 == 0 or data[-1] >> 4 == 0
 
 
 def check_frame(schema_key: str, message) -> None:
@@ -150,6 +182,8 @@ def check_frame(schema_key: str, message) -> None:
     for item in items:
         if item.get('kind') == 'fog' and not fog_ok(item):
             raise SemanticError('malformed fog bitset')
+        if item.get('kind') == 'terrain' and not terrain_ok(item):
+            raise SemanticError('malformed terrain cells')
     if schema_key == 'gm':
         for item in items:
             if item.get('kind') == 'token':

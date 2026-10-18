@@ -135,7 +135,7 @@ class VttEntity(Base):
             ["campaign_id", "scene_id"], ["vtt_scenes.campaign_id", "vtt_scenes.id"],
             name="fk_vtt_entities_scene", ondelete="CASCADE",
         ),
-        CheckConstraint("kind in ('token', 'light', 'wall')", name="known_kind"),
+        CheckConstraint("kind in ('token', 'light', 'wall', 'template')", name="known_entity_kind"),
         Index("ix_vtt_entities_campaign_scene", "campaign_id", "scene_id"),
     )
 
@@ -345,6 +345,35 @@ class VttFog(Base):
         ForeignKeyConstraint(
             ["campaign_id", "scene_id"], ["vtt_scenes.campaign_id", "vtt_scenes.id"],
             name="fk_vtt_fog_scene", ondelete="CASCADE",
+        ),
+        CheckConstraint("cols >= 1 AND rows >= 1 AND cols * rows <= 262144", name="grid_bounded"),
+    )
+
+
+class VttTerrain(Base):
+    """A scene's painted terrain (parity P2, handoff 065): cosmetic, like /map.
+    At most one per scene; no row means nothing painted. ``cells`` holds a 4-bit
+    kind per grid cell, two cells per byte, low nibble first (0 none, 1 lava,
+    2 water, 3 poison, 4 blood). ``cols``/``rows`` record the grid it was
+    painted on; a mismatch (only possible while nothing is painted) reads as
+    nothing painted."""
+
+    __tablename__ = "vtt_terrain"
+
+    campaign_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    scene_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    cols: Mapped[int] = mapped_column(Integer, nullable=False)
+    rows: Mapped[int] = mapped_column(Integer, nullable=False)
+    cells: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
+
+    __table_args__ = (
+        PrimaryKeyConstraint("campaign_id", "scene_id", name="pk_vtt_terrain"),
+        ForeignKeyConstraint(
+            ["campaign_id", "scene_id"], ["vtt_scenes.campaign_id", "vtt_scenes.id"],
+            name="fk_vtt_terrain_scene", ondelete="CASCADE",
         ),
         CheckConstraint("cols >= 1 AND rows >= 1 AND cols * rows <= 262144", name="grid_bounded"),
     )

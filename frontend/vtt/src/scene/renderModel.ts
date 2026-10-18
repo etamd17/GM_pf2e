@@ -53,6 +53,28 @@ export interface RenderFog {
   readonly key: string;
 }
 
+// An area template (parity P2). Size is in squares.
+export interface RenderTemplate {
+  readonly id: string;
+  readonly shape: 'burst' | 'emanation' | 'cone' | 'line';
+  readonly x: number;
+  readonly y: number;
+  readonly aimX: number;
+  readonly aimY: number;
+  readonly size: number;
+  readonly color: number;
+  readonly hidden?: boolean; // GM only
+}
+
+// Painted terrain (parity P2): a 4-bit kind per cell, two cells per byte, low
+// nibble first. `key` changes exactly when the terrain does.
+export interface RenderTerrain {
+  readonly cols: number;
+  readonly rows: number;
+  readonly cells: Uint8Array;
+  readonly key: string;
+}
+
 export interface RenderScene {
   readonly width: number;
   readonly height: number;
@@ -66,6 +88,8 @@ export interface RenderScene {
   // stretched to the scene's size.
   readonly backgroundUrl?: string;
   readonly fog?: RenderFog;
+  readonly terrain?: RenderTerrain;
+  readonly templates?: readonly RenderTemplate[];
   readonly tokens: readonly RenderToken[];
   readonly walls: readonly RenderWall[];
   readonly lights: readonly RenderLight[];

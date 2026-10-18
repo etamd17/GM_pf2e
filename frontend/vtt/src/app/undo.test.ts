@@ -18,6 +18,10 @@ import {
   fogReveal,
   fogUpdate,
   showOnTable,
+  templateCreate,
+  templateUpdate,
+  terrainPaint,
+  terrainReset,
   type Draft,
 } from './gmCommands';
 import { UndoManager, inverseFor, overlayFor, targetOf } from './undo';
@@ -334,5 +338,35 @@ describe('fog undo (parity P1)', () => {
   it('fog commands target the fog entity and show no overlay', () => {
     expect(targetOf(fogReveal('hide', [[0, 0]]))).toEqual({ kind: 'fog', id: 'fog' });
     expect(overlayFor(fogReveal('hide', [[0, 0]]))).toBeNull();
+  });
+});
+
+describe('template and terrain undo (parity P2)', () => {
+  const V1 = 'v' + 'A'.repeat(24);
+  const tpl = { kind: 'template', id: 'tpl_a', version: V1, shape: 'cone', x: 64, y: 64, aimX: 192, aimY: 64, size: 3, color: 7, hidden: false } as Extract<GmEntity, { kind: 'template' }>;
+  const terrainE = (cells: string) => ({ kind: 'terrain', id: 'terrain', version: V1, cols: 3, rows: 1, cells }) as Extract<GmEntity, { kind: 'terrain' }>;
+
+  it('template create, update and delete reverse like any entity', () => {
+    expect(inverseFor(templateCreate('tpl_a', 'cone', { x: 64, y: 64 }, { x: 192, y: 64 }, 3), undefined)?.make(tpl)?.type).toBe('entity.delete');
+    const back = inverseFor(templateUpdate(tpl, { size: 5, x: 96 }), tpl)?.make({ ...tpl, size: 5, x: 96 });
+    expect(back?.payload).toEqual({ id: 'tpl_a', size: 3, x: 64 });
+    expect(valid(back as Draft)).toBe(true);
+    const recreated = inverseFor(deleteEntity(tpl), tpl)?.make(undefined) as Draft;
+    expect(recreated.type).toBe('template.create');
+    expect(recreated.payload).toMatchObject({ id: 'tpl_a', shape: 'cone', aimX: 192, size: 3, color: 7, hidden: false });
+    expect(valid(recreated)).toBe(true);
+  });
+
+  it('a terrain paint is undone by repainting each cell its previous kind, in one command', () => {
+    const before = terrainE('QQM'); // kinds 1, 4, 3
+    const back = inverseFor(terrainPaint([[0, 0, 2], [2, 0, 0]]), before)?.make(terrainE('QgA'));
+    expect(back).toEqual({ type: 'terrain.paint', expected: [], payload: { cells: [[0, 0, 1], [2, 0, 3]] } });
+    expect(valid(back as Draft)).toBe(true);
+  });
+
+  it('a terrain reset is undone by repainting what was painted; resetting nothing is not undoable', () => {
+    const back = inverseFor(terrainReset(terrainE('QQM')), terrainE('QQM'))?.make(terrainE('AAA'));
+    expect(back?.payload).toEqual({ cells: [[0, 0, 1], [1, 0, 4], [2, 0, 3]] });
+    expect(inverseFor(terrainReset(terrainE('AAA')), terrainE('AAA'))).toBeNull();
   });
 });

@@ -85,7 +85,7 @@ export function setDoorState(wall: Of<'wall'>, doorState: DoorState): Draft {
   return { type: 'wall.update', expected: expect(wall), payload: { id: wall.id, doorState } };
 }
 
-export function deleteEntity(entity: Of<'token'> | Of<'light'> | Of<'wall'>): Draft {
+export function deleteEntity(entity: Of<'token'> | Of<'light'> | Of<'wall'> | Of<'template'>): Draft {
   return { type: 'entity.delete', expected: expect(entity), payload: { kind: entity.kind, id: entity.id } };
 }
 
@@ -129,6 +129,53 @@ export function fogReveal(mode: 'reveal' | 'hide', cells: readonly FogCell[]): D
 
 export function fogReset(fog: Of<'fog'>): Draft {
   return { type: 'fog.reset', expected: expect(fog), payload: {} };
+}
+
+// --- area templates and terrain (parity P2) ---------------------------------------------------
+
+export type TemplateShape = Of<'template'>['shape'];
+export const TEMPLATE_COLOR = 0x75c5eb;
+
+export function templateCreate(
+  id: string,
+  shape: TemplateShape,
+  at: Point,
+  aim: Point,
+  size: number,
+  extras: { color?: number; hidden?: boolean } = {},
+): Draft {
+  return {
+    type: 'template.create',
+    expected: [],
+    payload: {
+      id, shape, x: at.x, y: at.y, aimX: aim.x, aimY: aim.y, size,
+      color: extras.color ?? TEMPLATE_COLOR, hidden: extras.hidden ?? false,
+    },
+  };
+}
+
+export type TemplatePatch = Partial<Pick<Of<'template'>, 'x' | 'y' | 'aimX' | 'aimY' | 'size' | 'color' | 'hidden'>>;
+
+export function templateUpdate(template: Of<'template'>, patch: TemplatePatch): Draft {
+  return { type: 'template.update', expected: expect(template), payload: { id: template.id, ...patch } };
+}
+
+export type TerrainCell = [number, number, number]; // col, row, kind (0 none, 1-4)
+export const TERRAIN_KINDS = [
+  { kind: 1, label: 'Lava' },
+  { kind: 2, label: 'Water' },
+  { kind: 3, label: 'Poison' },
+  { kind: 4, label: 'Blood' },
+] as const;
+
+// A kind per cell: a set operation with no precondition, whose inverse is the
+// same command with each cell's previous kind.
+export function terrainPaint(cells: readonly TerrainCell[]): Draft {
+  return { type: 'terrain.paint', expected: [], payload: { cells: cells.map(([c, r, k]) => [c, r, k]) } };
+}
+
+export function terrainReset(terrain: Of<'terrain'>): Draft {
+  return { type: 'terrain.reset', expected: expect(terrain), payload: {} };
 }
 
 // --- optimistic overlays ---------------------------------------------------------------------

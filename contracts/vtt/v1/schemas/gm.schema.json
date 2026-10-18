@@ -27,7 +27,9 @@
             "token",
             "light",
             "wall",
-            "fog"
+            "fog",
+            "template",
+            "terrain"
           ]
         },
         "id": {
@@ -291,6 +293,12 @@
         },
         {
           "$ref": "common.schema.json#/definitions/FogState"
+        },
+        {
+          "$ref": "#/definitions/GmTemplate"
+        },
+        {
+          "$ref": "common.schema.json#/definitions/TerrainState"
         }
       ]
     },
@@ -420,6 +428,67 @@
         },
         "originCommandId": {
           "$ref": "common.schema.json#/definitions/OpaqueToken"
+        }
+      }
+    },
+    "GmTemplate": {
+      "title": "GmTemplate",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "id",
+        "version",
+        "shape",
+        "x",
+        "y",
+        "aimX",
+        "aimY",
+        "size",
+        "color",
+        "hidden"
+      ],
+      "properties": {
+        "kind": {
+          "const": "template"
+        },
+        "id": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "version": {
+          "$ref": "common.schema.json#/definitions/OpaqueToken"
+        },
+        "shape": {
+          "type": "string",
+          "enum": [
+            "burst",
+            "emanation",
+            "cone",
+            "line"
+          ]
+        },
+        "x": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "y": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "aimX": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "aimY": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 60
+        },
+        "color": {
+          "$ref": "common.schema.json#/definitions/Color"
+        },
+        "hidden": {
+          "type": "boolean"
         }
       }
     }

@@ -81,6 +81,8 @@ class Plan:
     # Fog (parity P1): on/off and the revealed cells, or None when there is none
     # to bring across.
     fog: dict[str, Any] | None = None
+    # Terrain (parity P2): (col, row, kind) cells, or None when none to bring.
+    terrain: dict[str, Any] | None = None
 
 
 def vtt_id(legacy_id: Any) -> str:
@@ -208,10 +210,7 @@ def plan_scene(legacy: dict[str, Any]) -> Plan:
 
     # --- what has no VTT equivalent yet ------------------------------------------------------
     _plan_fog(plan, legacy, grid)
-    if _count(legacy.get("templates")):
-        plan.dropped.append(f"{_count(legacy.get('templates'))} template(s)")
-    if _count(legacy.get("terrain")):
-        plan.dropped.append(f"{_count(legacy.get('terrain'))} terrain area(s)")
+    _plan_terrain(plan, legacy, grid)
     settings = legacy.get("settings") or {}
     if settings.get("dynamic_lighting"):
         plan.dropped.append("dynamic lighting and vision")
@@ -297,7 +296,94 @@ def plan_scene(legacy: dict[str, Any]) -> Plan:
         _add(plan, "light", light.get("id"), lid, data, light.get("visible_to_players", True) is False)
     if intensities:
         plan.dropped.append(f"light intensity on {intensities} light(s)")
+    _plan_templates(plan, legacy)
     return plan
+
+
+TEMPLATE_SHAPES = ("burst", "emanation", "cone", "line")
+TEMPLATE_COLOR = 0x75C5EB                     # /map's one template colour
+TERRAIN_KIND = {"lava": 1, "water": 2, "poison": 3, "blood": 4}
+
+
+def _plan_templates(plan: Plan, legacy: dict[str, Any]) -> None:
+    """/map templates (pixel radius, anchor x1/y1, aim x2/y2) become VTT
+    templates sized in squares. The emanation's token link is not kept, and a
+    line wider than one square is drawn one square wide; both are reported."""
+    grid_size = plan.scene["grid_size"]
+    linked = wide = skipped = 0
+    for tpl in legacy.get("templates") or []:
+        if not isinstance(tpl, dict) or tpl.get("kind") not in TEMPLATE_SHAPES:
+            skipped += 1
+            continue
+        tid = vtt_id(tpl.get("id"))
+        what = f"template {tid}"
+        x = _number(tpl.get("x1", 0), 0, COORD_MAX, 0, f"{what} x", plan)
+        y = _number(tpl.get("y1", 0), 0, COORD_MAX, 0, f"{what} y", plan)
+        try:
+            squares = float(tpl.get("radius", grid_size)) / grid_size
+        except (TypeError, ValueError):
+            squares = 1
+        size = int(max(1, min(60, round(squares))))
+        data = {
+            "shape": tpl["kind"], "x": x, "y": y,
+            "aimX": _number(tpl.get("x2", x), 0, COORD_MAX, x, f"{what} aim x", plan),
+            "aimY": _number(tpl.get("y2", y), 0, COORD_MAX, y, f"{what} aim y", plan),
+            "size": size, "color": TEMPLATE_COLOR,
+        }
+        linked += bool(tpl.get("source_token_id"))
+        try:
+            wide += tpl["kind"] == "line" and float(tpl.get("width", grid_size)) > grid_size * 1.5
+        except (TypeError, ValueError):
+            pass
+        _add(plan, "template", tpl.get("id"), tid, data, tpl.get("visible_to_players", True) is False)
+    if linked:
+        plan.dropped.append(f"emanation link to its token on {linked} template(s) (the area stays where it was)")
+    if wide:
+        plan.dropped.append(f"line width on {wide} template(s) (VTT lines are one square wide)")
+    if skipped:
+        plan.dropped.append(f"{skipped} template(s) of an unknown shape")
+
+
+def _plan_terrain(plan: Plan, legacy: dict[str, Any], grid: dict[str, Any]) -> None:
+    """/map terrain layers ({kind, cells: ["col,row"]}) become the VTT terrain
+    grid when the grid starts at the corner. An empty source replaces an
+    earlier import's terrain, as fog does."""
+    from vtt import fog as fog_rules
+    layers = legacy.get("terrain")
+    if not isinstance(layers, list):
+        return
+    if not layers:
+        plan.terrain = {"cells": [], "replace_only": True}
+        return
+    if grid.get("offset_x") or grid.get("offset_y"):
+        plan.dropped.append("terrain (the legacy grid is offset)")
+        return
+    cols, rows = fog_rules.grid_of(plan.scene["width"], plan.scene["height"], plan.scene["grid_size"])
+    if not fog_rules.available(cols, rows):
+        plan.dropped.append("terrain (the scene's grid is too large for terrain)")
+        return
+    cells: dict[tuple[int, int], int] = {}
+    outside = unknown = 0
+    for layer in layers:
+        if not isinstance(layer, dict) or layer.get("kind") not in TERRAIN_KIND:
+            unknown += 1
+            continue
+        for text in layer.get("cells") or []:
+            try:
+                col, row = (int(part) for part in str(text).split(","))
+            except ValueError:
+                outside += 1
+                continue
+            if 0 <= col < cols and 0 <= row < rows:
+                cells[(col, row)] = TERRAIN_KIND[layer["kind"]]
+            else:
+                outside += 1
+    if outside:
+        plan.dropped.append(f"{outside} terrain cell(s) outside the scene")
+    if unknown:
+        plan.dropped.append(f"{unknown} terrain layer(s) of an unknown kind")
+    plan.terrain = {"cells": [(c, r, k) for (c, r), k in sorted(cells.items())],
+                    "replace_only": not cells}
 
 
 class Refused(Exception):
@@ -372,6 +458,8 @@ def apply_plan(db: Database, campaign_id: str, plan: Plan, *, on_table: bool = F
                 counts["updated"] += 1
             changed.append([kind, eid])
         session.flush()
+        if plan.terrain is not None and _write_terrain(session, campaign_id, plan):
+            changed.append(["terrain", "terrain"])
         if plan.fog is not None and _write_fog(session, campaign_id, plan):
             # Written before sizing (its bitset counts too). Fog decides what the
             # table sees, so every token and light of the scene is rechecked,
@@ -455,6 +543,30 @@ def resolve_assets(plan: Plan, read_asset) -> None:
         plan.uploads.append(data)
     if missing:
         plan.dropped.append(f"token art on {missing} token(s) (file missing or unreadable)")
+
+
+def _write_terrain(session, campaign_id: str, plan: Plan) -> bool:
+    """The scene's terrain as /map had it; an empty source removes an earlier
+    import's terrain (no row reads as nothing painted)."""
+    from vtt import fog as fog_rules
+    from vtt import terrain as terrain_rules
+    from vtt.storage.models import VttTerrain
+    row = session.get(VttTerrain, (campaign_id, plan.scene_id))
+    if plan.terrain.get("replace_only"):
+        if row is None:
+            return False
+        session.delete(row)
+        session.flush()
+        return True
+    cols, rows = fog_rules.grid_of(plan.scene["width"], plan.scene["height"], plan.scene["grid_size"])
+    view = terrain_rules.TerrainView(cols, rows, terrain_rules.empty_cells(cols, rows))
+    cells = terrain_rules.with_cells(view, plan.terrain["cells"])
+    if row is None:
+        session.add(VttTerrain(campaign_id=campaign_id, scene_id=plan.scene_id, cols=cols, rows=rows, cells=cells))
+    else:
+        row.cols, row.rows, row.cells = cols, rows, cells
+    session.flush()
+    return True
 
 
 def _write_fog(session, campaign_id: str, plan: Plan) -> bool:

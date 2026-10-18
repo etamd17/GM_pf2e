@@ -83,7 +83,7 @@ def test_what_cannot_come_across_is_reported():
     plan = importer.plan_scene(scene)
     importer.resolve_assets(plan, None)          # no /map file reader: the image cannot come across
     dropped = " | ".join(plan.dropped)
-    for words in ("background image", "fog", "1 template", "1 terrain", "grid offset", "dynamic lighting",
+    for words in ("background image", "fog", "1 template", "terrain (the legacy grid is offset)", "grid offset", "dynamic lighting",
                   "token art on 1", "tracker links (live HP and conditions) on 1", "light intensity on 1",
                   "vision radius on 2"):
         assert words in dropped, words

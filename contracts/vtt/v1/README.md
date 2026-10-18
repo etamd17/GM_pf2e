@@ -191,3 +191,45 @@ ship with it. Digest `607148b1...`.
   - A `scene.update` that changes the grid is refused (`rule-violation`)
     while any cell is revealed.
   - A scene too large for fog answers `rule-violation` to any fog command.
+
+## Area templates and terrain, batch parity-2 (P2, Claude, 2026-10-17)
+
+Digest `32bd0faa...`.
+
+- **Entity `template`**: `GmTemplate` for the GM, `TableTemplate` for the table, which has no
+  `hidden`. Fields:
+  - `shape`: burst, emanation, cone or line;
+  - `x`, `y`: the anchor, in scene px;
+  - `aimX`, `aimY`: the aim, used by cone and line;
+  - `size`: in squares, 1 to 60;
+  - `color`;
+  - `hidden`: GM only.
+
+  Geometry follows /map: Euclidean distance, a 90-degree cone, a line one square wide. Up to
+  512 per scene.
+- **Commands for templates:**
+  - `template.create`, with a client id and no precondition;
+  - `template.update`, which changes the anchor, aim, size, colour or hidden flag, against its
+    version. The shape is fixed.
+  - `entity.delete` accepts `template`.
+- **Entity `terrain`** (`TerrainState`), one per scene with id `terrain`, sized to the scene grid
+  like fog:
+  - `cells` is a base64url run of 4-bit kinds, two cells per byte, low nibble first.
+  - Kinds: 0 none, 1 lava, 2 water, 3 poison, 4 blood. 5 to 15 are reserved.
+  - It is cosmetic, as on /map.
+- **Commands for terrain:**
+  - `terrain.paint {cells: [[col,row,kind], ...]}`, up to 20,000 cells, with no precondition.
+    Each cell carries its kind, so the inverse is the same command with the previous kinds.
+  - `terrain.reset {}`, against the terrain version.
+- **Semantic rules**, in all three runtimes:
+  - a terrain entity has at most 262,144 cells;
+  - `cells` is the canonical encoding of exactly `ceil(cols*rows/2)` bytes;
+  - every nibble is at most 4, and the spare nibble is zero;
+  - every `terrain.paint` cell's kind is at most 4. The Python boundary does not accept tuple
+    `items`, so this is a rule rather than schema;
+  - `template.update` names its template;
+  - `terrain.reset` names `("terrain", "terrain")`.
+- **Server rules:**
+  - The table projection leaves out a hidden template, or one whose anchor cell is under fog.
+  - The table's terrain is masked by fog: unrevealed cells are sent as 0.
+  - A grid change is refused while any terrain is painted.

@@ -96,3 +96,19 @@ describe('fog (parity P1)', () => {
     expect(adaptEntities(map(scene, fogEntity('vf2', 'IQAA'))).fog).toBeUndefined();
   });
 });
+
+describe('templates and terrain (parity P2)', () => {
+  it('maps templates (hidden kept for the GM) and decodes terrain, caching both by version', () => {
+    const cache = newAdaptCache();
+    const tpl = { kind: 'template', id: 'tpl_a', version: 'vt1', shape: 'cone', x: 10, y: 20, aimX: 90, aimY: 20, size: 3, color: 5, hidden: true };
+    // 3 x 1 cells -> 2 bytes: kinds 1, 4, 3
+    const terrain = { kind: 'terrain', id: 'terrain', version: 'vr1', cols: 3, rows: 1, cells: 'QQM' };
+    const out = adaptEntities(map(scene, tpl, terrain), cache);
+    expect(out.templates).toEqual([{ id: 'tpl_a', shape: 'cone', x: 10, y: 20, aimX: 90, aimY: 20, size: 3, color: 5, hidden: true }]);
+    expect(Array.from(out.terrain?.cells ?? [])).toEqual([0x41, 0x03]);
+    const again = adaptEntities(map(scene, tpl, terrain), cache);
+    expect(again.templates?.[0]).toBe(out.templates?.[0]);
+    expect(again.terrain).toBe(out.terrain);
+    expect(adaptEntities(map(scene), cache).templates).toBeUndefined(); // gone: dropped from the cache
+  });
+});

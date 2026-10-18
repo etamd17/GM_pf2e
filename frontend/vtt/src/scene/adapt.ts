@@ -1,6 +1,6 @@
 import type { RenderLight, RenderScene, RenderToken, RenderWall } from './renderModel';
 import { decodeFogBits } from '../protocol/semantics';
-import { EMPTY_SCENE, isMediaUrl, type RenderFog } from './renderModel';
+import { EMPTY_SCENE, isMediaUrl, type RenderFog, type RenderTemplate, type RenderTerrain } from './renderModel';
 
 // The one adapter between projected wire entities and the renderer's model
 // (renderModel.ts). It reads only the fields its surface's projection carries,
@@ -26,6 +26,8 @@ const num = (v: unknown, fallback = 0): number => (typeof v === 'number' && Numb
 
 export interface AdaptCache {
   fog?: { version: string; fog: RenderFog };
+  terrain?: { version: string; terrain: RenderTerrain };
+  templates?: Map<string, { version: string; template: RenderTemplate }>;
   tokens: Map<string, { version: string; token: RenderToken }>;
   lights: Map<string, { version: string; light: RenderLight }>;
   walls: Map<string, { version: string; wall: RenderWall }>;
@@ -58,9 +60,46 @@ export function adaptEntities(
   const walls: RenderWall[] = [];
   const seen = { tokens: new Set<string>(), lights: new Set<string>(), walls: new Set<string>() };
   let fog: RenderFog | undefined;
+  let terrain: RenderTerrain | undefined;
+  const templates: RenderTemplate[] = [];
+  const templateCache = (cache.templates ??= new Map());
+  const seenTemplates = new Set<string>();
   for (const e of entities.values()) {
     if (e.kind === 'scene') {
       scene = e;
+    } else if (e.kind === 'template') {
+      seenTemplates.add(e.id);
+      const hit = templateCache.get(e.id);
+      if (hit && hit.version === e.version) {
+        templates.push(hit.template);
+        continue;
+      }
+      const shape = e.shape === 'emanation' || e.shape === 'cone' || e.shape === 'line' ? e.shape : 'burst';
+      const template: RenderTemplate = {
+        id: e.id,
+        shape,
+        x: num(e.x),
+        y: num(e.y),
+        aimX: num(e.aimX, num(e.x)),
+        aimY: num(e.aimY, num(e.y)),
+        size: num(e.size, 1),
+        color: num(e.color),
+        ...(e.hidden === true ? { hidden: true } : {}),
+      };
+      templateCache.set(e.id, { version: e.version, template });
+      templates.push(template);
+    } else if (e.kind === 'terrain') {
+      if (cache.terrain?.version === e.version) {
+        terrain = cache.terrain.terrain;
+        continue;
+      }
+      const cols = num(e.cols, 1);
+      const rows = num(e.rows, 1);
+      const cells = typeof e.cells === 'string' ? decodeFogBits(e.cells) : null;
+      if (cells && cells.length === Math.ceil((cols * rows) / 2)) {
+        terrain = { cols, rows, cells, key: e.version };
+        cache.terrain = { version: e.version, terrain };
+      }
     } else if (e.kind === 'fog') {
       if (cache.fog?.version === e.version) {
         fog = cache.fog.fog;
@@ -131,6 +170,7 @@ export function adaptEntities(
       walls.push(wall);
     }
   }
+  for (const id of [...templateCache.keys()]) if (!seenTemplates.has(id)) templateCache.delete(id);
   for (const key of ['tokens', 'lights', 'walls'] as const) {
     for (const id of [...cache[key].keys()]) if (!seen[key].has(id)) cache[key].delete(id);
   }
@@ -144,6 +184,8 @@ export function adaptEntities(
     showGrid: scene ? scene.showGrid === true : EMPTY_SCENE.showGrid,
     ...(assetUrl(media, scene?.backgroundAssetId) ? { backgroundUrl: assetUrl(media, scene?.backgroundAssetId) as string } : {}),
     ...(fog ? { fog } : {}),
+    ...(terrain ? { terrain } : {}),
+    ...(templates.length ? { templates: templates.sort(byId) } : {}),
     tokens,
     walls,
     lights,

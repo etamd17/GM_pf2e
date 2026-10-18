@@ -3,12 +3,14 @@ import { tokenRadius, type RenderScene } from './renderModel';
 // Pure map geometry for GM input: what is under a point, and where a dropped
 // token lands. No Pixi, so it is tested directly.
 
+import { templateContains } from './templates';
+
 export interface Point {
   x: number;
   y: number;
 }
 
-export type Hit = { kind: 'token' | 'light' | 'wall'; id: string };
+export type Hit = { kind: 'token' | 'light' | 'wall' | 'template'; id: string };
 
 // Screen-pixel tolerances, converted to scene units by the current zoom.
 export const LIGHT_HANDLE_PX = 12;
@@ -44,7 +46,16 @@ export function hitTest(scene: RenderScene, p: Point, scale: number): Hit | null
       bestDistance = d;
     }
   }
-  return best;
+  if (best) return best;
+  // Templates last (parity P2): anywhere inside one picks it, the topmost
+  // first. /map picked only near the outer ring, so clicking inside a burst
+  // missed it (audit finding 18).
+  const templates = scene.templates ?? [];
+  for (let i = templates.length - 1; i >= 0; i -= 1) {
+    const t = templates[i];
+    if (t && templateContains(t, scene.gridSize, p)) return { kind: 'template', id: t.id };
+  }
+  return null;
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));

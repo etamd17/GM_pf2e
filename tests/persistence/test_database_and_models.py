@@ -157,6 +157,7 @@ def test_schema_exposes_the_approved_additive_tables():
         "vtt_scenes",
         "vtt_table_grants",
         "vtt_table_pointers",
+        "vtt_terrain",            # VTT terrain (migration 20261017_0009)
     }
 
 

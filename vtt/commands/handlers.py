@@ -18,19 +18,22 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from vtt import fog
+from vtt import terrain as terrain_rules
 from vtt.projection import serializers as S
-from vtt.storage.models import VttEntity, VttFog, VttScene, VttTablePointer
+from vtt.storage.models import VttEntity, VttFog, VttScene, VttTablePointer, VttTerrain
 
 ENTITY_DATA = {
     "token": ("x", "y", "size", "label", "color", "artAssetId", "actorId", "locked", "controllerIds"),
     "light": ("x", "y", "radius", "color"),
     "wall": ("x1", "y1", "x2", "y2", "doorState"),
+    "template": ("shape", "x", "y", "aimX", "aimY", "size", "color"),
 }
-HIDEABLE = ("token", "light")
+HIDEABLE = ("token", "light", "template")
+MAX_TEMPLATES = 512          # per scene (parity P2)
 SCENE_COLUMNS = {"name": "name", "width": "width", "height": "height", "gridSize": "grid_size",
                  "showGrid": "show_grid", "backgroundAssetId": "background_asset_id",
                  "published": "published"}
@@ -144,6 +147,10 @@ def scene_update(ctx: Context) -> dict[str, Any]:
         _row, view = fog.load(ctx.session, scene, for_update=True)
         if view is not None and view.any_revealed():
             raise Rejection("rule-violation")
+        # Painted terrain names cells too (parity P2): the same refusal.
+        _trow, painted = terrain_rules.load(ctx.session, scene, for_update=True)
+        if painted is not None and painted.any_painted():
+            raise Rejection("rule-violation")
         # Nor may new geometry silently turn fog off: a grid too large for fog
         # has no fog, which would show the table everything it covered
         # (handoff 062). The GM turns fog off first, deliberately.
@@ -199,9 +206,11 @@ def _fog_event(ctx: Context) -> dict[str, Any]:
     keys = ctx.session.execute(
         select(VttEntity.kind, VttEntity.id).where(
             VttEntity.campaign_id == ctx.campaign_id, VttEntity.scene_id == ctx.scene_id,
-            VttEntity.kind.in_(("token", "light"))).order_by(VttEntity.kind, VttEntity.id)
+            VttEntity.kind.in_(("token", "light", "template"))).order_by(VttEntity.kind, VttEntity.id)
     ).all()
-    return {"kind": "entities", "sceneId": ctx.scene_id, "changed": [["fog", "fog"]] + [[k, i] for k, i in keys]}
+    # Terrain too: the table's copy is masked by fog (parity P2).
+    return {"kind": "entities", "sceneId": ctx.scene_id,
+            "changed": [["fog", "fog"], ["terrain", "terrain"]] + [[k, i] for k, i in keys]}
 
 
 def _fog(ctx: Context, *, versioned: bool):
@@ -247,6 +256,44 @@ def fog_reset(ctx: Context) -> dict[str, Any]:
     return _fog_event(ctx)
 
 
+# --- terrain (parity-2) -------------------------------------------------------------------------
+
+def _terrain(ctx: Context, *, versioned: bool):
+    scene = _lock_scene(ctx)
+    row, view = terrain_rules.load(ctx.session, scene, for_update=True)
+    if view is None:
+        raise Rejection("rule-violation")      # the scene's grid is too large for terrain
+    if versioned:
+        _check_version(ctx, "terrain", "terrain", S.terrain_entity(ctx.key, ctx.campaign_id, "gm", view))
+    return row, view
+
+
+def _write_terrain(ctx: Context, row: VttTerrain | None, view, cells: bytes) -> dict[str, Any]:
+    if row is None:
+        ctx.session.add(VttTerrain(campaign_id=ctx.campaign_id, scene_id=ctx.scene_id, cols=view.cols,
+                                   rows=view.rows, cells=cells))
+    else:
+        row.cols, row.rows, row.cells = view.cols, view.rows, cells
+    ctx.session.flush()
+    return {"kind": "entities", "sceneId": ctx.scene_id, "changed": [["terrain", "terrain"]]}
+
+
+def terrain_paint(ctx: Context) -> dict[str, Any]:
+    # A set operation with a kind per cell: no precondition, and its inverse is
+    # the same command with each cell's previous kind.
+    row, view = _terrain(ctx, versioned=False)
+    try:
+        cells = terrain_rules.with_cells(view, ctx.payload["cells"])
+    except ValueError:
+        raise Rejection("validation-failed") from None
+    return _write_terrain(ctx, row, view, cells)
+
+
+def terrain_reset(ctx: Context) -> dict[str, Any]:
+    row, view = _terrain(ctx, versioned=True)
+    return _write_terrain(ctx, row, view, terrain_rules.empty_cells(view.cols, view.rows))
+
+
 # --- entities --------------------------------------------------------------------------------
 
 def _create(kind: str) -> Callable[[Context], dict[str, Any]]:
@@ -256,6 +303,13 @@ def _create(kind: str) -> Callable[[Context], dict[str, Any]]:
         if _lock_entity(ctx, kind, p["id"]) is not None:
             raise Rejection("conflict")
         _check_assets(ctx)
+        if kind == "template":
+            count = ctx.session.execute(
+                select(func.count()).select_from(VttEntity).where(
+                    VttEntity.campaign_id == ctx.campaign_id, VttEntity.scene_id == ctx.scene_id,
+                    VttEntity.kind == "template")).scalar_one()
+            if count >= MAX_TEMPLATES:
+                raise Rejection("rule-violation")
         data = {name: p[name] for name in ENTITY_DATA[kind]}
         if kind == "wall":
             _check_wall(data)
@@ -324,4 +378,9 @@ POLICIES: dict[str, Policy] = {
     "fog.update": Policy(_caps("scene.publish"), fog_update),
     "fog.reveal": Policy(_caps("scene.publish"), fog_reveal),
     "fog.reset": Policy(_caps("scene.publish"), fog_reset),
+    # Area templates and terrain are prepared like tokens (parity-2).
+    "template.create": Policy(_caps("scene.prepare"), _create("template")),
+    "template.update": Policy(_caps("scene.prepare"), _update("template")),
+    "terrain.paint": Policy(_caps("scene.prepare"), terrain_paint),
+    "terrain.reset": Policy(_caps("scene.prepare"), terrain_reset),
 }

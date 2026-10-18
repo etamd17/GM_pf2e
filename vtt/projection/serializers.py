@@ -74,9 +74,23 @@ def gm_entity(key: TokenKey, row) -> dict[str, Any]:
     elif row.kind == "wall":
         fields = {"x1": d["x1"], "y1": d["y1"], "x2": d["x2"], "y2": d["y2"],
                   "doorState": d.get("doorState", "none")}
+    elif row.kind == "template":
+        fields = {**_template_fields(d), "hidden": bool(row.hidden)}
     else:
         raise ValueError("unknown entity kind")
     return _with_version(key, row.campaign_id, "gm", row.kind, row.id, fields)
+
+
+def _template_fields(d: dict[str, Any]) -> dict[str, Any]:
+    return {"shape": d["shape"], "x": d["x"], "y": d["y"], "aimX": d.get("aimX", d["x"]),
+            "aimY": d.get("aimY", d["y"]), "size": d.get("size", 1), "color": d.get("color", 0)}
+
+
+def terrain_entity(key: TokenKey, campaign_id: str, audience: str, terrain) -> dict[str, Any]:
+    """The scene's terrain entity (parity-2) from a ``vtt.terrain.TerrainView``
+    (already masked by fog for the table)."""
+    fields = {"cols": terrain.cols, "rows": terrain.rows, "cells": terrain.encoded}
+    return _with_version(key, campaign_id, audience, "terrain", "terrain", fields)
 
 
 def fog_entity(key: TokenKey, campaign_id: str, audience: str, fog) -> dict[str, Any]:
@@ -86,11 +100,13 @@ def fog_entity(key: TokenKey, campaign_id: str, audience: str, fog) -> dict[str,
     return _with_version(key, campaign_id, audience, "fog", "fog", fields)
 
 
-def gm_entities(key: TokenKey, scene, rows, fog=None) -> list[dict[str, Any]]:
+def gm_entities(key: TokenKey, scene, rows, fog=None, terrain=None) -> list[dict[str, Any]]:
     out = [gm_scene(key, scene)] if scene is not None else []
     out += [gm_entity(key, row) for row in rows]
     if scene is not None and fog is not None:
         out.append(fog_entity(key, scene.campaign_id, "gm", fog))
+    if scene is not None and terrain is not None:
+        out.append(terrain_entity(key, scene.campaign_id, "gm", terrain))
     return out
 
 
@@ -110,11 +126,13 @@ def table_entity(key: TokenKey, row, fog=None) -> dict[str, Any] | None:
     """The table's view of one canonical entity, or None when the table may not
     see it: hidden, not a token or light, or (parity-1) its centre cell is
     under fog."""
-    if row.hidden or row.kind not in ("token", "light"):
+    if row.hidden or row.kind not in ("token", "light", "template"):
         return None
     d = row.data or {}
     if fog is not None and fog.hides(d.get("x", 0), d.get("y", 0)):
         return None
+    if row.kind == "template":
+        return _with_version(key, row.campaign_id, "table", "template", row.id, _template_fields(d))
     if row.kind == "token":
         fields = {
             "x": d["x"], "y": d["y"], "size": d.get("size", 1), "label": d.get("label", ""),
@@ -125,7 +143,7 @@ def table_entity(key: TokenKey, row, fog=None) -> dict[str, Any] | None:
     return _with_version(key, row.campaign_id, "table", row.kind, row.id, fields)
 
 
-def table_entities(key: TokenKey, scene, rows, fog=None) -> list[dict[str, Any]]:
+def table_entities(key: TokenKey, scene, rows, fog=None, terrain=None) -> list[dict[str, Any]]:
     if scene is None or not scene.published:
         return []
     out = [table_scene(key, scene)]
@@ -135,6 +153,8 @@ def table_entities(key: TokenKey, scene, rows, fog=None) -> list[dict[str, Any]]
             out.append(projected)
     if fog is not None:
         out.append(fog_entity(key, scene.campaign_id, "table", fog))
+    if terrain is not None:
+        out.append(terrain_entity(key, scene.campaign_id, "table", terrain.masked(fog)))
     return out
 
 

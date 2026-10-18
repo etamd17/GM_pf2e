@@ -4322,5 +4322,571 @@
       "expected": [],
       "payload": {}
     }
+  },
+  {
+    "id": "parity2-table-template-and-terrain",
+    "schema": "table",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "snapshot",
+      "audience": "table",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 0,
+      "campaignId": "campaign_a",
+      "sceneId": "scene_a",
+      "principal": {
+        "kind": "table"
+      },
+      "capabilities": [],
+      "entities": [
+        {
+          "kind": "template",
+          "id": "tpl_a",
+          "version": "ver_TEMPLATETEMPLAT",
+          "shape": "cone",
+          "x": 64,
+          "y": 64,
+          "aimX": 192,
+          "aimY": 64,
+          "size": 3,
+          "color": 7718379
+        },
+        {
+          "kind": "terrain",
+          "id": "terrain",
+          "version": "ver_TERRAINTERRAINT",
+          "cols": 5,
+          "rows": 3,
+          "cells": "IQAAAAAAAAQ"
+        }
+      ]
+    }
+  },
+  {
+    "id": "parity2-gm-template-patch",
+    "schema": "gm",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "patch",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 3,
+      "upserted": [
+        {
+          "kind": "template",
+          "id": "tpl_a",
+          "version": "ver_TEMPLATETEMPLAT",
+          "shape": "cone",
+          "x": 64,
+          "y": 64,
+          "aimX": 192,
+          "aimY": 64,
+          "size": 3,
+          "color": 7718379,
+          "hidden": false
+        },
+        {
+          "kind": "terrain",
+          "id": "terrain",
+          "version": "ver_TERRAINTERRAINT",
+          "cols": 5,
+          "rows": 3,
+          "cells": "IQAAAAAAAAQ"
+        }
+      ],
+      "removed": []
+    }
+  },
+  {
+    "id": "parity2-table-template-with-hidden",
+    "schema": "table",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "snapshot",
+      "audience": "table",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 0,
+      "campaignId": "campaign_a",
+      "sceneId": "scene_a",
+      "principal": {
+        "kind": "table"
+      },
+      "capabilities": [],
+      "entities": [
+        {
+          "kind": "template",
+          "id": "tpl_a",
+          "version": "ver_TEMPLATETEMPLAT",
+          "shape": "cone",
+          "x": 64,
+          "y": 64,
+          "aimX": 192,
+          "aimY": 64,
+          "size": 3,
+          "color": 7718379,
+          "hidden": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "parity2-gm-template-without-hidden",
+    "schema": "gm",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "patch",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 3,
+      "upserted": [
+        {
+          "kind": "template",
+          "id": "tpl_a",
+          "version": "ver_TEMPLATETEMPLAT",
+          "shape": "cone",
+          "x": 64,
+          "y": 64,
+          "aimX": 192,
+          "aimY": 64,
+          "size": 3,
+          "color": 7718379
+        }
+      ],
+      "removed": []
+    }
+  },
+  {
+    "id": "parity2-template-bad-shape",
+    "schema": "table",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "snapshot",
+      "audience": "table",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 0,
+      "campaignId": "campaign_a",
+      "sceneId": "scene_a",
+      "principal": {
+        "kind": "table"
+      },
+      "capabilities": [],
+      "entities": [
+        {
+          "kind": "template",
+          "id": "tpl_a",
+          "version": "ver_TEMPLATETEMPLAT",
+          "shape": "cube",
+          "x": 64,
+          "y": 64,
+          "aimX": 192,
+          "aimY": 64,
+          "size": 3,
+          "color": 7718379
+        }
+      ]
+    }
+  },
+  {
+    "id": "parity2-template-size-zero",
+    "schema": "table",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "snapshot",
+      "audience": "table",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 0,
+      "campaignId": "campaign_a",
+      "sceneId": "scene_a",
+      "principal": {
+        "kind": "table"
+      },
+      "capabilities": [],
+      "entities": [
+        {
+          "kind": "template",
+          "id": "tpl_a",
+          "version": "ver_TEMPLATETEMPLAT",
+          "shape": "cone",
+          "x": 64,
+          "y": 64,
+          "aimX": 192,
+          "aimY": 64,
+          "size": 0,
+          "color": 7718379
+        }
+      ]
+    }
+  },
+  {
+    "id": "parity2-terrain-wrong-length",
+    "schema": "table",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "snapshot",
+      "audience": "table",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 0,
+      "campaignId": "campaign_a",
+      "sceneId": "scene_a",
+      "principal": {
+        "kind": "table"
+      },
+      "capabilities": [],
+      "entities": [
+        {
+          "kind": "terrain",
+          "id": "terrain",
+          "version": "ver_TERRAINTERRAINT",
+          "cols": 5,
+          "rows": 3,
+          "cells": "IQAAAAAAAA"
+        }
+      ]
+    }
+  },
+  {
+    "id": "parity2-terrain-spare-nibble",
+    "schema": "table",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "snapshot",
+      "audience": "table",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 0,
+      "campaignId": "campaign_a",
+      "sceneId": "scene_a",
+      "principal": {
+        "kind": "table"
+      },
+      "capabilities": [],
+      "entities": [
+        {
+          "kind": "terrain",
+          "id": "terrain",
+          "version": "ver_TERRAINTERRAINT",
+          "cols": 5,
+          "rows": 3,
+          "cells": "IQAAAAAAADQ"
+        }
+      ]
+    }
+  },
+  {
+    "id": "parity2-terrain-reserved-kind",
+    "schema": "gm",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "patch",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 3,
+      "upserted": [
+        {
+          "kind": "terrain",
+          "id": "terrain",
+          "version": "ver_TERRAINTERRAINT",
+          "cols": 5,
+          "rows": 3,
+          "cells": "IQAABQAAAAQ"
+        }
+      ],
+      "removed": []
+    }
+  },
+  {
+    "id": "parity2-terrain-over-cap",
+    "schema": "gm",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "patch",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 3,
+      "upserted": [
+        {
+          "kind": "terrain",
+          "id": "terrain",
+          "version": "ver_TERRAINTERRAINT",
+          "cols": 2048,
+          "rows": 2048,
+          "cells": ""
+        }
+      ],
+      "removed": []
+    }
+  },
+  {
+    "id": "parity2-command-template-create",
+    "schema": "command",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "template.create",
+      "expected": [],
+      "payload": {
+        "id": "tpl_new",
+        "shape": "burst",
+        "x": 320,
+        "y": 320,
+        "aimX": 320,
+        "aimY": 320,
+        "size": 4,
+        "color": 7718379,
+        "hidden": false
+      }
+    }
+  },
+  {
+    "id": "parity2-command-template-create-expected",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "template.create",
+      "expected": [
+        {
+          "kind": "template",
+          "id": "tpl_new",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {
+        "id": "tpl_new",
+        "shape": "burst",
+        "x": 320,
+        "y": 320,
+        "aimX": 320,
+        "aimY": 320,
+        "size": 4,
+        "color": 7718379,
+        "hidden": false
+      }
+    }
+  },
+  {
+    "id": "parity2-command-template-update",
+    "schema": "command",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "template.update",
+      "expected": [
+        {
+          "kind": "template",
+          "id": "tpl_a",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {
+        "id": "tpl_a",
+        "x": 100,
+        "size": 6
+      }
+    }
+  },
+  {
+    "id": "parity2-command-template-update-no-expected",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "template.update",
+      "expected": [],
+      "payload": {
+        "id": "tpl_a",
+        "x": 1
+      }
+    }
+  },
+  {
+    "id": "parity2-command-template-update-shape",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "template.update",
+      "expected": [
+        {
+          "kind": "template",
+          "id": "tpl_a",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {
+        "id": "tpl_a",
+        "shape": "line"
+      }
+    }
+  },
+  {
+    "id": "parity2-command-template-delete",
+    "schema": "command",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "entity.delete",
+      "expected": [
+        {
+          "kind": "template",
+          "id": "tpl_a",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {
+        "kind": "template",
+        "id": "tpl_a"
+      }
+    }
+  },
+  {
+    "id": "parity2-command-terrain-paint",
+    "schema": "command",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "terrain.paint",
+      "expected": [],
+      "payload": {
+        "cells": [
+          [
+            0,
+            0,
+            1
+          ],
+          [
+            4,
+            2,
+            0
+          ]
+        ]
+      }
+    }
+  },
+  {
+    "id": "parity2-command-terrain-paint-bad-kind",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "terrain.paint",
+      "expected": [],
+      "payload": {
+        "cells": [
+          [
+            0,
+            0,
+            5
+          ]
+        ]
+      }
+    }
+  },
+  {
+    "id": "parity2-command-terrain-paint-short-cell",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "terrain.paint",
+      "expected": [],
+      "payload": {
+        "cells": [
+          [
+            0,
+            0
+          ]
+        ]
+      }
+    }
+  },
+  {
+    "id": "parity2-command-terrain-paint-long-cell",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "terrain.paint",
+      "expected": [],
+      "payload": {
+        "cells": [
+          [
+            0,
+            0,
+            1,
+            1
+          ]
+        ]
+      }
+    }
+  },
+  {
+    "id": "parity2-command-terrain-reset",
+    "schema": "command",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "terrain.reset",
+      "expected": [
+        {
+          "kind": "terrain",
+          "id": "terrain",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {}
+    }
+  },
+  {
+    "id": "parity2-command-terrain-reset-no-expected",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "terrain.reset",
+      "expected": [],
+      "payload": {}
+    }
   }
 ]

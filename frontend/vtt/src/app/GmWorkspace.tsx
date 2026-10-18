@@ -23,6 +23,13 @@ import {
   fogReveal,
   fogUpdate,
   moveToken,
+  TERRAIN_KINDS,
+  templateCreate,
+  templateUpdate,
+  terrainPaint,
+  terrainReset,
+  type TemplateShape,
+  type TerrainCell,
   newEntityId,
   setDoorState,
   showOnTable,
@@ -38,7 +45,7 @@ import { ImportPanel, PairingPanel } from './GmPanels';
 import { ImagePicker } from './ImagePicker';
 import { NoticeBar } from './NoticeBar';
 import { decodeFogBits } from '../protocol/semantics';
-import { cellAt, chunk, floodRegion, type FillWall } from '../scene/fogFill';
+import { cellAt, chunk, floodRegion, regionCells, terrainKindAt, type FillWall } from '../scene/fogFill';
 import { inverseFor, overlayFor, targetOf } from './undo';
 
 interface Props {
@@ -48,7 +55,7 @@ interface Props {
   live?: GmLive | null;
 }
 
-type Tool = 'select' | 'token' | 'light' | 'wall' | 'fog-reveal' | 'fog-hide';
+type Tool = 'select' | 'token' | 'light' | 'wall' | 'fog-reveal' | 'fog-hide' | 'template' | 'terrain';
 
 const TOOLS: ReadonlyArray<{ id: Tool; label: string; hint: string }> = [
   { id: 'select', label: 'Select', hint: 'Select and drag tokens; arrows move the selected token' },
@@ -57,6 +64,15 @@ const TOOLS: ReadonlyArray<{ id: Tool; label: string; hint: string }> = [
   { id: 'wall', label: 'Walls', hint: 'Click to start a wall, click again to end it; Esc stops' },
   { id: 'fog-reveal', label: 'Reveal', hint: 'Click a room to reveal it on the table (walls and closed doors bound it)' },
   { id: 'fog-hide', label: 'Hide', hint: 'Click a room to cover it with fog again' },
+  { id: 'template', label: 'Template', hint: 'Burst or emanation: click. Cone or line: click the origin, then click to aim' },
+  { id: 'terrain', label: 'Terrain', hint: 'Click a room to paint it; Alt-click paints one square' },
+];
+
+const TEMPLATE_SHAPES: ReadonlyArray<{ id: TemplateShape; label: string }> = [
+  { id: 'burst', label: 'Burst' },
+  { id: 'emanation', label: 'Emanation' },
+  { id: 'cone', label: 'Cone' },
+  { id: 'line', label: 'Line' },
 ];
 
 type Of<K extends GmEntity['kind']> = Extract<GmEntity, { kind: K }>;
@@ -87,6 +103,12 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
   const [selection, setSelection] = useState<Hit | null>(null);
   const [wallStart, setWallStart] = useState<Point | null>(null);
   const [wallEnd, setWallEnd] = useState<Point | null>(null);
+  // Templates and terrain (parity P2): the tool options, and a cone or line
+  // waiting for its aim.
+  const [templateShape, setTemplateShape] = useState<TemplateShape>('burst');
+  const [templateSize, setTemplateSize] = useState(3);
+  const [templateStart, setTemplateStart] = useState<Point | null>(null);
+  const [terrainKind, setTerrainKind] = useState(1);
   const [announcement, setAnnouncement] = useState('');
   const [scenes, setScenes] = useState<SceneSummary[] | null>(null);
   const [creatingScene, setCreatingScene] = useState<{ commandId: string; sceneId: string } | null>(null);
@@ -99,6 +121,10 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
   );
   const sceneEntity = useMemo(() => [...entities.values()].find((e): e is Of<'scene'> => e.kind === 'scene'), [entities]);
   const fogEntity = useMemo(() => [...entities.values()].find((e): e is Of<'fog'> => e.kind === 'fog'), [entities]);
+  const terrainEntity = useMemo(
+    () => [...entities.values()].find((e): e is Of<'terrain'> => e.kind === 'terrain'),
+    [entities],
+  );
   const selected = selection ? (entityOf(selection.kind, selection.id) ?? null) : null;
 
   // A selection whose entity is gone (deleted here or elsewhere) is dropped.
@@ -257,6 +283,59 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
     if (!fogEntity.enabled && mode === 'reveal') notify('Fog is off, so the table already shows everything. Turn it on in the Scene panel.');
   };
 
+  // --- templates and terrain (parity P2) -------------------------------------------------------
+  const placeTemplate = (point: Point, hit: Hit | null) => {
+    if (!scene) return;
+    if (templateShape === 'burst') {
+      const at = snapToGrid(point, scene);
+      issue(templateCreate(newEntityId('tpl'), 'burst', at, at, templateSize));
+      return;
+    }
+    if (templateShape === 'emanation') {
+      // Started on a token: centred on it and grown by its footprint, as on
+      // /map, but not linked to it afterwards.
+      const token = hit?.kind === 'token' ? (entityOf('token', hit.id) as Of<'token'> | undefined) : undefined;
+      const at = token ? { x: token.x, y: token.y } : snapToGrid(point, scene);
+      const size = Math.min(60, token ? Math.ceil(templateSize + token.size / 2) : templateSize);
+      issue(templateCreate(newEntityId('tpl'), 'emanation', at, at, size));
+      return;
+    }
+    // Cone or line: the first click sets the origin, the second aims.
+    if (!templateStart) {
+      setTemplateStart(snapToGrid(point, scene));
+      return;
+    }
+    if (point.x !== templateStart.x || point.y !== templateStart.y) {
+      issue(templateCreate(newEntityId('tpl'), templateShape, templateStart, point, templateSize));
+    }
+    setTemplateStart(null);
+    setWallEnd(null);
+  };
+
+  const paintTerrain = (point: Point, single: boolean) => {
+    if (!scene) return;
+    const notify = (text: string) => useCommands.getState().notify({ kind: 'info', text });
+    if (!terrainEntity) {
+      notify('This scene is too large for terrain.');
+      return;
+    }
+    const cells = decodeFogBits(terrainEntity.cells);
+    if (!cells) return;
+    const grid = { cols: terrainEntity.cols, rows: terrainEntity.rows, gridSize: scene.gridSize };
+    const start = cellAt(grid, point.x, point.y);
+    if (!start) return;
+    const walls = [...entities.values()].filter((e): e is Of<'wall'> => e.kind === 'wall') as FillWall[];
+    const region = single ? [start] : regionCells(grid, start, walls);
+    const changed: TerrainCell[] = region
+      .filter(([c, r]) => terrainKindAt(cells, grid.cols, c, r) !== terrainKind)
+      .map(([c, r]) => [c, r, terrainKind]);
+    if (changed.length === 0) {
+      notify('That area already looks like that.');
+      return;
+    }
+    for (const part of chunk(changed)) issue(terrainPaint(part));
+  };
+
   // --- map input ------------------------------------------------------------------------------
   const tokenCount = scene?.tokens.length ?? 0;
   const interaction: RuntimeInteraction = {
@@ -268,7 +347,7 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
       issue(moveToken(token, x, y), { kind: 'token', id, patch: { x, y } });
       setSelection({ kind: 'token', id });
     },
-    onClick: (point, hit) => {
+    onClick: (point, hit, modifiers) => {
       if (!scene) return;
       if (tool === 'select' || !inputEnabled) {
         setSelection(hit);
@@ -289,6 +368,10 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
         issue(createLight(newEntityId('light'), snapToGrid(point, scene), scene.gridSize));
       } else if (tool === 'fog-reveal' || tool === 'fog-hide') {
         revealRoom(point, tool === 'fog-reveal' ? 'reveal' : 'hide');
+      } else if (tool === 'template') {
+        placeTemplate(point, hit);
+      } else if (tool === 'terrain') {
+        paintTerrain(point, modifiers?.alt === true);
       } else if (tool === 'wall') {
         const p = snapToGrid(point, scene);
         if (!wallStart) {
@@ -302,19 +385,32 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
     },
     onPointerMove: (point) => {
       if (tool === 'wall' && wallStart && scene) setWallEnd(snapToGrid(point, scene));
+      if (tool === 'template' && templateStart) setWallEnd(point); // the aim preview line
     },
     onKey: (e) => {
       if (e.key === 'Escape') {
         setWallStart(null);
         setWallEnd(null);
+        setTemplateStart(null);
         setSelection(null);
         return true;
       }
       if (!inputEnabled || !selected || !scene) return false;
       // Delete only: Backspace is too easy to hit by accident on a map.
-      if (e.key === 'Delete' && selected.kind !== 'scene' && selected.kind !== 'fog') {
+      if (e.key === 'Delete' && selected.kind !== 'scene' && selected.kind !== 'fog' && selected.kind !== 'terrain') {
         issue(deleteEntity(selected), selected.kind === 'token' ? { kind: 'token', id: selected.id, deleted: true } : null);
         setSelection(null);
+        return true;
+      }
+      if (selected.kind === 'template' && e.key.startsWith('Arrow')) {
+        // Move the whole template one square, aim and all.
+        const g = scene.gridSize;
+        const dx = e.key === 'ArrowLeft' ? -g : e.key === 'ArrowRight' ? g : 0;
+        const dy = e.key === 'ArrowUp' ? -g : e.key === 'ArrowDown' ? g : 0;
+        const keep = (v: number) => Math.max(0, Math.min(16384, v));
+        issue(templateUpdate(selected, {
+          x: keep(selected.x + dx), y: keep(selected.y + dy), aimX: keep(selected.aimX + dx), aimY: keep(selected.aimY + dy),
+        }));
         return true;
       }
       if (selected.kind === 'token' && !selected.locked && e.key.startsWith('Arrow')) {
@@ -342,6 +438,7 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
     setTool(next);
     setWallStart(null);
     setWallEnd(null);
+    setTemplateStart(null);
   }
 
   const visibleTokens = scene?.tokens ?? [];
@@ -439,6 +536,51 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
               {t.label}
             </button>
           ))}
+        {railOpen && tool === 'template' && (
+          <div className="vtt-tool-options" role="group" aria-label="Template options">
+            <label className="vtt-field">
+              <span>Shape</span>
+              <select
+                value={templateShape}
+                onChange={(e) => {
+                  setTemplateShape(e.target.value as TemplateShape);
+                  setTemplateStart(null);
+                }}
+              >
+                {TEMPLATE_SHAPES.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="vtt-field">
+              <span>Size (squares)</span>
+              <input
+                type="number"
+                min={1}
+                max={60}
+                value={templateSize}
+                onChange={(e) => setTemplateSize(Math.max(1, Math.min(60, Math.round(Number(e.target.value) || 1))))}
+              />
+            </label>
+          </div>
+        )}
+        {railOpen && tool === 'terrain' && (
+          <div className="vtt-tool-options" role="group" aria-label="Terrain options">
+            <label className="vtt-field">
+              <span>Paint</span>
+              <select value={terrainKind} onChange={(e) => setTerrainKind(Number(e.target.value))}>
+                {TERRAIN_KINDS.map((option) => (
+                  <option key={option.kind} value={option.kind}>
+                    {option.label}
+                  </option>
+                ))}
+                <option value={0}>Erase</option>
+              </select>
+            </label>
+          </div>
+        )}
       </nav>
 
       <main className="vtt-stage">
@@ -451,7 +593,13 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
             onViewportChange={(v) => setZoom(v.scale)}
             interaction={interaction}
             selection={selection}
-            wallDraft={tool === 'wall' && wallStart && wallEnd ? { a: wallStart, b: wallEnd } : null}
+            wallDraft={
+              tool === 'wall' && wallStart && wallEnd
+                ? { a: wallStart, b: wallEnd }
+                : tool === 'template' && templateStart && wallEnd
+                  ? { a: templateStart, b: wallEnd }
+                  : null
+            }
           />
         )}
         {/* The canvas has an off-screen mirror for screen readers. */}
@@ -482,6 +630,7 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
             onDeleted={() => setSelection(null)}
             scene={sceneEntity ?? null}
             fog={fogEntity ?? null}
+            terrain={terrainEntity ?? null}
             {...(live ? { boot: live.boot } : {})}
           />
         )}
@@ -520,6 +669,8 @@ interface InspectorProps {
   boot?: Pick<GmBoot, 'campaignId' | 'csrf'>;
   // Fog (parity P1): the scene's fog entity, absent when the grid is too large.
   fog?: Extract<GmEntity, { kind: 'fog' }> | null;
+  // Terrain (parity P2), likewise.
+  terrain?: Extract<GmEntity, { kind: 'terrain' }> | null;
 }
 
 const mediaUrl = (boot: Pick<GmBoot, 'campaignId'>, id: string | null) =>
@@ -529,8 +680,8 @@ const mediaUrl = (boot: Pick<GmBoot, 'campaignId'>, id: string | null) =>
 // on every keystroke; a field the GM is editing is not overwritten by a frame
 // until they leave it (the key resets the field when the entity's version
 // changes while it is not focused).
-export function Inspector({ entity, enabled, onIssue, onDeleted, scene, boot, fog }: InspectorProps) {
-  if (!entity || entity.kind === 'scene' || entity.kind === 'fog') {
+export function Inspector({ entity, enabled, onIssue, onDeleted, scene, boot, fog, terrain }: InspectorProps) {
+  if (!entity || entity.kind === 'scene' || entity.kind === 'fog' || entity.kind === 'terrain') {
     return (
       <div className="vtt-inspector">
         {scene && boot && (
@@ -560,6 +711,16 @@ export function Inspector({ entity, enabled, onIssue, onDeleted, scene, boot, fo
           </>
         ) : (
           scene && <p className="vtt-empty">This scene is too large for fog.</p>
+        )}
+        {terrain && terrain.cells.replace(/A/g, '') !== '' && (
+          <button
+            type="button"
+            className="vtt-danger"
+            disabled={!enabled}
+            onClick={() => window.confirm('Erase all painted terrain in this scene?') && onIssue(terrainReset(terrain))}
+          >
+            Reset terrain
+          </button>
         )}
         <p className="vtt-empty">Select a token, light or wall to inspect it.</p>
       </div>
@@ -641,6 +802,29 @@ export function Inspector({ entity, enabled, onIssue, onDeleted, scene, boot, fo
             }}
           />
           <Toggle label="Hidden from the table" checked={entity.hidden} disabled={!enabled} onChange={(hidden) => onIssue(updateLight(entity, { hidden }))} />
+        </>
+      )}
+      {entity.kind === 'template' && (
+        <>
+          <h2 className="vtt-inspector-title">{TEMPLATE_SHAPES.find((t) => t.id === entity.shape)?.label ?? 'Template'}</h2>
+          <TextField
+            label="Size (squares)"
+            value={String(entity.size)}
+            version={entity.version}
+            maxLength={2}
+            disabled={!enabled}
+            onCommit={(text) => {
+              const size = Math.round(Number(text));
+              if (Number.isFinite(size) && size >= 1 && size <= 60 && size !== entity.size) onIssue(templateUpdate(entity, { size }));
+            }}
+          />
+          <Toggle
+            label="Hidden from the table"
+            checked={entity.hidden}
+            disabled={!enabled}
+            onChange={(hidden) => onIssue(templateUpdate(entity, { hidden }))}
+          />
+          <p className="vtt-empty">Arrow keys move it one square.</p>
         </>
       )}
       {entity.kind === 'wall' && (

@@ -8,7 +8,12 @@ import {
   deleteEntity,
   fogReveal,
   fogUpdate,
+  templateCreate,
+  templateUpdate,
+  terrainPaint,
   type FogCell,
+  type TemplatePatch,
+  type TerrainCell,
   moveToken,
   setDoorState,
   updateLight,
@@ -51,6 +56,10 @@ const LABELS: Record<string, string> = {
   'fog.reveal': 'fog change',
   'fog.update': 'fog on/off',
   'fog.reset': 'fog reset',
+  'template.create': 'new template',
+  'template.update': 'template change',
+  'terrain.paint': 'terrain',
+  'terrain.reset': 'terrain reset',
 };
 
 function pick<T extends object>(source: T, keys: string[]): Record<string, unknown> {
@@ -74,6 +83,10 @@ function recreate(before: GmEntity): Draft | null {
     const draft = createLight(before.id, { x: before.x, y: before.y }, 1);
     draft.payload = { ...draft.payload, radius: before.radius, color: before.color, hidden: before.hidden };
     return draft;
+  }
+  if (before.kind === 'template') {
+    return templateCreate(before.id, before.shape, { x: before.x, y: before.y }, { x: before.aimX, y: before.aimY },
+      before.size, { color: before.color, hidden: before.hidden });
   }
   if (before.kind === 'wall') {
     const draft = createWall(before.id, { x: before.x1, y: before.y1 }, { x: before.x2, y: before.y2 });
@@ -107,6 +120,36 @@ export function inverseFor(draft: Draft, before: GmEntity | undefined): UndoEntr
               : updateToken(now, back as TokenPatch),
       };
     }
+    case 'template.update': {
+      if (before?.kind !== 'template') return null;
+      const back = pick(before, changed) as TemplatePatch;
+      return { kind: 'template', id: before.id, label, make: (now) => (now?.kind === 'template' ? templateUpdate(now, back) : null) };
+    }
+    case 'terrain.paint': {
+      // The previous kind of exactly the cells painted: one command back.
+      if (before?.kind !== 'terrain') return null;
+      const bytes = decodeFogBits(before.cells);
+      if (!bytes) return null;
+      const back = (payload.cells as TerrainCell[]).map(([c, r]): TerrainCell => {
+        const index = r * before.cols + c;
+        const byte = bytes[index >> 1] ?? 0;
+        return [c, r, index & 1 ? byte >> 4 : byte & 0x0f];
+      });
+      return { kind: 'terrain', id: 'terrain', label, make: (now) => (now?.kind === 'terrain' ? terrainPaint(back) : null) };
+    }
+    case 'terrain.reset': {
+      if (before?.kind !== 'terrain') return null;
+      const bytes = decodeFogBits(before.cells);
+      if (!bytes) return null;
+      const back: TerrainCell[] = [];
+      for (let index = 0; index < before.cols * before.rows; index += 1) {
+        const byte = bytes[index >> 1] ?? 0;
+        const kind = index & 1 ? byte >> 4 : byte & 0x0f;
+        if (kind) back.push([index % before.cols, Math.floor(index / before.cols), kind]);
+      }
+      if (back.length === 0 || back.length > FOG_CELLS_PER_COMMAND) return null;
+      return { kind: 'terrain', id: 'terrain', label, make: (now) => (now?.kind === 'terrain' ? terrainPaint(back) : null) };
+    }
     case 'light.update': {
       if (before?.kind !== 'light') return null;
       const back = pick(before, changed) as LightPatch;
@@ -124,15 +167,16 @@ export function inverseFor(draft: Draft, before: GmEntity | undefined): UndoEntr
     }
     case 'token.create':
     case 'light.create':
-    case 'wall.create': {
-      const kind = draft.type.split('.')[0] as 'token' | 'light' | 'wall';
+    case 'wall.create':
+    case 'template.create': {
+      const kind = draft.type.split('.')[0] as 'token' | 'light' | 'wall' | 'template';
       const id = String(payload.id);
       // Undoing a create deletes what was created, if it is still there.
       return {
         kind,
         id,
         label,
-        make: (now) => (now && now.kind === kind ? deleteEntity(now as Of<'token'> | Of<'light'> | Of<'wall'>) : null),
+        make: (now) => (now && now.kind === kind ? deleteEntity(now as Of<'token'> | Of<'light'> | Of<'wall'> | Of<'template'>) : null),
       };
     }
     case 'entity.delete': {
@@ -346,7 +390,8 @@ export class UndoManager {
 export function targetOf(draft: Draft): { kind: GmEntity['kind']; id: string } | null {
   const payload = draft.payload as Record<string, unknown>;
   const [noun] = draft.type.split('.');
-  if (noun === 'fog') return { kind: 'fog', id: 'fog' };
+  if (noun === 'fog' || noun === 'terrain') return { kind: noun, id: noun };
+  if (noun === 'template') return { kind: 'template', id: String(payload.id) };
   if (draft.type === 'entity.delete') return { kind: payload.kind as GmEntity['kind'], id: String(payload.id) };
   if (noun === 'token' || noun === 'light' || noun === 'wall') return { kind: noun, id: String(payload.id) };
   if (draft.type === 'scene.update' && draft.sceneId) return { kind: 'scene', id: draft.sceneId };
