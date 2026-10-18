@@ -9,6 +9,8 @@ export interface GmBoot {
   csrf: string;
   // The signed-in member's stable id. Saved commands are bound to it.
   memberId: string;
+  // The campaign's game system (beta-1): it decides how the ruler counts distance.
+  system: 'pf2e' | 'cosmere' | 'dnd5e';
 }
 
 export function readBoot(doc: Document = document): Record<string, unknown> | null {
@@ -24,8 +26,9 @@ export function readBoot(doc: Document = document): Record<string, unknown> | nu
 
 export function gmBoot(raw: Record<string, unknown> | null): GmBoot | null {
   if (!raw) return null;
-  const { campaignId, sceneId, csrf, memberId } = raw;
+  const { campaignId, sceneId, csrf, memberId, system } = raw;
   if (typeof campaignId !== 'string' || typeof csrf !== 'string' || typeof memberId !== 'string') return null;
   if (sceneId !== null && typeof sceneId !== 'string') return null;
-  return { campaignId, sceneId, csrf, memberId };
+  const known = system === 'cosmere' || system === 'dnd5e' ? system : 'pf2e';
+  return { campaignId, sceneId, csrf, memberId, system: known };
 }

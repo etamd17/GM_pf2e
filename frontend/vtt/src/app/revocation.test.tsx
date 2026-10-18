@@ -19,6 +19,7 @@ vi.mock('../scene/SceneRuntime', () => ({
       runtimes.push(this);
     }
     setScene() {}
+    setTransients() {}
     setSelection() {}
     setWallDraft() {}
     init() {

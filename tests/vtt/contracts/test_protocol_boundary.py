@@ -62,7 +62,10 @@ def test_registry_fails_closed_for_reserved_events_and_audiences():
     assert registry.schema_for_event("vtt.snapshot", "table") == "table"
     # commands-1 makes vtt.command ready for the GM only; a table has no command schema.
     assert registry.schema_for_event("vtt.command", "gm") == "command"
-    for event, audience in (("vtt.command", "table"), ("vtt.transient", "gm"), ("vtt.whisper.send", "gm"),
+    # beta-1 makes vtt.transient ready for the GM only; a table never sends one.
+    assert registry.schema_for_event("vtt.transient", "gm") == "transient-send"
+    assert registry.schema_for_event("vtt.transient_relay", "table") == "transient"
+    for event, audience in (("vtt.command", "table"), ("vtt.transient", "table"), ("vtt.whisper.send", "gm"),
                             ("vtt.snapshot", "player"), ("bogus", "gm")):
         with pytest.raises(api.ProtocolValidationError):
             registry.schema_for_event(event, audience)

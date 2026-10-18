@@ -1,5 +1,7 @@
 import { Application, Container, Graphics, Sprite, Text, Texture, type WebGLRenderer } from 'pixi.js';
 import { layersFor, type LayerName, type Surface } from './layers';
+import { measure } from './measure';
+import type { LiveTransient } from '../state/transients';
 import { RenderScheduler } from './renderScheduler';
 import {
   gridLines,
@@ -47,6 +49,11 @@ export interface RuntimeInteraction {
   // grid squares expressed in pixels, so its anchor keeps its alignment.
   onTemplateDrop?(id: string, dx: number, dy: number): void;
   canDragTemplate?(id: string): boolean;
+  // beta-1: while this returns true, a left drag on the map measures instead
+  // of panning; onMeasure gets [start, current] as it moves and done=true once
+  // on release (a cancelled drag reports null).
+  measuring?(): boolean;
+  onMeasure?(points: Point[] | null, done: boolean): void;
   onPointerMove?(point: Point): void;
   // Return true when the key was handled (the runtime then does not pan).
   onKey?(event: KeyboardEvent): boolean;
@@ -68,6 +75,8 @@ interface TokenView {
 }
 
 const BG_COLOR = 0x0c0a07;
+const RULER_COLOR = 0xf2c94c;
+const PING_COLOR = 0x7fd6ff;
 // Terrain kinds 1-4 (lava, water, poison, blood) as RGBA, about half opaque.
 const TERRAIN_COLORS: Record<number, [number, number, number, number]> = {
   1: [214, 78, 26, 150],
@@ -106,6 +115,7 @@ export class SceneRuntime {
     moved: boolean;
     token: { id: string; dx: number; dy: number } | null;
     template: { id: string; start: Point } | null;
+    measure: Point | null;
     hit: Hit | null;
   } | null = null;
   // The template being dragged and its snapped offset, drawn shifted until the
@@ -116,6 +126,11 @@ export class SceneRuntime {
   // or lost command changes nothing) puts it back.
   private templateShiftTimer: ReturnType<typeof setTimeout> | null = null;
   private selection: Hit | null = null;
+  // Live pings and rulers (beta-1): drawn on the measure layer, on both
+  // surfaces. A ping animates (the one animation the GM page also runs, as on
+  // /map), so a render lease is held while any ping is alive.
+  private transients: readonly LiveTransient[] = [];
+  private transientLease: (() => void) | null = null;
   private wallDraft: { a: Point; b: Point } | null = null;
   private lastFrameMs = 0;
   // Backgrounds and token art (M6). Owned by the runtime, not the Pixi app, so
@@ -195,6 +210,18 @@ export class SceneRuntime {
   }
 
   // GM only: the wall being drawn (from its first point to the pointer).
+  setTransients(list: readonly LiveTransient[]): void {
+    this.transients = list;
+    this.drawTransients(Date.now());
+    const animating = list.some((t) => t.kind === 'ping');
+    if (animating && !this.transientLease) this.transientLease = this.scheduler.lease();
+    if (!animating && this.transientLease) {
+      this.transientLease();
+      this.transientLease = null;
+    }
+    this.scheduler.requestRender();
+  }
+
   setWallDraft(draft: { a: Point; b: Point } | null): void {
     this.wallDraft = draft;
     this.drawOverlay();
@@ -260,6 +287,8 @@ export class SceneRuntime {
   destroy(): void {
     this.destroyed = true;
     this.dropTemplateShift();
+    this.transientLease?.();
+    this.transientLease = null;
     this.scheduler.dispose();
     this.resizeObserver?.disconnect();
     if (this.restoreTimer) clearTimeout(this.restoreTimer);
@@ -290,6 +319,7 @@ export class SceneRuntime {
       id: string; x: number; y: number; label: string; hidden: boolean; artUrl: string | null; art: string;
       live: { hp: number | null; maxHp: number | null; status: string | null; conditions: readonly string[]; active: boolean } | null;
     }>;
+    transients: Array<{ kind: 'ping'; x: number; y: number } | { kind: 'ruler'; feet: number }>;
   } {
     const scene = this.scene;
     return {
@@ -335,6 +365,10 @@ export class SceneRuntime {
         art: t.artUrl ? this.textures.state(t.artUrl) : 'none',
         live: t.live ? { ...t.live } : null,
       })),
+      transients: this.transients
+        .filter((t) => t.expiresAt > Date.now())
+        .map((t) => (t.kind === 'ping' ? { kind: 'ping' as const, x: t.x, y: t.y }
+          : { kind: 'ruler' as const, feet: this.scene ? measure(t.points, this.scene.gridSize, t.rule).feet : 0 })),
     };
   }
 
@@ -472,6 +506,7 @@ export class SceneRuntime {
     const app = this.app;
     if (!app || this.rendererStatus !== 'ok') return;
     const start = performance.now();
+    if (this.transientLease) this.drawTransients(Date.now());
     app.render();
     this.lastFrameMs = performance.now() - start;
   };
@@ -524,7 +559,10 @@ export class SceneRuntime {
     let hit: Hit | null = null;
     let token: { id: string; dx: number; dy: number } | null = null;
     let template: { id: string; start: Point } | null = null;
-    if (interaction && e.button === 0 && this.scene) {
+    let measureFrom: Point | null = null;
+    if (interaction && e.button === 0 && this.scene && interaction.measuring?.() === true) {
+      measureFrom = this.worldPoint(e);
+    } else if (interaction && e.button === 0 && this.scene) {
       const p = this.worldPoint(e);
       hit = hitTest(this.scene, p, this.viewport.scale);
       if (hit?.kind === 'token' && interaction.canDragToken?.(hit.id) !== false) {
@@ -543,6 +581,7 @@ export class SceneRuntime {
       moved: false,
       token,
       template,
+      measure: measureFrom,
       hit,
     };
     (e.target as Element).setPointerCapture?.(e.pointerId);
@@ -569,6 +608,10 @@ export class SceneRuntime {
         this.drawOverlay();
         this.scheduler.requestRender();
       }
+      return;
+    }
+    if (drag.measure) {
+      if (drag.moved) this.options.interaction?.onMeasure?.([drag.measure, this.worldPoint(e)], false);
       return;
     }
     if (drag.template) {
@@ -605,10 +648,15 @@ export class SceneRuntime {
         this.scheduler.requestRender();
       }
       this.clearTemplateShift();
+      if (drag.measure) this.options.interaction?.onMeasure?.(null, true);
       return;
     }
     const interaction = this.options.interaction;
     if (!interaction) return;
+    if (drag.measure) {
+      interaction.onMeasure?.(drag.moved ? [drag.measure, this.worldPoint(e)] : null, true);
+      return;
+    }
     if (drag.template && drag.moved) {
       const shift = this.templateShift;
       // The shift stays drawn until the next projection replaces the scene.
@@ -691,6 +739,57 @@ export class SceneRuntime {
 
   private layer(name: LayerName): Container | null {
     return this.layers.get(name) ?? null;
+  }
+
+  // Rulers: a line through the points with a dot at each and the distance at
+  // the end, counted by the rule the sender chose. Pings: rings expanding from
+  // the point and fading over its lifetime. Sized in screen pixels.
+  private drawTransients(now: number): void {
+    const scene = this.scene;
+    if (!this.layer('measure') || !scene) return;
+    const live = this.transients.filter((t) => t.expiresAt > now);
+    if (live.length === 0) {
+      this.replaceLayerContent('measure', null);
+      return;
+    }
+    const s = this.viewport.scale > 0 ? this.viewport.scale : 1;
+    const root = new Container({ label: 'transients' });
+    const g = new Graphics();
+    root.addChild(g);
+    for (const t of live) {
+      if (t.kind === 'ruler') {
+        const [first, ...rest] = t.points;
+        if (!first) continue;
+        g.moveTo(first.x, first.y);
+        for (const p of rest) g.lineTo(p.x, p.y);
+        g.stroke({ width: 4 / s, color: 0x0c0a07, alpha: 0.6 });
+        g.moveTo(first.x, first.y);
+        for (const p of rest) g.lineTo(p.x, p.y);
+        g.stroke({ width: 2 / s, color: RULER_COLOR, alpha: 0.95 });
+        for (const p of t.points) g.circle(p.x, p.y, 4 / s).fill({ color: RULER_COLOR });
+        const end = t.points[t.points.length - 1] as Point;
+        const { feet } = measure(t.points, scene.gridSize, t.rule);
+        const label = new Text({
+          text: `${feet} ft`,
+          style: { fontFamily: uiFont(), fontSize: CANVAS_LABEL_FONT.sizePx + 1, fontWeight: '700', fill: 0xffffff,
+                   stroke: { color: 0x0c0a07, width: 4 } },
+        });
+        label.anchor.set(0, 1);
+        label.scale.set(1 / s);
+        label.position.set(end.x + 8 / s, end.y - 8 / s);
+        root.addChild(label);
+      } else {
+        const life = Math.max(1, t.expiresAt - t.startedAt);
+        const age = Math.min(1, Math.max(0, (now - t.startedAt) / life));
+        for (let ring = 0; ring < 3; ring += 1) {
+          const phase = (age * 3 + ring / 3) % 1;
+          const radius = (8 + phase * 48) / s;
+          g.circle(t.x, t.y, radius).stroke({ width: 3 / s, color: PING_COLOR, alpha: (1 - phase) * (1 - age * 0.5) });
+        }
+        g.circle(t.x, t.y, 5 / s).fill({ color: PING_COLOR, alpha: 1 - age * 0.6 });
+      }
+    }
+    this.replaceLayerContent('measure', root);
   }
 
   private replaceLayerContent(name: LayerName, child: Container | null): void {

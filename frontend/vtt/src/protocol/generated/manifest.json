@@ -1,7 +1,7 @@
 {
   "batch": "scene-projection-1",
   "schemaVersion": 1,
-  "sourceDigest": "610eed46c8d044d9ef277e5d4f7eaad180ae4acdbc0281424dd8f36c7eef9a56",
+  "sourceDigest": "5dbce7506ca4bade75e2f844bc22993a1b6a173ac98253f264a3e86cd7eb9b55",
   "generator": {
     "versions": {
       "ajv": "8.20.0",
@@ -34,11 +34,11 @@
   },
   "outputs": {
     "ajv-runtime.mjs": "99c0e4ed98924e6341f2d043908a4537a102600fc8c90b188c561166f6d57013",
-    "fixtures.json": "a1313385d28dacc66009e9e878a83896ac5d4f9a134f0c5ffea49aac8d24b452",
-    "gm.validators.d.mts": "8cd7737529a1a4e09d489ffe36d7fa9db24d3f7a3fd8ffe35ed8bb1d8374a25b",
-    "gm.validators.mjs": "a8be4dc5e3eb832eab9ad6d851dd5fdb8f777b23d0f2c105cf3f9c4ee4b86dcd",
-    "table.validators.d.mts": "6be82ce18f9a89722c10b0bf9c38355fd1738dc206621c9d88a99b8c95693ea4",
-    "table.validators.mjs": "c9ac9a3d94cbbaabe94091b5b4d659bd139adf6ed124947611c251cf22b371c1",
+    "fixtures.json": "21d3f53404859ef569c9240d3b66d628e82ed1c36cecdeed396935294b0f2ff1",
+    "gm.validators.d.mts": "e8368e9524fe587782eb19bf06e63cb72abf41232e2641f7fa3ff07c56981d7e",
+    "gm.validators.mjs": "55980507472c7a5409aae71c32587f3eedc70709a2906cef86abeb801d4cb7f6",
+    "table.validators.d.mts": "ce199f9114bd595f0718ddd6123fb305b0f3a2f1b0d82c51e7f59398fe0dc99c",
+    "table.validators.mjs": "3a9940e26e72e0d3e20fa88b89b491cb0702908245cea4b0ac041e7b485d73de",
     "types/acknowledgement.d.ts": "1a1eb5985db5c138ad35ebf0de0a3c24836b2a5770d370f905153a6340391948",
     "types/bootstrap-rejection.d.ts": "1893ffa6bd97bc1c5a0a6a25fa6a7953718097520193037aef3bbfa243561e7f",
     "types/command.d.ts": "2ad5ed988a7471f7515fe56f3cb91973f5dfa71fa90b168a3dfe34c1b9da495e",
@@ -46,6 +46,8 @@
     "types/gm.d.ts": "a725cf2bab2e2ddace9aa5f3b620d2ef10a772e07f39e2a4befb2dd2ee0eb594",
     "types/resync-required.d.ts": "cb66da6ab22abbdddeb9d4231e045b1bc15bfe41775f6b2bae1ae9422b1dc30a",
     "types/table-subscribe.d.ts": "4806b57abbe6a5ab579b4e1341b4fce5dad0ee6a81989fa4ceef6c1c80635c03",
-    "types/table.d.ts": "242897b68698c3a7498e44f50d5f90a9307461fefc1d5f818ac04505dff31bd9"
+    "types/table.d.ts": "242897b68698c3a7498e44f50d5f90a9307461fefc1d5f818ac04505dff31bd9",
+    "types/transient-send.d.ts": "ef4abfa3f458bb7088d304b5823c771210c35bd86fe74531abd4d5a31d243d35",
+    "types/transient.d.ts": "1d45b101abfb4479fa0d8761399ed1ebf74d4a74b866a4324530ddd8942d16ff"
   }
 }

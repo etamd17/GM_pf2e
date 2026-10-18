@@ -70,6 +70,14 @@ def make_pages_blueprint(*, db: Database, host, dist_dir: Path, on_change=lambda
             select(VttScene).where(VttScene.campaign_id == campaign_id).order_by(VttScene.name, VttScene.id)
         ).scalars().all()
 
+    def campaign_system(campaign_id: str) -> str:
+        lookup = getattr(host, "campaign_system", None)
+        try:
+            system = lookup(campaign_id) if lookup else None
+        except Exception:
+            system = None
+        return system if system in ("pf2e", "cosmere", "dnd5e") else "pf2e"
+
     @bp.get("/vtt/gm")
     def gm_page():
         campaign_id = request.args.get("campaignId")
@@ -93,7 +101,9 @@ def make_pages_blueprint(*, db: Database, host, dist_dir: Path, on_change=lambda
                              # The stable member id: commands saved when a session ends
                              # are resent only by the same member (handoff 043). Not
                              # the CSRF token, which changes on reauthentication.
-                             "memberId": member_id})
+                             "memberId": member_id,
+                             # The game system decides how the ruler counts distance (beta-1).
+                             "system": campaign_system(campaign_id)})
         response = Response(html.replace("</head>", boot + "</head>", 1), mimetype="text/html")
         response.headers["Cache-Control"] = "no-store"
         return response

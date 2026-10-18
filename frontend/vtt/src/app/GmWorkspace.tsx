@@ -4,6 +4,7 @@ import { MapHost } from '../components/MapHost';
 import type { GmLive } from '../live/gm';
 import type { GmEntity } from '../protocol/frames';
 import { conditionLabel } from '../scene/adapt';
+import { createRuler, ping, type RulerController } from './actions/transients';
 import { snapToGrid, snapTokenCentre, type Hit, type Point } from '../scene/interaction';
 import type { RuntimeInteraction } from '../scene/SceneRuntime';
 import { useCommands } from '../state/commands';
@@ -56,7 +57,7 @@ interface Props {
   live?: GmLive | null;
 }
 
-type Tool = 'select' | 'token' | 'light' | 'wall' | 'fog-reveal' | 'fog-hide' | 'template' | 'terrain';
+type Tool = 'select' | 'token' | 'light' | 'wall' | 'fog-reveal' | 'fog-hide' | 'template' | 'terrain' | 'ping' | 'ruler';
 
 const TOOLS: ReadonlyArray<{ id: Tool; label: string; hint: string }> = [
   { id: 'select', label: 'Select', hint: 'Select and drag tokens and templates; arrows move the selection' },
@@ -67,6 +68,9 @@ const TOOLS: ReadonlyArray<{ id: Tool; label: string; hint: string }> = [
   { id: 'fog-hide', label: 'Hide', hint: 'Click a room to cover it with fog again' },
   { id: 'template', label: 'Template', hint: 'Burst or emanation: click. Cone or line: click the origin, then click to aim' },
   { id: 'terrain', label: 'Terrain', hint: 'Click a room to paint it; Alt-click paints one square' },
+  // beta-1; Codex's tool-group rail (U-2) moves these into a Measure group.
+  { id: 'ruler', label: 'Ruler', hint: 'Drag to measure; the TV shows it too' },
+  { id: 'ping', label: 'Ping', hint: 'Click to ping a spot; the TV shows it too' },
 ];
 
 // A whole template moved, aim and all, kept inside the contract's range.
@@ -105,6 +109,17 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
   const entities = useEntities((s) => s.entities);
   const overlays = useOverlays((s) => s.overlays);
   const pending = useCommands((s) => s.pending);
+  // beta-1: one ruler controller per live session (throttle and linger rules).
+  const rulerRef = useRef<RulerController | null>(null);
+  useEffect(() => {
+    if (!live) return;
+    const ruler = createRuler(live.sendTransient, live.boot.system);
+    rulerRef.current = ruler;
+    return () => {
+      ruler.dispose();
+      if (rulerRef.current === ruler) rulerRef.current = null;
+    };
+  }, [live]);
   const lastApplied = useCommands((s) => s.lastApplied);
   const [zoom, setZoom] = useState(1);
   const [railOpen, setRailOpen] = useState(true);
@@ -366,6 +381,13 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
       setSelection({ kind: 'token', id });
     },
     canDragTemplate: (id) => inputEnabled && tool === 'select' && entityOf('template', id) !== undefined,
+    measuring: () => tool === 'ruler' && live !== null,
+    onMeasure: (points, done) => {
+      const ruler = rulerRef.current;
+      if (!ruler) return;
+      if (done) ruler.end(points);
+      else if (points) ruler.update(points);
+    },
     onTemplateDrop: (id, dx, dy) => {
       const template = entityOf('template', id) as Of<'template'> | undefined;
       if (!template || !inputEnabled) return;
@@ -397,6 +419,8 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
         placeTemplate(point, hit);
       } else if (tool === 'terrain') {
         paintTerrain(point, modifiers?.alt === true);
+      } else if (tool === 'ping') {
+        if (live) ping(live.sendTransient, point);
       } else if (tool === 'wall') {
         const p = snapToGrid(point, scene);
         if (!wallStart) {

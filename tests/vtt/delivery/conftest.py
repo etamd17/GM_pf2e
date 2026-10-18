@@ -38,6 +38,9 @@ class FakeHost:
     def csrf_token(self):
         return CSRF
 
+    def campaign_system(self, campaign_id):
+        return {"camp_b": "cosmere"}.get(campaign_id, "pf2e")
+
     def is_campaign_gm(self, session, user_id, campaign_id):
         return (user_id, campaign_id) in self.gms
 

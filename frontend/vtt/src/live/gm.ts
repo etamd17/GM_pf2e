@@ -12,6 +12,7 @@ import { useEntities } from '../state/entities';
 import type { TokenOverlay } from '../app/gmCommands';
 import { UndoManager } from '../app/undo';
 import { useOverlays } from '../state/overlays';
+import { useTransients, type RelayBody } from '../state/transients';
 import type { GmBoot } from './boot';
 import { browserClock } from './sessionClock';
 
@@ -25,6 +26,9 @@ export interface GmLive {
   undo: UndoManager;
   issue(draft: Omit<CommandDraft, 'campaignId' | 'sceneId'> & { sceneId?: string }, overlay?: OverlayData): string | null;
   boot: GmBoot;
+  // beta-1: a ping or ruler for the scene being edited. Drawn here at once and
+  // relayed to the TV (when that scene is on it) and other GMs on the scene.
+  sendTransient(body: RelayBody): boolean;
 }
 
 // What a pending command looks like on screen until its frame arrives.
@@ -122,7 +126,10 @@ export function startGm(boot: GmBoot): GmLive {
       resync: (d) => gm.validateResyncRequired(d),
       bootstrap: (d) => gm.validateBootstrapRejection(d),
       ack: (d) => gm.validateAcknowledgement(d),
+      transient: (d) => gm.validateTransient(d),
     },
+    onTransient: (relay) => useTransients.getState().apply(relay.key, relay.transient as RelayBody, relay.ttlMs),
+    onSnapshot: () => useTransients.getState().clear(),
     subscribeMessage: () => ({ schemaVersion: 1, audience: 'gm', campaignId: boot.campaignId, sceneId: boot.sceneId }),
     onAck: (ack) => queue.onAck(ack),
   });
@@ -156,5 +163,16 @@ export function startGm(boot: GmBoot): GmLive {
     boot,
     issue: (draft, overlay = null) =>
       queue.issue({ ...draft, campaignId: boot.campaignId, sceneId: draft.sceneId ?? boot.sceneId ?? '' }, overlay),
+    sendTransient: (body) => {
+      // The shape is checked here (the server checks the rest); a placeholder
+      // stands in for the subscription id, which the transport fills in.
+      if (!gm.validateTransientSend({ schemaVersion: 1, subscriptionId: 'sub_placeholder00', transient: body })) {
+        return false;
+      }
+      // The sender is never sent its own transient back: draw it here.
+      const key = body.type === 'ping' ? 'local:ping' : 'local:ruler';
+      useTransients.getState().apply(key, body, body.type === 'ping' ? 3000 : 10000);
+      return transport.sendTransient(body as unknown as Record<string, unknown>);
+    },
   };
 }

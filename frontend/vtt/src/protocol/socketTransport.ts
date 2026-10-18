@@ -18,6 +18,14 @@ export interface SurfaceValidators {
   resync(data: unknown): boolean;
   bootstrap(data: unknown): boolean;
   ack?(data: unknown): boolean; // GM only: a table sends no commands
+  transient?(data: unknown): boolean; // beta-1: a relayed ping or ruler
+}
+
+// A relayed transient, already validated and bound to the current subscription.
+export interface TransientRelay {
+  key: string;
+  ttlMs: number;
+  transient: { type: 'ping' | 'ruler' | 'ruler-clear'; [field: string]: unknown };
 }
 
 export type IoFactory = (url: string, options: Partial<ManagerOptions & SocketOptions>) => Socket;
@@ -32,6 +40,10 @@ export interface SocketTransportOptions<E extends EntityKey, O> {
   url?: string; // origin; defaults to the page's own
   io?: IoFactory; // injectable for tests
   onAck?: (ack: AckFrame) => void;
+  // beta-1: a relayed transient for the current subscription, and every new
+  // snapshot (which clears all transients: nothing is replayed).
+  onTransient?: (relay: TransientRelay) => void;
+  onSnapshot?: () => void;
   // Reconnect delay after the server itself closed the socket (Socket.IO does
   // not retry that on its own).
   serverCloseRetryMs?: number;
@@ -93,6 +105,7 @@ export class SocketIoTransport<E extends EntityKey, O = unknown> {
     socket.on('vtt.snapshot', (data: unknown) => {
       if (!this.valid((d) => this.options.validators.frame(d) && (d as { frame?: unknown }).frame === 'snapshot', data)) return;
       session.onSnapshot(data as SnapshotFrame<E>, this.attempt);
+      this.options.onSnapshot?.();
     });
     socket.on('vtt.patch', (data: unknown) => {
       if (!this.valid((d) => this.options.validators.frame(d) && (d as { frame?: unknown }).frame === 'patch', data)) return;
@@ -102,6 +115,18 @@ export class SocketIoTransport<E extends EntityKey, O = unknown> {
       if (!this.valid(this.options.validators.resync, data)) return;
       const m = data as { reason: ResyncReason; subscriptionId: string };
       session.onResyncRequired(m.reason, m.subscriptionId);
+    });
+    socket.on('vtt.transient_relay', (data: unknown) => {
+      // A transient is disposable: an invalid one is dropped, never a reason to
+      // resubscribe, and one for another subscription is ignored.
+      const validate = this.options.validators.transient;
+      if (!validate || !validate(data)) {
+        this.stats.invalid += 1;
+        return;
+      }
+      const relay = data as TransientRelay & { subscriptionId: string };
+      if (relay.subscriptionId !== session.currentSubscriptionId) return;
+      this.options.onTransient?.(relay);
     });
     socket.on('vtt.ack', (data: unknown) => {
       const validate = this.options.validators.ack;
@@ -143,6 +168,15 @@ export class SocketIoTransport<E extends EntityKey, O = unknown> {
     if (!this.socket?.connected) return false;
     this.socket.emit('vtt.command', command);
     this.stats.sent += 1;
+    return true;
+  }
+
+  // beta-1: send a ping or ruler for the current subscription. Returns false
+  // when there is no live socket or subscription (a transient is never queued).
+  sendTransient(transient: Record<string, unknown>): boolean {
+    const subscriptionId = this.options.session.currentSubscriptionId;
+    if (!this.socket?.connected || subscriptionId === null) return false;
+    this.socket.emit('vtt.transient', { schemaVersion: 1, subscriptionId, transient });
     return true;
   }
 

@@ -10,7 +10,9 @@
     "table": "schemas/table.schema.json",
     "gm-subscribe": "schemas/gm-subscribe.schema.json",
     "table-subscribe": "schemas/table-subscribe.schema.json",
-    "command": "schemas/command.schema.json"
+    "command": "schemas/command.schema.json",
+    "transient-send": "schemas/transient-send.schema.json",
+    "transient": "schemas/transient.schema.json"
   },
   "events": {
     "vtt.subscribe": {
@@ -29,9 +31,11 @@
       "status": "schema-ready"
     },
     "vtt.transient": {
-      "direction": "both",
-      "schemas": {},
-      "status": "reserved"
+      "direction": "client",
+      "schemas": {
+        "gm": "transient-send"
+      },
+      "status": "schema-ready"
     },
     "vtt.whisper.send": {
       "direction": "client",
@@ -73,6 +77,14 @@
         "table": "resync-required"
       },
       "status": "schema-ready"
+    },
+    "vtt.transient_relay": {
+      "direction": "server",
+      "schemas": {
+        "gm": "transient",
+        "table": "transient"
+      },
+      "status": "schema-ready"
     }
   },
   "bootstrapSchema": "bootstrap-rejection",
@@ -84,7 +96,9 @@
         "gm-subscribe",
         "acknowledgement",
         "resync-required",
-        "bootstrap-rejection"
+        "bootstrap-rejection",
+        "transient-send",
+        "transient"
       ],
       "validators": [
         "gm",
@@ -92,7 +106,9 @@
         "gm-subscribe",
         "acknowledgement",
         "resync-required",
-        "bootstrap-rejection"
+        "bootstrap-rejection",
+        "transient-send",
+        "transient"
       ]
     },
     "table": {
@@ -100,13 +116,15 @@
         "table",
         "table-subscribe",
         "resync-required",
-        "bootstrap-rejection"
+        "bootstrap-rejection",
+        "transient"
       ],
       "validators": [
         "table",
         "table-subscribe",
         "resync-required",
-        "bootstrap-rejection"
+        "bootstrap-rejection",
+        "transient"
       ]
     }
   },
@@ -136,5 +154,9 @@
     "terrain.paint",
     "terrain.reset"
   ],
-  "transientVariants": []
+  "transientVariants": [
+    "ping",
+    "ruler",
+    "ruler-clear"
+  ]
 }

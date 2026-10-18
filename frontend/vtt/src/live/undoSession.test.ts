@@ -33,7 +33,7 @@ const { startGm } = await import('./gm');
 type Of<K extends GmEntity['kind']> = Extract<GmEntity, { kind: K }>;
 const V1 = 'v' + 'A'.repeat(24);
 const V2 = 'v' + 'B'.repeat(24);
-const boot: GmBoot = { campaignId: 'camp_a', sceneId: 'scene_a', csrf: 'csrf', memberId: 'user_gm' };
+const boot: GmBoot = { campaignId: 'camp_a', sceneId: 'scene_a', csrf: 'csrf', memberId: 'user_gm', system: 'pf2e' };
 const scene = {
   kind: 'scene', id: 'scene_a', version: V1, name: 'Hall', width: 640, height: 640, gridSize: 64,
   showGrid: true, backgroundAssetId: null, published: true,

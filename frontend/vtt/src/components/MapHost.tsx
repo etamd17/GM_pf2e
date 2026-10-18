@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { useTransients } from '../state/transients';
 import { SceneRuntime, type RuntimeInteraction } from '../scene/SceneRuntime';
 import type { Hit, Point } from '../scene/interaction';
 import type { Surface } from '../scene/layers';
@@ -77,6 +78,8 @@ export function MapHost({ surface, scene, onViewportChange, label, interaction, 
               canDragToken: (id) => interactionRef.current?.canDragToken?.(id) ?? false,
               onTemplateDrop: (id, dx, dy) => interactionRef.current?.onTemplateDrop?.(id, dx, dy),
               canDragTemplate: (id) => interactionRef.current?.canDragTemplate?.(id) ?? false,
+              measuring: () => interactionRef.current?.measuring?.() ?? false,
+              onMeasure: (points, done) => interactionRef.current?.onMeasure?.(points, done),
               onPointerMove: (p) => interactionRef.current?.onPointerMove?.(p),
               onKey: (e) => interactionRef.current?.onKey?.(e) ?? false,
             } satisfies RuntimeInteraction,
@@ -112,6 +115,19 @@ export function MapHost({ surface, scene, onViewportChange, label, interaction, 
   useEffect(() => {
     runtimeRef.current?.setWallDraft(wallDraft);
   }, [wallDraft]);
+
+  // Live pings and rulers (beta-1), on both surfaces. Expired ones are pruned
+  // a few times a second; a new snapshot clears them (the live wiring does).
+  useEffect(() => {
+    const push = () => runtimeRef.current?.setTransients([...useTransients.getState().live.values()]);
+    push();
+    const unsubscribe = useTransients.subscribe(push);
+    const timer = window.setInterval(() => useTransients.getState().prune(), 250);
+    return () => {
+      unsubscribe();
+      window.clearInterval(timer);
+    };
+  }, [surface]);
 
   // The GM map is keyboard-focusable (arrows pan, +/- zoom, 0 fits). The table
   // has no operator, so it takes no focus.

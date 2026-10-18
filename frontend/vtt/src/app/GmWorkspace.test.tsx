@@ -30,6 +30,7 @@ vi.mock('../scene/SceneRuntime', () => ({
       runtimes.push(this);
     }
     setScene() {}
+    setTransients() {}
     setSelection(s: unknown) {
       this.selection = s;
     }

@@ -25,6 +25,7 @@ commit seen both by the snapshot and by replay is delivered once.
 
 from __future__ import annotations
 
+import base64
 import secrets
 import threading
 from collections.abc import Callable
@@ -46,6 +47,12 @@ from vtt.storage.stream import committed_position, outbox_after, snapshot_transa
 # More committed rows than this behind one subscription means the subscription
 # is too far behind to replay safely: it is told to resync (buffer-overflow).
 REPLAY_LIMIT = 1024
+
+# Transients (beta-1, ADR-0002 section 9): never stored, replayed or acknowledged.
+TRANSIENT_TTL_MS = {"ping": 3000, "ruler": 10000, "ruler-clear": 1}
+TRANSIENT_RATE = 20.0          # per second, per sender subscription (a ruler drag is throttled client-side)
+TRANSIENT_BURST = 20.0
+TRANSIENT_FOG_SAMPLES = 512    # fog checks along a ruler, at most
 
 Emit = Callable[[str, str, dict[str, Any]], None]          # (sid, event, payload)
 
@@ -105,7 +112,9 @@ class Hub:
         self._by_sid: dict[str, Subscription] = {}
         self._lock = threading.Lock()
         self.stats = {"snapshots": 0, "patches": 0, "suppressed": 0, "resyncs": 0, "invalid": 0,
-                      "delivery_errors": 0, "ended": 0, "completions": 0}
+                      "delivery_errors": 0, "ended": 0, "completions": 0, "transients_relayed": 0,
+                      "transients_dropped": 0, "transients_rate_limited": 0, "transient_errors": 0}
+        self._transient_budget: dict[str, tuple[float, float]] = {}   # sid -> (tokens, last refill)
 
     # --- subscribe -------------------------------------------------------------------------
 
@@ -126,6 +135,7 @@ class Hub:
         return sub
 
     def unsubscribe(self, sid: str) -> None:
+        self._transient_budget.pop(sid, None)
         with self._lock:
             sub = self._by_sid.pop(sid, None)
         if sub is not None:
@@ -437,6 +447,75 @@ class Hub:
         return upserted, removed, sent_after
 
     # --- helpers ------------------------------------------------------------------------------
+
+    # --- transients (beta-1) ---------------------------------------------------------------
+
+    def relay_transient(self, sid: str, message: dict[str, Any]) -> int:
+        """Relay a GM's (already schema-validated) transient to the recipients
+        whose current scene it belongs to. Returns how many received it; 0 when
+        it was dropped (not the sender's live GM subscription, rate-limited, off
+        the scene, or nobody to receive it). Nothing is stored or acknowledged."""
+        import hashlib as _hashlib
+        import hmac as _hmac
+        import math
+        import time as _time
+        sender = self._by_sid.get(sid)
+        if (sender is None or not sender.live or sender.audience != "gm" or sender.scene_id is None
+                or message.get("subscriptionId") != sender.subscription_id):
+            self.stats["transients_dropped"] += 1
+            return 0
+        now = _time.monotonic()
+        tokens, last = self._transient_budget.get(sid, (TRANSIENT_BURST, now))
+        tokens = min(TRANSIENT_BURST, tokens + (now - last) * TRANSIENT_RATE)
+        if tokens < 1.0:
+            self._transient_budget[sid] = (tokens, now)
+            self.stats["transients_rate_limited"] += 1
+            return 0
+        self._transient_budget[sid] = (tokens - 1.0, now)
+        transient = message["transient"]
+        kind = transient["type"]
+        points = ([(transient["x"], transient["y"])] if kind == "ping"
+                  else [(p["x"], p["y"]) for p in transient.get("points", [])])
+        with self.db.session() as session:
+            scene = self._scene(session, sender.campaign_id, sender.scene_id)
+            if scene is None or any(x > scene.width or y > scene.height for x, y in points):
+                self.stats["transients_dropped"] += 1
+                return 0
+            pointer = session.get(VttTablePointer, sender.campaign_id)
+            on_tv = bool(scene.published) and pointer is not None and pointer.scene_id == scene.id
+            fog_view = fog.load(session, scene)[1] if on_tv else None
+        # The table never sees a transient that could reveal what fog hides: every
+        # point, and points sampled every half square along each ruler segment.
+        table_safe = on_tv
+        if on_tv and fog_view is not None and points:
+            samples = list(points)
+            step = max(1.0, scene.grid_size / 2)
+            for (x1, y1), (x2, y2) in zip(points, points[1:]):
+                n = min(TRANSIENT_FOG_SAMPLES, int(math.ceil(math.hypot(x2 - x1, y2 - y1) / step)))
+                samples += [(x1 + (x2 - x1) * i / max(1, n), y1 + (y2 - y1) * i / max(1, n)) for i in range(n + 1)]
+            table_safe = not any(fog_view.hides(x, y) for x, y in samples[:TRANSIENT_FOG_SAMPLES * 2])
+        family = "ruler" if kind.startswith("ruler") else kind
+        digest = _hmac.new(self.key.secret, f"transient:{sender.subscription_id}:{family}".encode(), _hashlib.sha256)
+        key = "k" + base64.urlsafe_b64encode(digest.digest()[:15]).decode("ascii")      # 21 chars, opaque
+        with self._lock:
+            recipients = [s for s in self._by_sid.values()
+                          if s is not sender and s.live and s.campaign_id == sender.campaign_id]
+        sent = 0
+        for sub in recipients:
+            if sub.audience == "gm" and sub.scene_id != sender.scene_id:
+                continue
+            if sub.audience == "table" and not (table_safe and sub.scene_id == sender.scene_id):
+                continue
+            frame = {"schemaVersion": 1, "subscriptionId": sub.subscription_id, "key": key,
+                     "ttlMs": TRANSIENT_TTL_MS[kind], "transient": transient}
+            try:
+                self.registry.validate("transient", frame)
+                self.emit(sub.sid, "vtt.transient_relay", frame)
+                sent += 1
+            except Exception:
+                self.stats["transient_errors"] += 1
+        self.stats["transients_relayed"] += sent
+        return sent
 
     def _drop(self, sid: str, sub: Subscription) -> None:
         with self._lock:

@@ -4,6 +4,7 @@ import { ProjectionSession } from '../protocol/session';
 import { SocketIoTransport } from '../protocol/socketTransport';
 import { storeSink } from '../protocol/storeSink';
 import { adaptEntities, newAdaptCache } from '../scene/adapt';
+import { useTransients, type RelayBody } from '../state/transients';
 import { browserClock } from './sessionClock';
 
 // The table's live wiring. It imports only the table surface's validators; a
@@ -30,8 +31,11 @@ export function startTable(): SocketIoTransport<TableEntity> {
       frame: (d) => table.validateTable(d),
       resync: (d) => table.validateResyncRequired(d),
       bootstrap: (d) => table.validateBootstrapRejection(d),
+      transient: (d) => table.validateTransient(d),
     },
     subscribeMessage: () => ({ schemaVersion: 1, audience: 'table' }),
+    onTransient: (relay) => useTransients.getState().apply(relay.key, relay.transient as RelayBody, relay.ttlMs),
+    onSnapshot: () => useTransients.getState().clear(),
   });
   transport.connect();
   return transport;

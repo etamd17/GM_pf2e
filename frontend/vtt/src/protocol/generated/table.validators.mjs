@@ -3454,3 +3454,696 @@ return false;
 validate39.errors = vErrors;
 return errors === 0;
 }
+
+export const validateTransient = validate40;
+const schema69 = {"$schema":"http://json-schema.org/draft-07/schema#","$id":"https://vtt.invalid/v1/transient.schema.json","title":"TransientRelay","description":"A transient relayed to a recipient whose current scene it belongs to. key is an opaque latest-wins key (one per sender and kind: a newer transient with the same key replaces the older one); the recipient drops it after ttlMs, and clears every transient on a new snapshot.","type":"object","additionalProperties":false,"required":["schemaVersion","subscriptionId","key","ttlMs","transient"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"subscriptionId":{"$ref":"common.schema.json#/definitions/OpaqueToken","description":"The recipient's subscription."},"key":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"ttlMs":{"type":"integer","minimum":1,"maximum":10000},"transient":{"$ref":"common.schema.json#/definitions/Transient"}}};
+const schema73 = {"title":"Transient","description":"A transient (beta-1, ADR-0002 section 9): never stored, replayed or acknowledged. ping marks a point; ruler is a measured path of 2-8 points; ruler-clear ends the sender's ruler.","oneOf":[{"title":"TransientPing","type":"object","additionalProperties":false,"required":["type","x","y"],"properties":{"type":{"const":"ping"},"x":{"$ref":"common.schema.json#/definitions/Coord"},"y":{"$ref":"common.schema.json#/definitions/Coord"}}},{"title":"TransientRuler","type":"object","additionalProperties":false,"required":["type","points","rule"],"properties":{"type":{"const":"ruler"},"points":{"type":"array","minItems":2,"maxItems":8,"items":{"$ref":"common.schema.json#/definitions/TransientPoint"}},"rule":{"type":"string","enum":["uniform","alternating"],"description":"How the distance is counted, chosen by the sender from the campaign's system: uniform (every square 5 ft, diagonals included: Cosmere, D&D 5e) or alternating (diagonals alternate 5 and 10 ft: PF2e)."}}},{"title":"TransientRulerClear","type":"object","additionalProperties":false,"required":["type"],"properties":{"type":{"const":"ruler-clear"}}}]};
+const schema76 = {"title":"TransientPoint","type":"object","additionalProperties":false,"required":["x","y"],"properties":{"x":{"$ref":"common.schema.json#/definitions/Coord"},"y":{"$ref":"common.schema.json#/definitions/Coord"}}};
+
+function validate42(data, {instancePath="", parentData, parentDataProperty, rootData=data}={}){
+let vErrors = null;
+let errors = 0;
+if(errors === 0){
+if(data && typeof data == "object" && !Array.isArray(data)){
+let missing0;
+if((((data.x === undefined) || (!(func0.call(data, "x")))) && (missing0 = "x")) || (((data.y === undefined) || (!(func0.call(data, "y")))) && (missing0 = "y"))){
+validate42.errors = [{instancePath,schemaPath:"#/required",keyword:"required",params:{missingProperty: missing0},message:"must have required property '"+missing0+"'"}];
+return false;
+}
+else {
+const _errs1 = errors;
+for(const key0 of Object.keys(data)){
+if(!((key0 === "x") || (key0 === "y"))){
+validate42.errors = [{instancePath,schemaPath:"#/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"}];
+return false;
+break;
+}
+}
+if(_errs1 === errors){
+if(data.x !== undefined && func0.call(data, "x")){
+let data0 = data.x;
+const _errs2 = errors;
+const _errs3 = errors;
+if(errors === _errs3){
+if((typeof data0 == "number") && (isFinite(data0))){
+if(data0 > 16384 || isNaN(data0)){
+validate42.errors = [{instancePath:instancePath+"/x",schemaPath:"common.schema.json#/definitions/Coord/maximum",keyword:"maximum",params:{comparison: "<=", limit: 16384},message:"must be <= 16384"}];
+return false;
+}
+else {
+if(data0 < 0 || isNaN(data0)){
+validate42.errors = [{instancePath:instancePath+"/x",schemaPath:"common.schema.json#/definitions/Coord/minimum",keyword:"minimum",params:{comparison: ">=", limit: 0},message:"must be >= 0"}];
+return false;
+}
+}
+}
+else {
+validate42.errors = [{instancePath:instancePath+"/x",schemaPath:"common.schema.json#/definitions/Coord/type",keyword:"type",params:{type: "number"},message:"must be number"}];
+return false;
+}
+}
+var valid0 = _errs2 === errors;
+}
+else {
+var valid0 = true;
+}
+if(valid0){
+if(data.y !== undefined && func0.call(data, "y")){
+let data1 = data.y;
+const _errs5 = errors;
+const _errs6 = errors;
+if(errors === _errs6){
+if((typeof data1 == "number") && (isFinite(data1))){
+if(data1 > 16384 || isNaN(data1)){
+validate42.errors = [{instancePath:instancePath+"/y",schemaPath:"common.schema.json#/definitions/Coord/maximum",keyword:"maximum",params:{comparison: "<=", limit: 16384},message:"must be <= 16384"}];
+return false;
+}
+else {
+if(data1 < 0 || isNaN(data1)){
+validate42.errors = [{instancePath:instancePath+"/y",schemaPath:"common.schema.json#/definitions/Coord/minimum",keyword:"minimum",params:{comparison: ">=", limit: 0},message:"must be >= 0"}];
+return false;
+}
+}
+}
+else {
+validate42.errors = [{instancePath:instancePath+"/y",schemaPath:"common.schema.json#/definitions/Coord/type",keyword:"type",params:{type: "number"},message:"must be number"}];
+return false;
+}
+}
+var valid0 = _errs5 === errors;
+}
+else {
+var valid0 = true;
+}
+}
+}
+}
+}
+else {
+validate42.errors = [{instancePath,schemaPath:"#/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+return false;
+}
+}
+validate42.errors = vErrors;
+return errors === 0;
+}
+
+
+function validate41(data, {instancePath="", parentData, parentDataProperty, rootData=data}={}){
+let vErrors = null;
+let errors = 0;
+const _errs0 = errors;
+let valid0 = false;
+let passing0 = null;
+const _errs1 = errors;
+if(errors === _errs1){
+if(data && typeof data == "object" && !Array.isArray(data)){
+let missing0;
+if(((((data.type === undefined) || (!(func0.call(data, "type")))) && (missing0 = "type")) || (((data.x === undefined) || (!(func0.call(data, "x")))) && (missing0 = "x"))) || (((data.y === undefined) || (!(func0.call(data, "y")))) && (missing0 = "y"))){
+const err0 = {instancePath,schemaPath:"#/oneOf/0/required",keyword:"required",params:{missingProperty: missing0},message:"must have required property '"+missing0+"'"};
+if(vErrors === null){
+vErrors = [err0];
+}
+else {
+vErrors.push(err0);
+}
+errors++;
+}
+else {
+const _errs3 = errors;
+for(const key0 of Object.keys(data)){
+if(!(((key0 === "type") || (key0 === "x")) || (key0 === "y"))){
+const err1 = {instancePath,schemaPath:"#/oneOf/0/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"};
+if(vErrors === null){
+vErrors = [err1];
+}
+else {
+vErrors.push(err1);
+}
+errors++;
+break;
+}
+}
+if(_errs3 === errors){
+if(data.type !== undefined && func0.call(data, "type")){
+const _errs4 = errors;
+if("ping" !== data.type){
+const err2 = {instancePath:instancePath+"/type",schemaPath:"#/oneOf/0/properties/type/const",keyword:"const",params:{allowedValue: "ping"},message:"must be equal to constant"};
+if(vErrors === null){
+vErrors = [err2];
+}
+else {
+vErrors.push(err2);
+}
+errors++;
+}
+var valid1 = _errs4 === errors;
+}
+else {
+var valid1 = true;
+}
+if(valid1){
+if(data.x !== undefined && func0.call(data, "x")){
+let data1 = data.x;
+const _errs5 = errors;
+const _errs6 = errors;
+if(errors === _errs6){
+if((typeof data1 == "number") && (isFinite(data1))){
+if(data1 > 16384 || isNaN(data1)){
+const err3 = {instancePath:instancePath+"/x",schemaPath:"common.schema.json#/definitions/Coord/maximum",keyword:"maximum",params:{comparison: "<=", limit: 16384},message:"must be <= 16384"};
+if(vErrors === null){
+vErrors = [err3];
+}
+else {
+vErrors.push(err3);
+}
+errors++;
+}
+else {
+if(data1 < 0 || isNaN(data1)){
+const err4 = {instancePath:instancePath+"/x",schemaPath:"common.schema.json#/definitions/Coord/minimum",keyword:"minimum",params:{comparison: ">=", limit: 0},message:"must be >= 0"};
+if(vErrors === null){
+vErrors = [err4];
+}
+else {
+vErrors.push(err4);
+}
+errors++;
+}
+}
+}
+else {
+const err5 = {instancePath:instancePath+"/x",schemaPath:"common.schema.json#/definitions/Coord/type",keyword:"type",params:{type: "number"},message:"must be number"};
+if(vErrors === null){
+vErrors = [err5];
+}
+else {
+vErrors.push(err5);
+}
+errors++;
+}
+}
+var valid1 = _errs5 === errors;
+}
+else {
+var valid1 = true;
+}
+if(valid1){
+if(data.y !== undefined && func0.call(data, "y")){
+let data2 = data.y;
+const _errs8 = errors;
+const _errs9 = errors;
+if(errors === _errs9){
+if((typeof data2 == "number") && (isFinite(data2))){
+if(data2 > 16384 || isNaN(data2)){
+const err6 = {instancePath:instancePath+"/y",schemaPath:"common.schema.json#/definitions/Coord/maximum",keyword:"maximum",params:{comparison: "<=", limit: 16384},message:"must be <= 16384"};
+if(vErrors === null){
+vErrors = [err6];
+}
+else {
+vErrors.push(err6);
+}
+errors++;
+}
+else {
+if(data2 < 0 || isNaN(data2)){
+const err7 = {instancePath:instancePath+"/y",schemaPath:"common.schema.json#/definitions/Coord/minimum",keyword:"minimum",params:{comparison: ">=", limit: 0},message:"must be >= 0"};
+if(vErrors === null){
+vErrors = [err7];
+}
+else {
+vErrors.push(err7);
+}
+errors++;
+}
+}
+}
+else {
+const err8 = {instancePath:instancePath+"/y",schemaPath:"common.schema.json#/definitions/Coord/type",keyword:"type",params:{type: "number"},message:"must be number"};
+if(vErrors === null){
+vErrors = [err8];
+}
+else {
+vErrors.push(err8);
+}
+errors++;
+}
+}
+var valid1 = _errs8 === errors;
+}
+else {
+var valid1 = true;
+}
+}
+}
+}
+}
+}
+else {
+const err9 = {instancePath,schemaPath:"#/oneOf/0/type",keyword:"type",params:{type: "object"},message:"must be object"};
+if(vErrors === null){
+vErrors = [err9];
+}
+else {
+vErrors.push(err9);
+}
+errors++;
+}
+}
+var _valid0 = _errs1 === errors;
+if(_valid0){
+valid0 = true;
+passing0 = 0;
+}
+const _errs11 = errors;
+if(errors === _errs11){
+if(data && typeof data == "object" && !Array.isArray(data)){
+let missing1;
+if(((((data.type === undefined) || (!(func0.call(data, "type")))) && (missing1 = "type")) || (((data.points === undefined) || (!(func0.call(data, "points")))) && (missing1 = "points"))) || (((data.rule === undefined) || (!(func0.call(data, "rule")))) && (missing1 = "rule"))){
+const err10 = {instancePath,schemaPath:"#/oneOf/1/required",keyword:"required",params:{missingProperty: missing1},message:"must have required property '"+missing1+"'"};
+if(vErrors === null){
+vErrors = [err10];
+}
+else {
+vErrors.push(err10);
+}
+errors++;
+}
+else {
+const _errs13 = errors;
+for(const key1 of Object.keys(data)){
+if(!(((key1 === "type") || (key1 === "points")) || (key1 === "rule"))){
+const err11 = {instancePath,schemaPath:"#/oneOf/1/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key1},message:"must NOT have additional properties"};
+if(vErrors === null){
+vErrors = [err11];
+}
+else {
+vErrors.push(err11);
+}
+errors++;
+break;
+}
+}
+if(_errs13 === errors){
+if(data.type !== undefined && func0.call(data, "type")){
+const _errs14 = errors;
+if("ruler" !== data.type){
+const err12 = {instancePath:instancePath+"/type",schemaPath:"#/oneOf/1/properties/type/const",keyword:"const",params:{allowedValue: "ruler"},message:"must be equal to constant"};
+if(vErrors === null){
+vErrors = [err12];
+}
+else {
+vErrors.push(err12);
+}
+errors++;
+}
+var valid4 = _errs14 === errors;
+}
+else {
+var valid4 = true;
+}
+if(valid4){
+if(data.points !== undefined && func0.call(data, "points")){
+let data4 = data.points;
+const _errs15 = errors;
+if(errors === _errs15){
+if(Array.isArray(data4)){
+if(data4.length > 8){
+const err13 = {instancePath:instancePath+"/points",schemaPath:"#/oneOf/1/properties/points/maxItems",keyword:"maxItems",params:{limit: 8},message:"must NOT have more than 8 items"};
+if(vErrors === null){
+vErrors = [err13];
+}
+else {
+vErrors.push(err13);
+}
+errors++;
+}
+else {
+if(data4.length < 2){
+const err14 = {instancePath:instancePath+"/points",schemaPath:"#/oneOf/1/properties/points/minItems",keyword:"minItems",params:{limit: 2},message:"must NOT have fewer than 2 items"};
+if(vErrors === null){
+vErrors = [err14];
+}
+else {
+vErrors.push(err14);
+}
+errors++;
+}
+else {
+var valid5 = true;
+const len0 = data4.length;
+for(let i0=0; i0<len0; i0++){
+const _errs17 = errors;
+if(!(validate42(data4[i0], {instancePath:instancePath+"/points/" + i0,parentData:data4,parentDataProperty:i0,rootData}))){
+vErrors = vErrors === null ? validate42.errors : vErrors.concat(validate42.errors);
+errors = vErrors.length;
+}
+var valid5 = _errs17 === errors;
+if(!valid5){
+break;
+}
+}
+}
+}
+}
+else {
+const err15 = {instancePath:instancePath+"/points",schemaPath:"#/oneOf/1/properties/points/type",keyword:"type",params:{type: "array"},message:"must be array"};
+if(vErrors === null){
+vErrors = [err15];
+}
+else {
+vErrors.push(err15);
+}
+errors++;
+}
+}
+var valid4 = _errs15 === errors;
+}
+else {
+var valid4 = true;
+}
+if(valid4){
+if(data.rule !== undefined && func0.call(data, "rule")){
+let data6 = data.rule;
+const _errs18 = errors;
+if(typeof data6 !== "string"){
+const err16 = {instancePath:instancePath+"/rule",schemaPath:"#/oneOf/1/properties/rule/type",keyword:"type",params:{type: "string"},message:"must be string"};
+if(vErrors === null){
+vErrors = [err16];
+}
+else {
+vErrors.push(err16);
+}
+errors++;
+}
+if(!((data6 === "uniform") || (data6 === "alternating"))){
+const err17 = {instancePath:instancePath+"/rule",schemaPath:"#/oneOf/1/properties/rule/enum",keyword:"enum",params:{allowedValues: schema73.oneOf[1].properties.rule.enum},message:"must be equal to one of the allowed values"};
+if(vErrors === null){
+vErrors = [err17];
+}
+else {
+vErrors.push(err17);
+}
+errors++;
+}
+var valid4 = _errs18 === errors;
+}
+else {
+var valid4 = true;
+}
+}
+}
+}
+}
+}
+else {
+const err18 = {instancePath,schemaPath:"#/oneOf/1/type",keyword:"type",params:{type: "object"},message:"must be object"};
+if(vErrors === null){
+vErrors = [err18];
+}
+else {
+vErrors.push(err18);
+}
+errors++;
+}
+}
+var _valid0 = _errs11 === errors;
+if(_valid0 && valid0){
+valid0 = false;
+passing0 = [passing0, 1];
+}
+else {
+if(_valid0){
+valid0 = true;
+passing0 = 1;
+}
+const _errs20 = errors;
+if(errors === _errs20){
+if(data && typeof data == "object" && !Array.isArray(data)){
+let missing2;
+if(((data.type === undefined) || (!(func0.call(data, "type")))) && (missing2 = "type")){
+const err19 = {instancePath,schemaPath:"#/oneOf/2/required",keyword:"required",params:{missingProperty: missing2},message:"must have required property '"+missing2+"'"};
+if(vErrors === null){
+vErrors = [err19];
+}
+else {
+vErrors.push(err19);
+}
+errors++;
+}
+else {
+const _errs22 = errors;
+for(const key2 of Object.keys(data)){
+if(!(key2 === "type")){
+const err20 = {instancePath,schemaPath:"#/oneOf/2/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key2},message:"must NOT have additional properties"};
+if(vErrors === null){
+vErrors = [err20];
+}
+else {
+vErrors.push(err20);
+}
+errors++;
+break;
+}
+}
+if(_errs22 === errors){
+if(data.type !== undefined && func0.call(data, "type")){
+if("ruler-clear" !== data.type){
+const err21 = {instancePath:instancePath+"/type",schemaPath:"#/oneOf/2/properties/type/const",keyword:"const",params:{allowedValue: "ruler-clear"},message:"must be equal to constant"};
+if(vErrors === null){
+vErrors = [err21];
+}
+else {
+vErrors.push(err21);
+}
+errors++;
+}
+}
+}
+}
+}
+else {
+const err22 = {instancePath,schemaPath:"#/oneOf/2/type",keyword:"type",params:{type: "object"},message:"must be object"};
+if(vErrors === null){
+vErrors = [err22];
+}
+else {
+vErrors.push(err22);
+}
+errors++;
+}
+}
+var _valid0 = _errs20 === errors;
+if(_valid0 && valid0){
+valid0 = false;
+passing0 = [passing0, 2];
+}
+else {
+if(_valid0){
+valid0 = true;
+passing0 = 2;
+}
+}
+}
+if(!valid0){
+const err23 = {instancePath,schemaPath:"#/oneOf",keyword:"oneOf",params:{passingSchemas: passing0},message:"must match exactly one schema in oneOf"};
+if(vErrors === null){
+vErrors = [err23];
+}
+else {
+vErrors.push(err23);
+}
+errors++;
+validate41.errors = vErrors;
+return false;
+}
+else {
+errors = _errs0;
+if(vErrors !== null){
+if(_errs0){
+vErrors.length = _errs0;
+}
+else {
+vErrors = null;
+}
+}
+}
+validate41.errors = vErrors;
+return errors === 0;
+}
+
+
+function validate40(data, {instancePath="", parentData, parentDataProperty, rootData=data}={}){
+/*# sourceURL="https://vtt.invalid/v1/transient.schema.json" */;
+let vErrors = null;
+let errors = 0;
+if(errors === 0){
+if(data && typeof data == "object" && !Array.isArray(data)){
+let missing0;
+if(((((((data.schemaVersion === undefined) || (!(func0.call(data, "schemaVersion")))) && (missing0 = "schemaVersion")) || (((data.subscriptionId === undefined) || (!(func0.call(data, "subscriptionId")))) && (missing0 = "subscriptionId"))) || (((data.key === undefined) || (!(func0.call(data, "key")))) && (missing0 = "key"))) || (((data.ttlMs === undefined) || (!(func0.call(data, "ttlMs")))) && (missing0 = "ttlMs"))) || (((data.transient === undefined) || (!(func0.call(data, "transient")))) && (missing0 = "transient"))){
+validate40.errors = [{instancePath,schemaPath:"#/required",keyword:"required",params:{missingProperty: missing0},message:"must have required property '"+missing0+"'"}];
+return false;
+}
+else {
+const _errs1 = errors;
+for(const key0 of Object.keys(data)){
+if(!(((((key0 === "schemaVersion") || (key0 === "subscriptionId")) || (key0 === "key")) || (key0 === "ttlMs")) || (key0 === "transient"))){
+validate40.errors = [{instancePath,schemaPath:"#/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"}];
+return false;
+break;
+}
+}
+if(_errs1 === errors){
+if(data.schemaVersion !== undefined && func0.call(data, "schemaVersion")){
+let data0 = data.schemaVersion;
+const _errs2 = errors;
+const _errs3 = errors;
+if(!(((typeof data0 == "number") && (!(data0 % 1) && !isNaN(data0))) && (isFinite(data0)))){
+validate40.errors = [{instancePath:instancePath+"/schemaVersion",schemaPath:"common.schema.json#/definitions/SchemaVersion/type",keyword:"type",params:{type: "integer"},message:"must be integer"}];
+return false;
+}
+if(1 !== data0){
+validate40.errors = [{instancePath:instancePath+"/schemaVersion",schemaPath:"common.schema.json#/definitions/SchemaVersion/const",keyword:"const",params:{allowedValue: 1},message:"must be equal to constant"}];
+return false;
+}
+if(errors === _errs3){
+if((typeof data0 == "number") && (isFinite(data0))){
+if(data0 > 1 || isNaN(data0)){
+validate40.errors = [{instancePath:instancePath+"/schemaVersion",schemaPath:"common.schema.json#/definitions/SchemaVersion/maximum",keyword:"maximum",params:{comparison: "<=", limit: 1},message:"must be <= 1"}];
+return false;
+}
+else {
+if(data0 < 1 || isNaN(data0)){
+validate40.errors = [{instancePath:instancePath+"/schemaVersion",schemaPath:"common.schema.json#/definitions/SchemaVersion/minimum",keyword:"minimum",params:{comparison: ">=", limit: 1},message:"must be >= 1"}];
+return false;
+}
+}
+}
+}
+var valid0 = _errs2 === errors;
+}
+else {
+var valid0 = true;
+}
+if(valid0){
+if(data.subscriptionId !== undefined && func0.call(data, "subscriptionId")){
+let data1 = data.subscriptionId;
+const _errs5 = errors;
+const _errs6 = errors;
+if(errors === _errs6){
+if(typeof data1 === "string"){
+if(func60(data1) > 128){
+validate40.errors = [{instancePath:instancePath+"/subscriptionId",schemaPath:"common.schema.json#/definitions/OpaqueToken/maxLength",keyword:"maxLength",params:{limit: 128},message:"must NOT have more than 128 characters"}];
+return false;
+}
+else {
+if(func60(data1) < 16){
+validate40.errors = [{instancePath:instancePath+"/subscriptionId",schemaPath:"common.schema.json#/definitions/OpaqueToken/minLength",keyword:"minLength",params:{limit: 16},message:"must NOT have fewer than 16 characters"}];
+return false;
+}
+else {
+if(!pattern0.test(data1)){
+validate40.errors = [{instancePath:instancePath+"/subscriptionId",schemaPath:"common.schema.json#/definitions/OpaqueToken/pattern",keyword:"pattern",params:{pattern: "^[A-Za-z0-9_-]+(?![\\s\\S])"},message:"must match pattern \""+"^[A-Za-z0-9_-]+(?![\\s\\S])"+"\""}];
+return false;
+}
+}
+}
+}
+else {
+validate40.errors = [{instancePath:instancePath+"/subscriptionId",schemaPath:"common.schema.json#/definitions/OpaqueToken/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid0 = _errs5 === errors;
+}
+else {
+var valid0 = true;
+}
+if(valid0){
+if(data.key !== undefined && func0.call(data, "key")){
+let data2 = data.key;
+const _errs8 = errors;
+const _errs9 = errors;
+if(errors === _errs9){
+if(typeof data2 === "string"){
+if(func60(data2) > 128){
+validate40.errors = [{instancePath:instancePath+"/key",schemaPath:"common.schema.json#/definitions/OpaqueToken/maxLength",keyword:"maxLength",params:{limit: 128},message:"must NOT have more than 128 characters"}];
+return false;
+}
+else {
+if(func60(data2) < 16){
+validate40.errors = [{instancePath:instancePath+"/key",schemaPath:"common.schema.json#/definitions/OpaqueToken/minLength",keyword:"minLength",params:{limit: 16},message:"must NOT have fewer than 16 characters"}];
+return false;
+}
+else {
+if(!pattern0.test(data2)){
+validate40.errors = [{instancePath:instancePath+"/key",schemaPath:"common.schema.json#/definitions/OpaqueToken/pattern",keyword:"pattern",params:{pattern: "^[A-Za-z0-9_-]+(?![\\s\\S])"},message:"must match pattern \""+"^[A-Za-z0-9_-]+(?![\\s\\S])"+"\""}];
+return false;
+}
+}
+}
+}
+else {
+validate40.errors = [{instancePath:instancePath+"/key",schemaPath:"common.schema.json#/definitions/OpaqueToken/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid0 = _errs8 === errors;
+}
+else {
+var valid0 = true;
+}
+if(valid0){
+if(data.ttlMs !== undefined && func0.call(data, "ttlMs")){
+let data3 = data.ttlMs;
+const _errs11 = errors;
+if(!(((typeof data3 == "number") && (!(data3 % 1) && !isNaN(data3))) && (isFinite(data3)))){
+validate40.errors = [{instancePath:instancePath+"/ttlMs",schemaPath:"#/properties/ttlMs/type",keyword:"type",params:{type: "integer"},message:"must be integer"}];
+return false;
+}
+if(errors === _errs11){
+if((typeof data3 == "number") && (isFinite(data3))){
+if(data3 > 10000 || isNaN(data3)){
+validate40.errors = [{instancePath:instancePath+"/ttlMs",schemaPath:"#/properties/ttlMs/maximum",keyword:"maximum",params:{comparison: "<=", limit: 10000},message:"must be <= 10000"}];
+return false;
+}
+else {
+if(data3 < 1 || isNaN(data3)){
+validate40.errors = [{instancePath:instancePath+"/ttlMs",schemaPath:"#/properties/ttlMs/minimum",keyword:"minimum",params:{comparison: ">=", limit: 1},message:"must be >= 1"}];
+return false;
+}
+}
+}
+}
+var valid0 = _errs11 === errors;
+}
+else {
+var valid0 = true;
+}
+if(valid0){
+if(data.transient !== undefined && func0.call(data, "transient")){
+const _errs13 = errors;
+if(!(validate41(data.transient, {instancePath:instancePath+"/transient",parentData:data,parentDataProperty:"transient",rootData}))){
+vErrors = vErrors === null ? validate41.errors : vErrors.concat(validate41.errors);
+errors = vErrors.length;
+}
+var valid0 = _errs13 === errors;
+}
+else {
+var valid0 = true;
+}
+}
+}
+}
+}
+}
+}
+}
+else {
+validate40.errors = [{instancePath,schemaPath:"#/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+return false;
+}
+}
+validate40.errors = vErrors;
+return errors === 0;
+}

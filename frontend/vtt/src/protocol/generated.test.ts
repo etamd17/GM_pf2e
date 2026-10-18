@@ -31,6 +31,9 @@ const VALIDATORS: Record<string, (data: unknown) => boolean> = {
   'bootstrap-rejection': table.validateBootstrapRejection,
   table: table.validateTable,
   'table-subscribe': table.validateTableSubscribe,
+  // beta-1 transients: the GM sends; both surfaces receive the same relay shape.
+  'transient-send': gm.validateTransientSend,
+  transient: (d) => gm.validateTransient(d) && table.validateTransient(d),
   // The aggregate subscribe type has no runtime validator by design (a table
   // must never be validated against the GM shape); its cases are the union.
   subscribe: (d) => gm.validateGmSubscribe(d) || table.validateTableSubscribe(d),
@@ -67,6 +70,7 @@ describe('surface isolation', () => {
       'validateResyncRequired',
       'validateTable',
       'validateTableSubscribe',
+      'validateTransient', // beta-1: the table receives relayed pings and rulers (it never sends)
     ]);
     const source = readFileSync(join(here, 'generated', 'table.validators.mjs'), 'utf8');
     expect(source).not.toMatch(/gm(-subscribe)?\.schema\.json/);

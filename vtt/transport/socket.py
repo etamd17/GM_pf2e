@@ -490,6 +490,26 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
                 hub.notify(result.notify)
         return None
 
+    @socketio.on("vtt.transient", namespace=NAMESPACE)
+    def on_transient(message=None):
+        """A GM's ping or ruler (beta-1). Unacknowledged: anything invalid is
+        dropped. A table never sends one (criterion 14), so a table is closed."""
+        sid = request.sid
+        principal = principals.get(sid)
+        if principal is None or principal.kind == "table":
+            disconnect()
+            return None
+        if principal.session_ended:
+            disconnect()
+            return None
+        try:
+            registry.validate("transient-send", message)
+        except ProtocolValidationError:
+            hub.stats["transients_dropped"] += 1
+            return None
+        hub.relay_transient(sid, message)
+        return None
+
     @socketio.on("*", namespace=NAMESPACE)
     def on_other(_event=None, *_args):
         # M1 registers no commands, transients or whispers. A table may never send them.

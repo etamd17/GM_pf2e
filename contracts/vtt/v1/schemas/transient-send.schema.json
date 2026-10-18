@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://vtt.invalid/v1/transient-send.schema.json",
+  "title": "TransientSend",
+  "description": "A GM sends a transient for the scene of its current subscription. Tables never send one.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "subscriptionId",
+    "transient"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "$ref": "common.schema.json#/definitions/SchemaVersion"
+    },
+    "subscriptionId": {
+      "$ref": "common.schema.json#/definitions/OpaqueToken",
+      "description": "The sender's current subscription; a transient for any other is dropped."
+    },
+    "transient": {
+      "$ref": "common.schema.json#/definitions/Transient"
+    }
+  }
+}

@@ -8,7 +8,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-const boot = { campaignId: 'camp_a', sceneId: 'scene_a', csrf: 'csrf-x', memberId: 'user_gm' };
+const boot = { campaignId: 'camp_a', sceneId: 'scene_a', csrf: 'csrf-x', memberId: 'user_gm', system: 'pf2e' as const };
 
 function server(routes: Record<string, (body: unknown) => [number, unknown]>) {
   const calls: Array<{ path: string; method: string; body: unknown; csrf: string | null }> = [];

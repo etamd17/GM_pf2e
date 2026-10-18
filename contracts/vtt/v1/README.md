@@ -259,3 +259,34 @@ Digest `610eed46...`.
   - A token linked to an actor that is hidden in the tracker is not sent to the table.
   - An `actors` outbox event, which has no scene, rechecks the named actors for the GM, and
     the tokens linked to them for the table.
+
+## Ping and ruler transients, batch beta-1 (Claude, 2026-10-18)
+
+Digest `5dbce750...`.
+
+- **`vtt.transient`, sent by the GM only,** uses `TransientSend`: `{schemaVersion, subscriptionId,
+  transient}`. A table that sends one is disconnected.
+- **`vtt.transient_relay`, from the server to GM and table,** uses `TransientRelay`:
+  `{schemaVersion, subscriptionId, key, ttlMs, transient}`.
+- **`Transient`** is a closed set:
+  - `ping {x, y}`;
+  - `ruler {rule, points[2..8]}`;
+  - `ruler-clear`.
+
+  A ruler's `rule` is `uniform` (every square 5 ft, diagonals included: Cosmere, D&D 5e) or
+  `alternating` (5/10 ft diagonals: PF2e). The GM chooses it from the campaign's system, so the
+  TV counts as the GM does.
+- **Server rules:**
+  - A transient is relayed only for the sender's current live GM subscription and its scene.
+  - Coordinates must lie within the scene.
+  - There is a rate limit per sender.
+  - It is never echoed to the sender.
+  - **GMs** on the same scene receive it.
+  - **The table** receives it only when that scene is on the TV and no point, and no point sampled
+    every half square along a ruler, lies under fog.
+  - `key` is an opaque latest-wins key per sender and kind: a ruler and its clear share one key.
+  - The TTL is 3 s for a ping and 10 s for a ruler.
+  - **Nothing is stored, replayed or acknowledged.** Clients clear all transients on every
+    snapshot.
+- **`table.show`** (commands-1) already publishes and points the table in one transaction, so the
+  Editing and On TV split (U-3) needs no new command.

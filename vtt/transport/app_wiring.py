@@ -45,6 +45,11 @@ class AppHost:
         # The app's per-session token (creates one if the session has none).
         return _auth.csrf_token()
 
+    def campaign_system(self, campaign_id: str) -> str | None:
+        """The campaign's game system (pf2e, cosmere or dnd5e); None if unknown."""
+        campaign = _campaigns.get_campaign(campaign_id) or {}
+        return campaign.get("system")
+
     def is_campaign_gm(self, session, user_id: str, campaign_id: str) -> bool:
         if _runtime.sql_enabled():
             membership = session.get(CampaignMembership, (campaign_id, user_id))

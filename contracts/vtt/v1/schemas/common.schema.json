@@ -518,6 +518,94 @@
           "type": "boolean"
         }
       }
+    },
+    "TransientPoint": {
+      "title": "TransientPoint",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "x",
+        "y"
+      ],
+      "properties": {
+        "x": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "y": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        }
+      }
+    },
+    "Transient": {
+      "title": "Transient",
+      "description": "A transient (beta-1, ADR-0002 section 9): never stored, replayed or acknowledged. ping marks a point; ruler is a measured path of 2-8 points; ruler-clear ends the sender's ruler.",
+      "oneOf": [
+        {
+          "title": "TransientPing",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "x",
+            "y"
+          ],
+          "properties": {
+            "type": {
+              "const": "ping"
+            },
+            "x": {
+              "$ref": "common.schema.json#/definitions/Coord"
+            },
+            "y": {
+              "$ref": "common.schema.json#/definitions/Coord"
+            }
+          }
+        },
+        {
+          "title": "TransientRuler",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "points",
+            "rule"
+          ],
+          "properties": {
+            "type": {
+              "const": "ruler"
+            },
+            "points": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 8,
+              "items": {
+                "$ref": "common.schema.json#/definitions/TransientPoint"
+              }
+            },
+            "rule": {
+              "type": "string",
+              "enum": [
+                "uniform",
+                "alternating"
+              ],
+              "description": "How the distance is counted, chosen by the sender from the campaign's system: uniform (every square 5 ft, diagonals included: Cosmere, D&D 5e) or alternating (diagonals alternate 5 and 10 ft: PF2e)."
+            }
+          }
+        },
+        {
+          "title": "TransientRulerClear",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "ruler-clear"
+            }
+          }
+        }
+      ]
     }
   }
 }

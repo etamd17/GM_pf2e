@@ -41,7 +41,8 @@ def test_the_gm_page_carries_its_boot_data_and_is_never_cached(stack):
     response = get(stack, "/vtt/gm?campaignId=camp_a")
     assert response.status_code == 200 and response.headers["Cache-Control"] == "no-store"
     assert boot_of(response) == {"campaignId": "camp_a", "sceneId": "scene_a",
-                                 "csrf": "csrf-token-for-tests-000000000000", "memberId": "user_gm"}
+                                 "csrf": "csrf-token-for-tests-000000000000", "memberId": "user_gm",
+                                 "system": "pf2e"}                     # beta-1: the ruler's distance rule
     assert '<div id="root"></div>' in response.get_data(as_text=True)
 
 
@@ -220,3 +221,12 @@ def test_a_member_page_with_a_bad_token_is_refused_even_with_a_valid_table_cooki
                                                  auth={"csrf": "wrong-token-0000000000000000000"})
     assert not member.is_connected(NAMESPACE)
     assert not stack.service.principals
+
+
+def test_the_gm_page_names_its_campaign_system_and_falls_back_to_pf2e(stack):
+    seed_scene(stack.db)
+    stack.host.gms.add(("user_gm", "camp_b"))
+    W.create_scene(stack.db, "camp_b", "scene_z", name="Z")
+    assert boot_of(get(stack, "/vtt/gm?campaignId=camp_b"))["system"] == "cosmere"
+    stack.host.campaign_system = lambda cid: "not-a-system"
+    assert boot_of(get(stack, "/vtt/gm?campaignId=camp_a"))["system"] == "pf2e"

@@ -5660,5 +5660,297 @@
         "actorId": null
       }
     }
+  },
+  {
+    "id": "beta1-send-ping",
+    "schema": "transient-send",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "transient": {
+        "type": "ping",
+        "x": 320,
+        "y": 192
+      }
+    }
+  },
+  {
+    "id": "beta1-send-ruler",
+    "schema": "transient-send",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "transient": {
+        "type": "ruler",
+        "points": [
+          {
+            "x": 64,
+            "y": 64
+          },
+          {
+            "x": 320,
+            "y": 64
+          }
+        ],
+        "rule": "alternating"
+      }
+    }
+  },
+  {
+    "id": "beta1-send-ruler-clear",
+    "schema": "transient-send",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "transient": {
+        "type": "ruler-clear"
+      }
+    }
+  },
+  {
+    "id": "beta1-send-ruler-one-point",
+    "schema": "transient-send",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "transient": {
+        "type": "ruler",
+        "points": [
+          {
+            "x": 1,
+            "y": 1
+          }
+        ],
+        "rule": "alternating"
+      }
+    }
+  },
+  {
+    "id": "beta1-send-ruler-nine-points",
+    "schema": "transient-send",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "transient": {
+        "type": "ruler",
+        "points": [
+          {
+            "x": 0,
+            "y": 0
+          },
+          {
+            "x": 1,
+            "y": 1
+          },
+          {
+            "x": 2,
+            "y": 2
+          },
+          {
+            "x": 3,
+            "y": 3
+          },
+          {
+            "x": 4,
+            "y": 4
+          },
+          {
+            "x": 5,
+            "y": 5
+          },
+          {
+            "x": 6,
+            "y": 6
+          },
+          {
+            "x": 7,
+            "y": 7
+          },
+          {
+            "x": 8,
+            "y": 8
+          }
+        ],
+        "rule": "alternating"
+      }
+    }
+  },
+  {
+    "id": "beta1-send-ping-out-of-range",
+    "schema": "transient-send",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "transient": {
+        "type": "ping",
+        "x": 20000,
+        "y": 1
+      }
+    }
+  },
+  {
+    "id": "beta1-send-unknown-type",
+    "schema": "transient-send",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "transient": {
+        "type": "cursor",
+        "x": 1,
+        "y": 1
+      }
+    }
+  },
+  {
+    "id": "beta1-send-extra-field",
+    "schema": "transient-send",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "transient": {
+        "type": "ping",
+        "x": 320,
+        "y": 192,
+        "tokenId": "tok_a"
+      }
+    }
+  },
+  {
+    "id": "beta1-send-no-subscription",
+    "schema": "transient-send",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "transient": {
+        "type": "ping",
+        "x": 320,
+        "y": 192
+      }
+    }
+  },
+  {
+    "id": "beta1-relay-ping-gm",
+    "schema": "transient",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "key": "kAAAAAAAAAAAAAAAA",
+      "ttlMs": 3000,
+      "transient": {
+        "type": "ping",
+        "x": 320,
+        "y": 192
+      }
+    }
+  },
+  {
+    "id": "beta1-relay-ruler-table",
+    "schema": "transient",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "key": "kAAAAAAAAAAAAAAAA",
+      "ttlMs": 10000,
+      "transient": {
+        "type": "ruler",
+        "points": [
+          {
+            "x": 64,
+            "y": 64
+          },
+          {
+            "x": 320,
+            "y": 64
+          }
+        ],
+        "rule": "alternating"
+      }
+    }
+  },
+  {
+    "id": "beta1-relay-ttl-too-long",
+    "schema": "transient",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "key": "kAAAAAAAAAAAAAAAA",
+      "ttlMs": 60000,
+      "transient": {
+        "type": "ping",
+        "x": 320,
+        "y": 192
+      }
+    }
+  },
+  {
+    "id": "beta1-relay-no-key",
+    "schema": "transient",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "ttlMs": 3000,
+      "transient": {
+        "type": "ping",
+        "x": 320,
+        "y": 192
+      }
+    }
+  },
+  {
+    "id": "beta1-send-ruler-no-rule",
+    "schema": "transient-send",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "transient": {
+        "type": "ruler",
+        "points": [
+          {
+            "x": 1,
+            "y": 1
+          },
+          {
+            "x": 2,
+            "y": 2
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "beta1-send-ruler-bad-rule",
+    "schema": "transient-send",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "transient": {
+        "type": "ruler",
+        "rule": "euclid",
+        "points": [
+          {
+            "x": 1,
+            "y": 1
+          },
+          {
+            "x": 2,
+            "y": 2
+          }
+        ]
+      }
+    }
   }
 ]

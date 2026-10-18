@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://vtt.invalid/v1/transient.schema.json",
+  "title": "TransientRelay",
+  "description": "A transient relayed to a recipient whose current scene it belongs to. key is an opaque latest-wins key (one per sender and kind: a newer transient with the same key replaces the older one); the recipient drops it after ttlMs, and clears every transient on a new snapshot.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "subscriptionId",
+    "key",
+    "ttlMs",
+    "transient"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "$ref": "common.schema.json#/definitions/SchemaVersion"
+    },
+    "subscriptionId": {
+      "$ref": "common.schema.json#/definitions/OpaqueToken",
+      "description": "The recipient's subscription."
+    },
+    "key": {
+      "$ref": "common.schema.json#/definitions/OpaqueToken"
+    },
+    "ttlMs": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10000
+    },
+    "transient": {
+      "$ref": "common.schema.json#/definitions/Transient"
+    }
+  }
+}

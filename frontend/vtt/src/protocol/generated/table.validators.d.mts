@@ -7,3 +7,5 @@ import type { ResyncRequired } from './types/resync-required';
 export declare const validateResyncRequired: ((data: unknown) => data is ResyncRequired) & { errors?: readonly unknown[] | null };
 import type { BootstrapRejection } from './types/bootstrap-rejection';
 export declare const validateBootstrapRejection: ((data: unknown) => data is BootstrapRejection) & { errors?: readonly unknown[] | null };
+import type { TransientRelay } from './types/transient';
+export declare const validateTransient: ((data: unknown) => data is TransientRelay) & { errors?: readonly unknown[] | null };

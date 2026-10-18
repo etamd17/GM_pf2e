@@ -199,6 +199,31 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
     wait_for(gm, lambda s: (token(s, "tok_hero")["live"] or {}).get("hp") == 5, "the GM sees the exact HP")
     shoot(gm, "p3-gm"), shoot(tv, "p3-tv")
 
+    # --- ping and ruler on the TV (beta-1) -------------------------------------------------------
+    # The hero's room is revealed; the right half, past the wall at x=640, is still fogged.
+    gm.get_by_role("button", name="Ping", exact=True).click()
+    click_scene(gm, 900, 300)                                       # under fog: never shown on the TV
+    tv.wait_for_timeout(400)
+    assert probe(tv)["transients"] == []
+    click_scene(gm, 200, 300)                                       # revealed: shown
+    wait_for(tv, lambda s: s["transients"] == [{"kind": "ping", "x": 200, "y": 300}], "the TV shows the ping")
+    gm.get_by_role("button", name="Ruler", exact=True).click()
+    state = probe(gm)
+    view = state["viewport"]
+    box = gm.locator(".vtt-map-host canvas").bounding_box()
+    sx = lambda x: box["x"] + view["x"] + x * view["scale"]
+    sy = lambda y: box["y"] + view["y"] + y * view["scale"]
+    # Six squares straight across the revealed room (64 px grid): 30 ft by either rule.
+    gm.mouse.move(sx(96), sy(416))
+    gm.mouse.down()
+    gm.mouse.move(sx(300), sy(416), steps=5)
+    gm.mouse.move(sx(480), sy(416), steps=5)
+    wait_for(tv, lambda s: {"kind": "ruler", "feet": 30} in s["transients"], "the TV shows the ruler and its distance")
+    gm.mouse.up()
+    wait_for(tv, lambda s: not any(t["kind"] == "ruler" for t in s["transients"]), "the ruler clears after release",
+             timeout_ms=6000)
+    gm.get_by_role("button", name="Select", exact=True).click()
+
     # --- the table moves to another scene -------------------------------------------------------
     gm.locator(".vtt-scene-picker").select_option("scene_docks")
     gm.wait_for_url("**sceneId=scene_docks**")

@@ -22,7 +22,7 @@ vi.mock('../protocol/socketTransport', () => ({
 
 const { PARKED_KEY, adoptableCommands, parkEnvelope, startGm } = await import('./gm');
 
-const memberA: GmBoot = { campaignId: 'camp_a', sceneId: 'scene_a', csrf: 'token-1', memberId: 'user_a' };
+const memberA: GmBoot = { campaignId: 'camp_a', sceneId: 'scene_a', csrf: 'token-1', memberId: 'user_a', system: 'pf2e' };
 const command = {
   schemaVersion: 1,
   commandId: 'cmd_1234567890123456',
