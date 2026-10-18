@@ -11,7 +11,8 @@ it.
 | --- | --- |
 | `vtt-web` | Built from this repository's `Dockerfile`, branch `agent/claude-vtt-platform`. A push to that branch redeploys staging. The entrypoint applies migrations, then runs gunicorn with ONE gevent worker. |
 | `Postgres` | Railway's template, PostgreSQL 18; the local tests run on 17. Railway generates the password. |
-| `vtt-data` | A 1 GB volume at `/data`: the app's JSON stores, and VTT images (`VTT_ASSETS_BACKEND=local`). |
+| `vtt-data` | A 1 GB volume at `/data`: the app's JSON stores. |
+| `vtt-assets` | A Railway bucket (region sjc, virtual-hosted URLs) for VTT images. |
 | Domain | `https://vtt-web-vtt-staging.up.railway.app`, routed to port 8000. |
 
 **Variables on `vtt-web`.** Read their values in the Railway dashboard; they are not written down
@@ -23,7 +24,8 @@ here.
 | `SECRET_KEY` | Generated |
 | `SETUP_TOKEN` | Generated; needed once, at `/setup` |
 | `OWNERSHIP_BACKEND` | `sql` |
-| `VTT_ASSETS_BACKEND` | `local` |
+| `VTT_ASSETS_BACKEND` | `s3` |
+| `VTT_ASSETS_S3_*` | References to the bucket (`${{vtt-assets.ENDPOINT}}`, `BUCKET`, `ACCESS_KEY_ID`, `SECRET_ACCESS_KEY`, `REGION`), and `VTT_ASSETS_S3_URL_STYLE=virtual` |
 | `VTT_ALLOWED_ORIGINS` | The staging domain |
 | `PORT` | `8000` |
 | `RAILWAY_RUN_UID` | `0` (see below) |
@@ -36,13 +38,16 @@ here.
   in, is integration work the user has not approved.
 - **The branch is 144 commits behind `main`.** Staging therefore runs an older copy of the rest
   of the site.
-- **Images are stored on the volume, not in a bucket.** New Railway buckets use virtual-hosted
-  URLs, but `S3Backend` builds path-style URLs only. Teaching it the other style is a small
-  follow-up. Staging is a single instance, so the volume is sound.
 - **No Redis.** One web process; ADR-0002 brings Redis in only with a second process.
 - **`RAILWAY_RUN_UID=0`.** Railway mounts volumes owned by root, and the image's `app` user
   (uid 10001) could not write `/data`. The container runs as root on staging only. Locally,
   compose still runs as `app`.
+
+## Pre-deploy check
+
+Every deploy first runs `python tools/vtt/check_asset_store.py`, which round-trips one probe object
+through the configured asset store (key `vtt-probe/<sha256>`). A broken store fails the deploy
+before the new version replaces the running one.
 
 ## First use
 
