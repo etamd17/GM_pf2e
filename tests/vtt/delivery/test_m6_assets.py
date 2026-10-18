@@ -150,6 +150,39 @@ def test_sigv4_signature_matches_the_published_aws_example():
     assert request.get_header("X-amz-content-sha256") == hashlib.sha256(b"").hexdigest()
 
 
+def test_virtual_hosted_signing_reproduces_the_published_aws_example_exactly():
+    # The same AWS "Example: GET Object" in full: virtual-hosted addressing,
+    # GET /test.txt with a Range header, and the documented final signature.
+    import datetime as dt
+    backend = backends.S3Backend("https://s3.amazonaws.com", "examplebucket", "AKIAIOSFODNN7EXAMPLE",
+                                 "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY", url_style="virtual",
+                                 now=lambda: dt.datetime(2013, 5, 24, tzinfo=dt.timezone.utc))
+    request = backend._request("GET", "/test.txt", b"", {"range": "bytes=0-9"})
+    assert request.full_url == "https://examplebucket.s3.amazonaws.com/test.txt"
+    assert request.get_header("Authorization") == (
+        "AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20130524/us-east-1/s3/aws4_request, "
+        "SignedHeaders=host;range;x-amz-content-sha256;x-amz-date, "
+        "Signature=f0e8bdb87c964420e857bd35b5d6ed310bd44f0170aba48dd91039c6036bdb41")
+
+
+def test_url_style_decides_where_the_bucket_goes():
+    key = "camp_a/" + "a" * 64
+    path = backends.S3Backend("http://minio:9000", "vtt-assets", "k", "s")._signed("GET", key, b"", {})
+    assert path.full_url == f"http://minio:9000/vtt-assets/{key}"
+    virtual = backends.S3Backend("https://t3.storageapi.dev", "vtt-assets-x1y2", "k", "s", region="auto",
+                                 url_style="virtual")._signed("GET", key, b"", {})
+    assert virtual.full_url == f"https://vtt-assets-x1y2.t3.storageapi.dev/{key}"
+    assert "/auto/s3/aws4_request" in virtual.get_header("Authorization")
+    with pytest.raises(ValueError):
+        backends.S3Backend("https://t3.storageapi.dev", "vtt-assets", "k", "s", url_style="sideways")
+    with pytest.raises(ValueError):
+        backends.S3Backend("https://t3.storageapi.dev", "with.dots", "k", "s", url_style="virtual")
+    from_env = backends.from_env({"VTT_ASSETS_BACKEND": "s3", "VTT_ASSETS_S3_ENDPOINT": "https://t3.storageapi.dev",
+                                  "VTT_ASSETS_S3_BUCKET": "vtt-assets-x1y2", "VTT_ASSETS_S3_ACCESS_KEY": "k",
+                                  "VTT_ASSETS_S3_SECRET_KEY": "s", "VTT_ASSETS_S3_URL_STYLE": "virtual"})
+    assert from_env.host == "vtt-assets-x1y2.t3.storageapi.dev"
+
+
 # --- upload ----------------------------------------------------------------------------------
 
 def test_the_gm_uploads_and_the_same_bytes_are_the_same_asset(stack):

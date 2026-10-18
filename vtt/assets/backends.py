@@ -90,16 +90,23 @@ class LocalBackend:
 
 
 class S3Backend:
-    """Path-style S3 requests (MinIO's default), signed with SigV4."""
+    """S3 requests signed with SigV4. ``url_style`` is ``path`` (MinIO's and
+    SeaweedFS's default: ``endpoint/bucket/key``) or ``virtual`` (the bucket as
+    a subdomain: ``bucket.endpoint/key``, which new Railway buckets require)."""
 
     def __init__(self, endpoint: str, bucket: str, access_key: str, secret_key: str, region: str = "us-east-1",
-                 timeout: float = 10.0, now=None):
+                 timeout: float = 10.0, now=None, url_style: str = "path"):
         parsed = urllib.parse.urlsplit(endpoint)
         if parsed.scheme not in ("http", "https") or not parsed.netloc:
             raise ValueError("VTT_ASSETS_S3_ENDPOINT must be an http(s) URL")
         if not re.fullmatch(r"[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]", bucket or ""):
             raise ValueError("bad bucket name")
-        self.scheme, self.host = parsed.scheme, parsed.netloc
+        if url_style not in ("path", "virtual"):
+            raise ValueError("VTT_ASSETS_S3_URL_STYLE must be path or virtual")
+        if url_style == "virtual" and "." in bucket:
+            raise ValueError("a virtual-hosted bucket name cannot contain dots (TLS would not match)")
+        self.scheme, self.url_style = parsed.scheme, url_style
+        self.host = f"{bucket}.{parsed.netloc}" if url_style == "virtual" else parsed.netloc
         self.bucket, self.access_key, self.secret_key = bucket, access_key, secret_key
         self.region, self.timeout = region, timeout
         self._now = now or (lambda: _dt.datetime.now(_dt.timezone.utc))
@@ -107,7 +114,11 @@ class S3Backend:
     def _signed(self, method: str, key: str, body: bytes, headers: dict[str, str]) -> urllib.request.Request:
         campaign_id, sha = key.split("/", 1)
         key_for(campaign_id, sha)
-        path = "/" + urllib.parse.quote(f"{self.bucket}/{key}", safe="/")
+        object_path = key if self.url_style == "virtual" else f"{self.bucket}/{key}"
+        return self._request(method, "/" + urllib.parse.quote(object_path, safe="/"), body, headers)
+
+    def _request(self, method: str, path: str, body: bytes, headers: dict[str, str]) -> urllib.request.Request:
+        """A SigV4-signed request for an already-encoded absolute path."""
         stamp = self._now().strftime("%Y%m%dT%H%M%SZ")
         day = stamp[:8]
         payload_hash = hashlib.sha256(body).hexdigest()
@@ -164,7 +175,8 @@ def from_env(environ: dict[str, str] | None = None, data_dir: str | None = None)
         if missing:
             raise ValueError("VTT_ASSETS_BACKEND=s3 needs " + ", ".join(missing))
         return S3Backend(env["VTT_ASSETS_S3_ENDPOINT"], env["VTT_ASSETS_S3_BUCKET"], env["VTT_ASSETS_S3_ACCESS_KEY"],
-                         env["VTT_ASSETS_S3_SECRET_KEY"], env.get("VTT_ASSETS_S3_REGION", "us-east-1"))
+                         env["VTT_ASSETS_S3_SECRET_KEY"], env.get("VTT_ASSETS_S3_REGION", "us-east-1"),
+                         url_style=env.get("VTT_ASSETS_S3_URL_STYLE", "path"))
     if kind != "local":
         raise ValueError("VTT_ASSETS_BACKEND must be local or s3")
     root = env.get("VTT_ASSETS_DIR") or os.path.join(data_dir or env.get("DATA_DIR") or ".", "vtt-assets")
