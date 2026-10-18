@@ -229,7 +229,9 @@ class Hub:
         if not allowed:
             self._end(sub)
             return
-        if len(rows) > REPLAY_LIMIT:
+        if len(rows) > REPLAY_LIMIT or rows[0].position != sub.cursor + 1:
+            # Too far behind, or (positions are contiguous per campaign) rows
+            # after the cursor were pruned: resync rather than skip events.
             self._recover(sub, "buffer-overflow", depth)
             return
         if sub.audience == "table" and any(r.event.get("kind") == "table-pointer" for r in rows):

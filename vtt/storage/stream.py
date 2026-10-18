@@ -25,7 +25,9 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
 
-from sqlalchemy import select
+from datetime import datetime, timedelta, timezone
+
+from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
@@ -105,6 +107,31 @@ def snapshot_transaction(db: Database) -> Iterator[Session]:
         finally:
             session.rollback()
             session.close()
+
+
+# Outbox retention. Nothing replays a row this far behind: a new subscription
+# starts from a snapshot, and a live one more than the hub's REPLAY_LIMIT (1024)
+# behind is resynced. OUTBOX_KEEP stays well above that limit, and delivery
+# also resyncs on any gap after its cursor, so pruning can never make a
+# subscription skip an event silently.
+OUTBOX_KEEP = 4096
+OUTBOX_MIN_AGE = timedelta(minutes=10)
+
+
+def prune_outbox(db: Database, *, keep: int = OUTBOX_KEEP, min_age: timedelta = OUTBOX_MIN_AGE,
+                 now: datetime | None = None) -> int:
+    """Delete outbox rows more than ``keep`` positions behind their campaign's
+    latest and older than ``min_age``. Returns how many were deleted."""
+    cutoff = (now or datetime.now(timezone.utc)) - min_age
+    latest = (select(VttCampaignStream.position)
+              .where(VttCampaignStream.campaign_id == VttOutbox.campaign_id)
+              .scalar_subquery())
+    with db.transaction() as session:
+        result = session.execute(
+            delete(VttOutbox)
+            .where(VttOutbox.created_at < cutoff, VttOutbox.position <= latest - keep)
+            .execution_options(synchronize_session=False))
+        return int(result.rowcount or 0)
 
 
 def outbox_after(db: Database, campaign_id: str, cursor: int, limit: int) -> list[VttOutbox]:

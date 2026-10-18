@@ -60,6 +60,7 @@ from core.persistence.database import Database
 from vtt import live
 from vtt.commands import CommandService, RateLimiter
 from vtt.storage import grants as G
+from vtt.storage.stream import prune_outbox
 from vtt.delivery.hub import AccessLost, Hub, Principal
 from vtt.projection.serializers import TokenKey
 from vtt.protocol import ContractRegistry, ProtocolValidationError, StrictJSON
@@ -86,6 +87,8 @@ TABLE_COOKIE = "vtt_table"
 # inside AUTH_BOUND. A test pins these inequalities.
 AUTH_BOUND = timedelta(seconds=30)
 HEARTBEAT_SECONDS = 10
+# The outbox is pruned about hourly from the heartbeat (vtt.storage.stream).
+PRUNE_EVERY_BEATS = 360
 VERIFY_TIMEOUT_SECONDS = 5.0
 UNVERIFIED_LIMIT = timedelta(seconds=20)
 # The database's own waits stay inside the read timeout.
@@ -297,6 +300,7 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
 
     def heartbeat_loop():
         scheduled = time.monotonic() + HEARTBEAT_SECONDS
+        beats = 0
         while True:
             socketio.sleep(max(0.0, scheduled - time.monotonic()))
             scheduled = next_start(scheduled, time.monotonic(), HEARTBEAT_SECONDS)
@@ -304,6 +308,12 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
                 sweep(None)
             except Exception:       # nothing may stop the heartbeat
                 sweep_stats["loop_errors"] += 1
+            beats += 1
+            if beats % PRUNE_EVERY_BEATS == 0:
+                try:
+                    sweep_stats["pruned"] = sweep_stats.get("pruned", 0) + prune_outbox(db)
+                except Exception:
+                    sweep_stats["loop_errors"] += 1
 
     if start_heartbeat:
         socketio.start_background_task(heartbeat_loop)
