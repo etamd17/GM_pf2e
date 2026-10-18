@@ -35,6 +35,7 @@
 !maps/
 !maps/**
 !tools/vtt_import_scenes.py
+!tools/vtt/check_asset_store.py
 !docker/
 !docker/**
 !frontend/vtt/
