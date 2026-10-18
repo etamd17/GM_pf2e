@@ -46,23 +46,33 @@ services:
     volumes:
       - asset-data:/data
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:9333/cluster/status || exit 1"]
+      # Master, filer and S3 all answering: the bucket job talks to the filer, and
+      # a master-only check let it start while the filer was still coming up.
+      # (S3 answers an anonymous request with an HTTP error, so any status line counts.)
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:9333/cluster/status && wget -q -O /dev/null http://localhost:8888/ && { wget -q -S -O /dev/null http://localhost:8333/ 2>&1 | grep -q 'HTTP/'; } || exit 1"]
       interval: 2s
       timeout: 3s
       retries: 60
 
   # One-shot: make sure the bucket exists, then exit. Idempotent, and it fails
   # (so web never starts) unless the bucket is really there afterwards: weed
-  # shell itself exits 0 even when a command fails.
+  # shell itself exits 0 even when a command fails. It retries a bounded number
+  # of times (a slow filer start), logging each attempt, and each weed shell call
+  # is cut off after 8 s (it otherwise waits indefinitely for an unreachable
+  # master), so a real misconfiguration fails visibly within about 3.5 minutes.
   assets-bucket:
     image: chrislusf/seaweedfs:4.00
     depends_on:
       assets:
         condition: service_healthy
     entrypoint: >-
-      /bin/sh -c "list() { echo 's3.bucket.list' | weed shell -master=assets:9333 -filer=assets:8888; };
-      list | grep -q 'vtt-assets' || echo 's3.bucket.create -name vtt-assets' | weed shell -master=assets:9333 -filer=assets:8888;
-      list | grep -q 'vtt-assets'"
+      /bin/sh -c "shell() { timeout 8 weed shell -master=assets:9333 -filer=assets:8888; };
+      list() { echo 's3.bucket.list' | shell; };
+      for attempt in 1 2 3 4 5 6 7 8; do
+      list | grep -q 'vtt-assets' || echo 's3.bucket.create -name vtt-assets' | shell;
+      if list | grep -q 'vtt-assets'; then echo 'bucket vtt-assets ready'; exit 0; fi;
+      echo \"bucket not ready (attempt $$attempt of 8), retrying in 3s\"; sleep 3; done;
+      echo 'bucket vtt-assets could not be created: check the assets service and its credentials'; exit 1"
 
   web:
     build: .
