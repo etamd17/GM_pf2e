@@ -58,7 +58,7 @@ interface Props {
 type Tool = 'select' | 'token' | 'light' | 'wall' | 'fog-reveal' | 'fog-hide' | 'template' | 'terrain';
 
 const TOOLS: ReadonlyArray<{ id: Tool; label: string; hint: string }> = [
-  { id: 'select', label: 'Select', hint: 'Select and drag tokens; arrows move the selected token' },
+  { id: 'select', label: 'Select', hint: 'Select and drag tokens and templates; arrows move the selection' },
   { id: 'token', label: 'Token', hint: 'Click to place a token' },
   { id: 'light', label: 'Light', hint: 'Click to place a light' },
   { id: 'wall', label: 'Walls', hint: 'Click to start a wall, click again to end it; Esc stops' },
@@ -67,6 +67,15 @@ const TOOLS: ReadonlyArray<{ id: Tool; label: string; hint: string }> = [
   { id: 'template', label: 'Template', hint: 'Burst or emanation: click. Cone or line: click the origin, then click to aim' },
   { id: 'terrain', label: 'Terrain', hint: 'Click a room to paint it; Alt-click paints one square' },
 ];
+
+// A whole template moved, aim and all, kept inside the contract's range.
+function shiftTemplate(t: Of<'template'>, dx: number, dy: number) {
+  const keep = (v: number) => Math.max(0, Math.min(16384, v));
+  return { x: keep(t.x + dx), y: keep(t.y + dy), aimX: keep(t.aimX + dx), aimY: keep(t.aimY + dy) };
+}
+
+// The inspector's template colours: /map's one colour first, then the token set.
+const TEMPLATE_COLORS = [0x75c5eb, ...TOKEN_COLORS] as const;
 
 const TEMPLATE_SHAPES: ReadonlyArray<{ id: TemplateShape; label: string }> = [
   { id: 'burst', label: 'Burst' },
@@ -347,6 +356,13 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
       issue(moveToken(token, x, y), { kind: 'token', id, patch: { x, y } });
       setSelection({ kind: 'token', id });
     },
+    canDragTemplate: (id) => inputEnabled && tool === 'select' && entityOf('template', id) !== undefined,
+    onTemplateDrop: (id, dx, dy) => {
+      const template = entityOf('template', id) as Of<'template'> | undefined;
+      if (!template || !inputEnabled) return;
+      issue(templateUpdate(template, shiftTemplate(template, dx, dy)));
+      setSelection({ kind: 'template', id });
+    },
     onClick: (point, hit, modifiers) => {
       if (!scene) return;
       if (tool === 'select' || !inputEnabled) {
@@ -407,10 +423,7 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
         const g = scene.gridSize;
         const dx = e.key === 'ArrowLeft' ? -g : e.key === 'ArrowRight' ? g : 0;
         const dy = e.key === 'ArrowUp' ? -g : e.key === 'ArrowDown' ? g : 0;
-        const keep = (v: number) => Math.max(0, Math.min(16384, v));
-        issue(templateUpdate(selected, {
-          x: keep(selected.x + dx), y: keep(selected.y + dy), aimX: keep(selected.aimX + dx), aimY: keep(selected.aimY + dy),
-        }));
+        issue(templateUpdate(selected, shiftTemplate(selected, dx, dy)));
         return true;
       }
       if (selected.kind === 'token' && !selected.locked && e.key.startsWith('Arrow')) {
@@ -824,7 +837,28 @@ export function Inspector({ entity, enabled, onIssue, onDeleted, scene, boot, fo
             disabled={!enabled}
             onChange={(hidden) => onIssue(templateUpdate(entity, { hidden }))}
           />
-          <p className="vtt-empty">Arrow keys move it one square.</p>
+          <div className="vtt-field">
+            <span id={`tpl-colour-${entity.id}`}>Colour</span>
+            <div className="vtt-swatches" role="radiogroup" aria-labelledby={`tpl-colour-${entity.id}`}>
+              {TEMPLATE_COLORS.map((color) => {
+                const hex = `#${color.toString(16).padStart(6, '0')}`;
+                return (
+                  <button
+                    key={color}
+                    type="button"
+                    role="radio"
+                    aria-checked={entity.color === color}
+                    aria-label={hex}
+                    className="vtt-swatch"
+                    style={{ background: hex }}
+                    disabled={!enabled}
+                    onClick={() => entity.color !== color && onIssue(templateUpdate(entity, { color }))}
+                  />
+                );
+              })}
+            </div>
+          </div>
+          <p className="vtt-empty">Drag it, or use the arrow keys, to move it a square at a time.</p>
         </>
       )}
       {entity.kind === 'wall' && (

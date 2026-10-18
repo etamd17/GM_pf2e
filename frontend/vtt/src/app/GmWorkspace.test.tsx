@@ -549,4 +549,32 @@ describe('templates and terrain (parity P2)', () => {
     fireEvent.click(screen.getByLabelText('Hidden from the table'));
     expect(lastDraft(issued).payload).toEqual({ id: 'tpl_a', hidden: true });
   });
+
+  it('the template inspector changes colour, and the current one is marked', () => {
+    const tpl = { kind: 'template', id: 'tpl_a', version: V1, shape: 'burst', x: 64, y: 64, aimX: 64, aimY: 64, size: 3, color: 0x75c5eb, hidden: false } as Of<'template'>;
+    act(() => seed([scene, hero, wall, tpl]));
+    const { issued, interaction } = setup();
+    act(() => interaction.onClick?.({ x: 64, y: 64 }, { kind: 'template', id: 'tpl_a' }));
+    expect(screen.getByRole('radio', { name: '#75c5eb' }).getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(screen.getByRole('radio', { name: '#75c5eb' }));
+    expect(issued).toHaveLength(0); // already that colour
+    fireEvent.click(screen.getByRole('radio', { name: '#a83a3a' }));
+    expect(lastDraft(issued).payload).toEqual({ id: 'tpl_a', color: 0xa83a3a });
+  });
+
+  it('a template dragged with the select tool moves by the dropped offset, aim and all', () => {
+    const tpl = { kind: 'template', id: 'tpl_a', version: V1, shape: 'cone', x: 64, y: 64, aimX: 192, aimY: 64, size: 3, color: 7, hidden: false } as Of<'template'>;
+    act(() => seed([scene, hero, wall, tpl]));
+    const { issued, interaction } = setup();
+    expect(interaction.canDragTemplate?.('tpl_a')).toBe(true);
+    expect(interaction.canDragTemplate?.('tpl_missing')).toBe(false);
+    act(() => interaction.onTemplateDrop?.('tpl_a', 128, -64));
+    expect(lastDraft(issued)).toEqual({
+      type: 'template.update',
+      expected: [{ kind: 'template', id: 'tpl_a', version: V1 }],
+      payload: { id: 'tpl_a', x: 192, y: 0, aimX: 320, aimY: 0 },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Terrain' }));
+    expect(interaction.canDragTemplate?.('tpl_a')).toBe(false); // only the select tool drags
+  });
 });

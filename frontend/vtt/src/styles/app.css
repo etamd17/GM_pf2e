@@ -324,6 +324,31 @@ button:focus-visible,
   align-items: center;
 }
 
+/* Template colour choice (parity P2). */
+.vtt-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+}
+
+.vtt-swatch {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.vtt-swatch[aria-checked='true'] {
+  border-color: var(--text-primary);
+}
+
+.vtt-swatch:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
 .vtt-danger {
   margin-top: var(--sp-3);
   border-color: rgba(168, 58, 58, 0.6);

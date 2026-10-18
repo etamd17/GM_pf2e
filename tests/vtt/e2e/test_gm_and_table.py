@@ -154,6 +154,19 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
              "the burst appears on the TV")
     shoot(gm, "p2-gm"), shoot(tv, "p2-tv")
     gm.get_by_role("button", name="Select", exact=True).click()
+    # Drag the burst one square down by a point inside it, clear of the hero.
+    state = probe(gm)
+    burst, view, g = state["templates"][0], state["viewport"], state["scene"]["gridSize"]
+    box = gm.locator(".vtt-map-host canvas").bounding_box()
+    sx = lambda x: box["x"] + view["x"] + x * view["scale"]
+    sy = lambda y: box["y"] + view["y"] + y * view["scale"]
+    gm.mouse.move(sx(burst["x"] + 2 * g), sy(burst["y"]))
+    gm.mouse.down()
+    gm.mouse.move(sx(burst["x"] + 2 * g), sy(burst["y"] + g / 2), steps=4)
+    gm.mouse.move(sx(burst["x"] + 2 * g), sy(burst["y"] + g), steps=4)
+    gm.mouse.up()
+    wait_for(tv, lambda s: len(s["templates"]) == 1 and s["templates"][0]["y"] == burst["y"] + g,
+             "a dragged template moves on the TV")
 
     # --- the table moves to another scene -------------------------------------------------------
     gm.locator(".vtt-scene-picker").select_option("scene_docks")

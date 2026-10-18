@@ -41,6 +41,10 @@ export interface RuntimeInteraction {
   // was dropped until the projection (or an overlay) says otherwise.
   onTokenDrop?(id: string, x: number, y: number): void;
   canDragToken?(id: string): boolean;
+  // A template dragged and released (parity P2): how far it moved, in whole
+  // grid squares expressed in pixels, so its anchor keeps its alignment.
+  onTemplateDrop?(id: string, dx: number, dy: number): void;
+  canDragTemplate?(id: string): boolean;
   onPointerMove?(point: Point): void;
   // Return true when the key was handled (the runtime then does not pan).
   onKey?(event: KeyboardEvent): boolean;
@@ -74,6 +78,7 @@ const GRID_COLOR = 0xc9a34e;
 const WALL_COLOR = 0xede4cf;
 const KEY_PAN_PX = 64;
 const DRAG_THRESHOLD_PX = 4;
+const TEMPLATE_SHIFT_HOLD_MS = 2000;
 const SELECT_COLOR = 0xede4cf;
 const KEY_ZOOM = 1.2;
 
@@ -98,8 +103,16 @@ export class SceneRuntime {
     startY: number;
     moved: boolean;
     token: { id: string; dx: number; dy: number } | null;
+    template: { id: string; start: Point } | null;
     hit: Hit | null;
   } | null = null;
+  // The template being dragged and its snapped offset, drawn shifted until the
+  // projection (or an overlay) catches up.
+  private templateShift: { id: string; dx: number; dy: number } | null = null;
+  // Templates have no optimistic overlay, so after a drop the shift is held
+  // until the projection changes the templates, or this fallback (a refused
+  // or lost command changes nothing) puts it back.
+  private templateShiftTimer: ReturnType<typeof setTimeout> | null = null;
   private selection: Hit | null = null;
   private wallDraft: { a: Point; b: Point } | null = null;
   private lastFrameMs = 0;
@@ -160,6 +173,7 @@ export class SceneRuntime {
       if (!this.userMovedViewport) this.fit();
     }
     else if (prev.backgroundUrl !== next.backgroundUrl || prev.terrain !== next.terrain) this.drawBackground(next);
+    if (prev?.templates !== next.templates && !this.drag?.template) this.dropTemplateShift();
     if (geometryChanged || prev?.templates !== next.templates) this.drawTemplates(next);
     if (geometryChanged || prev?.fog !== next.fog) this.drawFog(next);
     if (!prev || prev.walls !== next.walls) this.drawWalls(next);
@@ -243,6 +257,7 @@ export class SceneRuntime {
 
   destroy(): void {
     this.destroyed = true;
+    this.dropTemplateShift();
     this.scheduler.dispose();
     this.resizeObserver?.disconnect();
     if (this.restoreTimer) clearTimeout(this.restoreTimer);
@@ -268,7 +283,7 @@ export class SceneRuntime {
       fog: { enabled: boolean; cols: number; rows: number; revealed: number } | null;
       terrainPainted: number;
     } | null;
-    templates: Array<{ id: string; shape: string; size: number; hidden: boolean }>;
+    templates: Array<{ id: string; shape: string; x: number; y: number; size: number; hidden: boolean }>;
     tokens: Array<{ id: string; x: number; y: number; label: string; hidden: boolean; artUrl: string | null; art: string }>;
   } {
     const scene = this.scene;
@@ -302,7 +317,9 @@ export class SceneRuntime {
               : 0,
           }
         : null,
-      templates: (scene?.templates ?? []).map((t) => ({ id: t.id, shape: t.shape, size: t.size, hidden: t.hidden === true })),
+      templates: (scene?.templates ?? []).map((t) => ({
+        id: t.id, shape: t.shape, x: t.x, y: t.y, size: t.size, hidden: t.hidden === true,
+      })),
       tokens: (scene?.tokens ?? []).map((t) => ({
         id: t.id,
         x: t.x,
@@ -500,12 +517,15 @@ export class SceneRuntime {
     const interaction = this.options.interaction;
     let hit: Hit | null = null;
     let token: { id: string; dx: number; dy: number } | null = null;
+    let template: { id: string; start: Point } | null = null;
     if (interaction && e.button === 0 && this.scene) {
       const p = this.worldPoint(e);
       hit = hitTest(this.scene, p, this.viewport.scale);
       if (hit?.kind === 'token' && interaction.canDragToken?.(hit.id) !== false) {
         const view = this.tokens.get(hit.id);
         if (view) token = { id: hit.id, dx: p.x - view.root.x, dy: p.y - view.root.y };
+      } else if (hit?.kind === 'template' && interaction.canDragTemplate?.(hit.id) === true) {
+        template = { id: hit.id, start: p };
       }
     }
     this.drag = {
@@ -516,6 +536,7 @@ export class SceneRuntime {
       startY: e.clientY,
       moved: false,
       token,
+      template,
       hit,
     };
     (e.target as Element).setPointerCapture?.(e.pointerId);
@@ -544,6 +565,20 @@ export class SceneRuntime {
       }
       return;
     }
+    if (drag.template) {
+      if (!drag.moved || !this.scene) return;
+      const p = this.worldPoint(e);
+      const g = this.scene.gridSize;
+      const dx = Math.round((p.x - drag.template.start.x) / g) * g;
+      const dy = Math.round((p.y - drag.template.start.y) / g) * g;
+      const prev = this.templateShift;
+      if (!prev || prev.dx !== dx || prev.dy !== dy) {
+        this.templateShift = { id: drag.template.id, dx, dy };
+        this.drawTemplates(this.scene);
+        this.scheduler.requestRender();
+      }
+      return;
+    }
     if (!drag.moved) return;
     this.userMovedViewport = true;
     this.applyViewport(panBy(this.viewport, dx, dy));
@@ -563,10 +598,21 @@ export class SceneRuntime {
         this.drawOverlay();
         this.scheduler.requestRender();
       }
+      this.clearTemplateShift();
       return;
     }
     const interaction = this.options.interaction;
     if (!interaction) return;
+    if (drag.template && drag.moved) {
+      const shift = this.templateShift;
+      // The shift stays drawn until the next projection replaces the scene.
+      if (shift && (shift.dx !== 0 || shift.dy !== 0)) {
+        if (this.templateShiftTimer) clearTimeout(this.templateShiftTimer);
+        this.templateShiftTimer = setTimeout(() => this.clearTemplateShift(), TEMPLATE_SHIFT_HOLD_MS);
+        interaction.onTemplateDrop?.(shift.id, shift.dx, shift.dy);
+      } else this.clearTemplateShift();
+      return;
+    }
     if (drag.token && drag.moved && this.scene) {
       const view = this.tokens.get(drag.token.id);
       if (!view) return;
@@ -707,8 +753,26 @@ export class SceneRuntime {
 
   // Area templates (parity P2): a translucent fill and a stroke in their
   // colour; hidden ones dimmed for the GM, never drawn on the table.
+  // Forget the shift without drawing (the caller redraws).
+  private dropTemplateShift(): void {
+    if (this.templateShiftTimer) clearTimeout(this.templateShiftTimer);
+    this.templateShiftTimer = null;
+    this.templateShift = null;
+  }
+
+  private clearTemplateShift(): void {
+    const had = this.templateShift !== null;
+    this.dropTemplateShift();
+    if (!had || this.destroyed || !this.app) return;
+    if (this.scene) this.drawTemplates(this.scene);
+    this.scheduler.requestRender();
+  }
+
   private drawTemplates(scene: RenderScene): void {
-    const templates = scene.templates ?? [];
+    const shift = this.templateShift;
+    const templates = (scene.templates ?? []).map((t) =>
+      shift && t.id === shift.id ? { ...t, x: t.x + shift.dx, y: t.y + shift.dy, aimX: t.aimX + shift.dx, aimY: t.aimY + shift.dy } : t,
+    );
     if (templates.length === 0) {
       this.replaceLayerContent('templates', null);
       return;

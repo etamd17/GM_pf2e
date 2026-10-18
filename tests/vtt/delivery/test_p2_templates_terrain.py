@@ -231,3 +231,72 @@ def test_reimporting_empty_terrain_removes_the_earlier_terrain(stack):
     assert _import(stack, scene)["status"] == "imported"
     with stack.db.session() as session:
         assert session.get(VttTerrain, ("camp_a", "legacy_abc123")) is None
+
+
+# --- the import obeys the per-scene template cap (handoff 067) ------------------------------
+
+def _bursts(count, start=0):
+    return [{"id": f"b{i}", "kind": "burst", "x1": 70, "y1": 70, "x2": 70, "y2": 70, "radius": 70}
+            for i in range(start, start + count)]
+
+
+def _templates(db):
+    from sqlalchemy import select
+    from vtt.storage.models import VttEntity
+    with db.session() as session:
+        return {r.id: r.data for r in session.execute(
+            select(VttEntity).where(VttEntity.kind == "template")).scalars()}
+
+
+def test_an_import_of_exactly_the_template_cap_succeeds(stack):
+    from .test_m5_import import full_scene
+    scene = full_scene()
+    scene["templates"] = _bursts(handlers.MAX_TEMPLATES)
+    assert _import(stack, scene)["status"] == "imported"
+    assert len(_templates(stack.db)) == handlers.MAX_TEMPLATES
+
+
+def test_an_import_over_the_template_cap_is_refused_whole(stack):
+    from sqlalchemy import func, select
+    from vtt.importer import legacy_scenes as importer
+    from vtt.storage.models import VttImportedEntity, VttImportedScene, VttScene, VttTablePointer
+    from .test_m5_import import full_scene, outbox
+    scene = full_scene()
+    scene["templates"] = _bursts(handlers.MAX_TEMPLATES + 1)
+    before = outbox(stack.db)
+    dry = importer.import_campaign(stack.db, "camp_a", [scene], "abc123", apply=False)["scenes"][0]
+    assert dry["status"] == "refused" and "at most 512" in dry["reason"]
+    report = importer.import_campaign(stack.db, "camp_a", [scene], "abc123", apply=True)["scenes"][0]
+    assert report["status"] == "refused" and "513 templates" in report["reason"]
+    with stack.db.session() as session:
+        assert session.get(VttScene, ("camp_a", "legacy_abc123")) is None
+        assert session.get(VttImportedScene, ("camp_a", "legacy_abc123")) is None
+        assert session.execute(select(func.count()).select_from(VttImportedEntity)).scalar_one() == 0
+        pointer = session.get(VttTablePointer, "camp_a")
+        assert pointer is None or pointer.scene_id != "legacy_abc123"
+    assert _templates(stack.db) == {} and outbox(stack.db) == before
+
+
+def test_a_reimport_counts_gm_added_templates_and_its_own_replacements_once(stack):
+    from vtt.storage.models import VttEntity
+    from .test_m5_import import full_scene
+    scene = full_scene()
+    scene["templates"] = _bursts(500)
+    assert _import(stack, scene)["status"] == "imported"
+    # The GM adds twelve of their own (no provenance, so never replaced).
+    data = _templates(stack.db)["legacy_b0"]
+    with stack.db.transaction() as session:
+        for i in range(12):
+            session.add(VttEntity(campaign_id="camp_a", scene_id="legacy_abc123", kind="template",
+                                  id=f"tpl_gm{i}", data=dict(data), hidden=False))
+    # Re-importing the same 500 replaces them in place: 512 in all, allowed.
+    report = _import(stack, scene)
+    assert report["status"] == "imported" and report["updated"] >= 500
+    assert len(_templates(stack.db)) == 512
+    # One more source template would make 513: refused, and nothing changes.
+    scene["templates"] = _bursts(500) + _bursts(1, start=500)
+    scene["templates"][0]["radius"] = 210
+    report = _import(stack, scene)
+    assert report["status"] == "refused" and "513 templates" in report["reason"]
+    held = _templates(stack.db)
+    assert len(held) == 512 and "legacy_b500" not in held and held["legacy_b0"]["size"] == 1

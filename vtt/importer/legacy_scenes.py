@@ -45,6 +45,7 @@ from typing import Any
 from sqlalchemy import select
 
 from core.persistence.database import Database
+from vtt.commands.handlers import MAX_TEMPLATES
 from vtt.commands.service import FRAME_HEADROOM, GM_ENTITY_CAP, TABLE_ENTITY_CAP, gm_snapshot_bytes
 from vtt.protocol.boundary import MAX_JSON_BYTES
 from vtt.storage.models import VttEntity, VttImportedEntity, VttImportedScene, VttScene, VttTablePointer
@@ -413,6 +414,14 @@ def _check_destination(session: Any, campaign_id: str, plan: Plan) -> tuple[VttS
         if (kind, eid) in existing and owners.get((kind, eid)) != plan.sources[(kind, eid)]:
             raise Refused(f"{plan.name}: {kind} id {eid} is already used by something "
                           "this import did not create")
+    # The per-scene template cap that template.create enforces. An import never
+    # deletes, so the scene ends with every template it has now (GM-added ones
+    # included) plus each planned one it does not already hold; a re-import
+    # that replaces its own templates counts them once.
+    templates = {eid for kind, eid in existing if kind == "template"}
+    templates.update(eid for kind, eid, _data, _hidden in plan.entities if kind == "template")
+    if len(templates) > MAX_TEMPLATES:
+        raise Refused(f"{plan.name}: {len(templates)} templates; a scene holds at most {MAX_TEMPLATES}")
     return scene, existing
 
 
