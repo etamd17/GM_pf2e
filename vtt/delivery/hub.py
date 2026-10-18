@@ -36,6 +36,7 @@ from sqlalchemy import select, tuple_
 
 from core.persistence.database import Database
 from vtt import fog
+from vtt import live
 from vtt import terrain as terrain_rules
 from vtt.projection import serializers as S
 from vtt.protocol import ContractRegistry, ProtocolValidationError
@@ -176,8 +177,9 @@ class Hub:
             rows = self._rows(session, sub.campaign_id, sub.scene_id) if scene is not None else []
             fog_view = fog.load(session, scene)[1] if scene is not None else None
             terrain_view = terrain_rules.load(session, scene)[1] if scene is not None else None
-            entities = (S.gm_entities(self.key, scene, rows, fog_view, terrain_view) if sub.audience == "gm"
-                        else S.table_entities(self.key, scene, rows, fog_view, terrain_view))
+            actors = live.load(session, sub.campaign_id) if scene is not None else {}
+            entities = (S.gm_entities(self.key, scene, rows, fog_view, terrain_view, actors) if sub.audience == "gm"
+                        else S.table_entities(self.key, scene, rows, fog_view, terrain_view, actors))
             if sub.audience == "table" and not entities:
                 sub.scene_id = None     # nothing published: the table sees no scene
             cursor = committed_position(session, sub.campaign_id)
@@ -253,9 +255,15 @@ class Hub:
         when the subscription was replaced (resync) and delivery must stop."""
         last = rows[-1].position
         keys: set[tuple[str, str]] = set()
+        actor_ids: set[str] = set()
         scene_changed = False
         for r in rows:
             ev = r.event
+            if ev.get("kind") == "actors":
+                # Campaign-wide (parity-3): no scene of its own.
+                if sub.scene_id is not None:
+                    actor_ids.update(ev.get("changed", []))
+                continue
             if ev.get("sceneId") != sub.scene_id:
                 continue
             kind = ev.get("kind")
@@ -263,11 +271,11 @@ class Hub:
                 scene_changed = True
             elif kind == "entities":
                 keys.update((k, i) for k, i in ev.get("changed", []))
-        if not keys and not scene_changed and origin_command_id is None:
+        if not keys and not actor_ids and not scene_changed and origin_command_id is None:
             sub.cursor = last           # nothing this subscription can see changed
             return True
-        if keys or scene_changed:
-            diff = self._diff(sub, keys, scene_changed)
+        if keys or actor_ids or scene_changed:
+            diff = self._diff(sub, keys, scene_changed, actor_ids)
             if diff is None:
                 self._recover(sub, "scene-changed", depth)
                 return False
@@ -346,10 +354,13 @@ class Hub:
         self._drop(sub.sid, sub)
         self.disconnect(sub.sid)
 
-    def _diff(self, sub: Subscription, keys: set[tuple[str, str]], scene_changed: bool):
+    def _diff(self, sub: Subscription, keys: set[tuple[str, str]], scene_changed: bool,
+              actor_ids: set[str] = frozenset()):
         """Project the named entities now and compare with what this subscription holds.
         Returns (upserted, removed, sent_after) without touching the subscription,
-        or None when the subscription's scene itself went away."""
+        or None when the subscription's scene itself went away. ``actor_ids``
+        (parity-3) name tracker actors that changed: the GM rechecks those
+        actors, the table the tokens on its scene that link to them."""
         upserted: list[dict[str, Any]] = []
         removed: list[dict[str, str]] = []
         sent_after = dict(sub.sent)
@@ -369,6 +380,19 @@ class Hub:
                         select(VttEntity.kind, VttEntity.id).where(
                             VttEntity.campaign_id == sub.campaign_id, VttEntity.scene_id == sub.scene_id,
                             VttEntity.kind.in_(("token", "light", "template")))).all()}
+            actors = live.load(session, sub.campaign_id)
+            if actor_ids:
+                if sub.audience == "gm":
+                    keys = keys | {("actor", aid) for aid in actor_ids}
+                    for aid in actor_ids:
+                        if aid in actors:
+                            current[("actor", aid)] = S.gm_actor(self.key, sub.campaign_id, aid, actors[aid])
+                else:
+                    keys = keys | {("token", row.id) for row in session.execute(
+                        select(VttEntity).where(
+                            VttEntity.campaign_id == sub.campaign_id, VttEntity.scene_id == sub.scene_id,
+                            VttEntity.kind == "token")).scalars()
+                        if (row.data or {}).get("actorId") in actor_ids}
             # Fog (parity-1) is read once: the table's tokens and lights are
             # filtered by it, and the fog entity itself may be among the keys.
             fog_view = fog.load(session, scene)[1] if (sub.audience == "table" or ("fog", "fog") in keys) else None
@@ -385,7 +409,7 @@ class Hub:
                 projected = S.gm_scene(self.key, scene) if sub.audience == "gm" else S.table_scene(self.key, scene)
                 current[("scene", scene.id)] = projected
                 keys = keys | {("scene", scene.id)}
-            entity_keys = [k for k in keys if k[0] not in ("scene", "fog", "terrain")]
+            entity_keys = [k for k in keys if k[0] not in ("scene", "fog", "terrain", "actor")]
             if entity_keys:
                 rows = session.execute(
                     select(VttEntity).where(
@@ -395,7 +419,7 @@ class Hub:
                 ).scalars().all()
                 for row in rows:
                     projected = (S.gm_entity(self.key, row) if sub.audience == "gm"
-                                 else S.table_entity(self.key, row, fog_view))
+                                 else S.table_entity(self.key, row, fog_view, actors))
                     if projected is not None:
                         current[(row.kind, row.id)] = projected
         for key in sorted(keys):

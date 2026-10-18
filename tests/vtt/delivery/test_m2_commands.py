@@ -7,6 +7,8 @@ timeouts) are in ``test_m2_postgresql.py``."""
 
 from __future__ import annotations
 
+import json
+
 import secrets
 
 import pytest
@@ -14,6 +16,7 @@ from sqlalchemy import func, select
 
 from vtt.commands import POLICIES, CommandService, RateLimiter, gm_snapshot_bytes
 from vtt.commands import service as service_module
+from vtt.projection import serializers as S
 from vtt.protocol import ContractRegistry
 from vtt.storage import writes as W
 from vtt.storage.models import VttCommandReceipt, VttEntity, VttOutbox, VttScene
@@ -509,11 +512,17 @@ def test_the_sizing_estimate_bounds_the_real_encoded_snapshot(stack):
     with stack.db.session() as session:
         estimate, gm_count, table_count = gm_snapshot_bytes(session, "camp_a", "scene_a")
     # Same entities and fixed-length tokens; the estimate uses the longest ids, so
-    # it is an upper bound that is tight to the id padding.
-    assert real <= estimate <= real + 2 * 128 + 64
-    # scene + 4 seeded + 40 tokens + fog + terrain; the table: scene, hero,
-    # torch, 40 tokens, fog and terrain
-    assert gm_count == 47 and table_count == 1 + 1 + 1 + 40 + 1 + 1
+    # it is an upper bound that is tight to the id padding, plus the room it
+    # reserves for a full set of tracker actors (parity-3; none exist here).
+    reserve = sum(len(json.dumps(S.gm_actor(service_module._SizingKey(), "camp_a", aid, data),
+                                 separators=(",", ":")).encode("utf-8")) + 1
+                  for aid, data in service_module._WORST_ACTORS.items())
+    assert real + reserve <= estimate <= real + reserve + 2 * 128 + 64
+    # scene + 4 seeded + 40 tokens + fog + terrain, plus the reserved actors
+    # (they count against the GM entity cap); the table: scene, hero, torch,
+    # 40 tokens, fog and terrain
+    from vtt import live
+    assert gm_count == 47 + live.MAX_ACTORS and table_count == 1 + 1 + 1 + 40 + 1 + 1
 
 
 def test_a_command_that_would_push_the_gm_snapshot_over_the_limit_is_refused(stack, monkeypatch):

@@ -4,7 +4,9 @@ import { RenderScheduler } from './renderScheduler';
 import {
   gridLines,
   normalizeScene,
+  sameLive,
   tokenRadius,
+  type RenderLive,
   type RenderScene,
   type RenderToken,
 } from './renderModel';
@@ -284,7 +286,10 @@ export class SceneRuntime {
       terrainPainted: number;
     } | null;
     templates: Array<{ id: string; shape: string; x: number; y: number; size: number; hidden: boolean }>;
-    tokens: Array<{ id: string; x: number; y: number; label: string; hidden: boolean; artUrl: string | null; art: string }>;
+    tokens: Array<{
+      id: string; x: number; y: number; label: string; hidden: boolean; artUrl: string | null; art: string;
+      live: { hp: number | null; maxHp: number | null; status: string | null; conditions: readonly string[]; active: boolean } | null;
+    }>;
   } {
     const scene = this.scene;
     return {
@@ -328,6 +333,7 @@ export class SceneRuntime {
         hidden: t.hidden === true,
         artUrl: t.artUrl ?? null,
         art: t.artUrl ? this.textures.state(t.artUrl) : 'none',
+        live: t.live ? { ...t.live } : null,
       })),
     };
   }
@@ -959,8 +965,59 @@ function sameAppearance(a: RenderToken, b: RenderToken): boolean {
     a.color === b.color &&
     a.artUrl === b.artUrl &&
     a.hidden === b.hidden &&
-    a.pending === b.pending
+    a.pending === b.pending &&
+    sameLive(a.live, b.live)
   );
+}
+
+const HP_BAR_HEIGHT = 5;
+const ACTIVE_RING = 0xc9a34e;
+const STATUS_COLORS = { Wounded: 0xe0913a, Dead: 0xd2564a } as const;
+const MAX_CONDITION_LABELS = 4;
+
+function hpColor(ratio: number): number {
+  if (ratio > 0.5) return 0x5c9a3a;
+  if (ratio > 0.25) return 0xc9a34e;
+  return 0xb8433a;
+}
+
+function smallText(text: string, fill: number): Text {
+  return new Text({
+    text,
+    style: { fontFamily: uiFont(), fontSize: CANVAS_LABEL_FONT.sizePx - 2, fontWeight: CANVAS_LABEL_FONT.weight, fill },
+  });
+}
+
+// Tracker state around a token (parity P3): an outline on whose turn it is, an
+// HP bar under it when the projection carries numbers, the status the table
+// may see instead, and the conditions above it. Returns where the label goes.
+function drawLive(root: Container, live: RenderLive, radius: number): { labelY: number; below: Text[] } {
+  if (live.active) {
+    root.addChild(new Graphics().circle(0, 0, radius + 5).stroke({ width: 3, color: ACTIVE_RING, alpha: 0.95 }));
+  }
+  let labelY = radius + 4;
+  const below: Text[] = [];
+  if (live.hp !== null && live.maxHp !== null && live.maxHp > 0) {
+    const width = Math.max(24, radius * 1.8);
+    const ratio = Math.max(0, Math.min(1, live.hp / live.maxHp));
+    const bar = new Graphics();
+    bar.rect(-width / 2, radius + 3, width, HP_BAR_HEIGHT).fill({ color: 0x0c0a07, alpha: 0.85 });
+    if (ratio > 0) bar.rect(-width / 2, radius + 3, width * ratio, HP_BAR_HEIGHT).fill({ color: hpColor(ratio) });
+    root.addChild(bar);
+    labelY = radius + 3 + HP_BAR_HEIGHT + 3;
+    below.push(smallText(`${live.hp} / ${live.maxHp}`, 0xd8d0bb));
+  } else if (live.status) {
+    below.push(smallText(live.status, STATUS_COLORS[live.status]));
+  }
+  if (live.conditions.length) {
+    const shown = live.conditions.slice(0, MAX_CONDITION_LABELS);
+    const more = live.conditions.length - shown.length;
+    const text = smallText(shown.join(', ') + (more > 0 ? ` +${more}` : ''), 0xe8c27a);
+    text.anchor.set(0.5, 1);
+    text.position.set(0, -radius - (live.active ? 9 : 4));
+    root.addChild(text);
+  }
+  return { labelY, below };
 }
 
 function buildToken(model: RenderToken, gridSize: number, art: Texture | null = null): Container {
@@ -987,6 +1044,7 @@ function buildToken(model: RenderToken, gridSize: number, art: Texture | null = 
   root.addChild(ring);
   // GM only: what the table cannot see is drawn dimmed, never hidden.
   if (model.hidden) root.alpha = 0.45;
+  const { labelY, below } = model.live ? drawLive(root, model.live, radius) : { labelY: radius + 4, below: [] };
   const label = new Text({
     text: model.label,
     style: {
@@ -997,8 +1055,15 @@ function buildToken(model: RenderToken, gridSize: number, art: Texture | null = 
     },
   });
   label.anchor.set(0.5, 0);
-  label.position.set(0, radius + 4);
+  label.position.set(0, labelY);
   root.addChild(label);
+  let y = labelY + CANVAS_LABEL_FONT.sizePx + 3;
+  for (const line of below) {
+    line.anchor.set(0.5, 0);
+    line.position.set(0, y);
+    root.addChild(line);
+    y += CANVAS_LABEL_FONT.sizePx + 1;
+  }
   root.position.set(model.x, model.y);
   return root;
 }

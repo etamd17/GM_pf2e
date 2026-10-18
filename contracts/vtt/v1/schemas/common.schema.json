@@ -229,6 +229,17 @@
               "type": "null"
             }
           ]
+        },
+        "live": {
+          "description": "Tracker state of the linked actor (parity-3); null when unlinked or the actor is absent. Always sent by the server.",
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/definitions/TableLive"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       }
     },
@@ -410,6 +421,101 @@
           "type": "string",
           "pattern": "^[A-Za-z0-9_-]*$",
           "maxLength": 174763
+        }
+      }
+    },
+    "LiveCondition": {
+      "title": "LiveCondition",
+      "description": "A tracker condition (parity-3): its vocabulary name (ASCII letters, digits, space, underscore, apostrophe, hyphen), and its value when it has one (Frightened 2); null for a plain flag.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "value"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "maxLength": 40,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9 _'-]{0,39}(?![\\s\\S])"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 99
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "LiveConditions": {
+      "type": "array",
+      "maxItems": 24,
+      "items": {
+        "$ref": "common.schema.json#/definitions/LiveCondition"
+      }
+    },
+    "TableLive": {
+      "title": "TableLive",
+      "description": "What the table may know of a linked token's tracker state (parity-3). Exact hp/maxHp for a player character, otherwise null; a non-PC has only status (Wounded at or below half, Dead at 0, null above half). active marks the creature whose turn it is.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "hp",
+        "maxHp",
+        "status",
+        "conditions",
+        "active"
+      ],
+      "properties": {
+        "hp": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -9999,
+              "maximum": 99999
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "maxHp": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 99999
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "Wounded",
+                "Dead"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "conditions": {
+          "$ref": "common.schema.json#/definitions/LiveConditions"
+        },
+        "active": {
+          "type": "boolean"
         }
       }
     }

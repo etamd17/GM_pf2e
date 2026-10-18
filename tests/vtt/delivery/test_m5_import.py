@@ -84,9 +84,9 @@ def test_what_cannot_come_across_is_reported():
     importer.resolve_assets(plan, None)          # no /map file reader: the image cannot come across
     dropped = " | ".join(plan.dropped)
     for words in ("background image", "fog", "1 template", "terrain (the legacy grid is offset)", "grid offset", "dynamic lighting",
-                  "token art on 1", "tracker links (live HP and conditions) on 1", "light intensity on 1",
-                  "vision radius on 2"):
+                  "token art on 1", "light intensity on 1", "vision radius on 2"):
         assert words in dropped, words
+    assert "tracker links" not in dropped        # brought across as actorId since parity P3
 
 
 def test_out_of_range_and_broken_values_are_clamped_and_reported():
@@ -148,7 +148,8 @@ def test_a_re_import_never_deletes_what_the_gm_added(stack):
 
 
 def test_a_scene_over_the_frame_limit_is_refused_whole_and_the_others_still_import(stack, monkeypatch):
-    monkeypatch.setattr(importer, "GM_ENTITY_CAP", 5)
+    from vtt import live
+    monkeypatch.setattr(importer, "GM_ENTITY_CAP", 5 + live.MAX_ACTORS)   # sizing reserves the actors (parity-3)
     small = legacy_scene(name="Small")
     small["id"] = "small1"
     report = importer.import_campaign(stack.db, "camp_a", [full_scene(), small], None, apply=True)

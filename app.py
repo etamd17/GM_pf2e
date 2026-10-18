@@ -2811,6 +2811,8 @@ def sse_broadcast(event_type, data, *, player_filter=None,
             if campaign_id is _SSE_CAMPAIGN_UNSET
             else campaign_id
         )
+        if event_type in globals().get('_VTT_LIVE_EVENTS', ()):  # defined below; import-time safe
+            _vtt_live_schedule()
         return _sse_broadcast_locked(
             event_type,
             data,
@@ -9146,6 +9148,61 @@ def _scene_payload(scene, *, player=False):
         elif token.get('combatant_id') and not token.get('is_pc'):
             token['sheet_url'] = None if player else (token.get('sheet_url') or '/tracker')
     return _scene_sync.project_scene(presentable, combatants, characters, player=player)
+
+
+# --- VTT live mirror (parity P3, docs/vtt handoff 069) ---
+# The rebuilt VTT replays from PostgreSQL and cannot read these globals, so
+# tracker state is mirrored into its vtt_actors table. The trigger is the same
+# signal /map refetches on (a "live state moved" SSE frame), coalesced the same
+# way. Flushes are serialized: each reads the globals and writes inside one
+# lock, so an older read can never commit after a newer one. Only the loaded
+# campaign has live state; when it changes, the previous campaign's mirror is
+# emptied rather than left showing a fight that is no longer loaded.
+_VTT_LIVE_EVENTS = frozenset({'encounter_update', 'pc_update', 'cosmere_player_state'})
+_VTT_LIVE_DELAY = 0.25
+_VTT_LIVE_SCHEDULE_LOCK = threading.Lock()
+_VTT_LIVE_FLUSH_LOCK = threading.Lock()
+_VTT_LIVE_TIMER = None
+_VTT_LIVE_LAST_CID = None
+
+
+def _vtt_live_schedule():
+    global _VTT_LIVE_TIMER
+    if globals().get('VTT_SERVICE') is None:
+        return
+    with _VTT_LIVE_SCHEDULE_LOCK:
+        if _VTT_LIVE_TIMER is not None:
+            return
+        timer = threading.Timer(_VTT_LIVE_DELAY, _vtt_live_flush)
+        timer.daemon = True
+        _VTT_LIVE_TIMER = timer
+        timer.start()
+
+
+def _vtt_live_flush():
+    global _VTT_LIVE_TIMER, _VTT_LIVE_LAST_CID
+    with _VTT_LIVE_SCHEDULE_LOCK:
+        _VTT_LIVE_TIMER = None
+    service = globals().get('VTT_SERVICE')
+    if service is None or service.sync_live is None:
+        return
+    # A timer thread has no request, but the live-index helpers assume one:
+    # account-mode sheet links go through url_for, and identity reads memoize
+    # on flask.g. A throwaway request context gives them exactly that (and a
+    # fresh g, so nothing is memoized across flushes).
+    with _VTT_LIVE_FLUSH_LOCK, app.test_request_context('/'):
+        try:
+            cid = _loaded_campaign_id()
+            previous = _VTT_LIVE_LAST_CID
+            if previous and previous != cid:
+                service.sync_live(previous, {}, {})
+            if cid:
+                combatants, characters = _scene_live_indexes(cid)
+                service.sync_live(cid, combatants, characters)
+            _VTT_LIVE_LAST_CID = cid
+        except Exception:
+            # The mirror is derived: the next tracker change rewrites it.
+            app.logger.exception('VTT live mirror flush failed')
 
 
 def _broadcast_scene(scene):
@@ -25782,6 +25839,7 @@ VTT_SERVICE = None
 if os.environ.get('VTT_ENABLED') == '1':
     from vtt.transport import app_wiring as _vtt_wiring  # noqa: E402
     VTT_SERVICE = _vtt_wiring.init_from_app(app)
+    _vtt_live_schedule()    # the first mirror of whatever the tracker restored
 
 
 if __name__ == '__main__':

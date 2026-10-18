@@ -578,3 +578,47 @@ describe('templates and terrain (parity P2)', () => {
     expect(interaction.canDragTemplate?.('tpl_a')).toBe(false); // only the select tool drags
   });
 });
+
+describe('tracker links (parity P3)', () => {
+  const valeros = {
+    kind: 'actor', id: 'chr_valeros', version: V1, name: 'Valeros', pc: true, hp: 18, maxHp: 30,
+    conditions: [{ name: 'frightened', value: 2 }], active: false, hidden: false, status: '',
+  } as Of<'actor'>;
+  const skeleton = {
+    kind: 'actor', id: 'cmb_skel', version: V1, name: 'Skeleton', pc: false, hp: 7, maxHp: 20,
+    conditions: [], active: true, hidden: true, status: 'Wounded',
+  } as Of<'actor'>;
+  const lastDraft = (issued: Array<{ draft: Record<string, unknown> }>) =>
+    issued.at(-1)?.draft as { type: string; payload: Record<string, unknown> };
+
+  it('the token inspector links a token to a tracker actor, party first, and unlinks it', () => {
+    act(() => seed([scene, hero, wall, skeleton, valeros]));
+    const { issued, interaction } = setup();
+    act(() => interaction.onClick?.({ x: 96, y: 96 }, { kind: 'token', id: 'tok_hero' }));
+    const picker = screen.getByLabelText('Tracker link') as HTMLSelectElement;
+    expect([...picker.options].map((o) => o.text)).toEqual(['None', 'Valeros (party)', 'Skeleton (hidden)']);
+    fireEvent.change(picker, { target: { value: 'chr_valeros' } });
+    expect(lastDraft(issued)).toMatchObject({ type: 'token.update', payload: { id: 'tok_hero', actorId: 'chr_valeros' } });
+  });
+
+  it('the tray says how many are fighting and whose turn it is', () => {
+    act(() => seed([scene, hero, wall, valeros]));
+    setup();
+    expect(screen.getByText('No encounter running.')).toBeTruthy();
+    act(() => seed([scene, hero, wall, valeros, skeleton, { ...skeleton, id: 'cmb_two', name: 'Zombie', active: false }]));
+    expect(screen.getByText("Encounter: 2 combatants, Skeleton's turn.")).toBeTruthy();
+  });
+
+  it('shows the linked actor, and keeps a link to an actor that left the tracker visible', () => {
+    act(() => seed([scene, { ...hero, actorId: 'chr_valeros' }, wall, valeros]));
+    const { issued, interaction } = setup();
+    act(() => interaction.onClick?.({ x: 96, y: 96 }, { kind: 'token', id: 'tok_hero' }));
+    expect(screen.getByText(/18 \/ 30 HP - Frightened 2/)).toBeTruthy();
+    act(() => seed([scene, { ...hero, actorId: 'cmb_gone' }, wall, valeros]));
+    const picker = screen.getByLabelText('Tracker link') as HTMLSelectElement;
+    expect(picker.value).toBe('cmb_gone');
+    expect([...picker.options].map((o) => o.text)).toContain('Not in the tracker now');
+    fireEvent.change(picker, { target: { value: '' } });
+    expect(lastDraft(issued).payload).toEqual({ id: 'tok_hero', actorId: null });
+  });
+});

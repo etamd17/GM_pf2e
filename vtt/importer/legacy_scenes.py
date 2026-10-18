@@ -46,6 +46,7 @@ from sqlalchemy import select
 
 from core.persistence.database import Database
 from vtt.commands.handlers import MAX_TEMPLATES
+from vtt.live import actor_id
 from vtt.commands.service import FRAME_HEADROOM, GM_ENTITY_CAP, TABLE_ENTITY_CAP, gm_snapshot_bytes
 from vtt.protocol.boundary import MAX_JSON_BYTES
 from vtt.storage.models import VttEntity, VttImportedEntity, VttImportedScene, VttScene, VttTablePointer
@@ -231,7 +232,10 @@ def plan_scene(legacy: dict[str, Any]) -> Plan:
             "label": name,
             "color": _color(token.get("color"), 0xB88A44),
             "artAssetId": None,
-            "actorId": None,
+            # The tracker link (parity P3), with /map's precedence: the
+            # combatant first, then the party character.
+            "actorId": (actor_id("cmb", token.get("combatant_id")) if token.get("combatant_id")
+                        else actor_id("chr", token.get("character_id"))),
             "locked": bool(token.get("locked", False)),
             "controllerIds": [],
         }
@@ -245,7 +249,7 @@ def plan_scene(legacy: dict[str, Any]) -> Plan:
                 plan.art_files[tid] = [f"{legacy_id}_token_{token.get('id')}{ext}" for ext in ART_EXTENSIONS]
             else:
                 plan.art_unsupported += 1
-        linked += bool(token.get("combatant_id") or token.get("character_id"))
+        linked += bool(token.get("combatant_id") or token.get("character_id")) and data["actorId"] is None
         try:
             vision += float(token.get("vision_radius") or 0) > 0
         except (TypeError, ValueError):
@@ -259,7 +263,7 @@ def plan_scene(legacy: dict[str, Any]) -> Plan:
     if plan.art_unsupported:
         plan.dropped.append(f"token art on {plan.art_unsupported} token(s) (not an image uploaded to /map)")
     if linked:
-        plan.dropped.append(f"tracker links (live HP and conditions) on {linked} token(s)")
+        plan.dropped.append(f"tracker links (live HP and conditions) on {linked} token(s) (an id the VTT cannot hold)")
 
     # --- walls and doors -----------------------------------------------------------------------
     for wall in legacy.get("walls") or []:

@@ -100,13 +100,25 @@ def fog_entity(key: TokenKey, campaign_id: str, audience: str, fog) -> dict[str,
     return _with_version(key, campaign_id, audience, "fog", "fog", fields)
 
 
-def gm_entities(key: TokenKey, scene, rows, fog=None, terrain=None) -> list[dict[str, Any]]:
+def gm_actor(key: TokenKey, campaign_id: str, actor_id: str, data: dict[str, Any]) -> dict[str, Any]:
+    """A tracker actor (parity-3) as the GM sees it: the whole mirrored record."""
+    fields = {
+        "name": data.get("name", ""), "pc": bool(data.get("pc")), "hp": data.get("hp", 0),
+        "maxHp": data.get("maxHp", 0), "conditions": list(data.get("conditions", [])),
+        "active": bool(data.get("active")), "hidden": bool(data.get("hidden")), "status": data.get("status", ""),
+    }
+    return _with_version(key, campaign_id, "gm", "actor", actor_id, fields)
+
+
+def gm_entities(key: TokenKey, scene, rows, fog=None, terrain=None, actors=None) -> list[dict[str, Any]]:
     out = [gm_scene(key, scene)] if scene is not None else []
     out += [gm_entity(key, row) for row in rows]
     if scene is not None and fog is not None:
         out.append(fog_entity(key, scene.campaign_id, "gm", fog))
     if scene is not None and terrain is not None:
         out.append(terrain_entity(key, scene.campaign_id, "gm", terrain))
+    if scene is not None and actors:
+        out += [gm_actor(key, scene.campaign_id, aid, actors[aid]) for aid in sorted(actors)]
     return out
 
 
@@ -122,10 +134,28 @@ def table_scene(key: TokenKey, scene) -> dict[str, Any]:
     return _with_version(key, scene.campaign_id, "table", "scene", scene.id, fields)
 
 
-def table_entity(key: TokenKey, row, fog=None) -> dict[str, Any] | None:
+def table_live(actor: dict[str, Any] | None) -> dict[str, Any] | None:
+    """What the table may know of a linked actor (parity-3, the user's 069
+    decision): exact HP for a player character; for anything else only the
+    status the tracker's player policy computed. Built field by field."""
+    if actor is None:
+        return None
+    pc = bool(actor.get("pc"))
+    status = actor.get("status") if not pc else None
+    return {
+        "hp": actor.get("hp", 0) if pc else None,
+        "maxHp": actor.get("maxHp", 0) if pc else None,
+        "status": status if status in ("Wounded", "Dead") else None,
+        "conditions": [{"name": c["name"], "value": c["value"]} for c in actor.get("conditions", [])],
+        "active": bool(actor.get("active")),
+    }
+
+
+def table_entity(key: TokenKey, row, fog, actors: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
     """The table's view of one canonical entity, or None when the table may not
-    see it: hidden, not a token or light, or (parity-1) its centre cell is
-    under fog."""
+    see it: hidden, not a token or light, (parity-1) its centre cell is under
+    fog, or (parity-3) a token linked to an actor hidden in the tracker.
+    ``actors`` is required: a caller that forgot it would leak exactly those."""
     if row.hidden or row.kind not in ("token", "light", "template"):
         return None
     d = row.data or {}
@@ -134,21 +164,25 @@ def table_entity(key: TokenKey, row, fog=None) -> dict[str, Any] | None:
     if row.kind == "template":
         return _with_version(key, row.campaign_id, "table", "template", row.id, _template_fields(d))
     if row.kind == "token":
+        actor = actors.get(d["actorId"]) if d.get("actorId") else None
+        if actor is not None and actor.get("hidden"):
+            return None
         fields = {
             "x": d["x"], "y": d["y"], "size": d.get("size", 1), "label": d.get("label", ""),
             "color": d.get("color", 0), "artAssetId": d.get("artAssetId"), "actorId": d.get("actorId"),
+            "live": table_live(actor),
         }
     else:
         fields = {"x": d["x"], "y": d["y"], "radius": d["radius"], "color": d.get("color", 0)}
     return _with_version(key, row.campaign_id, "table", row.kind, row.id, fields)
 
 
-def table_entities(key: TokenKey, scene, rows, fog=None, terrain=None) -> list[dict[str, Any]]:
+def table_entities(key: TokenKey, scene, rows, fog, terrain, actors: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
     if scene is None or not scene.published:
         return []
     out = [table_scene(key, scene)]
     for row in rows:
-        projected = table_entity(key, row, fog)
+        projected = table_entity(key, row, fog, actors)
         if projected is not None:
             out.append(projected)
     if fog is not None:

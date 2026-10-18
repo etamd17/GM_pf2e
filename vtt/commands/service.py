@@ -76,6 +76,22 @@ class _SizingKey:
         return "v" + "0" * 24
 
 
+def _worst_actors() -> dict[str, dict[str, Any]]:
+    """A full actor set (parity-3) at every cap, with names that encode as long
+    as they can, so sizing reserves room for whatever the tracker mirrors later:
+    a scene that fits now cannot be pushed over the frame limit by HP changes."""
+    from vtt import live
+    name = "😀" * live.NAME_MAX            # 12 bytes each once JSON-escaped
+    conditions = [{"name": ("c%02d" % i).ljust(live.CONDITION_NAME_MAX, "x"), "value": live.CONDITION_VALUE_MAX}
+                  for i in range(live.MAX_CONDITIONS)]
+    return {("cmb_%03d" % i).ljust(128, "x"): {
+        "name": name, "pc": False, "hp": -9999, "maxHp": 99999, "conditions": conditions,
+        "active": False, "hidden": False, "status": "Wounded"} for i in range(live.MAX_ACTORS)}
+
+
+_WORST_ACTORS = _worst_actors()
+
+
 @dataclass
 class Result:
     ack: dict[str, Any] | None          # None: close the connection (no correlation)
@@ -125,7 +141,9 @@ def command_digest(message: dict[str, Any]) -> str:
 
 def gm_snapshot_bytes(session, campaign_id: str, scene_id: str) -> tuple[int, int, int]:
     """(bytes, GM entity count, table entity count) of the scene's largest
-    snapshot, as the transport would encode it."""
+    snapshot, as the transport would encode it. The bytes are the larger of
+    the GM and table frames, each with every tracker actor at its caps
+    (parity-3), so a later HP change can never push a frame over the limit."""
     scene = session.get(VttScene, (campaign_id, scene_id))
     rows = session.execute(
         select(VttEntity).where(VttEntity.campaign_id == campaign_id, VttEntity.scene_id == scene_id)
@@ -135,15 +153,29 @@ def gm_snapshot_bytes(session, campaign_id: str, scene_id: str) -> tuple[int, in
     from vtt import terrain as terrain_rules
     fog_view = fog.load(session, scene)[1]
     terrain_view = terrain_rules.load(session, scene)[1]
-    entities = S.gm_entities(_SizingKey(), scene, rows, fog_view, terrain_view)
+    entities = S.gm_entities(_SizingKey(), scene, rows, fog_view, terrain_view, _WORST_ACTORS)
     frame = S.snapshot_frame("gm", "s" * 128, campaign_id, scene_id,
                              {"kind": "member", "id": "u" * 128, "campaignRole": "gm"}, entities)
     # python-socketio encodes the packet's [event, payload] list through
     # StrictJSON.dumps with these separators; that string is what the limit counts.
     encoded = json.dumps(["vtt.snapshot", frame], separators=(",", ":"), allow_nan=False)
+    # The table frame (parity-3) can outgrow the GM's: every linked token carries
+    # its actor's live block. Size it with no fog and a worst-case actor behind
+    # every link, whether or not the scene is published yet.
+    worst = next(iter(_WORST_ACTORS.values()))
+    linked = {r.data.get("actorId"): worst for r in rows if r.kind == "token" and (r.data or {}).get("actorId")}
+    table = [S.table_scene(_SizingKey(), scene)]
+    table += [e for e in (S.table_entity(_SizingKey(), r, None, linked) for r in rows) if e is not None]
+    if terrain_view is not None:
+        table.append(S.terrain_entity(_SizingKey(), campaign_id, "table", terrain_view))
+    if fog_view is not None:
+        table.append(S.fog_entity(_SizingKey(), campaign_id, "table", fog_view))
+    table_frame = S.snapshot_frame("table", "s" * 128, campaign_id, scene_id, {"kind": "table"}, table)
+    table_encoded = json.dumps(["vtt.snapshot", table_frame], separators=(",", ":"), allow_nan=False)
     table_count = (1 + (fog_view is not None) + (terrain_view is not None)
                    + sum(1 for r in rows if not r.hidden and r.kind in ("token", "light", "template")))
-    return len(encoded.encode("utf-8")), len(entities), table_count
+    size = max(len(encoded.encode("utf-8")), len(table_encoded.encode("utf-8")))
+    return size, len(entities), table_count
 
 
 class CommandService:

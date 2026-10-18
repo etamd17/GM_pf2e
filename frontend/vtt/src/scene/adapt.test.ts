@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { adaptEntities, newAdaptCache } from './adapt';
+import { adaptEntities, conditionLabel, newAdaptCache } from './adapt';
+import { sameLive } from './renderModel';
 
 const scene = { kind: 'scene', id: 's', version: 'vs', name: 'S', width: 1000, height: 800, gridSize: 50, showGrid: false };
 const token = (id: string, version: string, x = 10) => ({ kind: 'token', id, version, x, y: 20, size: 2, label: id, color: 7 });
@@ -110,5 +111,60 @@ describe('templates and terrain (parity P2)', () => {
     expect(again.templates?.[0]).toBe(out.templates?.[0]);
     expect(again.terrain).toBe(out.terrain);
     expect(adaptEntities(map(scene), cache).templates).toBeUndefined(); // gone: dropped from the cache
+  });
+});
+
+describe('live tracker state (parity P3)', () => {
+  const actor = (version: string, extra: Record<string, unknown> = {}) => ({
+    kind: 'actor', id: 'cmb_skel', version, name: 'Skeleton', pc: false, hp: 7, maxHp: 20,
+    conditions: [{ name: 'off_guard', value: null }, { name: 'frightened', value: 2 }],
+    active: true, hidden: false, status: 'Wounded', ...extra,
+  });
+
+  it('labels conditions for display', () => {
+    expect(conditionLabel('off_guard', null)).toBe('Off guard');
+    expect(conditionLabel('frightened', 2)).toBe('Frightened 2');
+  });
+
+  it('a table token carries the live block the server chose', () => {
+    const out = adaptEntities(map(scene, {
+      ...token('a', 'v1'), actorId: 'cmb_skel',
+      live: { hp: null, maxHp: null, status: 'Wounded', conditions: [{ name: 'prone', value: null }], active: false },
+    }));
+    expect(out.tokens[0]?.live).toEqual({ hp: null, maxHp: null, status: 'Wounded', conditions: ['Prone'], active: false });
+    expect(adaptEntities(map(scene, { ...token('b', 'v1'), live: null })).tokens[0]?.live).toBeUndefined();
+  });
+
+  it('a GM token joins its actor: exact HP for every creature, never a status', () => {
+    const out = adaptEntities(map(scene, { ...token('a', 'v1'), actorId: 'cmb_skel', hidden: false }, actor('va1')));
+    expect(out.tokens[0]?.live).toEqual({ hp: 7, maxHp: 20, status: null, conditions: ['Off guard', 'Frightened 2'], active: true });
+    expect(out.tokens[0]?.hidden).toBeUndefined();
+  });
+
+  it('a GM token whose actor is hidden in the tracker is drawn dimmed', () => {
+    const out = adaptEntities(map(scene, { ...token('a', 'v1'), actorId: 'cmb_skel', hidden: false }, actor('va1', { hidden: true })));
+    expect(out.tokens[0]?.hidden).toBe(true);
+  });
+
+  it('a GM token is rebuilt when its actor changes and reused when neither does', () => {
+    const cache = newAdaptCache();
+    const linked = { ...token('a', 'v1'), actorId: 'cmb_skel', hidden: false };
+    const first = adaptEntities(map(scene, linked, actor('va1')), cache);
+    expect(adaptEntities(map(scene, linked, actor('va1')), cache).tokens[0]).toBe(first.tokens[0]);
+    const hurt = adaptEntities(map(scene, linked, actor('va2', { hp: 3 })), cache);
+    expect(hurt.tokens[0]).not.toBe(first.tokens[0]);
+    expect(hurt.tokens[0]?.live?.hp).toBe(3);
+    expect(adaptEntities(map(scene, linked), cache).tokens[0]?.live).toBeUndefined(); // the actor left
+  });
+});
+
+describe('sameLive', () => {
+  const live = { hp: 1, maxHp: 2, status: null, conditions: ['Prone'], active: false } as const;
+  it('compares by content', () => {
+    expect(sameLive(live, { ...live, conditions: ['Prone'] })).toBe(true);
+    expect(sameLive(live, { ...live, hp: 0 })).toBe(false);
+    expect(sameLive(live, { ...live, conditions: ['Prone', 'Dying 1'] })).toBe(false);
+    expect(sameLive(undefined, undefined)).toBe(true);
+    expect(sameLive(live, undefined)).toBe(false);
   });
 });

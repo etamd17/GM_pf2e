@@ -4,6 +4,10 @@ export type TableFrame = TableSnapshot | TablePatch;
 export type OpaqueToken = string;
 export type Id = string;
 export type TableEntity = TableScene | TableToken | TableLight | FogState | TableTemplate | TerrainState;
+/**
+ * @maxItems 24
+ */
+export type LiveConditions = LiveCondition[];
 
 export interface TableSnapshot {
   schemaVersion: 1;
@@ -57,6 +61,27 @@ export interface TableToken {
   color: number;
   artAssetId: Id | null;
   actorId: Id | null;
+  /**
+   * Tracker state of the linked actor (parity-3); null when unlinked or the actor is absent. Always sent by the server.
+   */
+  live?: TableLive | null;
+}
+/**
+ * What the table may know of a linked token's tracker state (parity-3). Exact hp/maxHp for a player character, otherwise null; a non-PC has only status (Wounded at or below half, Dead at 0, null above half). active marks the creature whose turn it is.
+ */
+export interface TableLive {
+  hp: number | null;
+  maxHp: number | null;
+  status: ("Wounded" | "Dead") | null;
+  conditions: LiveConditions;
+  active: boolean;
+}
+/**
+ * A tracker condition (parity-3): its vocabulary name (ASCII letters, digits, space, underscore, apostrophe, hyphen), and its value when it has one (Frightened 2); null for a plain flag.
+ */
+export interface LiveCondition {
+  name: string;
+  value: number | null;
 }
 export interface TableLight {
   kind: "light";

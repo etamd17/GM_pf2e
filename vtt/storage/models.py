@@ -156,6 +156,28 @@ class VttTablePointer(Base):
     )
 
 
+class VttActor(Base):
+    """A tracker combatant or party character as the VTT sees it (parity P3,
+    handoff 069). Derived: app.py rewrites these rows from its live state and
+    deletes the ones that are gone, so nothing here is authoritative. ``id`` is
+    ``cmb_<combatant instance id>`` or ``chr_<character id>``; tokens refer to
+    it through their ``actorId``. ``data`` is the record vtt.live builds."""
+
+    __tablename__ = "vtt_actors"
+
+    campaign_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("campaigns.id", ondelete="CASCADE", name="fk_vtt_actors_campaign"),
+        nullable=False,
+    )
+    id: Mapped[str] = mapped_column(String(128), nullable=False)
+    data: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
+
+    __table_args__ = (PrimaryKeyConstraint("campaign_id", "id", name="pk_vtt_actors"),)
+
+
 class VttOutbox(Base):
     __tablename__ = "vtt_outbox"
 

@@ -1,7 +1,7 @@
 {
   "batch": "scene-projection-1",
   "schemaVersion": 1,
-  "sourceDigest": "32bd0faa2fa641afe2b2075bd85f23a0ebb76d757dda0c47c51ddd8b62aad5e0",
+  "sourceDigest": "610eed46c8d044d9ef277e5d4f7eaad180ae4acdbc0281424dd8f36c7eef9a56",
   "generator": {
     "versions": {
       "ajv": "8.20.0",
@@ -34,18 +34,18 @@
   },
   "outputs": {
     "ajv-runtime.mjs": "99c0e4ed98924e6341f2d043908a4537a102600fc8c90b188c561166f6d57013",
-    "fixtures.json": "7241a0f762d39c1967cd50fe14d25d73e6efed81c09ef237453ebc631105291c",
+    "fixtures.json": "a1313385d28dacc66009e9e878a83896ac5d4f9a134f0c5ffea49aac8d24b452",
     "gm.validators.d.mts": "8cd7737529a1a4e09d489ffe36d7fa9db24d3f7a3fd8ffe35ed8bb1d8374a25b",
-    "gm.validators.mjs": "7342bc5ca5824360057cea46969f1c568692c3be8c5cbcdc52d51177af7b2a6b",
+    "gm.validators.mjs": "a8be4dc5e3eb832eab9ad6d851dd5fdb8f777b23d0f2c105cf3f9c4ee4b86dcd",
     "table.validators.d.mts": "6be82ce18f9a89722c10b0bf9c38355fd1738dc206621c9d88a99b8c95693ea4",
-    "table.validators.mjs": "37451601c6db91f81bf18a0c7f26ea342836fb071b0b5a725bfbde222c7c33cd",
+    "table.validators.mjs": "c9ac9a3d94cbbaabe94091b5b4d659bd139adf6ed124947611c251cf22b371c1",
     "types/acknowledgement.d.ts": "1a1eb5985db5c138ad35ebf0de0a3c24836b2a5770d370f905153a6340391948",
     "types/bootstrap-rejection.d.ts": "1893ffa6bd97bc1c5a0a6a25fa6a7953718097520193037aef3bbfa243561e7f",
     "types/command.d.ts": "2ad5ed988a7471f7515fe56f3cb91973f5dfa71fa90b168a3dfe34c1b9da495e",
     "types/gm-subscribe.d.ts": "0d6b59c9c30714e479dc830123813bb2d10fa81029fd57ffe03691f781eaf3a4",
-    "types/gm.d.ts": "ee07c181af692afa164c2e76b237f34c43d3d4354deee592f1125ea07ed108c4",
+    "types/gm.d.ts": "a725cf2bab2e2ddace9aa5f3b620d2ef10a772e07f39e2a4befb2dd2ee0eb594",
     "types/resync-required.d.ts": "cb66da6ab22abbdddeb9d4231e045b1bc15bfe41775f6b2bae1ae9422b1dc30a",
     "types/table-subscribe.d.ts": "4806b57abbe6a5ab579b4e1341b4fce5dad0ee6a81989fa4ceef6c1c80635c03",
-    "types/table.d.ts": "4a574383983058927536806caf4070a2683dc58c6fa47e8e05885e8c80a066a5"
+    "types/table.d.ts": "242897b68698c3a7498e44f50d5f90a9307461fefc1d5f818ac04505dff31bd9"
   }
 }

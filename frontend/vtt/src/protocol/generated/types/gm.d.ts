@@ -3,7 +3,11 @@
 export type GmFrame = GmSnapshot | GmPatch;
 export type OpaqueToken = string;
 export type Id = string;
-export type GmEntity = GmScene | GmToken | GmLight | GmWall | FogState | GmTemplate | TerrainState;
+export type GmEntity = GmScene | GmToken | GmLight | GmWall | FogState | GmTemplate | TerrainState | GmActor;
+/**
+ * @maxItems 24
+ */
+export type LiveConditions = LiveCondition[];
 
 export interface GmSnapshot {
   schemaVersion: 1;
@@ -150,6 +154,29 @@ export interface TerrainState {
   rows: number;
   cells: string;
 }
+/**
+ * A tracker combatant (cmb_...) or party character (chr_...) a token can link to (parity-3). Campaign-wide: every GM snapshot carries all of them. Derived from the tracker; read only.
+ */
+export interface GmActor {
+  kind: "actor";
+  id: Id;
+  version: OpaqueToken;
+  name: string;
+  pc: boolean;
+  hp: number;
+  maxHp: number;
+  conditions: LiveConditions;
+  active: boolean;
+  hidden: boolean;
+  status: "" | "Wounded" | "Dead";
+}
+/**
+ * A tracker condition (parity-3): its vocabulary name (ASCII letters, digits, space, underscore, apostrophe, hyphen), and its value when it has one (Frightened 2); null for a plain flag.
+ */
+export interface LiveCondition {
+  name: string;
+  value: number | null;
+}
 export interface GmPatch {
   schemaVersion: 1;
   frame: "patch";
@@ -166,6 +193,6 @@ export interface GmPatch {
   originCommandId?: OpaqueToken;
 }
 export interface GmEntityRef {
-  kind: "scene" | "token" | "light" | "wall" | "fog" | "template" | "terrain";
+  kind: "scene" | "token" | "light" | "wall" | "fog" | "template" | "terrain" | "actor";
   id: Id;
 }

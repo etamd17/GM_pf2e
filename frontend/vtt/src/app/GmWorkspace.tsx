@@ -3,6 +3,7 @@ import { ConnectionBanner } from '../components/ConnectionBanner';
 import { MapHost } from '../components/MapHost';
 import type { GmLive } from '../live/gm';
 import type { GmEntity } from '../protocol/frames';
+import { conditionLabel } from '../scene/adapt';
 import { snapToGrid, snapTokenCentre, type Hit, type Point } from '../scene/interaction';
 import type { RuntimeInteraction } from '../scene/SceneRuntime';
 import { useCommands } from '../state/commands';
@@ -132,6 +133,14 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
   const fogEntity = useMemo(() => [...entities.values()].find((e): e is Of<'fog'> => e.kind === 'fog'), [entities]);
   const terrainEntity = useMemo(
     () => [...entities.values()].find((e): e is Of<'terrain'> => e.kind === 'terrain'),
+    [entities],
+  );
+  // Tracker actors (parity P3): party characters first, then the encounter, by name.
+  const actorEntities = useMemo(
+    () =>
+      [...entities.values()]
+        .filter((e): e is Of<'actor'> => e.kind === 'actor')
+        .sort((a, b) => Number(b.pc) - Number(a.pc) || a.name.localeCompare(b.name) || (a.id < b.id ? -1 : 1)),
     [entities],
   );
   const selected = selection ? (entityOf(selection.kind, selection.id) ?? null) : null;
@@ -413,7 +422,10 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
       }
       if (!inputEnabled || !selected || !scene) return false;
       // Delete only: Backspace is too easy to hit by accident on a map.
-      if (e.key === 'Delete' && selected.kind !== 'scene' && selected.kind !== 'fog' && selected.kind !== 'terrain') {
+      if (
+        e.key === 'Delete' &&
+        (selected.kind === 'token' || selected.kind === 'light' || selected.kind === 'wall' || selected.kind === 'template')
+      ) {
         issue(deleteEntity(selected), selected.kind === 'token' ? { kind: 'token', id: selected.id, deleted: true } : null);
         setSelection(null);
         return true;
@@ -644,6 +656,7 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
             scene={sceneEntity ?? null}
             fog={fogEntity ?? null}
             terrain={terrainEntity ?? null}
+            actors={actorEntities}
             {...(live ? { boot: live.boot } : {})}
           />
         )}
@@ -656,7 +669,7 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
       </aside>
 
       <footer className="vtt-tray" aria-label="Initiative and chat">
-        <span className="vtt-empty">No encounter running.</span>
+        <EncounterLine actors={actorEntities} />
       </footer>
     </div>
   );
@@ -684,6 +697,8 @@ interface InspectorProps {
   fog?: Extract<GmEntity, { kind: 'fog' }> | null;
   // Terrain (parity P2), likewise.
   terrain?: Extract<GmEntity, { kind: 'terrain' }> | null;
+  // Tracker actors a token can link to (parity P3).
+  actors?: ReadonlyArray<Extract<GmEntity, { kind: 'actor' }>>;
 }
 
 const mediaUrl = (boot: Pick<GmBoot, 'campaignId'>, id: string | null) =>
@@ -693,8 +708,69 @@ const mediaUrl = (boot: Pick<GmBoot, 'campaignId'>, id: string | null) =>
 // on every keystroke; a field the GM is editing is not overwritten by a frame
 // until they leave it (the key resets the field when the entity's version
 // changes while it is not focused).
-export function Inspector({ entity, enabled, onIssue, onDeleted, scene, boot, fog, terrain }: InspectorProps) {
-  if (!entity || entity.kind === 'scene' || entity.kind === 'fog' || entity.kind === 'terrain') {
+// The tray's one line about the tracker (parity P3). The mirror carries no
+// initiative order, so this says only how many are fighting and whose turn it is.
+function EncounterLine({ actors }: { actors: ReadonlyArray<Extract<GmEntity, { kind: 'actor' }>> }) {
+  const combatants = actors.filter((a) => a.id.startsWith('cmb_'));
+  if (combatants.length === 0) return <span className="vtt-empty">No encounter running.</span>;
+  const turn = combatants.find((a) => a.active);
+  return (
+    <span className="vtt-empty">
+      Encounter: {combatants.length} {combatants.length === 1 ? 'combatant' : 'combatants'}
+      {turn ? `, ${turn.name || 'unnamed'}'s turn` : ''}.
+    </span>
+  );
+}
+
+// Which tracker combatant or party character drives this token's HP and
+// conditions (parity P3). A link to an actor that is gone stays listed, so it
+// is visible and can be cleared.
+function TrackerLink({
+  entity,
+  actors,
+  enabled,
+  onIssue,
+}: {
+  entity: Extract<GmEntity, { kind: 'token' }>;
+  actors: ReadonlyArray<Extract<GmEntity, { kind: 'actor' }>>;
+  enabled: boolean;
+  onIssue: InspectorProps['onIssue'];
+}) {
+  const linked = entity.actorId ? actors.find((a) => a.id === entity.actorId) : undefined;
+  return (
+    <>
+      <label className="vtt-field">
+        <span>Tracker link</span>
+        <select
+          value={entity.actorId ?? ''}
+          disabled={!enabled}
+          onChange={(e) => {
+            const actorId = e.target.value || null;
+            if (actorId !== entity.actorId) onIssue(updateToken(entity, { actorId }));
+          }}
+        >
+          <option value="">None</option>
+          {actors.map((a) => (
+            <option key={a.id} value={a.id}>
+              {(a.name || 'Unnamed') + (a.pc ? ' (party)' : '') + (a.hidden ? ' (hidden)' : '')}
+            </option>
+          ))}
+          {entity.actorId && !linked && <option value={entity.actorId}>Not in the tracker now</option>}
+        </select>
+      </label>
+      {linked && (
+        <p className="vtt-empty">
+          {linked.hp} / {linked.maxHp} HP
+          {linked.conditions.length ? ` - ${linked.conditions.map((c) => conditionLabel(c.name, c.value ?? null)).join(', ')}` : ''}
+          {linked.hidden ? ' - hidden in the tracker, so not on the table' : ''}
+        </p>
+      )}
+    </>
+  );
+}
+
+export function Inspector({ entity, enabled, onIssue, onDeleted, scene, boot, fog, terrain, actors = [] }: InspectorProps) {
+  if (!entity || entity.kind === 'scene' || entity.kind === 'fog' || entity.kind === 'terrain' || entity.kind === 'actor') {
     return (
       <div className="vtt-inspector">
         {scene && boot && (
@@ -786,6 +862,7 @@ export function Inspector({ entity, enabled, onIssue, onDeleted, scene, boot, fo
             disabled={!enabled}
             onChange={(locked) => onIssue(updateToken(entity, { locked }))}
           />
+          <TrackerLink entity={entity} actors={actors} enabled={enabled} onIssue={onIssue} />
           {boot && (
             <ImagePicker
               label="Art"

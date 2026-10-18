@@ -20,6 +20,32 @@ export interface RenderToken {
   readonly hidden?: boolean;
   // GM only: a command for it is still waiting for its correlated frame.
   readonly pending?: boolean;
+  // Tracker state of the linked actor (parity P3). The table's projection
+  // already decided what it may show: exact HP for a player character, only a
+  // status for anything else. The GM sees exact HP for every actor.
+  readonly live?: RenderLive;
+}
+
+export interface RenderLive {
+  readonly hp: number | null;
+  readonly maxHp: number | null;
+  readonly status: 'Wounded' | 'Dead' | null;
+  readonly conditions: readonly string[]; // display labels, e.g. "Frightened 2"
+  readonly active: boolean; // whose turn it is
+}
+
+// Two live blocks that draw the same (tokens are rebuilt only when this changes).
+export function sameLive(a: RenderLive | undefined, b: RenderLive | undefined): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    a.hp === b.hp &&
+    a.maxHp === b.maxHp &&
+    a.status === b.status &&
+    a.active === b.active &&
+    a.conditions.length === b.conditions.length &&
+    a.conditions.every((c, i) => c === b.conditions[i])
+  );
 }
 
 export interface RenderWall {

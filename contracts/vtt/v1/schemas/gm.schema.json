@@ -29,7 +29,8 @@
             "wall",
             "fog",
             "template",
-            "terrain"
+            "terrain",
+            "actor"
           ]
         },
         "id": {
@@ -299,6 +300,9 @@
         },
         {
           "$ref": "common.schema.json#/definitions/TerrainState"
+        },
+        {
+          "$ref": "#/definitions/GmActor"
         }
       ]
     },
@@ -489,6 +493,71 @@
         },
         "hidden": {
           "type": "boolean"
+        }
+      }
+    },
+    "GmActor": {
+      "title": "GmActor",
+      "description": "A tracker combatant (cmb_...) or party character (chr_...) a token can link to (parity-3). Campaign-wide: every GM snapshot carries all of them. Derived from the tracker; read only.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "id",
+        "version",
+        "name",
+        "pc",
+        "hp",
+        "maxHp",
+        "conditions",
+        "active",
+        "hidden",
+        "status"
+      ],
+      "properties": {
+        "kind": {
+          "const": "actor"
+        },
+        "id": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "version": {
+          "$ref": "common.schema.json#/definitions/OpaqueToken"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])"
+        },
+        "pc": {
+          "type": "boolean"
+        },
+        "hp": {
+          "type": "integer",
+          "minimum": -9999,
+          "maximum": 99999
+        },
+        "maxHp": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 99999
+        },
+        "conditions": {
+          "$ref": "common.schema.json#/definitions/LiveConditions"
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "hidden": {
+          "type": "boolean"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "",
+            "Wounded",
+            "Dead"
+          ]
         }
       }
     }

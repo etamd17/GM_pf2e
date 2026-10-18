@@ -51,7 +51,7 @@ export function moveToken(token: Of<'token'>, x: number, y: number): Draft {
   return { type: 'token.move', expected: expect(token), payload: { id: token.id, x, y } };
 }
 
-export type TokenPatch = Partial<Pick<Of<'token'>, 'label' | 'size' | 'color' | 'hidden' | 'locked' | 'artAssetId'>>;
+export type TokenPatch = Partial<Pick<Of<'token'>, 'label' | 'size' | 'color' | 'hidden' | 'locked' | 'artAssetId' | 'actorId'>>;
 
 export function updateToken(token: Of<'token'>, patch: TokenPatch): Draft {
   return { type: 'token.update', expected: expect(token), payload: { id: token.id, ...patch } };

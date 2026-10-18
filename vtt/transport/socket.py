@@ -57,6 +57,7 @@ from sqlalchemy import text
 from flask_socketio import ConnectionRefusedError, SocketIO, disconnect
 
 from core.persistence.database import Database
+from vtt import live
 from vtt.commands import CommandService, RateLimiter
 from vtt.storage import grants as G
 from vtt.delivery.hub import AccessLost, Hub, Principal
@@ -159,6 +160,8 @@ class VttService:
     sweep: Callable[[str | None], int]
     sweep_stats: dict
     end_member: Callable[..., int]
+    # Parity P3: mirror app.py's live tracker indexes for one campaign.
+    sync_live: Callable[[str, dict, dict], list] = None
 
 
 def table_verifier(grant_key: bytes, credential: str) -> str:
@@ -450,6 +453,13 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
             disconnect()
         return None
 
+    def sync_live(campaign_id: str, combatants: dict, characters: dict) -> list:
+        """Mirror the tracker's live state (parity P3) and deliver what changed."""
+        changed = live.sync(db, campaign_id, live.build(combatants, characters))
+        if changed:
+            hub.notify(campaign_id)
+        return changed
+
     return VttService(socketio=socketio, hub=hub, principals=principals, commands=commands,
                       heartbeat=lambda: sweep(None), sweep=sweep, sweep_stats=sweep_stats,
-                      end_member=end_member)
+                      end_member=end_member, sync_live=sync_live)

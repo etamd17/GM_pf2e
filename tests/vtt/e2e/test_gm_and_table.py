@@ -9,6 +9,8 @@ trusting the GM page.
 
 from __future__ import annotations
 
+import json
+
 import io
 
 import pytest
@@ -167,6 +169,35 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
     gm.mouse.up()
     wait_for(tv, lambda s: len(s["templates"]) == 1 and s["templates"][0]["y"] == burst["y"] + g,
              "a dragged template moves on the TV")
+
+    # --- live HP from the tracker (parity P3) ---------------------------------------------------
+    # A monster joins the real tracker; the token is linked to it in the
+    # inspector; damage on the tracker reaches the TV as a status only.
+    tracker_post = """async ([path, body, form]) => {
+        const csrf = JSON.parse(document.getElementById('vtt-boot').textContent).csrf;
+        const init = form
+            ? {method: 'POST', body: new URLSearchParams(body), headers: {'X-CSRF-Token': csrf, 'X-Requested-With': 'XMLHttpRequest'}}
+            : {method: 'POST', body: JSON.stringify(body), headers: {'X-CSRF-Token': csrf, 'Content-Type': 'application/json'}};
+        const response = await fetch(path, init);
+        return [response.status, await response.text()];
+    }"""
+    status, text = gm.evaluate(tracker_post, ["/api/add_custom_monster", {"name": "Skeleton Guard", "hp": 20}, False])
+    assert status == 200, text
+    instance = json.loads(text)["instance_id"]
+    click_token(gm, "tok_hero")
+    picker = gm.get_by_label("Tracker link")
+    gm.wait_for_function("() => [...document.querySelectorAll('option')].some(o => o.text === 'Skeleton Guard')")
+    picker.select_option(label="Skeleton Guard")
+    # The only combatant, so it holds the turn: the TV outlines it.
+    wait_for(tv, lambda s: (token(s, "tok_hero") or {}).get("live") == {
+        "hp": None, "maxHp": None, "status": None, "conditions": [], "active": True}, "the TV sees the link, at full HP")
+    status, text = gm.evaluate(tracker_post, [f"/api/adjust_hp/{instance}", {"amount": "15", "action": "damage"}, True])
+    assert status == 200, text
+    wait_for(tv, lambda s: (token(s, "tok_hero")["live"] or {}).get("status") == "Wounded",
+             "tracker damage shows as Wounded on the TV")
+    assert token(probe(tv), "tok_hero")["live"]["hp"] is None             # never the monster's numbers
+    wait_for(gm, lambda s: (token(s, "tok_hero")["live"] or {}).get("hp") == 5, "the GM sees the exact HP")
+    shoot(gm, "p3-gm"), shoot(tv, "p3-tv")
 
     # --- the table moves to another scene -------------------------------------------------------
     gm.locator(".vtt-scene-picker").select_option("scene_docks")

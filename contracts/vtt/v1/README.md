@@ -233,3 +233,29 @@ Digest `32bd0faa...`.
   - The table projection leaves out a hidden template, or one whose anchor cell is under fog.
   - The table's terrain is masked by fog: unrevealed cells are sent as 0.
   - A grid change is refused while any terrain is painted.
+
+## Live tracker actors, batch parity-3 (P3, Claude, 2026-10-17)
+
+Digest `610eed46...`.
+
+- **Entity `actor`** (`GmActor`), GM only. It is a tracker combatant (`cmb_<instance id>`) or a
+  party character (`chr_<character id>`). Fields:
+  - `name`, `pc`, `hp`, `maxHp`;
+  - `conditions`: up to 24 `{name, value}`, where value is null for a plain flag;
+  - `active`: whose turn it is;
+  - `hidden`: hidden in the tracker;
+  - `status`: "", Wounded or Dead, from the tracker's player policy.
+
+  Actors are campaign-wide: every GM snapshot carries all of them, up to 64. They are derived
+  from the tracker, and no command writes them.
+- **`TableToken.live`** (`TableLive` or null): what the table may know of the linked actor.
+  - `hp`/`maxHp` are exact for a player character and null otherwise.
+  - `status` is Wounded or Dead for a non-PC, and null otherwise.
+  - Also `conditions` and `active`.
+
+  The schema leaves the field optional, but the server always sends it: null when the token is
+  unlinked or its actor is absent.
+- **Server rules:**
+  - A token linked to an actor that is hidden in the tracker is not sent to the table.
+  - An `actors` outbox event, which has no scene, rechecks the named actors for the GM, and
+    the tokens linked to them for the table.

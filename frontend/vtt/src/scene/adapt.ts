@@ -1,6 +1,6 @@
 import type { RenderLight, RenderScene, RenderToken, RenderWall } from './renderModel';
 import { decodeFogBits } from '../protocol/semantics';
-import { EMPTY_SCENE, isMediaUrl, type RenderFog, type RenderTemplate, type RenderTerrain } from './renderModel';
+import { EMPTY_SCENE, isMediaUrl, type RenderFog, type RenderLive, type RenderTemplate, type RenderTerrain } from './renderModel';
 
 // The one adapter between projected wire entities and the renderer's model
 // (renderModel.ts). It reads only the fields its surface's projection carries,
@@ -49,6 +49,48 @@ const assetUrl = (media: MediaUrl | undefined, id: unknown): string | undefined 
   return isMediaUrl(url) ? url : undefined;
 };
 
+// "off_guard" + null -> "Off guard"; "frightened" + 2 -> "Frightened 2".
+export function conditionLabel(name: string, value: number | null): string {
+  const words = name.replace(/_/g, ' ');
+  const label = words.charAt(0).toUpperCase() + words.slice(1);
+  return value === null ? label : `${label} ${value}`;
+}
+
+const conditionsOf = (raw: unknown): string[] =>
+  Array.isArray(raw)
+    ? raw.flatMap((c) =>
+        c && typeof c === 'object' && typeof (c as { name?: unknown }).name === 'string'
+          ? [conditionLabel((c as { name: string }).name, typeof (c as { value?: unknown }).value === 'number' ? (c as { value: number }).value : null)]
+          : [],
+      )
+    : [];
+
+const intOrNull = (v: unknown): number | null => (typeof v === 'number' && Number.isInteger(v) ? v : null);
+
+// The table's own live block (the server already chose what it may show).
+function tableLive(raw: unknown): RenderLive | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const live = raw as Record<string, unknown>;
+  return {
+    hp: intOrNull(live.hp),
+    maxHp: intOrNull(live.maxHp),
+    status: live.status === 'Wounded' || live.status === 'Dead' ? live.status : null,
+    conditions: conditionsOf(live.conditions),
+    active: live.active === true,
+  };
+}
+
+// The GM's view of a linked actor: exact HP for every creature.
+function gmLive(actor: WireEntity): RenderLive {
+  return {
+    hp: intOrNull(actor.hp),
+    maxHp: intOrNull(actor.maxHp),
+    status: null,
+    conditions: conditionsOf(actor.conditions),
+    active: actor.active === true,
+  };
+}
+
 export function adaptEntities(
   entities: ReadonlyMap<string, WireEntity>,
   cache: AdaptCache = newAdaptCache(),
@@ -64,6 +106,9 @@ export function adaptEntities(
   const templates: RenderTemplate[] = [];
   const templateCache = (cache.templates ??= new Map());
   const seenTemplates = new Set<string>();
+  // Tracker actors (parity P3) are GM-only entities; a GM token joins its own.
+  const actors = new Map<string, WireEntity>();
+  for (const e of entities.values()) if (e.kind === 'actor') actors.set(e.id, e);
   for (const e of entities.values()) {
     if (e.kind === 'scene') {
       scene = e;
@@ -116,11 +161,15 @@ export function adaptEntities(
       }
     } else if (e.kind === 'token') {
       seen.tokens.add(e.id);
+      const actor = typeof e.actorId === 'string' ? actors.get(e.actorId) : undefined;
+      // A GM token redraws when its actor changes too, so both versions key it.
+      const version = actor ? `${e.version}:${actor.version}` : e.version;
       const hit = cache.tokens.get(e.id);
-      if (hit && hit.version === e.version) {
+      if (hit && hit.version === version) {
         tokens.push(hit.token);
         continue;
       }
+      const live = actor ? gmLive(actor) : tableLive(e.live);
       const token: RenderToken = {
         id: e.id,
         x: num(e.x),
@@ -129,9 +178,12 @@ export function adaptEntities(
         label: typeof e.label === 'string' ? e.label : '',
         color: num(e.color),
         ...(assetUrl(media, e.artAssetId) ? { artUrl: assetUrl(media, e.artAssetId) as string } : {}),
-        ...(e.hidden === true ? { hidden: true } : {}),
+        // GM only: hidden on the map, or its actor hidden in the tracker
+        // (either way the table does not see it).
+        ...(e.hidden === true || actor?.hidden === true ? { hidden: true } : {}),
+        ...(live ? { live } : {}),
       };
-      cache.tokens.set(e.id, { version: e.version, token });
+      cache.tokens.set(e.id, { version, token });
       tokens.push(token);
     } else if (e.kind === 'light') {
       seen.lights.add(e.id);
