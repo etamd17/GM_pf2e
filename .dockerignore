@@ -9,6 +9,7 @@
 !app.py
 !class_matrix.py
 !pf2e_generator.py
+!pf2e_pdf_import.py
 !pf2e_database.db
 !alembic.ini
 !requirements.txt

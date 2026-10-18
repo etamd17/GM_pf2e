@@ -1,0 +1,35 @@
+"""The Docker image's .dockerignore is an allowlist. Every repository-root
+Python module the app imports (often lazily, inside a function) must be on it,
+or the image boots and then fails with ModuleNotFoundError on the first request
+that reaches the import. That happened on staging with pf2e_pdf_import.py."""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+PACKAGES = ("core", "services", "systems", "vtt")
+
+
+def _allowed() -> set[str]:
+    lines = (ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
+    return {line.strip()[1:] for line in lines if line.strip().startswith("!")}
+
+
+def _sources():
+    yield ROOT / "app.py"
+    for package in PACKAGES:
+        yield from (ROOT / package).rglob("*.py")
+
+
+def test_every_root_module_the_app_imports_is_in_the_image():
+    root_modules = {p.stem for p in ROOT.glob("*.py")}
+    pattern = re.compile(r"^\s*(?:from|import)\s+([A-Za-z_][A-Za-z0-9_]*)", re.MULTILINE)
+    imported = set()
+    for source in _sources():
+        imported |= set(pattern.findall(source.read_text(encoding="utf-8", errors="replace")))
+    needed = sorted(f"{name}.py" for name in imported & root_modules)
+    missing = [name for name in needed if name not in _allowed()]
+    assert not missing, f"imported but left out of the image by .dockerignore: {missing}"
+    assert "pf2e_pdf_import.py" in needed       # the case that broke staging is still covered
