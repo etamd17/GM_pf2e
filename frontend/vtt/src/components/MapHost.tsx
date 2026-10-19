@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useTransients } from '../state/transients';
+import type { ViewportController } from '../app/actions/viewport';
 import { SceneRuntime, type RuntimeInteraction } from '../scene/SceneRuntime';
 import type { Hit, Point } from '../scene/interaction';
 import type { Surface } from '../scene/layers';
@@ -16,6 +17,8 @@ interface Props {
   interaction?: RuntimeInteraction;
   selection?: Hit | null;
   wallDraft?: { a: Point; b: Point } | null;
+  // Handoff 090: zoom +/- and Fit for the layout's controls (app/actions/viewport.ts).
+  viewportController?: ViewportController;
 }
 
 declare global {
@@ -39,7 +42,7 @@ function probeEnabled(): boolean {
 // The only bridge between React and Pixi: one div, one SceneRuntime. React
 // re-renders never reach the scene graph; scene changes are pushed through
 // runtime.setScene, which diffs by object identity.
-export function MapHost({ surface, scene, onViewportChange, label, interaction, selection = null, wallDraft = null }: Props) {
+export function MapHost({ surface, scene, onViewportChange, label, interaction, selection = null, wallDraft = null, viewportController }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<SceneRuntime | null>(null);
   const viewportCb = useRef(onViewportChange);
@@ -51,6 +54,10 @@ export function MapHost({ surface, scene, onViewportChange, label, interaction, 
   const interactionRef = useRef(interaction);
   interactionRef.current = interaction;
   const latestSelection = useRef(selection);
+  // Handoff 090: the layout's zoom and Fit buttons reach the runtime through
+  // this controller (bound when the runtime is built, unbound on cleanup).
+  const viewportRef = useRef(viewportController);
+  viewportRef.current = viewportController;
   latestSelection.current = selection;
 
   useEffect(() => {
@@ -88,6 +95,11 @@ export function MapHost({ surface, scene, onViewportChange, label, interaction, 
     });
     runtimeRef.current = runtime;
     useConnection.getState().setRenderer('ok');
+    viewportRef.current?.bind({
+      zoomIn: () => runtime.zoomIn(),
+      zoomOut: () => runtime.zoomOut(),
+      fit: () => runtime.fitView(),
+    });
     runtime.setScene(latestScene.current);
     runtime.setSelection(latestSelection.current);
     runtime.init().catch(() => {
@@ -97,6 +109,7 @@ export function MapHost({ surface, scene, onViewportChange, label, interaction, 
     if (probeEnabled()) window.__vttProbe = () => runtime.probe();
     return () => {
       alive = false;
+      viewportRef.current?.bind(null);
       runtime.destroy();
       runtimeRef.current = null;
       if (window.__vttRuntime === runtime) delete window.__vttRuntime;

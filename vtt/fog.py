@@ -41,6 +41,11 @@ def encode(bits: bytes) -> str:
     return base64.urlsafe_b64encode(bits).rstrip(b"=").decode("ascii")
 
 
+# A ruler of up to 8 points on the largest fog grid (512 x 512) crosses at
+# most about 7 * 1024 cells; a path needing more checks than this is refused.
+PATH_CELL_BUDGET = 8192
+
+
 @dataclass(frozen=True)
 class FogView:
     """A scene's fog as the projections need it."""
@@ -66,6 +71,48 @@ class FogView:
 
     def any_revealed(self) -> bool:
         return any(self.bits)
+
+    def path_hidden(self, points, budget: int = PATH_CELL_BUDGET) -> bool:
+        """True when a path through ``points`` touches any unrevealed cell, or
+        when proving otherwise would take more than ``budget`` cell checks
+        (fail closed). Every cell a segment crosses or touches counts: the
+        segment is swept column strip by column strip, and closed intervals
+        make a segment that only grazes a cell's edge or corner count as
+        entering it. A single point is checked the same way, so a point on a
+        grid line counts for the cells on both sides."""
+        if not self.enabled:
+            return False
+        g = self.grid_size
+        if not points or g <= 0:
+            return False
+        segments = list(zip(points, points[1:])) or [(points[0], points[0])]
+        seen: set[tuple[int, int]] = set()
+
+        def span(lo: float, hi: float, limit: int) -> range:
+            # Cells whose closed interval [k*g, (k+1)*g] meets [lo, hi].
+            first = max(0, math.ceil(lo / g) - 1)
+            last = min(limit - 1, math.floor(hi / g))
+            return range(first, last + 1)
+
+        for (x1, y1), (x2, y2) in segments:
+            xmin, xmax = min(x1, x2), max(x1, x2)
+            for col in span(xmin, xmax, self.cols):
+                # The segment's y-range inside this column strip.
+                a = max(xmin, col * g)
+                b = min(xmax, (col + 1) * g)
+                if x2 == x1:
+                    ya, yb = min(y1, y2), max(y1, y2)
+                else:
+                    ta, tb = (a - x1) / (x2 - x1), (b - x1) / (x2 - x1)
+                    ya_, yb_ = y1 + (y2 - y1) * ta, y1 + (y2 - y1) * tb
+                    ya, yb = min(ya_, yb_), max(ya_, yb_)
+                for row in span(ya, yb, self.rows):
+                    if (col, row) in seen:
+                        continue
+                    seen.add((col, row))
+                    if len(seen) > budget or not self.revealed(col, row):
+                        return True
+        return False
 
     @property
     def encoded(self) -> str:

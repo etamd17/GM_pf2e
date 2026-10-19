@@ -10,6 +10,7 @@ import { useConnection } from '../state/connection';
 
 interface FakeRuntime {
   destroyed: boolean;
+  calls: string[];
   reject: (e: unknown) => void;
   status: (s: 'ok' | 'lost' | 'restoring' | 'failed') => void;
 }
@@ -29,6 +30,16 @@ vi.mock('../scene/SceneRuntime', () => ({
     setTransients() {}
     setSelection() {}
     setWallDraft() {}
+    calls: string[] = [];
+    zoomIn() {
+      this.calls.push('in');
+    }
+    zoomOut() {
+      this.calls.push('out');
+    }
+    fitView() {
+      this.calls.push('fit');
+    }
     init() {
       return new Promise<void>((_resolve, reject) => {
         this.reject = reject;
@@ -41,6 +52,7 @@ vi.mock('../scene/SceneRuntime', () => ({
 }));
 
 const { MapHost } = await import('./MapHost');
+const { createViewportController } = await import('../app/actions/viewport');
 
 beforeEach(() => {
   runtimes.length = 0;
@@ -89,5 +101,36 @@ describe('MapHost runtime lifecycle', () => {
     useConnection.setState({ renderer: 'failed' });
     render(<MapHost surface="gm" scene={EMPTY_SCENE} label="a" />);
     expect(useConnection.getState().renderer).toBe('ok');
+  });
+});
+
+
+describe('the viewport controller (handoff 090)', () => {
+  it('does nothing until MapHost binds it, then drives the live runtime, and lets go on unmount', () => {
+    const viewport = createViewportController();
+    viewport.zoomIn();                                            // unbound: a no-op, not a throw
+    expect(viewport.bound).toBe(false);
+    const { unmount } = render(<MapHost surface="gm" scene={EMPTY_SCENE} label="g" viewportController={viewport} />);
+    expect(viewport.bound).toBe(true);
+    viewport.zoomIn();
+    viewport.zoomOut();
+    viewport.fit();
+    expect(runtimes.at(-1)?.calls).toEqual(['in', 'out', 'fit']);
+    unmount();
+    expect(viewport.bound).toBe(false);
+    viewport.fit();
+    expect(runtimes.at(-1)?.calls).toEqual(['in', 'out', 'fit']);  // nothing reaches a destroyed runtime
+  });
+
+  it('binds the replacement runtime after a StrictMode remount', () => {
+    const viewport = createViewportController();
+    render(
+      <StrictMode>
+        <MapHost surface="gm" scene={EMPTY_SCENE} label="g" viewportController={viewport} />
+      </StrictMode>,
+    );
+    viewport.zoomIn();
+    expect(runtimes[0]?.calls).toEqual([]);                        // the destroyed first runtime
+    expect(runtimes[1]?.calls).toEqual(['in']);
   });
 });

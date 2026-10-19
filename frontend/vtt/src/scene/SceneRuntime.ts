@@ -242,6 +242,29 @@ export class SceneRuntime {
     );
   }
 
+  // Published viewport actions (handoff 090): the layout's zoom and Fit
+  // buttons and the + / - / 0 keys share these. Zoom keeps the view's centre
+  // and the zoom limits and counts as the GM moving the view (a resize then
+  // keeps it); fitView frames the scene and lets later resizes re-fit.
+  zoomIn(): void {
+    this.zoomByFactor(KEY_ZOOM);
+  }
+
+  zoomOut(): void {
+    this.zoomByFactor(1 / KEY_ZOOM);
+  }
+
+  fitView(): void {
+    this.userMovedViewport = false;
+    this.fit();
+  }
+
+  private zoomByFactor(factor: number): void {
+    const centre = { x: this.host.clientWidth / 2, y: this.host.clientHeight / 2 };
+    this.userMovedViewport = true;
+    this.applyViewport(zoomAt(this.viewport, centre, factor, this.zoomLimits()));
+  }
+
   // One padding value for both fitting and the zoom-out floor.
   private fitPadding(): number {
     return this.options.surface === 'table' ? 0 : 24;
@@ -717,14 +740,15 @@ export class SceneRuntime {
         break;
       case '+':
       case '=':
-        next = zoomAt(this.viewport, centre, KEY_ZOOM, this.zoomLimits());
-        break;
+        this.zoomIn();
+        e.preventDefault();
+        return;
       case '-':
-        next = zoomAt(this.viewport, centre, 1 / KEY_ZOOM, this.zoomLimits());
-        break;
+        this.zoomOut();
+        e.preventDefault();
+        return;
       case '0':
-        this.userMovedViewport = false;
-        this.fit();
+        this.fitView();
         e.preventDefault();
         return;
       default:

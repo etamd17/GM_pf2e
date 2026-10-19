@@ -143,3 +143,82 @@ def test_nothing_is_replayed_to_a_table_that_connects_later(stack):
     transient(gm, sub_id, {"type": "ping", "x": 320, "y": 192})
     later, _ = subscribe_table(stack, add_grant(stack.db))
     assert relays(later) == []
+
+
+# --- handoff 089: authorization and exact fog coverage ------------------------------------------
+
+def _resync_reasons(client):
+    return [payload(m)["reason"] for m in client.get_received(NAMESPACE) if m["name"] == "vtt.resync_required"]
+
+
+def test_a_removed_gm_cannot_send_and_is_ended(stack):
+    gm, table, sub_id, _ = ready(stack)
+    stack.host.gms.clear()                                          # removed from the campaign
+    transient(gm, sub_id, {"type": "ping", "x": 96, "y": 96})
+    assert relays(table) == []
+    assert not gm.is_connected(NAMESPACE)                           # the revoked refusal path closed it
+
+
+def test_an_expired_tv_receives_nothing_and_is_ended(stack):
+    from datetime import timedelta
+    gm, table, sub_id, _ = ready(stack)
+    stack.advance_clock(timedelta(hours=9))                         # past the grant's lifetime
+    transient(gm, sub_id, {"type": "ping", "x": 96, "y": 96})
+    assert not any(event == "vtt.transient_relay" for _sid, event, _data in stack.sent)
+    assert not table.is_connected(NAMESPACE)
+    assert gm.is_connected(NAMESPACE)                               # the sender is still allowed
+
+
+def test_a_revoked_tv_receives_nothing(stack):
+    from vtt.storage import grants as G
+    gm, table, sub_id, _ = ready(stack)
+    with stack.db.transaction() as session:
+        G.revoke_all(session, "camp_a")
+    transient(gm, sub_id, {"type": "ping", "x": 96, "y": 96})
+    assert not any(event == "vtt.transient_relay" for _sid, event, _data in stack.sent)
+    assert not table.is_connected(NAMESPACE)
+
+
+def _fog_with(stack, gm, table, cells):
+    send(stack, gm, "fog.update", {"enabled": True}, expected=expect(stack, "fog", "fog"))
+    send(stack, gm, "fog.reveal", {"mode": "reveal", "cells": cells})
+    table.get_received(NAMESPACE)
+
+
+def test_a_ruler_grazing_a_fogged_cell_near_a_corner_stays_off_the_tv(stack):
+    gm, table, sub_id, _ = ready(stack)
+    _fog_with(stack, gm, table, [[0, 0], [1, 1]])
+    # Codex's case: a short segment that crosses hidden cell (0, 1).
+    transient(gm, sub_id, {"type": "ruler", "rule": "uniform", "points": [{"x": 63, "y": 50}, {"x": 65, "y": 80}]})
+    # Exactly through the corner (64, 64): touches hidden (0, 1) and (1, 0) as well.
+    transient(gm, sub_id, {"type": "ruler", "rule": "uniform", "points": [{"x": 32, "y": 32}, {"x": 96, "y": 96}]})
+    assert relays(table) == []
+
+
+def test_a_long_ruler_through_revealed_cells_is_shown(stack):
+    gm, table, sub_id, _ = ready(stack)
+    revealed = [[c, r] for c in range(0, 12) for r in range(0, 4)]
+    _fog_with(stack, gm, table, revealed)
+    path = [{"x": 32, "y": 32}, {"x": 700, "y": 32}, {"x": 700, "y": 220}, {"x": 32, "y": 220},
+            {"x": 400, "y": 120}, {"x": 740, "y": 200}, {"x": 60, "y": 60}, {"x": 32, "y": 200}]
+    transient(gm, sub_id, {"type": "ruler", "rule": "alternating", "points": path})
+    assert [f["transient"]["type"] for f in relays(table)] == ["ruler"]
+
+
+def test_a_path_beyond_the_checking_budget_is_refused():
+    from vtt import fog as fog_rules
+    view = fog_rules.FogView(enabled=True, cols=64, rows=64, bits=b"\xff" * 512, grid_size=64)
+    path = [(0, 0), (4095, 4095)]
+    assert view.path_hidden(path) is False                          # everything revealed, within budget
+    assert view.path_hidden(path, budget=10) is True                # too many cells to prove: refused
+
+
+def test_the_other_gm_still_sees_a_ruler_the_tv_may_not(stack):
+    from .test_m1_read_path import subscribe_gm
+    gm, table, sub_id, _ = ready(stack)
+    other, _ = subscribe_gm(stack)
+    _fog_with(stack, gm, table, [[0, 0], [1, 1]])
+    other.get_received(NAMESPACE)
+    transient(gm, sub_id, {"type": "ruler", "rule": "uniform", "points": [{"x": 63, "y": 50}, {"x": 65, "y": 80}]})
+    assert relays(table) == []
+    assert [f["transient"]["type"] for f in relays(other)] == ["ruler"]

@@ -52,7 +52,7 @@ REPLAY_LIMIT = 1024
 TRANSIENT_TTL_MS = {"ping": 3000, "ruler": 10000, "ruler-clear": 1}
 TRANSIENT_RATE = 20.0          # per second, per sender subscription (a ruler drag is throttled client-side)
 TRANSIENT_BURST = 20.0
-TRANSIENT_FOG_SAMPLES = 512    # fog checks along a ruler, at most
+
 
 Emit = Callable[[str, str, dict[str, Any]], None]          # (sid, event, payload)
 
@@ -457,7 +457,6 @@ class Hub:
         the scene, or nobody to receive it). Nothing is stored or acknowledged."""
         import hashlib as _hashlib
         import hmac as _hmac
-        import math
         import time as _time
         sender = self._by_sid.get(sid)
         if (sender is None or not sender.live or sender.audience != "gm" or sender.scene_id is None
@@ -476,30 +475,48 @@ class Hub:
         kind = transient["type"]
         points = ([(transient["x"], transient["y"])] if kind == "ping"
                   else [(p["x"], p["y"]) for p in transient.get("points", [])])
-        with self.db.session() as session:
-            scene = self._scene(session, sender.campaign_id, sender.scene_id)
-            if scene is None or any(x > scene.width or y > scene.height for x, y in points):
-                self.stats["transients_dropped"] += 1
-                return 0
-            pointer = session.get(VttTablePointer, sender.campaign_id)
-            on_tv = bool(scene.published) and pointer is not None and pointer.scene_id == scene.id
-            fog_view = fog.load(session, scene)[1] if on_tv else None
-        # The table never sees a transient that could reveal what fog hides: every
-        # point, and points sampled every half square along each ruler segment.
-        table_safe = on_tv
-        if on_tv and fog_view is not None and points:
-            samples = list(points)
-            step = max(1.0, scene.grid_size / 2)
-            for (x1, y1), (x2, y2) in zip(points, points[1:]):
-                n = min(TRANSIENT_FOG_SAMPLES, int(math.ceil(math.hypot(x2 - x1, y2 - y1) / step)))
-                samples += [(x1 + (x2 - x1) * i / max(1, n), y1 + (y2 - y1) * i / max(1, n)) for i in range(n + 1)]
-            table_safe = not any(fog_view.hides(x, y) for x, y in samples[:TRANSIENT_FOG_SAMPLES * 2])
+        with self._lock:
+            candidates = [s for s in self._by_sid.values()
+                          if s is not sender and s.live and s.campaign_id == sender.campaign_id]
+        # One read, and the same authorization delivery applies (handoff 089):
+        # the sender must still be the campaign's GM and every recipient must
+        # still have access. Any storage failure drops the transient.
+        lost: list[Subscription] = []
+        allowed: list[Subscription] = []
+        try:
+            with self.db.session() as session:
+                if not self.access_check(session, sender.principal, sender.audience, sender.campaign_id):
+                    lost.append(sender)
+                else:
+                    for sub in candidates:
+                        (allowed if self.access_check(session, sub.principal, sub.audience, sub.campaign_id)
+                         else lost).append(sub)
+                    scene = self._scene(session, sender.campaign_id, sender.scene_id)
+                    pointer = session.get(VttTablePointer, sender.campaign_id)
+                    on_tv = (scene is not None and bool(scene.published) and pointer is not None
+                             and pointer.scene_id == scene.id)
+                    fog_view = fog.load(session, scene)[1] if on_tv else None
+        except Exception:
+            self.stats["transients_dropped"] += 1
+            self.stats["transient_errors"] += 1
+            return 0
+        for sub in lost:            # the established refusal path: revoked, then closed
+            with sub.lock:
+                if self._by_sid.get(sub.sid) is sub:
+                    self._end(sub)
+        if sender in lost:
+            self.stats["transients_dropped"] += 1
+            return 0
+        if scene is None or any(x > scene.width or y > scene.height for x, y in points):
+            self.stats["transients_dropped"] += 1
+            return 0
+        # The table never sees a transient that could reveal what fog hides:
+        # every cell its point or path touches must be revealed (fail closed).
+        table_safe = on_tv and not (fog_view is not None and fog_view.path_hidden(points))
+        recipients = allowed
         family = "ruler" if kind.startswith("ruler") else kind
         digest = _hmac.new(self.key.secret, f"transient:{sender.subscription_id}:{family}".encode(), _hashlib.sha256)
         key = "k" + base64.urlsafe_b64encode(digest.digest()[:15]).decode("ascii")      # 21 chars, opaque
-        with self._lock:
-            recipients = [s for s in self._by_sid.values()
-                          if s is not sender and s.live and s.campaign_id == sender.campaign_id]
         sent = 0
         for sub in recipients:
             if sub.audience == "gm" and sub.scene_id != sender.scene_id:
