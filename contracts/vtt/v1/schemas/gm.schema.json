@@ -618,6 +618,19 @@
             }
           ],
           "description": "The encounter generation token (E-3), on every actor. Opaque; it changes only when the tracker's roster is replaced wholesale (clear, load, stage, campaign switch). The GM page echoes it when it adds a bestiary creature."
+        },
+        "speed": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Feet one move covers (E-4), per system: PF2e Speed, Cosmere movement rate; null when unknown. The GM page measures a dragged token against it."
         }
       }
     }

@@ -199,6 +199,27 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
     wait_for(gm, lambda s: (token(s, "tok_hero")["live"] or {}).get("hp") == 5, "the GM sees the exact HP")
     shoot(gm, "p3-gm"), shoot(tv, "p3-tv")
 
+    # --- Speed while dragging (E-4) -------------------------------------------------------------
+    # The hero token is linked to the Skeleton Guard (a custom monster: Speed
+    # 25). Dragged five squares, the GM page reads 25 / 25 ft; seven squares is
+    # a second move. Brought back and released where it started.
+    state = probe(gm)
+    view = state["viewport"]
+    box = gm.locator(".vtt-map-host canvas").bounding_box()
+    sx = lambda x: box["x"] + view["x"] + x * view["scale"]
+    sy = lambda y: box["y"] + view["y"] + y * view["scale"]
+    hero_at = token(state, "tok_hero")
+    gm.mouse.move(sx(hero_at["x"]), sy(hero_at["y"]))
+    gm.mouse.down()
+    gm.mouse.move(sx(hero_at["x"] + 5 * 64), sy(hero_at["y"]), steps=6)
+    wait_for(gm, lambda s: (s["drag"] or {}).get("label") == "25 / 25 ft", "the drag reads 25 / 25 ft")
+    gm.mouse.move(sx(hero_at["x"] + 7 * 64), sy(hero_at["y"]), steps=3)
+    wait_for(gm, lambda s: (s["drag"] or {}).get("moves") == 2, "seven squares is a second move")
+    shoot(gm, "e4-drag")
+    gm.mouse.move(sx(hero_at["x"]), sy(hero_at["y"]), steps=6)
+    gm.mouse.up()
+    wait_for(gm, lambda s: s["drag"] is None, "the reading goes on release")
+
     # --- turn controls (E-1) ----------------------------------------------------------------------
     # A second monster joins; the GM page's turn route runs the tracker's own
     # next turn, and the TV's outline follows through the live mirror.

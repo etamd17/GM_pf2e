@@ -45,7 +45,9 @@ def combat(tmp_path, monkeypatch):
 
     ogre = SimpleNamespace(instance_id='ogre-1', name='Ogre', is_pc=False, system='pf2e',
                            current_hp=40, hp=40, conditions={}, visible_to_players=True,
-                           persistent_damage='', attributes={'spd': 25})
+                           # A PF2e Monster carries its statblock Speed as .speed (it has
+                           # no attributes dict; Cosmere's 'spd' is a score, not feet).
+                           persistent_damage='', speed=25)
     monkeypatch.setattr(app, 'ACTIVE_ENCOUNTER', [ogre])
     monkeypatch.setattr(app, 'TURN_INDEX', 0)
 

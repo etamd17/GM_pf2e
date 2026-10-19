@@ -189,6 +189,10 @@ export interface GmActor {
    * The encounter generation token (E-3), on every actor. Opaque; it changes only when the tracker's roster is replaced wholesale (clear, load, stage, campaign switch). The GM page echoes it when it adds a bestiary creature.
    */
   encounterToken?: string | null;
+  /**
+   * Feet one move covers (E-4), per system: PF2e Speed, Cosmere movement rate; null when unknown. The GM page measures a dragged token against it.
+   */
+  speed?: number | null;
 }
 /**
  * A tracker condition (parity-3): its vocabulary name (ASCII letters, digits, space, underscore, apostrophe, hyphen), and its value when it has one (Frightened 2); null for a plain flag.

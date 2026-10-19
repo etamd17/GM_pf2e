@@ -182,6 +182,7 @@ export function adaptEntities(
         // (either way the table does not see it).
         ...(e.hidden === true || actor?.hidden === true ? { hidden: true } : {}),
         ...(live ? { live } : {}),
+        ...(actor && typeof actor.speed === 'number' && actor.speed > 0 ? { speed: actor.speed } : {}),
       };
       cache.tokens.set(e.id, { version, token });
       tokens.push(token);

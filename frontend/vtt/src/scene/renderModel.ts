@@ -24,6 +24,9 @@ export interface RenderToken {
   // already decided what it may show: exact HP for a player character, only a
   // status for anything else. The GM sees exact HP for every actor.
   readonly live?: RenderLive;
+  // GM only (E-4): feet one move covers, from the linked actor; the drag
+  // reading measures against it. Not drawn on the token itself.
+  readonly speed?: number;
 }
 
 export interface RenderLive {

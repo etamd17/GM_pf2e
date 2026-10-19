@@ -9199,8 +9199,8 @@ def _scene_live_indexes(cid):
                               if v and v is not False},
                 # Speed, so dragging a token can measure against it. Read from
                 # the derived value the sheet shows, which already includes
-                # bonuses and toggles -- not the raw ancestry number.
-                'speed': int(getattr(pc, 'base_speed', 0) or 0),
+                # bonuses, toggles and penalties -- not the raw ancestry number.
+                'speed': _live_speed_feet(pc),
             })
         characters[char_id] = state
 
@@ -9226,8 +9226,7 @@ def _scene_live_indexes(cid):
                 'visible_to_players': bool(getattr(combatant, 'visible_to_players', True)),
                 'is_active': index == TURN_INDEX,
                 'character_id': record.get('id') if record else None,
-                'speed': int(getattr(combatant, 'base_speed', 0)
-                             or (getattr(combatant, 'attributes', {}) or {}).get('spd', 0) or 0),
+                'speed': _live_speed_feet(combatant),
             }
             if not combatant.is_pc:
                 # Carry the coarse status alongside the numbers. project_scene
@@ -9590,6 +9589,38 @@ def _vtt_bestiary_add(campaign_id, ref, request_id, expected_encounter=None):
         while len(_VTT_BESTIARY_ADDED) > _VTT_BESTIARY_ADDED_MAX:
             _VTT_BESTIARY_ADDED.popitem(last=False)
         return 'ok', detail
+
+
+def _live_speed_feet(actor):
+    """Feet one move covers, per system, for measuring a dragged token on /map
+    and in the VTT (E-4); 0 when unknown.
+
+    PF2e: a PC's current Speed (active_speed: bonuses, toggles and penalties
+    applied), a monster's statblock Speed. Cosmere: the movement rate, from the
+    walk override when one is set, else the rate the Speed attribute gives
+    (Ch.3) plus its bonus. The live index used to read base_speed, which a
+    monster does not have (0, so no reading), and Cosmere's Speed ATTRIBUTE
+    (a score of 1-5 shown as feet).
+    Conditions that change movement (immobilized, slowed and so on) are not
+    applied here; the tracker shows those."""
+    try:
+        if getattr(actor, 'system', 'pf2e') == 'cosmere':
+            movement = (getattr(actor, '_sys', None) or {}).get('movement') or {}
+            rate = ((movement.get('walk') or {}).get('rate') or {}) if isinstance(movement, dict) else {}
+            if rate.get('useOverride') and isinstance(rate.get('override'), (int, float)):
+                return max(0, int(rate['override']))
+            from systems.cosmere.stormlight_build import movement_rate
+            score = (getattr(actor, 'attributes', None) or {}).get('spd', 0)
+            if isinstance(score, dict):
+                score = score.get('value', 0)
+            return max(0, movement_rate(int(score or 0)) + int(rate.get('bonus') or 0))
+        for name in ('active_speed', 'speed', 'base_speed'):
+            value = getattr(actor, name, None)
+            if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
+                return int(value)
+    except Exception:
+        app.logger.debug('live speed unavailable for %r', getattr(actor, 'name', None))
+    return 0
 
 
 def _vtt_live_schedule():

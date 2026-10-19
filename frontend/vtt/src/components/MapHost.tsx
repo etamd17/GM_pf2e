@@ -3,6 +3,8 @@ import { useTransients } from '../state/transients';
 import type { ViewportController } from '../app/actions/viewport';
 import { SceneRuntime, type RuntimeInteraction } from '../scene/SceneRuntime';
 import type { Hit, Point } from '../scene/interaction';
+import { ruleFor, type MeasureRule } from '../scene/measure';
+import { gmBoot, readBoot } from '../live/boot';
 import type { Surface } from '../scene/layers';
 import type { RenderScene } from '../scene/renderModel';
 import type { Viewport } from '../scene/viewport';
@@ -19,6 +21,13 @@ interface Props {
   wallDraft?: { a: Point; b: Point } | null;
   // Handoff 090: zoom +/- and Fit for the layout's controls (app/actions/viewport.ts).
   viewportController?: ViewportController;
+  // E-4: how a dragged token's distance is counted. Defaults to the
+  // campaign's system from the page's boot data (PF2e alternates diagonals).
+  measureRule?: MeasureRule;
+}
+
+function bootRule(): MeasureRule {
+  return ruleFor(gmBoot(readBoot())?.system ?? 'dnd5e');
 }
 
 declare global {
@@ -42,7 +51,7 @@ function probeEnabled(): boolean {
 // The only bridge between React and Pixi: one div, one SceneRuntime. React
 // re-renders never reach the scene graph; scene changes are pushed through
 // runtime.setScene, which diffs by object identity.
-export function MapHost({ surface, scene, onViewportChange, label, interaction, selection = null, wallDraft = null, viewportController }: Props) {
+export function MapHost({ surface, scene, onViewportChange, label, interaction, selection = null, wallDraft = null, viewportController, measureRule }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<SceneRuntime | null>(null);
   const viewportCb = useRef(onViewportChange);
@@ -57,6 +66,8 @@ export function MapHost({ surface, scene, onViewportChange, label, interaction, 
   // Handoff 090: the layout's zoom and Fit buttons reach the runtime through
   // this controller (bound when the runtime is built, unbound on cleanup).
   const viewportRef = useRef(viewportController);
+  const measureRuleRef = useRef(measureRule);
+  measureRuleRef.current = measureRule;
   viewportRef.current = viewportController;
   latestSelection.current = selection;
 
@@ -71,6 +82,7 @@ export function MapHost({ surface, scene, onViewportChange, label, interaction, 
     const isCurrent = () => alive && runtimeRef.current === runtime;
     const runtime = new SceneRuntime(host, {
       surface,
+      measureRule: measureRuleRef.current ?? bootRule(),
       onRendererStatus: (status) => {
         if (isCurrent()) useConnection.getState().setRenderer(status);
       },
@@ -128,6 +140,12 @@ export function MapHost({ surface, scene, onViewportChange, label, interaction, 
   useEffect(() => {
     runtimeRef.current?.setWallDraft(wallDraft);
   }, [wallDraft]);
+
+  // A rule passed explicitly (a scene's own measurement setting, U-6) can
+  // change without rebuilding the runtime.
+  useEffect(() => {
+    if (measureRule) runtimeRef.current?.setMeasureRule(measureRule);
+  }, [measureRule]);
 
   // Live pings and rulers (beta-1), on both surfaces. Expired ones are pruned
   // a few times a second; a new snapshot clears them (the live wiring does).

@@ -56,3 +56,25 @@ export function measure(points: readonly Point[], gridSize: number, rule: Measur
   }
   return { squares, feet };
 }
+
+// A dragged token's reading (E-4): how far it has come by the scene's rule,
+// against the feet one move covers (PF2e Speed, Cosmere movement rate). Each
+// further multiple of Speed is another move (a second Stride, a Dash).
+export interface MoveReading {
+  feet: number;
+  speed: number | null; // null: the token has no linked actor with a Speed
+  moves: number; // moves needed; 0 when nothing moved or there is no Speed
+  over: boolean; // farther than one move
+  label: string;
+}
+
+export function moveReading(from: Point, to: Point, gridSize: number, rule: MeasureRule,
+                            speed: number | null | undefined): MoveReading {
+  const { feet } = measure([from, to], gridSize, rule);
+  const known = typeof speed === 'number' && speed > 0 ? speed : null;
+  const moves = known && feet > 0 ? Math.ceil(feet / known) : 0;
+  const label = known
+    ? `${feet} / ${known} ft${moves > 1 ? ` (${moves} moves)` : ''}`
+    : `${feet} ft`;
+  return { feet, speed: known, moves, over: known !== null && feet > known, label };
+}

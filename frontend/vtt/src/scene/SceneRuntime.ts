@@ -1,6 +1,6 @@
 import { Application, Container, Graphics, Sprite, Text, Texture, type WebGLRenderer } from 'pixi.js';
 import { layersFor, type LayerName, type Surface } from './layers';
-import { measure } from './measure';
+import { measure, moveReading, type MeasureRule, type MoveReading } from './measure';
 import type { LiveTransient } from '../state/transients';
 import { RenderScheduler } from './renderScheduler';
 import {
@@ -67,6 +67,8 @@ export interface SceneRuntimeOptions {
   // How long to wait for the browser to restore a lost WebGL context before
   // rebuilding the renderer on a fresh canvas.
   contextRestoreTimeoutMs?: number;
+  // E-4: how a dragged token's distance is counted (setMeasureRule changes it).
+  measureRule?: MeasureRule;
 }
 
 interface TokenView {
@@ -76,6 +78,8 @@ interface TokenView {
 
 const BG_COLOR = 0x0c0a07;
 const RULER_COLOR = 0xf2c94c;
+// The drag reading (E-4): within one move, a second move, three or more.
+const MOVE_COLORS = [RULER_COLOR, 0xf2994a, 0xeb5757] as const;
 const PING_COLOR = 0x7fd6ff;
 // Terrain kinds 1-4 (lava, water, poison, blood) as RGBA, about half opaque.
 const TERRAIN_COLORS: Record<number, [number, number, number, number]> = {
@@ -113,11 +117,15 @@ export class SceneRuntime {
     startX: number;
     startY: number;
     moved: boolean;
-    token: { id: string; dx: number; dy: number } | null;
+    token: { id: string; dx: number; dy: number; from: Point } | null;
     template: { id: string; start: Point } | null;
     measure: Point | null;
     hit: Hit | null;
   } | null = null;
+  // E-4: how distance is counted (the scene's rule; MapHost sets it from the
+  // campaign's system), and the reading drawn while a token is dragged.
+  private measureRule: MeasureRule = 'uniform';
+  private dragReading: MoveReading | null = null;
   // The template being dragged and its snapped offset, drawn shifted until the
   // projection (or an overlay) catches up.
   private templateShift: { id: string; dx: number; dy: number } | null = null;
@@ -151,6 +159,7 @@ export class SceneRuntime {
     private readonly options: SceneRuntimeOptions,
   ) {
     this.scheduler = new RenderScheduler(this.renderFrame);
+    if (options.measureRule) this.measureRule = options.measureRule;
   }
 
   get surface(): Surface {
@@ -343,6 +352,7 @@ export class SceneRuntime {
       live: { hp: number | null; maxHp: number | null; status: string | null; conditions: readonly string[]; active: boolean } | null;
     }>;
     transients: Array<{ kind: 'ping'; x: number; y: number } | { kind: 'ruler'; feet: number }>;
+    drag: { feet: number; speed: number | null; moves: number; over: boolean; label: string } | null;
   } {
     const scene = this.scene;
     return {
@@ -392,6 +402,7 @@ export class SceneRuntime {
         .filter((t) => t.expiresAt > Date.now())
         .map((t) => (t.kind === 'ping' ? { kind: 'ping' as const, x: t.x, y: t.y }
           : { kind: 'ruler' as const, feet: this.scene ? measure(t.points, this.scene.gridSize, t.rule).feet : 0 })),
+      drag: this.dragReading ? { ...this.dragReading } : null,
     };
   }
 
@@ -580,7 +591,7 @@ export class SceneRuntime {
     if (e.button === 1) e.preventDefault();
     const interaction = this.options.interaction;
     let hit: Hit | null = null;
-    let token: { id: string; dx: number; dy: number } | null = null;
+    let token: { id: string; dx: number; dy: number; from: Point } | null = null;
     let template: { id: string; start: Point } | null = null;
     let measureFrom: Point | null = null;
     if (interaction && e.button === 0 && this.scene && interaction.measuring?.() === true) {
@@ -590,7 +601,7 @@ export class SceneRuntime {
       hit = hitTest(this.scene, p, this.viewport.scale);
       if (hit?.kind === 'token' && interaction.canDragToken?.(hit.id) !== false) {
         const view = this.tokens.get(hit.id);
-        if (view) token = { id: hit.id, dx: p.x - view.root.x, dy: p.y - view.root.y };
+        if (view) token = { id: hit.id, dx: p.x - view.root.x, dy: p.y - view.root.y, from: { x: view.root.x, y: view.root.y } };
       } else if (hit?.kind === 'template' && interaction.canDragTemplate?.(hit.id) === true) {
         template = { id: hit.id, start: p };
       }
@@ -1030,7 +1041,46 @@ export class SceneRuntime {
       g.moveTo(a.x, a.y).lineTo(b.x, b.y).stroke({ width: 3 / s, color: WALL_COLOR, alpha: 0.6 });
       g.circle(a.x, a.y, 4 / s).fill({ color: WALL_COLOR, alpha: 0.9 });
     }
-    this.replaceLayerContent('overlay', g);
+    // E-4: a dragged token's path from where it started to the square it would
+    // land on, with its distance against the actor's Speed.
+    const root = new Container({ label: 'overlay' });
+    root.addChild(g);
+    this.dragReading = null;
+    const drag = this.drag;
+    if (drag?.token && drag.moved) {
+      const view = this.tokens.get(drag.token.id);
+      if (view) {
+        const to = snapTokenCentre({ x: view.root.x, y: view.root.y }, view.model.size, this.scene);
+        const from = drag.token.from;
+        const reading = moveReading(from, to, this.scene.gridSize, this.measureRule, view.model.speed);
+        this.dragReading = reading;
+        const color = MOVE_COLORS[Math.min(MOVE_COLORS.length, Math.max(1, reading.moves)) - 1] ?? RULER_COLOR;
+        g.moveTo(from.x, from.y).lineTo(to.x, to.y).stroke({ width: 4 / s, color: 0x0c0a07, alpha: 0.6 });
+        g.moveTo(from.x, from.y).lineTo(to.x, to.y).stroke({ width: 2 / s, color, alpha: 0.95 });
+        g.circle(from.x, from.y, 4 / s).fill({ color });
+        const label = new Text({
+          text: reading.label,
+          style: { fontFamily: uiFont(), fontSize: CANVAS_LABEL_FONT.sizePx + 1, fontWeight: '700', fill: color,
+                   stroke: { color: 0x0c0a07, width: 4 } },
+        });
+        label.anchor.set(0, 1);
+        label.scale.set(1 / s);
+        const r = tokenRadius(view.model.size, this.scene.gridSize);
+        label.position.set(to.x + r + 6 / s, to.y - r);
+        root.addChild(label);
+      }
+    }
+    this.replaceLayerContent('overlay', root);
+  }
+
+  // E-4: how the drag reading counts distance (PF2e alternates diagonals).
+  setMeasureRule(rule: MeasureRule): void {
+    if (this.measureRule === rule) return;
+    this.measureRule = rule;
+    if (this.drag?.token) {
+      this.drawOverlay();
+      this.scheduler.requestRender();
+    }
   }
 
   private clearTokens(): void {

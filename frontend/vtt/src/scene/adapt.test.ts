@@ -156,6 +156,13 @@ describe('live tracker state (parity P3)', () => {
     expect(hurt.tokens[0]?.live?.hp).toBe(3);
     expect(adaptEntities(map(scene, linked), cache).tokens[0]?.live).toBeUndefined(); // the actor left
   });
+
+  it('a GM token carries the Speed of its actor for the drag reading (E-4)', () => {
+    const linked = { ...token('a', 'v1'), actorId: 'cmb_skel', hidden: false };
+    expect(adaptEntities(map(scene, linked, actor('va1', { speed: 25 }))).tokens[0]?.speed).toBe(25);
+    expect(adaptEntities(map(scene, linked, actor('va1', { speed: null }))).tokens[0]?.speed).toBeUndefined();
+    expect(adaptEntities(map(scene, token('b', 'v1'))).tokens[0]?.speed).toBeUndefined();   // unlinked
+  });
 });
 
 describe('sameLive', () => {

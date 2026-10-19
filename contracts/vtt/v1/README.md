@@ -375,3 +375,19 @@ No schema change: the new creature reaches the GM page as a `GmActor`, like any 
   added).
 - PF2e monsters now read their size from the statblock (`system.traits.size`), so map and VTT
   tokens for Large and bigger creatures start at their real size.
+
+## Speed while dragging, batch speed-1 (E-4, Claude, 2026-10-19)
+
+- **`GmActor` gains `speed`** (an integer 1-1000, or null): the feet one move covers, per system.
+  PF2e: a PC's current Speed (bonuses, toggles and penalties applied), a monster's statblock
+  Speed. Cosmere: the movement rate (the walk override when the statblock sets one, else the rate
+  the Speed attribute gives, plus its bonus). Null when unknown (a hazard). Movement conditions
+  (immobilized, slowed) are not applied; the tracker shows those. Optional in the schema, always
+  sent.
+- The GM page draws a dragged token's path from where it started to the square it would land on,
+  labelled `feet / speed ft` and counted by the scene's rule (PF2e alternates diagonals 5/10), with
+  `(n moves)` past one move: gold within one move, orange for a second, red for three or more.
+  A token without a linked actor shows plain distance. Nothing is sent or shared; the TV never
+  sees it.
+- The same Speed now reaches `/map`'s drag measurement: it used to read `base_speed`, which a
+  monster does not have (no reading at all), and Cosmere's Speed attribute score as if it were feet.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { measure, ruleFor } from './measure';
+import { measure, moveReading, ruleFor } from './measure';
 
 const G = 64;
 const at = (col: number, row: number) => ({ x: col * G + G / 2, y: row * G + G / 2 });
@@ -32,5 +32,28 @@ describe('measure', () => {
   it('measures by the squares holding the points, not the exact pixels', () => {
     expect(measure([{ x: 1, y: 1 }, { x: 63, y: 63 }], G, 'uniform')).toEqual({ squares: 0, feet: 0 });
     expect(measure([{ x: 1, y: 1 }, { x: 65, y: 1 }], G, 'uniform')).toEqual({ squares: 1, feet: 5 });
+  });
+});
+
+describe('the drag reading (E-4)', () => {
+  it('measures a dragged token against its Speed, counting further moves', () => {
+    expect(moveReading(at(0, 0), at(5, 0), G, 'uniform', 25)).toEqual({
+      feet: 25, speed: 25, moves: 1, over: false, label: '25 / 25 ft' });
+    expect(moveReading(at(0, 0), at(7, 0), G, 'uniform', 25)).toEqual({
+      feet: 35, speed: 25, moves: 2, over: true, label: '35 / 25 ft (2 moves)' });
+    expect(moveReading(at(0, 0), at(16, 0), G, 'uniform', 25).moves).toBe(4);
+  });
+
+  it('uses the scene rule: PF2e diagonals alternate 5 and 10', () => {
+    expect(moveReading(at(0, 0), at(3, 3), G, 'alternating', 30).feet).toBe(20);
+    expect(moveReading(at(0, 0), at(3, 3), G, 'uniform', 30).feet).toBe(15);
+  });
+
+  it('shows plain distance without a Speed, and nothing for no movement', () => {
+    expect(moveReading(at(0, 0), at(2, 0), G, 'uniform', null)).toEqual({
+      feet: 10, speed: null, moves: 0, over: false, label: '10 ft' });
+    expect(moveReading(at(0, 0), at(0, 0), G, 'uniform', 30)).toEqual({
+      feet: 0, speed: 30, moves: 0, over: false, label: '0 / 30 ft' });
+    expect(moveReading(at(0, 0), at(2, 0), G, 'uniform', 0).speed).toBeNull();
   });
 });
