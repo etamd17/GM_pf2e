@@ -173,3 +173,41 @@ def test_the_snapshot_is_detached_from_the_tracker(vtt, monkeypatch):
     app_module._vtt_live_flush()
     sent = vtt.calls[0][1]
     assert sent == shared and sent is not shared and sent["c1"]["conditions"] is not shared["c1"]["conditions"]
+
+
+def test_the_flush_adds_placement_hints_from_the_map_candidates(vtt, monkeypatch):
+    monkeypatch.setattr(app_module, "_loaded_campaign_id", lambda: "camp_a")
+    monkeypatch.setattr(app_module, "_scene_live_indexes",
+                        lambda cid: ({"c1": {"name": "Skeleton"}, "c2": {"name": "Kyra"}},
+                                     {"p1": {"name": "Kyra"}, "p2": {"name": "Valeros"}}))
+    monkeypatch.setattr(app_module, "_scene_token_candidates", lambda cid: [
+        {"combatant_id": "c1", "character_id": None, "size": 2, "sheet_url": "/tracker"},
+        {"combatant_id": "c2", "character_id": "p1", "size": 1, "sheet_url": "/player/sheet/Kyra"},
+        {"combatant_id": None, "character_id": "p2", "size": 1, "sheet_url": "/player/sheet/Valeros"},
+    ])
+    app_module._vtt_live_flush()
+    _cid, combatants, characters = vtt.calls[0]
+    assert combatants["c1"]["vtt_hints"] == {"size": 2, "sheet_url": "/tracker"}
+    assert characters["p1"]["vtt_hints"]["sheet_url"] == "/player/sheet/Kyra"     # from its combatant
+    assert characters["p2"]["vtt_hints"]["sheet_url"] == "/player/sheet/Valeros"
+
+
+def test_the_shared_live_indexes_are_not_given_vtt_keys(vtt, monkeypatch):
+    shared = ({"c1": {"name": "Skeleton"}}, {})
+    monkeypatch.setattr(app_module, "_loaded_campaign_id", lambda: "camp_a")
+    monkeypatch.setattr(app_module, "_scene_live_indexes", lambda cid: shared)
+    monkeypatch.setattr(app_module, "_scene_token_candidates", lambda cid: [])
+    app_module._vtt_live_flush()
+    assert "vtt_hints" not in shared[0]["c1"]                                  # /map's data untouched
+
+
+def test_a_hint_failure_never_stops_the_live_mirror(vtt, monkeypatch):
+    monkeypatch.setattr(app_module, "_loaded_campaign_id", lambda: "camp_a")
+    monkeypatch.setattr(app_module, "_scene_live_indexes", lambda cid: ({"c1": {"name": "Skeleton"}}, {}))
+
+    def broken(cid):
+        raise OSError("party folder unreadable")
+
+    monkeypatch.setattr(app_module, "_scene_token_candidates", broken)
+    app_module._vtt_live_flush()
+    assert vtt.calls and "vtt_hints" not in vtt.calls[0][1]["c1"]                # mirrored, without hints

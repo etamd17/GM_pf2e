@@ -9246,6 +9246,27 @@ _VTT_LIVE_TIMER = None
 _VTT_LIVE_LAST_CID = None
 
 
+def _vtt_actor_hints(cid):
+    """(kind, id) -> {'size', 'sheet_url'} for the VTT actor mirror (U-4), from
+    /map's token candidates: a combatant's size from its creature size, a PC's
+    sheet link, /tracker for a monster. A character in the encounter takes its
+    combatant's hint. Best effort: the hints are optional, so a failure here
+    leaves them out rather than stopping live HP reaching the TV."""
+    hints = {}
+    try:
+        candidates = _scene_token_candidates(cid)
+    except Exception:
+        app.logger.exception('VTT actor hints unavailable')
+        return {}
+    for candidate in candidates:
+        hint = {'size': candidate.get('size') or 1, 'sheet_url': candidate.get('sheet_url')}
+        if candidate.get('combatant_id'):
+            hints[('cmb', candidate['combatant_id'])] = hint
+        if candidate.get('character_id'):
+            hints.setdefault(('chr', candidate['character_id']), hint)
+    return hints
+
+
 def _vtt_live_schedule():
     global _VTT_LIVE_TIMER
     if globals().get('VTT_SERVICE') is None:
@@ -9280,6 +9301,15 @@ def _vtt_live_flush():
                 cid = _loaded_campaign_id()
                 combatants, characters = _scene_live_indexes(cid) if cid else ({}, {})
                 combatants, characters = copy.deepcopy(combatants), copy.deepcopy(characters)
+                # Placement hints for the VTT's Creatures list (U-4): token size and
+                # the GM's sheet link, from the same candidates /map offers. Kept
+                # under VTT-only keys on these detached copies, so the shared live
+                # indexes (and /map's projections) are unchanged.
+                hints = _vtt_actor_hints(cid) if cid else {}
+                for kind, index in (('cmb', combatants), ('chr', characters)):
+                    for key, entry in index.items():
+                        if hints.get((kind, key)):
+                            entry['vtt_hints'] = hints[(kind, key)]
             # 2. The database write and delivery after releasing it (tracker
             #    requests never wait on PostgreSQL), but still inside the flush
             #    lock, so an older snapshot can never commit after a newer one.

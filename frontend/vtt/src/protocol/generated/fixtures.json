@@ -5952,5 +5952,209 @@
         ]
       }
     }
+  },
+  {
+    "id": "creatures1-actor-with-placement",
+    "schema": "gm",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "patch",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 3,
+      "upserted": [
+        {
+          "kind": "actor",
+          "id": "cmb_6f1c2d3e-0000-4000-8000-000000000001",
+          "version": "ver_ACTORACTORACTOR",
+          "name": "Skeleton Guard",
+          "pc": false,
+          "hp": 7,
+          "maxHp": 20,
+          "conditions": [
+            {
+              "name": "off-guard",
+              "value": null
+            }
+          ],
+          "active": false,
+          "hidden": false,
+          "status": "Wounded",
+          "size": 2,
+          "sheetUrl": "/player/sheet/Valeros"
+        }
+      ],
+      "removed": []
+    }
+  },
+  {
+    "id": "creatures1-actor-null-sheet",
+    "schema": "gm",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "patch",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 3,
+      "upserted": [
+        {
+          "kind": "actor",
+          "id": "cmb_6f1c2d3e-0000-4000-8000-000000000001",
+          "version": "ver_ACTORACTORACTOR",
+          "name": "Skeleton Guard",
+          "pc": false,
+          "hp": 7,
+          "maxHp": 20,
+          "conditions": [
+            {
+              "name": "off-guard",
+              "value": null
+            }
+          ],
+          "active": false,
+          "hidden": false,
+          "status": "Wounded",
+          "size": 1,
+          "sheetUrl": null
+        }
+      ],
+      "removed": []
+    }
+  },
+  {
+    "id": "creatures1-actor-protocol-relative-sheet",
+    "schema": "gm",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "patch",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 3,
+      "upserted": [
+        {
+          "kind": "actor",
+          "id": "cmb_6f1c2d3e-0000-4000-8000-000000000001",
+          "version": "ver_ACTORACTORACTOR",
+          "name": "Skeleton Guard",
+          "pc": false,
+          "hp": 7,
+          "maxHp": 20,
+          "conditions": [
+            {
+              "name": "off-guard",
+              "value": null
+            }
+          ],
+          "active": false,
+          "hidden": false,
+          "status": "Wounded",
+          "size": 1,
+          "sheetUrl": "//evil.example/x"
+        }
+      ],
+      "removed": []
+    }
+  },
+  {
+    "id": "creatures1-actor-scheme-sheet",
+    "schema": "gm",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "patch",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 3,
+      "upserted": [
+        {
+          "kind": "actor",
+          "id": "cmb_6f1c2d3e-0000-4000-8000-000000000001",
+          "version": "ver_ACTORACTORACTOR",
+          "name": "Skeleton Guard",
+          "pc": false,
+          "hp": 7,
+          "maxHp": 20,
+          "conditions": [
+            {
+              "name": "off-guard",
+              "value": null
+            }
+          ],
+          "active": false,
+          "hidden": false,
+          "status": "Wounded",
+          "size": 1,
+          "sheetUrl": "javascript:alert(1)"
+        }
+      ],
+      "removed": []
+    }
+  },
+  {
+    "id": "creatures1-actor-backslash-sheet",
+    "schema": "gm",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "patch",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 3,
+      "upserted": [
+        {
+          "kind": "actor",
+          "id": "cmb_6f1c2d3e-0000-4000-8000-000000000001",
+          "version": "ver_ACTORACTORACTOR",
+          "name": "Skeleton Guard",
+          "pc": false,
+          "hp": 7,
+          "maxHp": 20,
+          "conditions": [
+            {
+              "name": "off-guard",
+              "value": null
+            }
+          ],
+          "active": false,
+          "hidden": false,
+          "status": "Wounded",
+          "size": 1,
+          "sheetUrl": "/\\evil"
+        }
+      ],
+      "removed": []
+    }
+  },
+  {
+    "id": "creatures1-actor-size-too-big",
+    "schema": "gm",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "patch",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 3,
+      "upserted": [
+        {
+          "kind": "actor",
+          "id": "cmb_6f1c2d3e-0000-4000-8000-000000000001",
+          "version": "ver_ACTORACTORACTOR",
+          "name": "Skeleton Guard",
+          "pc": false,
+          "hp": 7,
+          "maxHp": 20,
+          "conditions": [
+            {
+              "name": "off-guard",
+              "value": null
+            }
+          ],
+          "active": false,
+          "hidden": false,
+          "status": "Wounded",
+          "size": 11,
+          "sheetUrl": null
+        }
+      ],
+      "removed": []
+    }
   }
 ]

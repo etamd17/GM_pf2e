@@ -2,7 +2,7 @@
 import { ucs2length as func60 } from './ajv-runtime.mjs';
 "use strict";
 export const validateGm = validate10;
-const schema11 = {"$schema":"http://json-schema.org/draft-07/schema#","$id":"https://vtt.invalid/v1/gm.schema.json","title":"GmFrame","oneOf":[{"$ref":"#/definitions/Snapshot"},{"$ref":"#/definitions/Patch"}],"definitions":{"EntityRef":{"title":"GmEntityRef","type":"object","additionalProperties":false,"required":["kind","id"],"properties":{"kind":{"type":"string","enum":["scene","token","light","wall","fog","template","terrain","actor"]},"id":{"$ref":"common.schema.json#/definitions/Id"}}},"GmScene":{"title":"GmScene","type":"object","additionalProperties":false,"required":["kind","id","version","name","width","height","gridSize","showGrid","backgroundAssetId","published"],"properties":{"kind":{"const":"scene"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"name":{"type":"string","maxLength":120,"pattern":"^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])"},"width":{"type":"number","minimum":1,"maximum":16384},"height":{"type":"number","minimum":1,"maximum":16384},"gridSize":{"type":"number","minimum":8,"maximum":1024},"showGrid":{"type":"boolean"},"backgroundAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"published":{"type":"boolean"}}},"GmToken":{"title":"GmToken","type":"object","additionalProperties":false,"required":["kind","id","version","x","y","size","label","color","artAssetId","actorId","hidden","locked","controllerIds"],"properties":{"kind":{"const":"token"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"x":{"$ref":"common.schema.json#/definitions/Coord","description":"Token centre, in scene pixels."},"y":{"$ref":"common.schema.json#/definitions/Coord","description":"Token centre, in scene pixels."},"size":{"type":"number","minimum":0.25,"maximum":10},"label":{"$ref":"common.schema.json#/definitions/Label"},"color":{"$ref":"common.schema.json#/definitions/Color"},"artAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"actorId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"hidden":{"type":"boolean"},"locked":{"type":"boolean"},"controllerIds":{"type":"array","maxItems":64,"items":{"$ref":"common.schema.json#/definitions/Id"}}}},"GmLight":{"title":"GmLight","type":"object","additionalProperties":false,"required":["kind","id","version","x","y","radius","color","hidden"],"properties":{"kind":{"const":"light"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"x":{"$ref":"common.schema.json#/definitions/Coord"},"y":{"$ref":"common.schema.json#/definitions/Coord"},"radius":{"type":"number","minimum":0,"maximum":16384},"color":{"$ref":"common.schema.json#/definitions/Color"},"hidden":{"type":"boolean"}}},"GmWall":{"title":"GmWall","type":"object","additionalProperties":false,"required":["kind","id","version","x1","y1","x2","y2","doorState"],"properties":{"kind":{"const":"wall"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"x1":{"$ref":"common.schema.json#/definitions/Coord"},"y1":{"$ref":"common.schema.json#/definitions/Coord"},"x2":{"$ref":"common.schema.json#/definitions/Coord"},"y2":{"$ref":"common.schema.json#/definitions/Coord"},"doorState":{"type":"string","enum":["none","open","closed","locked","secret"]}},"description":"A wall segment; doorState other than \"none\" makes it a door. Zero-length segments are rejected by the semantic boundary."},"Entity":{"title":"GmEntity","oneOf":[{"$ref":"#/definitions/GmScene"},{"$ref":"#/definitions/GmToken"},{"$ref":"#/definitions/GmLight"},{"$ref":"#/definitions/GmWall"},{"$ref":"common.schema.json#/definitions/FogState"},{"$ref":"#/definitions/GmTemplate"},{"$ref":"common.schema.json#/definitions/TerrainState"},{"$ref":"#/definitions/GmActor"}]},"Snapshot":{"title":"GmSnapshot","type":"object","additionalProperties":false,"required":["schemaVersion","frame","audience","subscriptionId","seq","campaignId","sceneId","principal","capabilities","entities"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"frame":{"const":"snapshot"},"audience":{"const":"gm"},"subscriptionId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"seq":{"type":"integer","minimum":0,"maximum":0,"const":0},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"principal":{"title":"GmPrincipal","type":"object","additionalProperties":false,"required":["kind","id","campaignRole"],"properties":{"kind":{"const":"member"},"id":{"$ref":"common.schema.json#/definitions/Id"},"campaignRole":{"const":"gm"}}},"capabilities":{"type":"array","maxItems":5,"items":{"$ref":"common.schema.json#/definitions/Capability"}},"entities":{"type":"array","maxItems":4096,"items":{"$ref":"#/definitions/Entity"}}}},"Patch":{"title":"GmPatch","type":"object","additionalProperties":false,"required":["schemaVersion","frame","subscriptionId","seq","upserted","removed"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"frame":{"const":"patch"},"subscriptionId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"seq":{"$ref":"common.schema.json#/definitions/Seq"},"upserted":{"type":"array","maxItems":4096,"items":{"$ref":"#/definitions/Entity"}},"removed":{"type":"array","maxItems":4096,"items":{"$ref":"#/definitions/EntityRef"}},"originCommandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"}}},"GmTemplate":{"title":"GmTemplate","type":"object","additionalProperties":false,"required":["kind","id","version","shape","x","y","aimX","aimY","size","color","hidden"],"properties":{"kind":{"const":"template"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"shape":{"type":"string","enum":["burst","emanation","cone","line"]},"x":{"$ref":"common.schema.json#/definitions/Coord"},"y":{"$ref":"common.schema.json#/definitions/Coord"},"aimX":{"$ref":"common.schema.json#/definitions/Coord"},"aimY":{"$ref":"common.schema.json#/definitions/Coord"},"size":{"type":"integer","minimum":1,"maximum":60},"color":{"$ref":"common.schema.json#/definitions/Color"},"hidden":{"type":"boolean"}}},"GmActor":{"title":"GmActor","description":"A tracker combatant (cmb_...) or party character (chr_...) a token can link to (parity-3). Campaign-wide: every GM snapshot carries all of them. Derived from the tracker; read only.","type":"object","additionalProperties":false,"required":["kind","id","version","name","pc","hp","maxHp","conditions","active","hidden","status"],"properties":{"kind":{"const":"actor"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"name":{"type":"string","maxLength":64,"pattern":"^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])"},"pc":{"type":"boolean"},"hp":{"type":"integer","minimum":-9999,"maximum":99999},"maxHp":{"type":"integer","minimum":0,"maximum":99999},"conditions":{"$ref":"common.schema.json#/definitions/LiveConditions"},"active":{"type":"boolean"},"hidden":{"type":"boolean"},"status":{"type":"string","enum":["","Wounded","Dead"]}}}}};
+const schema11 = {"$schema":"http://json-schema.org/draft-07/schema#","$id":"https://vtt.invalid/v1/gm.schema.json","title":"GmFrame","oneOf":[{"$ref":"#/definitions/Snapshot"},{"$ref":"#/definitions/Patch"}],"definitions":{"EntityRef":{"title":"GmEntityRef","type":"object","additionalProperties":false,"required":["kind","id"],"properties":{"kind":{"type":"string","enum":["scene","token","light","wall","fog","template","terrain","actor"]},"id":{"$ref":"common.schema.json#/definitions/Id"}}},"GmScene":{"title":"GmScene","type":"object","additionalProperties":false,"required":["kind","id","version","name","width","height","gridSize","showGrid","backgroundAssetId","published"],"properties":{"kind":{"const":"scene"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"name":{"type":"string","maxLength":120,"pattern":"^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])"},"width":{"type":"number","minimum":1,"maximum":16384},"height":{"type":"number","minimum":1,"maximum":16384},"gridSize":{"type":"number","minimum":8,"maximum":1024},"showGrid":{"type":"boolean"},"backgroundAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"published":{"type":"boolean"}}},"GmToken":{"title":"GmToken","type":"object","additionalProperties":false,"required":["kind","id","version","x","y","size","label","color","artAssetId","actorId","hidden","locked","controllerIds"],"properties":{"kind":{"const":"token"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"x":{"$ref":"common.schema.json#/definitions/Coord","description":"Token centre, in scene pixels."},"y":{"$ref":"common.schema.json#/definitions/Coord","description":"Token centre, in scene pixels."},"size":{"type":"number","minimum":0.25,"maximum":10},"label":{"$ref":"common.schema.json#/definitions/Label"},"color":{"$ref":"common.schema.json#/definitions/Color"},"artAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"actorId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"hidden":{"type":"boolean"},"locked":{"type":"boolean"},"controllerIds":{"type":"array","maxItems":64,"items":{"$ref":"common.schema.json#/definitions/Id"}}}},"GmLight":{"title":"GmLight","type":"object","additionalProperties":false,"required":["kind","id","version","x","y","radius","color","hidden"],"properties":{"kind":{"const":"light"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"x":{"$ref":"common.schema.json#/definitions/Coord"},"y":{"$ref":"common.schema.json#/definitions/Coord"},"radius":{"type":"number","minimum":0,"maximum":16384},"color":{"$ref":"common.schema.json#/definitions/Color"},"hidden":{"type":"boolean"}}},"GmWall":{"title":"GmWall","type":"object","additionalProperties":false,"required":["kind","id","version","x1","y1","x2","y2","doorState"],"properties":{"kind":{"const":"wall"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"x1":{"$ref":"common.schema.json#/definitions/Coord"},"y1":{"$ref":"common.schema.json#/definitions/Coord"},"x2":{"$ref":"common.schema.json#/definitions/Coord"},"y2":{"$ref":"common.schema.json#/definitions/Coord"},"doorState":{"type":"string","enum":["none","open","closed","locked","secret"]}},"description":"A wall segment; doorState other than \"none\" makes it a door. Zero-length segments are rejected by the semantic boundary."},"Entity":{"title":"GmEntity","oneOf":[{"$ref":"#/definitions/GmScene"},{"$ref":"#/definitions/GmToken"},{"$ref":"#/definitions/GmLight"},{"$ref":"#/definitions/GmWall"},{"$ref":"common.schema.json#/definitions/FogState"},{"$ref":"#/definitions/GmTemplate"},{"$ref":"common.schema.json#/definitions/TerrainState"},{"$ref":"#/definitions/GmActor"}]},"Snapshot":{"title":"GmSnapshot","type":"object","additionalProperties":false,"required":["schemaVersion","frame","audience","subscriptionId","seq","campaignId","sceneId","principal","capabilities","entities"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"frame":{"const":"snapshot"},"audience":{"const":"gm"},"subscriptionId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"seq":{"type":"integer","minimum":0,"maximum":0,"const":0},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"principal":{"title":"GmPrincipal","type":"object","additionalProperties":false,"required":["kind","id","campaignRole"],"properties":{"kind":{"const":"member"},"id":{"$ref":"common.schema.json#/definitions/Id"},"campaignRole":{"const":"gm"}}},"capabilities":{"type":"array","maxItems":5,"items":{"$ref":"common.schema.json#/definitions/Capability"}},"entities":{"type":"array","maxItems":4096,"items":{"$ref":"#/definitions/Entity"}}}},"Patch":{"title":"GmPatch","type":"object","additionalProperties":false,"required":["schemaVersion","frame","subscriptionId","seq","upserted","removed"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"frame":{"const":"patch"},"subscriptionId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"seq":{"$ref":"common.schema.json#/definitions/Seq"},"upserted":{"type":"array","maxItems":4096,"items":{"$ref":"#/definitions/Entity"}},"removed":{"type":"array","maxItems":4096,"items":{"$ref":"#/definitions/EntityRef"}},"originCommandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"}}},"GmTemplate":{"title":"GmTemplate","type":"object","additionalProperties":false,"required":["kind","id","version","shape","x","y","aimX","aimY","size","color","hidden"],"properties":{"kind":{"const":"template"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"shape":{"type":"string","enum":["burst","emanation","cone","line"]},"x":{"$ref":"common.schema.json#/definitions/Coord"},"y":{"$ref":"common.schema.json#/definitions/Coord"},"aimX":{"$ref":"common.schema.json#/definitions/Coord"},"aimY":{"$ref":"common.schema.json#/definitions/Coord"},"size":{"type":"integer","minimum":1,"maximum":60},"color":{"$ref":"common.schema.json#/definitions/Color"},"hidden":{"type":"boolean"}}},"GmActor":{"title":"GmActor","description":"A tracker combatant (cmb_...) or party character (chr_...) a token can link to (parity-3). Campaign-wide: every GM snapshot carries all of them. Derived from the tracker; read only.","type":"object","additionalProperties":false,"required":["kind","id","version","name","pc","hp","maxHp","conditions","active","hidden","status"],"properties":{"kind":{"const":"actor"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"name":{"type":"string","maxLength":64,"pattern":"^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])"},"pc":{"type":"boolean"},"hp":{"type":"integer","minimum":-9999,"maximum":99999},"maxHp":{"type":"integer","minimum":0,"maximum":99999},"conditions":{"$ref":"common.schema.json#/definitions/LiveConditions"},"active":{"type":"boolean"},"hidden":{"type":"boolean"},"status":{"type":"string","enum":["","Wounded","Dead"]},"size":{"type":"number","minimum":0.25,"maximum":10,"description":"Token size in squares for placing this creature (U-4)."},"sheetUrl":{"anyOf":[{"type":"string","maxLength":256,"pattern":"^/(?![/\\\\])[A-Za-z0-9._~%!$&'()*+,;=:@/?#-]*(?![\\s\\S])"},{"type":"null"}],"description":"A same-origin path to this creature's sheet the GM may open, resolved by the server (U-4); null when there is none."}}}}};
 const schema12 = {"title":"GmSnapshot","type":"object","additionalProperties":false,"required":["schemaVersion","frame","audience","subscriptionId","seq","campaignId","sceneId","principal","capabilities","entities"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"frame":{"const":"snapshot"},"audience":{"const":"gm"},"subscriptionId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"seq":{"type":"integer","minimum":0,"maximum":0,"const":0},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"principal":{"title":"GmPrincipal","type":"object","additionalProperties":false,"required":["kind","id","campaignRole"],"properties":{"kind":{"const":"member"},"id":{"$ref":"common.schema.json#/definitions/Id"},"campaignRole":{"const":"gm"}}},"capabilities":{"type":"array","maxItems":5,"items":{"$ref":"common.schema.json#/definitions/Capability"}},"entities":{"type":"array","maxItems":4096,"items":{"$ref":"#/definitions/Entity"}}}};
 const schema14 = {"type":"integer","minimum":1,"maximum":1,"const":1};
 const schema15 = {"title":"OpaqueToken","type":"string","minLength":16,"maxLength":128,"pattern":"^[A-Za-z0-9_-]+(?![\\s\\S])"};
@@ -2098,7 +2098,8 @@ validate26.errors = vErrors;
 return errors === 0;
 }
 
-const schema60 = {"title":"GmActor","description":"A tracker combatant (cmb_...) or party character (chr_...) a token can link to (parity-3). Campaign-wide: every GM snapshot carries all of them. Derived from the tracker; read only.","type":"object","additionalProperties":false,"required":["kind","id","version","name","pc","hp","maxHp","conditions","active","hidden","status"],"properties":{"kind":{"const":"actor"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"name":{"type":"string","maxLength":64,"pattern":"^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])"},"pc":{"type":"boolean"},"hp":{"type":"integer","minimum":-9999,"maximum":99999},"maxHp":{"type":"integer","minimum":0,"maximum":99999},"conditions":{"$ref":"common.schema.json#/definitions/LiveConditions"},"active":{"type":"boolean"},"hidden":{"type":"boolean"},"status":{"type":"string","enum":["","Wounded","Dead"]}}};
+const schema60 = {"title":"GmActor","description":"A tracker combatant (cmb_...) or party character (chr_...) a token can link to (parity-3). Campaign-wide: every GM snapshot carries all of them. Derived from the tracker; read only.","type":"object","additionalProperties":false,"required":["kind","id","version","name","pc","hp","maxHp","conditions","active","hidden","status"],"properties":{"kind":{"const":"actor"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"name":{"type":"string","maxLength":64,"pattern":"^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])"},"pc":{"type":"boolean"},"hp":{"type":"integer","minimum":-9999,"maximum":99999},"maxHp":{"type":"integer","minimum":0,"maximum":99999},"conditions":{"$ref":"common.schema.json#/definitions/LiveConditions"},"active":{"type":"boolean"},"hidden":{"type":"boolean"},"status":{"type":"string","enum":["","Wounded","Dead"]},"size":{"type":"number","minimum":0.25,"maximum":10,"description":"Token size in squares for placing this creature (U-4)."},"sheetUrl":{"anyOf":[{"type":"string","maxLength":256,"pattern":"^/(?![/\\\\])[A-Za-z0-9._~%!$&'()*+,;=:@/?#-]*(?![\\s\\S])"},{"type":"null"}],"description":"A same-origin path to this creature's sheet the GM may open, resolved by the server (U-4); null when there is none."}}};
+const pattern28 = new RegExp("^/(?![/\\\\])[A-Za-z0-9._~%!$&'()*+,;=:@/?#-]*(?![\\s\\S])", "u");
 const schema63 = {"type":"array","maxItems":24,"items":{"$ref":"common.schema.json#/definitions/LiveCondition"}};
 const schema64 = {"title":"LiveCondition","description":"A tracker condition (parity-3): its vocabulary name (ASCII letters, digits, space, underscore, apostrophe, hyphen), and its value when it has one (Frightened 2); null for a plain flag.","type":"object","additionalProperties":false,"required":["name","value"],"properties":{"name":{"type":"string","maxLength":40,"pattern":"^[A-Za-z0-9][A-Za-z0-9 _'-]{0,39}(?![\\s\\S])"},"value":{"anyOf":[{"type":"integer","minimum":0,"maximum":99},{"type":"null"}]}}};
 const pattern27 = new RegExp("^[A-Za-z0-9][A-Za-z0-9 _'-]{0,39}(?![\\s\\S])", "u");
@@ -2520,6 +2521,123 @@ var valid0 = _errs22 === errors;
 }
 else {
 var valid0 = true;
+}
+if(valid0){
+if(data.size !== undefined && func0.call(data, "size")){
+let data11 = data.size;
+const _errs24 = errors;
+if(errors === _errs24){
+if((typeof data11 == "number") && (isFinite(data11))){
+if(data11 > 10 || isNaN(data11)){
+validate28.errors = [{instancePath:instancePath+"/size",schemaPath:"#/properties/size/maximum",keyword:"maximum",params:{comparison: "<=", limit: 10},message:"must be <= 10"}];
+return false;
+}
+else {
+if(data11 < 0.25 || isNaN(data11)){
+validate28.errors = [{instancePath:instancePath+"/size",schemaPath:"#/properties/size/minimum",keyword:"minimum",params:{comparison: ">=", limit: 0.25},message:"must be >= 0.25"}];
+return false;
+}
+}
+}
+else {
+validate28.errors = [{instancePath:instancePath+"/size",schemaPath:"#/properties/size/type",keyword:"type",params:{type: "number"},message:"must be number"}];
+return false;
+}
+}
+var valid0 = _errs24 === errors;
+}
+else {
+var valid0 = true;
+}
+if(valid0){
+if(data.sheetUrl !== undefined && func0.call(data, "sheetUrl")){
+let data12 = data.sheetUrl;
+const _errs26 = errors;
+const _errs27 = errors;
+let valid3 = false;
+const _errs28 = errors;
+if(errors === _errs28){
+if(typeof data12 === "string"){
+if(func60(data12) > 256){
+const err0 = {instancePath:instancePath+"/sheetUrl",schemaPath:"#/properties/sheetUrl/anyOf/0/maxLength",keyword:"maxLength",params:{limit: 256},message:"must NOT have more than 256 characters"};
+if(vErrors === null){
+vErrors = [err0];
+}
+else {
+vErrors.push(err0);
+}
+errors++;
+}
+else {
+if(!pattern28.test(data12)){
+const err1 = {instancePath:instancePath+"/sheetUrl",schemaPath:"#/properties/sheetUrl/anyOf/0/pattern",keyword:"pattern",params:{pattern: "^/(?![/\\\\])[A-Za-z0-9._~%!$&'()*+,;=:@/?#-]*(?![\\s\\S])"},message:"must match pattern \""+"^/(?![/\\\\])[A-Za-z0-9._~%!$&'()*+,;=:@/?#-]*(?![\\s\\S])"+"\""};
+if(vErrors === null){
+vErrors = [err1];
+}
+else {
+vErrors.push(err1);
+}
+errors++;
+}
+}
+}
+else {
+const err2 = {instancePath:instancePath+"/sheetUrl",schemaPath:"#/properties/sheetUrl/anyOf/0/type",keyword:"type",params:{type: "string"},message:"must be string"};
+if(vErrors === null){
+vErrors = [err2];
+}
+else {
+vErrors.push(err2);
+}
+errors++;
+}
+}
+var _valid0 = _errs28 === errors;
+valid3 = valid3 || _valid0;
+if(!valid3){
+const _errs30 = errors;
+if(data12 !== null){
+const err3 = {instancePath:instancePath+"/sheetUrl",schemaPath:"#/properties/sheetUrl/anyOf/1/type",keyword:"type",params:{type: "null"},message:"must be null"};
+if(vErrors === null){
+vErrors = [err3];
+}
+else {
+vErrors.push(err3);
+}
+errors++;
+}
+var _valid0 = _errs30 === errors;
+valid3 = valid3 || _valid0;
+}
+if(!valid3){
+const err4 = {instancePath:instancePath+"/sheetUrl",schemaPath:"#/properties/sheetUrl/anyOf",keyword:"anyOf",params:{},message:"must match a schema in anyOf"};
+if(vErrors === null){
+vErrors = [err4];
+}
+else {
+vErrors.push(err4);
+}
+errors++;
+validate28.errors = vErrors;
+return false;
+}
+else {
+errors = _errs27;
+if(vErrors !== null){
+if(_errs27){
+vErrors.length = _errs27;
+}
+else {
+vErrors = null;
+}
+}
+}
+var valid0 = _errs26 === errors;
+}
+else {
+var valid0 = true;
+}
+}
 }
 }
 }

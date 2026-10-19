@@ -278,3 +278,25 @@ def test_art_shared_with_a_visible_token_stays_readable(stack):
     assert ack["outcome"] == "applied"
     mirror(stack, {"skel": {**SKELETON, "visible_to_players": False}})
     assert fetch(stack, "camp_a", asset, add_grant(stack.db), member=False).status_code == 200
+
+
+# --- U-4: placement hints for the Creatures list ------------------------------------------------
+
+def test_records_carry_a_checked_size_and_sheet_link():
+    actors = live.build(
+        {"skel": {**entry("Skeleton", 7, 20), "vtt_hints": {"size": 2, "sheet_url": "/tracker"}},
+         "evil": {**entry("Imp", 1, 1), "vtt_hints": {"size": 99, "sheet_url": "//evil.example/x"}},
+         "bare": entry("Rat", 1, 1)},
+        {"valeros": {**VALEROS, "vtt_hints": {"size": 1, "sheet_url": "/player/sheet/Valeros"}}})
+    assert (actors["cmb_skel"]["size"], actors["cmb_skel"]["sheetUrl"]) == (2.0, "/tracker")
+    assert (actors["cmb_evil"]["size"], actors["cmb_evil"]["sheetUrl"]) == (10.0, None)   # clamped; refused
+    assert (actors["cmb_bare"]["size"], actors["cmb_bare"]["sheetUrl"]) == (1.0, None)    # defaults
+    assert actors["chr_valeros"]["sheetUrl"] == "/player/sheet/Valeros"
+
+
+def test_the_gm_actor_entity_carries_size_and_sheet_link(stack):
+    gm, _ = setup(stack)
+    held = Gm(gm)
+    mirror(stack, {"skel": {**SKELETON, "vtt_hints": {"size": 2, "sheet_url": "/tracker"}}}, {})
+    actor = held.now()[("actor", "cmb_skel")]
+    assert (actor["size"], actor["sheetUrl"]) == (2.0, "/tracker")

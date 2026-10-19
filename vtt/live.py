@@ -34,6 +34,9 @@ CONDITION_NAME_MAX = 40
 CONDITION_VALUE_MAX = 99
 STATUSES = ("", "Wounded", "Dead")
 ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+# A sheet link the GM page may open (U-4): a same-origin path only, never a
+# scheme, a protocol-relative URL or a backslash.
+SHEET_URL = re.compile(r"/(?![/\\])[A-Za-z0-9._~%!$&'()*+,;=:@/?#-]{0,255}")
 # Condition names come from the tracker's own vocabulary ('frightened',
 # 'off_guard'); the contract keeps them ASCII so a full actor set stays small.
 CONDITION_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _'-]{0,39}$")
@@ -92,7 +95,21 @@ def record(entry: dict[str, Any], *, active: bool) -> dict[str, Any]:
         "active": bool(active),
         "hidden": entry.get("visible_to_players") is False,
         "status": status if status in STATUSES else "",
+        **_placement(entry.get("vtt_hints")),
     }
+
+
+def _placement(hints: Any) -> dict[str, Any]:
+    """Token size in squares (0.25-10, default 1) and a checked sheet link."""
+    hints = hints if isinstance(hints, dict) else {}
+    try:
+        size = float(hints.get("size") or 1)
+    except (TypeError, ValueError):
+        size = 1.0
+    size = 1.0 if size != size else max(0.25, min(10.0, size))
+    url = hints.get("sheet_url")
+    url = url if isinstance(url, str) and SHEET_URL.fullmatch(url) else None
+    return {"size": size, "sheetUrl": url}
 
 
 def build(combatants: dict[str, dict[str, Any]], characters: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:

@@ -169,6 +169,14 @@ export interface GmActor {
   active: boolean;
   hidden: boolean;
   status: "" | "Wounded" | "Dead";
+  /**
+   * Token size in squares for placing this creature (U-4).
+   */
+  size?: number;
+  /**
+   * A same-origin path to this creature's sheet the GM may open, resolved by the server (U-4); null when there is none.
+   */
+  sheetUrl?: string | null;
 }
 /**
  * A tracker condition (parity-3): its vocabulary name (ASCII letters, digits, space, underscore, apostrophe, hyphen), and its value when it has one (Frightened 2); null for a plain flag.

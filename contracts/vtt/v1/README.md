@@ -290,3 +290,18 @@ Digest `5dbce750...`.
     snapshot.
 - **`table.show`** (commands-1) already publishes and points the table in one transaction, so the
   Editing and On TV split (U-3) needs no new command.
+
+## Creature placement hints, batch creatures-1 (U-4, Claude, 2026-10-19)
+
+Digest `dd14bd57...`.
+
+- **`GmActor` gains `size`** (number, 0.25-10): the token size in squares for placing the creature,
+  from its creature size. It falls back to 1.
+- **`GmActor` gains `sheetUrl`** (a string or null): **a same-origin path only**. No scheme, no
+  `//`, no backslash; at most 256 characters.
+  - It is resolved by the server: a PC's sheet, or `/tracker` for a monster.
+  - The page opens it as the GM's link to that creature's sheet.
+  - It is GM-only, like the rest of `actor`, and never reaches the table.
+- Both fields are optional in the schema and always sent by the server. The mirror takes them from
+  the same token candidates `/map` offers, on detached copies, so `/map`'s data is unchanged. A
+  failure building them leaves them out without stopping the live mirror.

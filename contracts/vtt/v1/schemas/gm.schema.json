@@ -558,6 +558,25 @@
             "Wounded",
             "Dead"
           ]
+        },
+        "size": {
+          "type": "number",
+          "minimum": 0.25,
+          "maximum": 10,
+          "description": "Token size in squares for placing this creature (U-4)."
+        },
+        "sheetUrl": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 256,
+              "pattern": "^/(?![/\\\\])[A-Za-z0-9._~%!$&'()*+,;=:@/?#-]*(?![\\s\\S])"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "A same-origin path to this creature's sheet the GM may open, resolved by the server (U-4); null when there is none."
         }
       }
     }
