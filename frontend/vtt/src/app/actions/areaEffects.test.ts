@@ -94,6 +94,10 @@ describe('the area applier', () => {
     const stale = createAreaApplier(boot, fakeFetch({ outcome: 'stale', missing: ['cmb_a'], encounterToken: 'boot-g2' }, 409).impl);
     expect(await stale.apply({ action: 'heal', actorIds: ['cmb_a'], amount: 1, encounterToken: 'boot-g1' }))
       .toEqual({ outcome: 'stale', missing: ['cmb_a'], encounterToken: 'boot-g2' });
+    const uncertain = createAreaApplier(boot, fakeFetch({ outcome: 'ok', uncertain: 'OSError',
+      results: [{ actorId: 'cmb_pc', outcome: 'uncertain', reason: 'OSError' }] }).impl);
+    expect(await uncertain.apply({ action: 'save', actorIds: ['cmb_pc'], save: 'will', dc: 18, encounterToken: 'boot-g1' }))
+      .toEqual({ outcome: 'ok', uncertain: 'OSError', results: [{ actorId: 'cmb_pc', outcome: 'uncertain', reason: 'OSError' }] });
     const odd = createAreaApplier(boot, fakeFetch({ outcome: 'nope' }).impl);
     expect((await odd.apply({ action: 'heal', actorIds: ['cmb_a'], amount: 1, encounterToken: 'boot-g1' })).outcome)
       .toBe('failed');

@@ -99,7 +99,9 @@ export type AreaOutcome = 'ok' | 'stale' | 'not-live' | 'unsupported' | 'invalid
 
 export interface AreaTargetResult {
   actorId: string;
-  outcome: 'applied' | 'failed' | 'gone' | 'requested' | 'gm-rolls';
+  // 'uncertain': a save request whose delivery failed partway; it may have
+  // reached the player. It is never sent again; ask at the table.
+  outcome: 'applied' | 'failed' | 'gone' | 'requested' | 'gm-rolls' | 'uncertain';
   net?: number;
   defeated?: boolean;
   reason?: string;
@@ -109,6 +111,7 @@ export interface AreaResult {
   outcome: AreaOutcome;
   results?: AreaTargetResult[];
   incomplete?: string;
+  uncertain?: string; // a save request's delivery failed partway (named); show it to the GM
   missing?: string[]; // on 'stale': targets no longer in the encounter
   encounterToken?: string; // on 'stale': the current one
 }
@@ -151,6 +154,7 @@ export function createAreaApplier(
           outcome,
           ...(Array.isArray(body?.results) ? { results: body.results } : {}),
           ...(typeof body?.incomplete === 'string' ? { incomplete: body.incomplete } : {}),
+          ...(typeof body?.uncertain === 'string' ? { uncertain: body.uncertain } : {}),
           ...(Array.isArray(body?.missing) ? { missing: body.missing } : {}),
           ...(typeof body?.encounterToken === 'string' ? { encounterToken: body.encounterToken } : {}),
         };

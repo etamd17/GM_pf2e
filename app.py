@@ -9645,6 +9645,8 @@ def _vtt_area_answer(receipt):
                           for actor_id in receipt['targets'] if actor_id in receipt['results']]}
     if not receipt['complete']:
         answer['incomplete'] = receipt.get('stopped') or 'stopped'
+    if receipt.get('uncertain'):
+        answer['uncertain'] = receipt['uncertain']
     return answer
 
 
@@ -9689,6 +9691,9 @@ def _vtt_area_apply(campaign_id, request_id, expected_encounter, action, actor_i
     target is reported 'failed' (it is never retried; the GM checks it), the
     answer is 'ok' with 'incomplete', and the same id again resumes with the
     targets not yet reached, if the encounter is still the same one.
+    A save request is sent at most once per request id: the attempt is
+    recorded before the broadcast, and a broadcast that raised (it may have
+    reached some players) is reported 'uncertain' and never sent again.
     Returns (code, detail): 'ok' with {results: [{actorId, outcome, ...}]},
     'stale', 'not-live', 'unsupported', 'invalid' or 'blocked'."""
     with _LIVE_CAMPAIGN_DISPATCH_LOCK:
@@ -9699,6 +9704,13 @@ def _vtt_area_apply(campaign_id, request_id, expected_encounter, action, actor_i
                     or receipt['targets'] != targets or receipt['params_in'] != params):
                 return 'blocked', {'reason': 'request id reused'}
             if receipt['complete']:
+                return 'ok', {**_vtt_area_answer(receipt), 'repeat': True}
+            if receipt.get('save_attempted'):
+                # Attempted, never confirmed: report it, never send it again.
+                receipt['uncertain'] = receipt.get('uncertain') or 'interrupted'
+                for a in receipt['targets']:
+                    receipt['results'].setdefault(a, {'outcome': 'uncertain', 'reason': receipt['uncertain']})
+                receipt['complete'] = True
                 return 'ok', {**_vtt_area_answer(receipt), 'repeat': True}
             if campaign_id != _loaded_campaign_id() or receipt['encounter'] != _vtt_encounter_token():
                 return 'stale', {'encounterToken': _vtt_encounter_token(), **_vtt_area_answer(receipt)}
@@ -9734,18 +9746,30 @@ def _vtt_area_apply(campaign_id, request_id, expected_encounter, action, actor_i
         with app.test_request_context('/api/scenes/bulk-combat', method='POST'):
             if action == 'save':
                 roster = {('cmb_' + str(c.instance_id)): c for c in _loaded_encounter_snapshot()}
-                players = [roster[a].name for a in targets if a in roster and getattr(roster[a], 'is_pc', False)]
-                try:
-                    if players:
+                is_pc = {a: a in roster and bool(getattr(roster[a], 'is_pc', False)) for a in targets}
+                players = [roster[a].name for a in targets if is_pc[a]]
+                # A save request is sent at most once per request id. The
+                # attempt is recorded BEFORE the broadcast: a broadcast that
+                # reached some players and then raised cannot be told apart
+                # from one that reached none, so it is never sent again; the
+                # players are reported 'uncertain' for the GM to check.
+                failure = None
+                if players:
+                    receipt['save_attempted'] = True
+                    try:
                         sse_broadcast('check_request', {'skill': checked['save'], 'dc': checked['dc'],
                                                         'targets': players, 'secret': checked['secret']},
                                       campaign_id=campaign_id)
-                except Exception as error:
-                    receipt['stopped'] = type(error).__name__
-                    return 'ok', _vtt_area_answer(receipt)
+                    except Exception as error:
+                        failure = type(error).__name__
+                        app.logger.info('VTT save request delivery uncertain: %s', failure)
+                        receipt['uncertain'] = failure
                 for a in targets:
-                    is_pc = a in roster and getattr(roster[a], 'is_pc', False)
-                    receipt['results'][a] = {'outcome': 'requested' if is_pc else 'gm-rolls'}
+                    if is_pc[a]:
+                        receipt['results'][a] = ({'outcome': 'uncertain', 'reason': failure} if failure
+                                                 else {'outcome': 'requested'})
+                    else:
+                        receipt['results'][a] = {'outcome': 'gm-rolls'}
             else:
                 for a in targets:
                     if a in receipt['results']:

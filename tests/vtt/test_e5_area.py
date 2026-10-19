@@ -181,3 +181,43 @@ def test_the_client_offers_exactly_each_systems_damage_types():
     assert listed("PF2E_DAMAGE") == list(app_module.PF2E_DAMAGE_TYPES)
     assert listed("COSMERE_DAMAGE") == list(cosmere_combat.DAMAGE_TYPES)
     assert listed("PF2E_SAVES") == list(app_module._VTT_PF2E_SAVES)
+
+
+# --- review 103: a save request is sent at most once ---------------------------------------------
+
+def test_a_save_broadcast_that_raises_after_delivering_is_never_sent_again(tracker, monkeypatch):
+    tracker["encounter"][1].is_pc = True
+    tracker["encounter"][1].name = "Valeros"
+    sends = []
+
+    def deliver_then_raise(event, data, **kwargs):
+        sends.append(data)                       # reached the players ...
+        raise OSError("socket closed")           # ... then failed
+
+    monkeypatch.setattr(app_module, "sse_broadcast", deliver_then_raise)
+    code, first = apply("save", targets=("cmb_ga", "cmb_gb"), save="will", dc=18, request_id="req-save0001")
+    assert code == "ok" and first["uncertain"] == "OSError" and "incomplete" not in first
+    assert first["results"] == [{"actorId": "cmb_ga", "outcome": "gm-rolls"},
+                                {"actorId": "cmb_gb", "outcome": "uncertain", "reason": "OSError"}]
+    again = apply("save", targets=("cmb_ga", "cmb_gb"), save="will", dc=18, request_id="req-save0001")
+    assert again == ("ok", {**first, "repeat": True})
+    assert len(sends) == 1                       # never re-sent
+
+
+def test_an_attempt_interrupted_before_its_receipt_completed_is_not_resent(tracker, monkeypatch):
+    tracker["encounter"][1].is_pc = True
+    tracker["encounter"][1].name = "Valeros"
+    sends = []
+
+    def deliver_then_escape(event, data, **kwargs):
+        sends.append(data)
+        raise KeyboardInterrupt                  # escapes the adapter's handler
+
+    monkeypatch.setattr(app_module, "sse_broadcast", deliver_then_escape)
+    with pytest.raises(KeyboardInterrupt):
+        apply("save", targets=("cmb_gb",), save="will", dc=18, request_id="req-save0002")
+    monkeypatch.setattr(app_module, "sse_broadcast", lambda event, data, **kw: sends.append(data))
+    code, detail = apply("save", targets=("cmb_gb",), save="will", dc=18, request_id="req-save0002")
+    assert code == "ok" and detail["uncertain"] == "interrupted"
+    assert detail["results"] == [{"actorId": "cmb_gb", "outcome": "uncertain", "reason": "interrupted"}]
+    assert len(sends) == 1

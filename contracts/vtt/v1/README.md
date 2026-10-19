@@ -419,3 +419,7 @@ No schema change: the results reach every page through the live actor mirror.
     `incomplete`; the same `requestId` resumes with the targets not reached yet, if the encounter
     is still the same one (else `stale`). Receipts are an in-memory window of the last 128
     effects, not kept across a restart.
+  - A save request is sent at most once per `requestId`: the attempt is recorded before the
+    broadcast. If the broadcast raises (it may have reached some players), the answer is `ok` with
+    `uncertain` naming the failure and those players `uncertain`; a retry returns that and sends
+    nothing. (Review 103.)
