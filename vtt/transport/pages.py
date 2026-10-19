@@ -258,6 +258,37 @@ def make_pages_blueprint(*, db: Database, host, dist_dir: Path, on_change=lambda
         code, detail = add(campaign_id, ref, request_id, expected) if add else ("unsupported", {})
         return jsonify({"outcome": code, **(detail or {})}), BESTIARY_STATUS.get(code, 422)
 
+    AREA_STATUS = {"ok": 200, "stale": 409, "not-live": 409, "unsupported": 422, "invalid": 422, "blocked": 422}
+    AREA_PARAMS = ("amount", "damageType", "nonlethal", "save", "dc", "secret")
+
+    @bp.post("/vtt/api/area-effect")
+    def area_effect():
+        """Apply an area effect to the GM's reviewed target list (E-5), through
+        the tracker. requestId makes a retry harmless; encounterToken binds it
+        to the encounter the page showed."""
+        body = request.get_json(silent=True)
+        body = body if isinstance(body, dict) else {}
+        campaign_id = body.get("campaignId")
+        if gm_of(campaign_id) is None or not host.csrf_valid(request.headers.get("X-CSRF-Token")):
+            return jsonify({"error": "unauthorized"}), 403
+        request_id = body.get("requestId")
+        token = body.get("encounterToken")
+        action = body.get("action")
+        actor_ids = body.get("actorIds")
+        params = {key: body[key] for key in AREA_PARAMS if key in body}
+        if (not isinstance(request_id, str) or not REQUEST_ID.fullmatch(request_id)
+                or not isinstance(token, str) or not TURN_TOKEN.fullmatch(token)
+                or action not in ("damage", "heal", "save")
+                or not isinstance(actor_ids, list) or not 1 <= len(actor_ids) <= 50
+                or not all(isinstance(a, str) and COMBATANT_ID.fullmatch(a) for a in actor_ids)
+                or not all(isinstance(v, (int, str, bool)) and (not isinstance(v, str) or len(v) <= 40)
+                           for v in params.values())):
+            return jsonify({"error": "bad request"}), 400
+        apply = getattr(host, "area_apply", None)
+        code, detail = (apply(campaign_id, request_id, token, action, actor_ids, params) if apply
+                        else ("unsupported", {}))
+        return jsonify({"outcome": code, **(detail or {})}), AREA_STATUS.get(code, 422)
+
     @bp.post("/vtt/api/import-legacy")
     def import_legacy():
         """Bring this campaign's /map scenes into the VTT (M5). ``apply`` false

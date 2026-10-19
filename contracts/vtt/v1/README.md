@@ -391,3 +391,31 @@ No schema change: the new creature reaches the GM page as a `GmActor`, like any 
   sees it.
 - The same Speed now reaches `/map`'s drag measurement: it used to read `base_speed`, which a
   monster does not have (no reading at all), and Cosmere's Speed attribute score as if it were feet.
+
+## Area effects (E-5, Claude, 2026-10-19)
+
+No schema change: the results reach every page through the live actor mirror.
+
+- The client proposes targets from a template (`app/actions/areaEffects.ts`, `templateTargets`): a
+  token is caught when the area overlaps any square of its space (each footprint square's centre
+  and slightly inset corners), so a burst clipping a Large creature's corner catches it. The GM
+  reviews and edits the list (/map Round 6: auto-select, then adjust); only linked tracker
+  combatants (`cmb_`) can be applied to.
+- `POST /vtt/api/area-effect` (campaign GM, CSRF), body `{campaignId, requestId, encounterToken,
+  action, actorIds (1-50 cmb_ ids), ...}`:
+  - `damage` `{amount 1-100000, damageType, nonlethal?}` and `heal` `{amount}` run the tracker's
+    own `_apply_hp_delta` on each target (PF2e temp HP, W/R/I and dying; Cosmere Deflect and
+    injuries) and the auto-removal of a defeated monster. Damage types are the campaign system's
+    own; `nonlethal` is PF2e's.
+  - `save` `{save: fortitude|reflex|will, dc 1-60, secret?}` (PF2e only; Cosmere has no saves)
+    sends one `check_request` to the player characters in the list, as /map's bulk-combat does;
+    monsters are reported `gm-rolls`.
+  - Answers `{results: [{actorId, outcome: applied|failed|gone|requested|gm-rolls, net?,
+    defeated?, reason?}]}`. Refused before anything is applied: `stale` (409: an old encounter
+    token, or targets no longer in the encounter as `missing`), `not-live` (409), `unsupported`
+    (422, D&D 5e), `invalid` (422: parameters not valid for the system), `blocked` (422).
+  - The same `requestId` again returns what was done and applies nothing again. If the tracker
+    raises on a target the run stops there (`failed`, never retried) and the answer is `ok` with
+    `incomplete`; the same `requestId` resumes with the targets not reached yet, if the encounter
+    is still the same one (else `stale`). Receipts are an in-memory window of the last 128
+    effects, not kept across a restart.

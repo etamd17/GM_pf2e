@@ -357,6 +357,20 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
     assert status == 200 and fresh["outcome"] == "ok", fresh
     assert gm.evaluate(count_in_tracker, "Goblin Warrior") == 1
 
+    # --- area effects (E-5) ----------------------------------------------------------------------
+    # Fire damage to the reviewed list (the goblin) through the tracker's HP
+    # engine; the same request id again applies nothing.
+    area = {"requestId": "req-e5e2e000001", "encounterToken": stale["encounterToken"], "action": "damage",
+            "actorIds": [fresh["actorId"]], "amount": 3, "damageType": "fire"}
+    status, hit = gm.evaluate(bestiary, ["/vtt/api/area-effect", area])
+    assert status == 200 and hit["outcome"] == "ok", hit
+    assert hit["results"] == [{"actorId": fresh["actorId"], "outcome": "applied", "net": 3, "defeated": False}], hit
+    status, again = gm.evaluate(bestiary, ["/vtt/api/area-effect", area])
+    assert status == 200 and again["repeat"] is True and again["results"] == hit["results"], again
+    status, wrong = gm.evaluate(bestiary, ["/vtt/api/area-effect", {**area, "requestId": "req-e5e2e000002",
+                                                                     "damageType": "keen"}])
+    assert status == 422 and wrong["outcome"] == "invalid", wrong          # Cosmere's damage type
+
     # --- the table moves to another scene -------------------------------------------------------
     gm.locator(".vtt-scene-picker").select_option("scene_docks")
     gm.wait_for_url("**sceneId=scene_docks**")

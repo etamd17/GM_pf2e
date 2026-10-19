@@ -60,6 +60,15 @@ def register_bestiary(search, add) -> None:
     _BESTIARY_SEARCH, _BESTIARY_ADD = search, add
 
 
+# E-5: the area-effect adapter.
+_AREA_APPLY = None
+
+
+def register_area_apply(fn) -> None:
+    global _AREA_APPLY
+    _AREA_APPLY = fn
+
+
 class AppHost:
     def current_member_id(self) -> str | None:
         user = _auth.current_user()
@@ -99,6 +108,13 @@ class AppHost:
         if _BESTIARY_ADD is None:
             return "unsupported", {}
         return _BESTIARY_ADD(campaign_id, ref, request_id, expected_encounter)
+
+    def area_apply(self, campaign_id: str, request_id: str, encounter_token: str, action: str,
+                   actor_ids: list, params: dict):
+        """Apply an area effect through the tracker (E-5). (code, detail); see app._vtt_area_apply."""
+        if _AREA_APPLY is None:
+            return "unsupported", {}
+        return _AREA_APPLY(campaign_id, request_id, encounter_token, action, actor_ids, params)
 
     def campaign_system(self, campaign_id: str) -> str | None:
         """The campaign's game system (pf2e, cosmere or dnd5e); None if unknown."""

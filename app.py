@@ -9623,6 +9623,162 @@ def _live_speed_feet(actor):
     return 0
 
 
+# E-5: area effects from the VTT. Receipts by request id: a retry never
+# applies an effect to a target twice. Bounded and in memory (not kept across a
+# restart); held under the dispatch lock.
+_VTT_AREA_RECEIPTS = __import__("collections").OrderedDict()
+_VTT_AREA_RECEIPTS_MAX = 128
+_VTT_AREA_MAX_TARGETS = 50
+_VTT_PF2E_SAVES = ('fortitude', 'reflex', 'will')
+
+
+def _vtt_area_damage_types(system):
+    """Each system's own damage types (systems never share mechanics)."""
+    if system == 'pf2e':
+        return tuple(PF2E_DAMAGE_TYPES)
+    import systems.cosmere.combat as _cc
+    return tuple(_cc.DAMAGE_TYPES)
+
+
+def _vtt_area_answer(receipt):
+    answer = {'results': [{'actorId': actor_id, **receipt['results'][actor_id]}
+                          for actor_id in receipt['targets'] if actor_id in receipt['results']]}
+    if not receipt['complete']:
+        answer['incomplete'] = receipt.get('stopped') or 'stopped'
+    return answer
+
+
+def _vtt_area_check(system, action, params):
+    """The effect's parameters, checked for the campaign's system; None if
+    they are not valid for it."""
+    if action in ('damage', 'heal'):
+        amount = params.get('amount')
+        if not isinstance(amount, int) or isinstance(amount, bool) or not 1 <= amount <= 100000:
+            return None
+        damage_type = params.get('damageType') or ('untyped' if system == 'pf2e' else None)
+        if action == 'damage' and damage_type not in _vtt_area_damage_types(system):
+            return None
+        nonlethal = params.get('nonlethal') is True
+        if nonlethal and system != 'pf2e':
+            return None
+        return {'amount': amount, 'damage_type': damage_type or 'untyped', 'nonlethal': nonlethal}
+    if action == 'save':
+        if system != 'pf2e':                     # Cosmere has no saving throws
+            return None
+        dc = params.get('dc')
+        if params.get('save') not in _VTT_PF2E_SAVES or not isinstance(dc, int) or isinstance(dc, bool) \
+                or not 1 <= dc <= 60:
+            return None
+        return {'save': params['save'], 'dc': dc, 'secret': params.get('secret') is True}
+    return None
+
+
+def _vtt_area_apply(campaign_id, request_id, expected_encounter, action, actor_ids, params):
+    """Apply one area effect to the GM's reviewed target list (E-5), through
+    the tracker's own engines: _apply_hp_delta (PF2e temp HP, W/R/I and dying;
+    Cosmere Deflect and injuries), the auto-removal of a defeated monster, and
+    the check_request a save asks the players to roll (/map's bulk-combat
+    path). Refused, never acted on: another campaign than the loaded one (never
+    activated), D&D 5e, parameters that are not the campaign system's (a
+    damage type, a save in Cosmere), an encounter token that is not the
+    current one, or a target that is not a combatant of that system in the
+    encounter ('stale', naming them).
+
+    Receipts by request id. The same id again returns what was done and applies
+    nothing again. If the tracker raises on a target, the run stops there: that
+    target is reported 'failed' (it is never retried; the GM checks it), the
+    answer is 'ok' with 'incomplete', and the same id again resumes with the
+    targets not yet reached, if the encounter is still the same one.
+    Returns (code, detail): 'ok' with {results: [{actorId, outcome, ...}]},
+    'stale', 'not-live', 'unsupported', 'invalid' or 'blocked'."""
+    with _LIVE_CAMPAIGN_DISPATCH_LOCK:
+        targets = list(dict.fromkeys(actor_ids))
+        receipt = _VTT_AREA_RECEIPTS.get(request_id)
+        if receipt is not None:
+            if (receipt['campaign'] != campaign_id or receipt['action'] != action
+                    or receipt['targets'] != targets or receipt['params_in'] != params):
+                return 'blocked', {'reason': 'request id reused'}
+            if receipt['complete']:
+                return 'ok', {**_vtt_area_answer(receipt), 'repeat': True}
+            if campaign_id != _loaded_campaign_id() or receipt['encounter'] != _vtt_encounter_token():
+                return 'stale', {'encounterToken': _vtt_encounter_token(), **_vtt_area_answer(receipt)}
+        else:
+            if campaign_id != _loaded_campaign_id():
+                return 'not-live', {}
+            system = (_campaigns.get_campaign(campaign_id) or {}).get('system') or 'pf2e'
+            if system not in ('pf2e', 'cosmere'):
+                return 'unsupported', {'system': system}
+            checked = _vtt_area_check(system, action, params)
+            if checked is None or not 1 <= len(targets) <= _VTT_AREA_MAX_TARGETS:
+                return 'invalid', {}
+            token = _vtt_encounter_token()
+            if expected_encounter != token:
+                return 'stale', {'encounterToken': token}
+            roster = {('cmb_' + str(c.instance_id)): c for c in _loaded_encounter_snapshot()}
+            missing = [a for a in targets if a not in roster
+                       or (getattr(roster[a], 'system', 'pf2e') or 'pf2e') != system]
+            if missing:
+                return 'stale', {'encounterToken': token, 'missing': missing}
+            if action in ('damage', 'heal'):
+                try:
+                    _workflow_preflight_targets([a[4:] for a in targets])
+                except Exception as error:
+                    return 'blocked', {'reason': type(error).__name__}
+            receipt = {'campaign': campaign_id, 'action': action, 'targets': targets, 'params_in': dict(params),
+                       'checked': checked, 'encounter': token, 'results': {}, 'complete': False}
+            _VTT_AREA_RECEIPTS[request_id] = receipt
+            while len(_VTT_AREA_RECEIPTS) > _VTT_AREA_RECEIPTS_MAX:
+                _VTT_AREA_RECEIPTS.popitem(last=False)
+        checked = receipt['checked']
+        receipt.pop('stopped', None)
+        with app.test_request_context('/api/scenes/bulk-combat', method='POST'):
+            if action == 'save':
+                roster = {('cmb_' + str(c.instance_id)): c for c in _loaded_encounter_snapshot()}
+                players = [roster[a].name for a in targets if a in roster and getattr(roster[a], 'is_pc', False)]
+                try:
+                    if players:
+                        sse_broadcast('check_request', {'skill': checked['save'], 'dc': checked['dc'],
+                                                        'targets': players, 'secret': checked['secret']},
+                                      campaign_id=campaign_id)
+                except Exception as error:
+                    receipt['stopped'] = type(error).__name__
+                    return 'ok', _vtt_area_answer(receipt)
+                for a in targets:
+                    is_pc = a in roster and getattr(roster[a], 'is_pc', False)
+                    receipt['results'][a] = {'outcome': 'requested' if is_pc else 'gm-rolls'}
+            else:
+                for a in targets:
+                    if a in receipt['results']:
+                        continue
+                    instance_id = a[4:]
+                    try:
+                        if checked['nonlethal']:
+                            old_hp = _apply_hp_delta(instance_id, checked['amount'], action, checked['damage_type'],
+                                                     nonlethal=True)
+                        else:
+                            old_hp = _apply_hp_delta(instance_id, checked['amount'], action, checked['damage_type'])
+                        if old_hp is None:
+                            receipt['results'][a] = {'outcome': 'gone'}
+                            continue
+                        now = next((c for c in _loaded_encounter_snapshot() if str(c.instance_id) == instance_id),
+                                   None)
+                        new_hp = now.current_hp if now is not None else 0
+                        defeated = _maybe_auto_remove_defeated(instance_id, old_hp, action)
+                        if defeated:
+                            _persist_encounter_state()
+                            _broadcast_encounter_state()
+                    except Exception as error:
+                        app.logger.info('VTT area effect stopped at %s: %s', a, type(error).__name__)
+                        receipt['results'][a] = {'outcome': 'failed', 'reason': type(error).__name__}
+                        receipt['stopped'] = type(error).__name__
+                        return 'ok', _vtt_area_answer(receipt)
+                    net = (old_hp - new_hp) if action == 'damage' else (new_hp - old_hp)
+                    receipt['results'][a] = {'outcome': 'applied', 'net': int(max(0, net)),
+                                             'defeated': bool(defeated)}
+        receipt['complete'] = True
+        return 'ok', _vtt_area_answer(receipt)
+
+
 def _vtt_live_schedule():
     global _VTT_LIVE_TIMER
     if globals().get('VTT_SERVICE') is None:
@@ -29314,6 +29470,7 @@ if os.environ.get('VTT_ENABLED') == '1':
     _vtt_wiring.register_turn_step(_vtt_turn_step)     # E-1: turn changes from the VTT
     _vtt_wiring.register_condition_change(_vtt_condition_change)   # E-2: conditions from the VTT
     _vtt_wiring.register_bestiary(_vtt_bestiary_search, _vtt_bestiary_add)   # E-3: bestiary to tracker
+    _vtt_wiring.register_area_apply(_vtt_area_apply)   # E-5: area effects
     _vtt_live_schedule()    # the first mirror of whatever the tracker restored
 
 
