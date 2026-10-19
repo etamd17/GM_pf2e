@@ -199,6 +199,31 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
     wait_for(gm, lambda s: (token(s, "tok_hero")["live"] or {}).get("hp") == 5, "the GM sees the exact HP")
     shoot(gm, "p3-gm"), shoot(tv, "p3-tv")
 
+    # --- turn controls (E-1) ----------------------------------------------------------------------
+    # A second monster joins; the GM page's turn route runs the tracker's own
+    # next turn, and the TV's outline follows through the live mirror.
+    status, text = gm.evaluate(tracker_post, ["/api/add_custom_monster", {"name": "Zombie Shambler", "hp": 20}, False])
+    assert status == 200, text
+    zombie = "cmb_" + json.loads(text)["instance_id"]
+    turn = """async (body) => {
+        const boot = JSON.parse(document.getElementById('vtt-boot').textContent);
+        const response = await fetch('/vtt/api/turn', {method: 'POST', body: JSON.stringify({campaignId: boot.campaignId, ...body}),
+            headers: {'X-CSRF-Token': boot.csrf, 'Content-Type': 'application/json'}});
+        return [response.status, await response.json()];
+    }"""
+    # A page behind the tracker is told where it is, and nothing moves.
+    status, now = gm.evaluate(turn, {"direction": "next", "expectedActorId": f"cmb_{instance}", "expectedRound": 99999})
+    assert status == 409 and now["outcome"] == "stale" and now["actorId"] == f"cmb_{instance}", now
+    status, moved = gm.evaluate(turn, {"direction": "next", "expectedActorId": f"cmb_{instance}", "expectedRound": now["round"]})
+    assert status == 200 and moved["outcome"] == "ok" and moved["actorId"] == zombie, moved
+    wait_for(tv, lambda s: (token(s, "tok_hero")["live"] or {}).get("active") is False, "the turn moved off the hero's monster")
+    # The same click again is stale: no turn is skipped.
+    status, again = gm.evaluate(turn, {"direction": "next", "expectedActorId": f"cmb_{instance}", "expectedRound": now["round"]})
+    assert status == 409 and again["outcome"] == "stale" and again["actorId"] == zombie, again
+    status, back = gm.evaluate(turn, {"direction": "prev", "expectedActorId": zombie, "expectedRound": moved["round"]})
+    assert status == 200 and back["actorId"] == f"cmb_{instance}", back
+    wait_for(tv, lambda s: (token(s, "tok_hero")["live"] or {}).get("active") is True, "previous turn comes back to it")
+
     # --- ping and ruler on the TV (beta-1) -------------------------------------------------------
     # The hero's room is revealed; the right half, past the wall at x=640, is still fogged.
     gm.get_by_role("button", name="Ping", exact=True).click()

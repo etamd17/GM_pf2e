@@ -9267,6 +9267,43 @@ def _vtt_actor_hints(cid):
     return hints
 
 
+def _vtt_turn_step(campaign_id, direction, expected_actor_id, expected_round):
+    """Change turns from the VTT (E-1), through the tracker's own cycle_turn so
+    every start- and end-of-turn rule runs exactly as it does from /tracker.
+
+    Bound to what the GM page showed: refused, never acting on anything else,
+    when the campaign is not the loaded one (it is never activated silently),
+    when the campaign's system has no integrated tracker (D&D 5e), when no
+    encounter is running, or when the current combatant or round is not the
+    one the page expected. A duplicate click is therefore a harmless 'stale'.
+    Returns (code, detail): code is 'ok', 'not-live', 'unsupported',
+    'no-encounter', 'stale' or 'blocked'."""
+    if direction not in ('next', 'prev'):
+        return 'blocked', {'reason': 'bad direction'}
+    with _LIVE_CAMPAIGN_DISPATCH_LOCK:
+        if campaign_id != _loaded_campaign_id():
+            return 'not-live', {}
+        campaign = _campaigns.get_campaign(campaign_id) or {}
+        if (campaign.get('system') or 'pf2e') not in ('pf2e', 'cosmere'):
+            return 'unsupported', {'system': campaign.get('system')}
+        if not ACTIVE_ENCOUNTER or not (0 <= TURN_INDEX < len(ACTIVE_ENCOUNTER)):
+            return 'no-encounter', {}
+        current = 'cmb_' + str(ACTIVE_ENCOUNTER[TURN_INDEX].instance_id)
+        if current != expected_actor_id or int(ROUND_NUMBER or 0) != expected_round:
+            return 'stale', {'actorId': current, 'round': int(ROUND_NUMBER or 0)}
+        try:
+            # The tracker's route, in a request of its own: its preflight and
+            # every turn rule run unchanged; its response is not needed.
+            with app.test_request_context(f'/api/cycle_turn/{direction}', method='POST'):
+                cycle_turn(direction)
+        except Exception as error:
+            # The preflight refuses an immutable actor, and so on: nothing moved.
+            app.logger.info('VTT turn step refused: %s', type(error).__name__)
+            return 'blocked', {'reason': type(error).__name__}
+        now = 'cmb_' + str(ACTIVE_ENCOUNTER[TURN_INDEX].instance_id) if ACTIVE_ENCOUNTER else None
+        return 'ok', {'actorId': now, 'round': int(ROUND_NUMBER or 0)}
+
+
 def _vtt_live_schedule():
     global _VTT_LIVE_TIMER
     if globals().get('VTT_SERVICE') is None:
@@ -9310,6 +9347,10 @@ def _vtt_live_flush():
                     for key, entry in index.items():
                         if hints.get((kind, key)):
                             entry['vtt_hints'] = hints[(kind, key)]
+                # The round, on every combatant (E-1: the GM page sends it back as
+                # the round it expects when it changes turns).
+                for entry in combatants.values():
+                    entry['vtt_round'] = int(ROUND_NUMBER or 0)
             # 2. The database write and delivery after releasing it (tracker
             #    requests never wait on PostgreSQL), but still inside the flush
             #    lock, so an older snapshot can never commit after a newer one.
@@ -28945,6 +28986,7 @@ VTT_SERVICE = None
 if os.environ.get('VTT_ENABLED') == '1':
     from vtt.transport import app_wiring as _vtt_wiring  # noqa: E402
     VTT_SERVICE = _vtt_wiring.init_from_app(app)
+    _vtt_wiring.register_turn_step(_vtt_turn_step)     # E-1: turn changes from the VTT
     _vtt_live_schedule()    # the first mirror of whatever the tracker restored
 
 

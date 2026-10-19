@@ -31,6 +31,16 @@ from vtt.projection.serializers import TokenKey
 from vtt.transport.socket import VttService, init_vtt
 
 
+# E-1: app.py registers its turn-step adapter here at startup (app.py imports
+# this module, never the reverse).
+_TURN_STEP = None
+
+
+def register_turn_step(fn) -> None:
+    global _TURN_STEP
+    _TURN_STEP = fn
+
+
 class AppHost:
     def current_member_id(self) -> str | None:
         user = _auth.current_user()
@@ -44,6 +54,12 @@ class AppHost:
     def csrf_token(self) -> str:
         # The app's per-session token (creates one if the session has none).
         return _auth.csrf_token()
+
+    def turn_step(self, campaign_id: str, direction: str, expected_actor_id: str, expected_round: int):
+        """Change turns through the tracker (E-1). (code, detail); see app._vtt_turn_step."""
+        if _TURN_STEP is None:
+            return "unsupported", {}
+        return _TURN_STEP(campaign_id, direction, expected_actor_id, expected_round)
 
     def campaign_system(self, campaign_id: str) -> str | None:
         """The campaign's game system (pf2e, cosmere or dnd5e); None if unknown."""

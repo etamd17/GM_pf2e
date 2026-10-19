@@ -305,3 +305,19 @@ Digest `dd14bd57...`.
 - Both fields are optional in the schema and always sent by the server. The mirror takes them from
   the same token candidates `/map` offers, on detached copies, so `/map`'s data is unchanged. A
   failure building them leaves them out without stopping the live mirror.
+
+## Turn controls, batch turns-1 (E-1, Claude, 2026-10-19)
+
+- **`GmActor` gains `round`** (an integer 0-100000, or null): the encounter's round on a tracker
+  combatant (`cmb_`), null on a party character (`chr_`). Optional in the schema, always sent.
+- The GM page changes turns with `POST /vtt/api/turn` (campaign GM, CSRF), body
+  `{campaignId, direction: "next"|"prev", expectedActorId, expectedRound}`: the active combatant and
+  round it showed. The server runs the tracker's own next/previous turn, so every start- and
+  end-of-turn rule runs as it does from `/tracker`. It answers `{outcome, ...}`:
+  - `ok` (200) with the new `actorId` and `round`;
+  - `stale` (409) with the current values, when the page was behind (a duplicate click is this);
+  - `not-live` (409) when the campaign is not the loaded one (it is never activated);
+  - `no-encounter` (409); `unsupported` (422, a system without an integrated tracker: D&D 5e);
+  - `blocked` (422) when the tracker refused; nothing moved.
+- The result reaches every page through the live actor mirror, never from the response.
+- "Previous turn" moves the marker back; it does not undo effects the tracker already applied.

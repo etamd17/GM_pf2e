@@ -17,6 +17,7 @@ the pages answer 503 rather than serve something half-made.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from flask import Blueprint, Response, abort, jsonify, request, send_from_directory
@@ -36,6 +37,10 @@ def _boot_script(data: dict) -> str:
     text = json.dumps(data, separators=(",", ":"))
     text = text.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
     return f'<script id="vtt-boot" type="application/json">{text}</script>'
+
+
+# E-1: a turn is expected to be a tracker combatant's (vtt.live ids).
+COMBATANT_ID = re.compile(r"cmb_[A-Za-z0-9_-]{1,124}")
 
 
 def _valid_id(value) -> bool:
@@ -144,6 +149,31 @@ def make_pages_blueprint(*, db: Database, host, dist_dir: Path, on_change=lambda
             rows = scenes_of(session, campaign_id)
             return jsonify({"scenes": [{"id": s.id, "name": s.name, "published": bool(s.published),
                                         "onTable": s.id == on_table} for s in rows]})
+
+    TURN_STATUS = {"ok": 200, "stale": 409, "not-live": 409, "no-encounter": 409, "unsupported": 422,
+                   "blocked": 422}
+
+    @bp.post("/vtt/api/turn")
+    def turn():
+        """Next or previous turn from the GM page (E-1), through the tracker.
+        The body names what the page showed (the current combatant and round);
+        anything else is refused with the current values, never acted on."""
+        body = request.get_json(silent=True)
+        body = body if isinstance(body, dict) else {}
+        campaign_id = body.get("campaignId")
+        if gm_of(campaign_id) is None or not host.csrf_valid(request.headers.get("X-CSRF-Token")):
+            return jsonify({"error": "unauthorized"}), 403
+        direction = body.get("direction")
+        actor_id = body.get("expectedActorId")
+        expected_round = body.get("expectedRound")
+        if (direction not in ("next", "prev") or not isinstance(actor_id, str) or not COMBATANT_ID.fullmatch(actor_id)
+                or not isinstance(expected_round, int) or isinstance(expected_round, bool)
+                or not 0 <= expected_round <= 100000):
+            return jsonify({"error": "bad request"}), 400
+        step = getattr(host, "turn_step", None)
+        code, detail = step(campaign_id, direction, actor_id, expected_round) if step else ("unsupported", {})
+        status = TURN_STATUS.get(code, 422)
+        return jsonify({"outcome": code, **(detail or {})}), status
 
     @bp.post("/vtt/api/import-legacy")
     def import_legacy():

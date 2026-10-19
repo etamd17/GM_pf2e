@@ -6156,5 +6156,145 @@
       ],
       "removed": []
     }
+  },
+  {
+    "id": "turns1-actor-round",
+    "schema": "gm",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "patch",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 3,
+      "upserted": [
+        {
+          "kind": "actor",
+          "id": "cmb_6f1c2d3e-0000-4000-8000-000000000001",
+          "version": "ver_ACTORACTORACTOR",
+          "name": "Skeleton Guard",
+          "pc": false,
+          "hp": 7,
+          "maxHp": 20,
+          "conditions": [
+            {
+              "name": "off-guard",
+              "value": null
+            }
+          ],
+          "active": false,
+          "hidden": false,
+          "status": "Wounded",
+          "size": 2,
+          "sheetUrl": "/player/sheet/Valeros",
+          "round": 4
+        }
+      ],
+      "removed": []
+    }
+  },
+  {
+    "id": "turns1-actor-null-round",
+    "schema": "gm",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "patch",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 3,
+      "upserted": [
+        {
+          "kind": "actor",
+          "id": "cmb_6f1c2d3e-0000-4000-8000-000000000001",
+          "version": "ver_ACTORACTORACTOR",
+          "name": "Skeleton Guard",
+          "pc": false,
+          "hp": 7,
+          "maxHp": 20,
+          "conditions": [
+            {
+              "name": "off-guard",
+              "value": null
+            }
+          ],
+          "active": false,
+          "hidden": false,
+          "status": "Wounded",
+          "size": 2,
+          "sheetUrl": "/player/sheet/Valeros",
+          "round": null
+        }
+      ],
+      "removed": []
+    }
+  },
+  {
+    "id": "turns1-actor-negative-round",
+    "schema": "gm",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "patch",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 3,
+      "upserted": [
+        {
+          "kind": "actor",
+          "id": "cmb_6f1c2d3e-0000-4000-8000-000000000001",
+          "version": "ver_ACTORACTORACTOR",
+          "name": "Skeleton Guard",
+          "pc": false,
+          "hp": 7,
+          "maxHp": 20,
+          "conditions": [
+            {
+              "name": "off-guard",
+              "value": null
+            }
+          ],
+          "active": false,
+          "hidden": false,
+          "status": "Wounded",
+          "size": 2,
+          "sheetUrl": "/player/sheet/Valeros",
+          "round": -1
+        }
+      ],
+      "removed": []
+    }
+  },
+  {
+    "id": "turns1-actor-fractional-round",
+    "schema": "gm",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "patch",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 3,
+      "upserted": [
+        {
+          "kind": "actor",
+          "id": "cmb_6f1c2d3e-0000-4000-8000-000000000001",
+          "version": "ver_ACTORACTORACTOR",
+          "name": "Skeleton Guard",
+          "pc": false,
+          "hp": 7,
+          "maxHp": 20,
+          "conditions": [
+            {
+              "name": "off-guard",
+              "value": null
+            }
+          ],
+          "active": false,
+          "hidden": false,
+          "status": "Wounded",
+          "size": 2,
+          "sheetUrl": "/player/sheet/Valeros",
+          "round": 1.5
+        }
+      ],
+      "removed": []
+    }
   }
 ]

@@ -96,6 +96,8 @@ def record(entry: dict[str, Any], *, active: bool) -> dict[str, Any]:
         "hidden": entry.get("visible_to_players") is False,
         "status": status if status in STATUSES else "",
         **_placement(entry.get("vtt_hints")),
+        # E-1: the round on a combatant (null on a party character).
+        "round": _int(entry["vtt_round"], 0, 100000) if isinstance(entry.get("vtt_round"), int) else None,
     }
 
 

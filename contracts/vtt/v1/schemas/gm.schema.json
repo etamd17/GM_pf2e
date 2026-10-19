@@ -577,6 +577,19 @@
             }
           ],
           "description": "A same-origin path to this creature's sheet the GM may open, resolved by the server (U-4); null when there is none."
+        },
+        "round": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100000
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The encounter's round, on a combatant (E-1); null on a party character. The GM page sends it back as the round it expects when it changes turns."
         }
       }
     }

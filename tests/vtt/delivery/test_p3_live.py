@@ -300,3 +300,25 @@ def test_the_gm_actor_entity_carries_size_and_sheet_link(stack):
     mirror(stack, {"skel": {**SKELETON, "vtt_hints": {"size": 2, "sheet_url": "/tracker"}}}, {})
     actor = held.now()[("actor", "cmb_skel")]
     assert (actor["size"], actor["sheetUrl"]) == (2.0, "/tracker")
+
+
+# --- E-1: the round, for the turn controls' expected-round check --------------------------------
+
+def test_records_carry_the_round_on_combatants_only():
+    actors = live.build(
+        {"skel": {**entry("Skeleton", 7, 20, active=True), "vtt_round": 3},
+         "odd": {**entry("Imp", 1, 1), "vtt_round": "3"},
+         "big": {**entry("Rat", 1, 1), "vtt_round": 10**9}},
+        {"valeros": VALEROS})
+    assert actors["cmb_skel"]["round"] == 3
+    assert actors["cmb_odd"]["round"] is None                                 # not an int: left out
+    assert actors["cmb_big"]["round"] == 100000                               # capped
+    assert actors["chr_valeros"]["round"] is None
+
+
+def test_the_gm_actor_entity_carries_the_round(stack):
+    gm, _ = setup(stack)
+    held = Gm(gm)
+    mirror(stack, {"skel": {**SKELETON, "is_active": True, "vtt_round": 2}}, {})
+    actor = held.now()[("actor", "cmb_skel")]
+    assert (actor["active"], actor["round"]) == (True, 2)
