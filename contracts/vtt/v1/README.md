@@ -321,3 +321,20 @@ Digest `dd14bd57...`.
   - `blocked` (422) when the tracker refused; nothing moved.
 - The result reaches every page through the live actor mirror, never from the response.
 - "Previous turn" moves the marker back; it does not undo effects the tracker already applied.
+
+## Conditions from the map (E-2, Claude, 2026-10-19)
+
+No schema change: the conditions already reach the GM page in `GmActor.conditions`.
+
+- The GM page changes one with `POST /vtt/api/condition` (campaign GM, CSRF), body
+  `{campaignId, actorId: "cmb_...", condition, operation: "add"|"decrease"|"remove",
+  expectedValue, rounds?}`. `expectedValue` is what the page showed: 0 when absent, 1 for a flag,
+  else the value. The server runs the tracker's own engine for the campaign's system:
+  - **PF2e**: add raises a valued condition or sets a flag, decrease lowers it, remove clears it;
+    `rounds` (0-100) sets the tracker's expiry timer on add;
+  - **Cosmere**: add and remove only, with no timer from here.
+- Outcomes: `ok` (200, the new `value`), `stale` (409, the current `value`; a duplicate click is
+  this), `not-live` (409, never activated), `not-in-encounter` (409), `unsupported` (422, D&D 5e),
+  `invalid` (422: a condition outside the system's list, a combatant of another system, or an
+  operation the system does not have), `blocked` (422, the tracker refused).
+- The result reaches every page through the live actor mirror.

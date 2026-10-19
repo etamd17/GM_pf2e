@@ -41,6 +41,12 @@ def _boot_script(data: dict) -> str:
 
 # E-1: a turn is expected to be a tracker combatant's (vtt.live ids).
 COMBATANT_ID = re.compile(r"cmb_[A-Za-z0-9_-]{1,124}")
+# E-2: a condition name, as the actor mirror carries it (vtt.live.CONDITION_NAME).
+CONDITION_NAME = re.compile(r"[a-z][a-z0-9_]{0,39}")
+
+
+def _small_int(value, high: int) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= high
 
 
 def _valid_id(value) -> bool:
@@ -174,6 +180,35 @@ def make_pages_blueprint(*, db: Database, host, dist_dir: Path, on_change=lambda
         code, detail = step(campaign_id, direction, actor_id, expected_round) if step else ("unsupported", {})
         status = TURN_STATUS.get(code, 422)
         return jsonify({"outcome": code, **(detail or {})}), status
+
+    CONDITION_STATUS = {"ok": 200, "stale": 409, "not-live": 409, "not-in-encounter": 409,
+                        "unsupported": 422, "invalid": 422, "blocked": 422}
+
+    @bp.post("/vtt/api/condition")
+    def condition():
+        """Add, lower or remove a condition from the GM page (E-2), through the
+        tracker's engine for the campaign's system. The body names the value the
+        page showed (0 absent, 1 a flag, else the value); anything else is
+        refused with the current value, never acted on."""
+        body = request.get_json(silent=True)
+        body = body if isinstance(body, dict) else {}
+        campaign_id = body.get("campaignId")
+        if gm_of(campaign_id) is None or not host.csrf_valid(request.headers.get("X-CSRF-Token")):
+            return jsonify({"error": "unauthorized"}), 403
+        actor_id = body.get("actorId")
+        name = body.get("condition")
+        operation = body.get("operation")
+        expected = body.get("expectedValue")
+        rounds = body.get("rounds", 0)
+        if (not isinstance(actor_id, str) or not COMBATANT_ID.fullmatch(actor_id)
+                or not isinstance(name, str) or not CONDITION_NAME.fullmatch(name)
+                or operation not in ("add", "decrease", "remove")
+                or not _small_int(expected, 99) or not _small_int(rounds, 100)):
+            return jsonify({"error": "bad request"}), 400
+        change = getattr(host, "condition_change", None)
+        code, detail = (change(campaign_id, actor_id, name, operation, expected, rounds) if change
+                        else ("unsupported", {}))
+        return jsonify({"outcome": code, **(detail or {})}), CONDITION_STATUS.get(code, 422)
 
     @bp.post("/vtt/api/import-legacy")
     def import_legacy():

@@ -224,6 +224,26 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
     assert status == 200 and back["actorId"] == f"cmb_{instance}", back
     wait_for(tv, lambda s: (token(s, "tok_hero")["live"] or {}).get("active") is True, "previous turn comes back to it")
 
+    # --- conditions from the map (E-2) ------------------------------------------------------------
+    condition = """async (body) => {
+        const boot = JSON.parse(document.getElementById('vtt-boot').textContent);
+        const response = await fetch('/vtt/api/condition', {method: 'POST', body: JSON.stringify({campaignId: boot.campaignId, ...body}),
+            headers: {'X-CSRF-Token': boot.csrf, 'Content-Type': 'application/json'}});
+        return [response.status, await response.json()];
+    }"""
+    skeleton = {"actorId": f"cmb_{instance}", "condition": "frightened"}
+    status, done = gm.evaluate(condition, {**skeleton, "operation": "add", "expectedValue": 0, "rounds": 2})
+    assert status == 200 and done == {"outcome": "ok", "value": 1}, done
+    wait_for(gm, lambda s: (token(s, "tok_hero")["live"] or {}).get("conditions") == ["Frightened 1"],
+             "the GM page shows the tracker's Frightened 1")
+    status, again = gm.evaluate(condition, {**skeleton, "operation": "add", "expectedValue": 0})
+    assert status == 409 and again == {"outcome": "stale", "value": 1}, again          # a double click stacks nothing
+    status, wrong = gm.evaluate(condition, {**skeleton, "condition": "determined", "operation": "add", "expectedValue": 0})
+    assert status == 422 and wrong["outcome"] == "invalid", wrong                      # Cosmere's, not PF2e's
+    status, done = gm.evaluate(condition, {**skeleton, "operation": "remove", "expectedValue": 1})
+    assert status == 200 and done["value"] == 0, done
+    wait_for(gm, lambda s: not ((token(s, "tok_hero")["live"] or {}).get("conditions") or []), "and its removal")
+
     # --- ping and ruler on the TV (beta-1) -------------------------------------------------------
     # The hero's room is revealed; the right half, past the wall at x=640, is still fogged.
     gm.get_by_role("button", name="Ping", exact=True).click()

@@ -9304,6 +9304,74 @@ def _vtt_turn_step(campaign_id, direction, expected_actor_id, expected_round):
         return 'ok', {'actorId': now, 'round': int(ROUND_NUMBER or 0)}
 
 
+def _vtt_condition_value(conditions, condition):
+    """A condition as the VTT's actor mirror shows it: 0 when absent, 1 for a
+    plain flag, else the value (capped as vtt.live caps it)."""
+    value = (conditions or {}).get(condition)
+    if isinstance(value, bool):
+        return 1 if value else 0
+    if isinstance(value, int):
+        return max(0, min(99, value))
+    return 1 if value else 0
+
+
+def _vtt_condition_change(campaign_id, actor_id, condition, operation, expected_value, rounds=0):
+    """Change a condition from the VTT (E-2), through the tracker's own
+    engine for the campaign's system, so the PC write-through, combat log,
+    persistence and broadcast all happen exactly as from /tracker.
+
+    PF2e goes through _apply_condition_change (operations add, decrease,
+    remove; 'rounds' sets the tracker's expiry timer on add). Cosmere goes
+    through _apply_cosmere_condition_change (add, remove; no timer here).
+    Refused, never acted on: another campaign than the loaded one (never
+    activated), D&D 5e, an actor that is not in the encounter, a combatant of
+    another system, a condition outside that system's list, or a value that is
+    not the one the page showed ('stale', so a duplicate click never stacks a
+    condition twice). Returns (code, detail): 'ok', 'not-live', 'unsupported',
+    'not-in-encounter', 'invalid', 'stale' or 'blocked'."""
+    if operation not in ('add', 'decrease', 'remove'):
+        return 'invalid', {'reason': 'operation'}
+    with _LIVE_CAMPAIGN_DISPATCH_LOCK:
+        if campaign_id != _loaded_campaign_id():
+            return 'not-live', {}
+        campaign = _campaigns.get_campaign(campaign_id) or {}
+        system = campaign.get('system') or 'pf2e'
+        if system not in ('pf2e', 'cosmere'):
+            return 'unsupported', {'system': campaign.get('system')}
+        instance_id = actor_id[4:] if isinstance(actor_id, str) and actor_id.startswith('cmb_') else None
+        combatant = next((c for c in ACTIVE_ENCOUNTER if str(c.instance_id) == instance_id), None) \
+            if instance_id else None
+        if combatant is None:
+            return 'not-in-encounter', {}
+        if (getattr(combatant, 'system', 'pf2e') or 'pf2e') != system:
+            return 'invalid', {'reason': 'system'}       # systems never share mechanics
+        if system == 'pf2e':
+            vocabulary = APPLICABLE_CONDITIONS
+        else:
+            vocabulary = systems.cosmere.CONDITION_INFO
+        if condition not in vocabulary:
+            return 'invalid', {'reason': 'condition'}
+        if system == 'cosmere' and (operation == 'decrease' or rounds):
+            return 'invalid', {'reason': 'operation'}
+        current = _vtt_condition_value(getattr(combatant, 'conditions', {}), condition)
+        if current != expected_value:
+            return 'stale', {'value': current}
+        try:
+            with app.test_request_context('/api/toggle_condition', method='POST'):
+                if system == 'pf2e':
+                    applied = _apply_condition_change(instance_id, condition, operation, rounds=rounds)
+                else:
+                    applied = _apply_cosmere_condition_change(instance_id, condition, operation) is not None
+        except Exception as error:
+            # The workflow preflight refuses an immutable actor: nothing moved.
+            app.logger.info('VTT condition change refused: %s', type(error).__name__)
+            return 'blocked', {'reason': type(error).__name__}
+        if not applied:
+            return 'blocked', {'reason': 'not applied'}
+        combatant = next((c for c in ACTIVE_ENCOUNTER if str(c.instance_id) == instance_id), combatant)
+        return 'ok', {'value': _vtt_condition_value(getattr(combatant, 'conditions', {}), condition)}
+
+
 def _vtt_live_schedule():
     global _VTT_LIVE_TIMER
     if globals().get('VTT_SERVICE') is None:
@@ -28987,6 +29055,7 @@ if os.environ.get('VTT_ENABLED') == '1':
     from vtt.transport import app_wiring as _vtt_wiring  # noqa: E402
     VTT_SERVICE = _vtt_wiring.init_from_app(app)
     _vtt_wiring.register_turn_step(_vtt_turn_step)     # E-1: turn changes from the VTT
+    _vtt_wiring.register_condition_change(_vtt_condition_change)   # E-2: conditions from the VTT
     _vtt_live_schedule()    # the first mirror of whatever the tracker restored
 
 

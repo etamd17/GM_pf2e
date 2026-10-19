@@ -41,6 +41,15 @@ def register_turn_step(fn) -> None:
     _TURN_STEP = fn
 
 
+# E-2: the same, for condition changes.
+_CONDITION_CHANGE = None
+
+
+def register_condition_change(fn) -> None:
+    global _CONDITION_CHANGE
+    _CONDITION_CHANGE = fn
+
+
 class AppHost:
     def current_member_id(self) -> str | None:
         user = _auth.current_user()
@@ -60,6 +69,13 @@ class AppHost:
         if _TURN_STEP is None:
             return "unsupported", {}
         return _TURN_STEP(campaign_id, direction, expected_actor_id, expected_round)
+
+    def condition_change(self, campaign_id: str, actor_id: str, condition: str, operation: str,
+                         expected_value: int, rounds: int = 0):
+        """Change a condition through the tracker (E-2). (code, detail); see app._vtt_condition_change."""
+        if _CONDITION_CHANGE is None:
+            return "unsupported", {}
+        return _CONDITION_CHANGE(campaign_id, actor_id, condition, operation, expected_value, rounds)
 
     def campaign_system(self, campaign_id: str) -> str | None:
         """The campaign's game system (pf2e, cosmere or dnd5e); None if unknown."""
