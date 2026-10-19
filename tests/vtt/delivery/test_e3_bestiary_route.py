@@ -19,7 +19,8 @@ def add(stack, body, csrf=CSRF):
                               base_url="https://localhost")
 
 
-GOOD = {"campaignId": "camp_a", "ref": "pathfinder-bestiary\\goblin-warrior.json", "requestId": "req-1a2b3c4d"}
+GOOD = {"campaignId": "camp_a", "ref": "pathfinder-bestiary\\goblin-warrior.json", "requestId": "req-1a2b3c4d",
+        "encounterToken": "a1b2c3-g4"}
 
 
 def test_both_need_the_campaign_gm_and_add_needs_csrf(stack):
@@ -41,7 +42,8 @@ def test_a_malformed_request_is_refused_before_the_tracker(stack):
     assert search(stack, campaignId="camp_a", q="x" * 81).status_code == 400
     for bad in ({**GOOD, "ref": ""}, {**GOOD, "ref": "a\nb"}, {**GOOD, "ref": "x" * 241}, {**GOOD, "ref": 3},
                 {**GOOD, "requestId": "short"}, {**GOOD, "requestId": "has space here"},
-                {k: v for k, v in GOOD.items() if k != "requestId"}):
+                {k: v for k, v in GOOD.items() if k != "requestId"},
+                {k: v for k, v in GOOD.items() if k != "encounterToken"}, {**GOOD, "encounterToken": "a b"}):
         assert add(stack, bad).status_code == 400, bad
     assert calls == []
 
@@ -52,14 +54,14 @@ def test_it_passes_the_request_through_and_maps_the_outcome(stack):
         "ok", {"results": [{"ref": "r", "name": "Goblin", "level": -1, "size": 1}]})
     response = search(stack, campaignId="camp_a", q="gob")
     assert response.status_code == 200 and response.get_json()["results"][0]["name"] == "Goblin"
-    outcomes = iter([("ok", {"actorId": "cmb_x", "name": "Goblin", "size": 1}), ("not-live", {}),
+    outcomes = iter([("ok", {"actorId": "cmb_x", "name": "Goblin", "size": 1}), ("stale", {}), ("not-live", {}),
                      ("not-found", {}), ("unsupported", {}), ("blocked", {"reason": "x"})])
     stack.host.bestiary_add = lambda *args: calls.append(args) or next(outcomes)
     response = add(stack, GOOD)
     assert response.status_code == 200 and response.get_json() == {
         "outcome": "ok", "actorId": "cmb_x", "name": "Goblin", "size": 1}
-    assert calls == [("camp_a", "gob"), ("camp_a", GOOD["ref"], GOOD["requestId"])]
-    assert [add(stack, GOOD).status_code for _ in range(4)] == [409, 404, 422, 422]
+    assert calls == [("camp_a", "gob"), ("camp_a", GOOD["ref"], GOOD["requestId"], "a1b2c3-g4")]
+    assert [add(stack, GOOD).status_code for _ in range(5)] == [409, 409, 404, 422, 422]
 
 
 def test_a_host_without_bestiary_support_says_so(stack):

@@ -102,6 +102,10 @@ def record(entry: dict[str, Any], *, active: bool) -> dict[str, Any]:
         # E-1: the tracker's turn token, echoed by the GM page's turn request.
         "turnToken": entry["vtt_turn"] if isinstance(entry.get("vtt_turn"), str)
         and TURN_TOKEN.fullmatch(entry["vtt_turn"]) else None,
+        # E-3: the encounter generation token, on every actor (party characters
+        # too), echoed by the GM page's bestiary add.
+        "encounterToken": entry["vtt_encounter"] if isinstance(entry.get("vtt_encounter"), str)
+        and TURN_TOKEN.fullmatch(entry["vtt_encounter"]) else None,
     }
 
 

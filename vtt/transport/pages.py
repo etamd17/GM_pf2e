@@ -221,7 +221,8 @@ def make_pages_blueprint(*, db: Database, host, dist_dir: Path, on_change=lambda
                         else ("unsupported", {}))
         return jsonify({"outcome": code, **(detail or {})}), CONDITION_STATUS.get(code, 422)
 
-    BESTIARY_STATUS = {"ok": 200, "not-live": 409, "not-found": 404, "unsupported": 422, "blocked": 422}
+    BESTIARY_STATUS = {"ok": 200, "stale": 409, "not-live": 409, "not-found": 404, "unsupported": 422,
+                       "blocked": 422}
 
     @bp.get("/vtt/api/bestiary")
     def bestiary_search():
@@ -248,11 +249,13 @@ def make_pages_blueprint(*, db: Database, host, dist_dir: Path, on_change=lambda
             return jsonify({"error": "unauthorized"}), 403
         ref = body.get("ref")
         request_id = body.get("requestId")
+        expected = body.get("encounterToken")
         if (not isinstance(ref, str) or not BESTIARY_REF.fullmatch(ref)
-                or not isinstance(request_id, str) or not REQUEST_ID.fullmatch(request_id)):
+                or not isinstance(request_id, str) or not REQUEST_ID.fullmatch(request_id)
+                or not isinstance(expected, str) or not TURN_TOKEN.fullmatch(expected)):
             return jsonify({"error": "bad request"}), 400
         add = getattr(host, "bestiary_add", None)
-        code, detail = add(campaign_id, ref, request_id) if add else ("unsupported", {})
+        code, detail = add(campaign_id, ref, request_id, expected) if add else ("unsupported", {})
         return jsonify({"outcome": code, **(detail or {})}), BESTIARY_STATUS.get(code, 422)
 
     @bp.post("/vtt/api/import-legacy")

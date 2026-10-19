@@ -306,11 +306,14 @@ def test_the_gm_actor_entity_carries_size_and_sheet_link(stack):
 
 def test_records_carry_the_round_on_combatants_only():
     actors = live.build(
-        {"skel": {**entry("Skeleton", 7, 20, active=True), "vtt_round": 3, "vtt_turn": "9f3c2a1b0e4d-12"},
+        {"skel": {**entry("Skeleton", 7, 20, active=True), "vtt_round": 3, "vtt_turn": "9f3c2a1b0e4d-12",
+                  "vtt_encounter": "9f3c2a1b0e4d-g2"},
          "odd": {**entry("Imp", 1, 1), "vtt_round": "3", "vtt_turn": "not a token"},
          "big": {**entry("Rat", 1, 1), "vtt_round": 10**9}},
-        {"valeros": VALEROS})
+        {"valeros": {**VALEROS, "vtt_encounter": "9f3c2a1b0e4d-g2"}})
     assert (actors["cmb_skel"]["round"], actors["cmb_skel"]["turnToken"]) == (3, "9f3c2a1b0e4d-12")
+    assert actors["cmb_skel"]["encounterToken"] == actors["chr_valeros"]["encounterToken"] == "9f3c2a1b0e4d-g2"
+    assert actors["cmb_odd"]["encounterToken"] is None
     assert (actors["cmb_odd"]["round"], actors["cmb_odd"]["turnToken"]) == (None, None)   # malformed: left out
     assert actors["cmb_big"]["round"] == 100000                               # capped
     assert actors["chr_valeros"]["round"] is None and actors["chr_valeros"]["turnToken"] is None

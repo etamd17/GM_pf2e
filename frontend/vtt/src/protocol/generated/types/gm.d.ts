@@ -185,6 +185,10 @@ export interface GmActor {
    * The tracker's turn token on a combatant (E-1); null on a party character. Opaque and never reused: it changes on every turn change and encounter reload. The GM page echoes it when it changes turns.
    */
   turnToken?: string | null;
+  /**
+   * The encounter generation token (E-3), on every actor. Opaque; it changes only when the tracker's roster is replaced wholesale (clear, load, stage, campaign switch). The GM page echoes it when it adds a bestiary creature.
+   */
+  encounterToken?: string | null;
 }
 /**
  * A tracker condition (parity-3): its vocabulary name (ASCII letters, digits, space, underscore, apostrophe, hyphen), and its value when it has one (Frightened 2); null for a plain flag.

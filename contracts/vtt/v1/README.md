@@ -355,11 +355,23 @@ No schema change: the new creature reaches the GM page as a `GmActor`, like any 
   and D&D 5e is `unsupported`. A query under two characters finds nothing; names starting with it
   come first; at most 25. Results are `{ref, name, level, size}` (level is the Cosmere tier; size
   is in squares, from the statblock). `ref` is server-issued and echoed back unchanged.
-- `POST /vtt/api/bestiary/add` (campaign GM, CSRF), body `{campaignId, ref, requestId}`, runs the
-  tracker's own add (initiative, sorting, persistence and broadcast as from `/tracker`) and returns
-  `{actorId, name, size}`; the page then places a token linked to `actorId` with `token.create`.
-  The same `requestId` again returns the first result with `repeat: true` and adds nothing.
-- Outcomes: `ok` (200), `not-live` (409, never activated), `not-found` (404, not in this system's
-  bestiary; a Cosmere PC id is not), `unsupported` (422), `blocked` (422).
+- **`GmActor` gains `encounterToken`** (a string `[A-Za-z0-9-]{1,64}`, or null), on every actor,
+  party characters included: the encounter generation. Opaque; it changes only when the tracker's
+  roster is replaced wholesale (clear, load, stage, campaign switch, an Obsidian room launch), never
+  on a turn change or one creature joining or leaving. The search answer carries it too, for a
+  page whose mirror has no actor at all. (Review 098.)
+- `POST /vtt/api/bestiary/add` (campaign GM, CSRF), body `{campaignId, ref, requestId,
+  encounterToken}`, runs the tracker's own add (initiative, sorting, persistence and broadcast as
+  from `/tracker`) and returns `{actorId, name, size}`; the page then places a token linked to
+  `actorId` with `token.create`.
+  - A token that is not the current one is `stale` (409, with the current `encounterToken`), and
+    nothing is added: the encounter the page showed is gone.
+  - The same `requestId` again returns the first result with `repeat: true` and adds nothing. The
+    receipt is kept as soon as the creature is in the roster; if a later tracker step failed, the
+    answer is `ok` with `incomplete` naming it, and the creature is still added. Receipts are an
+    in-memory window of the last 256 adds: not kept across a restart.
+- Outcomes: `ok` (200), `stale` (409), `not-live` (409, never activated), `not-found` (404, not in
+  this system's bestiary; a Cosmere PC id is not), `unsupported` (422), `blocked` (422, nothing was
+  added).
 - PF2e monsters now read their size from the statblock (`system.traits.size`), so map and VTT
   tokens for Large and bigger creatures start at their real size.

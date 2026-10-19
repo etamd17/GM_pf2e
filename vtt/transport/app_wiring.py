@@ -94,11 +94,11 @@ class AppHost:
             return "unsupported", {}
         return _BESTIARY_SEARCH(campaign_id, query)
 
-    def bestiary_add(self, campaign_id: str, ref: str, request_id: str):
+    def bestiary_add(self, campaign_id: str, ref: str, request_id: str, expected_encounter: str):
         """Add a bestiary creature to the tracker (E-3). (code, detail); see app._vtt_bestiary_add."""
         if _BESTIARY_ADD is None:
             return "unsupported", {}
-        return _BESTIARY_ADD(campaign_id, ref, request_id)
+        return _BESTIARY_ADD(campaign_id, ref, request_id, expected_encounter)
 
     def campaign_system(self, campaign_id: str) -> str | None:
         """The campaign's game system (pf2e, cosmere or dnd5e); None if unknown."""

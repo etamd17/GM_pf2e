@@ -2130,8 +2130,17 @@ def _chronicle_unpublish_dir(chronicle_dir):
 
 
 def _clear_live_encounter_roster():
-    """Clear the loaded combat roster; caller owns request/encounter locking."""
+    """Clear the loaded combat roster; caller owns request/encounter locking.
+
+    Every wholesale replacement of the roster (campaign switch, clear, load,
+    stage, an Obsidian room launch) clears it through here, so the VTT's
+    encounter generation moves on (E-3): a request bound to the encounter the
+    GM page showed is refused once that encounter is gone. Guarded by
+    tests/vtt/test_e3_bestiary.py, which fails on a direct clear elsewhere."""
     ACTIVE_ENCOUNTER.clear()
+    replaced = globals().get('_vtt_encounter_replaced')
+    if replaced is not None:
+        replaced()
 
 
 def _reset_live_runtime_state():
@@ -9319,6 +9328,24 @@ def _vtt_turn_token():
         return f"{_VTT_TURN_BOOT}-{_VTT_TURN_STATE['rev']}"
 
 
+_VTT_ENCOUNTER_STATE = {'gen': 0}
+
+
+def _vtt_encounter_replaced():
+    """The roster was replaced wholesale (see _clear_live_encounter_roster)."""
+    with _VTT_TURN_LOCK:
+        _VTT_ENCOUNTER_STATE['gen'] += 1
+
+
+def _vtt_encounter_token():
+    """The encounter generation token (E-3): this process's boot nonce plus a
+    counter moved only when the roster is replaced wholesale, never by a turn
+    change or one creature joining or leaving. An empty encounter has one too,
+    so the GM can add the first creature to it."""
+    with _VTT_TURN_LOCK:
+        return f"{_VTT_TURN_BOOT}-g{_VTT_ENCOUNTER_STATE['gen']}"
+
+
 def _vtt_turn_observe():
     """Observe the tracker's turn state from a persist or broadcast hook.
     Best effort: it never breaks the tracker."""
@@ -9483,26 +9510,36 @@ def _vtt_bestiary_search(campaign_id, query, limit=25):
         system = (_campaigns.get_campaign(campaign_id) or {}).get('system') or 'pf2e'
         if system not in ('pf2e', 'cosmere'):
             return 'unsupported', {'system': system}
+        token = _vtt_encounter_token()
         q = (query or '').strip().lower()
         if len(q) < 2:
-            return 'ok', {'results': []}
+            return 'ok', {'results': [], 'encounterToken': token}
         found = [(not name.lower().startswith(q), level, name.lower(), ref, name, squares)
                  for ref, name, level, squares in _vtt_bestiary_entries(system) if q in name.lower()]
     found.sort()
     return 'ok', {'results': [{'ref': ref, 'name': name, 'level': level, 'size': squares}
-                              for _, level, _, ref, name, squares in found[:limit]]}
+                              for _, level, _, ref, name, squares in found[:limit]],
+                  'encounterToken': token}
 
 
-def _vtt_bestiary_add(campaign_id, ref, request_id):
+def _vtt_bestiary_add(campaign_id, ref, request_id, expected_encounter=None):
     """Add a bestiary creature to the live encounter (E-3), through the
     tracker's own add_combatant, so initiative, sorting, persistence and
     broadcast happen exactly as from /tracker. The page then places a token
     linked to the returned actor. Refused, never acted on: another campaign
     than the loaded one (never activated), D&D 5e, or a ref this system's
-    bestiary does not have (a Cosmere PC id is not a bestiary entry). The same
-    request id again returns the first result and adds nothing.
-    Returns (code, detail): 'ok' with {actorId, name, size}, 'not-live',
-    'unsupported', 'not-found' or 'blocked'."""
+    bestiary does not have (a Cosmere PC id is not a bestiary entry), or an
+    encounter token that is not the current one ('stale': the encounter the
+    page showed was cleared, loaded over or replaced).
+
+    The same request id again returns the first result and adds nothing. The
+    receipt is recorded as soon as the creature is in the roster, even if the
+    tracker fails after appending it (initiative, sort, persist, broadcast):
+    that answer is 'ok' with 'incomplete' naming the failure, and a retry gets
+    the same creature. Receipts are an in-memory window (the last 256), so
+    protection does not survive a restart or eviction.
+    Returns (code, detail): 'ok' with {actorId, name, size}, 'stale',
+    'not-live', 'unsupported', 'not-found' or 'blocked'."""
     with _LIVE_CAMPAIGN_DISPATCH_LOCK:
         done = _VTT_BESTIARY_ADDED.get(request_id)
         if done is not None:
@@ -9514,6 +9551,9 @@ def _vtt_bestiary_add(campaign_id, ref, request_id):
         system = (_campaigns.get_campaign(campaign_id) or {}).get('system') or 'pf2e'
         if system not in ('pf2e', 'cosmere'):
             return 'unsupported', {'system': system}
+        token = _vtt_encounter_token()
+        if expected_encounter != token:
+            return 'stale', {'encounterToken': token}
         if system == 'pf2e':
             if ref not in MONSTER_LIBRARY:
                 return 'not-found', {}
@@ -9523,18 +9563,29 @@ def _vtt_bestiary_add(campaign_id, ref, request_id):
                 return 'not-found', {}
             kind = 'cosmere'
         before = _loaded_encounter_snapshot()
+        failure = None
         try:
             with app.test_request_context('/api/add_combatant', method='POST', data={'type': kind, 'path': ref}):
                 add_combatant()
         except Exception as error:
-            app.logger.info('VTT bestiary add refused: %s', type(error).__name__)
-            return 'blocked', {'reason': type(error).__name__}
+            failure = type(error).__name__
+            app.logger.info('VTT bestiary add raised: %s', failure)
         added = [c for c in _loaded_encounter_snapshot() if not any(c is old for old in before)]
         if len(added) != 1:
-            return 'blocked', {'reason': 'not added'}
+            # Nothing joined (refused before the append): safe to retry.
+            return 'blocked', {'reason': failure or 'not added'}
         creature = added[0]
         detail = {'actorId': 'cmb_' + str(creature.instance_id), 'name': str(creature.name),
                   'size': _vtt_squares(getattr(creature, 'size', None))}
+        if failure is not None:
+            # The creature is in; what failed came after. Report it, keep the
+            # receipt, and try the save and broadcast once more.
+            detail['incomplete'] = failure
+            for step in (_persist_encounter_state, _broadcast_encounter_state):
+                try:
+                    step()
+                except Exception:
+                    app.logger.info('VTT bestiary add: %s failed again', step.__name__)
         _VTT_BESTIARY_ADDED[request_id] = (campaign_id, detail)
         while len(_VTT_BESTIARY_ADDED) > _VTT_BESTIARY_ADDED_MAX:
             _VTT_BESTIARY_ADDED.popitem(last=False)
@@ -9590,6 +9641,10 @@ def _vtt_live_flush():
                 for entry in combatants.values():
                     entry['vtt_round'] = int(ROUND_NUMBER or 0)
                     entry['vtt_turn'] = turn_token
+                encounter_token = _vtt_encounter_token()
+                for index in (combatants, characters):
+                    for entry in index.values():
+                        entry['vtt_encounter'] = encounter_token
             # 2. The database write and delivery after releasing it (tracker
             #    requests never wait on PostgreSQL), but still inside the flush
             #    lock, so an older snapshot can never commit after a newer one.
@@ -21875,7 +21930,7 @@ def load_encounter():
     except (OSError, json.JSONDecodeError) as e:
         return jsonify({"success": False, "error": f"encounter file is unreadable or corrupt: {e}"}), 500
     if name and os.path.exists(enc_path):
-        ACTIVE_ENCOUNTER.clear(); TURN_INDEX = 0; ROUND_NUMBER = 1; ENCOUNTER_NOTES = ''; ROUND_EVENTS = []
+        _clear_live_encounter_roster(); TURN_INDEX = 0; ROUND_NUMBER = 1; ENCOUNTER_NOTES = ''; ROUND_EVENTS = []
         COSMERE_PHASE_BOUNDARIES.clear()
         _RECENT_DEFEATED[:] = []   # new encounter context — drop stale Undos
 
@@ -22320,7 +22375,7 @@ def api_stage_encounter():
     clear_first = data.get('clear_first', True)
 
     if clear_first:
-        ACTIVE_ENCOUNTER.clear()
+        _clear_live_encounter_roster()
         _RECENT_DEFEATED[:] = []   # new encounter context — drop stale Undos
         TURN_INDEX = 0
         ROUND_NUMBER = 1
@@ -28778,7 +28833,7 @@ def _obsidian_launch_room_encounter(payload):
         else:
             prepared.append((row, MONSTER_LIBRARY[path], count))
 
-    ACTIVE_ENCOUNTER.clear()
+    _clear_live_encounter_roster()
     _RECENT_DEFEATED[:] = []
     TURN_INDEX = 0
     ROUND_NUMBER = 1

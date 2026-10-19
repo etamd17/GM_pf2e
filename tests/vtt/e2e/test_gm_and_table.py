@@ -317,10 +317,23 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
     assert goblin["size"] == 1
     status, giant = gm.evaluate(bestiary, ["/vtt/api/bestiary?q=ogre", None])
     assert any(r["size"] >= 2 for r in giant["results"]), giant          # monster sizes come from the statblock
-    status, added = gm.evaluate(bestiary, ["/vtt/api/bestiary/add", {"ref": goblin["ref"], "requestId": "req-e3e2e000001"}])
+    shown = found["encounterToken"]
+    request = {"ref": goblin["ref"], "requestId": "req-e3e2e000001", "encounterToken": shown}
+    status, added = gm.evaluate(bestiary, ["/vtt/api/bestiary/add", request])
     assert status == 200 and added["outcome"] == "ok" and added["actorId"].startswith("cmb_"), added
-    status, again = gm.evaluate(bestiary, ["/vtt/api/bestiary/add", {"ref": goblin["ref"], "requestId": "req-e3e2e000001"}])
+    status, again = gm.evaluate(bestiary, ["/vtt/api/bestiary/add", request])
     assert status == 200 and again["actorId"] == added["actorId"] and again["repeat"] is True, again
+    assert gm.evaluate(count_in_tracker, "Goblin Warrior") == 1
+    # Review 098: once the tracker clears the encounter, a request bound to the
+    # old one adds nothing; a fresh one (the empty encounter's token) works.
+    status, text = gm.evaluate(tracker_post, ["/api/clear_encounter", {}, True])
+    assert status == 200, text
+    status, stale = gm.evaluate(bestiary, ["/vtt/api/bestiary/add", {**request, "requestId": "req-e3e2e000002"}])
+    assert status == 409 and stale["outcome"] == "stale" and stale["encounterToken"] != shown, stale
+    assert gm.evaluate(count_in_tracker, "Goblin Warrior") == 0
+    status, fresh = gm.evaluate(bestiary, ["/vtt/api/bestiary/add", {**request, "requestId": "req-e3e2e000003",
+                                                                     "encounterToken": stale["encounterToken"]}])
+    assert status == 200 and fresh["outcome"] == "ok", fresh
     assert gm.evaluate(count_in_tracker, "Goblin Warrior") == 1
 
     # --- the table moves to another scene -------------------------------------------------------

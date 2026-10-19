@@ -604,6 +604,20 @@
             }
           ],
           "description": "The tracker's turn token on a combatant (E-1); null on a party character. Opaque and never reused: it changes on every turn change and encounter reload. The GM page echoes it when it changes turns."
+        },
+        "encounterToken": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9-]{1,64}(?![\\s\\S])"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The encounter generation token (E-3), on every actor. Opaque; it changes only when the tracker's roster is replaced wholesale (clear, load, stage, campaign switch). The GM page echoes it when it adds a bestiary creature."
         }
       }
     }

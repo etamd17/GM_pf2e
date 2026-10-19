@@ -107,6 +107,7 @@ def gm_actor(key: TokenKey, campaign_id: str, actor_id: str, data: dict[str, Any
         "maxHp": data.get("maxHp", 0), "conditions": list(data.get("conditions", [])),
         "active": bool(data.get("active")), "hidden": bool(data.get("hidden")), "status": data.get("status", ""),
         "size": data.get("size", 1), "sheetUrl": data.get("sheetUrl"), "round": data.get("round"), "turnToken": data.get("turnToken"),
+        "encounterToken": data.get("encounterToken"),
     }
     return _with_version(key, campaign_id, "gm", "actor", actor_id, fields)
 
