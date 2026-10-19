@@ -765,7 +765,8 @@ OPTIONAL_ROUTE_POLICIES: Mapping[str, RoutePolicy] = build_policy_registry((
     (RoutePolicy.PUBLIC, ("vtt_pages.table_page", "vtt_pages.assets")),
     # The views also require GM of the campaign named in the query.
     (RoutePolicy.CAMPAIGN_GM, ("vtt_pages.gm_page", "vtt_pages.scene_list", "vtt_pages.import_legacy",
-                               "vtt_pages.turn", "vtt_pages.condition")),
+                               "vtt_pages.turn", "vtt_pages.condition", "vtt_pages.bestiary_search",
+                               "vtt_pages.bestiary_add")),
     # The view also requires GM of the campaign named in the body.
     (RoutePolicy.CAMPAIGN_GM, ("vtt_pairing.issue", "vtt_pairing.list_grants", "vtt_pairing.revoke",
                                "vtt_pairing.revoke_all")),

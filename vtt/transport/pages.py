@@ -47,6 +47,12 @@ TURN_TOKEN = re.compile(r"[A-Za-z0-9-]{1,64}")
 CONDITION_NAME = re.compile(r"[a-z][a-z0-9_]{0,39}")
 
 
+# E-3: a bestiary reference (server-issued; a library path or a Foundry id),
+# and a client request id.
+BESTIARY_REF = re.compile(r"[^\x00-\x1f\x7f]{1,240}")
+REQUEST_ID = re.compile(r"[A-Za-z0-9_-]{8,64}")
+
+
 def _small_int(value, high: int) -> bool:
     return isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= high
 
@@ -214,6 +220,40 @@ def make_pages_blueprint(*, db: Database, host, dist_dir: Path, on_change=lambda
         code, detail = (change(campaign_id, actor_id, name, operation, expected, rounds) if change
                         else ("unsupported", {}))
         return jsonify({"outcome": code, **(detail or {})}), CONDITION_STATUS.get(code, 422)
+
+    BESTIARY_STATUS = {"ok": 200, "not-live": 409, "not-found": 404, "unsupported": 422, "blocked": 422}
+
+    @bp.get("/vtt/api/bestiary")
+    def bestiary_search():
+        """Search the campaign's bestiary (E-3): ?campaignId=&q=."""
+        campaign_id = request.args.get("campaignId")
+        if gm_of(campaign_id) is None:
+            return jsonify({"error": "unauthorized"}), 403
+        query = request.args.get("q", "")
+        if len(query) > 80:
+            return jsonify({"error": "bad request"}), 400
+        search = getattr(host, "bestiary_search", None)
+        code, detail = search(campaign_id, query) if search else ("unsupported", {})
+        return jsonify({"outcome": code, **(detail or {})}), BESTIARY_STATUS.get(code, 422)
+
+    @bp.post("/vtt/api/bestiary/add")
+    def bestiary_add():
+        """Add a bestiary creature to the live encounter (E-3), through the
+        tracker. The page places the linked token itself. requestId makes a
+        retry harmless."""
+        body = request.get_json(silent=True)
+        body = body if isinstance(body, dict) else {}
+        campaign_id = body.get("campaignId")
+        if gm_of(campaign_id) is None or not host.csrf_valid(request.headers.get("X-CSRF-Token")):
+            return jsonify({"error": "unauthorized"}), 403
+        ref = body.get("ref")
+        request_id = body.get("requestId")
+        if (not isinstance(ref, str) or not BESTIARY_REF.fullmatch(ref)
+                or not isinstance(request_id, str) or not REQUEST_ID.fullmatch(request_id)):
+            return jsonify({"error": "bad request"}), 400
+        add = getattr(host, "bestiary_add", None)
+        code, detail = add(campaign_id, ref, request_id) if add else ("unsupported", {})
+        return jsonify({"outcome": code, **(detail or {})}), BESTIARY_STATUS.get(code, 422)
 
     @bp.post("/vtt/api/import-legacy")
     def import_legacy():

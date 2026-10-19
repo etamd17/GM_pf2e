@@ -50,6 +50,16 @@ def register_condition_change(fn) -> None:
     _CONDITION_CHANGE = fn
 
 
+# E-3: the bestiary search and add adapters.
+_BESTIARY_SEARCH = None
+_BESTIARY_ADD = None
+
+
+def register_bestiary(search, add) -> None:
+    global _BESTIARY_SEARCH, _BESTIARY_ADD
+    _BESTIARY_SEARCH, _BESTIARY_ADD = search, add
+
+
 class AppHost:
     def current_member_id(self) -> str | None:
         user = _auth.current_user()
@@ -77,6 +87,18 @@ class AppHost:
         if _CONDITION_CHANGE is None:
             return "unsupported", {}
         return _CONDITION_CHANGE(campaign_id, actor_id, condition, operation, expected_value, rounds)
+
+    def bestiary_search(self, campaign_id: str, query: str):
+        """Search the bestiary (E-3). (code, detail); see app._vtt_bestiary_search."""
+        if _BESTIARY_SEARCH is None:
+            return "unsupported", {}
+        return _BESTIARY_SEARCH(campaign_id, query)
+
+    def bestiary_add(self, campaign_id: str, ref: str, request_id: str):
+        """Add a bestiary creature to the tracker (E-3). (code, detail); see app._vtt_bestiary_add."""
+        if _BESTIARY_ADD is None:
+            return "unsupported", {}
+        return _BESTIARY_ADD(campaign_id, ref, request_id)
 
     def campaign_system(self, campaign_id: str) -> str | None:
         """The campaign's game system (pf2e, cosmere or dnd5e); None if unknown."""

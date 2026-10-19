@@ -345,3 +345,21 @@ No schema change: the conditions already reach the GM page in `GmActor.condition
   `invalid` (422: a condition outside the system's list, a combatant of another system, or an
   operation the system does not have), `blocked` (422, the tracker refused).
 - The result reaches every page through the live actor mirror.
+
+## Bestiary to tracker (E-3, Claude, 2026-10-19)
+
+No schema change: the new creature reaches the GM page as a `GmActor`, like any tracker addition.
+
+- `GET /vtt/api/bestiary?campaignId=&q=` (campaign GM) searches the loaded campaign's bestiary:
+  PF2e monsters, or Cosmere adversaries and the campaign's homebrew ones. Never the other system's,
+  and D&D 5e is `unsupported`. A query under two characters finds nothing; names starting with it
+  come first; at most 25. Results are `{ref, name, level, size}` (level is the Cosmere tier; size
+  is in squares, from the statblock). `ref` is server-issued and echoed back unchanged.
+- `POST /vtt/api/bestiary/add` (campaign GM, CSRF), body `{campaignId, ref, requestId}`, runs the
+  tracker's own add (initiative, sorting, persistence and broadcast as from `/tracker`) and returns
+  `{actorId, name, size}`; the page then places a token linked to `actorId` with `token.create`.
+  The same `requestId` again returns the first result with `repeat: true` and adds nothing.
+- Outcomes: `ok` (200), `not-live` (409, never activated), `not-found` (404, not in this system's
+  bestiary; a Cosmere PC id is not), `unsupported` (422), `blocked` (422).
+- PF2e monsters now read their size from the statblock (`system.traits.size`), so map and VTT
+  tokens for Large and bigger creatures start at their real size.

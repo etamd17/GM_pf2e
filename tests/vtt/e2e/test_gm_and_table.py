@@ -286,6 +286,43 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
              timeout_ms=6000)
     gm.get_by_role("button", name="Select", exact=True).click()
 
+    # --- bestiary to tracker (E-3) --------------------------------------------------------------
+    # Search the PF2e bestiary, add a creature through the tracker's own add,
+    # and a retry with the same request id adds nothing.
+    bestiary = """async ([path, body]) => {
+        const boot = JSON.parse(document.getElementById('vtt-boot').textContent);
+        const init = body
+            ? {method: 'POST', body: JSON.stringify({campaignId: boot.campaignId, ...body}),
+               headers: {'X-CSRF-Token': boot.csrf, 'Content-Type': 'application/json'}}
+            : {method: 'GET'};
+        const url = body ? path : path + (path.includes('?') ? '&' : '?') + 'campaignId=' + boot.campaignId;
+        const response = await fetch(url, init);
+        return [response.status, await response.json()];
+    }"""
+    count_in_tracker = """async (name) => {
+        const state = await (await fetch('/api/tracker_state')).json();
+        const ids = new Set();
+        (function walk(v) {
+            if (Array.isArray(v)) v.forEach(walk);
+            else if (v && typeof v === 'object') {
+                if (v.name === name && v.instance_id) ids.add(v.instance_id);
+                Object.values(v).forEach(walk);
+            }
+        })(state);
+        return ids.size;
+    }"""
+    status, found = gm.evaluate(bestiary, ["/vtt/api/bestiary?q=goblin%20warrior", None])
+    assert status == 200 and found["outcome"] == "ok", found
+    goblin = next(r for r in found["results"] if r["name"] == "Goblin Warrior")
+    assert goblin["size"] == 1
+    status, giant = gm.evaluate(bestiary, ["/vtt/api/bestiary?q=ogre", None])
+    assert any(r["size"] >= 2 for r in giant["results"]), giant          # monster sizes come from the statblock
+    status, added = gm.evaluate(bestiary, ["/vtt/api/bestiary/add", {"ref": goblin["ref"], "requestId": "req-e3e2e000001"}])
+    assert status == 200 and added["outcome"] == "ok" and added["actorId"].startswith("cmb_"), added
+    status, again = gm.evaluate(bestiary, ["/vtt/api/bestiary/add", {"ref": goblin["ref"], "requestId": "req-e3e2e000001"}])
+    assert status == 200 and again["actorId"] == added["actorId"] and again["repeat"] is True, again
+    assert gm.evaluate(count_in_tracker, "Goblin Warrior") == 1
+
     # --- the table moves to another scene -------------------------------------------------------
     gm.locator(".vtt-scene-picker").select_option("scene_docks")
     gm.wait_for_url("**sceneId=scene_docks**")

@@ -7323,6 +7323,14 @@ class Monster:
         raw_traits = system.get('traits', {})
         if isinstance(raw_traits, dict):
             self.traits = [str(t) for t in raw_traits.get('value', [])]
+        # Creature size (system.traits.size.value: tiny, sm, med, lg, huge, grg),
+        # named as Character.size is. Read by map/VTT token placement; it was
+        # never parsed, so every monster placed as one square.
+        _size = raw_traits.get('size') if isinstance(raw_traits, dict) else None
+        _size = str((_size.get('value') if isinstance(_size, dict) else _size) or '').strip().lower()
+        self.size = {'tiny': 'Tiny', 'sm': 'Small', 'small': 'Small', 'med': 'Medium', 'medium': 'Medium',
+                     'lg': 'Large', 'large': 'Large', 'huge': 'Huge', 'grg': 'Gargantuan',
+                     'gargantuan': 'Gargantuan'}.get(_size, 'Medium')
         
         # An NPC's real Strikes are `melee` / `ranged` items (they carry the attack
         # bonus + damageRolls). A `weapon` item is inventory; for an NPC it has no
@@ -9431,6 +9439,106 @@ def _vtt_condition_change(campaign_id, actor_id, condition, operation, expected_
         combatant = next((c for c in _loaded_encounter_snapshot() if str(c.instance_id) == instance_id),
                          combatant)
         return 'ok', {'value': _vtt_condition_value(getattr(combatant, 'conditions', {}), condition)}
+
+
+_VTT_TOKEN_SQUARES = {'tiny': .5, 'small': 1, 'medium': 1, 'large': 2, 'huge': 3, 'gargantuan': 4}
+# E-3: recent bestiary additions by request id, so a retried request adds
+# nothing twice. Bounded; held under the dispatch lock.
+_VTT_BESTIARY_ADDED = __import__("collections").OrderedDict()
+_VTT_BESTIARY_ADDED_MAX = 256
+
+
+def _vtt_squares(size):
+    return _VTT_TOKEN_SQUARES.get(str(size or '').strip().lower(), 1)
+
+
+def _vtt_bestiary_entries(system):
+    """(ref, name, level, squares) for every creature this system's tracker
+    can add from its bestiary. PF2e: the monster library, by its path. Cosmere:
+    the adversary bestiary and the campaign's homebrew adversaries, by _id."""
+    if system == 'pf2e':
+        for path, monster in MONSTER_LIBRARY.items():
+            yield path, monster.name, int(getattr(monster, 'level', 0) or 0), _vtt_squares(getattr(monster, 'size', None))
+    elif system == 'cosmere':
+        seen = set()
+        for doc in list(systems.cosmere.adversary_docs()) + list(_load_cosmere_custom_adversaries()):
+            if not isinstance(doc, dict) or not doc.get('_id') or doc['_id'] in seen:
+                continue
+            seen.add(doc['_id'])
+            body = doc.get('system') or {}
+            try:
+                tier = int(body.get('tier') or 0)
+            except (TypeError, ValueError):
+                tier = 0
+            yield doc['_id'], str(doc.get('name') or 'Adversary'), tier, _vtt_squares(body.get('size'))
+
+
+def _vtt_bestiary_search(campaign_id, query, limit=25):
+    """Search the loaded campaign's bestiary (E-3). (code, detail): 'ok' with
+    results [{ref, name, level, size}], 'not-live' or 'unsupported'. A query
+    under two characters finds nothing; names starting with it come first."""
+    with _LIVE_CAMPAIGN_DISPATCH_LOCK:
+        if campaign_id != _loaded_campaign_id():
+            return 'not-live', {}
+        system = (_campaigns.get_campaign(campaign_id) or {}).get('system') or 'pf2e'
+        if system not in ('pf2e', 'cosmere'):
+            return 'unsupported', {'system': system}
+        q = (query or '').strip().lower()
+        if len(q) < 2:
+            return 'ok', {'results': []}
+        found = [(not name.lower().startswith(q), level, name.lower(), ref, name, squares)
+                 for ref, name, level, squares in _vtt_bestiary_entries(system) if q in name.lower()]
+    found.sort()
+    return 'ok', {'results': [{'ref': ref, 'name': name, 'level': level, 'size': squares}
+                              for _, level, _, ref, name, squares in found[:limit]]}
+
+
+def _vtt_bestiary_add(campaign_id, ref, request_id):
+    """Add a bestiary creature to the live encounter (E-3), through the
+    tracker's own add_combatant, so initiative, sorting, persistence and
+    broadcast happen exactly as from /tracker. The page then places a token
+    linked to the returned actor. Refused, never acted on: another campaign
+    than the loaded one (never activated), D&D 5e, or a ref this system's
+    bestiary does not have (a Cosmere PC id is not a bestiary entry). The same
+    request id again returns the first result and adds nothing.
+    Returns (code, detail): 'ok' with {actorId, name, size}, 'not-live',
+    'unsupported', 'not-found' or 'blocked'."""
+    with _LIVE_CAMPAIGN_DISPATCH_LOCK:
+        done = _VTT_BESTIARY_ADDED.get(request_id)
+        if done is not None:
+            if done[0] != campaign_id:
+                return 'blocked', {'reason': 'request id reused'}
+            return 'ok', {**done[1], 'repeat': True}
+        if campaign_id != _loaded_campaign_id():
+            return 'not-live', {}
+        system = (_campaigns.get_campaign(campaign_id) or {}).get('system') or 'pf2e'
+        if system not in ('pf2e', 'cosmere'):
+            return 'unsupported', {'system': system}
+        if system == 'pf2e':
+            if ref not in MONSTER_LIBRARY:
+                return 'not-found', {}
+            kind = 'monster'
+        else:
+            if _cosmere_doc_by_id(ref) is None:
+                return 'not-found', {}
+            kind = 'cosmere'
+        before = _loaded_encounter_snapshot()
+        try:
+            with app.test_request_context('/api/add_combatant', method='POST', data={'type': kind, 'path': ref}):
+                add_combatant()
+        except Exception as error:
+            app.logger.info('VTT bestiary add refused: %s', type(error).__name__)
+            return 'blocked', {'reason': type(error).__name__}
+        added = [c for c in _loaded_encounter_snapshot() if not any(c is old for old in before)]
+        if len(added) != 1:
+            return 'blocked', {'reason': 'not added'}
+        creature = added[0]
+        detail = {'actorId': 'cmb_' + str(creature.instance_id), 'name': str(creature.name),
+                  'size': _vtt_squares(getattr(creature, 'size', None))}
+        _VTT_BESTIARY_ADDED[request_id] = (campaign_id, detail)
+        while len(_VTT_BESTIARY_ADDED) > _VTT_BESTIARY_ADDED_MAX:
+            _VTT_BESTIARY_ADDED.popitem(last=False)
+        return 'ok', detail
 
 
 def _vtt_live_schedule():
@@ -29119,6 +29227,7 @@ if os.environ.get('VTT_ENABLED') == '1':
     VTT_SERVICE = _vtt_wiring.init_from_app(app)
     _vtt_wiring.register_turn_step(_vtt_turn_step)     # E-1: turn changes from the VTT
     _vtt_wiring.register_condition_change(_vtt_condition_change)   # E-2: conditions from the VTT
+    _vtt_wiring.register_bestiary(_vtt_bestiary_search, _vtt_bestiary_add)   # E-3: bestiary to tracker
     _vtt_live_schedule()    # the first mirror of whatever the tracker restored
 
 
