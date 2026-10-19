@@ -3,9 +3,11 @@
 // /vtt/api/turn, which runs the tracker's own next/previous turn, and the
 // result arrives back through the live actor mirror like any tracker change.
 //
-// The request names what the page showed: the combatant whose turn it is and
-// the round. The server refuses anything else ('stale', with the current
-// values), so a double click or a page behind the tracker never skips a turn.
+// The request names what the page showed: the tracker's turn token (never
+// reused: it changes on every turn change and encounter reload), the
+// combatant whose turn it is and the round. The server refuses anything else
+// ('stale', with the current values), so a double click, a replay after Next
+// and Previous, or a page behind the tracker never moves a turn twice.
 // While one request is in flight a second is not sent ('busy').
 //
 // "Previous turn" moves the turn marker back; it does not undo start- or
@@ -21,16 +23,20 @@ export interface TurnResult {
   outcome: TurnOutcome;
   actorId?: string; // the combatant whose turn it now is (ok, stale)
   round?: number;
+  turnToken?: string;
 }
 
 // The combatant whose turn it is, and the round, from the mirror; null when no
 // encounter is running.
-export function currentTurn(entities: Iterable<GmEntity>): { actorId: string; name: string; round: number } | null {
+export function currentTurn(
+  entities: Iterable<GmEntity>,
+): { actorId: string; name: string; round: number; turnToken: string } | null {
   for (const e of entities) {
     if (e.kind !== 'actor') continue;
     const actor = e as Actor;
-    if (actor.active && actor.id.startsWith('cmb_') && typeof actor.round === 'number') {
-      return { actorId: actor.id, name: actor.name, round: actor.round };
+    if (actor.active && actor.id.startsWith('cmb_') && typeof actor.round === 'number'
+        && typeof actor.turnToken === 'string') {
+      return { actorId: actor.id, name: actor.name, round: actor.round, turnToken: actor.turnToken };
     }
   }
   return null;
@@ -67,6 +73,7 @@ export function createTurnController(
             direction,
             expectedActorId: turn.actorId,
             expectedRound: turn.round,
+            turnToken: turn.turnToken,
           }),
         });
         const body = (await response.json().catch(() => null)) as Partial<TurnResult> | null;
@@ -77,6 +84,7 @@ export function createTurnController(
           outcome,
           ...(typeof body?.actorId === 'string' ? { actorId: body.actorId } : {}),
           ...(typeof body?.round === 'number' ? { round: body.round } : {}),
+          ...(typeof body?.turnToken === 'string' ? { turnToken: body.turnToken } : {}),
         };
       } catch {
         return { outcome: 'failed' };

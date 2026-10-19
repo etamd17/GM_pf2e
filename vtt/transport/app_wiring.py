@@ -64,11 +64,12 @@ class AppHost:
         # The app's per-session token (creates one if the session has none).
         return _auth.csrf_token()
 
-    def turn_step(self, campaign_id: str, direction: str, expected_actor_id: str, expected_round: int):
+    def turn_step(self, campaign_id: str, direction: str, expected_actor_id: str, expected_round: int,
+                  expected_token: str):
         """Change turns through the tracker (E-1). (code, detail); see app._vtt_turn_step."""
         if _TURN_STEP is None:
             return "unsupported", {}
-        return _TURN_STEP(campaign_id, direction, expected_actor_id, expected_round)
+        return _TURN_STEP(campaign_id, direction, expected_actor_id, expected_round, expected_token)
 
     def condition_change(self, campaign_id: str, actor_id: str, condition: str, operation: str,
                          expected_value: int, rounds: int = 0):

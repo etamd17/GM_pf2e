@@ -590,6 +590,20 @@
             }
           ],
           "description": "The encounter's round, on a combatant (E-1); null on a party character. The GM page sends it back as the round it expects when it changes turns."
+        },
+        "turnToken": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9-]{1,64}(?![\\s\\S])",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The tracker's turn token on a combatant (E-1); null on a party character. Opaque and never reused: it changes on every turn change and encounter reload. The GM page echoes it when it changes turns."
         }
       }
     }

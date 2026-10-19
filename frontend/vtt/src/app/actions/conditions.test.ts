@@ -6,7 +6,7 @@ type Of<K extends GmEntity['kind']> = Extract<GmEntity, { kind: K }>;
 const V = 'vAAAAAAAAAAAAAAAAAAAAAAAA';
 const actor = (id: string, conditions: Of<'actor'>['conditions'] = []) =>
   ({ kind: 'actor', id, version: V, name: id, pc: false, hp: 1, maxHp: 1, conditions, active: false,
-     hidden: false, status: '', size: 1, sheetUrl: null, round: 1 }) as Of<'actor'>;
+     hidden: false, status: '', size: 1, sheetUrl: null, round: 1, turnToken: 'boot-1' }) as Of<'actor'>;
 
 const boot = { campaignId: 'camp_a', csrf: 'token' };
 

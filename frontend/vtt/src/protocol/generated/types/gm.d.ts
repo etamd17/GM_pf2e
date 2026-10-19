@@ -181,6 +181,10 @@ export interface GmActor {
    * The encounter's round, on a combatant (E-1); null on a party character. The GM page sends it back as the round it expects when it changes turns.
    */
   round?: number | null;
+  /**
+   * The tracker's turn token on a combatant (E-1); null on a party character. Opaque and never reused: it changes on every turn change and encounter reload. The GM page echoes it when it changes turns.
+   */
+  turnToken?: string | null;
 }
 /**
  * A tracker condition (parity-3): its vocabulary name (ASCII letters, digits, space, underscore, apostrophe, hyphen), and its value when it has one (Frightened 2); null for a plain flag.

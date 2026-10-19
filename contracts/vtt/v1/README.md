@@ -310,12 +310,19 @@ Digest `dd14bd57...`.
 
 - **`GmActor` gains `round`** (an integer 0-100000, or null): the encounter's round on a tracker
   combatant (`cmb_`), null on a party character (`chr_`). Optional in the schema, always sent.
+- **`GmActor` gains `turnToken`** (a string `[A-Za-z0-9-]{1,64}`, or null): the tracker's turn
+  token on a combatant, null on a party character. Opaque and **never reused**: a boot nonce plus a
+  revision that moves on every change of the encounter's combatant objects, turn index or round.
+  So Next then Previous, or reloading a saved encounter with the same ids and round, gives a new
+  token. Optional in the schema, always sent. (Review 095.)
 - The GM page changes turns with `POST /vtt/api/turn` (campaign GM, CSRF), body
-  `{campaignId, direction: "next"|"prev", expectedActorId, expectedRound}`: the active combatant and
-  round it showed. The server runs the tracker's own next/previous turn, so every start- and
-  end-of-turn rule runs as it does from `/tracker`. It answers `{outcome, ...}`:
-  - `ok` (200) with the new `actorId` and `round`;
-  - `stale` (409) with the current values, when the page was behind (a duplicate click is this);
+  `{campaignId, direction: "next"|"prev", expectedActorId, expectedRound, turnToken}`: the turn it
+  showed. The server compares the token, actor and round under the dispatch lock, then runs the
+  tracker's own next/previous turn, so every start- and end-of-turn rule runs as it does from
+  `/tracker`. An accepted request runs at most once. It answers `{outcome, ...}`:
+  - `ok` (200) with the new `actorId`, `round` and `turnToken`;
+  - `stale` (409) with the current values, when the page was behind: a duplicate click, a replay
+    after Next and Previous, or a request from before an encounter reload;
   - `not-live` (409) when the campaign is not the loaded one (it is never activated);
   - `no-encounter` (409); `unsupported` (422, a system without an integrated tracker: D&D 5e);
   - `blocked` (422) when the tracker refused; nothing moved.

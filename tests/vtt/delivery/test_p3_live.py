@@ -306,19 +306,19 @@ def test_the_gm_actor_entity_carries_size_and_sheet_link(stack):
 
 def test_records_carry_the_round_on_combatants_only():
     actors = live.build(
-        {"skel": {**entry("Skeleton", 7, 20, active=True), "vtt_round": 3},
-         "odd": {**entry("Imp", 1, 1), "vtt_round": "3"},
+        {"skel": {**entry("Skeleton", 7, 20, active=True), "vtt_round": 3, "vtt_turn": "9f3c2a1b0e4d-12"},
+         "odd": {**entry("Imp", 1, 1), "vtt_round": "3", "vtt_turn": "not a token"},
          "big": {**entry("Rat", 1, 1), "vtt_round": 10**9}},
         {"valeros": VALEROS})
-    assert actors["cmb_skel"]["round"] == 3
-    assert actors["cmb_odd"]["round"] is None                                 # not an int: left out
+    assert (actors["cmb_skel"]["round"], actors["cmb_skel"]["turnToken"]) == (3, "9f3c2a1b0e4d-12")
+    assert (actors["cmb_odd"]["round"], actors["cmb_odd"]["turnToken"]) == (None, None)   # malformed: left out
     assert actors["cmb_big"]["round"] == 100000                               # capped
-    assert actors["chr_valeros"]["round"] is None
+    assert actors["chr_valeros"]["round"] is None and actors["chr_valeros"]["turnToken"] is None
 
 
 def test_the_gm_actor_entity_carries_the_round(stack):
     gm, _ = setup(stack)
     held = Gm(gm)
-    mirror(stack, {"skel": {**SKELETON, "is_active": True, "vtt_round": 2}}, {})
+    mirror(stack, {"skel": {**SKELETON, "is_active": True, "vtt_round": 2, "vtt_turn": "abc-3"}}, {})
     actor = held.now()[("actor", "cmb_skel")]
-    assert (actor["active"], actor["round"]) == (True, 2)
+    assert (actor["active"], actor["round"], actor["turnToken"]) == (True, 2, "abc-3")

@@ -211,18 +211,35 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
             headers: {'X-CSRF-Token': boot.csrf, 'Content-Type': 'application/json'}});
         return [response.status, await response.json()];
     }"""
-    # A page behind the tracker is told where it is, and nothing moves.
-    status, now = gm.evaluate(turn, {"direction": "next", "expectedActorId": f"cmb_{instance}", "expectedRound": 99999})
-    assert status == 409 and now["outcome"] == "stale" and now["actorId"] == f"cmb_{instance}", now
-    status, moved = gm.evaluate(turn, {"direction": "next", "expectedActorId": f"cmb_{instance}", "expectedRound": now["round"]})
+    # A page behind the tracker is told where it is (with the turn token), and nothing moves.
+    hero = f"cmb_{instance}"
+    status, now = gm.evaluate(turn, {"direction": "next", "expectedActorId": hero, "expectedRound": 99999,
+                                     "turnToken": "old-1"})
+    assert status == 409 and now["outcome"] == "stale" and now["actorId"] == hero, now
+    shown = {"expectedActorId": hero, "expectedRound": now["round"], "turnToken": now["turnToken"]}
+    status, moved = gm.evaluate(turn, {"direction": "next", **shown})
     assert status == 200 and moved["outcome"] == "ok" and moved["actorId"] == zombie, moved
     wait_for(tv, lambda s: (token(s, "tok_hero")["live"] or {}).get("active") is False, "the turn moved off the hero's monster")
     # The same click again is stale: no turn is skipped.
-    status, again = gm.evaluate(turn, {"direction": "next", "expectedActorId": f"cmb_{instance}", "expectedRound": now["round"]})
+    status, again = gm.evaluate(turn, {"direction": "next", **shown})
     assert status == 409 and again["outcome"] == "stale" and again["actorId"] == zombie, again
-    status, back = gm.evaluate(turn, {"direction": "prev", "expectedActorId": zombie, "expectedRound": moved["round"]})
-    assert status == 200 and back["actorId"] == f"cmb_{instance}", back
+    status, back = gm.evaluate(turn, {"direction": "prev", "expectedActorId": zombie, "expectedRound": moved["round"],
+                                      "turnToken": moved["turnToken"]})
+    assert status == 200 and back["actorId"] == hero and back["round"] == now["round"], back
     wait_for(tv, lambda s: (token(s, "tok_hero")["live"] or {}).get("active") is True, "previous turn comes back to it")
+    # Review 095: back at the same actor and round, the original Next is still stale.
+    status, replay = gm.evaluate(turn, {"direction": "next", **shown})
+    assert status == 409 and replay["outcome"] == "stale" and replay["actorId"] == hero, replay
+    # ... and so is a request from before the tracker reloads a saved encounter
+    # (same instance ids, same round).
+    status, text = gm.evaluate(tracker_post, ["/api/save_encounter", {"encounter_name": "e1 check"}, True])
+    assert status == 200, text
+    status, text = gm.evaluate(tracker_post, ["/api/load_encounter", {"encounter_name": "e1 check"}, True])
+    assert status == 200, text
+    status, reloaded = gm.evaluate(turn, {"direction": "next", "expectedActorId": hero, "expectedRound": back["round"],
+                                          "turnToken": back["turnToken"]})
+    assert status == 409 and reloaded["outcome"] == "stale" and reloaded["actorId"] == hero, reloaded
+    assert reloaded["turnToken"] != back["turnToken"]
 
     # --- conditions from the map (E-2) ------------------------------------------------------------
     condition = """async (body) => {

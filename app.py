@@ -2456,6 +2456,9 @@ def _persist_encounter_state():
     """Mark encounter state dirty. A background thread flushes to disk."""
     global _PERSIST_DIRTY
     _PERSIST_DIRTY = True
+    observe = globals().get('_vtt_turn_observe')       # E-1: the VTT's turn token
+    if observe is not None:
+        observe()
 
 def _do_persist_encounter_state_unlocked():
     """Write the active encounter and report whether durable state is current."""
@@ -3199,6 +3202,9 @@ def _broadcast_encounter_state():
     global _ENC_BROADCAST_TIMER, _ENC_BROADCAST_PENDING
     _bump_perf('enc_broadcast_total')
     _invalidate_tracker_cache()
+    observe = globals().get('_vtt_turn_observe')       # E-1: the VTT's turn token
+    if observe is not None:
+        observe()
     with _ENC_BROADCAST_LOCK:
         if _ENC_BROADCAST_PENDING:
             _bump_perf('enc_broadcast_coalesced')
@@ -9267,15 +9273,65 @@ def _vtt_actor_hints(cid):
     return hints
 
 
-def _vtt_turn_step(campaign_id, direction, expected_actor_id, expected_round):
+# --- E-1: the turn token -----------------------------------------------------------------------
+# The GM page's turn request must name the exact turn it showed. Actor and
+# round are not enough: Next then Previous returns to the same pair, and a
+# reloaded encounter keeps its instance ids and round. So the tracker's turn
+# state carries a token that is never reused: this process's boot nonce plus a
+# revision that moves on every observed change of (which combatant objects
+# are in the encounter, TURN_INDEX, ROUND_NUMBER). Combatant objects are
+# numbered through a weak map, so a reloaded encounter (fresh objects, same
+# ids) is a new encounter. Changes are observed wherever the tracker persists
+# or broadcasts encounter state (every tracker mutation does both), by the
+# live mirror, and by the turn route itself before it compares.
+_VTT_TURN_BOOT = __import__('secrets').token_hex(6)
+_VTT_TURN_LOCK = threading.Lock()
+_VTT_TURN_STATE = {'rev': 0, 'seen': None}
+_VTT_TURN_IDS = __import__('weakref').WeakKeyDictionary()
+_VTT_TURN_COUNTER = __import__('itertools').count(1)
+
+
+def _vtt_turn_token():
+    """The current turn token, moving the revision on if the turn state
+    changed since it was last observed."""
+    with _VTT_TURN_LOCK:
+        idents = []
+        for combatant in _loaded_encounter_snapshot():
+            try:
+                ident = _VTT_TURN_IDS.get(combatant)
+                if ident is None:
+                    ident = _VTT_TURN_IDS[combatant] = next(_VTT_TURN_COUNTER)
+            except TypeError:                 # not weak-referenceable: identity for its lifetime
+                ident = ('id', id(combatant))
+            idents.append(ident)
+        seen = (tuple(idents), TURN_INDEX, ROUND_NUMBER)
+        if seen != _VTT_TURN_STATE['seen']:
+            _VTT_TURN_STATE['seen'] = seen
+            _VTT_TURN_STATE['rev'] += 1
+        return f"{_VTT_TURN_BOOT}-{_VTT_TURN_STATE['rev']}"
+
+
+def _vtt_turn_observe():
+    """Observe the tracker's turn state from a persist or broadcast hook.
+    Best effort: it never breaks the tracker."""
+    try:
+        _vtt_turn_token()
+    except Exception:
+        pass
+
+
+def _vtt_turn_step(campaign_id, direction, expected_actor_id, expected_round, expected_token=None):
     """Change turns from the VTT (E-1), through the tracker's own cycle_turn so
     every start- and end-of-turn rule runs exactly as it does from /tracker.
 
     Bound to what the GM page showed: refused, never acting on anything else,
     when the campaign is not the loaded one (it is never activated silently),
     when the campaign's system has no integrated tracker (D&D 5e), when no
-    encounter is running, or when the current combatant or round is not the
-    one the page expected. A duplicate click is therefore a harmless 'stale'.
+    encounter is running, or when the turn token, combatant or round is not
+    the one the page showed. The token is never reused (see _vtt_turn_token),
+    so a duplicate click, a replay after Next and Previous, or a request from
+    before an encounter reload is a harmless 'stale', and an accepted request
+    runs at most once.
     Returns (code, detail): code is 'ok', 'not-live', 'unsupported',
     'no-encounter', 'stale' or 'blocked'."""
     if direction not in ('next', 'prev'):
@@ -9286,11 +9342,14 @@ def _vtt_turn_step(campaign_id, direction, expected_actor_id, expected_round):
         campaign = _campaigns.get_campaign(campaign_id) or {}
         if (campaign.get('system') or 'pf2e') not in ('pf2e', 'cosmere'):
             return 'unsupported', {'system': campaign.get('system')}
-        if not ACTIVE_ENCOUNTER or not (0 <= TURN_INDEX < len(ACTIVE_ENCOUNTER)):
+        encounter = _loaded_encounter_snapshot()
+        if not encounter or not (0 <= TURN_INDEX < len(encounter)):
             return 'no-encounter', {}
-        current = 'cmb_' + str(ACTIVE_ENCOUNTER[TURN_INDEX].instance_id)
-        if current != expected_actor_id or int(ROUND_NUMBER or 0) != expected_round:
-            return 'stale', {'actorId': current, 'round': int(ROUND_NUMBER or 0)}
+        current = 'cmb_' + str(encounter[TURN_INDEX].instance_id)
+        token = _vtt_turn_token()
+        if (token != expected_token or current != expected_actor_id
+                or int(ROUND_NUMBER or 0) != expected_round):
+            return 'stale', {'actorId': current, 'round': int(ROUND_NUMBER or 0), 'turnToken': token}
         try:
             # The tracker's route, in a request of its own: its preflight and
             # every turn rule run unchanged; its response is not needed.
@@ -9300,8 +9359,9 @@ def _vtt_turn_step(campaign_id, direction, expected_actor_id, expected_round):
             # The preflight refuses an immutable actor, and so on: nothing moved.
             app.logger.info('VTT turn step refused: %s', type(error).__name__)
             return 'blocked', {'reason': type(error).__name__}
-        now = 'cmb_' + str(ACTIVE_ENCOUNTER[TURN_INDEX].instance_id) if ACTIVE_ENCOUNTER else None
-        return 'ok', {'actorId': now, 'round': int(ROUND_NUMBER or 0)}
+        encounter = _loaded_encounter_snapshot()
+        now = 'cmb_' + str(encounter[TURN_INDEX].instance_id) if 0 <= TURN_INDEX < len(encounter) else None
+        return 'ok', {'actorId': now, 'round': int(ROUND_NUMBER or 0), 'turnToken': _vtt_turn_token()}
 
 
 def _vtt_condition_value(conditions, condition):
@@ -9339,8 +9399,8 @@ def _vtt_condition_change(campaign_id, actor_id, condition, operation, expected_
         if system not in ('pf2e', 'cosmere'):
             return 'unsupported', {'system': campaign.get('system')}
         instance_id = actor_id[4:] if isinstance(actor_id, str) and actor_id.startswith('cmb_') else None
-        combatant = next((c for c in ACTIVE_ENCOUNTER if str(c.instance_id) == instance_id), None) \
-            if instance_id else None
+        combatant = next((c for c in _loaded_encounter_snapshot() if str(c.instance_id) == instance_id),
+                         None) if instance_id else None
         if combatant is None:
             return 'not-in-encounter', {}
         if (getattr(combatant, 'system', 'pf2e') or 'pf2e') != system:
@@ -9368,7 +9428,8 @@ def _vtt_condition_change(campaign_id, actor_id, condition, operation, expected_
             return 'blocked', {'reason': type(error).__name__}
         if not applied:
             return 'blocked', {'reason': 'not applied'}
-        combatant = next((c for c in ACTIVE_ENCOUNTER if str(c.instance_id) == instance_id), combatant)
+        combatant = next((c for c in _loaded_encounter_snapshot() if str(c.instance_id) == instance_id),
+                         combatant)
         return 'ok', {'value': _vtt_condition_value(getattr(combatant, 'conditions', {}), condition)}
 
 
@@ -9417,8 +9478,10 @@ def _vtt_live_flush():
                             entry['vtt_hints'] = hints[(kind, key)]
                 # The round, on every combatant (E-1: the GM page sends it back as
                 # the round it expects when it changes turns).
+                turn_token = _vtt_turn_token() if combatants else None
                 for entry in combatants.values():
                     entry['vtt_round'] = int(ROUND_NUMBER or 0)
+                    entry['vtt_turn'] = turn_token
             # 2. The database write and delivery after releasing it (tracker
             #    requests never wait on PostgreSQL), but still inside the flush
             #    lock, so an older snapshot can never commit after a newer one.

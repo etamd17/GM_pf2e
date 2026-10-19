@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # The VTT branch too: its own workflow (vtt.yml) does not run the app-wide
+    # gates, and 71 commits once went unchecked against them.
+    branches: [main, agent/claude-vtt-platform]
   pull_request:
 
 permissions:

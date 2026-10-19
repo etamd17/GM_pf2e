@@ -39,6 +39,7 @@ ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 SHEET_URL = re.compile(r"/(?![/\\])[A-Za-z0-9._~%!$&'()*+,;=:@/?#-]{0,255}")
 # Condition names come from the tracker's own vocabulary ('frightened',
 # 'off_guard'); the contract keeps them ASCII so a full actor set stays small.
+TURN_TOKEN = re.compile(r"[A-Za-z0-9-]{1,64}")
 CONDITION_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _'-]{0,39}$")
 # The contract's Label rule: no C0/C1 controls, bidi overrides/isolates or lone surrogates.
 CONTROL = re.compile("[\x00-\x1f\x7f-\x9f‪-‮⁦-⁩\ud800-\udfff]")
@@ -98,6 +99,9 @@ def record(entry: dict[str, Any], *, active: bool) -> dict[str, Any]:
         **_placement(entry.get("vtt_hints")),
         # E-1: the round on a combatant (null on a party character).
         "round": _int(entry["vtt_round"], 0, 100000) if isinstance(entry.get("vtt_round"), int) else None,
+        # E-1: the tracker's turn token, echoed by the GM page's turn request.
+        "turnToken": entry["vtt_turn"] if isinstance(entry.get("vtt_turn"), str)
+        and TURN_TOKEN.fullmatch(entry["vtt_turn"]) else None,
     }
 
 

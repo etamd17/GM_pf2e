@@ -11,7 +11,8 @@ def post(stack, body, csrf=CSRF):
                                         base_url="https://localhost")
 
 
-GOOD = {"campaignId": "camp_a", "direction": "next", "expectedActorId": "cmb_a1", "expectedRound": 3}
+GOOD = {"campaignId": "camp_a", "direction": "next", "expectedActorId": "cmb_a1", "expectedRound": 3,
+        "turnToken": "a1b2c3-7"}
 
 
 def test_the_route_needs_the_campaign_gm_and_csrf(stack):
@@ -29,7 +30,9 @@ def test_a_malformed_body_is_refused_before_the_tracker(stack):
     stack.host.turn_step = lambda *args: calls.append(args) or ("ok", {})
     for bad in ({**GOOD, "direction": "skip"}, {**GOOD, "expectedActorId": "../x"},
                 {**GOOD, "expectedRound": "3"}, {**GOOD, "expectedRound": True}, {**GOOD, "expectedRound": -1},
-                {k: v for k, v in GOOD.items() if k != "expectedActorId"}):
+                {k: v for k, v in GOOD.items() if k != "expectedActorId"},
+                {k: v for k, v in GOOD.items() if k != "turnToken"}, {**GOOD, "turnToken": "a b"},
+                {**GOOD, "turnToken": 7}, {**GOOD, "turnToken": "x" * 65}):
         assert post(stack, bad).status_code == 400, bad
     assert calls == []
 
@@ -42,7 +45,7 @@ def test_it_passes_exactly_what_the_page_showed_and_maps_the_outcome(stack):
     stack.host.turn_step = lambda *args: calls.append(args) or next(outcomes)
     response = post(stack, GOOD)
     assert response.status_code == 200 and response.get_json() == {"outcome": "ok", "actorId": "cmb_b2", "round": 3}
-    assert calls == [("camp_a", "next", "cmb_a1", 3)]
+    assert calls == [("camp_a", "next", "cmb_a1", 3, "a1b2c3-7")]
     assert [post(stack, GOOD).status_code for _ in range(5)] == [409, 409, 409, 422, 422]
 
 

@@ -41,7 +41,8 @@ def vtt(monkeypatch):
 def test_a_flush_mirrors_the_loaded_campaign(vtt, monkeypatch):
     monkeypatch.setattr(app_module, "_loaded_campaign_id", lambda: "camp_a")
     app_module._vtt_live_flush()
-    assert vtt.calls == [("camp_a", {"c1": {"name": "from camp_a", "vtt_round": 1}}, {"p1": {"name": "Valeros"}})]
+    assert vtt.calls == [("camp_a", {"c1": {"name": "from camp_a", "vtt_round": 1, "vtt_turn": app_module._vtt_turn_token()}},
+                          {"p1": {"name": "Valeros"}})]
 
 
 def test_switching_campaigns_empties_the_previous_mirror_first(vtt, monkeypatch):
@@ -132,7 +133,8 @@ def test_a_flush_never_sees_a_half_rebound_campaign(vtt, monkeypatch):
         worker.join(0.5)
         state["encounter"] = "camp_b fight"             # ... and then reloaded
     worker.join(10)
-    assert vtt.calls == [("camp_b", {"c1": {"name": "camp_b fight", "vtt_round": 1}}, {})]
+    assert vtt.calls == [("camp_b", {"c1": {"name": "camp_b fight", "vtt_round": 1,
+                                           "vtt_turn": app_module._vtt_turn_token()}}, {})]
 
 
 def test_an_older_snapshot_never_commits_after_a_newer_one(vtt, monkeypatch):
@@ -173,7 +175,8 @@ def test_the_snapshot_is_detached_from_the_tracker(vtt, monkeypatch):
     monkeypatch.setattr(app_module, "_scene_live_indexes", lambda cid: (shared, {}))
     app_module._vtt_live_flush()
     sent = vtt.calls[0][1]
-    assert sent == {"c1": {**shared["c1"], "vtt_round": 1}} and "vtt_round" not in shared["c1"]
+    assert sent == {"c1": {**shared["c1"], "vtt_round": 1, "vtt_turn": app_module._vtt_turn_token()}}
+    assert "vtt_round" not in shared["c1"] and "vtt_turn" not in shared["c1"]
     assert sent is not shared and sent["c1"]["conditions"] is not shared["c1"]["conditions"]
 
 

@@ -6,7 +6,8 @@ type Of<K extends GmEntity['kind']> = Extract<GmEntity, { kind: K }>;
 const V = 'vAAAAAAAAAAAAAAAAAAAAAAAA';
 const actor = (id: string, extra: Partial<Of<'actor'>> = {}) =>
   ({ kind: 'actor', id, version: V, name: id, pc: false, hp: 1, maxHp: 1, conditions: [], active: false,
-     hidden: false, status: '', size: 1, sheetUrl: null, round: id.startsWith('cmb_') ? 2 : null, ...extra }) as Of<'actor'>;
+     hidden: false, status: '', size: 1, sheetUrl: null, round: id.startsWith('cmb_') ? 2 : null,
+     turnToken: id.startsWith('cmb_') ? 'boot-5' : null, ...extra }) as Of<'actor'>;
 
 const boot = { campaignId: 'camp_a', csrf: 'token' };
 
@@ -22,20 +23,21 @@ function fakeFetch(reply: unknown, status = 200) {
 describe('currentTurn', () => {
   it('is the active combatant and its round, ignoring an active party character', () => {
     expect(currentTurn([actor('chr_valeros', { active: true }), actor('cmb_skel', { active: true, name: 'Skeleton' })]))
-      .toEqual({ actorId: 'cmb_skel', name: 'Skeleton', round: 2 });
+      .toEqual({ actorId: 'cmb_skel', name: 'Skeleton', round: 2, turnToken: 'boot-5' });
     expect(currentTurn([actor('cmb_skel')])).toBeNull();
+    expect(currentTurn([actor('cmb_skel', { active: true, turnToken: null })])).toBeNull();   // an older mirror
   });
 });
 
 describe('the turn controller', () => {
   it('sends what the page showed, with the CSRF token, and reports the new turn', async () => {
-    const f = fakeFetch({ outcome: 'ok', actorId: 'cmb_zombie', round: 2 });
+    const f = fakeFetch({ outcome: 'ok', actorId: 'cmb_zombie', round: 2, turnToken: 'boot-6' });
     const turns = createTurnController(boot, f.impl);
     const result = await turns.change('next', [actor('cmb_skel', { active: true })]);
-    expect(result).toEqual({ outcome: 'ok', actorId: 'cmb_zombie', round: 2 });
+    expect(result).toEqual({ outcome: 'ok', actorId: 'cmb_zombie', round: 2, turnToken: 'boot-6' });
     expect(f.calls[0]?.url).toBe('/vtt/api/turn');
     expect(JSON.parse(String(f.calls[0]?.init.body))).toEqual({
-      campaignId: 'camp_a', direction: 'next', expectedActorId: 'cmb_skel', expectedRound: 2,
+      campaignId: 'camp_a', direction: 'next', expectedActorId: 'cmb_skel', expectedRound: 2, turnToken: 'boot-5',
     });
     expect((f.calls[0]?.init.headers as Record<string, string>)['X-CSRF-Token']).toBe('token');
   });

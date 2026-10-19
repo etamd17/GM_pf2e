@@ -41,6 +41,8 @@ def _boot_script(data: dict) -> str:
 
 # E-1: a turn is expected to be a tracker combatant's (vtt.live ids).
 COMBATANT_ID = re.compile(r"cmb_[A-Za-z0-9_-]{1,124}")
+# E-1: the tracker's turn token (app._vtt_turn_token; GmActor.turnToken).
+TURN_TOKEN = re.compile(r"[A-Za-z0-9-]{1,64}")
 # E-2: a condition name, as the actor mirror carries it (vtt.live.CONDITION_NAME).
 CONDITION_NAME = re.compile(r"[a-z][a-z0-9_]{0,39}")
 
@@ -172,12 +174,15 @@ def make_pages_blueprint(*, db: Database, host, dist_dir: Path, on_change=lambda
         direction = body.get("direction")
         actor_id = body.get("expectedActorId")
         expected_round = body.get("expectedRound")
+        expected_token = body.get("turnToken")
         if (direction not in ("next", "prev") or not isinstance(actor_id, str) or not COMBATANT_ID.fullmatch(actor_id)
+                or not isinstance(expected_token, str) or not TURN_TOKEN.fullmatch(expected_token)
                 or not isinstance(expected_round, int) or isinstance(expected_round, bool)
                 or not 0 <= expected_round <= 100000):
             return jsonify({"error": "bad request"}), 400
         step = getattr(host, "turn_step", None)
-        code, detail = step(campaign_id, direction, actor_id, expected_round) if step else ("unsupported", {})
+        code, detail = (step(campaign_id, direction, actor_id, expected_round, expected_token) if step
+                        else ("unsupported", {}))
         status = TURN_STATUS.get(code, 422)
         return jsonify({"outcome": code, **(detail or {})}), status
 
