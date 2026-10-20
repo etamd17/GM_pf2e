@@ -52,3 +52,23 @@ describe('the mask key', () => {
     expect(visionSignature({ ...base, occluders: [{ x1: 0, y1: 0, x2: 5, y2: 5 }] })).not.toBe(key);
   });
 });
+
+describe('the GM preview uses only what the table would see by (review 106)', () => {
+  const pc = { id: 'pc', x: 100, y: 100, size: 1, label: 'PC', color: 1, vision: 256 };
+  // A 10 x 8 fog grid (64 px cells) with only cell (1, 1) revealed.
+  const bits = new Uint8Array(Math.ceil(80 / 8));
+  const index = 1 * 10 + 1;
+  bits[index >> 3] = (bits[index >> 3] ?? 0) | (1 << (index & 7));
+  const fog = { enabled: true, cols: 10, rows: 8, bits, key: 'f1' };
+
+  it('drops a hidden token (hidden, or its actor hidden in the tracker)', () => {
+    expect(visionSources(scene({ tokens: [{ ...pc, hidden: true }] }))).toEqual([]);
+  });
+
+  it('drops a token or a light whose centre fog hides, as the table projection does', () => {
+    const torch = { id: 'l', x: 500, y: 300, radius: 64, color: 1 };
+    const fogged = scene({ fog, tokens: [pc, { ...pc, id: 'pc2', x: 400 }], lights: [torch, { ...torch, id: 'l2', x: 90, y: 90 }] });
+    expect(visionSources(fogged)).toEqual([{ x: 100, y: 100, radius: 256 }, { x: 90, y: 90, radius: 128 }]);
+    expect(visionSources({ ...fogged, fog: { ...fog, enabled: false } })).toHaveLength(4);
+  });
+});

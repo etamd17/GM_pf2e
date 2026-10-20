@@ -151,6 +151,10 @@ export class SceneRuntime {
   // E-6: the darkness mask, cached on what it depends on (visionSignature, the
   // surface and the GM's preview switch); recomputed only when that changes.
   private visionMask: { key: string; texture: Texture } | null = null;
+  // The layer the darkness was last attached to. A renderer rebuild replaces
+  // every layer (review 106): the cached texture is reused, but it must be
+  // attached to the new layer again.
+  private visionLayer: Container | null = null;
   private visionPreview = false;
   private visionStats: { sources: number; occluders: number; builds: number } = { sources: 0, occluders: 0, builds: 0 };
   // Painted terrain (parity P2), the same one-pixel-per-cell approach.
@@ -1022,11 +1026,17 @@ export class SceneRuntime {
         this.visionMask.texture.destroy(true);
         this.visionMask = null;
         this.replaceLayerContent('vision', null);
+        this.visionLayer = null;
       }
       return;
     }
     const key = `${surface}:${this.visionPreview ? 1 : 0}:${visionSignature(scene)}`;
-    if (this.visionMask?.key === key) return;
+    if (this.visionMask?.key === key) {
+      // The texture is current; attach it if this layer does not have it yet
+      // (a rebuilt renderer, or a preview switched on before the layers existed).
+      if (this.layer('vision') !== this.visionLayer) this.attachVision(scene, this.visionMask.texture);
+      return;
+    }
     const scale = 0.5;
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.ceil(scene.width * scale));
@@ -1054,15 +1064,24 @@ export class SceneRuntime {
     const texture = Texture.from(canvas);
     texture.source.scaleMode = 'linear';
     this.visionMask = { key, texture };
+    this.attachVision(scene, texture);
+  }
+
+  private attachVision(scene: RenderScene, texture: Texture): void {
+    const layer = this.layer('vision');
+    if (!layer) {
+      this.visionLayer = null;      // no layers yet: attached once they exist
+      return;
+    }
     const sprite = new Sprite(texture);
     sprite.width = scene.width;
     sprite.height = scene.height;
     const root = new Container({ label: 'vision' });
     root.addChild(sprite);
-    const layer = this.layer('vision');
-    if (!layer) return;
+    // The darkness texture is this runtime's own; never destroyed with a sprite.
     for (const old of layer.removeChildren()) old.destroy({ children: true, texture: false });
     layer.addChild(root);
+    this.visionLayer = layer;
   }
 
   // E-6, GM only: show the table's darkness on the GM page (half as dark), so

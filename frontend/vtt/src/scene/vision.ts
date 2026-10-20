@@ -74,16 +74,33 @@ export function visibilityPolygon(source: VisionSource, segments: readonly Segme
   });
 }
 
+// True when fog hides this point from the table: fog on, and the cell holding
+// it (clamped into the grid) not revealed. The same rule as the server's
+// vtt.fog.FogView.hides, which drops such a token or light from the table.
+function fogHides(scene: RenderScene, x: number, y: number): boolean {
+  const fog = scene.fog;
+  if (!fog || !fog.enabled) return false;
+  const col = Math.min(fog.cols - 1, Math.max(0, Math.floor(x / scene.gridSize)));
+  const row = Math.min(fog.rows - 1, Math.max(0, Math.floor(y / scene.gridSize)));
+  const index = row * fog.cols + col;
+  return (((fog.bits[index >> 3] ?? 0) >> (index & 7)) & 1) === 0;
+}
+
 // Every source the table sees by: party tokens (their vision radius) and the
-// scene's lights out to their dim radius. Hidden lights are the GM's own and
-// reveal nothing (the table's projection never has them anyway).
+// scene's lights out to their dim radius. Exactly the sources the table's
+// projection would carry (review 106), so the GM's preview matches the TV: a
+// hidden token (hidden on the map, or its actor hidden in the tracker; the GM
+// adapter marks both) and a hidden light are the GM's own, and a token or
+// light whose centre fog hides never reaches the table.
 export function visionSources(scene: RenderScene): VisionSource[] {
   const sources: VisionSource[] = [];
   for (const t of scene.tokens) {
-    if (typeof t.vision === 'number' && t.vision > 0) sources.push({ x: t.x, y: t.y, radius: t.vision });
+    if (typeof t.vision === 'number' && t.vision > 0 && !t.hidden && !fogHides(scene, t.x, t.y)) {
+      sources.push({ x: t.x, y: t.y, radius: t.vision });
+    }
   }
   for (const l of scene.lights) {
-    if (!l.hidden && l.radius > 0) sources.push({ x: l.x, y: l.y, radius: l.radius * 2 });
+    if (!l.hidden && l.radius > 0 && !fogHides(scene, l.x, l.y)) sources.push({ x: l.x, y: l.y, radius: l.radius * 2 });
   }
   return sources;
 }

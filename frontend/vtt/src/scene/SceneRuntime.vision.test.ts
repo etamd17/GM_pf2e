@@ -65,3 +65,35 @@ describe('the darkness', () => {
     expect(r.probe().vision.drawn).toBe(false);
   });
 });
+
+describe('the darkness after a renderer rebuild (review 106)', () => {
+  it('is attached again to the new layer, from the cached texture', () => {
+    const r = runtime('table');
+    const first = { removeChildren: () => [], addChild: vi.fn() };
+    r.layers.set('vision', first);
+    r.drawVision(lit);
+    expect(first.addChild).toHaveBeenCalledTimes(1);
+    // createApplication replaces every layer, then repaints the same scene.
+    r.layers.clear();
+    const rebuilt = { removeChildren: () => [], addChild: vi.fn() };
+    r.layers.set('vision', rebuilt);
+    r.drawVision(lit);
+    expect(rebuilt.addChild).toHaveBeenCalledTimes(1);
+    expect(r.probe().vision.builds).toBe(1);               // the texture was reused, not rebuilt
+    r.drawVision(lit);
+    expect(rebuilt.addChild).toHaveBeenCalledTimes(1);     // and not attached twice
+  });
+
+  it('is attached once the layers exist when the GM preview was switched on before them', () => {
+    const r = runtime('gm');
+    r.layers.clear();                                       // before init: no layers
+    r.scene = lit;
+    r.setVisionPreview(true);
+    expect(r.probe().vision.builds).toBe(1);
+    const layer = { removeChildren: () => [], addChild: vi.fn() };
+    r.layers.set('vision', layer);
+    r.drawVision(lit);
+    expect(layer.addChild).toHaveBeenCalledTimes(1);
+    expect(r.probe().vision.builds).toBe(1);
+  });
+});
