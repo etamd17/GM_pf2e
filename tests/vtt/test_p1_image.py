@@ -39,7 +39,7 @@ def run(tmp_path, script, env):
     data.mkdir(exist_ok=True)
     base = {k: v for k, v in os.environ.items()
             if k not in ("RUN_MIGRATIONS", "VTT_ENABLED", "OWNERSHIP_BACKEND", "DATABASE_URL", "SECRET_KEY",
-                         "DATA_DIR", "PGOPTIONS")}
+                         "DATA_DIR", "PGOPTIONS", "OWN_DATA_VOLUME")}
     base["PATH"] = bin_dir.as_posix() + os.pathsep + base.get("PATH", "")
     base["DATA_DIR"] = data.as_posix()
     base.update(env)
@@ -150,3 +150,22 @@ def test_production_railway_config_is_unchanged_until_r1():
     import tomllib
     config = tomllib.loads((ROOT / "railway.toml").read_text(encoding="utf-8"))
     assert config["build"]["builder"] == "NIXPACKS" and "startCommand" in config["deploy"]
+
+
+# --- the one-deploy volume ownership change (G1 option b) -----------------------------------
+
+@pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0, reason="needs a non-root user")
+def test_own_data_volume_refuses_without_root_and_runs_nothing(tmp_path):
+    result, calls = run(tmp_path, ENTRY, {"OWN_DATA_VOLUME": "1"})
+    assert result.returncode != 0 and "needs root" in result.stderr and calls == []
+
+
+@pytest.mark.parametrize("value", ["yes", "2"])
+def test_own_data_volume_accepts_only_0_or_1(tmp_path, value):
+    result, calls = run(tmp_path, ENTRY, {"OWN_DATA_VOLUME": value})
+    assert result.returncode != 0 and "OWN_DATA_VOLUME must be 0 or 1" in result.stderr and calls == []
+
+
+def test_own_data_volume_0_changes_nothing(tmp_path):
+    result, calls = run(tmp_path, ENTRY, {"OWN_DATA_VOLUME": "0"})
+    assert result.returncode == 0 and calls[0].startswith("gunicorn app:app")

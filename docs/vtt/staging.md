@@ -28,7 +28,7 @@ here.
 | `VTT_ASSETS_S3_*` | References to the bucket (`${{vtt-assets.ENDPOINT}}`, `BUCKET`, `ACCESS_KEY_ID`, `SECRET_ACCESS_KEY`, `REGION`), and `VTT_ASSETS_S3_URL_STYLE=virtual` |
 | `VTT_ALLOWED_ORIGINS` | The staging domain |
 | `PORT` | `8000` |
-| `RAILWAY_RUN_UID` | `0` (see below) |
+| `RAILWAY_RUN_UID` | unset since the 2026-10-20 volume rehearsal (see below) |
 | `RAILWAY_DOCKERFILE_PATH` | `Dockerfile` |
 
 ## Deviations from ADR-0003, and why
@@ -40,9 +40,27 @@ here.
   branch on 2026-10-18 at `a9be6450`, with the user's approval. Merge again to bring staging's
   copy of the site up to date.
 - **No Redis.** One web process; ADR-0002 brings Redis in only with a second process.
-- **`RAILWAY_RUN_UID=0`.** Railway mounts volumes owned by root, and the image's `app` user
-  (uid 10001) could not write `/data`. The container runs as root on staging only. Locally,
-  compose still runs as `app`.
+- **`RAILWAY_RUN_UID=0`** (until the 2026-10-20 rehearsal below). Railway mounts volumes owned by
+  root, and the image's `app` user (uid 10001) could not write `/data`, so the container ran as
+  root. Locally, compose runs as `app`.
+
+## Volume ownership: option (b), rehearsed here for production
+
+The user chose production-plan G1 option (b) on 2026-10-20: give the volume to the `app` user
+once, then run without root. Railway has no one-off shell with the volume mounted, so the change
+runs inside one deploy:
+
+1. With `RAILWAY_RUN_UID=0` still set, add `OWN_DATA_VOLUME=1` and deploy. The entrypoint runs
+   `tools/vtt/own_data_volume.sh --apply`: it logs the entry count and how many were not owned by
+   uid 10001, changes ownership (`chown -R` to `app`, nothing deleted or moved), checks that none
+   are left, and verifies that uid 10001 can write. It then starts gunicorn **as uid 10001** (via
+   `setpriv`), not as root.
+2. Remove both `OWN_DATA_VOLUME` and `RAILWAY_RUN_UID` and deploy. The container now runs as the
+   image's `USER app`. The entrypoint's writability check refuses to start if the volume is not
+   writable, so a mistake fails at deploy, not as lost saves.
+
+Rollback: set `RAILWAY_RUN_UID=0` again (root can write any owner). The ownership change itself
+needs no undo.
 
 ## Pre-deploy step
 

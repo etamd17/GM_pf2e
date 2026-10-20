@@ -141,3 +141,13 @@ jobs:
               if [ -e "/app/$p" ]; then echo "unexpected in image: $p"; exit 1; fi
             done
             test -f /app/frontend/vtt/dist/index.html'
+      - name: The volume ownership step works inside the image (production-plan G1 option b)
+        run: |
+          docker run --rm -u 0 --entrypoint sh gm-vtt-web:ci -c '
+            set -eu
+            command -v setpriv
+            mkdir -p /tmp/vol/sub && touch /tmp/vol/sub/save.json
+            DATA_DIR=/tmp/vol sh /app/tools/vtt/own_data_volume.sh
+            DATA_DIR=/tmp/vol sh /app/tools/vtt/own_data_volume.sh --apply
+            test "$(stat -c %u /tmp/vol/sub/save.json)" = 10001
+            setpriv --reuid 10001 --regid "$(getent group app | cut -d: -f3)" --clear-groups sh -c ": > /tmp/vol/sub/new"'

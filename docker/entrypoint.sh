@@ -35,6 +35,22 @@ if [ "$needs_database" = "1" ] || [ "${RUN_MIGRATIONS:-0}" = "1" ]; then
   [ -n "${DATABASE_URL:-}" ] || fail "DATABASE_URL is required (VTT_ENABLED=1, OWNERSHIP_BACKEND=${OWNERSHIP_BACKEND:-json} or RUN_MIGRATIONS=1)"
 fi
 
+# Volume ownership, production-plan.md G1 option (b), decided 2026-10-20. A
+# Railway volume is root-owned and has no one-off shell, so the one-time
+# ownership change runs here, in ONE deploy made with RAILWAY_RUN_UID=0 and
+# OWN_DATA_VOLUME=1: the volume is given to the app user (verified), and the
+# app is then started as that user, not as root. Remove both variables for
+# the next deploy, which runs unprivileged as the image's USER.
+drop=""
+if [ "${OWN_DATA_VOLUME:-0}" = "1" ]; then
+  [ "$(id -u)" = "0" ] || fail "OWN_DATA_VOLUME=1 needs root for this one deploy (RAILWAY_RUN_UID=0); see production-plan.md G1"
+  sh /app/tools/vtt/own_data_volume.sh --apply
+  app_gid=$(getent group app | cut -d: -f3)
+  drop="setpriv --reuid 10001 --regid ${app_gid:-10001} --clear-groups"
+elif [ "${OWN_DATA_VOLUME:-0}" != "0" ]; then
+  fail "OWN_DATA_VOLUME must be 0 or 1 (got '${OWN_DATA_VOLUME}')"
+fi
+
 # The data volume must be writable by the user the app runs as. Railway volumes
 # are root-owned: either run as root (RAILWAY_RUN_UID=0, production-plan.md G1
 # option a) or give the volume to uid 10001 once (option b, tools/vtt/own_data_volume.sh).
@@ -53,7 +69,8 @@ if [ "${RUN_MIGRATIONS:-0}" = "1" ]; then
 fi
 
 # --no-control-socket: gunicorn's control socket would need a writable /app.
-exec gunicorn app:app \
+# shellcheck disable=SC2086 # $drop is deliberately split into its words
+exec $drop gunicorn app:app \
   --bind "0.0.0.0:${PORT:-8000}" \
   --workers 1 \
   --worker-class gevent \
