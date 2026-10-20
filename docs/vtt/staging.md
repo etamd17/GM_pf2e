@@ -9,7 +9,7 @@ it.
 
 | Resource | Notes |
 | --- | --- |
-| `vtt-web` | Built from this repository's `Dockerfile`, branch `agent/claude-vtt-platform`. A push to that branch redeploys staging. The entrypoint applies migrations, then runs gunicorn with ONE gevent worker. |
+| `vtt-web` | Built from this repository's `Dockerfile`, branch `agent/claude-vtt-platform`. A push to that branch redeploys staging. Migrations run in the pre-deploy step (below), never at start; the entrypoint checks its environment and the data volume, then runs gunicorn with ONE gevent worker. |
 | `Postgres` | Railway's template, PostgreSQL 18; the local tests run on 17. Railway generates the password. |
 | `vtt-data` | A 1 GB volume at `/data`: the app's JSON stores. |
 | `vtt-assets` | A Railway bucket (region sjc, virtual-hosted URLs) for VTT images. |
@@ -44,11 +44,21 @@ here.
   (uid 10001) could not write `/data`. The container runs as root on staging only. Locally,
   compose still runs as `app`.
 
-## Pre-deploy check
+## Pre-deploy step
 
-Every deploy first runs `python tools/vtt/check_asset_store.py`, which round-trips one probe object
-through the configured asset store (key `vtt-probe/<sha256>`). A broken store fails the deploy
-before the new version replaces the running one.
+Since P-1 (2026-10-20) every deploy first runs `sh tools/vtt/predeploy.sh`, the same step
+production will run:
+
+1. `alembic upgrade head`, with `lock_timeout=10s` and `statement_timeout=300s` (override with
+   `MIGRATION_LOCK_TIMEOUT` / `MIGRATION_STATEMENT_TIMEOUT`), so a migration that cannot take its
+   lock fails the deploy instead of stalling the live site;
+2. `python tools/vtt/check_asset_store.py`, which round-trips one probe object through the
+   configured asset store (key `vtt-probe/<sha256>`).
+
+It runs in a separate container without the volume. A failure blocks the new deployment, but a
+migration that already committed stays, so every migration must be expand-only and safe for the
+image still running. `RUN_MIGRATIONS` is unset on staging: the entrypoint makes no database
+change, and `/ready` fails if the VTT's schema is not the one the release needs.
 
 ## First use
 

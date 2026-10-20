@@ -216,3 +216,34 @@ def test_store_call_preserves_domain_validation_errors(error):
     with pytest.raises(type(error)) as raised:
         runtime.store_call(rejected)
     assert raised.value is error
+
+
+# P-1: the schema check runs whatever the ownership backend (the VTT needs it
+# in JSON account mode too), and /ready uses it while the VTT is on.
+
+def test_the_schema_check_rejects_an_unmigrated_database_even_in_json_mode(monkeypatch, sqlite_database):
+    monkeypatch.setenv("OWNERSHIP_BACKEND", "json")
+    monkeypatch.setattr(runtime, "database", lambda: sqlite_database)
+    runtime.require_ready()                                   # JSON accounts: not checked here
+    with sqlite_database.engine.begin() as connection:
+        connection.execute(text("CREATE TABLE alembic_version (version_num TEXT)"))
+        connection.execute(text("INSERT INTO alembic_version VALUES ('20261017_0010')"))
+    with pytest.raises(runtime.StoreUnavailable):
+        runtime.require_schema()
+
+
+def test_ready_fails_while_the_vtt_is_on_and_its_schema_is_not_current(monkeypatch):
+    import app as app_module
+
+    monkeypatch.setattr(app_module, "VTT_SERVICE", object(), raising=False)
+    monkeypatch.setattr(app_module, "_production_configuration_issues", lambda: [])
+    monkeypatch.setattr(app_module._auth, "account_store_state", lambda: app_module._auth.ACCOUNT_STORE_READY)
+
+    def unmigrated():
+        raise runtime.StoreUnavailable("not ready")
+
+    monkeypatch.setattr(runtime, "require_schema", unmigrated)
+    client = app_module.app.test_client()
+    assert client.get("/ready").status_code == 503
+    monkeypatch.setattr(runtime, "require_schema", lambda: None)
+    assert client.get("/ready").status_code == 200

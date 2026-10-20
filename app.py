@@ -8378,6 +8378,13 @@ def ready_check():
     issues = _production_configuration_issues()
     if issues or _auth.account_store_state() == _auth.ACCOUNT_STORE_UNAVAILABLE:
         return jsonify({'status': 'unhealthy'}), 503, {'Retry-After': '60'}
+    if globals().get('VTT_SERVICE') is not None:
+        # P-1: migrations run in the pre-deploy step, never at start, so the
+        # VTT's schema is checked here (read-only) whatever the account backend.
+        try:
+            _persistence_runtime.require_schema()
+        except _persistence_runtime.StoreUnavailable:
+            return jsonify({'status': 'unhealthy'}), 503, {'Retry-After': '60'}
     return jsonify({'status': 'ready'})
 
 

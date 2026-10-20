@@ -15,3 +15,6 @@ compose.yaml text eol=lf
 systems/pf2e/rules/evidence/** text eol=lf
 compendium_data/classes/*.json text eol=lf
 systems/pf2e/rules/reviews/**/*.json text eol=lf
+
+# Scripts run by sh inside the container (P-1) keep LF too.
+tools/vtt/*.sh text eol=lf

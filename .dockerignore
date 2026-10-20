@@ -37,6 +37,8 @@
 !maps/**
 !tools/vtt_import_scenes.py
 !tools/vtt/check_asset_store.py
+!tools/vtt/predeploy.sh
+!tools/vtt/own_data_volume.sh
 !docker/
 !docker/**
 !frontend/vtt/

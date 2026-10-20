@@ -83,6 +83,8 @@ services:
         condition: service_completed_successfully
     environment:
       DATABASE_URL: postgresql+psycopg://vtt:${VTT_DB_PASSWORD}@db:5432/vtt
+      # Local development opts in to migrations at start (P-1); production runs them pre-deploy.
+      RUN_MIGRATIONS: "1"
       SECRET_KEY: ${VTT_SECRET_KEY:?set VTT_SECRET_KEY in .env}
       OWNERSHIP_BACKEND: sql
       VTT_ASSETS_BACKEND: s3

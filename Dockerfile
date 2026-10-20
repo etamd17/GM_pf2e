@@ -31,7 +31,7 @@ COPY --from=client /src/frontend/vtt/dist /app/frontend/vtt/dist
 RUN useradd --system --uid 10001 --home-dir /app app \
     && mkdir -p /data \
     && chown -R app:app /data \
-    && sed -i 's/\r$//' /app/docker/entrypoint.sh \
+    && sed -i 's/\r$//' /app/docker/entrypoint.sh /app/tools/vtt/predeploy.sh /app/tools/vtt/own_data_volume.sh \
     && chmod 0755 /app/docker/entrypoint.sh
 USER app
 ENV DATA_DIR=/data \

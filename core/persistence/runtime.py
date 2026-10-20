@@ -103,6 +103,15 @@ def require_ready() -> None:
 
     if backend() == "json":
         return
+    require_schema()
+
+
+def require_schema() -> None:
+    """The schema check alone, whatever the ownership backend: every mapped
+    table readable and, when Alembic has stamped the database, exactly the
+    revision this release needs. Read-only. ``/ready`` runs it whenever the VTT
+    is on (P-1): migrations no longer run at start, so a deploy whose pre-deploy
+    step did not migrate must not report ready."""
 
     def check_schema() -> None:
         with database().engine.connect() as connection:
