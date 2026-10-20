@@ -1774,6 +1774,12 @@ def _autostart_storage_probe():
 
 _autostart_storage_probe()
 
+# Which uid serves the site, for the deploy log (P-1, production-plan.md G1
+# option b): evidence that the app runs unprivileged after the volume
+# ownership step, not an assumption from the image's USER line.
+if hasattr(os, 'getuid'):
+    print(f"[STARTUP] serving as uid {os.getuid()}", flush=True)
+
 # --- Active-campaign path binding -------------------------------------------
 # The app operates on ONE active campaign at a time (the live slot). Every
 # per-campaign data path is (re)bound to that campaign by _bind_campaign_paths();
