@@ -423,3 +423,38 @@ No schema change: the results reach every page through the live actor mirror.
     broadcast. If the broadcast raises (it may have reached some players), the answer is `ok` with
     `uncertain` naming the failure and those players `uncertain`; a retry returns that and sends
     nothing. (Review 103.)
+
+## Dynamic lighting and vision, batch vision-1 (E-6, Claude, 2026-10-20)
+
+Migration `20261020_0011` adds `vtt_scenes.lighting_enabled` (default off) and `default_vision`
+(scene px, default 0). Nothing the table shows changes until the GM turns lighting on.
+
+- **`GmScene` gains `lighting`** (boolean) **and `defaultVision`** (0-16384 scene px): how far a
+  party token sees unless it says otherwise; 0 means it sees only by light. `scene.create` and
+  `scene.update` take both (optional).
+- **`GmToken` gains `vision`** (0-16384, or null for the scene's default). `token.create` and
+  `token.update` take it (optional; a token created without it uses the default).
+- **The table, while lighting is on:**
+  - `TableScene.lighting` says so (always sent);
+  - a **party token** (linked to a player character) carries `vision`: its own radius or the
+    scene's default; any other token carries none;
+  - **`TableWall`** (new entity kind: id, x1, y1, x2, y2, no door state) is sent for every wall
+    and every door that is not open (closed, locked and secret doors block sight). The table
+    never draws them; they shape the darkness. An opened door, or lighting turned off, removes
+    them. They are sent whatever the fog: a wall under fog still blocks sight into a revealed room
+    beyond it, so the table learns wall geometry under fog (drawn over by the fog itself).
+  - The table draws darkness (0.96 opaque) except the union of what party tokens see out to their
+    radius and what each light reveals out to twice its radius (dim light, as on /map), all cast
+    against those walls. Hidden lights are the GM's own and reveal nothing.
+- **The GM page** draws no darkness unless the preview is on (`SceneRuntime.setVisionPreview`,
+  `MapHost visionPreview`), which draws the table's darkness half as dark.
+- A wall on either surface is not zero-length (the rule now covers the table's walls); a table
+  patch may now remove a wall.
+- The size rule sizes the table frame as if lighting were on (every wall, a vision radius on every
+  linked token), so turning lighting on can never push a frame over the limits.
+- **Deferred, stated:** this is table-first, client-drawn darkness, as /map does. The table's
+  device receives the positions of tokens in darkness (as it does today); server-side,
+  per-audience vision (D6 in the client architecture) is needed before any player-facing
+  surface and is not part of this batch. Light flicker and light intensity are not ported.
+- The /map importer brings dynamic lighting, the default vision and each token's own vision
+  radius across (they were reported as dropped before).

@@ -51,7 +51,9 @@ export function moveToken(token: Of<'token'>, x: number, y: number): Draft {
   return { type: 'token.move', expected: expect(token), payload: { id: token.id, x, y } };
 }
 
-export type TokenPatch = Partial<Pick<Of<'token'>, 'label' | 'size' | 'color' | 'hidden' | 'locked' | 'artAssetId' | 'actorId'>>;
+export type TokenPatch = Partial<
+  Pick<Of<'token'>, 'label' | 'size' | 'color' | 'hidden' | 'locked' | 'artAssetId' | 'actorId' | 'vision'>
+>;
 
 export function updateToken(token: Of<'token'>, patch: TokenPatch): Draft {
   return { type: 'token.update', expected: expect(token), payload: { id: token.id, ...patch } };
@@ -99,7 +101,10 @@ export function createScene(sceneId: string, name: string): Draft {
 }
 
 export type ScenePatch = Partial<
-  Pick<Of<'scene'>, 'name' | 'width' | 'height' | 'gridSize' | 'showGrid' | 'published' | 'backgroundAssetId'>
+  Pick<
+    Of<'scene'>,
+    'name' | 'width' | 'height' | 'gridSize' | 'showGrid' | 'published' | 'backgroundAssetId' | 'lighting' | 'defaultVision'
+  >
 >;
 
 export function updateScene(scene: Of<'scene'>, patch: ScenePatch): Draft {
@@ -184,7 +189,8 @@ export function terrainReset(terrain: Of<'terrain'>): Draft {
 // hand. Everything else waits for its frame.
 
 export type TokenOverlay =
-  | { kind: 'token'; id: string; patch: { x?: number; y?: number } & Omit<TokenPatch, 'artAssetId'> }
+  // (A token's vision is not overlaid: the GM's setting and the drawn radius differ.)
+  | { kind: 'token'; id: string; patch: { x?: number; y?: number } & Omit<TokenPatch, 'artAssetId' | 'vision'> }
   | { kind: 'token'; id: string; create: RenderToken }
   | { kind: 'token'; id: string; deleted: true };
 

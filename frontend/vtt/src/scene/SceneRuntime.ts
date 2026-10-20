@@ -1,6 +1,7 @@
 import { Application, Container, Graphics, Sprite, Text, Texture, type WebGLRenderer } from 'pixi.js';
 import { layersFor, type LayerName, type Surface } from './layers';
 import { measure, moveReading, type MeasureRule, type MoveReading } from './measure';
+import { visibilityPolygon, visionSignature, visionSources } from './vision';
 import type { LiveTransient } from '../state/transients';
 import { RenderScheduler } from './renderScheduler';
 import {
@@ -147,6 +148,11 @@ export class SceneRuntime {
   // scene, rebuilt only when the fog itself changes (its key is the projected
   // version, which a token move does not touch: /map's revision trap avoided).
   private fogMask: { key: string; texture: Texture } | null = null;
+  // E-6: the darkness mask, cached on what it depends on (visionSignature, the
+  // surface and the GM's preview switch); recomputed only when that changes.
+  private visionMask: { key: string; texture: Texture } | null = null;
+  private visionPreview = false;
+  private visionStats: { sources: number; occluders: number; builds: number } = { sources: 0, occluders: 0, builds: 0 };
   // Painted terrain (parity P2), the same one-pixel-per-cell approach.
   private terrainMask: { key: string; texture: Texture } | null = null;
   private readonly textures = new TextureLoader<Texture>(
@@ -204,6 +210,7 @@ export class SceneRuntime {
     if (geometryChanged || prev?.fog !== next.fog) this.drawFog(next);
     if (!prev || prev.walls !== next.walls) this.drawWalls(next);
     if (!prev || prev.lights !== next.lights) this.drawLights(next);
+    this.drawVision(next);
     this.syncTokens(next);
     // Images the scene still uses keep retrying after a failure; others stop.
     this.textures.keep(sceneImageUrls(next));
@@ -328,6 +335,8 @@ export class SceneRuntime {
     this.textures.dispose();
     this.fogMask?.texture.destroy(true);
     this.fogMask = null;
+    this.visionMask?.texture.destroy(true);
+    this.visionMask = null;
     this.terrainMask?.texture.destroy(true);
     this.terrainMask = null;
   }
@@ -353,6 +362,7 @@ export class SceneRuntime {
     }>;
     transients: Array<{ kind: 'ping'; x: number; y: number } | { kind: 'ruler'; feet: number }>;
     drag: { feet: number; speed: number | null; moves: number; over: boolean; label: string } | null;
+    vision: { lighting: boolean; drawn: boolean; sources: number; occluders: number; builds: number };
   } {
     const scene = this.scene;
     return {
@@ -403,6 +413,7 @@ export class SceneRuntime {
         .map((t) => (t.kind === 'ping' ? { kind: 'ping' as const, x: t.x, y: t.y }
           : { kind: 'ruler' as const, feet: this.scene ? measure(t.points, this.scene.gridSize, t.rule).feet : 0 })),
       drag: this.dragReading ? { ...this.dragReading } : null,
+      vision: { lighting: scene?.lighting === true, drawn: this.visionMask !== null, ...this.visionStats },
     };
   }
 
@@ -997,6 +1008,72 @@ export class SceneRuntime {
     if (!layer) return;
     for (const old of layer.removeChildren()) old.destroy({ children: true, texture: false });
     layer.addChild(root);
+  }
+
+  // E-6: darkness everywhere no party token or light can see, on the table
+  // when the scene's lighting is on; on the GM page only as a preview (half as
+  // dark). Built on a half-resolution canvas (a soft mask has no detail to
+  // lose) and kept until visionSignature changes.
+  private drawVision(scene: RenderScene): void {
+    const surface = this.options.surface;
+    const wanted = scene.lighting === true && (surface === 'table' || this.visionPreview);
+    if (!wanted) {
+      if (this.visionMask) {
+        this.visionMask.texture.destroy(true);
+        this.visionMask = null;
+        this.replaceLayerContent('vision', null);
+      }
+      return;
+    }
+    const key = `${surface}:${this.visionPreview ? 1 : 0}:${visionSignature(scene)}`;
+    if (this.visionMask?.key === key) return;
+    const scale = 0.5;
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.ceil(scene.width * scale));
+    canvas.height = Math.max(1, Math.ceil(scene.height * scale));
+    const context = canvas.getContext('2d');
+    if (!context) return;
+    context.fillStyle = surface === 'table' ? 'rgba(4,3,2,0.96)' : 'rgba(4,3,2,0.5)';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.globalCompositeOperation = 'destination-out';
+    context.fillStyle = '#000';
+    const occluders = scene.occluders ?? [];
+    const sources = visionSources(scene);
+    for (const source of sources) {
+      const polygon = visibilityPolygon(source, occluders);
+      const [first, ...rest] = polygon;
+      if (!first) continue;
+      context.beginPath();
+      context.moveTo(first.x * scale, first.y * scale);
+      for (const p of rest) context.lineTo(p.x * scale, p.y * scale);
+      context.closePath();
+      context.fill();
+    }
+    this.visionStats = { sources: sources.length, occluders: occluders.length, builds: this.visionStats.builds + 1 };
+    this.visionMask?.texture.destroy(true);
+    const texture = Texture.from(canvas);
+    texture.source.scaleMode = 'linear';
+    this.visionMask = { key, texture };
+    const sprite = new Sprite(texture);
+    sprite.width = scene.width;
+    sprite.height = scene.height;
+    const root = new Container({ label: 'vision' });
+    root.addChild(sprite);
+    const layer = this.layer('vision');
+    if (!layer) return;
+    for (const old of layer.removeChildren()) old.destroy({ children: true, texture: false });
+    layer.addChild(root);
+  }
+
+  // E-6, GM only: show the table's darkness on the GM page (half as dark), so
+  // the GM can check what the party sees.
+  setVisionPreview(on: boolean): void {
+    if (this.visionPreview === on) return;
+    this.visionPreview = on;
+    if (this.scene) {
+      this.drawVision(this.scene);
+      this.scheduler.requestRender();
+    }
   }
 
   private drawLights(scene: RenderScene): void {

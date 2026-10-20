@@ -54,7 +54,8 @@ def gm_scene(key: TokenKey, scene) -> dict[str, Any]:
     fields = {
         "name": scene.name, "width": scene.width, "height": scene.height, "gridSize": scene.grid_size,
         "showGrid": bool(scene.show_grid), "backgroundAssetId": scene.background_asset_id,
-        "published": bool(scene.published),
+        "published": bool(scene.published), "lighting": bool(getattr(scene, "lighting_enabled", False)),
+        "defaultVision": float(getattr(scene, "default_vision", 0) or 0),
     }
     return _with_version(key, scene.campaign_id, "gm", "scene", scene.id, fields)
 
@@ -66,7 +67,7 @@ def gm_entity(key: TokenKey, row) -> dict[str, Any]:
             "x": d["x"], "y": d["y"], "size": d.get("size", 1), "label": d.get("label", ""),
             "color": d.get("color", 0), "artAssetId": d.get("artAssetId"), "actorId": d.get("actorId"),
             "hidden": bool(row.hidden), "locked": bool(d.get("locked", False)),
-            "controllerIds": list(d.get("controllerIds", [])),
+            "controllerIds": list(d.get("controllerIds", [])), "vision": d.get("vision"),
         }
     elif row.kind == "light":
         fields = {"x": d["x"], "y": d["y"], "radius": d["radius"], "color": d.get("color", 0),
@@ -127,12 +128,20 @@ def gm_entities(key: TokenKey, scene, rows, fog=None, terrain=None, actors=None)
 
 # --- table -----------------------------------------------------------------------------------
 # Reads only the published scene's own fields, and non-hidden tokens and lights.
-# Walls, doors, hidden/locked/controller data and the published flag never enter.
+# Hidden/locked/controller data, door states and the published flag never enter.
+# Walls enter only while the scene's lighting is on (E-6), and then only the
+# segments that block sight, with no door state: the table draws darkness with
+# them and never draws them.
+
+def blocks_sight(row) -> bool:
+    """A wall, or a door that is not open (closed, locked and secret doors block)."""
+    return row.kind == "wall" and (row.data or {}).get("doorState", "none") != "open"
 
 def table_scene(key: TokenKey, scene) -> dict[str, Any]:
     fields = {
         "name": scene.name, "width": scene.width, "height": scene.height, "gridSize": scene.grid_size,
         "showGrid": bool(scene.show_grid), "backgroundAssetId": scene.background_asset_id,
+        "lighting": bool(getattr(scene, "lighting_enabled", False)),
     }
     return _with_version(key, scene.campaign_id, "table", "scene", scene.id, fields)
 
@@ -154,14 +163,27 @@ def table_live(actor: dict[str, Any] | None) -> dict[str, Any] | None:
     }
 
 
-def table_entity(key: TokenKey, row, fog, actors: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
+def table_entity(key: TokenKey, row, fog, actors: dict[str, dict[str, Any]], scene=None) -> dict[str, Any] | None:
     """The table's view of one canonical entity, or None when the table may not
     see it: hidden, not a token or light, (parity-1) its centre cell is under
     fog, or (parity-3) a token linked to an actor hidden in the tracker.
-    ``actors`` is required: a caller that forgot it would leak exactly those."""
+    ``actors`` is required: a caller that forgot it would leak exactly those.
+
+    E-6, with ``scene`` (the scene the row is on): while its lighting is on, a
+    segment that blocks sight is sent (without its door state, and whatever
+    the fog: a wall under fog still blocks sight into a revealed room beyond
+    it), and a party token (linked to a player character) carries how far it
+    sees. Without ``scene`` neither is ever sent."""
+    lighting = scene is not None and bool(getattr(scene, "lighting_enabled", False))
+    d = row.data or {}
+    if row.kind == "wall":
+        # (The size rule counts open doors too: a later close would add them.)
+        if not lighting or not (blocks_sight(row) or getattr(scene, "every_wall", False)):
+            return None
+        fields = {"x1": d["x1"], "y1": d["y1"], "x2": d["x2"], "y2": d["y2"]}
+        return _with_version(key, row.campaign_id, "table", "wall", row.id, fields)
     if row.hidden or row.kind not in ("token", "light", "template"):
         return None
-    d = row.data or {}
     if fog is not None and fog.hides(d.get("x", 0), d.get("y", 0)):
         return None
     if row.kind == "template":
@@ -175,6 +197,9 @@ def table_entity(key: TokenKey, row, fog, actors: dict[str, dict[str, Any]]) -> 
             "color": d.get("color", 0), "artAssetId": d.get("artAssetId"), "actorId": d.get("actorId"),
             "live": table_live(actor),
         }
+        if lighting and actor is not None and actor.get("pc"):
+            vision = d.get("vision")
+            fields["vision"] = float(vision if vision is not None else (getattr(scene, "default_vision", 0) or 0))
     else:
         fields = {"x": d["x"], "y": d["y"], "radius": d["radius"], "color": d.get("color", 0)}
     return _with_version(key, row.campaign_id, "table", row.kind, row.id, fields)
@@ -185,7 +210,7 @@ def table_entities(key: TokenKey, scene, rows, fog, terrain, actors: dict[str, d
         return []
     out = [table_scene(key, scene)]
     for row in rows:
-        projected = table_entity(key, row, fog, actors)
+        projected = table_entity(key, row, fog, actors, scene)
         if projected is not None:
             out.append(projected)
     if fog is not None:

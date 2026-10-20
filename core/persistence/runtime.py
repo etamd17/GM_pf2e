@@ -29,7 +29,7 @@ _cached_database: Database | None = None
 _cached_url: str | None = None
 _database_lock = threading.Lock()
 # Update alongside every schema migration (20261017_0009 adds VTT templates and terrain).
-_REQUIRED_REVISION = "20261017_0010"
+_REQUIRED_REVISION = "20261020_0011"
 
 
 class StoreUnavailable(RuntimeError):

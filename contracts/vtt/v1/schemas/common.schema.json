@@ -162,6 +162,10 @@
               "type": "null"
             }
           ]
+        },
+        "lighting": {
+          "type": "boolean",
+          "description": "Dynamic lighting (E-6): when on, the table draws darkness except what the party's tokens and the lights can see. Optional in the schema, always sent."
         }
       }
     },
@@ -240,6 +244,12 @@
               "type": "null"
             }
           ]
+        },
+        "vision": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 16384,
+          "description": "E-6: how far this token sees, in scene pixels, when lighting is on and it is a party token (linked to a player character); absent otherwise. 0: it sees only by light."
         }
       }
     },
@@ -606,6 +616,44 @@
           }
         }
       ]
+    },
+    "TableWall": {
+      "title": "TableWall",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "id",
+        "version",
+        "x1",
+        "y1",
+        "x2",
+        "y2"
+      ],
+      "properties": {
+        "kind": {
+          "const": "wall"
+        },
+        "id": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "version": {
+          "$ref": "common.schema.json#/definitions/OpaqueToken"
+        },
+        "x1": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "y1": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "x2": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        },
+        "y2": {
+          "$ref": "common.schema.json#/definitions/Coord"
+        }
+      },
+      "description": "E-6: a segment that blocks sight, sent to the table only while lighting is on: a wall, or a door that is not open. Never drawn; only the darkness uses it. Zero-length segments are rejected by the semantic boundary."
     }
   }
 }

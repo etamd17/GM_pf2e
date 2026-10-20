@@ -175,3 +175,42 @@ describe('sameLive', () => {
     expect(sameLive(live, undefined)).toBe(false);
   });
 });
+
+describe('lighting and vision (E-6)', () => {
+  const litScene = { ...scene, lighting: true, defaultVision: 320 };
+  const pc = (version: string, pcFlag: boolean) => ({
+    kind: 'actor', id: 'chr_valeros', version, name: 'Valeros', pc: pcFlag, hp: 1, maxHp: 1, conditions: [],
+    active: false, hidden: false, status: '' });
+
+  it('a GM party token sees by its own radius or the scene default, and other tokens do not', () => {
+    const own = { ...token('a', 'v1'), actorId: 'chr_valeros', hidden: false, locked: false, vision: 128 };
+    const byDefault = { ...token('b', 'v1'), actorId: 'chr_valeros', hidden: false, locked: false, vision: null };
+    const unlinked = { ...token('c', 'v1'), hidden: false, locked: false, vision: 500 };
+    const out = adaptEntities(map(litScene, own, byDefault, unlinked, pc('va1', true)));
+    expect(out.tokens.map((t) => t.vision)).toEqual([128, 320, undefined]);
+    expect(adaptEntities(map(litScene, own, pc('va1', false))).tokens[0]?.vision).toBeUndefined();   // a monster
+    expect(adaptEntities(map(scene, own, pc('va1', true))).tokens[0]?.vision).toBeUndefined();        // lighting off
+  });
+
+  it('a table token sees as far as the server says', () => {
+    const out = adaptEntities(map({ ...scene, lighting: true }, { ...token('a', 'v1'), vision: 256 }));
+    expect(out.tokens[0]?.vision).toBe(256);
+  });
+
+  it('occluders are the walls and doors that are not open, only while lighting is on', () => {
+    const walls = [
+      { kind: 'wall', id: 'w1', version: 'v1', x1: 0, y1: 0, x2: 10, y2: 0, doorState: 'none' },
+      { kind: 'wall', id: 'w2', version: 'v1', x1: 0, y1: 0, x2: 0, y2: 10, doorState: 'open' },
+      { kind: 'wall', id: 'w3', version: 'v1', x1: 5, y1: 5, x2: 9, y2: 9, doorState: 'secret' },
+    ];
+    const out = adaptEntities(map(litScene, ...walls));
+    expect(out.lighting).toBe(true);
+    expect(out.occluders).toEqual([{ x1: 0, y1: 0, x2: 10, y2: 0 }, { x1: 5, y1: 5, x2: 9, y2: 9 }]);
+    const off = adaptEntities(map(scene, ...walls));
+    expect(off.lighting).toBeUndefined();
+    expect(off.occluders).toBeUndefined();
+    // The table's walls have no door state: every one blocks.
+    const table = adaptEntities(map({ ...scene, lighting: true }, { kind: 'wall', id: 'w9', version: 'v1', x1: 1, y1: 1, x2: 2, y2: 2 }));
+    expect(table.occluders).toEqual([{ x1: 1, y1: 1, x2: 2, y2: 2 }]);
+  });
+});

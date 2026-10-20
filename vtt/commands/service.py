@@ -139,6 +139,19 @@ def command_digest(message: dict[str, Any]) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
+class _LitScene:
+    """A scene as the sizing rule sees it (E-6): lighting on. ``every_wall``
+    also counts open doors, which a later close would add."""
+
+    def __init__(self, scene, every_wall: bool = False):
+        self._scene = scene
+        self.lighting_enabled = True
+        self.every_wall = every_wall
+
+    def __getattr__(self, name):
+        return getattr(self._scene, name)
+
+
 def gm_snapshot_bytes(session, campaign_id: str, scene_id: str) -> tuple[int, int, int]:
     """(bytes, GM entity count, table entity count) of the scene's largest
     snapshot, as the transport would encode it. The bytes are the larger of
@@ -164,8 +177,14 @@ def gm_snapshot_bytes(session, campaign_id: str, scene_id: str) -> tuple[int, in
     # every link, whether or not the scene is published yet.
     worst = next(iter(_WORST_ACTORS.values()))
     linked = {r.data.get("actorId"): worst for r in rows if r.kind == "token" and (r.data or {}).get("actorId")}
-    table = [S.table_scene(_SizingKey(), scene)]
-    table += [e for e in (S.table_entity(_SizingKey(), r, None, linked) for r in rows) if e is not None]
+    # E-6: sized as if lighting were on (every wall, and a vision radius on every
+    # linked token), so turning it on later never pushes the frame over.
+    lit = _LitScene(scene)
+    worst_pc = {aid: {**actor, "pc": True} for aid, actor in linked.items()}
+    table = [S.table_scene(_SizingKey(), lit)]
+    table += [e for e in (S.table_entity(_SizingKey(), r, None, worst_pc,
+                                         _LitScene(scene, every_wall=True)) for r in rows)
+              if e is not None]
     if terrain_view is not None:
         table.append(S.terrain_entity(_SizingKey(), campaign_id, "table", terrain_view))
     if fog_view is not None:
@@ -173,7 +192,8 @@ def gm_snapshot_bytes(session, campaign_id: str, scene_id: str) -> tuple[int, in
     table_frame = S.snapshot_frame("table", "s" * 128, campaign_id, scene_id, {"kind": "table"}, table)
     table_encoded = json.dumps(["vtt.snapshot", table_frame], separators=(",", ":"), allow_nan=False)
     table_count = (1 + (fog_view is not None) + (terrain_view is not None)
-                   + sum(1 for r in rows if not r.hidden and r.kind in ("token", "light", "template")))
+                   + sum(1 for r in rows if not r.hidden and r.kind in ("token", "light", "template"))
+                   + sum(1 for r in rows if r.kind == "wall"))
     size = max(len(encoded.encode("utf-8")), len(table_encoded.encode("utf-8")))
     return size, len(entities), table_count
 

@@ -28,7 +28,8 @@
             "light",
             "fog",
             "template",
-            "terrain"
+            "terrain",
+            "wall"
           ]
         },
         "id": {
@@ -56,6 +57,9 @@
         },
         {
           "$ref": "common.schema.json#/definitions/TerrainState"
+        },
+        {
+          "$ref": "common.schema.json#/definitions/TableWall"
         }
       ]
     },

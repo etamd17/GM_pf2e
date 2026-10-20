@@ -21,17 +21,20 @@ from .stream import advance
 
 def create_scene(db: Database, campaign_id: str, scene_id: str, *, name: str, width: float = 2048,
                  height: float = 2048, grid_size: float = 64, show_grid: bool = True,
-                 background_asset_id: str | None = None, published: bool = False) -> int:
+                 background_asset_id: str | None = None, published: bool = False,
+                 lighting_enabled: bool = False, default_vision: float = 0) -> int:
     with db.transaction() as session:
         session.add(VttScene(id=scene_id, campaign_id=campaign_id, name=name, width=width, height=height,
                              grid_size=grid_size, show_grid=show_grid,
-                             background_asset_id=background_asset_id, published=published))
+                             background_asset_id=background_asset_id, published=published,
+                             lighting_enabled=lighting_enabled, default_vision=default_vision))
         session.flush()
         return advance(session, campaign_id, {"kind": "scene", "sceneId": scene_id})
 
 
 def update_scene(db: Database, campaign_id: str, scene_id: str, **fields: Any) -> int:
-    allowed = {"name", "width", "height", "grid_size", "show_grid", "background_asset_id", "published"}
+    allowed = {"name", "width", "height", "grid_size", "show_grid", "background_asset_id", "published",
+               "lighting_enabled", "default_vision"}
     if set(fields) - allowed:
         raise ValueError("unknown scene field")
     with db.transaction() as session:

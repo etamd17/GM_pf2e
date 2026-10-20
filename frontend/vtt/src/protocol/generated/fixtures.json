@@ -2755,7 +2755,7 @@
   {
     "id": "table-patch-removes-wall",
     "schema": "table",
-    "valid": false,
+    "valid": true,
     "message": {
       "schemaVersion": 1,
       "frame": "patch",
@@ -6775,6 +6775,622 @@
         }
       ],
       "removed": []
+    }
+  },
+  {
+    "id": "vision1-table-patch-removes-actor",
+    "schema": "table",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "patch",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 1,
+      "upserted": [],
+      "removed": [
+        {
+          "kind": "actor",
+          "id": "actor_a"
+        }
+      ]
+    }
+  },
+  {
+    "id": "vision1-table-lit-snapshot",
+    "schema": "table",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "snapshot",
+      "audience": "table",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 0,
+      "campaignId": "campaign_a",
+      "sceneId": "scene_a",
+      "principal": {
+        "kind": "table"
+      },
+      "capabilities": [],
+      "entities": [
+        {
+          "kind": "scene",
+          "id": "scene_a",
+          "version": "ver_AAAAAAAAAAAAAAAA",
+          "name": "Battlefield",
+          "width": 4096,
+          "height": 4096,
+          "gridSize": 64,
+          "showGrid": true,
+          "backgroundAssetId": null,
+          "lighting": true
+        },
+        {
+          "kind": "token",
+          "id": "token_a",
+          "version": "ver_AAAAAAAAAAAAAAAA",
+          "x": 64,
+          "y": 64,
+          "size": 1,
+          "label": "Valeros",
+          "color": 13214542,
+          "artAssetId": null,
+          "actorId": "actor_a",
+          "vision": 448
+        },
+        {
+          "kind": "light",
+          "id": "light_a",
+          "version": "ver_AAAAAAAAAAAAAAAA",
+          "x": 80,
+          "y": 80,
+          "radius": 128,
+          "color": 16767392
+        },
+        {
+          "kind": "wall",
+          "id": "wall_a",
+          "version": "ver_AAAAAAAAAAAAAAAA",
+          "x1": 64,
+          "y1": 64,
+          "x2": 64,
+          "y2": 256
+        }
+      ]
+    }
+  },
+  {
+    "id": "vision1-table-zero-length-wall",
+    "schema": "table",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "snapshot",
+      "audience": "table",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 0,
+      "campaignId": "campaign_a",
+      "sceneId": "scene_a",
+      "principal": {
+        "kind": "table"
+      },
+      "capabilities": [],
+      "entities": [
+        {
+          "kind": "scene",
+          "id": "scene_a",
+          "version": "ver_AAAAAAAAAAAAAAAA",
+          "name": "Battlefield",
+          "width": 4096,
+          "height": 4096,
+          "gridSize": 64,
+          "showGrid": true,
+          "backgroundAssetId": null,
+          "lighting": true
+        },
+        {
+          "kind": "token",
+          "id": "token_a",
+          "version": "ver_AAAAAAAAAAAAAAAA",
+          "x": 64,
+          "y": 64,
+          "size": 1,
+          "label": "Valeros",
+          "color": 13214542,
+          "artAssetId": null,
+          "actorId": "actor_a",
+          "vision": 448
+        },
+        {
+          "kind": "light",
+          "id": "light_a",
+          "version": "ver_AAAAAAAAAAAAAAAA",
+          "x": 80,
+          "y": 80,
+          "radius": 128,
+          "color": 16767392
+        },
+        {
+          "kind": "wall",
+          "id": "wall_a",
+          "version": "ver_AAAAAAAAAAAAAAAA",
+          "x1": 64,
+          "y1": 64,
+          "x2": 64,
+          "y2": 64
+        }
+      ]
+    }
+  },
+  {
+    "id": "vision1-table-wall-door-state",
+    "schema": "table",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "snapshot",
+      "audience": "table",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 0,
+      "campaignId": "campaign_a",
+      "sceneId": "scene_a",
+      "principal": {
+        "kind": "table"
+      },
+      "capabilities": [],
+      "entities": [
+        {
+          "kind": "scene",
+          "id": "scene_a",
+          "version": "ver_AAAAAAAAAAAAAAAA",
+          "name": "Battlefield",
+          "width": 4096,
+          "height": 4096,
+          "gridSize": 64,
+          "showGrid": true,
+          "backgroundAssetId": null,
+          "lighting": true
+        },
+        {
+          "kind": "token",
+          "id": "token_a",
+          "version": "ver_AAAAAAAAAAAAAAAA",
+          "x": 64,
+          "y": 64,
+          "size": 1,
+          "label": "Valeros",
+          "color": 13214542,
+          "artAssetId": null,
+          "actorId": "actor_a",
+          "vision": 448
+        },
+        {
+          "kind": "light",
+          "id": "light_a",
+          "version": "ver_AAAAAAAAAAAAAAAA",
+          "x": 80,
+          "y": 80,
+          "radius": 128,
+          "color": 16767392
+        },
+        {
+          "kind": "wall",
+          "id": "wall_a",
+          "version": "ver_AAAAAAAAAAAAAAAA",
+          "x1": 64,
+          "y1": 64,
+          "x2": 64,
+          "y2": 256,
+          "doorState": "closed"
+        }
+      ]
+    }
+  },
+  {
+    "id": "vision1-table-negative-vision",
+    "schema": "table",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "snapshot",
+      "audience": "table",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 0,
+      "campaignId": "campaign_a",
+      "sceneId": "scene_a",
+      "principal": {
+        "kind": "table"
+      },
+      "capabilities": [],
+      "entities": [
+        {
+          "kind": "scene",
+          "id": "scene_a",
+          "version": "ver_AAAAAAAAAAAAAAAA",
+          "name": "Battlefield",
+          "width": 4096,
+          "height": 4096,
+          "gridSize": 64,
+          "showGrid": true,
+          "backgroundAssetId": null,
+          "lighting": true
+        },
+        {
+          "kind": "token",
+          "id": "token_a",
+          "version": "ver_AAAAAAAAAAAAAAAA",
+          "x": 64,
+          "y": 64,
+          "size": 1,
+          "label": "Valeros",
+          "color": 13214542,
+          "artAssetId": null,
+          "actorId": "actor_a",
+          "vision": -1
+        },
+        {
+          "kind": "light",
+          "id": "light_a",
+          "version": "ver_AAAAAAAAAAAAAAAA",
+          "x": 80,
+          "y": 80,
+          "radius": 128,
+          "color": 16767392
+        }
+      ]
+    }
+  },
+  {
+    "id": "vision1-gm-lighting-snapshot",
+    "schema": "gm",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "snapshot",
+      "audience": "gm",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 0,
+      "campaignId": "campaign_a",
+      "sceneId": "scene_a",
+      "principal": {
+        "kind": "member",
+        "id": "user_gm",
+        "campaignRole": "gm"
+      },
+      "capabilities": [
+        "scene.prepare",
+        "scene.publish",
+        "token.move"
+      ],
+      "entities": [
+        {
+          "kind": "scene",
+          "id": "scene_a",
+          "version": "ver_AAAAAAAAAAAAAAAA",
+          "name": "Battlefield",
+          "width": 4096,
+          "height": 4096,
+          "gridSize": 64,
+          "showGrid": true,
+          "backgroundAssetId": null,
+          "published": false,
+          "lighting": true,
+          "defaultVision": 448
+        },
+        {
+          "kind": "token",
+          "id": "token_a",
+          "version": "ver_AAAAAAAAAAAAAAAA",
+          "x": 64,
+          "y": 64,
+          "size": 1,
+          "label": "Valeros",
+          "color": 13214542,
+          "artAssetId": null,
+          "actorId": "actor_a",
+          "hidden": false,
+          "locked": false,
+          "controllerIds": [
+            "user_a"
+          ],
+          "vision": null
+        },
+        {
+          "kind": "light",
+          "id": "light_a",
+          "version": "ver_AAAAAAAAAAAAAAAA",
+          "x": 80,
+          "y": 80,
+          "radius": 128,
+          "color": 16767392,
+          "hidden": false
+        },
+        {
+          "kind": "wall",
+          "id": "wall_a",
+          "version": "ver_AAAAAAAAAAAAAAAA",
+          "x1": 0,
+          "y1": 0,
+          "x2": 128,
+          "y2": 0,
+          "doorState": "secret"
+        }
+      ]
+    }
+  },
+  {
+    "id": "vision1-gm-vision-too-far",
+    "schema": "gm",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "snapshot",
+      "audience": "gm",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 0,
+      "campaignId": "campaign_a",
+      "sceneId": "scene_a",
+      "principal": {
+        "kind": "member",
+        "id": "user_gm",
+        "campaignRole": "gm"
+      },
+      "capabilities": [
+        "scene.prepare",
+        "scene.publish",
+        "token.move"
+      ],
+      "entities": [
+        {
+          "kind": "scene",
+          "id": "scene_a",
+          "version": "ver_AAAAAAAAAAAAAAAA",
+          "name": "Battlefield",
+          "width": 4096,
+          "height": 4096,
+          "gridSize": 64,
+          "showGrid": true,
+          "backgroundAssetId": null,
+          "published": false,
+          "lighting": true,
+          "defaultVision": 448
+        },
+        {
+          "kind": "token",
+          "id": "token_a",
+          "version": "ver_AAAAAAAAAAAAAAAA",
+          "x": 64,
+          "y": 64,
+          "size": 1,
+          "label": "Valeros",
+          "color": 13214542,
+          "artAssetId": null,
+          "actorId": "actor_a",
+          "hidden": false,
+          "locked": false,
+          "controllerIds": [
+            "user_a"
+          ],
+          "vision": 20000
+        },
+        {
+          "kind": "light",
+          "id": "light_a",
+          "version": "ver_AAAAAAAAAAAAAAAA",
+          "x": 80,
+          "y": 80,
+          "radius": 128,
+          "color": 16767392,
+          "hidden": false
+        },
+        {
+          "kind": "wall",
+          "id": "wall_a",
+          "version": "ver_AAAAAAAAAAAAAAAA",
+          "x1": 0,
+          "y1": 0,
+          "x2": 128,
+          "y2": 0,
+          "doorState": "secret"
+        }
+      ]
+    }
+  },
+  {
+    "id": "vision1-gm-lighting-not-boolean",
+    "schema": "gm",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "snapshot",
+      "audience": "gm",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 0,
+      "campaignId": "campaign_a",
+      "sceneId": "scene_a",
+      "principal": {
+        "kind": "member",
+        "id": "user_gm",
+        "campaignRole": "gm"
+      },
+      "capabilities": [
+        "scene.prepare",
+        "scene.publish",
+        "token.move"
+      ],
+      "entities": [
+        {
+          "kind": "scene",
+          "id": "scene_a",
+          "version": "ver_AAAAAAAAAAAAAAAA",
+          "name": "Battlefield",
+          "width": 4096,
+          "height": 4096,
+          "gridSize": 64,
+          "showGrid": true,
+          "backgroundAssetId": null,
+          "published": false,
+          "lighting": "yes",
+          "defaultVision": 448
+        },
+        {
+          "kind": "token",
+          "id": "token_a",
+          "version": "ver_AAAAAAAAAAAAAAAA",
+          "x": 64,
+          "y": 64,
+          "size": 1,
+          "label": "Valeros",
+          "color": 13214542,
+          "artAssetId": null,
+          "actorId": "actor_a",
+          "hidden": false,
+          "locked": false,
+          "controllerIds": [
+            "user_a"
+          ],
+          "vision": null
+        },
+        {
+          "kind": "light",
+          "id": "light_a",
+          "version": "ver_AAAAAAAAAAAAAAAA",
+          "x": 80,
+          "y": 80,
+          "radius": 128,
+          "color": 16767392,
+          "hidden": false
+        },
+        {
+          "kind": "wall",
+          "id": "wall_a",
+          "version": "ver_AAAAAAAAAAAAAAAA",
+          "x1": 0,
+          "y1": 0,
+          "x2": 128,
+          "y2": 0,
+          "doorState": "secret"
+        }
+      ]
+    }
+  },
+  {
+    "id": "vision1-command-scene-lighting",
+    "schema": "command",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "scene.update",
+      "expected": [
+        {
+          "kind": "scene",
+          "id": "scene_a",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {
+        "lighting": true,
+        "defaultVision": 448
+      }
+    }
+  },
+  {
+    "id": "vision1-command-token-vision",
+    "schema": "command",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "token.update",
+      "expected": [
+        {
+          "kind": "token",
+          "id": "tok_1",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {
+        "id": "tok_1",
+        "vision": 320
+      }
+    }
+  },
+  {
+    "id": "vision1-command-token-vision-default",
+    "schema": "command",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "token.update",
+      "expected": [
+        {
+          "kind": "token",
+          "id": "tok_1",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {
+        "id": "tok_1",
+        "vision": null
+      }
+    }
+  },
+  {
+    "id": "vision1-command-token-create-vision",
+    "schema": "command",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "token.create",
+      "expected": [],
+      "payload": {
+        "id": "tok_1",
+        "x": 64,
+        "y": 64,
+        "size": 1,
+        "label": "Valeros",
+        "color": 255,
+        "artAssetId": null,
+        "actorId": null,
+        "hidden": false,
+        "locked": false,
+        "controllerIds": [
+          "user_p"
+        ],
+        "vision": 320
+      }
+    }
+  },
+  {
+    "id": "vision1-command-scene-negative-vision",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "scene.create",
+      "expected": [],
+      "payload": {
+        "name": "Docks",
+        "width": 2048,
+        "height": 1024,
+        "gridSize": 64,
+        "showGrid": true,
+        "backgroundAssetId": null,
+        "defaultVision": -5
+      }
     }
   }
 ]

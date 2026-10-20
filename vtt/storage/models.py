@@ -97,6 +97,12 @@ class VttScene(Base):
     published: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
+    # E-6 (migration 0011): dynamic lighting, and a party token's default vision
+    # radius in scene pixels (0: it sees only by light).
+    lighting_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    default_vision: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default=text("0"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
@@ -110,6 +116,7 @@ class VttScene(Base):
         CheckConstraint("width >= 1 AND width <= 16384", name="width_bounded"),
         CheckConstraint("height >= 1 AND height <= 16384", name="height_bounded"),
         CheckConstraint("grid_size >= 8 AND grid_size <= 1024", name="grid_bounded"),
+        CheckConstraint("default_vision >= 0 AND default_vision <= 16384", name="default_vision_bounded"),
         Index("ix_vtt_scenes_campaign_id", "campaign_id"),
     )
 

@@ -17,7 +17,7 @@ Rules (each a ``ProtocolValidationError``):
 * a snapshot carries at most one ``scene`` entity, and it is ``sceneId``'s;
   ``sceneId: null`` means no entities at all;
 * GM ``controllerIds`` and ``capabilities`` hold no repeats;
-* a GM wall is not zero-length;
+* a wall (GM, or the table's since E-6) is not zero-length;
 * a ``fog`` entity (batch parity-1, GM and table): ``cols * rows`` is at most
   262,144, and ``revealed`` is the canonical unpadded base64url of exactly
   ``ceil(cols * rows / 8)`` bytes (decoding and re-encoding gives the same
@@ -184,10 +184,11 @@ def check_frame(schema_key: str, message) -> None:
             raise SemanticError('malformed fog bitset')
         if item.get('kind') == 'terrain' and not terrain_ok(item):
             raise SemanticError('malformed terrain cells')
+    for item in items:
+        # A wall on either surface (the table's since E-6) is not zero-length.
+        if item.get('kind') == 'wall' and (item.get('x1'), item.get('y1')) == (item.get('x2'), item.get('y2')):
+            raise SemanticError('zero-length wall')
     if schema_key == 'gm':
         for item in items:
             if item.get('kind') == 'token':
                 _no_repeats(list(item.get('controllerIds') or []), 'controller')
-            elif item.get('kind') == 'wall':
-                if (item.get('x1'), item.get('y1')) == (item.get('x2'), item.get('y2')):
-                    raise SemanticError('zero-length wall')

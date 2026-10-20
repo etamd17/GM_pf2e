@@ -138,6 +138,14 @@
               "type": "null"
             }
           ]
+        },
+        "lighting": {
+          "type": "boolean"
+        },
+        "defaultVision": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 16384
         }
       }
     },
@@ -224,6 +232,14 @@
         },
         "published": {
           "type": "boolean"
+        },
+        "lighting": {
+          "type": "boolean"
+        },
+        "defaultVision": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 16384
         }
       }
     },
@@ -430,6 +446,18 @@
           "items": {
             "$ref": "common.schema.json#/definitions/Id"
           }
+        },
+        "vision": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 16384
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       }
     },
@@ -535,6 +563,18 @@
           "items": {
             "$ref": "common.schema.json#/definitions/Id"
           }
+        },
+        "vision": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 16384
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       }
     },

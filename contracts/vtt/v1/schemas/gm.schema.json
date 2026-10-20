@@ -99,6 +99,16 @@
         },
         "published": {
           "type": "boolean"
+        },
+        "lighting": {
+          "type": "boolean",
+          "description": "Dynamic lighting (E-6). Optional in the schema, always sent."
+        },
+        "defaultVision": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 16384,
+          "description": "E-6: how far a party token sees, in scene pixels, unless the token says otherwise. 0: party tokens see only by light. Optional in the schema, always sent."
         }
       }
     },
@@ -182,6 +192,19 @@
           "items": {
             "$ref": "common.schema.json#/definitions/Id"
           }
+        },
+        "vision": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 16384
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "E-6: this token's vision radius in scene pixels; null uses the scene's default. Only a party token (linked to a player character) sees for the table. Optional in the schema, always sent."
         }
       }
     },

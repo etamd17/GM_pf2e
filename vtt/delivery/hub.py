@@ -391,7 +391,7 @@ class Hub:
                     keys = keys | {(k, i) for k, i in session.execute(
                         select(VttEntity.kind, VttEntity.id).where(
                             VttEntity.campaign_id == sub.campaign_id, VttEntity.scene_id == sub.scene_id,
-                            VttEntity.kind.in_(("token", "light", "template")))).all()}
+                            VttEntity.kind.in_(("token", "light", "template", "wall")))).all()}
             actors = live.load(session, sub.campaign_id)
             if actor_ids:
                 if sub.audience == "gm":
@@ -431,7 +431,7 @@ class Hub:
                 ).scalars().all()
                 for row in rows:
                     projected = (S.gm_entity(self.key, row) if sub.audience == "gm"
-                                 else S.table_entity(self.key, row, fog_view, actors))
+                                 else S.table_entity(self.key, row, fog_view, actors, scene))
                     if projected is not None:
                         current[(row.kind, row.id)] = projected
         for key in sorted(keys):

@@ -61,7 +61,7 @@ def test_tokens_walls_doors_and_lights_map_across():
     plan = importer.plan_scene(full_scene())
     assert plan.scene_id == "legacy_abc123"
     assert plan.scene == {"name": "Crypt", "width": 1400, "height": 1000, "grid_size": 70, "show_grid": True,
-                          "background_asset_id": None}
+                          "background_asset_id": None, "lighting_enabled": False, "default_vision": 700}
     by_id = {eid: (kind, data, hidden) for kind, eid, data, hidden in plan.entities}
     assert by_id["legacy_tok1"] == ("token", {
         "x": 105, "y": 105, "size": 1, "label": "Valeros", "color": 0x4F8A62, "artAssetId": None,
@@ -83,10 +83,23 @@ def test_what_cannot_come_across_is_reported():
     plan = importer.plan_scene(scene)
     importer.resolve_assets(plan, None)          # no /map file reader: the image cannot come across
     dropped = " | ".join(plan.dropped)
-    for words in ("background image", "fog", "1 template", "terrain (the legacy grid is offset)", "grid offset", "dynamic lighting",
-                  "token art on 1", "light intensity on 1", "vision radius on 2"):
+    for words in ("background image", "fog", "1 template", "terrain (the legacy grid is offset)", "grid offset",
+                  "token art on 1", "light intensity on 1"):
         assert words in dropped, words
     assert "tracker links" not in dropped        # brought across as actorId since parity P3
+    assert "lighting" not in dropped and "vision" not in dropped     # brought across since E-6
+
+
+def test_dynamic_lighting_and_vision_come_across():
+    scene = full_scene()
+    scene["settings"]["dynamic_lighting"] = True
+    scene["settings"]["default_vision"] = 420
+    scene["tokens"][0]["vision_radius"] = 420        # the default: nothing stored on the token
+    scene["tokens"][1]["vision_radius"] = 210        # its own radius
+    plan = importer.plan_scene(scene)
+    assert (plan.scene["lighting_enabled"], plan.scene["default_vision"]) == (True, 420)
+    by_id = {eid: data for _kind, eid, data, _hidden in plan.entities}
+    assert "vision" not in by_id["legacy_tok1"] and by_id["legacy_tok2"]["vision"] == 210
 
 
 def test_out_of_range_and_broken_values_are_clamped_and_reported():

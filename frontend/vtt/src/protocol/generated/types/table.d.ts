@@ -3,7 +3,7 @@
 export type TableFrame = TableSnapshot | TablePatch;
 export type OpaqueToken = string;
 export type Id = string;
-export type TableEntity = TableScene | TableToken | TableLight | FogState | TableTemplate | TerrainState;
+export type TableEntity = TableScene | TableToken | TableLight | FogState | TableTemplate | TerrainState | TableWall;
 /**
  * @maxItems 24
  */
@@ -40,6 +40,10 @@ export interface TableScene {
   gridSize: number;
   showGrid: boolean;
   backgroundAssetId: Id | null;
+  /**
+   * Dynamic lighting (E-6): when on, the table draws darkness except what the party's tokens and the lights can see. Optional in the schema, always sent.
+   */
+  lighting?: boolean;
 }
 export interface TableToken {
   kind: "token";
@@ -65,6 +69,10 @@ export interface TableToken {
    * Tracker state of the linked actor (parity-3); null when unlinked or the actor is absent. Always sent by the server.
    */
   live?: TableLive | null;
+  /**
+   * E-6: how far this token sees, in scene pixels, when lighting is on and it is a party token (linked to a player character); absent otherwise. 0: it sees only by light.
+   */
+  vision?: number;
 }
 /**
  * What the table may know of a linked token's tracker state (parity-3). Exact hp/maxHp for a player character, otherwise null; a non-PC has only status (Wounded at or below half, Dead at 0, null above half). active marks the creature whose turn it is.
@@ -130,6 +138,18 @@ export interface TerrainState {
   rows: number;
   cells: string;
 }
+/**
+ * E-6: a segment that blocks sight, sent to the table only while lighting is on: a wall, or a door that is not open. Never drawn; only the darkness uses it. Zero-length segments are rejected by the semantic boundary.
+ */
+export interface TableWall {
+  kind: "wall";
+  id: Id;
+  version: OpaqueToken;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
 export interface TablePatch {
   schemaVersion: 1;
   frame: "patch";
@@ -145,6 +165,6 @@ export interface TablePatch {
   removed: TableEntityRef[];
 }
 export interface TableEntityRef {
-  kind: "scene" | "token" | "light" | "fog" | "template" | "terrain";
+  kind: "scene" | "token" | "light" | "fog" | "template" | "terrain" | "wall";
   id: Id;
 }

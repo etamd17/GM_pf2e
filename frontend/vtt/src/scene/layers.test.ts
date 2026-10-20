@@ -11,6 +11,7 @@ describe('layers', () => {
       'walls',
       'tokens',
       'lighting',
+      'vision',
       'fog',
       'measure',
       'effects',

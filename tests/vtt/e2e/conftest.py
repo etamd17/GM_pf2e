@@ -61,6 +61,13 @@ W.upsert_entity(db, cid, "scene_hall", "token", "tok_hero",
 # left half, 10 of 20 columns.
 W.upsert_entity(db, cid, "scene_hall", "wall", "wall_mid", {"x1": 640, "y1": 0, "x2": 640, "y2": 960, "doorState": "none"})
 W.create_scene(db, cid, "scene_docks", name="Docks", width=1600, height=900, published=True)
+# E-6: a lit scene. One wall down the middle and one torch on the left: the
+# table is dark except the torch's light, which the wall stops.
+W.create_scene(db, cid, "scene_dark", name="Dark Vault", width=1280, height=960, published=True,
+               lighting_enabled=True, default_vision=0)
+W.upsert_entity(db, cid, "scene_dark", "wall", "wall_vault", {"x1": 640, "y1": 0, "x2": 640, "y2": 960, "doorState": "none"})
+W.upsert_entity(db, cid, "scene_dark", "wall", "door_vault", {"x1": 0, "y1": 480, "x2": 128, "y2": 480, "doorState": "open"})
+W.upsert_entity(db, cid, "scene_dark", "light", "torch_vault", {"x": 320, "y": 320, "radius": 128, "color": 0xFFD580})
 W.set_table_pointer(db, cid, "scene_hall")
 
 # A legacy /map scene with a background image file, for the import.
@@ -72,6 +79,7 @@ with open(os.path.join(storage.scene_assets_dir(cid), old["id"] + ".png"), "wb")
     handle.write(image.getvalue())
 old["background"] = {"filename": old["id"] + ".png"}
 legacy.add_token(old, name="Skeleton", x=210, y=210)
+old.setdefault("settings", {})["dynamic_lighting"] = True     # E-6: comes across
 legacy.save_scene(cid, old)
 print("E2E_RESULT=" + json.dumps({"cid": cid, "legacy": old["id"]}))
 '''

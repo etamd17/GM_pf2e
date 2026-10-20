@@ -8,7 +8,7 @@
 // - a snapshot has at most one scene entity and it is sceneId's;
 //   sceneId null means no entities
 // - GM controllerIds and capabilities hold no repeats
-// - a GM wall is not zero-length
+// - a wall (GM, or the table's since E-6) is not zero-length
 // Commands: no repeated expected key; updates, moves, deletes and table
 // commands name their target's expected version; no repeated controller;
 // a created (or fully re-ended) wall is not zero-length.
@@ -104,11 +104,12 @@ export function checkFrame(schemaKey, message) {
   for (const item of items) {
     if (item.kind === 'fog' && !fogOk(item)) return false;
     if (item.kind === 'terrain' && !terrainOk(item)) return false;
+    // A wall on either surface (the table's since E-6) is not zero-length.
+    if (item.kind === 'wall' && item.x1 === item.x2 && item.y1 === item.y2) return false;
   }
   if (schemaKey === 'gm') {
     for (const item of items) {
       if (item.kind === 'token' && !distinct(item.controllerIds ?? [])) return false;
-      if (item.kind === 'wall' && item.x1 === item.x2 && item.y1 === item.y2) return false;
     }
   }
   return true;

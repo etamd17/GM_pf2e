@@ -67,6 +67,14 @@ export interface GmScene {
   showGrid: boolean;
   backgroundAssetId: Id | null;
   published: boolean;
+  /**
+   * Dynamic lighting (E-6). Optional in the schema, always sent.
+   */
+  lighting?: boolean;
+  /**
+   * E-6: how far a party token sees, in scene pixels, unless the token says otherwise. 0: party tokens see only by light. Optional in the schema, always sent.
+   */
+  defaultVision?: number;
 }
 export interface GmToken {
   kind: "token";
@@ -94,6 +102,10 @@ export interface GmToken {
    * @maxItems 64
    */
   controllerIds: Id[];
+  /**
+   * E-6: this token's vision radius in scene pixels; null uses the scene's default. Only a party token (linked to a player character) sees for the table. Optional in the schema, always sent.
+   */
+  vision?: number | null;
 }
 export interface GmLight {
   kind: "light";

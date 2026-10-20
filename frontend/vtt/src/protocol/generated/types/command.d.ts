@@ -46,6 +46,8 @@ export interface SceneCreatePayload {
   gridSize: number;
   showGrid: boolean;
   backgroundAssetId: Id | null;
+  lighting?: boolean;
+  defaultVision?: number;
 }
 export interface SceneUpdate {
   schemaVersion: 1;
@@ -73,6 +75,8 @@ export interface SceneUpdatePayload {
   showGrid?: boolean;
   backgroundAssetId?: Id | null;
   published?: boolean;
+  lighting?: boolean;
+  defaultVision?: number;
 }
 export interface TableShow {
   schemaVersion: 1;
@@ -132,6 +136,7 @@ export interface TokenCreatePayload {
    * @maxItems 64
    */
   controllerIds: Id[];
+  vision?: number | null;
 }
 export interface TokenUpdate {
   schemaVersion: 1;
@@ -164,6 +169,7 @@ export interface TokenUpdatePayload {
    * @maxItems 64
    */
   controllerIds?: Id[];
+  vision?: number | null;
 }
 export interface TokenMove {
   schemaVersion: 1;

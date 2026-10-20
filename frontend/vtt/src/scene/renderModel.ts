@@ -27,6 +27,9 @@ export interface RenderToken {
   // GM only (E-4): feet one move covers, from the linked actor; the drag
   // reading measures against it. Not drawn on the token itself.
   readonly speed?: number;
+  // E-6: how far this token sees for the table (scene px), when lighting is on
+  // and it is a party token; absent otherwise.
+  readonly vision?: number;
 }
 
 export interface RenderLive {
@@ -122,6 +125,11 @@ export interface RenderScene {
   readonly tokens: readonly RenderToken[];
   readonly walls: readonly RenderWall[];
   readonly lights: readonly RenderLight[];
+  // E-6: dynamic lighting. When on, the table draws darkness except what party
+  // tokens and lights can see, cast against `occluders` (walls and doors that
+  // are not open). Absent: lighting off.
+  readonly lighting?: boolean;
+  readonly occluders?: readonly { x1: number; y1: number; x2: number; y2: number }[];
 }
 
 export const EMPTY_SCENE: RenderScene = {

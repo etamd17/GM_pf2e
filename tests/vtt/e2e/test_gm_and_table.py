@@ -377,6 +377,21 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
     gm.get_by_text("live", exact=True).wait_for()
     gm.get_by_role("button", name="Show on table").click()
     wait_for(tv, lambda s: s["scene"] is not None and s["scene"]["width"] == 1600, "the TV follows to the Docks")
+    assert probe(tv)["vision"]["lighting"] is False and probe(tv)["vision"]["drawn"] is False
+
+    # --- dynamic lighting on the TV (E-6) ---------------------------------------------------------
+    # The Dark Vault is lit: the TV draws darkness cast from its one torch,
+    # blocked by the wall (the open door blocks nothing); the GM sees no
+    # darkness (only a preview would show it).
+    gm.locator(".vtt-scene-picker").select_option("scene_dark")
+    gm.wait_for_url("**sceneId=scene_dark**")
+    gm.get_by_text("live", exact=True).wait_for()
+    gm.get_by_role("button", name="Show on table").click()
+    wait_for(tv, lambda s: s["scene"] is not None and s["vision"]["drawn"] is True, "the TV draws the darkness")
+    assert probe(tv)["vision"] == {"lighting": True, "drawn": True, "sources": 1, "occluders": 1, "builds": 1}
+    vision = probe(gm)["vision"]
+    assert vision["lighting"] is True and vision["drawn"] is False
+    shoot(tv, "e6-tv-dark")
 
     # --- import the /map scene, with its background ---------------------------------------------
     gm.get_by_role("button", name="Check what would import").click()
@@ -389,5 +404,6 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
     wait_for(gm, lambda s: s["scene"]["width"] == 1400 and s["scene"]["background"] == "loaded",
              "the imported background is drawn on the GM page")
     assert any(t["label"] == "Skeleton" for t in probe(gm)["tokens"])
+    assert probe(gm)["vision"]["lighting"] is True              # /map's dynamic lighting came across (E-6)
 
     assert gm.errors == [] and tv.errors == []

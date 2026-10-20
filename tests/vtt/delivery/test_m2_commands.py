@@ -520,9 +520,9 @@ def test_the_sizing_estimate_bounds_the_real_encoded_snapshot(stack):
     assert real + reserve <= estimate <= real + reserve + 2 * 128 + 64
     # scene + 4 seeded + 40 tokens + fog + terrain, plus the reserved actors
     # (they count against the GM entity cap); the table: scene, hero, torch,
-    # 40 tokens, fog and terrain
+    # 40 tokens, fog, terrain, and the wall (E-6: counted as if lighting were on)
     from vtt import live
-    assert gm_count == 47 + live.MAX_ACTORS and table_count == 1 + 1 + 1 + 40 + 1 + 1
+    assert gm_count == 47 + live.MAX_ACTORS and table_count == 1 + 1 + 1 + 40 + 1 + 1 + 1
 
 
 def test_a_command_that_would_push_the_gm_snapshot_over_the_limit_is_refused(stack, monkeypatch):

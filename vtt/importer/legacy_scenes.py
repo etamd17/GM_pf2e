@@ -214,11 +214,16 @@ def plan_scene(legacy: dict[str, Any]) -> Plan:
     _plan_fog(plan, legacy, grid)
     _plan_terrain(plan, legacy, grid)
     settings = legacy.get("settings") or {}
-    if settings.get("dynamic_lighting"):
-        plan.dropped.append("dynamic lighting and vision")
+    # Dynamic lighting and vision (E-6): /map's switch and its default vision
+    # radius (700 px when unset, as /map defaults it). A token's own radius is
+    # kept below only when it differs from that default; 0 or unset in /map
+    # means the default too.
+    plan.scene["lighting_enabled"] = bool(settings.get("dynamic_lighting"))
+    plan.scene["default_vision"] = _number(settings.get("default_vision", 700), 0, COORD_MAX, 700,
+                                           "default vision", plan)
 
     # --- tokens --------------------------------------------------------------------------------
-    linked = vision = nameplates = 0
+    linked = nameplates = 0
     for token in legacy.get("tokens") or []:
         if not isinstance(token, dict):
             continue
@@ -239,6 +244,13 @@ def plan_scene(legacy: dict[str, Any]) -> Plan:
             "locked": bool(token.get("locked", False)),
             "controllerIds": [],
         }
+        try:
+            radius = float(token.get("vision_radius") or 0)
+        except (TypeError, ValueError):
+            radius = 0
+            plan.dropped.append(f"{label} vision radius (not a number)")
+        if radius > 0 and radius != plan.scene["default_vision"]:
+            data["vision"] = _number(radius, 0, COORD_MAX, 0, f"{label} vision", plan)
         image = token.get("image")
         if image:
             # Only art uploaded through /map is a file this import can read
@@ -250,14 +262,8 @@ def plan_scene(legacy: dict[str, Any]) -> Plan:
             else:
                 plan.art_unsupported += 1
         linked += bool(token.get("combatant_id") or token.get("character_id")) and data["actorId"] is None
-        try:
-            vision += float(token.get("vision_radius") or 0) > 0
-        except (TypeError, ValueError):
-            vision += 1
         nameplates += token.get("show_nameplate", True) is False
         _add(plan, "token", token.get("id"), tid, data, token.get("visible_to_players", True) is False)
-    if vision:
-        plan.dropped.append(f"vision radius on {vision} token(s) (the VTT has no vision yet)")
     if nameplates:
         plan.dropped.append(f"hidden nameplate on {nameplates} token(s) (the VTT shows every label)")
     if plan.art_unsupported:

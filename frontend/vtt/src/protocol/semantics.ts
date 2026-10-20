@@ -81,7 +81,7 @@ export function fogOk(item: Record<string, unknown>): boolean {
 // - a snapshot has at most one scene entity and it is sceneId's; sceneId null
 //   means no entities;
 // - GM controllerIds and capabilities hold no repeats;
-// - a GM wall is not zero-length.
+// - a wall (GM, or the table's since E-6) is not zero-length.
 export function frameRulesHold(surface: FrameSurface, message: unknown): boolean {
   if (message === null || typeof message !== 'object') return true;
   const m = message as {
@@ -117,11 +117,12 @@ export function frameRulesHold(surface: FrameSurface, message: unknown): boolean
   for (const item of items) {
     if (item.kind === 'fog' && !fogOk(item)) return false;
     if (item.kind === 'terrain' && !terrainOk(item)) return false;
+    // A wall on either surface (the table's since E-6) is not zero-length.
+    if (item.kind === 'wall' && item.x1 === item.x2 && item.y1 === item.y2) return false;
   }
   if (surface === 'gm') {
     for (const item of items) {
       if (item.kind === 'token' && !distinct((item.controllerIds as readonly unknown[] | undefined) ?? [])) return false;
-      if (item.kind === 'wall' && item.x1 === item.x2 && item.y1 === item.y2) return false;
     }
   }
   return true;

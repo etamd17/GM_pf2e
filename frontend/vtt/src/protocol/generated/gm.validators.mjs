@@ -2,7 +2,7 @@
 import { ucs2length as func60 } from './ajv-runtime.mjs';
 "use strict";
 export const validateGm = validate10;
-const schema11 = {"$schema":"http://json-schema.org/draft-07/schema#","$id":"https://vtt.invalid/v1/gm.schema.json","title":"GmFrame","oneOf":[{"$ref":"#/definitions/Snapshot"},{"$ref":"#/definitions/Patch"}],"definitions":{"EntityRef":{"title":"GmEntityRef","type":"object","additionalProperties":false,"required":["kind","id"],"properties":{"kind":{"type":"string","enum":["scene","token","light","wall","fog","template","terrain","actor"]},"id":{"$ref":"common.schema.json#/definitions/Id"}}},"GmScene":{"title":"GmScene","type":"object","additionalProperties":false,"required":["kind","id","version","name","width","height","gridSize","showGrid","backgroundAssetId","published"],"properties":{"kind":{"const":"scene"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"name":{"type":"string","maxLength":120,"pattern":"^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])"},"width":{"type":"number","minimum":1,"maximum":16384},"height":{"type":"number","minimum":1,"maximum":16384},"gridSize":{"type":"number","minimum":8,"maximum":1024},"showGrid":{"type":"boolean"},"backgroundAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"published":{"type":"boolean"}}},"GmToken":{"title":"GmToken","type":"object","additionalProperties":false,"required":["kind","id","version","x","y","size","label","color","artAssetId","actorId","hidden","locked","controllerIds"],"properties":{"kind":{"const":"token"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"x":{"$ref":"common.schema.json#/definitions/Coord","description":"Token centre, in scene pixels."},"y":{"$ref":"common.schema.json#/definitions/Coord","description":"Token centre, in scene pixels."},"size":{"type":"number","minimum":0.25,"maximum":10},"label":{"$ref":"common.schema.json#/definitions/Label"},"color":{"$ref":"common.schema.json#/definitions/Color"},"artAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"actorId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"hidden":{"type":"boolean"},"locked":{"type":"boolean"},"controllerIds":{"type":"array","maxItems":64,"items":{"$ref":"common.schema.json#/definitions/Id"}}}},"GmLight":{"title":"GmLight","type":"object","additionalProperties":false,"required":["kind","id","version","x","y","radius","color","hidden"],"properties":{"kind":{"const":"light"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"x":{"$ref":"common.schema.json#/definitions/Coord"},"y":{"$ref":"common.schema.json#/definitions/Coord"},"radius":{"type":"number","minimum":0,"maximum":16384},"color":{"$ref":"common.schema.json#/definitions/Color"},"hidden":{"type":"boolean"}}},"GmWall":{"title":"GmWall","type":"object","additionalProperties":false,"required":["kind","id","version","x1","y1","x2","y2","doorState"],"properties":{"kind":{"const":"wall"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"x1":{"$ref":"common.schema.json#/definitions/Coord"},"y1":{"$ref":"common.schema.json#/definitions/Coord"},"x2":{"$ref":"common.schema.json#/definitions/Coord"},"y2":{"$ref":"common.schema.json#/definitions/Coord"},"doorState":{"type":"string","enum":["none","open","closed","locked","secret"]}},"description":"A wall segment; doorState other than \"none\" makes it a door. Zero-length segments are rejected by the semantic boundary."},"Entity":{"title":"GmEntity","oneOf":[{"$ref":"#/definitions/GmScene"},{"$ref":"#/definitions/GmToken"},{"$ref":"#/definitions/GmLight"},{"$ref":"#/definitions/GmWall"},{"$ref":"common.schema.json#/definitions/FogState"},{"$ref":"#/definitions/GmTemplate"},{"$ref":"common.schema.json#/definitions/TerrainState"},{"$ref":"#/definitions/GmActor"}]},"Snapshot":{"title":"GmSnapshot","type":"object","additionalProperties":false,"required":["schemaVersion","frame","audience","subscriptionId","seq","campaignId","sceneId","principal","capabilities","entities"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"frame":{"const":"snapshot"},"audience":{"const":"gm"},"subscriptionId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"seq":{"type":"integer","minimum":0,"maximum":0,"const":0},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"principal":{"title":"GmPrincipal","type":"object","additionalProperties":false,"required":["kind","id","campaignRole"],"properties":{"kind":{"const":"member"},"id":{"$ref":"common.schema.json#/definitions/Id"},"campaignRole":{"const":"gm"}}},"capabilities":{"type":"array","maxItems":5,"items":{"$ref":"common.schema.json#/definitions/Capability"}},"entities":{"type":"array","maxItems":4096,"items":{"$ref":"#/definitions/Entity"}}}},"Patch":{"title":"GmPatch","type":"object","additionalProperties":false,"required":["schemaVersion","frame","subscriptionId","seq","upserted","removed"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"frame":{"const":"patch"},"subscriptionId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"seq":{"$ref":"common.schema.json#/definitions/Seq"},"upserted":{"type":"array","maxItems":4096,"items":{"$ref":"#/definitions/Entity"}},"removed":{"type":"array","maxItems":4096,"items":{"$ref":"#/definitions/EntityRef"}},"originCommandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"}}},"GmTemplate":{"title":"GmTemplate","type":"object","additionalProperties":false,"required":["kind","id","version","shape","x","y","aimX","aimY","size","color","hidden"],"properties":{"kind":{"const":"template"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"shape":{"type":"string","enum":["burst","emanation","cone","line"]},"x":{"$ref":"common.schema.json#/definitions/Coord"},"y":{"$ref":"common.schema.json#/definitions/Coord"},"aimX":{"$ref":"common.schema.json#/definitions/Coord"},"aimY":{"$ref":"common.schema.json#/definitions/Coord"},"size":{"type":"integer","minimum":1,"maximum":60},"color":{"$ref":"common.schema.json#/definitions/Color"},"hidden":{"type":"boolean"}}},"GmActor":{"title":"GmActor","description":"A tracker combatant (cmb_...) or party character (chr_...) a token can link to (parity-3). Campaign-wide: every GM snapshot carries all of them. Derived from the tracker; read only.","type":"object","additionalProperties":false,"required":["kind","id","version","name","pc","hp","maxHp","conditions","active","hidden","status"],"properties":{"kind":{"const":"actor"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"name":{"type":"string","maxLength":64,"pattern":"^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])"},"pc":{"type":"boolean"},"hp":{"type":"integer","minimum":-9999,"maximum":99999},"maxHp":{"type":"integer","minimum":0,"maximum":99999},"conditions":{"$ref":"common.schema.json#/definitions/LiveConditions"},"active":{"type":"boolean"},"hidden":{"type":"boolean"},"status":{"type":"string","enum":["","Wounded","Dead"]},"size":{"type":"number","minimum":0.25,"maximum":10,"description":"Token size in squares for placing this creature (U-4)."},"sheetUrl":{"anyOf":[{"type":"string","maxLength":256,"pattern":"^/(?![/\\\\])[A-Za-z0-9._~%!$&'()*+,;=:@/?#-]*(?![\\s\\S])"},{"type":"null"}],"description":"A same-origin path to this creature's sheet the GM may open, resolved by the server (U-4); null when there is none."},"round":{"anyOf":[{"type":"integer","minimum":0,"maximum":100000},{"type":"null"}],"description":"The encounter's round, on a combatant (E-1); null on a party character. The GM page sends it back as the round it expects when it changes turns."},"turnToken":{"anyOf":[{"type":"string","pattern":"^[A-Za-z0-9-]{1,64}(?![\\s\\S])","minLength":1,"maxLength":64},{"type":"null"}],"description":"The tracker's turn token on a combatant (E-1); null on a party character. Opaque and never reused: it changes on every turn change and encounter reload. The GM page echoes it when it changes turns."},"encounterToken":{"anyOf":[{"type":"string","minLength":1,"maxLength":64,"pattern":"^[A-Za-z0-9-]{1,64}(?![\\s\\S])"},{"type":"null"}],"description":"The encounter generation token (E-3), on every actor. Opaque; it changes only when the tracker's roster is replaced wholesale (clear, load, stage, campaign switch). The GM page echoes it when it adds a bestiary creature."},"speed":{"anyOf":[{"type":"integer","minimum":1,"maximum":1000},{"type":"null"}],"description":"Feet one move covers (E-4), per system: PF2e Speed, Cosmere movement rate; null when unknown. The GM page measures a dragged token against it."}}}}};
+const schema11 = {"$schema":"http://json-schema.org/draft-07/schema#","$id":"https://vtt.invalid/v1/gm.schema.json","title":"GmFrame","oneOf":[{"$ref":"#/definitions/Snapshot"},{"$ref":"#/definitions/Patch"}],"definitions":{"EntityRef":{"title":"GmEntityRef","type":"object","additionalProperties":false,"required":["kind","id"],"properties":{"kind":{"type":"string","enum":["scene","token","light","wall","fog","template","terrain","actor"]},"id":{"$ref":"common.schema.json#/definitions/Id"}}},"GmScene":{"title":"GmScene","type":"object","additionalProperties":false,"required":["kind","id","version","name","width","height","gridSize","showGrid","backgroundAssetId","published"],"properties":{"kind":{"const":"scene"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"name":{"type":"string","maxLength":120,"pattern":"^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])"},"width":{"type":"number","minimum":1,"maximum":16384},"height":{"type":"number","minimum":1,"maximum":16384},"gridSize":{"type":"number","minimum":8,"maximum":1024},"showGrid":{"type":"boolean"},"backgroundAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"published":{"type":"boolean"},"lighting":{"type":"boolean","description":"Dynamic lighting (E-6). Optional in the schema, always sent."},"defaultVision":{"type":"number","minimum":0,"maximum":16384,"description":"E-6: how far a party token sees, in scene pixels, unless the token says otherwise. 0: party tokens see only by light. Optional in the schema, always sent."}}},"GmToken":{"title":"GmToken","type":"object","additionalProperties":false,"required":["kind","id","version","x","y","size","label","color","artAssetId","actorId","hidden","locked","controllerIds"],"properties":{"kind":{"const":"token"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"x":{"$ref":"common.schema.json#/definitions/Coord","description":"Token centre, in scene pixels."},"y":{"$ref":"common.schema.json#/definitions/Coord","description":"Token centre, in scene pixels."},"size":{"type":"number","minimum":0.25,"maximum":10},"label":{"$ref":"common.schema.json#/definitions/Label"},"color":{"$ref":"common.schema.json#/definitions/Color"},"artAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"actorId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"hidden":{"type":"boolean"},"locked":{"type":"boolean"},"controllerIds":{"type":"array","maxItems":64,"items":{"$ref":"common.schema.json#/definitions/Id"}},"vision":{"anyOf":[{"type":"number","minimum":0,"maximum":16384},{"type":"null"}],"description":"E-6: this token's vision radius in scene pixels; null uses the scene's default. Only a party token (linked to a player character) sees for the table. Optional in the schema, always sent."}}},"GmLight":{"title":"GmLight","type":"object","additionalProperties":false,"required":["kind","id","version","x","y","radius","color","hidden"],"properties":{"kind":{"const":"light"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"x":{"$ref":"common.schema.json#/definitions/Coord"},"y":{"$ref":"common.schema.json#/definitions/Coord"},"radius":{"type":"number","minimum":0,"maximum":16384},"color":{"$ref":"common.schema.json#/definitions/Color"},"hidden":{"type":"boolean"}}},"GmWall":{"title":"GmWall","type":"object","additionalProperties":false,"required":["kind","id","version","x1","y1","x2","y2","doorState"],"properties":{"kind":{"const":"wall"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"x1":{"$ref":"common.schema.json#/definitions/Coord"},"y1":{"$ref":"common.schema.json#/definitions/Coord"},"x2":{"$ref":"common.schema.json#/definitions/Coord"},"y2":{"$ref":"common.schema.json#/definitions/Coord"},"doorState":{"type":"string","enum":["none","open","closed","locked","secret"]}},"description":"A wall segment; doorState other than \"none\" makes it a door. Zero-length segments are rejected by the semantic boundary."},"Entity":{"title":"GmEntity","oneOf":[{"$ref":"#/definitions/GmScene"},{"$ref":"#/definitions/GmToken"},{"$ref":"#/definitions/GmLight"},{"$ref":"#/definitions/GmWall"},{"$ref":"common.schema.json#/definitions/FogState"},{"$ref":"#/definitions/GmTemplate"},{"$ref":"common.schema.json#/definitions/TerrainState"},{"$ref":"#/definitions/GmActor"}]},"Snapshot":{"title":"GmSnapshot","type":"object","additionalProperties":false,"required":["schemaVersion","frame","audience","subscriptionId","seq","campaignId","sceneId","principal","capabilities","entities"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"frame":{"const":"snapshot"},"audience":{"const":"gm"},"subscriptionId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"seq":{"type":"integer","minimum":0,"maximum":0,"const":0},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"principal":{"title":"GmPrincipal","type":"object","additionalProperties":false,"required":["kind","id","campaignRole"],"properties":{"kind":{"const":"member"},"id":{"$ref":"common.schema.json#/definitions/Id"},"campaignRole":{"const":"gm"}}},"capabilities":{"type":"array","maxItems":5,"items":{"$ref":"common.schema.json#/definitions/Capability"}},"entities":{"type":"array","maxItems":4096,"items":{"$ref":"#/definitions/Entity"}}}},"Patch":{"title":"GmPatch","type":"object","additionalProperties":false,"required":["schemaVersion","frame","subscriptionId","seq","upserted","removed"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"frame":{"const":"patch"},"subscriptionId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"seq":{"$ref":"common.schema.json#/definitions/Seq"},"upserted":{"type":"array","maxItems":4096,"items":{"$ref":"#/definitions/Entity"}},"removed":{"type":"array","maxItems":4096,"items":{"$ref":"#/definitions/EntityRef"}},"originCommandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"}}},"GmTemplate":{"title":"GmTemplate","type":"object","additionalProperties":false,"required":["kind","id","version","shape","x","y","aimX","aimY","size","color","hidden"],"properties":{"kind":{"const":"template"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"shape":{"type":"string","enum":["burst","emanation","cone","line"]},"x":{"$ref":"common.schema.json#/definitions/Coord"},"y":{"$ref":"common.schema.json#/definitions/Coord"},"aimX":{"$ref":"common.schema.json#/definitions/Coord"},"aimY":{"$ref":"common.schema.json#/definitions/Coord"},"size":{"type":"integer","minimum":1,"maximum":60},"color":{"$ref":"common.schema.json#/definitions/Color"},"hidden":{"type":"boolean"}}},"GmActor":{"title":"GmActor","description":"A tracker combatant (cmb_...) or party character (chr_...) a token can link to (parity-3). Campaign-wide: every GM snapshot carries all of them. Derived from the tracker; read only.","type":"object","additionalProperties":false,"required":["kind","id","version","name","pc","hp","maxHp","conditions","active","hidden","status"],"properties":{"kind":{"const":"actor"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"name":{"type":"string","maxLength":64,"pattern":"^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])"},"pc":{"type":"boolean"},"hp":{"type":"integer","minimum":-9999,"maximum":99999},"maxHp":{"type":"integer","minimum":0,"maximum":99999},"conditions":{"$ref":"common.schema.json#/definitions/LiveConditions"},"active":{"type":"boolean"},"hidden":{"type":"boolean"},"status":{"type":"string","enum":["","Wounded","Dead"]},"size":{"type":"number","minimum":0.25,"maximum":10,"description":"Token size in squares for placing this creature (U-4)."},"sheetUrl":{"anyOf":[{"type":"string","maxLength":256,"pattern":"^/(?![/\\\\])[A-Za-z0-9._~%!$&'()*+,;=:@/?#-]*(?![\\s\\S])"},{"type":"null"}],"description":"A same-origin path to this creature's sheet the GM may open, resolved by the server (U-4); null when there is none."},"round":{"anyOf":[{"type":"integer","minimum":0,"maximum":100000},{"type":"null"}],"description":"The encounter's round, on a combatant (E-1); null on a party character. The GM page sends it back as the round it expects when it changes turns."},"turnToken":{"anyOf":[{"type":"string","pattern":"^[A-Za-z0-9-]{1,64}(?![\\s\\S])","minLength":1,"maxLength":64},{"type":"null"}],"description":"The tracker's turn token on a combatant (E-1); null on a party character. Opaque and never reused: it changes on every turn change and encounter reload. The GM page echoes it when it changes turns."},"encounterToken":{"anyOf":[{"type":"string","minLength":1,"maxLength":64,"pattern":"^[A-Za-z0-9-]{1,64}(?![\\s\\S])"},{"type":"null"}],"description":"The encounter generation token (E-3), on every actor. Opaque; it changes only when the tracker's roster is replaced wholesale (clear, load, stage, campaign switch). The GM page echoes it when it adds a bestiary creature."},"speed":{"anyOf":[{"type":"integer","minimum":1,"maximum":1000},{"type":"null"}],"description":"Feet one move covers (E-4), per system: PF2e Speed, Cosmere movement rate; null when unknown. The GM page measures a dragged token against it."}}}}};
 const schema12 = {"title":"GmSnapshot","type":"object","additionalProperties":false,"required":["schemaVersion","frame","audience","subscriptionId","seq","campaignId","sceneId","principal","capabilities","entities"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"frame":{"const":"snapshot"},"audience":{"const":"gm"},"subscriptionId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"seq":{"type":"integer","minimum":0,"maximum":0,"const":0},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"principal":{"title":"GmPrincipal","type":"object","additionalProperties":false,"required":["kind","id","campaignRole"],"properties":{"kind":{"const":"member"},"id":{"$ref":"common.schema.json#/definitions/Id"},"campaignRole":{"const":"gm"}}},"capabilities":{"type":"array","maxItems":5,"items":{"$ref":"common.schema.json#/definitions/Capability"}},"entities":{"type":"array","maxItems":4096,"items":{"$ref":"#/definitions/Entity"}}}};
 const schema14 = {"type":"integer","minimum":1,"maximum":1,"const":1};
 const schema15 = {"title":"OpaqueToken","type":"string","minLength":16,"maxLength":128,"pattern":"^[A-Za-z0-9_-]+(?![\\s\\S])"};
@@ -12,7 +12,7 @@ const func0 = Object.prototype.hasOwnProperty;
 
 const pattern0 = new RegExp("^[A-Za-z0-9_-]+(?![\\s\\S])", "u");
 const schema20 = {"title":"GmEntity","oneOf":[{"$ref":"#/definitions/GmScene"},{"$ref":"#/definitions/GmToken"},{"$ref":"#/definitions/GmLight"},{"$ref":"#/definitions/GmWall"},{"$ref":"common.schema.json#/definitions/FogState"},{"$ref":"#/definitions/GmTemplate"},{"$ref":"common.schema.json#/definitions/TerrainState"},{"$ref":"#/definitions/GmActor"}]};
-const schema21 = {"title":"GmScene","type":"object","additionalProperties":false,"required":["kind","id","version","name","width","height","gridSize","showGrid","backgroundAssetId","published"],"properties":{"kind":{"const":"scene"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"name":{"type":"string","maxLength":120,"pattern":"^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])"},"width":{"type":"number","minimum":1,"maximum":16384},"height":{"type":"number","minimum":1,"maximum":16384},"gridSize":{"type":"number","minimum":8,"maximum":1024},"showGrid":{"type":"boolean"},"backgroundAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"published":{"type":"boolean"}}};
+const schema21 = {"title":"GmScene","type":"object","additionalProperties":false,"required":["kind","id","version","name","width","height","gridSize","showGrid","backgroundAssetId","published"],"properties":{"kind":{"const":"scene"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"name":{"type":"string","maxLength":120,"pattern":"^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])"},"width":{"type":"number","minimum":1,"maximum":16384},"height":{"type":"number","minimum":1,"maximum":16384},"gridSize":{"type":"number","minimum":8,"maximum":1024},"showGrid":{"type":"boolean"},"backgroundAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"published":{"type":"boolean"},"lighting":{"type":"boolean","description":"Dynamic lighting (E-6). Optional in the schema, always sent."},"defaultVision":{"type":"number","minimum":0,"maximum":16384,"description":"E-6: how far a party token sees, in scene pixels, unless the token says otherwise. 0: party tokens see only by light. Optional in the schema, always sent."}}};
 const pattern6 = new RegExp("^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])", "u");
 
 function validate14(data, {instancePath="", parentData, parentDataProperty, rootData=data}={}){
@@ -347,6 +347,47 @@ var valid0 = _errs26 === errors;
 else {
 var valid0 = true;
 }
+if(valid0){
+if(data.lighting !== undefined && func0.call(data, "lighting")){
+const _errs28 = errors;
+if(typeof data.lighting !== "boolean"){
+validate14.errors = [{instancePath:instancePath+"/lighting",schemaPath:"#/properties/lighting/type",keyword:"type",params:{type: "boolean"},message:"must be boolean"}];
+return false;
+}
+var valid0 = _errs28 === errors;
+}
+else {
+var valid0 = true;
+}
+if(valid0){
+if(data.defaultVision !== undefined && func0.call(data, "defaultVision")){
+let data11 = data.defaultVision;
+const _errs30 = errors;
+if(errors === _errs30){
+if((typeof data11 == "number") && (isFinite(data11))){
+if(data11 > 16384 || isNaN(data11)){
+validate14.errors = [{instancePath:instancePath+"/defaultVision",schemaPath:"#/properties/defaultVision/maximum",keyword:"maximum",params:{comparison: "<=", limit: 16384},message:"must be <= 16384"}];
+return false;
+}
+else {
+if(data11 < 0 || isNaN(data11)){
+validate14.errors = [{instancePath:instancePath+"/defaultVision",schemaPath:"#/properties/defaultVision/minimum",keyword:"minimum",params:{comparison: ">=", limit: 0},message:"must be >= 0"}];
+return false;
+}
+}
+}
+else {
+validate14.errors = [{instancePath:instancePath+"/defaultVision",schemaPath:"#/properties/defaultVision/type",keyword:"type",params:{type: "number"},message:"must be number"}];
+return false;
+}
+}
+var valid0 = _errs30 === errors;
+}
+else {
+var valid0 = true;
+}
+}
+}
 }
 }
 }
@@ -368,7 +409,7 @@ validate14.errors = vErrors;
 return errors === 0;
 }
 
-const schema25 = {"title":"GmToken","type":"object","additionalProperties":false,"required":["kind","id","version","x","y","size","label","color","artAssetId","actorId","hidden","locked","controllerIds"],"properties":{"kind":{"const":"token"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"x":{"$ref":"common.schema.json#/definitions/Coord","description":"Token centre, in scene pixels."},"y":{"$ref":"common.schema.json#/definitions/Coord","description":"Token centre, in scene pixels."},"size":{"type":"number","minimum":0.25,"maximum":10},"label":{"$ref":"common.schema.json#/definitions/Label"},"color":{"$ref":"common.schema.json#/definitions/Color"},"artAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"actorId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"hidden":{"type":"boolean"},"locked":{"type":"boolean"},"controllerIds":{"type":"array","maxItems":64,"items":{"$ref":"common.schema.json#/definitions/Id"}}}};
+const schema25 = {"title":"GmToken","type":"object","additionalProperties":false,"required":["kind","id","version","x","y","size","label","color","artAssetId","actorId","hidden","locked","controllerIds"],"properties":{"kind":{"const":"token"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"x":{"$ref":"common.schema.json#/definitions/Coord","description":"Token centre, in scene pixels."},"y":{"$ref":"common.schema.json#/definitions/Coord","description":"Token centre, in scene pixels."},"size":{"type":"number","minimum":0.25,"maximum":10},"label":{"$ref":"common.schema.json#/definitions/Label"},"color":{"$ref":"common.schema.json#/definitions/Color"},"artAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"actorId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"hidden":{"type":"boolean"},"locked":{"type":"boolean"},"controllerIds":{"type":"array","maxItems":64,"items":{"$ref":"common.schema.json#/definitions/Id"}},"vision":{"anyOf":[{"type":"number","minimum":0,"maximum":16384},{"type":"null"}],"description":"E-6: this token's vision radius in scene pixels; null uses the scene's default. Only a party token (linked to a player character) sees for the table. Optional in the schema, always sent."}}};
 const schema28 = {"type":"number","minimum":0,"maximum":16384};
 const schema30 = {"type":"string","maxLength":80,"pattern":"^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])","description":"Display text. Excludes C0/C1 controls, bidi overrides/isolates and unpaired surrogates; length counts code points."};
 const schema31 = {"type":"integer","minimum":0,"maximum":16777215};
@@ -894,6 +935,95 @@ var valid0 = _errs41 === errors;
 }
 else {
 var valid0 = true;
+}
+if(valid0){
+if(data.vision !== undefined && func0.call(data, "vision")){
+let data14 = data.vision;
+const _errs46 = errors;
+const _errs47 = errors;
+let valid13 = false;
+const _errs48 = errors;
+if(errors === _errs48){
+if((typeof data14 == "number") && (isFinite(data14))){
+if(data14 > 16384 || isNaN(data14)){
+const err12 = {instancePath:instancePath+"/vision",schemaPath:"#/properties/vision/anyOf/0/maximum",keyword:"maximum",params:{comparison: "<=", limit: 16384},message:"must be <= 16384"};
+if(vErrors === null){
+vErrors = [err12];
+}
+else {
+vErrors.push(err12);
+}
+errors++;
+}
+else {
+if(data14 < 0 || isNaN(data14)){
+const err13 = {instancePath:instancePath+"/vision",schemaPath:"#/properties/vision/anyOf/0/minimum",keyword:"minimum",params:{comparison: ">=", limit: 0},message:"must be >= 0"};
+if(vErrors === null){
+vErrors = [err13];
+}
+else {
+vErrors.push(err13);
+}
+errors++;
+}
+}
+}
+else {
+const err14 = {instancePath:instancePath+"/vision",schemaPath:"#/properties/vision/anyOf/0/type",keyword:"type",params:{type: "number"},message:"must be number"};
+if(vErrors === null){
+vErrors = [err14];
+}
+else {
+vErrors.push(err14);
+}
+errors++;
+}
+}
+var _valid2 = _errs48 === errors;
+valid13 = valid13 || _valid2;
+if(!valid13){
+const _errs50 = errors;
+if(data14 !== null){
+const err15 = {instancePath:instancePath+"/vision",schemaPath:"#/properties/vision/anyOf/1/type",keyword:"type",params:{type: "null"},message:"must be null"};
+if(vErrors === null){
+vErrors = [err15];
+}
+else {
+vErrors.push(err15);
+}
+errors++;
+}
+var _valid2 = _errs50 === errors;
+valid13 = valid13 || _valid2;
+}
+if(!valid13){
+const err16 = {instancePath:instancePath+"/vision",schemaPath:"#/properties/vision/anyOf",keyword:"anyOf",params:{},message:"must match a schema in anyOf"};
+if(vErrors === null){
+vErrors = [err16];
+}
+else {
+vErrors.push(err16);
+}
+errors++;
+validate16.errors = vErrors;
+return false;
+}
+else {
+errors = _errs47;
+if(vErrors !== null){
+if(_errs47){
+vErrors.length = _errs47;
+}
+else {
+vErrors = null;
+}
+}
+}
+var valid0 = _errs46 === errors;
+}
+else {
+var valid0 = true;
+}
 }
 }
 }
@@ -4064,7 +4194,7 @@ return errors === 0;
 }
 
 export const validateCommand = validate39;
-const schema72 = {"$schema":"http://json-schema.org/draft-07/schema#","$id":"https://vtt.invalid/v1/command.schema.json","title":"Command","description":"A GM command (VTT-ADR-0002 section 7). A table has no commands. Rules the schema cannot express are in vtt/protocol/semantics.py.","oneOf":[{"$ref":"#/definitions/SceneCreate"},{"$ref":"#/definitions/SceneUpdate"},{"$ref":"#/definitions/TableShow"},{"$ref":"#/definitions/TableClear"},{"$ref":"#/definitions/TokenCreate"},{"$ref":"#/definitions/TokenUpdate"},{"$ref":"#/definitions/TokenMove"},{"$ref":"#/definitions/LightCreate"},{"$ref":"#/definitions/LightUpdate"},{"$ref":"#/definitions/WallCreate"},{"$ref":"#/definitions/WallUpdate"},{"$ref":"#/definitions/EntityDelete"},{"$ref":"#/definitions/FogUpdate"},{"$ref":"#/definitions/FogReveal"},{"$ref":"#/definitions/FogReset"},{"$ref":"#/definitions/TemplateCreate"},{"$ref":"#/definitions/TemplateUpdate"},{"$ref":"#/definitions/TerrainPaint"},{"$ref":"#/definitions/TerrainReset"}],"definitions":{"ExpectedVersion":{"title":"ExpectedVersion","type":"object","additionalProperties":false,"required":["id","kind","version"],"properties":{"kind":{"type":"string","enum":["scene","token","light","wall","fog","template","terrain"]},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"}}},"SceneCreatePayload":{"title":"SceneCreatePayload","type":"object","additionalProperties":false,"required":["backgroundAssetId","gridSize","height","name","showGrid","width"],"properties":{"name":{"type":"string","maxLength":120,"pattern":"^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])"},"width":{"type":"number","minimum":1,"maximum":16384},"height":{"type":"number","minimum":1,"maximum":16384},"gridSize":{"type":"number","minimum":8,"maximum":1024},"showGrid":{"type":"boolean"},"backgroundAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]}}},"SceneCreate":{"title":"SceneCreate","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"scene.create"},"expected":{"type":"array","minItems":0,"maxItems":0,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/SceneCreatePayload"}}},"SceneUpdatePayload":{"title":"SceneUpdatePayload","type":"object","additionalProperties":false,"required":[],"properties":{"name":{"type":"string","maxLength":120,"pattern":"^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])"},"width":{"type":"number","minimum":1,"maximum":16384},"height":{"type":"number","minimum":1,"maximum":16384},"gridSize":{"type":"number","minimum":8,"maximum":1024},"showGrid":{"type":"boolean"},"backgroundAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"published":{"type":"boolean"}}},"SceneUpdate":{"title":"SceneUpdate","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"scene.update"},"expected":{"type":"array","minItems":0,"maxItems":1,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/SceneUpdatePayload"}}},"EmptyPayload":{"title":"EmptyPayload","type":"object","additionalProperties":false,"required":[],"properties":{}},"TableShow":{"title":"TableShow","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"table.show"},"expected":{"type":"array","minItems":0,"maxItems":1,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/EmptyPayload"}}},"TableClear":{"title":"TableClear","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"table.clear"},"expected":{"type":"array","minItems":0,"maxItems":1,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/EmptyPayload"}}},"TokenCreatePayload":{"title":"TokenCreatePayload","type":"object","additionalProperties":false,"required":["actorId","artAssetId","color","controllerIds","hidden","id","label","locked","size","x","y"],"properties":{"id":{"$ref":"common.schema.json#/definitions/Id"},"x":{"$ref":"common.schema.json#/definitions/Coord"},"y":{"$ref":"common.schema.json#/definitions/Coord"},"size":{"type":"number","minimum":0.25,"maximum":10},"label":{"$ref":"common.schema.json#/definitions/Label"},"color":{"$ref":"common.schema.json#/definitions/Color"},"artAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"actorId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"hidden":{"type":"boolean"},"locked":{"type":"boolean"},"controllerIds":{"type":"array","maxItems":64,"items":{"$ref":"common.schema.json#/definitions/Id"}}}},"TokenCreate":{"title":"TokenCreate","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"token.create"},"expected":{"type":"array","minItems":0,"maxItems":0,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/TokenCreatePayload"}}},"TokenUpdatePayload":{"title":"TokenUpdatePayload","type":"object","additionalProperties":false,"required":["id"],"properties":{"id":{"$ref":"common.schema.json#/definitions/Id"},"x":{"$ref":"common.schema.json#/definitions/Coord"},"y":{"$ref":"common.schema.json#/definitions/Coord"},"size":{"type":"number","minimum":0.25,"maximum":10},"label":{"$ref":"common.schema.json#/definitions/Label"},"color":{"$ref":"common.schema.json#/definitions/Color"},"artAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"actorId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"hidden":{"type":"boolean"},"locked":{"type":"boolean"},"controllerIds":{"type":"array","maxItems":64,"items":{"$ref":"common.schema.json#/definitions/Id"}}}},"TokenUpdate":{"title":"TokenUpdate","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"token.update"},"expected":{"type":"array","minItems":0,"maxItems":1,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/TokenUpdatePayload"}}},"TokenMovePayload":{"title":"TokenMovePayload","type":"object","additionalProperties":false,"required":["id","x","y"],"properties":{"id":{"$ref":"common.schema.json#/definitions/Id"},"x":{"$ref":"common.schema.json#/definitions/Coord"},"y":{"$ref":"common.schema.json#/definitions/Coord"}}},"TokenMove":{"title":"TokenMove","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"token.move"},"expected":{"type":"array","minItems":0,"maxItems":1,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/TokenMovePayload"}}},"LightCreatePayload":{"title":"LightCreatePayload","type":"object","additionalProperties":false,"required":["color","hidden","id","radius","x","y"],"properties":{"id":{"$ref":"common.schema.json#/definitions/Id"},"x":{"$ref":"common.schema.json#/definitions/Coord"},"y":{"$ref":"common.schema.json#/definitions/Coord"},"radius":{"type":"number","minimum":0,"maximum":16384},"color":{"$ref":"common.schema.json#/definitions/Color"},"hidden":{"type":"boolean"}}},"LightCreate":{"title":"LightCreate","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"light.create"},"expected":{"type":"array","minItems":0,"maxItems":0,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/LightCreatePayload"}}},"LightUpdatePayload":{"title":"LightUpdatePayload","type":"object","additionalProperties":false,"required":["id"],"properties":{"id":{"$ref":"common.schema.json#/definitions/Id"},"x":{"$ref":"common.schema.json#/definitions/Coord"},"y":{"$ref":"common.schema.json#/definitions/Coord"},"radius":{"type":"number","minimum":0,"maximum":16384},"color":{"$ref":"common.schema.json#/definitions/Color"},"hidden":{"type":"boolean"}}},"LightUpdate":{"title":"LightUpdate","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"light.update"},"expected":{"type":"array","minItems":0,"maxItems":1,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/LightUpdatePayload"}}},"WallCreatePayload":{"title":"WallCreatePayload","type":"object","additionalProperties":false,"required":["doorState","id","x1","x2","y1","y2"],"properties":{"id":{"$ref":"common.schema.json#/definitions/Id"},"x1":{"$ref":"common.schema.json#/definitions/Coord"},"y1":{"$ref":"common.schema.json#/definitions/Coord"},"x2":{"$ref":"common.schema.json#/definitions/Coord"},"y2":{"$ref":"common.schema.json#/definitions/Coord"},"doorState":{"type":"string","enum":["none","open","closed","locked","secret"]}}},"WallCreate":{"title":"WallCreate","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"wall.create"},"expected":{"type":"array","minItems":0,"maxItems":0,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/WallCreatePayload"}}},"WallUpdatePayload":{"title":"WallUpdatePayload","type":"object","additionalProperties":false,"required":["id"],"properties":{"id":{"$ref":"common.schema.json#/definitions/Id"},"x1":{"$ref":"common.schema.json#/definitions/Coord"},"y1":{"$ref":"common.schema.json#/definitions/Coord"},"x2":{"$ref":"common.schema.json#/definitions/Coord"},"y2":{"$ref":"common.schema.json#/definitions/Coord"},"doorState":{"type":"string","enum":["none","open","closed","locked","secret"]}}},"WallUpdate":{"title":"WallUpdate","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"wall.update"},"expected":{"type":"array","minItems":0,"maxItems":1,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/WallUpdatePayload"}}},"EntityDeletePayload":{"title":"EntityDeletePayload","type":"object","additionalProperties":false,"required":["id","kind"],"properties":{"kind":{"type":"string","enum":["token","light","wall","template"]},"id":{"$ref":"common.schema.json#/definitions/Id"}}},"EntityDelete":{"title":"EntityDelete","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"entity.delete"},"expected":{"type":"array","minItems":0,"maxItems":1,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/EntityDeletePayload"}}},"FogUpdatePayload":{"title":"FogUpdatePayload","type":"object","additionalProperties":false,"required":["enabled"],"properties":{"enabled":{"type":"boolean"}}},"FogUpdate":{"title":"FogUpdate","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"fog.update"},"expected":{"type":"array","minItems":0,"maxItems":1,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/FogUpdatePayload"}}},"FogRevealPayload":{"title":"FogRevealPayload","type":"object","additionalProperties":false,"required":["mode","cells"],"properties":{"mode":{"type":"string","enum":["reveal","hide"]},"cells":{"type":"array","minItems":1,"maxItems":20000,"items":{"type":"array","minItems":2,"maxItems":2,"items":{"type":"integer","minimum":0,"maximum":2047}}}}},"FogReveal":{"title":"FogReveal","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"fog.reveal"},"expected":{"type":"array","minItems":0,"maxItems":0,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/FogRevealPayload"}}},"FogReset":{"title":"FogReset","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"fog.reset"},"expected":{"type":"array","minItems":0,"maxItems":1,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/EmptyPayload"}}},"TemplateCreatePayload":{"title":"TemplateCreatePayload","type":"object","additionalProperties":false,"required":["id","shape","x","y","aimX","aimY","size","color","hidden"],"properties":{"id":{"$ref":"common.schema.json#/definitions/Id"},"shape":{"type":"string","enum":["burst","emanation","cone","line"]},"x":{"$ref":"common.schema.json#/definitions/Coord"},"y":{"$ref":"common.schema.json#/definitions/Coord"},"aimX":{"$ref":"common.schema.json#/definitions/Coord"},"aimY":{"$ref":"common.schema.json#/definitions/Coord"},"size":{"type":"integer","minimum":1,"maximum":60},"color":{"$ref":"common.schema.json#/definitions/Color"},"hidden":{"type":"boolean"}}},"TemplateCreate":{"title":"TemplateCreate","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"template.create"},"expected":{"type":"array","minItems":0,"maxItems":0,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/TemplateCreatePayload"}}},"TemplateUpdatePayload":{"title":"TemplateUpdatePayload","type":"object","additionalProperties":false,"required":["id"],"properties":{"id":{"$ref":"common.schema.json#/definitions/Id"},"x":{"$ref":"common.schema.json#/definitions/Coord"},"y":{"$ref":"common.schema.json#/definitions/Coord"},"aimX":{"$ref":"common.schema.json#/definitions/Coord"},"aimY":{"$ref":"common.schema.json#/definitions/Coord"},"size":{"type":"integer","minimum":1,"maximum":60},"color":{"$ref":"common.schema.json#/definitions/Color"},"hidden":{"type":"boolean"}}},"TemplateUpdate":{"title":"TemplateUpdate","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"template.update"},"expected":{"type":"array","minItems":0,"maxItems":1,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/TemplateUpdatePayload"}}},"TerrainPaintPayload":{"title":"TerrainPaintPayload","type":"object","additionalProperties":false,"required":["cells"],"properties":{"cells":{"type":"array","minItems":1,"maxItems":20000,"items":{"type":"array","minItems":3,"maxItems":3,"items":{"type":"integer","minimum":0,"maximum":2047}}}},"description":"Each cell is [col, row, kind]; kind is 0-4 (a semantic rule: 0 none, 1 lava, 2 water, 3 poison, 4 blood)."},"TerrainPaint":{"title":"TerrainPaint","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"terrain.paint"},"expected":{"type":"array","minItems":0,"maxItems":0,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/TerrainPaintPayload"}}},"TerrainReset":{"title":"TerrainReset","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"terrain.reset"},"expected":{"type":"array","minItems":0,"maxItems":1,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/EmptyPayload"}}}}};
+const schema72 = {"$schema":"http://json-schema.org/draft-07/schema#","$id":"https://vtt.invalid/v1/command.schema.json","title":"Command","description":"A GM command (VTT-ADR-0002 section 7). A table has no commands. Rules the schema cannot express are in vtt/protocol/semantics.py.","oneOf":[{"$ref":"#/definitions/SceneCreate"},{"$ref":"#/definitions/SceneUpdate"},{"$ref":"#/definitions/TableShow"},{"$ref":"#/definitions/TableClear"},{"$ref":"#/definitions/TokenCreate"},{"$ref":"#/definitions/TokenUpdate"},{"$ref":"#/definitions/TokenMove"},{"$ref":"#/definitions/LightCreate"},{"$ref":"#/definitions/LightUpdate"},{"$ref":"#/definitions/WallCreate"},{"$ref":"#/definitions/WallUpdate"},{"$ref":"#/definitions/EntityDelete"},{"$ref":"#/definitions/FogUpdate"},{"$ref":"#/definitions/FogReveal"},{"$ref":"#/definitions/FogReset"},{"$ref":"#/definitions/TemplateCreate"},{"$ref":"#/definitions/TemplateUpdate"},{"$ref":"#/definitions/TerrainPaint"},{"$ref":"#/definitions/TerrainReset"}],"definitions":{"ExpectedVersion":{"title":"ExpectedVersion","type":"object","additionalProperties":false,"required":["id","kind","version"],"properties":{"kind":{"type":"string","enum":["scene","token","light","wall","fog","template","terrain"]},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"}}},"SceneCreatePayload":{"title":"SceneCreatePayload","type":"object","additionalProperties":false,"required":["backgroundAssetId","gridSize","height","name","showGrid","width"],"properties":{"name":{"type":"string","maxLength":120,"pattern":"^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])"},"width":{"type":"number","minimum":1,"maximum":16384},"height":{"type":"number","minimum":1,"maximum":16384},"gridSize":{"type":"number","minimum":8,"maximum":1024},"showGrid":{"type":"boolean"},"backgroundAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"lighting":{"type":"boolean"},"defaultVision":{"type":"number","minimum":0,"maximum":16384}}},"SceneCreate":{"title":"SceneCreate","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"scene.create"},"expected":{"type":"array","minItems":0,"maxItems":0,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/SceneCreatePayload"}}},"SceneUpdatePayload":{"title":"SceneUpdatePayload","type":"object","additionalProperties":false,"required":[],"properties":{"name":{"type":"string","maxLength":120,"pattern":"^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])"},"width":{"type":"number","minimum":1,"maximum":16384},"height":{"type":"number","minimum":1,"maximum":16384},"gridSize":{"type":"number","minimum":8,"maximum":1024},"showGrid":{"type":"boolean"},"backgroundAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"published":{"type":"boolean"},"lighting":{"type":"boolean"},"defaultVision":{"type":"number","minimum":0,"maximum":16384}}},"SceneUpdate":{"title":"SceneUpdate","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"scene.update"},"expected":{"type":"array","minItems":0,"maxItems":1,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/SceneUpdatePayload"}}},"EmptyPayload":{"title":"EmptyPayload","type":"object","additionalProperties":false,"required":[],"properties":{}},"TableShow":{"title":"TableShow","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"table.show"},"expected":{"type":"array","minItems":0,"maxItems":1,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/EmptyPayload"}}},"TableClear":{"title":"TableClear","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"table.clear"},"expected":{"type":"array","minItems":0,"maxItems":1,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/EmptyPayload"}}},"TokenCreatePayload":{"title":"TokenCreatePayload","type":"object","additionalProperties":false,"required":["actorId","artAssetId","color","controllerIds","hidden","id","label","locked","size","x","y"],"properties":{"id":{"$ref":"common.schema.json#/definitions/Id"},"x":{"$ref":"common.schema.json#/definitions/Coord"},"y":{"$ref":"common.schema.json#/definitions/Coord"},"size":{"type":"number","minimum":0.25,"maximum":10},"label":{"$ref":"common.schema.json#/definitions/Label"},"color":{"$ref":"common.schema.json#/definitions/Color"},"artAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"actorId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"hidden":{"type":"boolean"},"locked":{"type":"boolean"},"controllerIds":{"type":"array","maxItems":64,"items":{"$ref":"common.schema.json#/definitions/Id"}},"vision":{"anyOf":[{"type":"number","minimum":0,"maximum":16384},{"type":"null"}]}}},"TokenCreate":{"title":"TokenCreate","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"token.create"},"expected":{"type":"array","minItems":0,"maxItems":0,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/TokenCreatePayload"}}},"TokenUpdatePayload":{"title":"TokenUpdatePayload","type":"object","additionalProperties":false,"required":["id"],"properties":{"id":{"$ref":"common.schema.json#/definitions/Id"},"x":{"$ref":"common.schema.json#/definitions/Coord"},"y":{"$ref":"common.schema.json#/definitions/Coord"},"size":{"type":"number","minimum":0.25,"maximum":10},"label":{"$ref":"common.schema.json#/definitions/Label"},"color":{"$ref":"common.schema.json#/definitions/Color"},"artAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"actorId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"hidden":{"type":"boolean"},"locked":{"type":"boolean"},"controllerIds":{"type":"array","maxItems":64,"items":{"$ref":"common.schema.json#/definitions/Id"}},"vision":{"anyOf":[{"type":"number","minimum":0,"maximum":16384},{"type":"null"}]}}},"TokenUpdate":{"title":"TokenUpdate","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"token.update"},"expected":{"type":"array","minItems":0,"maxItems":1,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/TokenUpdatePayload"}}},"TokenMovePayload":{"title":"TokenMovePayload","type":"object","additionalProperties":false,"required":["id","x","y"],"properties":{"id":{"$ref":"common.schema.json#/definitions/Id"},"x":{"$ref":"common.schema.json#/definitions/Coord"},"y":{"$ref":"common.schema.json#/definitions/Coord"}}},"TokenMove":{"title":"TokenMove","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"token.move"},"expected":{"type":"array","minItems":0,"maxItems":1,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/TokenMovePayload"}}},"LightCreatePayload":{"title":"LightCreatePayload","type":"object","additionalProperties":false,"required":["color","hidden","id","radius","x","y"],"properties":{"id":{"$ref":"common.schema.json#/definitions/Id"},"x":{"$ref":"common.schema.json#/definitions/Coord"},"y":{"$ref":"common.schema.json#/definitions/Coord"},"radius":{"type":"number","minimum":0,"maximum":16384},"color":{"$ref":"common.schema.json#/definitions/Color"},"hidden":{"type":"boolean"}}},"LightCreate":{"title":"LightCreate","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"light.create"},"expected":{"type":"array","minItems":0,"maxItems":0,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/LightCreatePayload"}}},"LightUpdatePayload":{"title":"LightUpdatePayload","type":"object","additionalProperties":false,"required":["id"],"properties":{"id":{"$ref":"common.schema.json#/definitions/Id"},"x":{"$ref":"common.schema.json#/definitions/Coord"},"y":{"$ref":"common.schema.json#/definitions/Coord"},"radius":{"type":"number","minimum":0,"maximum":16384},"color":{"$ref":"common.schema.json#/definitions/Color"},"hidden":{"type":"boolean"}}},"LightUpdate":{"title":"LightUpdate","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"light.update"},"expected":{"type":"array","minItems":0,"maxItems":1,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/LightUpdatePayload"}}},"WallCreatePayload":{"title":"WallCreatePayload","type":"object","additionalProperties":false,"required":["doorState","id","x1","x2","y1","y2"],"properties":{"id":{"$ref":"common.schema.json#/definitions/Id"},"x1":{"$ref":"common.schema.json#/definitions/Coord"},"y1":{"$ref":"common.schema.json#/definitions/Coord"},"x2":{"$ref":"common.schema.json#/definitions/Coord"},"y2":{"$ref":"common.schema.json#/definitions/Coord"},"doorState":{"type":"string","enum":["none","open","closed","locked","secret"]}}},"WallCreate":{"title":"WallCreate","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"wall.create"},"expected":{"type":"array","minItems":0,"maxItems":0,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/WallCreatePayload"}}},"WallUpdatePayload":{"title":"WallUpdatePayload","type":"object","additionalProperties":false,"required":["id"],"properties":{"id":{"$ref":"common.schema.json#/definitions/Id"},"x1":{"$ref":"common.schema.json#/definitions/Coord"},"y1":{"$ref":"common.schema.json#/definitions/Coord"},"x2":{"$ref":"common.schema.json#/definitions/Coord"},"y2":{"$ref":"common.schema.json#/definitions/Coord"},"doorState":{"type":"string","enum":["none","open","closed","locked","secret"]}}},"WallUpdate":{"title":"WallUpdate","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"wall.update"},"expected":{"type":"array","minItems":0,"maxItems":1,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/WallUpdatePayload"}}},"EntityDeletePayload":{"title":"EntityDeletePayload","type":"object","additionalProperties":false,"required":["id","kind"],"properties":{"kind":{"type":"string","enum":["token","light","wall","template"]},"id":{"$ref":"common.schema.json#/definitions/Id"}}},"EntityDelete":{"title":"EntityDelete","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"entity.delete"},"expected":{"type":"array","minItems":0,"maxItems":1,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/EntityDeletePayload"}}},"FogUpdatePayload":{"title":"FogUpdatePayload","type":"object","additionalProperties":false,"required":["enabled"],"properties":{"enabled":{"type":"boolean"}}},"FogUpdate":{"title":"FogUpdate","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"fog.update"},"expected":{"type":"array","minItems":0,"maxItems":1,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/FogUpdatePayload"}}},"FogRevealPayload":{"title":"FogRevealPayload","type":"object","additionalProperties":false,"required":["mode","cells"],"properties":{"mode":{"type":"string","enum":["reveal","hide"]},"cells":{"type":"array","minItems":1,"maxItems":20000,"items":{"type":"array","minItems":2,"maxItems":2,"items":{"type":"integer","minimum":0,"maximum":2047}}}}},"FogReveal":{"title":"FogReveal","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"fog.reveal"},"expected":{"type":"array","minItems":0,"maxItems":0,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/FogRevealPayload"}}},"FogReset":{"title":"FogReset","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"fog.reset"},"expected":{"type":"array","minItems":0,"maxItems":1,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/EmptyPayload"}}},"TemplateCreatePayload":{"title":"TemplateCreatePayload","type":"object","additionalProperties":false,"required":["id","shape","x","y","aimX","aimY","size","color","hidden"],"properties":{"id":{"$ref":"common.schema.json#/definitions/Id"},"shape":{"type":"string","enum":["burst","emanation","cone","line"]},"x":{"$ref":"common.schema.json#/definitions/Coord"},"y":{"$ref":"common.schema.json#/definitions/Coord"},"aimX":{"$ref":"common.schema.json#/definitions/Coord"},"aimY":{"$ref":"common.schema.json#/definitions/Coord"},"size":{"type":"integer","minimum":1,"maximum":60},"color":{"$ref":"common.schema.json#/definitions/Color"},"hidden":{"type":"boolean"}}},"TemplateCreate":{"title":"TemplateCreate","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"template.create"},"expected":{"type":"array","minItems":0,"maxItems":0,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/TemplateCreatePayload"}}},"TemplateUpdatePayload":{"title":"TemplateUpdatePayload","type":"object","additionalProperties":false,"required":["id"],"properties":{"id":{"$ref":"common.schema.json#/definitions/Id"},"x":{"$ref":"common.schema.json#/definitions/Coord"},"y":{"$ref":"common.schema.json#/definitions/Coord"},"aimX":{"$ref":"common.schema.json#/definitions/Coord"},"aimY":{"$ref":"common.schema.json#/definitions/Coord"},"size":{"type":"integer","minimum":1,"maximum":60},"color":{"$ref":"common.schema.json#/definitions/Color"},"hidden":{"type":"boolean"}}},"TemplateUpdate":{"title":"TemplateUpdate","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"template.update"},"expected":{"type":"array","minItems":0,"maxItems":1,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/TemplateUpdatePayload"}}},"TerrainPaintPayload":{"title":"TerrainPaintPayload","type":"object","additionalProperties":false,"required":["cells"],"properties":{"cells":{"type":"array","minItems":1,"maxItems":20000,"items":{"type":"array","minItems":3,"maxItems":3,"items":{"type":"integer","minimum":0,"maximum":2047}}}},"description":"Each cell is [col, row, kind]; kind is 0-4 (a semantic rule: 0 none, 1 lava, 2 water, 3 poison, 4 blood)."},"TerrainPaint":{"title":"TerrainPaint","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"terrain.paint"},"expected":{"type":"array","minItems":0,"maxItems":0,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/TerrainPaintPayload"}}},"TerrainReset":{"title":"TerrainReset","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"terrain.reset"},"expected":{"type":"array","minItems":0,"maxItems":1,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/EmptyPayload"}}}}};
 const schema73 = {"title":"SceneCreate","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"scene.create"},"expected":{"type":"array","minItems":0,"maxItems":0,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/SceneCreatePayload"}}};
 const schema78 = {"title":"ExpectedVersion","type":"object","additionalProperties":false,"required":["id","kind","version"],"properties":{"kind":{"type":"string","enum":["scene","token","light","wall","fog","template","terrain"]},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"}}};
 
@@ -4186,7 +4316,7 @@ validate41.errors = vErrors;
 return errors === 0;
 }
 
-const schema81 = {"title":"SceneCreatePayload","type":"object","additionalProperties":false,"required":["backgroundAssetId","gridSize","height","name","showGrid","width"],"properties":{"name":{"type":"string","maxLength":120,"pattern":"^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])"},"width":{"type":"number","minimum":1,"maximum":16384},"height":{"type":"number","minimum":1,"maximum":16384},"gridSize":{"type":"number","minimum":8,"maximum":1024},"showGrid":{"type":"boolean"},"backgroundAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]}}};
+const schema81 = {"title":"SceneCreatePayload","type":"object","additionalProperties":false,"required":["backgroundAssetId","gridSize","height","name","showGrid","width"],"properties":{"name":{"type":"string","maxLength":120,"pattern":"^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])"},"width":{"type":"number","minimum":1,"maximum":16384},"height":{"type":"number","minimum":1,"maximum":16384},"gridSize":{"type":"number","minimum":8,"maximum":1024},"showGrid":{"type":"boolean"},"backgroundAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"lighting":{"type":"boolean"},"defaultVision":{"type":"number","minimum":0,"maximum":16384}}};
 
 function validate43(data, {instancePath="", parentData, parentDataProperty, rootData=data}={}){
 let vErrors = null;
@@ -4201,7 +4331,7 @@ return false;
 else {
 const _errs1 = errors;
 for(const key0 of Object.keys(data)){
-if(!((((((key0 === "name") || (key0 === "width")) || (key0 === "height")) || (key0 === "gridSize")) || (key0 === "showGrid")) || (key0 === "backgroundAssetId"))){
+if(!((((((((key0 === "name") || (key0 === "width")) || (key0 === "height")) || (key0 === "gridSize")) || (key0 === "showGrid")) || (key0 === "backgroundAssetId")) || (key0 === "lighting")) || (key0 === "defaultVision"))){
 validate43.errors = [{instancePath,schemaPath:"#/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"}];
 return false;
 break;
@@ -4427,6 +4557,47 @@ var valid0 = _errs12 === errors;
 }
 else {
 var valid0 = true;
+}
+if(valid0){
+if(data.lighting !== undefined && func0.call(data, "lighting")){
+const _errs19 = errors;
+if(typeof data.lighting !== "boolean"){
+validate43.errors = [{instancePath:instancePath+"/lighting",schemaPath:"#/properties/lighting/type",keyword:"type",params:{type: "boolean"},message:"must be boolean"}];
+return false;
+}
+var valid0 = _errs19 === errors;
+}
+else {
+var valid0 = true;
+}
+if(valid0){
+if(data.defaultVision !== undefined && func0.call(data, "defaultVision")){
+let data7 = data.defaultVision;
+const _errs21 = errors;
+if(errors === _errs21){
+if((typeof data7 == "number") && (isFinite(data7))){
+if(data7 > 16384 || isNaN(data7)){
+validate43.errors = [{instancePath:instancePath+"/defaultVision",schemaPath:"#/properties/defaultVision/maximum",keyword:"maximum",params:{comparison: "<=", limit: 16384},message:"must be <= 16384"}];
+return false;
+}
+else {
+if(data7 < 0 || isNaN(data7)){
+validate43.errors = [{instancePath:instancePath+"/defaultVision",schemaPath:"#/properties/defaultVision/minimum",keyword:"minimum",params:{comparison: ">=", limit: 0},message:"must be >= 0"}];
+return false;
+}
+}
+}
+else {
+validate43.errors = [{instancePath:instancePath+"/defaultVision",schemaPath:"#/properties/defaultVision/type",keyword:"type",params:{type: "number"},message:"must be number"}];
+return false;
+}
+}
+var valid0 = _errs21 === errors;
+}
+else {
+var valid0 = true;
+}
+}
 }
 }
 }
@@ -4684,7 +4855,7 @@ return errors === 0;
 }
 
 const schema83 = {"title":"SceneUpdate","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"scene.update"},"expected":{"type":"array","minItems":0,"maxItems":1,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/SceneUpdatePayload"}}};
-const schema88 = {"title":"SceneUpdatePayload","type":"object","additionalProperties":false,"required":[],"properties":{"name":{"type":"string","maxLength":120,"pattern":"^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])"},"width":{"type":"number","minimum":1,"maximum":16384},"height":{"type":"number","minimum":1,"maximum":16384},"gridSize":{"type":"number","minimum":8,"maximum":1024},"showGrid":{"type":"boolean"},"backgroundAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"published":{"type":"boolean"}}};
+const schema88 = {"title":"SceneUpdatePayload","type":"object","additionalProperties":false,"required":[],"properties":{"name":{"type":"string","maxLength":120,"pattern":"^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])"},"width":{"type":"number","minimum":1,"maximum":16384},"height":{"type":"number","minimum":1,"maximum":16384},"gridSize":{"type":"number","minimum":8,"maximum":1024},"showGrid":{"type":"boolean"},"backgroundAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"published":{"type":"boolean"},"lighting":{"type":"boolean"},"defaultVision":{"type":"number","minimum":0,"maximum":16384}}};
 
 function validate48(data, {instancePath="", parentData, parentDataProperty, rootData=data}={}){
 let vErrors = null;
@@ -4693,7 +4864,7 @@ if(errors === 0){
 if(data && typeof data == "object" && !Array.isArray(data)){
 const _errs1 = errors;
 for(const key0 of Object.keys(data)){
-if(!(((((((key0 === "name") || (key0 === "width")) || (key0 === "height")) || (key0 === "gridSize")) || (key0 === "showGrid")) || (key0 === "backgroundAssetId")) || (key0 === "published"))){
+if(!(func0.call(schema88.properties, key0))){
 validate48.errors = [{instancePath,schemaPath:"#/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"}];
 return false;
 break;
@@ -4931,6 +5102,47 @@ var valid0 = _errs19 === errors;
 }
 else {
 var valid0 = true;
+}
+if(valid0){
+if(data.lighting !== undefined && func0.call(data, "lighting")){
+const _errs21 = errors;
+if(typeof data.lighting !== "boolean"){
+validate48.errors = [{instancePath:instancePath+"/lighting",schemaPath:"#/properties/lighting/type",keyword:"type",params:{type: "boolean"},message:"must be boolean"}];
+return false;
+}
+var valid0 = _errs21 === errors;
+}
+else {
+var valid0 = true;
+}
+if(valid0){
+if(data.defaultVision !== undefined && func0.call(data, "defaultVision")){
+let data8 = data.defaultVision;
+const _errs23 = errors;
+if(errors === _errs23){
+if((typeof data8 == "number") && (isFinite(data8))){
+if(data8 > 16384 || isNaN(data8)){
+validate48.errors = [{instancePath:instancePath+"/defaultVision",schemaPath:"#/properties/defaultVision/maximum",keyword:"maximum",params:{comparison: "<=", limit: 16384},message:"must be <= 16384"}];
+return false;
+}
+else {
+if(data8 < 0 || isNaN(data8)){
+validate48.errors = [{instancePath:instancePath+"/defaultVision",schemaPath:"#/properties/defaultVision/minimum",keyword:"minimum",params:{comparison: ">=", limit: 0},message:"must be >= 0"}];
+return false;
+}
+}
+}
+else {
+validate48.errors = [{instancePath:instancePath+"/defaultVision",schemaPath:"#/properties/defaultVision/type",keyword:"type",params:{type: "number"},message:"must be number"}];
+return false;
+}
+}
+var valid0 = _errs23 === errors;
+}
+else {
+var valid0 = true;
+}
+}
 }
 }
 }
@@ -5689,7 +5901,7 @@ return errors === 0;
 }
 
 const schema102 = {"title":"TokenCreate","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"token.create"},"expected":{"type":"array","minItems":0,"maxItems":0,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/TokenCreatePayload"}}};
-const schema107 = {"title":"TokenCreatePayload","type":"object","additionalProperties":false,"required":["actorId","artAssetId","color","controllerIds","hidden","id","label","locked","size","x","y"],"properties":{"id":{"$ref":"common.schema.json#/definitions/Id"},"x":{"$ref":"common.schema.json#/definitions/Coord"},"y":{"$ref":"common.schema.json#/definitions/Coord"},"size":{"type":"number","minimum":0.25,"maximum":10},"label":{"$ref":"common.schema.json#/definitions/Label"},"color":{"$ref":"common.schema.json#/definitions/Color"},"artAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"actorId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"hidden":{"type":"boolean"},"locked":{"type":"boolean"},"controllerIds":{"type":"array","maxItems":64,"items":{"$ref":"common.schema.json#/definitions/Id"}}}};
+const schema107 = {"title":"TokenCreatePayload","type":"object","additionalProperties":false,"required":["actorId","artAssetId","color","controllerIds","hidden","id","label","locked","size","x","y"],"properties":{"id":{"$ref":"common.schema.json#/definitions/Id"},"x":{"$ref":"common.schema.json#/definitions/Coord"},"y":{"$ref":"common.schema.json#/definitions/Coord"},"size":{"type":"number","minimum":0.25,"maximum":10},"label":{"$ref":"common.schema.json#/definitions/Label"},"color":{"$ref":"common.schema.json#/definitions/Color"},"artAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"actorId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"hidden":{"type":"boolean"},"locked":{"type":"boolean"},"controllerIds":{"type":"array","maxItems":64,"items":{"$ref":"common.schema.json#/definitions/Id"}},"vision":{"anyOf":[{"type":"number","minimum":0,"maximum":16384},{"type":"null"}]}}};
 
 function validate59(data, {instancePath="", parentData, parentDataProperty, rootData=data}={}){
 let vErrors = null;
@@ -6167,6 +6379,95 @@ var valid0 = _errs37 === errors;
 else {
 var valid0 = true;
 }
+if(valid0){
+if(data.vision !== undefined && func0.call(data, "vision")){
+let data12 = data.vision;
+const _errs42 = errors;
+const _errs43 = errors;
+let valid12 = false;
+const _errs44 = errors;
+if(errors === _errs44){
+if((typeof data12 == "number") && (isFinite(data12))){
+if(data12 > 16384 || isNaN(data12)){
+const err12 = {instancePath:instancePath+"/vision",schemaPath:"#/properties/vision/anyOf/0/maximum",keyword:"maximum",params:{comparison: "<=", limit: 16384},message:"must be <= 16384"};
+if(vErrors === null){
+vErrors = [err12];
+}
+else {
+vErrors.push(err12);
+}
+errors++;
+}
+else {
+if(data12 < 0 || isNaN(data12)){
+const err13 = {instancePath:instancePath+"/vision",schemaPath:"#/properties/vision/anyOf/0/minimum",keyword:"minimum",params:{comparison: ">=", limit: 0},message:"must be >= 0"};
+if(vErrors === null){
+vErrors = [err13];
+}
+else {
+vErrors.push(err13);
+}
+errors++;
+}
+}
+}
+else {
+const err14 = {instancePath:instancePath+"/vision",schemaPath:"#/properties/vision/anyOf/0/type",keyword:"type",params:{type: "number"},message:"must be number"};
+if(vErrors === null){
+vErrors = [err14];
+}
+else {
+vErrors.push(err14);
+}
+errors++;
+}
+}
+var _valid2 = _errs44 === errors;
+valid12 = valid12 || _valid2;
+if(!valid12){
+const _errs46 = errors;
+if(data12 !== null){
+const err15 = {instancePath:instancePath+"/vision",schemaPath:"#/properties/vision/anyOf/1/type",keyword:"type",params:{type: "null"},message:"must be null"};
+if(vErrors === null){
+vErrors = [err15];
+}
+else {
+vErrors.push(err15);
+}
+errors++;
+}
+var _valid2 = _errs46 === errors;
+valid12 = valid12 || _valid2;
+}
+if(!valid12){
+const err16 = {instancePath:instancePath+"/vision",schemaPath:"#/properties/vision/anyOf",keyword:"anyOf",params:{},message:"must match a schema in anyOf"};
+if(vErrors === null){
+vErrors = [err16];
+}
+else {
+vErrors.push(err16);
+}
+errors++;
+validate59.errors = vErrors;
+return false;
+}
+else {
+errors = _errs43;
+if(vErrors !== null){
+if(_errs43){
+vErrors.length = _errs43;
+}
+else {
+vErrors = null;
+}
+}
+}
+var valid0 = _errs42 === errors;
+}
+else {
+var valid0 = true;
+}
+}
 }
 }
 }
@@ -6428,7 +6729,7 @@ return errors === 0;
 }
 
 const schema116 = {"title":"TokenUpdate","type":"object","additionalProperties":false,"required":["campaignId","commandId","expected","payload","sceneId","schemaVersion","type"],"properties":{"schemaVersion":{"$ref":"common.schema.json#/definitions/SchemaVersion"},"commandId":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"campaignId":{"$ref":"common.schema.json#/definitions/Id"},"sceneId":{"$ref":"common.schema.json#/definitions/Id"},"type":{"const":"token.update"},"expected":{"type":"array","minItems":0,"maxItems":1,"items":{"$ref":"#/definitions/ExpectedVersion"}},"payload":{"$ref":"#/definitions/TokenUpdatePayload"}}};
-const schema121 = {"title":"TokenUpdatePayload","type":"object","additionalProperties":false,"required":["id"],"properties":{"id":{"$ref":"common.schema.json#/definitions/Id"},"x":{"$ref":"common.schema.json#/definitions/Coord"},"y":{"$ref":"common.schema.json#/definitions/Coord"},"size":{"type":"number","minimum":0.25,"maximum":10},"label":{"$ref":"common.schema.json#/definitions/Label"},"color":{"$ref":"common.schema.json#/definitions/Color"},"artAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"actorId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"hidden":{"type":"boolean"},"locked":{"type":"boolean"},"controllerIds":{"type":"array","maxItems":64,"items":{"$ref":"common.schema.json#/definitions/Id"}}}};
+const schema121 = {"title":"TokenUpdatePayload","type":"object","additionalProperties":false,"required":["id"],"properties":{"id":{"$ref":"common.schema.json#/definitions/Id"},"x":{"$ref":"common.schema.json#/definitions/Coord"},"y":{"$ref":"common.schema.json#/definitions/Coord"},"size":{"type":"number","minimum":0.25,"maximum":10},"label":{"$ref":"common.schema.json#/definitions/Label"},"color":{"$ref":"common.schema.json#/definitions/Color"},"artAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"actorId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"hidden":{"type":"boolean"},"locked":{"type":"boolean"},"controllerIds":{"type":"array","maxItems":64,"items":{"$ref":"common.schema.json#/definitions/Id"}},"vision":{"anyOf":[{"type":"number","minimum":0,"maximum":16384},{"type":"null"}]}}};
 
 function validate64(data, {instancePath="", parentData, parentDataProperty, rootData=data}={}){
 let vErrors = null;
@@ -6905,6 +7206,95 @@ var valid0 = _errs37 === errors;
 }
 else {
 var valid0 = true;
+}
+if(valid0){
+if(data.vision !== undefined && func0.call(data, "vision")){
+let data12 = data.vision;
+const _errs42 = errors;
+const _errs43 = errors;
+let valid12 = false;
+const _errs44 = errors;
+if(errors === _errs44){
+if((typeof data12 == "number") && (isFinite(data12))){
+if(data12 > 16384 || isNaN(data12)){
+const err12 = {instancePath:instancePath+"/vision",schemaPath:"#/properties/vision/anyOf/0/maximum",keyword:"maximum",params:{comparison: "<=", limit: 16384},message:"must be <= 16384"};
+if(vErrors === null){
+vErrors = [err12];
+}
+else {
+vErrors.push(err12);
+}
+errors++;
+}
+else {
+if(data12 < 0 || isNaN(data12)){
+const err13 = {instancePath:instancePath+"/vision",schemaPath:"#/properties/vision/anyOf/0/minimum",keyword:"minimum",params:{comparison: ">=", limit: 0},message:"must be >= 0"};
+if(vErrors === null){
+vErrors = [err13];
+}
+else {
+vErrors.push(err13);
+}
+errors++;
+}
+}
+}
+else {
+const err14 = {instancePath:instancePath+"/vision",schemaPath:"#/properties/vision/anyOf/0/type",keyword:"type",params:{type: "number"},message:"must be number"};
+if(vErrors === null){
+vErrors = [err14];
+}
+else {
+vErrors.push(err14);
+}
+errors++;
+}
+}
+var _valid2 = _errs44 === errors;
+valid12 = valid12 || _valid2;
+if(!valid12){
+const _errs46 = errors;
+if(data12 !== null){
+const err15 = {instancePath:instancePath+"/vision",schemaPath:"#/properties/vision/anyOf/1/type",keyword:"type",params:{type: "null"},message:"must be null"};
+if(vErrors === null){
+vErrors = [err15];
+}
+else {
+vErrors.push(err15);
+}
+errors++;
+}
+var _valid2 = _errs46 === errors;
+valid12 = valid12 || _valid2;
+}
+if(!valid12){
+const err16 = {instancePath:instancePath+"/vision",schemaPath:"#/properties/vision/anyOf",keyword:"anyOf",params:{},message:"must match a schema in anyOf"};
+if(vErrors === null){
+vErrors = [err16];
+}
+else {
+vErrors.push(err16);
+}
+errors++;
+validate64.errors = vErrors;
+return false;
+}
+else {
+errors = _errs43;
+if(vErrors !== null){
+if(_errs43){
+vErrors.length = _errs43;
+}
+else {
+vErrors = null;
+}
+}
+}
+var valid0 = _errs42 === errors;
+}
+else {
+var valid0 = true;
+}
 }
 }
 }

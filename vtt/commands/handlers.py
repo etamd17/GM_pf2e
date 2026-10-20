@@ -27,7 +27,7 @@ from vtt.projection import serializers as S
 from vtt.storage.models import VttEntity, VttFog, VttScene, VttTablePointer, VttTerrain
 
 ENTITY_DATA = {
-    "token": ("x", "y", "size", "label", "color", "artAssetId", "actorId", "locked", "controllerIds"),
+    "token": ("x", "y", "size", "label", "color", "artAssetId", "actorId", "locked", "controllerIds", "vision"),
     "light": ("x", "y", "radius", "color"),
     "wall": ("x1", "y1", "x2", "y2", "doorState"),
     "template": ("shape", "x", "y", "aimX", "aimY", "size", "color"),
@@ -36,7 +36,7 @@ HIDEABLE = ("token", "light", "template")
 MAX_TEMPLATES = 512          # per scene (parity P2)
 SCENE_COLUMNS = {"name": "name", "width": "width", "height": "height", "gridSize": "grid_size",
                  "showGrid": "show_grid", "backgroundAssetId": "background_asset_id",
-                 "published": "published"}
+                 "published": "published", "lighting": "lighting_enabled", "defaultVision": "default_vision"}
 
 
 class Rejection(Exception):
@@ -131,7 +131,9 @@ def scene_create(ctx: Context) -> dict[str, Any]:
     p = ctx.payload
     ctx.session.add(VttScene(campaign_id=ctx.campaign_id, id=ctx.scene_id, name=p["name"], width=p["width"],
                              height=p["height"], grid_size=p["gridSize"], show_grid=p["showGrid"],
-                             background_asset_id=p["backgroundAssetId"], published=False))
+                             background_asset_id=p["backgroundAssetId"], published=False,
+                             lighting_enabled=bool(p.get("lighting", False)),
+                             default_vision=float(p.get("defaultVision", 0))))
     ctx.session.flush()
     return {"kind": "scene", "sceneId": ctx.scene_id}
 
@@ -310,7 +312,9 @@ def _create(kind: str) -> Callable[[Context], dict[str, Any]]:
                     VttEntity.kind == "template")).scalar_one()
             if count >= MAX_TEMPLATES:
                 raise Rejection("rule-violation")
-        data = {name: p[name] for name in ENTITY_DATA[kind]}
+        # Required fields are guaranteed by the schema; optional ones (a token's
+        # vision, E-6) are stored only when sent.
+        data = {name: p[name] for name in ENTITY_DATA[kind] if name in p}
         if kind == "wall":
             _check_wall(data)
         ctx.session.add(VttEntity(campaign_id=ctx.campaign_id, scene_id=ctx.scene_id, kind=kind, id=p["id"],

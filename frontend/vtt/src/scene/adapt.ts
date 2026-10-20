@@ -108,7 +108,14 @@ export function adaptEntities(
   const seenTemplates = new Set<string>();
   // Tracker actors (parity P3) are GM-only entities; a GM token joins its own.
   const actors = new Map<string, WireEntity>();
-  for (const e of entities.values()) if (e.kind === 'actor') actors.set(e.id, e);
+  let sceneEntity: WireEntity | undefined;
+  for (const e of entities.values()) {
+    if (e.kind === 'actor') actors.set(e.id, e);
+    else if (e.kind === 'scene') sceneEntity = e;
+  }
+  // E-6: lighting, and (GM) the scene's default vision for a party token.
+  const lit = sceneEntity?.lighting === true;
+  const defaultVision = num(sceneEntity?.defaultVision, 0);
   for (const e of entities.values()) {
     if (e.kind === 'scene') {
       scene = e;
@@ -162,8 +169,9 @@ export function adaptEntities(
     } else if (e.kind === 'token') {
       seen.tokens.add(e.id);
       const actor = typeof e.actorId === 'string' ? actors.get(e.actorId) : undefined;
-      // A GM token redraws when its actor changes too, so both versions key it.
-      const version = actor ? `${e.version}:${actor.version}` : e.version;
+      // A GM token redraws when its actor changes too, so both versions key it,
+      // and (E-6) when the scene's lighting or default vision does.
+      const version = `${actor ? `${e.version}:${actor.version}` : e.version}:${lit ? defaultVision : '-'}`;
       const hit = cache.tokens.get(e.id);
       if (hit && hit.version === version) {
         tokens.push(hit.token);
@@ -183,6 +191,13 @@ export function adaptEntities(
         ...(e.hidden === true || actor?.hidden === true ? { hidden: true } : {}),
         ...(live ? { live } : {}),
         ...(actor && typeof actor.speed === 'number' && actor.speed > 0 ? { speed: actor.speed } : {}),
+        // E-6: the table's projection says how far a party token sees; the GM
+        // works it out the same way (a player character's token, its own radius
+        // or the scene's default), so the GM can preview the table's darkness.
+        // (A GM token always carries `locked`; the table's never does.)
+        ...(lit && typeof e.locked !== 'boolean' && typeof e.vision === 'number' ? { vision: Math.max(0, e.vision) } : {}),
+        ...(lit && typeof e.locked === 'boolean' && actor?.pc === true
+          ? { vision: Math.max(0, typeof e.vision === 'number' ? e.vision : defaultVision) } : {}),
       };
       cache.tokens.set(e.id, { version, token });
       tokens.push(token);
@@ -230,6 +245,11 @@ export function adaptEntities(
   const byId = <T extends { id: string }>(a: T, b: T) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
   tokens.sort(byId);
   lights.sort(byId);
+  // E-6: what blocks sight. The table is sent only those segments (no door
+  // state); the GM's walls say, and an open door does not block.
+  const occluders = lit
+    ? walls.filter((w) => w.doorState !== 'open').map((w) => ({ x1: w.x1, y1: w.y1, x2: w.x2, y2: w.y2 }))
+    : [];
   return {
     width: num(scene?.width, EMPTY_SCENE.width),
     height: num(scene?.height, EMPTY_SCENE.height),
@@ -242,5 +262,6 @@ export function adaptEntities(
     tokens,
     walls,
     lights,
+    ...(lit ? { lighting: true, occluders } : {}),
   };
 }

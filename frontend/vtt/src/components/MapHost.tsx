@@ -24,6 +24,8 @@ interface Props {
   // E-4: how a dragged token's distance is counted. Defaults to the
   // campaign's system from the page's boot data (PF2e alternates diagonals).
   measureRule?: MeasureRule;
+  // E-6, GM only: draw the table's darkness on the GM page (half as dark).
+  visionPreview?: boolean;
 }
 
 function bootRule(): MeasureRule {
@@ -51,7 +53,7 @@ function probeEnabled(): boolean {
 // The only bridge between React and Pixi: one div, one SceneRuntime. React
 // re-renders never reach the scene graph; scene changes are pushed through
 // runtime.setScene, which diffs by object identity.
-export function MapHost({ surface, scene, onViewportChange, label, interaction, selection = null, wallDraft = null, viewportController, measureRule }: Props) {
+export function MapHost({ surface, scene, onViewportChange, label, interaction, selection = null, wallDraft = null, viewportController, measureRule, visionPreview }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<SceneRuntime | null>(null);
   const viewportCb = useRef(onViewportChange);
@@ -146,6 +148,10 @@ export function MapHost({ surface, scene, onViewportChange, label, interaction, 
   useEffect(() => {
     if (measureRule) runtimeRef.current?.setMeasureRule(measureRule);
   }, [measureRule]);
+
+  useEffect(() => {
+    if (visionPreview !== undefined) runtimeRef.current?.setVisionPreview(visionPreview);
+  }, [visionPreview]);
 
   // Live pings and rulers (beta-1), on both surfaces. Expired ones are pruned
   // a few times a second; a new snapshot clears them (the live wiring does).

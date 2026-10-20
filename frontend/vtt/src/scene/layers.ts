@@ -9,6 +9,7 @@ export const LAYER_ORDER = [
   'walls',
   'tokens',
   'lighting',
+  'vision',
   'fog',
   'measure',
   'effects',
