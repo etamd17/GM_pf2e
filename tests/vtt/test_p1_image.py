@@ -135,10 +135,18 @@ def test_the_scripts_are_in_the_image_and_keep_lf():
     assert "tools/vtt/*.sh text eol=lf" in (ROOT / ".gitattributes").read_text(encoding="utf-8")
 
 
-def test_railway_config_has_no_start_command_and_uses_the_entrypoint():
+def test_the_r1_railway_config_has_no_start_command_and_uses_the_entrypoint():
+    # deploy/railway.r1.toml replaces railway.toml at R-1 (approval); until then
+    # railway.toml stays production's Nixpacks config, pinned by ci.yml.
     import tomllib
-    config = tomllib.loads((ROOT / "railway.toml").read_text(encoding="utf-8"))
+    config = tomllib.loads((ROOT / "deploy" / "railway.r1.toml").read_text(encoding="utf-8"))
     assert config["build"]["builder"] == "DOCKERFILE"
     assert "startCommand" not in config.get("deploy", {})
     assert config["deploy"]["preDeployCommand"] == ["sh tools/vtt/predeploy.sh"]
     assert config["deploy"]["healthcheckPath"] == "/ready"
+
+
+def test_production_railway_config_is_unchanged_until_r1():
+    import tomllib
+    config = tomllib.loads((ROOT / "railway.toml").read_text(encoding="utf-8"))
+    assert config["build"]["builder"] == "NIXPACKS" and "startCommand" in config["deploy"]

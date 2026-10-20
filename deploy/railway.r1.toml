@@ -1,0 +1,29 @@
+# The R-1 production deploy config (P-1, production-plan.md G1/G2). NOT live:
+# railway.toml stays production's current Nixpacks config, pinned by ci.yml's
+# "Validate deployment configuration" step, so merging this branch can never
+# change how production deploys by itself. At R-1, with the user's approval,
+# this file replaces railway.toml and that CI step is updated in the same change.
+# The image's entrypoint
+# (docker/entrypoint.sh) is the only start path: no startCommand here, so
+# nothing can bypass its checks or its single gevent worker. Migrations never
+# run at start; the pre-deploy step runs them (and the VTT asset-store probe),
+# in a separate container without the volume.
+#
+# Before the first deploy with this file, production needs, deliberately:
+#   VTT_ENABLED=0 while the site stays in JSON mode (R-1), and
+#   the volume decision in G1: RAILWAY_RUN_UID=0 (option a), or
+#   tools/vtt/own_data_volume.sh run once (option b).
+# The entrypoint refuses to start on an unwritable /data rather than lose saves.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+preDeployCommand = ["sh tools/vtt/predeploy.sh"]
+healthcheckPath = "/ready"
+healthcheckTimeout = 120
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
+overlapSeconds = 0
+drainingSeconds = 30
