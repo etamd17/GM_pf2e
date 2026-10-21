@@ -51,6 +51,8 @@ function clickTool(label: string) {
   fireEvent.click(screen.getByRole('button', {name:label === 'Template' ? 'Templates' : label}));
 }
 
+vi.mock('./shell/sceneNavigation',()=>({navigateToScene:vi.fn()}));
+const {navigateToScene}=await import('./shell/sceneNavigation');
 const { GmWorkspace } = await import('./GmWorkspace');
 const { UndoManager } = await import('./undo');
 
@@ -106,6 +108,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();vi.mocked(navigateToScene).mockClear();
 });
 
 it('shows first-run guidance only after a successful empty scene list, not on loading or failure', async () => {
@@ -707,4 +710,53 @@ describe('tracker links (parity P3)', () => {
     fireEvent.change(picker, { target: { value: '' } });
     expect(lastDraft(issued).payload).toEqual({ id: 'tok_hero', actorId: null });
   });
+});
+
+
+describe('scene deletion',()=>{
+  it.each([true,false])('navigates only after applied, with another scene available=%s',async hasOther=>{
+    let deleted=false;
+    vi.stubGlobal('fetch',vi.fn(async()=>({ok:true,json:async()=>({scenes:deleted ? (hasOther ? [{id:'scene_b',name:'Crypt',onTable:false,published:false}] : []) : [{id:scene.id,name:scene.name,onTable:false,published:true}]})})));
+    vi.spyOn(window,'confirm').mockReturnValue(true);
+    const {issued}=setup();await act(async()=>{});
+    fireEvent.click(screen.getByText('Scene menu'));fireEvent.click(screen.getByRole('button',{name:'Delete scene'}));
+    expect(issued).toHaveLength(1);expect(issued[0]?.draft).toEqual({type:'scene.delete',sceneId:scene.id,expected:[{kind:'scene',id:scene.id,version:V1}],payload:{}});
+    expect(navigateToScene).not.toHaveBeenCalled();deleted=true;
+    await act(async()=>{useCommands.getState().notify({kind:'applied',commandId:'cmd_0000000000000001',type:'scene.delete'});});
+    expect(navigateToScene).toHaveBeenCalledWith(hasOther ? 'scene_b' : null);
+  });
+  it('a rejected delete stays on the scene and re-enables controls',async()=>{
+    vi.spyOn(window,'confirm').mockReturnValue(true);setup();await act(async()=>{});
+    fireEvent.click(screen.getByText('Scene menu'));fireEvent.click(screen.getByRole('button',{name:'Delete scene'}));
+    act(()=>useCommands.getState().notify({kind:'rejected',commandId:'cmd_0000000000000001',type:'scene.delete',code:'rule-violation',action:'none'} as never));
+    expect(navigateToScene).not.toHaveBeenCalled();expect(screen.getByText('The scene is on the TV. Clear the TV before deleting it.')).toBeTruthy();
+    expect((screen.getByRole('button',{name:'Delete scene'}) as HTMLButtonElement).disabled).toBe(false);
+  });
+  it('a no-scene live snapshot shows deletion and the picker, without navigating or claiming revocation',async()=>{
+    vi.stubGlobal('fetch',vi.fn(async()=>({ok:true,json:async()=>({scenes:[{id:'scene_b',name:'Crypt',onTable:false,published:false}]})})));
+    setup();await act(async()=>{});
+    act(()=>{useConnection.getState().setStatus('resyncing');useEntities.getState().clear();useProjection.getState().clear();});
+    expect(screen.queryByText(/This scene was deleted/)).toBeNull();
+    await act(async()=>{useConnection.getState().setStatus('live');});
+    expect(screen.getByText(/This scene was deleted/)).toBeTruthy();expect(screen.getByLabelText('Editing')).toBeTruthy();expect(screen.getByRole('option',{name:'Crypt'})).toBeTruthy();
+    expect(navigateToScene).not.toHaveBeenCalled();expect(useConnection.getState().status).toBe('live');
+  });
+});
+
+it('delete navigation survives a newer scene-list refresh from the empty replacement snapshot',async()=>{
+  let finish!:(r:unknown)=>void;let reads=0;
+  const other={id:'scene_b',name:'Crypt',onTable:false,published:false};
+  vi.stubGlobal('fetch',vi.fn(async(url:string)=>{
+    if(!url.startsWith('/vtt/api/scenes?')) return {ok:true,json:async()=>({})};
+    ++reads;const read=reads;
+    if(reads===2) return new Promise(resolve=>{finish=resolve;});
+    return {ok:true,json:async()=>({scenes:read===1 ? [{id:scene.id,name:scene.name,onTable:false,published:true}] : [other]})};
+  }));
+  vi.spyOn(window,'confirm').mockReturnValue(true);const {issued}=setup();await act(async()=>{});
+  fireEvent.click(screen.getByText('Scene menu'));fireEvent.click(screen.getByRole('button',{name:'Delete scene'}));expect(issued).toHaveLength(1);
+  await act(async()=>{useCommands.getState().notify({kind:'applied',commandId:'cmd_0000000000000001',type:'scene.delete'});});
+  await act(async()=>{useEntities.getState().clear();useProjection.getState().clear();});
+  expect(reads).toBeGreaterThanOrEqual(3);
+  await act(async()=>{finish({ok:true,json:async()=>({scenes:[other]})});});
+  expect(navigateToScene).toHaveBeenCalledWith('scene_b');
 });

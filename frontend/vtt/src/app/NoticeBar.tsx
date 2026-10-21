@@ -10,6 +10,7 @@ import { useCommands } from '../state/commands';
 const TYPE_LABEL: Record<string, string> = {
   'scene.create': 'Creating the scene',
   'scene.update': 'Changing the scene',
+  'scene.delete': 'Deleting the scene',
   'table.show': 'Showing the scene on the table',
   'table.clear': 'Clearing the table',
   'token.create': 'Placing the token',
@@ -43,6 +44,7 @@ export function noticeText(outcome: CommandOutcome): string | null {
     case 'refused-locally':
       return `${TYPE_LABEL[outcome.type] ?? 'That change'} could not be sent: this page built an invalid command. Reload the page.`;
     case 'rejected': {
+      if(outcome.type === 'scene.delete' && outcome.code === 'rule-violation') return 'The scene is on the TV. Clear the TV before deleting it.';
       const what = TYPE_LABEL[outcome.type] ?? 'That change';
       return `${what} ${CODE_MESSAGE[outcome.code] ?? 'failed. Reload the page if it keeps happening.'}`;
     }

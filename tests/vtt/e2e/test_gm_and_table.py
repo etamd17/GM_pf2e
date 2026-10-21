@@ -503,6 +503,11 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
     wait_for(tv, lambda s: s["vision"]["drawn"] is True, "Scene UI restores TV lighting")
     expect(gm.get_by_label("Lighting on the TV", exact=True)).to_be_checked()
     shoot(gm, "consumers-lighting")
+    # The TV scene cannot be deleted; the menu offers Clear TV instead.
+    gm.get_by_text("Scene menu", exact=True).click()
+    expect(gm.get_by_role("button", name="Delete scene", exact=True)).to_be_disabled()
+    expect(gm.get_by_role("button", name="Clear TV before deleting", exact=True)).to_be_visible()
+    gm.get_by_text("Scene menu", exact=True).click()
     for width in (1440, 1024):
         gm.set_viewport_size({"width": width, "height": 900})
         assert gm.evaluate("document.documentElement.scrollWidth <= innerWidth")
@@ -526,7 +531,24 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
     assert not any(t["label"] == "Skeleton" for t in probe(tv)["tokens"])
     expect(gm.get_by_label("On TV", exact=True)).to_contain_text("Dark Vault")
 
-    assert gm.errors == [] and tv.errors == []
+    # Two GMs viewing the imported scene: one deletes, one stays connected
+    # on the null-scene recovery snapshot, with a notice and the picker.
+    observer = screens("gm")
+    observer.goto(site.gm_url(imported))
+    observer.get_by_text("live", exact=True).wait_for()
+    wait_for(observer, lambda s: s["scene"]["width"] == 1400, "other GM views imported scene")
+    gm.get_by_text("Scene menu", exact=True).click()
+    gm.once("dialog", lambda dialog: dialog.accept())
+    gm.get_by_role("button", name="Delete scene", exact=True).click()
+    gm.wait_for_url(lambda url: f"sceneId={imported}" not in url)
+    gm.get_by_text("live", exact=True).wait_for()
+    observer.get_by_text("This scene was deleted.", exact=False).wait_for()
+    observer.get_by_text("live", exact=True).wait_for()
+    expect(observer.get_by_label("Editing", exact=True)).to_be_visible()
+    expect(observer.locator(f'.vtt-scene-picker option[value="{imported}"]')).to_have_count(0)
+    assert probe(tv)["scene"]["width"] == 1280  # deletion did not move or blank the TV
+    shoot(observer, "u3-deleted-elsewhere")
+    assert gm.errors == [] and tv.errors == [] and observer.errors == []
 
 
 def test_empty_campaign_guidance_and_sidebar(site, screens):
@@ -550,4 +572,9 @@ def test_empty_campaign_guidance_and_sidebar(site, screens):
     gm.wait_for_url("**sceneId=**")
     gm.get_by_text("live", exact=True).wait_for()
     assert gm.get_by_role("heading", name="Set up your first scene").count() == 0
+    gm.get_by_text("Scene menu", exact=True).click()
+    gm.once("dialog", lambda dialog: dialog.accept())
+    gm.get_by_role("button", name="Delete scene", exact=True).click()
+    gm.wait_for_url(lambda url: "sceneId=" not in url)
+    gm.get_by_role("heading", name="Set up your first scene").wait_for()
     assert gm.errors == []

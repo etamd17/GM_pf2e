@@ -7,6 +7,7 @@ import { LightingControls,TokenVisionControls } from './controls/LightingControl
 import { asCreature,type AddedCreature } from './actions/bestiary';
 import { freeSpotNear,placeCreature } from './actions/creatures';
 export { Inspector } from './Inspector';
+import { navigateToScene } from './shell/sceneNavigation';
 import { SceneBar } from './shell/SceneBar';
 import { WorkspaceSidebar, useSidebarTab } from './shell/WorkspaceSidebar';
 import { FirstRunGuidance } from './shell/FirstRunGuidance';
@@ -37,6 +38,7 @@ import {
   createToken,
   createWall,
   deleteEntity,
+  deleteScene,
   fogReveal,
   fogReset,
   moveToken,
@@ -124,7 +126,9 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
   const [scenes, setScenes] = useState<SceneSummary[] | null>(null);
   const [creatingScene, setCreatingScene] = useState<{ commandId: string; sceneId: string } | null>(null);
 
-  const inputEnabled = acceptsDurableInput(status) && renderer === 'ok' && live !== null;
+  const [deletingScene,setDeletingScene] = useState<{commandId:string;sceneId:string} | null>(null);
+  const [deletionApplied,setDeletionApplied] = useState(false);
+  const inputEnabled = !deletingScene && acceptsDurableInput(status) && renderer === 'ok' && live !== null;
   const showMap = projected !== null && !isTerminal(status);
   const scene = useMemo(
     () => (projected ? applyOverlays(projected, overlays.values() as Iterable<TokenOverlay | null>) : null),
@@ -228,7 +232,7 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
   // --- scenes -------------------------------------------------------------------------------
   const sceneListGeneration = useRef(0);
   const refreshScenes = useCallback(async () => {
-    if (!live) return;
+    if (!live) return null;
     const generation = ++sceneListGeneration.current;
     try {
       const response = await fetch(`/vtt/api/scenes?campaignId=${encodeURIComponent(live.boot.campaignId)}`, {
@@ -236,8 +240,10 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
       });
       const list = response.ok ? ((await response.json()) as {scenes:SceneSummary[]}).scenes : null;
       if (generation === sceneListGeneration.current) setScenes(list);
+      return list;
     } catch {
       if (generation === sceneListGeneration.current) setScenes(null);
+      return null;
     }
   }, [live]);
 
@@ -265,7 +271,7 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
   );
 
   const openScene = useCallback(
-    (sceneId: string) => {
+    (sceneId: string | null) => {
       if (!live) return;
       // Opening a scene reloads the page; a change still being saved would be
       // lost with it.
@@ -275,9 +281,7 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
       ) {
         return;
       }
-      const url = new URL(window.location.href);
-      url.searchParams.set('sceneId', sceneId);
-      window.location.assign(url.toString());
+      navigateToScene(sceneId);
     },
     [live],
   );
@@ -294,6 +298,36 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
     const commandId = issue(createScene(sceneId, name.slice(0, 120)));
     if (commandId) setCreatingScene({ commandId, sceneId });
   }
+
+  function removeScene() {
+    if(!inputEnabled || !sceneEntity || !scenes || scenes.some(s=>s.id===sceneEntity.id && s.onTable)) return;
+    const commandId=issue(deleteScene(sceneEntity));
+    if(commandId) {setDeletionApplied(false);setDeletingScene({commandId,sceneId:sceneEntity.id});}
+  }
+  useEffect(()=>{
+    if(!deletingScene) return;
+    const inspect=()=>{
+      const state=useCommands.getState();
+      if(state.lastApplied === deletingScene.commandId) setDeletionApplied(true);
+      else if(state.notice?.kind === 'rejected' && state.notice.commandId === deletingScene.commandId) setDeletingScene(null);
+    };
+    const stop=useCommands.subscribe(inspect);inspect();return stop;
+  },[deletingScene]);
+  useEffect(()=>{
+    if(!deletingScene || !deletionApplied) return;
+    let current=true;
+    void refreshScenes().then(list=>{
+      if(!current) return;
+      setDeletingScene(null);
+      if(list) openScene(list.find(s=>s.id !== deletingScene.sceneId)?.id ?? null);
+      // A failed list read leaves the deletion notice and picker available;
+      // it must not guess a destination or resend the delete.
+    });
+    return ()=>{current=false;};
+  },[deletingScene,deletionApplied,refreshScenes,openScene]);
+  // A valid GM snapshot has no scene entity iff its sceneId is null. Resync
+  // clears and terminal revocation are excluded by the live status check.
+  const sceneDeleted = !!live?.boot.sceneId && status === 'live' && !sceneEntity;
 
   // --- fog (parity P1) --------------------------------------------------------------------------
   // One click reveals (or hides) the room under it: a flood bounded by walls
@@ -509,7 +543,7 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
   return (
     <div className={`vtt-gm ${railOpen ? '' : 'is-rail-collapsed'} ${dockOpen ? '' : 'is-dock-collapsed'}`}>
       <SceneBar scenes={live ? scenes : null} scene={sceneEntity ?? null} fallbackName={sceneName}
-        enabled={inputEnabled} onOpen={openScene} onNew={newScene}
+        enabled={inputEnabled} onOpen={openScene} onNew={newScene} onDelete={removeScene}
         onRename={name => sceneEntity && issue(updateScene(sceneEntity, { name }))}
         onShow={() => sceneEntity && issue(showOnTable(sceneEntity))}
         onClear={() => sceneEntity && issue(clearTable(sceneEntity))}
@@ -532,6 +566,9 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
 
       <main className="vtt-stage">
         <NoticeBar live={live} />
+        {(sceneDeleted || deletionApplied) && <div className="vtt-notice" role="status">
+          <span>This scene was deleted. Choose another scene in the Editing picker, or create a new scene.</span>
+        </div>}
         {live && scenes?.length === 0 && !sceneEntity && <FirstRunGuidance enabled={inputEnabled}
           onNew={newScene} onPair={() => { setSidebarTab('tv'); setDockOpen(true); }} />}
 
