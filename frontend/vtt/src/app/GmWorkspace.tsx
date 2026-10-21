@@ -31,6 +31,7 @@ import {
   createWall,
   deleteEntity,
   fogReveal,
+  fogReset,
   moveToken,
   templateCreate,
   templateUpdate,
@@ -406,19 +407,21 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
         paintTerrain(point, modifiers?.alt === true);
       } else if (tool === 'ping') {
         if (live) ping(live.sendTransient, point);
-      } else if (tool === 'wall') {
+      } else if (tool === 'wall' || tool === 'door') {
         const p = snapToGrid(point, scene);
         if (!wallStart) {
           setWallStart(p);
           setWallEnd(p);
         } else if (p.x !== wallStart.x || p.y !== wallStart.y) {
-          issue(createWall(newEntityId('wall'), wallStart, p));
-          setWallStart(p); // keep drawing from here
+          const draft = createWall(newEntityId('wall'), wallStart, p);
+          issue(tool === 'door' ? {...draft, payload:{...draft.payload, doorState:'closed'}} : draft);
+          setWallStart(tool === 'door' ? null : p); // walls continue; a door is one segment
+          if (tool === 'door') setWallEnd(null);
         }
       }
     },
     onPointerMove: (point) => {
-      if (tool === 'wall' && wallStart && scene) setWallEnd(snapToGrid(point, scene));
+      if ((tool === 'wall' || tool === 'door') && wallStart && scene) setWallEnd(snapToGrid(point, scene));
       if (tool === 'template' && templateStart) setWallEnd(point); // the aim preview line
     },
     onKey: (e) => {
@@ -495,6 +498,9 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
       <ToolRail railOpen={railOpen} tool={tool} inputEnabled={inputEnabled}
         templateShape={templateShape} templateSize={templateSize} terrainKind={terrainKind}
         onToggle={() => setRailOpen((v) => !v)} onChoose={chooseTool}
+        canResetFog={!!fogEntity} onResetFog={() => {
+          if (inputEnabled && fogEntity && window.confirm('Cover the whole scene with fog again?')) issue(fogReset(fogEntity));
+        }}
         setTemplateShape={(shape) => { setTemplateShape(shape); setTemplateStart(null); }}
         setTemplateSize={setTemplateSize} setTerrainKind={setTerrainKind} />
 
@@ -513,7 +519,7 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
             interaction={interaction}
             selection={selection}
             wallDraft={
-              tool === 'wall' && wallStart && wallEnd
+              (tool === 'wall' || tool === 'door') && wallStart && wallEnd
                 ? { a: wallStart, b: wallEnd }
                 : tool === 'template' && templateStart && wallEnd
                   ? { a: templateStart, b: wallEnd }

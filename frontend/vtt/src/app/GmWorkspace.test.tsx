@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GmLive } from '../live/gm';
 import type { GmEntity } from '../protocol/frames';
@@ -43,6 +43,12 @@ vi.mock('../scene/SceneRuntime', () => ({
     destroy() {}
   },
 }));
+
+function clickTool(label: string) {
+  const group = ({Token:'Place',Light:'Place',Ruler:'Measure',Ping:'Measure',Reveal:'Fog',Hide:'Fog'} as Record<string,string>)[label];
+  if (group) fireEvent.click(screen.getByRole('button', {name:group}));
+  fireEvent.click(screen.getByRole('button', {name:label === 'Template' ? 'Templates' : label}));
+}
 
 const { GmWorkspace } = await import('./GmWorkspace');
 const { UndoManager } = await import('./undo');
@@ -117,6 +123,23 @@ it('shows first-run guidance only after a successful empty scene list, not on lo
 });
 
 describe('map input', () => {
+  it('the Door sub-tool creates one closed segment and changing tools cancels its draft', () => {
+    const {issued,interaction,runtime} = setup();
+    clickTool('Walls');
+    fireEvent.click(screen.getByRole('button', {name:'Door'}));
+    act(() => interaction.onClick?.({x:10,y:10},null));
+    act(() => interaction.onPointerMove?.({x:130,y:5}));
+    expect(runtime.draft).toEqual({a:{x:0,y:0},b:{x:128,y:0}});
+    act(() => interaction.onClick?.({x:130,y:5},null));
+    expect(issued).toHaveLength(1);
+    expect(issued[0]?.draft).toMatchObject({type:'wall.create',payload:{x1:0,y1:0,x2:128,y2:0,doorState:'closed'}});
+    expect(runtime.draft).toBeNull();
+    act(() => interaction.onClick?.({x:200,y:200},null));
+    fireEvent.click(screen.getByRole('button', {name:'Wall'}));
+    expect(runtime.draft).toBeNull();
+    act(() => interaction.onClick?.({x:300,y:300},null));
+    expect(issued).toHaveLength(1);
+  });
   it('reselecting the same token opens Inspector, while mirror updates preserve the chosen tab', () => {
     const { interaction } = setup();
     act(() => interaction.onClick?.({x:96,y:96}, {kind:'token',id:'tok_hero'}, {alt:false}));
@@ -159,7 +182,7 @@ describe('map input', () => {
 
   it('the token tool places a snapped token, shown at once as pending', () => {
     const { issued, interaction } = setup();
-    fireEvent.click(screen.getByRole('button', { name: 'Token' }));
+    clickTool('Token');
     act(() => interaction.onClick?.({ x: 300, y: 300 }, null));
     const [{ draft, overlay }] = issued as [{ draft: { type: string; payload: { id: string; x: number; y: number } }; overlay: { create: { x: number } } }];
     expect(draft.type).toBe('token.create');
@@ -169,7 +192,7 @@ describe('map input', () => {
 
   it('the wall tool draws a chain of walls between snapped points, and Esc stops', () => {
     const { issued, interaction, runtime } = setup();
-    fireEvent.click(screen.getByRole('button', { name: 'Walls' }));
+    clickTool('Walls');
     act(() => interaction.onClick?.({ x: 10, y: 10 }, null));
     act(() => interaction.onPointerMove?.({ x: 130, y: 5 }));
     expect(runtime.draft).toEqual({ a: { x: 0, y: 0 }, b: { x: 128, y: 0 } });
@@ -292,7 +315,7 @@ describe('inspector and scene bar', () => {
     act(() => useConnection.getState().setStatus('resyncing'));
     expect((screen.getByLabelText('Label') as HTMLInputElement).disabled).toBe(true);
     expect((screen.getByRole('button', { name: 'Show on table' }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole('button', { name: 'Token' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Place' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('lists tokens for screen readers, hidden ones marked', () => {
@@ -454,10 +477,23 @@ describe('fog of war (parity P1)', () => {
   // A wall straight down the grid line x = 320, the full height: two rooms.
   const divider = { kind: 'wall', id: 'wall_mid', version: V1, x1: 320, y1: 0, x2: 320, y2: 640, doorState: 'closed' } as Of<'wall'>;
 
+  it('the rail reset requires confirmation and sends the current fog version', () => {
+    seed([scene, fogOf(new Uint8Array(13))]);
+    const {issued} = setup();
+    fireEvent.click(screen.getByRole('button', {name:'Fog'}));
+    const reset = within(screen.getByRole('navigation', {name:'Map tools'})).getByRole('button', {name:'Reset fog'});
+    vi.stubGlobal('confirm', vi.fn(() => false));
+    fireEvent.click(reset);
+    expect(issued).toHaveLength(0);
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    fireEvent.click(reset);
+    expect(issued[0]?.draft).toEqual({type:'fog.reset',expected:[{kind:'fog',id:'fog',version:V1}],payload:{}});
+  });
+
   it('the Reveal tool sends the room under the click, bounded by walls and closed doors', () => {
     act(() => seed([scene, hero, wall, divider, fogOf(new Uint8Array(13))]));
     const { issued, interaction } = setup();
-    fireEvent.click(screen.getByRole('button', { name: 'Reveal' }));
+    clickTool('Reveal');
     act(() => interaction.onClick?.({ x: 96, y: 96 }, null));
     const draft = issued.at(-1)?.draft as { type: string; expected: unknown[]; payload: { mode: string; cells: number[][] } };
     expect(draft.type).toBe('fog.reveal');
@@ -472,7 +508,7 @@ describe('fog of war (parity P1)', () => {
     bits[0] = 0b00000011; // cells (0,0) and (1,0)
     act(() => seed([scene, hero, wall, divider, fogOf(bits)]));
     const { issued, interaction } = setup();
-    fireEvent.click(screen.getByRole('button', { name: 'Hide' }));
+    clickTool('Hide');
     act(() => interaction.onClick?.({ x: 96, y: 96 }, null));
     const payload = (issued.at(-1)?.draft as { payload: { mode: string; cells: number[][] } }).payload;
     expect(payload.mode).toBe('hide');
@@ -509,7 +545,7 @@ describe('templates and terrain (parity P2)', () => {
 
   it('a burst is placed with one click at the grid point, sized in squares', () => {
     const { issued, interaction } = setup();
-    fireEvent.click(screen.getByRole('button', { name: 'Template' }));
+    clickTool('Template');
     fireEvent.change(screen.getByLabelText('Size (squares)'), { target: { value: '4' } });
     act(() => interaction.onClick?.({ x: 130, y: 190 }, null));
     const draft = lastDraft(issued);
@@ -519,7 +555,7 @@ describe('templates and terrain (parity P2)', () => {
 
   it('a cone takes two clicks: the origin, then the aim', () => {
     const { issued, interaction } = setup();
-    fireEvent.click(screen.getByRole('button', { name: 'Template' }));
+    clickTool('Template');
     fireEvent.change(screen.getByLabelText('Shape'), { target: { value: 'cone' } });
     act(() => interaction.onClick?.({ x: 64, y: 64 }, null));
     expect(issued).toHaveLength(0);
@@ -529,7 +565,7 @@ describe('templates and terrain (parity P2)', () => {
 
   it('an emanation started on a token is centred on it and grown by its footprint', () => {
     const { issued, interaction } = setup();
-    fireEvent.click(screen.getByRole('button', { name: 'Template' }));
+    clickTool('Template');
     fireEvent.change(screen.getByLabelText('Shape'), { target: { value: 'emanation' } });
     act(() => interaction.onClick?.({ x: 100, y: 100 }, { kind: 'token', id: 'tok_hero' }));
     expect(lastDraft(issued).payload).toMatchObject({ shape: 'emanation', x: 96, y: 96, size: 4 }); // 3 + ceil(1/2)
@@ -551,7 +587,7 @@ describe('templates and terrain (parity P2)', () => {
   it('terrain paints the room under the click, and Alt-click paints one square', () => {
     act(() => seed([scene, hero, wall, divider, terrainOf(new Uint8Array(50))]));
     const { issued, interaction } = setup();
-    fireEvent.click(screen.getByRole('button', { name: 'Terrain' }));
+    clickTool('Terrain');
     fireEvent.change(screen.getByLabelText('Paint'), { target: { value: '2' } });
     act(() => interaction.onClick?.({ x: 96, y: 96 }, null, { alt: false }));
     const cells = lastDraft(issued).payload.cells as number[][];
@@ -560,6 +596,15 @@ describe('templates and terrain (parity P2)', () => {
     expect(cells.every(([c, , k]) => (c as number) < 5 && k === 2)).toBe(true);
     act(() => interaction.onClick?.({ x: 500, y: 500 }, null, { alt: true }));
     expect(lastDraft(issued).payload).toEqual({ cells: [[7, 7, 2]] });
+  });
+
+  it('the Erase terrain sub-tool sends zero through the existing terrain command', () => {
+    seed([scene, hero, wall, terrainOf(new Uint8Array(50).fill(0x11))]);
+    const {issued,interaction} = setup();
+    clickTool('Terrain');
+    fireEvent.click(screen.getByRole('button', {name:'Erase terrain'}));
+    act(() => interaction.onClick?.({x:96,y:96},null,{alt:true}));
+    expect(lastDraft(issued)).toMatchObject({type:'terrain.paint',payload:{cells:[[1,1,0]]}});
   });
 
   it('the template inspector changes size and visibility', () => {
@@ -600,7 +645,7 @@ describe('templates and terrain (parity P2)', () => {
       expected: [{ kind: 'template', id: 'tpl_a', version: V1 }],
       payload: { id: 'tpl_a', x: 192, y: 0, aimX: 320, aimY: 0 },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Terrain' }));
+    clickTool('Terrain');
     expect(interaction.canDragTemplate?.('tpl_a')).toBe(false); // only the select tool drags
   });
 });

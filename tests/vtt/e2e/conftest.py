@@ -191,8 +191,10 @@ def screens(browser, site, request, tmp_path):
             page.get_by_role("button", name="Sign in", exact=True).click()
             page.wait_for_url("**/me")
             # Pick the campaign, as a GM does: the VTT pages need it active.
-            page.locator(f'form[action="/campaign/{site.cid}/activate"] button').first.click()
-            page.wait_for_url(lambda url: not url.endswith("/me"))
+            # Loading the full bestiary on campaign activation can exceed the
+            # page's interaction timeout on a loaded Windows test host.
+            page.locator(f'form[action="/campaign/{site.cid}/activate"] button').first.click(timeout=60000)
+            page.wait_for_url(lambda url: not url.endswith("/me"), timeout=60000)
         opened.append(page)
         return page
 

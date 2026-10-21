@@ -12,7 +12,7 @@ it('keeps selection available offline while disabling editing tools', () => {
   const choose = vi.fn();
   render(<ToolRail railOpen tool="select" inputEnabled={false} templateShape="burst" templateSize={3} terrainKind={1}
     onToggle={vi.fn()} onChoose={choose} setTemplateShape={vi.fn()} setTemplateSize={vi.fn()} setTerrainKind={vi.fn()} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Token' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Place' }));
   expect(choose).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Select' }));
   expect(choose).toHaveBeenCalledWith('select');

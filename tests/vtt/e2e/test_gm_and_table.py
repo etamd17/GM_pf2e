@@ -73,11 +73,47 @@ def png(color=(30, 110, 200), size=(160, 120)) -> bytes:
     return out.getvalue()
 
 
+def choose_tool(page, label):
+    group = {"Token": "Place", "Light": "Place", "Ruler": "Measure", "Ping": "Measure", "Reveal": "Fog", "Hide": "Fog", "Door": "Walls"}.get(label)
+    if group:
+        page.get_by_role("button", name=group, exact=True).click()
+    page.get_by_role("button", name="Templates" if label == "Template" else label, exact=True).click()
+
+
 def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
     gm = screens("gm")
     gm.goto(site.gm_url("scene_hall"))
     gm.get_by_text("live", exact=True).wait_for()
-    shoot(gm, "u1-shell")
+    # U-2: visible group labels, native keyboard activation, and distinct sub-tools.
+    for group in ("Select", "Place", "Measure", "Templates", "Walls", "Fog", "Terrain"):
+        assert gm.get_by_role("button", name=group, exact=True).is_visible()
+    gm.get_by_role("button", name="Place", exact=True).hover()
+    hint = gm.locator(".vtt-floating-tool-hint")
+    hint.wait_for(state="visible")
+    assert "Enter or Space" in hint.inner_text()
+    button_box = gm.get_by_role("button", name="Place", exact=True).bounding_box()
+    assert hint.bounding_box()["x"] >= button_box["x"] + button_box["width"]
+    gm.get_by_role("button", name="Place", exact=True).focus()
+    gm.keyboard.press("Enter")
+    assert gm.get_by_role("button", name="Token", exact=True).get_attribute("aria-pressed") == "true"
+    gm.get_by_role("button", name="Light", exact=True).click()
+    assert gm.get_by_role("button", name="Light", exact=True).get_attribute("aria-pressed") == "true"
+    gm.get_by_role("button", name="Measure", exact=True).focus()
+    gm.keyboard.press("Space")
+    assert gm.get_by_role("button", name="Ruler", exact=True).get_attribute("aria-pressed") == "true"
+    choose_tool(gm, "Door")
+    assert gm.get_by_role("button", name="Door", exact=True).get_attribute("aria-pressed") == "true"
+    for width in (1440, 1024):
+        gm.set_viewport_size({"width": width, "height": 900})
+        assert gm.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        shoot(gm, f"u2-shell-{width}")
+    gm.set_viewport_size({"width": 1280, "height": 800})
+    choose_tool(gm, "Terrain")
+    gm.get_by_role("button", name="Erase terrain", exact=True).click()
+    assert gm.get_by_label("Paint", exact=True).input_value() == "0"
+    gm.get_by_role("button", name="Paint terrain", exact=True).click()
+    assert gm.get_by_label("Paint", exact=True).input_value() == "1"
+    choose_tool(gm, "Select")
 
     # --- pair the TV with a one-time code ---------------------------------------------------
     tv = screens("table")
@@ -129,7 +165,7 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
     gm.get_by_label("Fog of war").click()
     wait_for(tv, lambda s: s["scene"]["fog"] is not None and s["scene"]["fog"]["enabled"]
              and token(s, "tok_hero") is None, "fog on hides the token from the TV")
-    gm.get_by_role("button", name="Reveal", exact=True).click()
+    choose_tool(gm, "Reveal")
     hero = token(probe(gm), "tok_hero")
     click_scene(gm, hero["x"], hero["y"])
     # the room left of the wall: 10 of 20 columns, all 15 rows
@@ -142,24 +178,24 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
     gm.keyboard.press("Control+z")
     wait_for(tv, lambda s: token(s, "tok_hero") is None and s["scene"]["fog"]["revealed"] == 0,
              "undo covers the room again")
-    gm.get_by_role("button", name="Select", exact=True).click()
+    choose_tool(gm, "Select")
 
     # --- terrain and templates (parity P2), still under fog ---------------------------------------
-    gm.get_by_role("button", name="Terrain", exact=True).click()
+    choose_tool(gm, "Terrain")
     hero = token(probe(gm), "tok_hero")
     click_scene(gm, hero["x"], hero["y"])            # lava, the hero's room: 150 cells
     wait_for(gm, lambda s: s["scene"]["terrainPainted"] == 150, "the GM sees the painted room")
     tv.wait_for_timeout(500)
     assert probe(tv)["scene"]["terrainPainted"] == 0  # all of it is under fog: never sent to the TV
-    gm.get_by_role("button", name="Reveal", exact=True).click()
+    choose_tool(gm, "Reveal")
     click_scene(gm, hero["x"], hero["y"])
     wait_for(tv, lambda s: s["scene"]["terrainPainted"] == 150, "revealing the room shows its terrain")
-    gm.get_by_role("button", name="Template", exact=True).click()
+    choose_tool(gm, "Template")
     click_scene(gm, hero["x"], hero["y"])            # a 3-square burst on the hero
     wait_for(tv, lambda s: len(s["templates"]) == 1 and s["templates"][0]["shape"] == "burst",
              "the burst appears on the TV")
     shoot(gm, "p2-gm"), shoot(tv, "p2-tv")
-    gm.get_by_role("button", name="Select", exact=True).click()
+    choose_tool(gm, "Select")
     # Drag the burst one square down by a point inside it, clear of the hero.
     state = probe(gm)
     burst, view, g = state["templates"][0], state["viewport"], state["scene"]["gridSize"]
@@ -288,13 +324,13 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
 
     # --- ping and ruler on the TV (beta-1) -------------------------------------------------------
     # The hero's room is revealed; the right half, past the wall at x=640, is still fogged.
-    gm.get_by_role("button", name="Ping", exact=True).click()
+    choose_tool(gm, "Ping")
     click_scene(gm, 900, 300)                                       # under fog: never shown on the TV
     tv.wait_for_timeout(400)
     assert probe(tv)["transients"] == []
     click_scene(gm, 200, 300)                                       # revealed: shown
     wait_for(tv, lambda s: s["transients"] == [{"kind": "ping", "x": 200, "y": 300}], "the TV shows the ping")
-    gm.get_by_role("button", name="Ruler", exact=True).click()
+    choose_tool(gm, "Ruler")
     state = probe(gm)
     view = state["viewport"]
     box = gm.locator(".vtt-map-host canvas").bounding_box()
@@ -309,7 +345,7 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
     gm.mouse.up()
     wait_for(tv, lambda s: not any(t["kind"] == "ruler" for t in s["transients"]), "the ruler clears after release",
              timeout_ms=6000)
-    gm.get_by_role("button", name="Select", exact=True).click()
+    choose_tool(gm, "Select")
 
     # --- bestiary to tracker (E-3) --------------------------------------------------------------
     # Search the PF2e bestiary, add a creature through the tracker's own add,
