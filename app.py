@@ -12367,8 +12367,9 @@ def _me_render(**extra):
                live_campaign_id=live_id, last_campaign=last,
                trashed_campaigns=trashed, trash_ttl_days=_campaigns.TRASH_TTL_DAYS,
                last_backup_at=_backups.last_backup_at(),
-               # The rebuilt VTT's GM page, linked only where it is switched on.
-               vtt_enabled=globals().get('VTT_SERVICE') is not None)
+               # The rebuilt VTT's GM page, linked only where it is switched on
+               # and only for the campaigns in its pilot list (P-3).
+               vtt_pilot=getattr(globals().get('VTT_SERVICE'), 'pilot', None))
     ctx.update(_workflow_landing_context())
     ctx.update(extra)
     return render_template('account_home.html', **ctx)

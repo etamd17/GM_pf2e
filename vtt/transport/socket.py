@@ -58,6 +58,7 @@ from flask_socketio import ConnectionRefusedError, SocketIO, disconnect
 
 from core.persistence.database import Database
 from vtt import live
+from vtt.transport.pilot import Pilot, gate
 from vtt.commands import CommandService, RateLimiter
 from vtt.storage import grants as G
 from vtt.storage.stream import prune_outbox
@@ -169,6 +170,8 @@ class VttService:
     # The heartbeat loop itself (started by init_vtt unless start_heartbeat is
     # False); a test can run it with a stop event.
     run_heartbeat: Callable[..., None] = None
+    # P-3: the campaigns allowed in (None: no pilot applied, tests only).
+    pilot: Pilot | None = None
 
 
 def table_verifier(grant_key: bytes, credential: str) -> str:
@@ -180,7 +183,11 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
              async_mode: str | None = None, now: Callable[[], datetime] | None = None,
              rate_limiter: RateLimiter | None = None, start_heartbeat: bool = True,
              pairing_limits=None, dist_dir: Path | None = None, legacy_source=None,
-             legacy_asset=None, asset_backend=None) -> VttService:
+             legacy_asset=None, asset_backend=None, pilot: Pilot | None = None) -> VttService:
+    # P-3: the pilot list applies to every member check through the host; a
+    # table, which is not a member, is checked against it below.
+    host = gate(host, pilot)
+    in_pilot = pilot.allows if pilot is not None else (lambda _campaign_id: True)
     registry = registry or ContractRegistry()
     clock = now or (lambda: datetime.now(timezone.utc))
     socketio = SocketIO(app, json=StrictJSON, async_mode=async_mode, manage_session=False,
@@ -194,7 +201,7 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
         if audience == "gm":
             return principal.kind == "member" and host.is_campaign_gm(session, principal.id, campaign_id)
         grant = session.get(VttTableGrant, principal.id)
-        return (grant is not None and grant.campaign_id == campaign_id
+        return (grant is not None and grant.campaign_id == campaign_id and in_pilot(campaign_id)
                 and G.grant_status(session, grant, clock()) == "ok")
 
     def close(sid: str) -> None:
@@ -230,6 +237,8 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
                     raise _refused("grant-revoked")
                 if status == "expired":
                     raise _refused("grant-expired")
+                if not in_pilot(grant.campaign_id):
+                    raise _refused("session-ended")
                 return Principal(kind="table", id=grant.id, campaign_id=grant.campaign_id,
                                  verified_at=clock(), expires_at=G.utc(grant.expires_at))
         raise _refused("session-ended")
@@ -403,7 +412,7 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
         if not isinstance(credential, str) or not (16 <= len(credential) <= 256):
             return None
         grant = session.query(VttTableGrant).filter_by(verifier=table_verifier(grant_key, credential)).one_or_none()
-        if grant is None or G.grant_status(session, grant, clock()) != "ok":
+        if grant is None or G.grant_status(session, grant, clock()) != "ok" or not in_pilot(grant.campaign_id):
             return None
         return grant.campaign_id
 
@@ -527,4 +536,5 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
 
     return VttService(socketio=socketio, hub=hub, principals=principals, commands=commands,
                       heartbeat=lambda: sweep(None), sweep=sweep, sweep_stats=sweep_stats,
-                      end_member=end_member, sync_live=sync_live, run_heartbeat=heartbeat_loop)
+                      end_member=end_member, sync_live=sync_live, run_heartbeat=heartbeat_loop,
+                      pilot=pilot)

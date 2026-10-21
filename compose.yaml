@@ -93,6 +93,8 @@ services:
       VTT_ASSETS_S3_ACCESS_KEY: ${VTT_ASSETS_KEY}
       VTT_ASSETS_S3_SECRET_KEY: ${VTT_ASSETS_SECRET}
       VTT_ALLOWED_ORIGINS: ${VTT_ALLOWED_ORIGINS:-http://localhost:8000}
+      # P-3: every campaign locally; production lists its pilot campaigns.
+      VTT_PILOT_CAMPAIGNS: "*"
     ports:
       - "127.0.0.1:8000:8000"
     volumes:

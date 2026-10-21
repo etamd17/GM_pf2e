@@ -27,6 +27,7 @@ here.
 | `VTT_ASSETS_BACKEND` | `s3` |
 | `VTT_ASSETS_S3_*` | References to the bucket (`${{vtt-assets.ENDPOINT}}`, `BUCKET`, `ACCESS_KEY_ID`, `SECRET_ACCESS_KEY`, `REGION`), and `VTT_ASSETS_S3_URL_STYLE=virtual` |
 | `VTT_ALLOWED_ORIGINS` | The staging domain |
+| `VTT_PILOT_CAMPAIGNS` | `*` (P-3). Staging lets every campaign in; unset, the VTT refuses all of them |
 | `PORT` | `8000` |
 | `RAILWAY_RUN_UID` | unset since the 2026-10-20 volume rehearsal (see below) |
 | `RAILWAY_DOCKERFILE_PATH` | `Dockerfile` |

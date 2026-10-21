@@ -26,6 +26,10 @@ from sqlalchemy import select
 from core.persistence.database import Database
 from vtt.storage.models import VttScene, VttTablePointer
 from vtt.transport import outage
+from vtt.transport.pilot import ENV as PILOT_ENV, NOT_IN_PILOT
+
+PILOT_MESSAGE = (f"This campaign is not in the tabletop pilot. The site admin adds a campaign by its id "
+                 f"to {PILOT_ENV}; until then, use the map (/map).")
 
 ID_MAX = 128
 ASSET_SUFFIXES = {".js", ".css", ".woff", ".woff2", ".ttf", ".png", ".svg", ".webp", ".jpg", ".jpeg"}
@@ -84,6 +88,20 @@ def make_pages_blueprint(*, db: Database, host, dist_dir: Path, on_change=lambda
         with db.session() as session:
             return user_id if host.is_campaign_gm(session, user_id, campaign_id) else None
 
+    def outside_pilot(campaign_id) -> bool:
+        """A GM of this campaign kept out only by the pilot list (P-3)."""
+        check = getattr(host, "outside_pilot", None)
+        user_id = host.current_member_id()
+        if check is None or not user_id or not _valid_id(campaign_id):
+            return False
+        with db.session() as session:
+            return check(session, user_id, campaign_id)
+
+    def refused(campaign_id):
+        if outside_pilot(campaign_id):
+            return jsonify({"error": NOT_IN_PILOT, "message": PILOT_MESSAGE}), 403
+        return jsonify({"error": "unauthorized"}), 403
+
     def scenes_of(session, campaign_id: str):
         return session.execute(
             select(VttScene).where(VttScene.campaign_id == campaign_id).order_by(VttScene.name, VttScene.id)
@@ -102,6 +120,8 @@ def make_pages_blueprint(*, db: Database, host, dist_dir: Path, on_change=lambda
         campaign_id = request.args.get("campaignId")
         member_id = gm_of(campaign_id)
         if member_id is None:
+            if outside_pilot(campaign_id):
+                return Response(PILOT_MESSAGE, status=403, mimetype="text/plain")
             abort(403)
         html = built("index.html")
         if html is None:
@@ -156,7 +176,7 @@ def make_pages_blueprint(*, db: Database, host, dist_dir: Path, on_change=lambda
     def scene_list():
         campaign_id = request.args.get("campaignId")
         if gm_of(campaign_id) is None:
-            return jsonify({"error": "unauthorized"}), 403
+            return refused(campaign_id)
         with db.session() as session:
             pointer = session.get(VttTablePointer, campaign_id)
             on_table = pointer.scene_id if pointer is not None else None
@@ -176,7 +196,7 @@ def make_pages_blueprint(*, db: Database, host, dist_dir: Path, on_change=lambda
         body = body if isinstance(body, dict) else {}
         campaign_id = body.get("campaignId")
         if gm_of(campaign_id) is None or not host.csrf_valid(request.headers.get("X-CSRF-Token")):
-            return jsonify({"error": "unauthorized"}), 403
+            return refused(campaign_id)
         direction = body.get("direction")
         actor_id = body.get("expectedActorId")
         expected_round = body.get("expectedRound")
@@ -205,7 +225,7 @@ def make_pages_blueprint(*, db: Database, host, dist_dir: Path, on_change=lambda
         body = body if isinstance(body, dict) else {}
         campaign_id = body.get("campaignId")
         if gm_of(campaign_id) is None or not host.csrf_valid(request.headers.get("X-CSRF-Token")):
-            return jsonify({"error": "unauthorized"}), 403
+            return refused(campaign_id)
         actor_id = body.get("actorId")
         name = body.get("condition")
         operation = body.get("operation")
@@ -229,7 +249,7 @@ def make_pages_blueprint(*, db: Database, host, dist_dir: Path, on_change=lambda
         """Search the campaign's bestiary (E-3): ?campaignId=&q=."""
         campaign_id = request.args.get("campaignId")
         if gm_of(campaign_id) is None:
-            return jsonify({"error": "unauthorized"}), 403
+            return refused(campaign_id)
         query = request.args.get("q", "")
         if len(query) > 80:
             return jsonify({"error": "bad request"}), 400
@@ -246,7 +266,7 @@ def make_pages_blueprint(*, db: Database, host, dist_dir: Path, on_change=lambda
         body = body if isinstance(body, dict) else {}
         campaign_id = body.get("campaignId")
         if gm_of(campaign_id) is None or not host.csrf_valid(request.headers.get("X-CSRF-Token")):
-            return jsonify({"error": "unauthorized"}), 403
+            return refused(campaign_id)
         ref = body.get("ref")
         request_id = body.get("requestId")
         expected = body.get("encounterToken")
@@ -270,7 +290,7 @@ def make_pages_blueprint(*, db: Database, host, dist_dir: Path, on_change=lambda
         body = body if isinstance(body, dict) else {}
         campaign_id = body.get("campaignId")
         if gm_of(campaign_id) is None or not host.csrf_valid(request.headers.get("X-CSRF-Token")):
-            return jsonify({"error": "unauthorized"}), 403
+            return refused(campaign_id)
         request_id = body.get("requestId")
         token = body.get("encounterToken")
         action = body.get("action")
@@ -298,7 +318,7 @@ def make_pages_blueprint(*, db: Database, host, dist_dir: Path, on_change=lambda
         body = body if isinstance(body, dict) else {}
         campaign_id = body.get("campaignId")
         if gm_of(campaign_id) is None or not host.csrf_valid(request.headers.get("X-CSRF-Token")):
-            return jsonify({"error": "unauthorized"}), 403
+            return refused(campaign_id)
         if legacy_source is None:
             return jsonify({"error": "no legacy store"}), 404
         from vtt.importer.legacy_scenes import import_campaign

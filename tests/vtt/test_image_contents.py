@@ -47,6 +47,10 @@ def _account_home(**extra):
 
 
 def test_the_campaign_card_links_the_gm_to_the_tabletop_only_where_it_is_on():
-    assert f'href="/vtt/gm?campaignId={"c" * 32}"' in _account_home(vtt_enabled=True)
-    assert '/vtt/gm' not in _account_home(vtt_enabled=False)
+    from vtt.transport.pilot import EVERYONE, Pilot
+    assert f'href="/vtt/gm?campaignId={"c" * 32}"' in _account_home(vtt_pilot=EVERYONE)
+    assert f'href="/vtt/gm?campaignId={"c" * 32}"' in _account_home(vtt_pilot=Pilot(frozenset({"c" * 32})))
+    assert '/vtt/gm' not in _account_home(vtt_pilot=None)                       # the VTT is off
+    assert '/vtt/gm' not in _account_home(vtt_pilot=Pilot())                    # on, list unset (P-3)
+    assert '/vtt/gm' not in _account_home(vtt_pilot=Pilot(frozenset({"d" * 32})))   # another campaign
     assert '/vtt/gm' not in _account_home()            # production's context has no flag

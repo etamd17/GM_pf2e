@@ -28,6 +28,7 @@ from core import campaigns as _campaigns
 from core.persistence import CampaignMembership, Database
 from core.persistence import runtime as _runtime
 from vtt.projection.serializers import TokenKey
+from vtt.transport import pilot as _pilot
 from vtt.transport.socket import VttService, init_vtt
 
 
@@ -180,9 +181,11 @@ def init_from_app(app, *, environ=None) -> VttService | None:
     options: dict[str, Any] = {"pool_timeout": 4}
     if url.startswith(("postgres://", "postgresql")):
         options["connect_args"] = {"connect_timeout": 4}
+    pilot = _pilot.from_env(env)
+    print(f"[VTT] pilot: {pilot.describe()}", flush=True)
     return init_vtt(app, db=Database.from_env("DATABASE_URL", environ=env, engine_options=options), host=AppHost(),
                     grant_key=grant_key, token_key=TokenKey.derive(secret), allowed_origins=origins,
                     async_mode=env.get("VTT_ASYNC_MODE") or None,
                     dist_dir=Path(env["VTT_DIST_DIR"]) if env.get("VTT_DIST_DIR") else None,
                     legacy_source=_legacy_scenes, legacy_asset=_legacy_asset,
-                    asset_backend=asset_backends.from_env(env))
+                    asset_backend=asset_backends.from_env(env), pilot=pilot)

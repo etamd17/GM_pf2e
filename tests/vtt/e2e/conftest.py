@@ -96,7 +96,7 @@ class VttSite:
         database = os.environ.get("VTT_E2E_DATABASE_URL") or "sqlite+pysqlite:///" + str(root / "vtt.db")
         self.env = dict(os.environ, APP_ENV="development", DATA_DIR=str(root / "data"), DATABASE_URL=database,
                         OWNERSHIP_BACKEND="sql", GM_PASSWORD="", SECRET_KEY=secrets.token_urlsafe(32),
-                        VTT_ENABLED="1", VTT_DIST_DIR=str(DIST), VTT_ASSETS_BACKEND="local",
+                        VTT_ENABLED="1", VTT_PILOT_CAMPAIGNS="*", VTT_DIST_DIR=str(DIST), VTT_ASSETS_BACKEND="local",
                         VTT_ASSETS_DIR=str(root / "assets"), E2E_PASSWORD=self.password,
                         PYTHONDONTWRITEBYTECODE="1")
         for key in ("PUBLIC_BASE_URL", "ALLOWED_HOSTS", "GUNICORN_CMD_ARGS", "VTT_ASYNC_MODE", "VTT_ALLOWED_ORIGINS"):

@@ -76,7 +76,9 @@ FAKE_TABLE = '<!doctype html><html><head><title>VTT - Table</title></head><body>
 
 
 @pytest.fixture
-def stack(tmp_path):
+def stack(tmp_path, request):
+    # P-3: a test may pass a pilot list (indirect parametrize); none applies none.
+    pilot = getattr(request, "param", None)
     # A fake client build, so page tests never depend on whether dist/ exists.
     dist = tmp_path / "dist"
     (dist / ".vite").mkdir(parents=True)
@@ -101,7 +103,7 @@ def stack(tmp_path):
                        legacy_source=lambda cid: legacy.get(cid, ([], None)),
                        asset_backend=assets,
                        legacy_asset=lambda cid, name: legacy_files.get((cid, name)),
-                       now=lambda: datetime.now(timezone.utc) + offset["by"])
+                       now=lambda: datetime.now(timezone.utc) + offset["by"], pilot=pilot)
 
     class Stack:
         pass
