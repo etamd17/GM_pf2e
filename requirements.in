@@ -13,4 +13,4 @@ MarkupSafe==3.0.3
 reportlab==4.5.1
 segno==1.6.6
 pypdf==6.19.0
-Pillow==12.3.0
+Pillow==13.0.0
