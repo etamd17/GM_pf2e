@@ -1681,6 +1681,10 @@ def _harden_response(response):
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 DATA_DIR = os.environ.get('DATA_DIR', BASE_DIR)  # Railway volume mount or local
 MONSTER_DIR = os.path.join(DATA_DIR, 'monster_data')         # shared bestiary (system content, not per-campaign)
+# GM-made PF2e monsters (imported or authored) belong to their campaign
+# (2026-10-21): campaigns/<cid>/monster_data, keyed 'campaign/<file>' in
+# MONSTER_LIBRARY, loaded with the party on a switch and dropped on the next.
+CAMPAIGN_MONSTER_PREFIX = 'campaign/'
 DB_PATH = os.path.join(BASE_DIR, 'pf2e_database.db')         # ships with repo, read-only
 COMPENDIUM_DATA_DIR = os.path.join(BASE_DIR, 'compendium_data')
 
@@ -2223,7 +2227,9 @@ def load_campaign(cid):
         if callable(resetter):
             resetter()
         _bind_campaign_paths(cid)
-        load_libraries()
+        # Party, encounter and session state only: the compendium and the
+        # bestiary are shared by every campaign and stay loaded.
+        load_libraries(shared=False)
         _load_session_state()
         _load_handouts()
         return _loaded_campaign_id()
@@ -2237,6 +2243,7 @@ for _dir in [PARTY_DIR, ENCOUNTER_DIR, CAMPAIGN_ASSETS_DIR, HANDOUTS_DIR, os.pat
     os.makedirs(_dir, exist_ok=True)
 
 MONSTER_LIBRARY = {}
+CAMPAIGN_MONSTER_KEYS = set()   # the loaded campaign's own entries in MONSTER_LIBRARY
 PARTY_LIBRARY = {}
 PENDING_INITIATIVES = {}
 ACTIVE_ENCOUNTER = []
@@ -8194,13 +8201,49 @@ def load_compendium():
             else:
                 f['prereqs_struct'] = parse_feat_prereqs(f.get('prerequisites_raw', ''), _feat_name_lookup)
 
-def load_libraries(restore_autosave=True):
-    """Load campaign-scoped libraries (monsters/party/compendium) and, by
-    default, rehydrate the encounter autosave. The module-scope boot call
-    passes restore_autosave=False and the restore runs once at the module
-    tail instead: restoring mid-import NameErrors on helpers defined later
-    in the file (e.g. _restore_cosmere_combatant), which silently wiped a
-    live Cosmere fight on every server restart."""
+def _custom_monster_target(fname):
+    """(folder, library key) for a GM-made monster: the loaded campaign's own
+    folder, or the shared one in the legacy flat layout (no campaigns)."""
+    cid = _loaded_campaign_id()
+    if not cid:
+        return MONSTER_DIR, fname
+    folder = _storage.campaign_monsters_dir(cid)
+    os.makedirs(folder, exist_ok=True)
+    return folder, CAMPAIGN_MONSTER_PREFIX + fname
+
+
+def _register_custom_monster(key, monster):
+    MONSTER_LIBRARY[key] = monster
+    if key.startswith(CAMPAIGN_MONSTER_PREFIX):
+        CAMPAIGN_MONSTER_KEYS.add(key)
+
+
+def _load_campaign_monsters():
+    """Swap the previous campaign's own monsters for the loaded campaign's."""
+    for key in CAMPAIGN_MONSTER_KEYS:
+        MONSTER_LIBRARY.pop(key, None)
+    CAMPAIGN_MONSTER_KEYS.clear()
+    cid = _loaded_campaign_id()
+    folder = _storage.campaign_monsters_dir(cid) if cid else None
+    if not folder or not os.path.isdir(folder):
+        return
+    for file in sorted(os.listdir(folder)):
+        if not file.endswith('.json') or file.startswith('_'):
+            continue
+        data, err = safe_load_json_file(os.path.join(folder, file))
+        if err:
+            print(f"[LOAD ERROR] Campaign monster {file}: {err}")
+            continue
+        try:
+            if isinstance(data, dict):
+                key = CAMPAIGN_MONSTER_PREFIX + file
+                _register_custom_monster(key, Monster(data, key))
+        except Exception as e:
+            print(f"[LOAD ERROR] Campaign monster {file}: {e}")
+
+
+def _load_shared_libraries():
+    """The compendium and the bestiary: system content, shared by every campaign."""
     load_compendium()
     
     # --- POST-LOAD CORRECTION: Fix weapon damage from known table ---
@@ -8242,6 +8285,26 @@ def load_libraries(restore_autosave=True):
                         print(f"[LOAD ERROR] Monster {file}: {e}")
     print(f"[STARTUP] Loaded {len(MONSTER_LIBRARY)} monsters from {len(monster_dirs)} director{'ies' if len(monster_dirs) > 1 else 'y'}")
     
+
+
+def load_libraries(restore_autosave=True, *, shared=True):
+    """Load campaign-scoped libraries (monsters/party/compendium) and, by
+    default, rehydrate the encounter autosave. The module-scope boot call
+    passes restore_autosave=False and the restore runs once at the module
+    tail instead: restoring mid-import NameErrors on helpers defined later
+    in the file (e.g. _restore_cosmere_combatant), which silently wiped a
+    live Cosmere fight on every server restart.
+
+    ``shared=False`` (a campaign switch) skips the compendium and bestiary.
+    Neither is per-campaign (both live outside the campaign folders), and
+    rebuilding them read ~4,800 monster files on every switch: tens of
+    seconds on Railway, on the one worker that serves every player's SSE.
+    Runtime additions (imported and custom monsters) are inserted into
+    MONSTER_LIBRARY directly, and combatants are deep copies, so the loaded
+    library stays current without a reload."""
+    if shared:
+        _load_shared_libraries()
+
     PARTY_LIBRARY.clear()
     party_dir = _loaded_party_dir()
     if not os.path.exists(party_dir):
@@ -8269,6 +8332,8 @@ def load_libraries(restore_autosave=True):
             except Exception as e: 
                 print(f"[LOAD ERROR] Character {file}: {e}")
     _build_pc_file_cache()
+    # This campaign's own monsters, before the autosave restore that names them.
+    _load_campaign_monsters()
 
     # --- AUTO-RESTORE ENCOUNTER FROM AUTOSAVE ---
     # Skipped for the module-scope boot call (see docstring); runtime
@@ -11360,6 +11425,29 @@ def account_home():
     return _me_render()
 
 
+def _live_session_held_by_another_gm(cid, user):
+    """What another GM's live session would lose if this GM took the slot.
+
+    There is one live campaign slot (load_campaign rebinds the process-wide
+    tracker), so a GM entering campaign B unloads campaign A for everyone in
+    it. None when nothing would be lost: no live campaign, the same one, a
+    campaign this user GMs, or a live campaign with nobody connected and no
+    encounter running. Advisory only: the GM may still take over."""
+    live_id = _storage.get_live_campaign_id()
+    if not live_id or live_id == cid:
+        return None
+    live = _campaigns.get_campaign(live_id)
+    if not live or _campaigns.is_gm(live, user['id']):
+        return None
+    with _sse_lock:
+        connected = sum(1 for entry in _sse_subscribers if entry[2] == live_id)
+    combatants = len(_loaded_encounter_snapshot()) if _loaded_campaign_id() == live_id else 0
+    if not connected and not combatants:
+        return None
+    return {'name': live.get('name') or 'another campaign', 'connected': connected,
+            'combatants': combatants}
+
+
 @app.route('/campaign/<cid>/activate', methods=['POST'])
 @_auth.login_required
 def activate_campaign(cid):
@@ -11371,6 +11459,14 @@ def activate_campaign(cid):
         return jsonify({'error': 'not a member of that campaign'}), 403
     gm = _campaigns.is_gm(camp, u['id']) or u.get('is_admin')
     if gm:
+        # One live slot: taking it from another GM's running session needs a
+        # deliberate second click, never a silent swap.
+        held = _live_session_held_by_another_gm(cid, u)
+        if held and request.form.get('takeover') != '1':
+            return render_template(
+                'campaign_takeover.html', campaign=camp, held=held,
+                then=request.form.get('then') or request.args.get('then') or '',
+            ), 409
         previous_live = _storage.get_live_campaign_id()
         try:
             # Rebind only after the old campaign flush succeeds. Persist the
@@ -27692,14 +27788,15 @@ def import_monster():
         
         # Save to monster_data
         safe_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', name)
-        file_path = os.path.join(MONSTER_DIR, f"{safe_name}.json")
+        folder, key = _custom_monster_target(f"{safe_name}.json")
+        file_path = os.path.join(folder, f"{safe_name}.json")
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2)
         
         # Try to load into library
         try:
-            m = Monster(data, f"{safe_name}.json")
-            MONSTER_LIBRARY[f"{safe_name}.json"] = m
+            m = Monster(data, key)
+            _register_custom_monster(key, m)
             return jsonify({"success": True, "name": name, "level": m.level})
         except Exception:
             app.logger.exception(
@@ -27725,11 +27822,11 @@ def _save_custom_monster(monster_json, name):
     """Persist a GM-authored monster to the bestiary (atomic write) and register
     it in MONSTER_LIBRARY for reuse. Returns (filename, Monster)."""
     safe_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', name) or 'Custom_Monster'
-    fname = f"{safe_name}.json"
-    _atomic_write_json(os.path.join(MONSTER_DIR, fname), monster_json, indent=2)
-    m = Monster(monster_json, fname)
-    MONSTER_LIBRARY[fname] = m
-    return fname, m
+    folder, key = _custom_monster_target(f"{safe_name}.json")
+    _atomic_write_json(os.path.join(folder, f"{safe_name}.json"), monster_json, indent=2)
+    m = Monster(monster_json, key)
+    _register_custom_monster(key, m)
+    return key, m
 
 
 @app.route('/api/add_custom_monster', methods=['POST'])

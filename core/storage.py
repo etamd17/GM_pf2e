@@ -95,6 +95,7 @@ def cosmere_table_state_file(cid): return os.path.join(campaign_dir(cid), 'cosme
 def cosmere_encounter_stage_file(cid): return os.path.join(campaign_dir(cid), 'cosmere_encounter_stage.json')
 def cosmere_narrative_scenes_file(cid): return os.path.join(campaign_dir(cid), 'cosmere_narrative_scenes.json')
 def homebrew_file(cid):            return os.path.join(campaign_dir(cid), 'homebrew.json')
+def campaign_monsters_dir(cid):    return os.path.join(campaign_dir(cid), 'monster_data')
 def chronicle_dir(cid):            return os.path.join(campaign_dir(cid), 'chronicle')
 
 
