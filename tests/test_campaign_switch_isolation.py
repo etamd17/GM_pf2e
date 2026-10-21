@@ -128,7 +128,7 @@ def test_load_campaign_closes_old_stream_but_keeps_new_campaign_subscriber(monke
         app.ACTIVE_CAMPAIGN_ID = cid
 
     monkeypatch.setattr(app, "_bind_campaign_paths", bind)
-    monkeypatch.setattr(app, "load_libraries", lambda: None)
+    monkeypatch.setattr(app, "load_libraries", lambda **_kw: None)
     monkeypatch.setattr(app, "_load_session_state", lambda: None)
     monkeypatch.setattr(app, "_load_handouts", lambda: None)
 
@@ -234,7 +234,7 @@ def test_campaign_switch_waits_for_inflight_persistence_flush(monkeypatch):
     monkeypatch.setattr(app, "_close_sse_subscribers_for_other_campaign", lambda _cid: None)
     monkeypatch.setattr(app, "_reset_live_runtime_state", lambda: None)
     monkeypatch.setattr(app, "_bind_campaign_paths", bind_new_campaign)
-    monkeypatch.setattr(app, "load_libraries", lambda: None)
+    monkeypatch.setattr(app, "load_libraries", lambda **_kw: None)
     monkeypatch.setattr(app, "_load_session_state", lambda: None)
     monkeypatch.setattr(app, "_load_handouts", lambda: None)
 
@@ -486,3 +486,82 @@ def test_failed_gm_stop_rolls_back_a_partially_cleared_runtime(monkeypatch):
     assert load_calls == [None, CAMPAIGN_A]
     assert app.ACTIVE_CAMPAIGN_ID == CAMPAIGN_A
     assert durable["campaign_id"] == CAMPAIGN_A
+
+
+def test_a_campaign_switch_reloads_the_party_but_not_the_shared_bestiary(monkeypatch, tmp_path):
+    """The compendium and the bestiary are shared by every campaign; rebuilding
+    them on each switch read ~4,800 monster files on the single worker."""
+    calls = []
+    # Restored afterwards: the switch below rebinds these module globals.
+    monkeypatch.setattr(app, "ACTIVE_CAMPAIGN_ID", app.ACTIVE_CAMPAIGN_ID)
+    monkeypatch.setattr(app, "PARTY_LIBRARY", {})
+    monkeypatch.setattr(app, "_build_pc_file_cache", lambda: None)
+    monkeypatch.setattr(app, "_flush_pending_persistence", lambda: None)
+    monkeypatch.setattr(app, "_reset_live_runtime_state", lambda: None)
+    monkeypatch.setattr(app, "_bind_campaign_paths", lambda cid: setattr(app, "ACTIVE_CAMPAIGN_ID", cid))
+    monkeypatch.setattr(app, "_load_shared_libraries", lambda: calls.append("shared"))
+    monkeypatch.setattr(app, "_recover_character_batch_transactions", lambda _d: calls.append("party"))
+    monkeypatch.setattr(app, "_restore_encounter_autosave", lambda: calls.append("encounter"))
+    monkeypatch.setattr(app, "_load_session_state", lambda: None)
+    monkeypatch.setattr(app, "_load_handouts", lambda: None)
+    monkeypatch.setattr(app, "_loaded_party_dir", lambda: str(tmp_path))
+
+    app.load_campaign(CAMPAIGN_B)
+    assert calls == ["party", "encounter"]
+
+    calls.clear()
+    app.load_libraries(restore_autosave=False)            # boot: everything
+    assert calls == ["shared", "party"]
+
+
+# --- the takeover guard: one live slot, never taken silently from another GM -------------------
+
+def _activation(monkeypatch, *, live_gm="other-gm", subscribers=0, combatants=0, takeover=False):
+    """Campaign A is live and GM'd by ``live_gm``; gm-user enters B. Returns
+    (result, load calls)."""
+    user = {"id": "gm-user", "is_admin": False}
+    campaigns = {CAMPAIGN_A: {"id": CAMPAIGN_A, "name": "Saga", "system": "pf2e", "gm": live_gm},
+                 CAMPAIGN_B: {"id": CAMPAIGN_B, "name": "Mine", "system": "pf2e", "gm": "gm-user"}}
+    loads = []
+    monkeypatch.setattr(app._auth, "current_user", lambda: user)
+    monkeypatch.setattr(app._campaigns, "get_campaign", lambda cid: campaigns.get(cid))
+    monkeypatch.setattr(app._campaigns, "user_role", lambda camp, uid: "gm" if camp["gm"] == uid else None)
+    monkeypatch.setattr(app._campaigns, "is_gm", lambda camp, uid: bool(camp) and camp["gm"] == uid)
+    monkeypatch.setattr(app._storage, "get_live_campaign_id", lambda: CAMPAIGN_A)
+    monkeypatch.setattr(app._storage, "set_live_campaign_id", lambda cid: None)
+    monkeypatch.setattr(app, "ACTIVE_CAMPAIGN_ID", CAMPAIGN_A)
+    monkeypatch.setattr(app, "_loaded_encounter_snapshot", lambda: tuple(range(combatants)))
+    monkeypatch.setattr(app, "load_campaign", lambda cid: loads.append(cid))
+    for _ in range(subscribers):
+        app._sse_subscribers.append((queue.Queue(), False, CAMPAIGN_A))
+    data = {"takeover": "1"} if takeover else {}
+    with app.app.test_request_context(f"/campaign/{CAMPAIGN_B}/activate", method="POST", data=data):
+        app.session["active_campaign_id"] = CAMPAIGN_A
+        result = app.activate_campaign(CAMPAIGN_B)
+        session_campaign = app.session.get("active_campaign_id")
+    return result, loads, session_campaign
+
+
+def test_entering_while_another_gms_session_is_live_asks_first(monkeypatch):
+    result, loads, session_campaign = _activation(monkeypatch, subscribers=3)
+    body, status = result
+    assert status == 409 and loads == [] and session_campaign == CAMPAIGN_A
+    assert "Saga" in body and "3 connected" in body and 'name="takeover" value="1"' in body
+
+
+def test_a_running_encounter_counts_even_with_nobody_connected(monkeypatch):
+    (body, status), loads, _ = _activation(monkeypatch, combatants=4)
+    assert status == 409 and loads == [] and "4 combatants" in body
+
+
+def test_taking_over_deliberately_switches(monkeypatch):
+    result, loads, session_campaign = _activation(monkeypatch, subscribers=3, takeover=True)
+    assert loads == [CAMPAIGN_B] and session_campaign == CAMPAIGN_B
+    assert result.status_code == 302
+
+
+@pytest.mark.parametrize("case", ["idle", "own"])
+def test_an_idle_or_own_live_campaign_switches_without_asking(monkeypatch, case):
+    kwargs = {"live_gm": "gm-user", "subscribers": 2} if case == "own" else {}
+    result, loads, _ = _activation(monkeypatch, **kwargs)
+    assert loads == [CAMPAIGN_B] and result.status_code == 302

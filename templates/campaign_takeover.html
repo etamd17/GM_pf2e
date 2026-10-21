@@ -1,0 +1,15 @@
+{% extends "_account_base.html" %}
+{% block title %}Another session is live{% endblock %}
+{% block content %}
+<h1>Another session is live</h1>
+<p><strong>{{ held.name }}</strong> is running on the site right now
+  ({% if held.connected %}{{ held.connected }} connected{% endif %}{% if held.connected and held.combatants %}, {% endif %}{% if held.combatants %}an encounter with {{ held.combatants }} combatant{{ '' if held.combatants == 1 else 's' }}{% endif %}).</p>
+<p>The site runs one live game at a time. Entering <strong>{{ campaign.name }}</strong> saves that
+  session and unloads it: its GM and players stop getting live updates until their GM enters it again.</p>
+<form method="POST" action="/campaign/{{ campaign.id }}/activate">
+  <input type="hidden" name="takeover" value="1">
+  {% if then %}<input type="hidden" name="then" value="{{ then }}">{% endif %}
+  <button type="submit">Enter {{ campaign.name }} anyway</button>
+</form>
+<p style="margin-top:18px;"><a href="/me" style="color:var(--gilt);">Back to my campaigns</a></p>
+{% endblock %}
