@@ -31,6 +31,7 @@ from vtt.assets import service
 from vtt.assets.backends import AssetBackend, AssetBackendError
 from vtt.assets.images import MAX_BYTES, BadImage
 from vtt.transport import outage
+from vtt.transport.pilot import refusal as pilot_refusal
 
 log = logging.getLogger(__name__)
 _ID = re.compile(r"[A-Za-z0-9_-]{1,128}")
@@ -55,8 +56,10 @@ def make_assets_blueprint(*, db: Database, host, backend: AssetBackend,
             return jsonify({"error": "unauthorized"}), 403
         with db.session() as session:
             user_id = gm_of(session, campaign_id)
+            reason = (pilot_refusal(host, session, host.current_member_id(), campaign_id)
+                      if user_id is None else None)
         if user_id is None:
-            return jsonify({"error": "unauthorized"}), 403
+            return jsonify({"error": reason}), 403
         if request.content_length is not None and request.content_length > MAX_BYTES:
             return jsonify({"error": "images must be 25 MB or smaller"}), 413
         data = request.stream.read(MAX_BYTES + 1)

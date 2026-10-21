@@ -40,6 +40,7 @@ from flask import Blueprint, jsonify, make_response, request
 from core.persistence.database import Database
 from vtt.storage import grants as G
 from vtt.transport import outage
+from vtt.transport.pilot import refusal as pilot_refusal
 
 GM_HEADER = "X-CSRF-Token"
 LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "[::1]", "::1"}
@@ -101,13 +102,20 @@ def _same_origin(allowed: list[str] | None) -> bool:
     return secrets.compare_digest(origin, own) or origin in (allowed or [])
 
 
+class _OutsidePilot(Exception):
+    pass
+
+
 def _failed(status: int = 400, reason: str = "pairing-failed"):
     return jsonify({"error": reason}), status
 
 
 def make_blueprint(*, db: Database, host, grant_key: bytes, cookie_name: str, verifier: Callable[[str], str],
                    on_access_change: Callable[[str], None], now: Callable[[], datetime],
-                   allowed_origins: list[str] | None = None, limits: Limits | None = None) -> Blueprint:
+                   allowed_origins: list[str] | None = None, limits: Limits | None = None,
+                   campaign_allowed: Callable[[str], bool] = lambda _campaign_id: True) -> Blueprint:
+    """``campaign_allowed`` is the pilot list (P-3): a code for a campaign
+    outside it redeems to nothing, exactly like an invalid code."""
     bp = Blueprint("vtt_pairing", __name__)
     limits = limits or Limits()
     bp.limits = limits          # exposed for tests
@@ -121,7 +129,7 @@ def make_blueprint(*, db: Database, host, grant_key: bytes, cookie_name: str, ve
             return None, _failed(403, "unauthorized")
         with db.session() as session:
             if not host.is_campaign_gm(session, user_id, campaign_id):
-                return None, _failed(403, "unauthorized")
+                return None, _failed(403, pilot_refusal(host, session, user_id, campaign_id))
         return user_id, None
 
     def body() -> dict:
@@ -192,17 +200,24 @@ def make_blueprint(*, db: Database, host, grant_key: bytes, cookie_name: str, ve
         current = now()
         with db.session() as session:
             campaign_id = G.challenge_campaign(session, grant_key, code, current)
-        if campaign_id is None:
+        # Outside the pilot (a code issued before a restart that removed its
+        # campaign): refused before anything is consumed, with no detail.
+        if campaign_id is None or not campaign_allowed(campaign_id):
             return _failed()
         if not limits.campaign.hit(campaign_id):
             return _failed(429, "rate-limited")
         credential = secrets.token_urlsafe(32)
-        with db.transaction() as session:
-            # A redeemer that lost the race (or a code that expired in between)
-            # gets None here and writes nothing; the empty transaction commits.
-            consumed = G.consume_challenge(session, grant_key, code, current)
-            if consumed is not None:
-                G.create_grant(session, verifier(credential), consumed, current)
+        try:
+            with db.transaction() as session:
+                # A redeemer that lost the race (or a code that expired in between)
+                # gets None here and writes nothing; the empty transaction commits.
+                consumed = G.consume_challenge(session, grant_key, code, current)
+                if consumed is not None and not campaign_allowed(consumed):
+                    raise _OutsidePilot      # rolls the consumption back
+                if consumed is not None:
+                    G.create_grant(session, verifier(credential), consumed, current)
+        except _OutsidePilot:
+            return _failed()
         if consumed is None:
             return _failed()
         response = make_response(jsonify({"paired": True}))

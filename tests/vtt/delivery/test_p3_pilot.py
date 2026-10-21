@@ -162,3 +162,81 @@ def test_the_app_wiring_reads_the_list_from_the_environment(tmp_path, capsys):
     app2.config["SECRET_KEY"] = "pilot-secret"
     unset = app_wiring.init_from_app(app2, environ={"VTT_ENABLED": "1", "DATABASE_URL": url})
     assert not unset.pilot.allows("camp_a") and "[VTT] pilot: no campaigns (unset)" in capsys.readouterr().out
+
+
+# --- pairing redemption and the GM's refusal wording (review 116) ----------------------------
+
+def _challenge(stack, campaign_id):
+    """A code issued earlier, e.g. before a restart that removed its campaign."""
+    import hashlib
+    import hmac
+    from datetime import datetime, timezone
+
+    from vtt.storage import grants as G
+    from .conftest import GRANT_KEY
+    key = hmac.new(GRANT_KEY, b"vtt-pairing-codes", hashlib.sha256).digest()
+    with stack.db.transaction() as session:
+        code = G.issue_challenge(session, key, campaign_id, "user_gm", datetime.now(timezone.utc))
+    return G.display_code(code)
+
+
+def _redeem(stack, code):
+    return stack.app.test_client().post("/vtt/api/table-pairing/redeem", json={"code": code},
+                                        headers={"Origin": "https://localhost"}, base_url="https://localhost")
+
+
+def _counts(stack, campaign_id):
+    from sqlalchemy import func, select
+
+    from vtt.storage.models import VttPairingChallenge, VttTableGrant
+    with stack.db.session() as session:
+        grants = session.scalar(select(func.count()).select_from(VttTableGrant)
+                                .where(VttTableGrant.campaign_id == campaign_id))
+        open_codes = session.scalar(select(func.count()).select_from(VttPairingChallenge)
+                                    .where(VttPairingChallenge.campaign_id == campaign_id,
+                                           VttPairingChallenge.consumed_at.is_(None)))
+    return grants, open_codes
+
+
+@only_a
+def test_a_code_for_a_campaign_outside_the_pilot_redeems_to_nothing(stack):
+    code = _challenge(stack, "camp_b")
+    response = _redeem(stack, code)
+    assert response.status_code == 400 and response.get_json() == {"error": "pairing-failed"}
+    assert "Set-Cookie" not in response.headers
+    assert _counts(stack, "camp_b") == (0, 1)        # no grant, and the code was not consumed
+    allowed = _redeem(stack, _challenge(stack, "camp_a"))
+    assert allowed.status_code == 200 and allowed.get_json() == {"paired": True}
+    assert _counts(stack, "camp_a") == (1, 0)
+
+
+class _FlipsAfterTheFirstLook(Pilot):
+    """Allows a campaign once, then not: forces the refusal inside the transaction."""
+    def __init__(self):
+        super().__init__(frozenset({"camp_a"}))
+        self.looks = 0
+
+    def allows(self, campaign_id):
+        self.looks += 1
+        return self.looks == 1 and super().allows(campaign_id)
+
+
+@pytest.mark.parametrize("stack", [_FlipsAfterTheFirstLook()], indirect=True)
+def test_a_refusal_inside_the_transaction_rolls_the_consumption_back(stack):
+    code = _challenge(stack, "camp_a")
+    response = _redeem(stack, code)
+    assert response.status_code == 400 and response.get_json() == {"error": "pairing-failed"}
+    assert "Set-Cookie" not in response.headers
+    assert _counts(stack, "camp_a") == (0, 1)
+
+
+@only_a
+def test_the_gm_is_told_about_the_pilot_on_pairing_and_upload_too(stack):
+    gm_of_both(stack)
+    assert post(stack, "/vtt/api/table-pairing", {"campaignId": "camp_b"}).get_json() == {"error": "not-in-pilot"}
+    upload = stack.app.test_client().post("/vtt/api/assets?campaignId=camp_b", data=b"x",
+                                          headers={"X-CSRF-Token": CSRF}, base_url="https://localhost")
+    assert upload.status_code == 403 and upload.get_json() == {"error": "not-in-pilot"}
+    # a member who is not that campaign's GM still learns nothing
+    stack.host.gms.discard(("user_gm", "camp_b"))
+    assert post(stack, "/vtt/api/table-pairing", {"campaignId": "camp_b"}).get_json() == {"error": "unauthorized"}

@@ -424,7 +424,8 @@ def init_vtt(app, *, db: Database, host: VttHost, grant_key: bytes, token_key: T
     app.register_blueprint(make_blueprint(
         db=db, host=host, grant_key=hmac.new(grant_key, b"vtt-pairing-codes", hashlib.sha256).digest(),
         cookie_name=TABLE_COOKIE, verifier=lambda credential: table_verifier(grant_key, credential),
-        on_access_change=access_changed, now=clock, allowed_origins=allowed_origins, limits=pairing_limits))
+        on_access_change=access_changed, now=clock, allowed_origins=allowed_origins, limits=pairing_limits,
+        campaign_allowed=in_pilot))
 
     @socketio.on("connect", namespace=NAMESPACE)
     def on_connect(auth=None):

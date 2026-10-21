@@ -78,6 +78,13 @@ class PilotHost:
                 and self._host.is_campaign_gm(session, user_id, campaign_id))
 
 
+def refusal(host, session, user_id, campaign_id) -> str:
+    """The refusal code for a member denied this campaign: ``not-in-pilot``
+    for its GM when only the list keeps them out, else ``unauthorized``."""
+    check = getattr(host, "outside_pilot", None)
+    return NOT_IN_PILOT if check is not None and check(session, user_id, campaign_id) else "unauthorized"
+
+
 def gate(host, pilot: Pilot | None):
     """``host`` with the pilot applied; ``None`` (tests that predate P-3) applies none."""
     return host if pilot is None else PilotHost(host, pilot)
