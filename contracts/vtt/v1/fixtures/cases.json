@@ -3094,6 +3094,82 @@
     }
   },
   {
+    "id": "command-scene-delete",
+    "schema": "command",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "scene.delete",
+      "expected": [
+        {
+          "kind": "scene",
+          "id": "scene_a",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {}
+    }
+  },
+  {
+    "id": "command-invalid-scene-delete-with-payload",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "scene.delete",
+      "expected": [
+        {
+          "kind": "scene",
+          "id": "scene_a",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {
+        "cascade": true
+      }
+    }
+  },
+  {
+    "id": "command-invalid-scene-delete-without-expected",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "scene.delete",
+      "expected": [],
+      "payload": {}
+    }
+  },
+  {
+    "id": "command-invalid-scene-delete-expects-other-scene",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "scene.delete",
+      "expected": [
+        {
+          "kind": "scene",
+          "id": "scene_b",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {}
+    }
+  },
+  {
     "id": "command-token-create",
     "schema": "command",
     "valid": true,

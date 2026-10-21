@@ -90,7 +90,7 @@ TOKEN = {"x": 300, "y": 300, "size": 1, "label": "Goblin", "color": 65280, "artA
 def test_every_contract_command_type_has_exactly_one_policy():
     variants = REGISTRY.manifest["commandVariants"]
     assert sorted(variants) == sorted(POLICIES)
-    assert len(variants) == 19          # commands-1 (12), parity-1 fog (3), parity-2 templates/terrain (4)
+    assert len(variants) == 20          # commands-1 (12), parity-1 fog (3), parity-2 templates/terrain (4), e-7 (1)
 
 
 def test_the_service_refuses_to_start_when_policies_and_contract_disagree(stack, monkeypatch):

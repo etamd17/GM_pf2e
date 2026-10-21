@@ -138,6 +138,7 @@
     "scene.update",
     "table.show",
     "table.clear",
+    "scene.delete",
     "token.create",
     "token.update",
     "token.move",

@@ -31,7 +31,7 @@ Rules (each a ``ProtocolValidationError``):
 Commands (``command``, batch commands-1):
 
 * ``expected`` holds no repeated ``(kind, id)``;
-* an update, move, delete, ``table.show`` or ``table.clear`` names its target's
+* an update, move, delete, ``table.show``, ``table.clear`` or ``scene.delete`` names its target's
   expected version: ``("scene", sceneId)`` for scene and table commands, the
   payload's entity otherwise;
 * ``controllerIds`` hold no repeats;
@@ -64,7 +64,7 @@ def _no_repeats(values, what):
 
 
 _TARGETED = {
-    'scene.update': 'scene', 'table.show': 'scene', 'table.clear': 'scene',
+    'scene.update': 'scene', 'table.show': 'scene', 'table.clear': 'scene', 'scene.delete': 'scene',
     'token.update': 'token', 'token.move': 'token', 'light.update': 'light', 'wall.update': 'wall',
     'entity.delete': None,
     'fog.update': 'fog', 'fog.reset': 'fog',

@@ -17,6 +17,9 @@
       "$ref": "#/definitions/TableClear"
     },
     {
+      "$ref": "#/definitions/SceneDelete"
+    },
+    {
       "$ref": "#/definitions/TokenCreate"
     },
     {
@@ -375,6 +378,49 @@
           "$ref": "#/definitions/EmptyPayload"
         }
       }
+    },
+    "SceneDelete": {
+      "title": "SceneDelete",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "campaignId",
+        "commandId",
+        "expected",
+        "payload",
+        "sceneId",
+        "schemaVersion",
+        "type"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "$ref": "common.schema.json#/definitions/SchemaVersion"
+        },
+        "commandId": {
+          "$ref": "common.schema.json#/definitions/OpaqueToken"
+        },
+        "campaignId": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "sceneId": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "type": {
+          "const": "scene.delete"
+        },
+        "expected": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {
+            "$ref": "#/definitions/ExpectedVersion"
+          }
+        },
+        "payload": {
+          "$ref": "#/definitions/EmptyPayload"
+        }
+      },
+      "description": "Delete a scene and everything on it (batch e-7). Version-checked: exactly one expected version, the scene's. Refused while the table shows the scene: clear the table first."
     },
     "TokenCreatePayload": {
       "title": "TokenCreatePayload",

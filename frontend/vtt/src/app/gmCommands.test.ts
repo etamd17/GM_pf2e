@@ -11,6 +11,7 @@ import {
   createToken,
   createWall,
   deleteEntity,
+  deleteScene,
   moveToken,
   newEntityId,
   setDoorState,
@@ -64,6 +65,7 @@ const drafts: Array<[string, Draft]> = [
   ['publish', updateScene(scene, { published: false })],
   ['show on table', showOnTable(scene)],
   ['clear table', clearTable(scene)],
+  ['delete scene', deleteScene(scene)],
 ];
 
 describe('GM command builders', () => {
@@ -79,6 +81,12 @@ describe('GM command builders', () => {
       else expect(d.expected).toHaveLength(1);
     }
     expect(moveToken(token, 1, 1).expected).toEqual([{ kind: 'token', id: 'tok_1', version: V }]);
+  });
+
+  it('a scene delete is version-checked: without its expected version the schema refuses it', () => {
+    const command = wire(deleteScene(scene));
+    expect(command.expected).toEqual([{ kind: 'scene', id: scene.id, version: V }]);
+    expect(gm.validateCommand({ ...command, expected: [] })).toBe(false);
   });
 
   it('new ids are Id-shaped and unique', () => {

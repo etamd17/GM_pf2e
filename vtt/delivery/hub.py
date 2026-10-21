@@ -330,6 +330,16 @@ class Hub:
             self._terminate(old)
             return
         scene_id = old.scene_id if old.audience == "gm" else None
+        if scene_id is not None:
+            # The GM's scene was deleted (batch e-7): resubscribe with no scene,
+            # an empty snapshot, rather than ending access as for a missing scene
+            # at subscribe time. The GM is still the campaign's GM.
+            try:
+                with self.db.session() as session:
+                    if self._scene(session, old.campaign_id, scene_id) is None:
+                        scene_id = None
+            except Exception:
+                pass    # unreadable: the snapshot below fails and is handled as before
         new = self._new_subscription(old.sid, old.principal, old.audience, old.campaign_id, scene_id)
         with new.lock:
             with self._lock:

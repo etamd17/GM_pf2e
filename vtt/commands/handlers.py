@@ -18,13 +18,14 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from vtt import fog
 from vtt import terrain as terrain_rules
 from vtt.projection import serializers as S
-from vtt.storage.models import VttEntity, VttFog, VttScene, VttTablePointer, VttTerrain
+from vtt.storage.models import (VttEntity, VttFog, VttImportedEntity, VttImportedScene, VttScene,
+                                 VttTablePointer, VttTerrain)
 
 ENTITY_DATA = {
     "token": ("x", "y", "size", "label", "color", "artAssetId", "actorId", "locked", "controllerIds", "vision"),
@@ -199,6 +200,26 @@ def table_clear(ctx: Context) -> dict[str, Any]:
     return {"kind": "table-pointer", "sceneId": scene.id}
 
 
+def scene_delete(ctx: Context) -> dict[str, Any]:
+    """Delete a scene and everything on it (batch e-7): its tokens, lights,
+    walls, templates, fog, terrain and /map import provenance. Version-checked.
+    Refused while the table shows it, exactly as unpublishing is: the GM clears
+    the table first, so a delete never changes what the table shows. A GM
+    subscribed to the scene is resynced into an empty snapshot (hub._recover).
+    Uploaded images stay: assets are shared by the campaign. Not undoable."""
+    scene = _lock_scene(ctx)
+    _check_version(ctx, "scene", scene.id, S.gm_scene(ctx.key, scene))
+    pointer = ctx.session.get(VttTablePointer, ctx.campaign_id, with_for_update=True)
+    if pointer is not None and pointer.scene_id == scene.id:
+        raise Rejection("rule-violation")
+    for model in (VttImportedEntity, VttImportedScene, VttEntity, VttFog, VttTerrain):
+        ctx.session.execute(delete(model).where(model.campaign_id == ctx.campaign_id,
+                                                model.scene_id == scene.id))
+    ctx.session.delete(scene)
+    ctx.session.flush()
+    return {"kind": "scene", "sceneId": ctx.scene_id}
+
+
 # --- fog (parity-1) ---------------------------------------------------------------------------
 
 def _fog_event(ctx: Context) -> dict[str, Any]:
@@ -370,6 +391,7 @@ POLICIES: dict[str, Policy] = {
     "scene.update": Policy(_scene_update_caps, scene_update),
     "table.show": Policy(_caps("scene.publish"), table_show),
     "table.clear": Policy(_caps("scene.publish"), table_clear, sizes_scene=False),
+    "scene.delete": Policy(_caps("scene.prepare"), scene_delete, sizes_scene=False),
     "token.create": Policy(_caps("scene.prepare"), _create("token")),
     "token.update": Policy(_caps("scene.prepare"), _update("token")),
     "token.move": Policy(_caps("token.move"), _update("token", ("x", "y"))),

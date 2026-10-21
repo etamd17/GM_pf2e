@@ -133,7 +133,7 @@ export function frameRulesHold(surface: FrameSurface, message: unknown): boolean
 // client checks its own outgoing commands with these before sending, so a
 // command the server would refuse as invalid-schema never leaves:
 // - expected repeats no (kind, id);
-// - an update, move, delete, table.show or table.clear names its target's
+// - an update, move, delete, table.show, table.clear or scene.delete names its target's
 //   expected version: ("scene", sceneId) for scene and table commands, the
 //   payload's entity otherwise;
 // - controllerIds repeat nothing;
@@ -142,6 +142,7 @@ const TARGETED: Record<string, string | null> = {
   'scene.update': 'scene',
   'table.show': 'scene',
   'table.clear': 'scene',
+  'scene.delete': 'scene',
   'token.update': 'token',
   'token.move': 'token',
   'light.update': 'light',

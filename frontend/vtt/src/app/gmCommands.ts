@@ -119,6 +119,13 @@ export function clearTable(scene: Of<'scene'>): Draft {
   return { type: 'table.clear', sceneId: scene.id, expected: expect(scene), payload: {} };
 }
 
+// Batch e-7: deletes the scene and everything on it, against its version.
+// Refused (rule-violation) while the table shows it: clear the table first.
+// Not undoable; a GM viewing it is resynced into an empty snapshot.
+export function deleteScene(scene: Of<'scene'>): Draft {
+  return { type: 'scene.delete', sceneId: scene.id, expected: expect(scene), payload: {} };
+}
+
 // --- fog (parity P1) --------------------------------------------------------------------------
 
 export type FogCell = [number, number];

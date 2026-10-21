@@ -17,7 +17,7 @@ const key = (item) => JSON.stringify([item?.kind, item?.id]);
 const distinct = (values) => new Set(values).size === values.length;
 
 const TARGETED = {
-  'scene.update': 'scene', 'table.show': 'scene', 'table.clear': 'scene',
+  'scene.update': 'scene', 'table.show': 'scene', 'table.clear': 'scene', 'scene.delete': 'scene',
   'token.update': 'token', 'token.move': 'token', 'light.update': 'light', 'wall.update': 'wall',
   'entity.delete': null,
   'fog.update': 'fog', 'fog.reset': 'fog',

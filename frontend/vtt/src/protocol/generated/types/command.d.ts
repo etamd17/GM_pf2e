@@ -8,6 +8,7 @@ export type Command =
   | SceneUpdate
   | TableShow
   | TableClear
+  | SceneDelete
   | TokenCreate
   | TokenUpdate
   | TokenMove
@@ -103,6 +104,22 @@ export interface TableClear {
    * @maxItems 1
    */
   expected: [] | [ExpectedVersion];
+  payload: EmptyPayload;
+}
+/**
+ * Delete a scene and everything on it (batch e-7). Version-checked: exactly one expected version, the scene's. Refused while the table shows the scene: clear the table first.
+ */
+export interface SceneDelete {
+  schemaVersion: 1;
+  commandId: OpaqueToken;
+  campaignId: Id;
+  sceneId: Id;
+  type: "scene.delete";
+  /**
+   * @minItems 1
+   * @maxItems 1
+   */
+  expected: [ExpectedVersion];
   payload: EmptyPayload;
 }
 export interface TokenCreate {
