@@ -1681,6 +1681,10 @@ def _harden_response(response):
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 DATA_DIR = os.environ.get('DATA_DIR', BASE_DIR)  # Railway volume mount or local
 MONSTER_DIR = os.path.join(DATA_DIR, 'monster_data')         # shared bestiary (system content, not per-campaign)
+# GM-made PF2e monsters (imported or authored) belong to their campaign
+# (2026-10-21): campaigns/<cid>/monster_data, keyed 'campaign/<file>' in
+# MONSTER_LIBRARY, loaded with the party on a switch and dropped on the next.
+CAMPAIGN_MONSTER_PREFIX = 'campaign/'
 DB_PATH = os.path.join(BASE_DIR, 'pf2e_database.db')         # ships with repo, read-only
 COMPENDIUM_DATA_DIR = os.path.join(BASE_DIR, 'compendium_data')
 
@@ -2224,6 +2228,7 @@ for _dir in [PARTY_DIR, ENCOUNTER_DIR, CAMPAIGN_ASSETS_DIR, HANDOUTS_DIR, os.pat
     os.makedirs(_dir, exist_ok=True)
 
 MONSTER_LIBRARY = {}
+CAMPAIGN_MONSTER_KEYS = set()   # the loaded campaign's own entries in MONSTER_LIBRARY
 PARTY_LIBRARY = {}
 PENDING_INITIATIVES = {}
 ACTIVE_ENCOUNTER = []
@@ -8151,6 +8156,47 @@ def load_compendium():
             else:
                 f['prereqs_struct'] = parse_feat_prereqs(f.get('prerequisites_raw', ''), _feat_name_lookup)
 
+def _custom_monster_target(fname):
+    """(folder, library key) for a GM-made monster: the loaded campaign's own
+    folder, or the shared one in the legacy flat layout (no campaigns)."""
+    cid = _loaded_campaign_id()
+    if not cid:
+        return MONSTER_DIR, fname
+    folder = _storage.campaign_monsters_dir(cid)
+    os.makedirs(folder, exist_ok=True)
+    return folder, CAMPAIGN_MONSTER_PREFIX + fname
+
+
+def _register_custom_monster(key, monster):
+    MONSTER_LIBRARY[key] = monster
+    if key.startswith(CAMPAIGN_MONSTER_PREFIX):
+        CAMPAIGN_MONSTER_KEYS.add(key)
+
+
+def _load_campaign_monsters():
+    """Swap the previous campaign's own monsters for the loaded campaign's."""
+    for key in CAMPAIGN_MONSTER_KEYS:
+        MONSTER_LIBRARY.pop(key, None)
+    CAMPAIGN_MONSTER_KEYS.clear()
+    cid = _loaded_campaign_id()
+    folder = _storage.campaign_monsters_dir(cid) if cid else None
+    if not folder or not os.path.isdir(folder):
+        return
+    for file in sorted(os.listdir(folder)):
+        if not file.endswith('.json') or file.startswith('_'):
+            continue
+        data, err = safe_load_json_file(os.path.join(folder, file))
+        if err:
+            print(f"[LOAD ERROR] Campaign monster {file}: {err}")
+            continue
+        try:
+            if isinstance(data, dict):
+                key = CAMPAIGN_MONSTER_PREFIX + file
+                _register_custom_monster(key, Monster(data, key))
+        except Exception as e:
+            print(f"[LOAD ERROR] Campaign monster {file}: {e}")
+
+
 def _load_shared_libraries():
     """The compendium and the bestiary: system content, shared by every campaign."""
     load_compendium()
@@ -8241,6 +8287,8 @@ def load_libraries(restore_autosave=True, *, shared=True):
             except Exception as e: 
                 print(f"[LOAD ERROR] Character {file}: {e}")
     _build_pc_file_cache()
+    # This campaign's own monsters, before the autosave restore that names them.
+    _load_campaign_monsters()
 
     # --- AUTO-RESTORE ENCOUNTER FROM AUTOSAVE ---
     # Skipped for the module-scope boot call (see docstring); runtime
@@ -27053,14 +27101,15 @@ def import_monster():
         
         # Save to monster_data
         safe_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', name)
-        file_path = os.path.join(MONSTER_DIR, f"{safe_name}.json")
+        folder, key = _custom_monster_target(f"{safe_name}.json")
+        file_path = os.path.join(folder, f"{safe_name}.json")
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2)
         
         # Try to load into library
         try:
-            m = Monster(data, f"{safe_name}.json")
-            MONSTER_LIBRARY[f"{safe_name}.json"] = m
+            m = Monster(data, key)
+            _register_custom_monster(key, m)
             return jsonify({"success": True, "name": name, "level": m.level})
         except Exception:
             app.logger.exception(
@@ -27086,11 +27135,11 @@ def _save_custom_monster(monster_json, name):
     """Persist a GM-authored monster to the bestiary (atomic write) and register
     it in MONSTER_LIBRARY for reuse. Returns (filename, Monster)."""
     safe_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', name) or 'Custom_Monster'
-    fname = f"{safe_name}.json"
-    _atomic_write_json(os.path.join(MONSTER_DIR, fname), monster_json, indent=2)
-    m = Monster(monster_json, fname)
-    MONSTER_LIBRARY[fname] = m
-    return fname, m
+    folder, key = _custom_monster_target(f"{safe_name}.json")
+    _atomic_write_json(os.path.join(folder, f"{safe_name}.json"), monster_json, indent=2)
+    m = Monster(monster_json, key)
+    _register_custom_monster(key, m)
+    return key, m
 
 
 @app.route('/api/add_custom_monster', methods=['POST'])
