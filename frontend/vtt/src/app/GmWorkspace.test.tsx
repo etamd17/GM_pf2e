@@ -271,12 +271,15 @@ describe('inspector and scene bar', () => {
     });
   });
 
-  it('publishes, shows on the table and clears it, against the scene version', () => {
+  it('renames and shows on TV against the scene version without a separate publish', async () => {
     const { issued } = setup();
-    fireEvent.click(screen.getByRole('button', { name: 'Unpublish' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Show on table' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Clear table' }));
-    expect(issued.map((i) => (i.draft as { type: string }).type)).toEqual(['scene.update', 'table.show', 'table.clear']);
+    await act(async () => {});
+    fireEvent.click(screen.getByText('Scene menu'));
+    fireEvent.change(screen.getByLabelText('Scene name'),{target:{value:'New hall'}});
+    fireEvent.click(screen.getByRole('button',{name:'Save name'}));
+    fireEvent.click(screen.getByRole('button', { name: 'Show on TV' }));
+    expect(issued.map((i) => (i.draft as { type: string }).type)).toEqual(['scene.update', 'table.show']);
+    expect(issued[0]?.draft).toMatchObject({payload:{name:'New hall'}});
     for (const i of issued) expect((i.draft as { expected: unknown }).expected).toEqual([{ kind: 'scene', id: 'scene_a', version: V1 }]);
   });
 
@@ -288,7 +291,7 @@ describe('inspector and scene bar', () => {
     act(() => interaction.onTokenDrop?.('tok_hero', 160, 96));
     act(() => useCommands.getState().notify({ kind: 'applied', commandId: 'cmd_0000000000000001' } as never));
     expect(calls()).toBe(before);
-    fireEvent.click(screen.getByRole('button', { name: 'Show on table' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Show on TV' }));
     expect((issued[1]?.draft as { type: string }).type).toBe('table.show');
     act(() => useCommands.getState().notify({ kind: 'applied', commandId: 'cmd_0000000000000002' } as never));
     expect(calls()).toBe(before + 1);
@@ -326,7 +329,7 @@ describe('inspector and scene bar', () => {
     act(() => interaction.onClick?.({ x: 96, y: 96 }, { kind: 'token', id: 'tok_hero' }));
     act(() => useConnection.getState().setStatus('resyncing'));
     expect((screen.getByLabelText('Label') as HTMLInputElement).disabled).toBe(true);
-    expect((screen.getByRole('button', { name: 'Show on table' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Show on TV' }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole('button', { name: 'Place' }) as HTMLButtonElement).disabled).toBe(true);
   });
 

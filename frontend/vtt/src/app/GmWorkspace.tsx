@@ -226,21 +226,30 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
   }, [step]);
 
   // --- scenes -------------------------------------------------------------------------------
+  const sceneListGeneration = useRef(0);
   const refreshScenes = useCallback(async () => {
     if (!live) return;
+    const generation = ++sceneListGeneration.current;
     try {
       const response = await fetch(`/vtt/api/scenes?campaignId=${encodeURIComponent(live.boot.campaignId)}`, {
         credentials: 'same-origin',
       });
-      if (response.ok) setScenes(((await response.json()) as { scenes: SceneSummary[] }).scenes);
+      const list = response.ok ? ((await response.json()) as {scenes:SceneSummary[]}).scenes : null;
+      if (generation === sceneListGeneration.current) setScenes(list);
     } catch {
-      /* the picker keeps its last list */
+      if (generation === sceneListGeneration.current) setScenes(null);
     }
   }, [live]);
 
   useEffect(() => {
     void refreshScenes();
   }, [refreshScenes, sceneEntity?.version]);
+
+  // Other GMs can move the TV pointer without changing the scene being edited.
+  useEffect(() => {
+    const timer = window.setInterval(() => {void refreshScenes();},5000);
+    return () => {window.clearInterval(timer);++sceneListGeneration.current;};
+  },[refreshScenes]);
 
   // Showing or clearing the table moves the table pointer without changing
   // this scene, so the picker's "(on the table)" would go stale: refetch once
@@ -501,7 +510,7 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
     <div className={`vtt-gm ${railOpen ? '' : 'is-rail-collapsed'} ${dockOpen ? '' : 'is-dock-collapsed'}`}>
       <SceneBar scenes={live ? scenes : null} scene={sceneEntity ?? null} fallbackName={sceneName}
         enabled={inputEnabled} onOpen={openScene} onNew={newScene}
-        onPublish={() => sceneEntity && issue(updateScene(sceneEntity, { published: !sceneEntity.published }))}
+        onRename={name => sceneEntity && issue(updateScene(sceneEntity, { name }))}
         onShow={() => sceneEntity && issue(showOnTable(sceneEntity))}
         onClear={() => sceneEntity && issue(clearTable(sceneEntity))}
         canUndo={undoState.canUndo} canRedo={undoState.canRedo} nextUndo={undoState.next}

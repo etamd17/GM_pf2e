@@ -64,14 +64,14 @@ it('guidance uses explicit create and pairing actions', () => {
   expect(onPair).toHaveBeenCalledOnce();
 });
 it('scene navigation does not publish or change the TV, with undo always present', () => {
-  const onOpen = vi.fn(), onShow = vi.fn(), onPublish = vi.fn();
+  const onOpen = vi.fn(), onShow = vi.fn(), onRename = vi.fn();
   render(<SceneBar scenes={[{id:'next', name:'Next room', published:false, onTable:false}]} scene={null}
     fallbackName="Empty" enabled={false} canUndo={false} canRedo={false} nextUndo={null}
-    onOpen={onOpen} onShow={onShow} onPublish={onPublish} onNew={vi.fn()} onClear={vi.fn()} onUndo={vi.fn()} onRedo={vi.fn()}>{null}</SceneBar>);
-  fireEvent.change(screen.getByLabelText('Scene'), {target: {value:'next'}});
+    onOpen={onOpen} onShow={onShow} onRename={onRename} onNew={vi.fn()} onClear={vi.fn()} onUndo={vi.fn()} onRedo={vi.fn()}>{null}</SceneBar>);
+  fireEvent.change(screen.getByLabelText('Editing'), {target: {value:'next'}});
   expect(onOpen).toHaveBeenCalledWith('next');
   expect(onShow).not.toHaveBeenCalled();
-  expect(onPublish).not.toHaveBeenCalled();
+  expect(onRename).not.toHaveBeenCalled();
   expect((screen.getByRole('button', {name:'Undo'}) as HTMLButtonElement).disabled).toBe(true);
   expect((screen.getByRole('button', {name:'Redo'}) as HTMLButtonElement).disabled).toBe(true);
 });

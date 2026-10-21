@@ -1,27 +1,49 @@
-import type { ReactNode } from 'react';
+import { useState,type ReactNode } from 'react';
 import type { GmEntity } from '../../protocol/frames';
 interface Summary { id: string; name: string; published: boolean; onTable: boolean }
 interface Props {
   scenes: readonly Summary[] | null;
   scene: Extract<GmEntity, { kind: 'scene' }> | null;
   fallbackName: string; enabled: boolean; canUndo: boolean; canRedo: boolean; nextUndo: string | null;
-  onOpen(id: string): void; onNew(): void; onPublish(): void; onShow(): void; onClear(): void;
+  onOpen(id: string): void; onNew(): void; onRename(name:string): void; onShow(): void; onClear(): void;
   onUndo(): void; onRedo(): void; children: ReactNode;
 }
-// Presentation only: navigation and TV commands remain separate callbacks.
+function SceneMenu({scene,enabled,onRename}:{scene:NonNullable<Props['scene']>;enabled:boolean;onRename:Props['onRename']}) {
+  const [name,setName]=useState(scene.name);
+  const trimmed=name.trim();
+  return <details className="vtt-scene-menu"><summary>Scene menu</summary>
+    <div className="vtt-scene-menu-content"><form onSubmit={event=>{event.preventDefault();if(enabled && trimmed && trimmed !== scene.name) onRename(trimmed);}}>
+      <label className="vtt-field">Scene name<input value={name} maxLength={120} disabled={!enabled}
+        onChange={event=>setName(event.target.value)} /></label>
+      <button className="vtt-topbar-btn" disabled={!enabled || !trimmed || trimmed === scene.name}>Save name</button>
+    </form>
+    <button className="vtt-topbar-btn" disabled title="Scene deletion is not available yet">Delete scene</button>
+    <p className="vtt-empty">Scene deletion is not available yet.</p></div>
+  </details>;
+}
+// Navigation and TV writes deliberately remain separate callbacks.
 export function SceneBar(p: Props) {
+  const onTv=p.scenes?.find(s=>s.onTable);
+  const known=p.scenes !== null;
+  function show() {
+    if(!p.enabled || !p.scene || !known) return;
+    if(onTv && onTv.id !== p.scene.id && !window.confirm(`Replace “${onTv.name}” on the TV with “${p.scene.name}”?`)) return;
+    p.onShow();
+  }
   return <header className="vtt-topbar">
     <span className="vtt-brand">VTT</span>
-    {p.scenes ? <select className="vtt-scene-picker" aria-label="Scene" value={p.scene?.id ?? ''}
-      onChange={(e) => e.target.value && p.onOpen(e.target.value)}>
+    <label className="vtt-editing">Editing {p.scenes ? <select className="vtt-scene-picker" aria-label="Editing" value={p.scene?.id ?? ''}
+      onChange={e=>e.target.value && e.target.value !== p.scene?.id && p.onOpen(e.target.value)}>
       {!p.scene && <option value="">No scene</option>}
-      {p.scenes.map((s) => <option key={s.id} value={s.id}>{s.name}{s.onTable ? ' (on the table)' : s.published ? '' : ' (prep)'}</option>)}
-    </select> : <span className="vtt-scene-name">{p.scene?.name ?? p.fallbackName}</span>}
+      {p.scene && !p.scenes.some(s=>s.id===p.scene!.id) && <option value={p.scene.id}>{p.scene.name}</option>}
+      {p.scenes.map(s=><option key={s.id} value={s.id}>{s.name}{s.onTable ? ' (On TV)' : ''}</option>)}
+    </select> : <span className="vtt-scene-name">{p.scene?.name ?? p.fallbackName}</span>}</label>
+    <span className="vtt-tv-scene" aria-label="On TV" role="status">On TV: {known ? (onTv?.name ?? 'Nothing') : 'Unavailable'}</span>
     <button className="vtt-topbar-btn" disabled={!p.enabled} onClick={p.onNew}>New scene</button>
     {p.scene && <>
-      <button className="vtt-topbar-btn" disabled={!p.enabled} onClick={p.onPublish}>{p.scene.published ? 'Unpublish' : 'Publish'}</button>
-      <button className="vtt-topbar-btn" disabled={!p.enabled} onClick={p.onShow}>Show on table</button>
-      <button className="vtt-topbar-btn" disabled={!p.enabled} onClick={p.onClear}>Clear table</button>
+      <button className="vtt-topbar-btn" disabled={!p.enabled || !known} onClick={show}>Show on TV</button>
+      <button className="vtt-topbar-btn" disabled={!p.enabled || !known || !onTv} onClick={p.onClear}>Clear TV</button>
+      <SceneMenu key={p.scene.id} scene={p.scene} enabled={p.enabled} onRename={p.onRename}/>
     </>}
     <button className="vtt-topbar-btn" disabled={!p.enabled || !p.canUndo} onClick={p.onUndo}
       title={p.nextUndo ? `Undo ${p.nextUndo} (Ctrl+Z)` : 'Undo (Ctrl+Z)'}>Undo</button>

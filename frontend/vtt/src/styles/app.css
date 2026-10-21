@@ -533,3 +533,11 @@ button:focus-visible,
 .vtt-bestiary-results { padding-left: 0; list-style: none; }
 .vtt-bestiary-results li { padding-block: 8px; border-bottom: 1px solid var(--border-card); }
 .vtt-bestiary-results span { display: block; margin-bottom: 4px; overflow-wrap: anywhere; }
+
+/* Scene navigation: the editing target is independent of the TV pointer. */
+.vtt-editing { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.vtt-tv-scene { max-width: 220px; overflow-wrap: anywhere; color: var(--gilt-200); }
+.vtt-scene-menu { position: relative; }
+.vtt-scene-menu summary { cursor: pointer; padding: 6px; }
+.vtt-scene-menu-content { position: absolute; z-index: 30; top: 100%; right: 0; width: 260px; padding: 10px; border: 1px solid var(--border-rule); background: var(--bg-card); }
+.vtt-scene-menu form { display: grid; gap: 6px; }

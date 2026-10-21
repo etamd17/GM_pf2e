@@ -458,8 +458,22 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
     gm.locator(".vtt-scene-picker").select_option("scene_docks")
     gm.wait_for_url("**sceneId=scene_docks**")
     gm.get_by_text("live", exact=True).wait_for()
-    gm.get_by_role("button", name="Show on table").click()
+    expect(gm.get_by_label("On TV", exact=True)).to_contain_text("Hall")
+    # Editing the Docks alone must not publish or move the TV.
+    assert probe(tv)["scene"]["width"] == 1280
+    gm.get_by_text("Scene menu", exact=True).click()
+    gm.get_by_label("Scene name", exact=True).fill("Docks berth")
+    gm.get_by_role("button", name="Save name", exact=True).click()
+    expect(gm.get_by_label("Editing", exact=True)).to_contain_text("Docks berth")
+    assert probe(tv)["scene"]["width"] == 1280
+    gm.once("dialog", lambda dialog: dialog.dismiss())
+    gm.get_by_role("button", name="Show on TV").click()
+    assert probe(tv)["scene"]["width"] == 1280
+    gm.once("dialog", lambda dialog: dialog.accept())
+    gm.get_by_role("button", name="Show on TV").click()
     wait_for(tv, lambda s: s["scene"] is not None and s["scene"]["width"] == 1600, "the TV follows to the Docks")
+    expect(gm.get_by_label("On TV", exact=True)).to_contain_text("Docks berth")
+    shoot(gm, "u3-editing-and-tv")
     assert probe(tv)["vision"]["lighting"] is False and probe(tv)["vision"]["drawn"] is False
 
     # --- dynamic lighting on the TV (E-6) ---------------------------------------------------------
@@ -469,7 +483,9 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
     gm.locator(".vtt-scene-picker").select_option("scene_dark")
     gm.wait_for_url("**sceneId=scene_dark**")
     gm.get_by_text("live", exact=True).wait_for()
-    gm.get_by_role("button", name="Show on table").click()
+    assert probe(tv)["scene"]["width"] == 1600
+    gm.once("dialog", lambda dialog: dialog.accept())
+    gm.get_by_role("button", name="Show on TV").click()
     wait_for(tv, lambda s: s["scene"] is not None and s["vision"]["drawn"] is True, "the TV draws the darkness")
     assert probe(tv)["vision"] == {"lighting": True, "drawn": True, "sources": 1, "occluders": 1, "builds": 1}
     vision = probe(gm)["vision"]
@@ -506,6 +522,9 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
              "the imported background is drawn on the GM page")
     assert any(t["label"] == "Skeleton" for t in probe(gm)["tokens"])
     assert probe(gm)["vision"]["lighting"] is True              # /map's dynamic lighting came across (E-6)
+    assert probe(tv)["scene"]["width"] == 1280                  # editing the import never shows it on TV
+    assert not any(t["label"] == "Skeleton" for t in probe(tv)["tokens"])
+    expect(gm.get_by_label("On TV", exact=True)).to_contain_text("Dark Vault")
 
     assert gm.errors == [] and tv.errors == []
 
