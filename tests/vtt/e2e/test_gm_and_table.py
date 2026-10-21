@@ -81,6 +81,7 @@ def choose_tool(page, label):
 
 
 def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
+    from playwright.sync_api import expect
     gm = screens("gm")
     gm.goto(site.gm_url("scene_hall"))
     gm.get_by_text("live", exact=True).wait_for()
@@ -266,6 +267,9 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
     status, text = gm.evaluate(tracker_post, ["/api/add_custom_monster", {"name": "Zombie Shambler", "hp": 20}, False])
     assert status == 200, text
     zombie = "cmb_" + json.loads(text)["instance_id"]
+    # Wait for the roster mirror before using a button bound to its turn token.
+    gm.get_by_role("tab", name="Creatures", exact=True).click()
+    gm.get_by_role("listitem").filter(has_text="Zombie Shambler").first.wait_for()
     turn = """async (body) => {
         const boot = JSON.parse(document.getElementById('vtt-boot').textContent);
         const response = await fetch('/vtt/api/turn', {method: 'POST', body: JSON.stringify({campaignId: boot.campaignId, ...body}),
@@ -277,6 +281,14 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
     status, now = gm.evaluate(turn, {"direction": "next", "expectedActorId": hero, "expectedRound": 99999,
                                      "turnToken": "old-1"})
     assert status == 409 and now["outcome"] == "stale" and now["actorId"] == hero, now
+    shown = {"expectedActorId": hero, "expectedRound": now["round"], "turnToken": now["turnToken"]}
+    # The new turn strip consumes the same published action; only the mirror
+    # updates the label and the TV's active outline.
+    gm.get_by_role("button", name="Next turn", exact=True).click()
+    wait_for(tv, lambda s: (token(s, "tok_hero")["live"] or {}).get("active") is False, "Next in the turn strip")
+    gm.get_by_role("button", name="Previous turn", exact=True).click()
+    wait_for(tv, lambda s: (token(s, "tok_hero")["live"] or {}).get("active") is True, "Previous in the turn strip")
+    status, now = gm.evaluate(turn, {"direction": "next", "expectedActorId": hero, "expectedRound": 99999, "turnToken": "old-1"})
     shown = {"expectedActorId": hero, "expectedRound": now["round"], "turnToken": now["turnToken"]}
     status, moved = gm.evaluate(turn, {"direction": "next", **shown})
     assert status == 200 and moved["outcome"] == "ok" and moved["actorId"] == zombie, moved
@@ -321,6 +333,13 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
     status, done = gm.evaluate(condition, {**skeleton, "operation": "remove", "expectedValue": 1})
     assert status == 200 and done["value"] == 0, done
     wait_for(gm, lambda s: not ((token(s, "tok_hero")["live"] or {}).get("conditions") or []), "and its removal")
+    click_token(gm, "tok_hero")
+    gm.get_by_text("Conditions", exact=True).click()
+    gm.get_by_role("button", name="Increase Frightened", exact=True).click()
+    wait_for(tv, lambda s: "Frightened 1" in (token(s, "tok_hero")["live"] or {}).get("conditions", []), "condition picker increases Frightened")
+    gm.get_by_role("button", name="Decrease Frightened", exact=True).click()
+    wait_for(tv, lambda s: not (token(s, "tok_hero")["live"] or {}).get("conditions"), "condition picker decreases Frightened")
+    shoot(gm, "consumers-conditions")
 
     # --- ping and ruler on the TV (beta-1) -------------------------------------------------------
     # The hero's room is revealed; the right half, past the wall at x=640, is still fogged.
@@ -411,6 +430,30 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
                                                                      "damageType": "keen"}])
     assert status == 422 and wrong["outcome"] == "invalid", wrong          # Cosmere's damage type
 
+    # Review the same real encounter through the template panel. The fresh
+    # goblin has no token yet, so the GM explicitly includes it in the list.
+    current_burst = probe(gm)["templates"][0]
+    click_scene(gm, current_burst["x"] + 2 * 64, current_burst["y"])
+    gm.get_by_role("region", name="Area effect review").wait_for()
+    gm.get_by_label("Target Goblin Warrior", exact=True).wait_for()
+    gm.get_by_role("button", name="Refresh targets", exact=True).click()
+    gm.get_by_label("Target Goblin Warrior", exact=True).check()
+    gm.get_by_label("Area amount", exact=True).fill("1")
+    with gm.expect_response(lambda r: r.url.endswith("/vtt/api/area-effect") and r.request.method == "POST") as applied:
+        gm.get_by_role("button", name="Apply reviewed effect", exact=True).click()
+    assert applied.value.json()["results"] == [{"actorId": fresh["actorId"], "outcome": "applied", "net": 1, "defeated": False}]
+    gm.get_by_text("Effect processed. Changes arrive from the tracker.", exact=True).wait_for()
+    shoot(gm, "consumers-area")
+
+    # The bestiary UI adds another goblin and queues exactly one linked token.
+    gm.get_by_role("tab", name="Creatures", exact=True).click()
+    gm.get_by_label("Search bestiary", exact=True).fill("goblin warrior")
+    gm.get_by_role("button", name="Search bestiary", exact=True).click()
+    gm.get_by_role("button", name="Add and place Goblin Warrior", exact=True).click()
+    wait_for(gm, lambda s: any(t["label"] == "Goblin Warrior" and t.get("live") is not None for t in s["tokens"]), "bestiary UI places a linked creature")
+    assert gm.evaluate(count_in_tracker, "Goblin Warrior") == 2
+    shoot(gm, "consumers-bestiary")
+
     # --- the table moves to another scene -------------------------------------------------------
     gm.locator(".vtt-scene-picker").select_option("scene_docks")
     gm.wait_for_url("**sceneId=scene_docks**")
@@ -432,6 +475,23 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
     vision = probe(gm)["vision"]
     assert vision["lighting"] is True and vision["drawn"] is False
     shoot(tv, "e6-tv-dark")
+    gm.get_by_role("tab", name="Scene", exact=True).click()
+    gm.get_by_label("Preview party vision on this GM screen", exact=True).check()
+    wait_for(gm, lambda s: s["vision"]["drawn"] is True, "local GM vision preview")
+    gm.get_by_label("Preview party vision on this GM screen", exact=True).uncheck()
+    wait_for(gm, lambda s: s["vision"]["drawn"] is False, "GM preview off")
+    gm.get_by_label("Lighting on the TV", exact=True).click()
+    wait_for(tv, lambda s: s["vision"]["lighting"] is False, "Scene UI turns TV lighting off")
+    expect(gm.get_by_label("Lighting on the TV", exact=True)).not_to_be_checked()
+    gm.get_by_label("Lighting on the TV", exact=True).click()
+    wait_for(tv, lambda s: s["vision"]["drawn"] is True, "Scene UI restores TV lighting")
+    expect(gm.get_by_label("Lighting on the TV", exact=True)).to_be_checked()
+    shoot(gm, "consumers-lighting")
+    for width in (1440, 1024):
+        gm.set_viewport_size({"width": width, "height": 900})
+        assert gm.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        shoot(gm, f"consumers-layout-{width}")
+    gm.set_viewport_size({"width": 1280, "height": 800})
 
     # --- import the /map scene, with its background ---------------------------------------------
     gm.get_by_role("tab", name="Import", exact=True).click()

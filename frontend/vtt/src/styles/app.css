@@ -517,3 +517,19 @@ button:focus-visible,
   .vtt-gm.is-rail-collapsed { grid-template-columns: 72px minmax(0, 1fr) 240px; }
   .vtt-first-run { margin: 12px; padding: 16px; }
 }
+.vtt-gm { grid-template-rows: minmax(44px, auto) auto minmax(0, 1fr) minmax(56px, auto); }
+.vtt-turn-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; width: 100%; padding-block: 8px; }
+.vtt-turn-controls [role=status] { font-size: 12px; color: var(--text-secondary); }
+.vtt-action-panel { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border-card); }
+.vtt-action-panel h3 { margin: 0 0 8px; color: var(--gilt-200); font-size: 15px; }
+.vtt-action-panel summary { cursor: pointer; color: var(--gilt-200); padding-block: 8px; }
+.vtt-action-panel input:not([type=checkbox]), .vtt-action-panel select { min-width: 0; width: 100%; }
+.vtt-action-panel .vtt-field { margin-block: 8px; }
+.vtt-action-panel fieldset { min-width: 0; margin-block: 12px; border: 1px solid var(--border-card); }
+.vtt-condition-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; align-items: center; gap: 4px; margin-block: 6px; }
+.vtt-condition-row button { padding: 4px 8px; }
+.vtt-action-status { grid-column: 1 / -1; font-size: 12px; color: var(--text-secondary); }
+.vtt-action-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-block: 8px; }
+.vtt-bestiary-results { padding-left: 0; list-style: none; }
+.vtt-bestiary-results li { padding-block: 8px; border-bottom: 1px solid var(--border-card); }
+.vtt-bestiary-results span { display: block; margin-bottom: 4px; overflow-wrap: anywhere; }

@@ -31,6 +31,7 @@ vi.mock('../scene/SceneRuntime', () => ({
     }
     setScene() {}
     setTransients() {}
+    setVisionPreview() {}
     setSelection(s: unknown) {
       this.selection = s;
     }
@@ -76,7 +77,7 @@ function seed(entities: GmEntity[]) {
 function setup() {
   const issued: Array<{ draft: Record<string, unknown>; overlay: unknown }> = [];
   const live = {
-    boot: { campaignId: 'camp_a', sceneId: 'scene_a', csrf: 'x' },
+    boot: { campaignId: 'camp_a', sceneId: 'scene_a', csrf: 'x', memberId:'gm_a', system:'pf2e' },
     issue: (draft: Record<string, unknown>, overlay: unknown) => {
       issued.push({ draft, overlay });
       return `cmd_${issued.length.toString().padStart(16, '0')}`;
@@ -123,6 +124,17 @@ it('shows first-run guidance only after a successful empty scene list, not on lo
 });
 
 describe('map input', () => {
+  it('removes bestiary results when access ends', async () => {
+    vi.stubGlobal('fetch',vi.fn(async (url:string) => ({ok:true,json:async () => url.includes('/bestiary?') ?
+      {outcome:'ok',encounterToken:'enc-1',results:[{ref:'secret.json',name:'Private adversary',level:1,size:1}]} : {scenes:[]}})));
+    setup();fireEvent.click(screen.getByRole('tab',{name:'Creatures'}));
+    fireEvent.change(screen.getByLabelText('Search bestiary'),{target:{value:'private'}});
+    fireEvent.click(screen.getByRole('button',{name:'Search bestiary'}));
+    await screen.findByRole('button',{name:'Add and place Private adversary'});
+    act(() => useConnection.getState().setStatus('revoked'));
+    expect(screen.queryByRole('button',{name:'Add and place Private adversary'})).toBeNull();
+    expect(screen.queryByText(/Private adversary/)).toBeNull();
+  });
   it('the Door sub-tool creates one closed segment and changing tools cancels its draft', () => {
     const {issued,interaction,runtime} = setup();
     clickTool('Walls');
@@ -657,7 +669,7 @@ describe('tracker links (parity P3)', () => {
   } as Of<'actor'>;
   const skeleton = {
     kind: 'actor', id: 'cmb_skel', version: V1, name: 'Skeleton', pc: false, hp: 7, maxHp: 20,
-    conditions: [], active: true, hidden: true, status: 'Wounded',
+    conditions: [], active: true, hidden: true, status: 'Wounded', round:2,turnToken:'turn-1',encounterToken:'enc-1',
   } as Of<'actor'>;
   const lastDraft = (issued: Array<{ draft: Record<string, unknown> }>) =>
     issued.at(-1)?.draft as { type: string; payload: Record<string, unknown> };
@@ -672,12 +684,12 @@ describe('tracker links (parity P3)', () => {
     expect(lastDraft(issued)).toMatchObject({ type: 'token.update', payload: { id: 'tok_hero', actorId: 'chr_valeros' } });
   });
 
-  it('the tray says how many are fighting and whose turn it is', () => {
+  it('the tray shows the active combatant and round from the turn mirror', () => {
     act(() => seed([scene, hero, wall, valeros]));
     setup();
     expect(screen.getByText('No encounter running.')).toBeTruthy();
     act(() => seed([scene, hero, wall, valeros, skeleton, { ...skeleton, id: 'cmb_two', name: 'Zombie', active: false }]));
-    expect(screen.getByText("Encounter: 2 combatants, Skeleton's turn.")).toBeTruthy();
+    expect(screen.getByText('Skeleton, round 2')).toBeTruthy();
   });
 
   it('shows the linked actor, and keeps a link to an actor that left the tracker visible', () => {

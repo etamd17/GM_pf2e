@@ -1,4 +1,11 @@
 import { Inspector } from './Inspector';
+import { TurnControls } from './controls/TurnControls';
+import { ConditionPicker } from './controls/ConditionPicker';
+import { BestiaryPanel } from './controls/BestiaryPanel';
+import { AreaEffectPanel,createAreaAttemptStore } from './controls/AreaEffectPanel';
+import { LightingControls,TokenVisionControls } from './controls/LightingControls';
+import { asCreature,type AddedCreature } from './actions/bestiary';
+import { freeSpotNear,placeCreature } from './actions/creatures';
 export { Inspector } from './Inspector';
 import { SceneBar } from './shell/SceneBar';
 import { WorkspaceSidebar, useSidebarTab } from './shell/WorkspaceSidebar';
@@ -96,6 +103,8 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
   }, [live]);
   const lastApplied = useCommands((s) => s.lastApplied);
   const [zoom, setZoom] = useState(1);
+  const [areaAttempts] = useState(createAreaAttemptStore);
+  const [visionPreview,setVisionPreview] = useState(false);
   const viewport = useMemo(createViewportController, []);
   const [railOpen, setRailOpen] = useState(true);
   const [dockOpen, setDockOpen] = useState(true);
@@ -479,6 +488,14 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
   }
 
   const visibleTokens = scene?.tokens ?? [];
+  const allEntities = [...entities.values()];
+  const linkedActor = selected?.kind === 'token' ? actorEntities.find(a => a.id === selected.actorId) : undefined;
+  function placeAddedCreature(added:AddedCreature):boolean {
+    if (!inputEnabled || !scene || !sceneEntity) return false;
+    const creature = asCreature(added);
+    const point = freeSpotNear({x:scene.width / 2,y:scene.height / 2},creature.size,scene);
+    return !!issue(placeCreature(creature,point,scene).draft);
+  }
 
   return (
     <div className={`vtt-gm ${railOpen ? '' : 'is-rail-collapsed'} ${dockOpen ? '' : 'is-dock-collapsed'}`}>
@@ -513,6 +530,7 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
           <MapHost
             surface="gm"
             viewportController={viewport}
+            visionPreview={visionPreview}
             scene={scene}
             label={`Map: ${sceneEntity?.name ?? sceneName}`}
             onViewportChange={(v) => setZoom(v.scale)}
@@ -546,25 +564,31 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
       <WorkspaceSidebar open={dockOpen} onToggle={() => setDockOpen((v) => !v)} tab={sidebarTab} onTab={setSidebarTab}
         panels={{
           inspector: selected && ['token', 'wall', 'light', 'template'].includes(selected.kind) ?
-            <Inspector entity={selected} enabled={inputEnabled} onIssue={issue} onDeleted={() => setSelection(null)}
-              actors={actorEntities} {...(live ? { boot: live.boot } : {})} /> :
+            <><Inspector entity={selected} enabled={inputEnabled} onIssue={issue} onDeleted={() => setSelection(null)}
+              actors={actorEntities} {...(live ? { boot: live.boot } : {})} />
+              {live && linkedActor && <ConditionPicker key={`${live.boot.campaignId}:${linkedActor.id}`} boot={live.boot} actor={linkedActor} enabled={inputEnabled} />}
+              {selected.kind === 'token' && sceneEntity && <TokenVisionControls key={selected.id} token={selected} scene={sceneEntity} enabled={inputEnabled} onIssue={issue} />}
+              {live && selected.kind === 'template' && sceneEntity && <AreaEffectPanel attempts={areaAttempts} key={`${sceneEntity.id}:${selected.id}`} boot={live.boot} template={selected} scene={sceneEntity} entities={allEntities} enabled={inputEnabled} />}
+            </> :
             <p className="vtt-empty">Select a token, light, wall or template to inspect it.</p>,
           creatures: <section><h2 className="vtt-inspector-title">Creatures</h2>
             <p className="vtt-empty">Party and encounter from the tracker. Select a token to link it in Inspector.</p>
             {actorEntities.length ? <ul>{actorEntities.map((a) => <li key={a.id}>{a.name}{a.pc ? ' (party)' : ''}</li>)}</ul> :
               <p className="vtt-empty">No creatures in the tracker yet.</p>}
-            <a href="/tracker" target="_blank" rel="noopener noreferrer">Open tracker</a></section>,
-          scene: <Inspector entity={null} enabled={inputEnabled} onIssue={issue} onDeleted={() => {}}
+            <a href="/tracker" target="_blank" rel="noopener noreferrer">Open live tracker</a>
+            {live && !isTerminal(status) && <BestiaryPanel key={live.boot.campaignId} boot={live.boot} entities={allEntities} enabled={inputEnabled && !!sceneEntity} onPlace={placeAddedCreature} />}</section>,
+          scene: <><Inspector entity={null} enabled={inputEnabled} onIssue={issue} onDeleted={() => {}}
             scene={sceneEntity ?? null} fog={fogEntity ?? null} terrain={terrainEntity ?? null}
-            {...(live ? { boot: live.boot } : {})} />,
+            {...(live ? { boot: live.boot } : {})} />
+            {sceneEntity && <LightingControls key={sceneEntity.id} scene={sceneEntity} enabled={inputEnabled} preview={visionPreview} onPreview={setVisionPreview} onIssue={issue} />}</>,
           tv: live ? <><p className="vtt-empty">Pairing authorizes a display. It does not report whether that display is online.</p>
             <PairingPanel boot={live.boot} /></> : <p className="vtt-empty">Connect to a campaign to pair a TV.</p>,
           import: live ? <ImportPanel boot={live.boot} onImported={() => void refreshScenes()} /> :
             <p className="vtt-empty">Connect to a campaign to import scenes.</p>,
         }} />
 
-      <footer className="vtt-tray" aria-label="Initiative and chat">
-        <EncounterLine actors={actorEntities} />
+      <footer className="vtt-tray" aria-label="Encounter">
+        {live ? <TurnControls key={live.boot.campaignId} boot={live.boot} entities={allEntities} enabled={inputEnabled} /> : <EncounterLine actors={actorEntities} />}
       </footer>
     </div>
   );

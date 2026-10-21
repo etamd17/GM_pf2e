@@ -22,6 +22,7 @@ vi.mock('../scene/SceneRuntime', () => ({
     setTransients() {}
     setSelection() {}
     setWallDraft() {}
+    setVisionPreview() {}
     init() {
       return Promise.resolve();
     }
