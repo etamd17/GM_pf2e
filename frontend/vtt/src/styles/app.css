@@ -491,3 +491,20 @@ button:focus-visible,
 .vtt-image-picker input[hidden] {
   display: none;
 }
+
+/* U-1 shell: preserve the map's available space and keep panel state mounted. */
+.vtt-gm { grid-template-rows: minmax(44px, auto) auto minmax(0, 1fr) 56px; }
+.vtt-topbar { flex-wrap: wrap; padding-block: 6px; gap: 6px; }
+.vtt-scene-picker { max-width: 200px; min-width: 100px; }
+.vtt-sidebar-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 12px 0; }
+.vtt-sidebar-tabs [aria-selected="true"] { color: var(--gilt-200); border-color: var(--gilt-300); background: var(--ink-800); }
+.vtt-dock [hidden] { display: none !important; }
+.vtt-first-run { position: relative; z-index: 2; max-width: 520px; margin: 40px auto; padding: 24px; background: var(--ink-900); border: 1px solid var(--border-card); border-radius: 10px; }
+.vtt-first-run h1 { font-family: var(--font-display); font-size: 22px; }
+.vtt-first-run li { margin-block: 12px; }
+.vtt-guidance-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+@media (max-width: 1000px) {
+  .vtt-gm { grid-template-columns: 96px minmax(0, 1fr) 240px; }
+  .vtt-gm.is-rail-collapsed { grid-template-columns: 72px minmax(0, 1fr) 240px; }
+  .vtt-first-run { margin: 12px; padding: 16px; }
+}

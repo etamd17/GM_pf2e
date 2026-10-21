@@ -81,7 +81,8 @@ old["background"] = {"filename": old["id"] + ".png"}
 legacy.add_token(old, name="Skeleton", x=210, y=210)
 old.setdefault("settings", {})["dynamic_lighting"] = True     # E-6: comes across
 legacy.save_scene(cid, old)
-print("E2E_RESULT=" + json.dumps({"cid": cid, "legacy": old["id"]}))
+empty = campaigns.create_campaign("Empty VTT harness", "pf2e", gm["id"])
+print("E2E_RESULT=" + json.dumps({"cid": cid, "legacy": old["id"], "empty": empty["id"]}))
 '''
 
 
@@ -111,6 +112,7 @@ class VttSite:
         result = json.loads([line for line in seeded.stdout.splitlines() if line.startswith("E2E_RESULT=")][-1]
                             .split("=", 1)[1])
         self.cid, self.legacy_scene = result["cid"], result["legacy"]
+        self.empty_cid = result["empty"]
         self.process = None
         self.log = None
         self.start()

@@ -77,11 +77,13 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
     gm = screens("gm")
     gm.goto(site.gm_url("scene_hall"))
     gm.get_by_text("live", exact=True).wait_for()
+    shoot(gm, "u1-shell")
 
     # --- pair the TV with a one-time code ---------------------------------------------------
     tv = screens("table")
     tv.goto(site.url + "/vtt/table")
     tv.get_by_label("Pairing code").wait_for()
+    gm.get_by_role("tab", name="TV", exact=True).click()
     gm.get_by_role("button", name="Pair a display").click()
     code = gm.locator(".vtt-code-value").inner_text()
     tv.get_by_label("Pairing code").fill(code)
@@ -108,6 +110,7 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
 
     # --- set a background: uploaded, then drawn on the TV -------------------------------------
     click_scene(gm, 1200, 900)                        # empty floor: nothing selected, the Scene section
+    gm.get_by_role("tab", name="Scene", exact=True).click()
     gm.get_by_label("Background file").set_input_files(
         files=[{"name": "hall.png", "mimeType": "image/png", "buffer": png()}])
     with_bg = wait_for(tv, lambda s: s["scene"]["background"] == "loaded", "the TV draws the background")
@@ -122,6 +125,7 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
 
     # --- fog of war (parity P1): applied on the server, so the TV never gets the token ------------
     click_scene(gm, 1200, 900)                        # nothing selected: the Scene section
+    gm.get_by_role("tab", name="Scene", exact=True).click()
     gm.get_by_label("Fog of war").click()
     wait_for(tv, lambda s: s["scene"]["fog"] is not None and s["scene"]["fog"]["enabled"]
              and token(s, "tok_hero") is None, "fog on hides the token from the TV")
@@ -394,6 +398,7 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
     shoot(tv, "e6-tv-dark")
 
     # --- import the /map scene, with its background ---------------------------------------------
+    gm.get_by_role("tab", name="Import", exact=True).click()
     gm.get_by_role("button", name="Check what would import").click()
     gm.get_by_text("Old Crypt").wait_for()
     gm.get_by_role("button", name="Import 1 scene").click()
@@ -407,3 +412,27 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
     assert probe(gm)["vision"]["lighting"] is True              # /map's dynamic lighting came across (E-6)
 
     assert gm.errors == [] and tv.errors == []
+
+
+def test_empty_campaign_guidance_and_sidebar(site, screens):
+    gm = screens("gm")
+    gm.goto(site.url + "/me")
+    gm.locator(f'form[action="/campaign/{site.empty_cid}/activate"] button').first.click()
+    gm.wait_for_url(lambda url: not url.endswith("/me"))
+    gm.goto(f"{site.url}/vtt/gm?campaignId={site.empty_cid}")
+    gm.get_by_role("heading", name="Set up your first scene").wait_for()
+    gm.get_by_role("button", name="Pair a TV").click()
+    assert gm.get_by_role("tab", name="TV", exact=True).get_attribute("aria-selected") == "true"
+    gm.reload()
+    gm.get_by_role("heading", name="Set up your first scene").wait_for()
+    assert gm.get_by_role("tab", name="TV", exact=True).get_attribute("aria-selected") == "true"
+    for width in (1440, 1024):
+        gm.set_viewport_size({"width": width, "height": 900})
+        assert gm.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        shoot(gm, f"u1-empty-{width}")
+    gm.once("dialog", lambda dialog: dialog.accept("First room"))
+    gm.get_by_role("button", name="Create first scene").click()
+    gm.wait_for_url("**sceneId=**")
+    gm.get_by_text("live", exact=True).wait_for()
+    assert gm.get_by_role("heading", name="Set up your first scene").count() == 0
+    assert gm.errors == []

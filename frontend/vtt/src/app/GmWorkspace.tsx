@@ -1,9 +1,18 @@
+import { Inspector } from './Inspector';
+export { Inspector } from './Inspector';
+import { SceneBar } from './shell/SceneBar';
+import { WorkspaceSidebar, useSidebarTab } from './shell/WorkspaceSidebar';
+import { FirstRunGuidance } from './shell/FirstRunGuidance';
+import { createViewportController } from './actions/viewport';
+import { ViewportButtons } from './shell/ViewportButtons';
+import { ToolRail, type Tool } from './shell/ToolRail';
+import { EncounterLine } from './shell/EncounterLine';
+import { WorkspaceStatus } from './shell/WorkspaceStatus';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ConnectionBanner } from '../components/ConnectionBanner';
 import { MapHost } from '../components/MapHost';
 import type { GmLive } from '../live/gm';
 import type { GmEntity } from '../protocol/frames';
-import { conditionLabel } from '../scene/adapt';
 import { createRuler, ping, type RulerController } from './actions/transients';
 import { snapToGrid, snapTokenCentre, type Hit, type Point } from '../scene/interaction';
 import type { RuntimeInteraction } from '../scene/SceneRuntime';
@@ -21,30 +30,20 @@ import {
   createToken,
   createWall,
   deleteEntity,
-  fogReset,
   fogReveal,
-  fogUpdate,
   moveToken,
-  TERRAIN_KINDS,
   templateCreate,
   templateUpdate,
   terrainPaint,
-  terrainReset,
   type TemplateShape,
   type TerrainCell,
   newEntityId,
-  setDoorState,
   showOnTable,
-  updateLight,
   updateScene,
-  updateToken,
-  type DoorState,
   type Draft,
   type TokenOverlay,
 } from './gmCommands';
-import type { GmBoot } from '../live/boot';
 import { ImportPanel, PairingPanel } from './GmPanels';
-import { ImagePicker } from './ImagePicker';
 import { NoticeBar } from './NoticeBar';
 import { decodeFogBits } from '../protocol/semantics';
 import { cellAt, chunk, floodRegion, regionCells, terrainKindAt, type FillWall } from '../scene/fogFill';
@@ -57,37 +56,11 @@ interface Props {
   live?: GmLive | null;
 }
 
-type Tool = 'select' | 'token' | 'light' | 'wall' | 'fog-reveal' | 'fog-hide' | 'template' | 'terrain' | 'ping' | 'ruler';
-
-const TOOLS: ReadonlyArray<{ id: Tool; label: string; hint: string }> = [
-  { id: 'select', label: 'Select', hint: 'Select and drag tokens and templates; arrows move the selection' },
-  { id: 'token', label: 'Token', hint: 'Click to place a token' },
-  { id: 'light', label: 'Light', hint: 'Click to place a light' },
-  { id: 'wall', label: 'Walls', hint: 'Click to start a wall, click again to end it; Esc stops' },
-  { id: 'fog-reveal', label: 'Reveal', hint: 'Click a room to reveal it on the table (walls and closed doors bound it)' },
-  { id: 'fog-hide', label: 'Hide', hint: 'Click a room to cover it with fog again' },
-  { id: 'template', label: 'Template', hint: 'Burst or emanation: click. Cone or line: click the origin, then click to aim' },
-  { id: 'terrain', label: 'Terrain', hint: 'Click a room to paint it; Alt-click paints one square' },
-  // beta-1; Codex's tool-group rail (U-2) moves these into a Measure group.
-  { id: 'ruler', label: 'Ruler', hint: 'Drag to measure; the TV shows it too' },
-  { id: 'ping', label: 'Ping', hint: 'Click to ping a spot; the TV shows it too' },
-];
-
 // A whole template moved, aim and all, kept inside the contract's range.
 function shiftTemplate(t: Of<'template'>, dx: number, dy: number) {
   const keep = (v: number) => Math.max(0, Math.min(16384, v));
   return { x: keep(t.x + dx), y: keep(t.y + dy), aimX: keep(t.aimX + dx), aimY: keep(t.aimY + dy) };
 }
-
-// The inspector's template colours: /map's one colour first, then the token set.
-const TEMPLATE_COLORS = [0x75c5eb, ...TOKEN_COLORS] as const;
-
-const TEMPLATE_SHAPES: ReadonlyArray<{ id: TemplateShape; label: string }> = [
-  { id: 'burst', label: 'Burst' },
-  { id: 'emanation', label: 'Emanation' },
-  { id: 'cone', label: 'Cone' },
-  { id: 'line', label: 'Line' },
-];
 
 type Of<K extends GmEntity['kind']> = Extract<GmEntity, { kind: K }>;
 
@@ -122,8 +95,11 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
   }, [live]);
   const lastApplied = useCommands((s) => s.lastApplied);
   const [zoom, setZoom] = useState(1);
+  const viewport = useMemo(createViewportController, []);
   const [railOpen, setRailOpen] = useState(true);
   const [dockOpen, setDockOpen] = useState(true);
+  const [sidebarTab, setSidebarTab] = useSidebarTab(live?.boot.memberId);
+
   const [tool, setTool] = useState<Tool>('select');
   const [selection, setSelection] = useState<Hit | null>(null);
   const [wallStart, setWallStart] = useState<Point | null>(null);
@@ -158,6 +134,15 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
         .sort((a, b) => Number(b.pc) - Number(a.pc) || a.name.localeCompare(b.name) || (a.id < b.id ? -1 : 1)),
     [entities],
   );
+  // User selection opens Inspector, including reselecting the same token.
+  // Mirror updates never steal the chosen tab.
+  function selectEntity(hit: Hit | null) {
+    setSelection(hit);
+    if (hit) {
+      setSidebarTab('inspector');
+      setDockOpen(true);
+    }
+  }
   const selected = selection ? (entityOf(selection.kind, selection.id) ?? null) : null;
 
   // A selection whose entity is gone (deleted here or elsewhere) is dropped.
@@ -378,7 +363,7 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
       if (!token || !inputEnabled) return;
       if (token.x === x && token.y === y) return;
       issue(moveToken(token, x, y), { kind: 'token', id, patch: { x, y } });
-      setSelection({ kind: 'token', id });
+      selectEntity({ kind: 'token', id });
     },
     canDragTemplate: (id) => inputEnabled && tool === 'select' && entityOf('template', id) !== undefined,
     measuring: () => tool === 'ruler' && live !== null,
@@ -392,12 +377,12 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
       const template = entityOf('template', id) as Of<'template'> | undefined;
       if (!template || !inputEnabled) return;
       issue(templateUpdate(template, shiftTemplate(template, dx, dy)));
-      setSelection({ kind: 'template', id });
+      selectEntity({ kind: 'template', id });
     },
     onClick: (point, hit, modifiers) => {
       if (!scene) return;
       if (tool === 'select' || !inputEnabled) {
-        setSelection(hit);
+        selectEntity(hit);
         if (hit) announce(hit);
         return;
       }
@@ -494,149 +479,34 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
 
   return (
     <div className={`vtt-gm ${railOpen ? '' : 'is-rail-collapsed'} ${dockOpen ? '' : 'is-dock-collapsed'}`}>
-      <header className="vtt-topbar">
-        <span className="vtt-brand">VTT</span>
-        {live && scenes ? (
-          <select
-            className="vtt-scene-picker"
-            aria-label="Scene"
-            value={sceneEntity?.id ?? ''}
-            onChange={(e) => e.target.value && openScene(e.target.value)}
-          >
-            {!sceneEntity && <option value="">No scene</option>}
-            {scenes.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-                {s.onTable ? ' (on the table)' : s.published ? '' : ' (prep)'}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <span className="vtt-scene-name">{sceneEntity?.name ?? sceneName}</span>
-        )}
-        <button type="button" className="vtt-topbar-btn" onClick={newScene} disabled={!inputEnabled}>
-          New scene
-        </button>
-        {sceneEntity && (
-          <>
-            <button
-              type="button"
-              className="vtt-topbar-btn"
-              disabled={!inputEnabled}
-              onClick={() => issue(updateScene(sceneEntity, { published: !sceneEntity.published }))}
-            >
-              {sceneEntity.published ? 'Unpublish' : 'Publish'}
-            </button>
-            <button type="button" className="vtt-topbar-btn" disabled={!inputEnabled} onClick={() => issue(showOnTable(sceneEntity))}>
-              Show on table
-            </button>
-            <button type="button" className="vtt-topbar-btn" disabled={!inputEnabled} onClick={() => issue(clearTable(sceneEntity))}>
-              Clear table
-            </button>
-          </>
-        )}
-        <button
-          type="button"
-          className="vtt-topbar-btn"
-          disabled={!inputEnabled || !undoState.canUndo}
-          title={undoState.next ? `Undo ${undoState.next} (Ctrl+Z)` : 'Undo (Ctrl+Z)'}
-          onClick={() => step('undo')}
-        >
-          Undo
-        </button>
-        <button
-          type="button"
-          className="vtt-topbar-btn"
-          disabled={!inputEnabled || !undoState.canRedo}
-          title="Redo (Ctrl+Shift+Z)"
-          onClick={() => step('redo')}
-        >
-          Redo
-        </button>
-        <span className="vtt-topbar-spacer" />
-        {pending.length > 0 && (
-          <span className="vtt-pending" aria-live="polite">
-            {pending.some((p) => p.state !== 'sent') ? 'Waiting to send' : 'Saving'} ({pending.length})
-          </span>
-        )}
-        <span className="vtt-zoom" aria-label="Zoom level">
-          {Math.round(zoom * 100)}%
-        </span>
-        <span className={`vtt-conn vtt-conn--${status}`}>{status}</span>
-      </header>
+      <SceneBar scenes={live ? scenes : null} scene={sceneEntity ?? null} fallbackName={sceneName}
+        enabled={inputEnabled} onOpen={openScene} onNew={newScene}
+        onPublish={() => sceneEntity && issue(updateScene(sceneEntity, { published: !sceneEntity.published }))}
+        onShow={() => sceneEntity && issue(showOnTable(sceneEntity))}
+        onClear={() => sceneEntity && issue(clearTable(sceneEntity))}
+        canUndo={undoState.canUndo} canRedo={undoState.canRedo} nextUndo={undoState.next}
+        onUndo={() => step('undo')} onRedo={() => step('redo')}>
+        <ViewportButtons controls={viewport} enabled={showMap && renderer === 'ok'} />
+        <WorkspaceStatus pending={pending} zoom={zoom} status={status} />
+      </SceneBar>
 
       <ConnectionBanner status={status} renderer={renderer} variant="gm" />
 
-      <nav className="vtt-rail" aria-label="Map tools">
-        <button type="button" className="vtt-rail-toggle" aria-expanded={railOpen} onClick={() => setRailOpen((v) => !v)}>
-          {railOpen ? 'Hide tools' : 'Tools'}
-        </button>
-        {railOpen &&
-          TOOLS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              className={`vtt-tool ${tool === t.id ? 'is-active' : ''}`}
-              aria-pressed={tool === t.id}
-              title={t.hint}
-              disabled={t.id !== 'select' && !inputEnabled}
-              onClick={() => chooseTool(t.id)}
-            >
-              {t.label}
-            </button>
-          ))}
-        {railOpen && tool === 'template' && (
-          <div className="vtt-tool-options" role="group" aria-label="Template options">
-            <label className="vtt-field">
-              <span>Shape</span>
-              <select
-                value={templateShape}
-                onChange={(e) => {
-                  setTemplateShape(e.target.value as TemplateShape);
-                  setTemplateStart(null);
-                }}
-              >
-                {TEMPLATE_SHAPES.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="vtt-field">
-              <span>Size (squares)</span>
-              <input
-                type="number"
-                min={1}
-                max={60}
-                value={templateSize}
-                onChange={(e) => setTemplateSize(Math.max(1, Math.min(60, Math.round(Number(e.target.value) || 1))))}
-              />
-            </label>
-          </div>
-        )}
-        {railOpen && tool === 'terrain' && (
-          <div className="vtt-tool-options" role="group" aria-label="Terrain options">
-            <label className="vtt-field">
-              <span>Paint</span>
-              <select value={terrainKind} onChange={(e) => setTerrainKind(Number(e.target.value))}>
-                {TERRAIN_KINDS.map((option) => (
-                  <option key={option.kind} value={option.kind}>
-                    {option.label}
-                  </option>
-                ))}
-                <option value={0}>Erase</option>
-              </select>
-            </label>
-          </div>
-        )}
-      </nav>
+      <ToolRail railOpen={railOpen} tool={tool} inputEnabled={inputEnabled}
+        templateShape={templateShape} templateSize={templateSize} terrainKind={terrainKind}
+        onToggle={() => setRailOpen((v) => !v)} onChoose={chooseTool}
+        setTemplateShape={(shape) => { setTemplateShape(shape); setTemplateStart(null); }}
+        setTemplateSize={setTemplateSize} setTerrainKind={setTerrainKind} />
 
       <main className="vtt-stage">
         <NoticeBar live={live} />
+        {live && scenes?.length === 0 && !sceneEntity && <FirstRunGuidance enabled={inputEnabled}
+          onNew={newScene} onPair={() => { setSidebarTab('tv'); setDockOpen(true); }} />}
+
         {showMap && scene && (
           <MapHost
             surface="gm"
+            viewportController={viewport}
             scene={scene}
             label={`Map: ${sceneEntity?.name ?? sceneName}`}
             onViewportChange={(v) => setZoom(v.scale)}
@@ -655,7 +525,7 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
         <ul className="vtt-visually-hidden" aria-label="Tokens on the map">
           {visibleTokens.map((t) => (
             <li key={t.id}>
-              <button type="button" onClick={() => setSelection({ kind: 'token', id: t.id })}>
+              <button type="button" onClick={() => selectEntity({ kind: 'token', id: t.id })}>
                 {t.label || 'Unnamed token'}
                 {t.hidden ? ' (hidden from the table)' : ''}
               </button>
@@ -667,374 +537,29 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
         </p>
       </main>
 
-      <aside className="vtt-dock" aria-label="Inspector">
-        <button type="button" className="vtt-dock-toggle" aria-expanded={dockOpen} onClick={() => setDockOpen((v) => !v)}>
-          {dockOpen ? 'Hide inspector' : 'Inspector'}
-        </button>
-        {dockOpen && (
-          <Inspector
-            entity={selected}
-            enabled={inputEnabled}
-            onIssue={issue}
-            onDeleted={() => setSelection(null)}
-            scene={sceneEntity ?? null}
-            fog={fogEntity ?? null}
-            terrain={terrainEntity ?? null}
-            actors={actorEntities}
-            {...(live ? { boot: live.boot } : {})}
-          />
-        )}
-        {dockOpen && live && (
-          <>
-            <PairingPanel boot={live.boot} />
-            <ImportPanel boot={live.boot} onImported={() => void refreshScenes()} />
-          </>
-        )}
-      </aside>
+      <WorkspaceSidebar open={dockOpen} onToggle={() => setDockOpen((v) => !v)} tab={sidebarTab} onTab={setSidebarTab}
+        panels={{
+          inspector: selected && ['token', 'wall', 'light', 'template'].includes(selected.kind) ?
+            <Inspector entity={selected} enabled={inputEnabled} onIssue={issue} onDeleted={() => setSelection(null)}
+              actors={actorEntities} {...(live ? { boot: live.boot } : {})} /> :
+            <p className="vtt-empty">Select a token, light, wall or template to inspect it.</p>,
+          creatures: <section><h2 className="vtt-inspector-title">Creatures</h2>
+            <p className="vtt-empty">Party and encounter from the tracker. Select a token to link it in Inspector.</p>
+            {actorEntities.length ? <ul>{actorEntities.map((a) => <li key={a.id}>{a.name}{a.pc ? ' (party)' : ''}</li>)}</ul> :
+              <p className="vtt-empty">No creatures in the tracker yet.</p>}
+            <a href="/tracker" target="_blank" rel="noopener noreferrer">Open tracker</a></section>,
+          scene: <Inspector entity={null} enabled={inputEnabled} onIssue={issue} onDeleted={() => {}}
+            scene={sceneEntity ?? null} fog={fogEntity ?? null} terrain={terrainEntity ?? null}
+            {...(live ? { boot: live.boot } : {})} />,
+          tv: live ? <><p className="vtt-empty">Pairing authorizes a display. It does not report whether that display is online.</p>
+            <PairingPanel boot={live.boot} /></> : <p className="vtt-empty">Connect to a campaign to pair a TV.</p>,
+          import: live ? <ImportPanel boot={live.boot} onImported={() => void refreshScenes()} /> :
+            <p className="vtt-empty">Connect to a campaign to import scenes.</p>,
+        }} />
 
       <footer className="vtt-tray" aria-label="Initiative and chat">
         <EncounterLine actors={actorEntities} />
       </footer>
     </div>
-  );
-}
-
-const DOOR_STATES: readonly DoorState[] = ['none', 'closed', 'open', 'locked', 'secret'];
-const DOOR_LABEL: Record<DoorState, string> = {
-  none: 'Wall',
-  closed: 'Door (closed)',
-  open: 'Door (open)',
-  locked: 'Door (locked)',
-  secret: 'Secret door',
-};
-
-interface InspectorProps {
-  entity: GmEntity | null;
-  enabled: boolean;
-  onIssue(draft: Draft, overlay?: TokenOverlay | null): string | null;
-  onDeleted(): void;
-  // Images (M6): the open scene, for its background when nothing is selected,
-  // and how this page uploads and previews assets.
-  scene?: Extract<GmEntity, { kind: 'scene' }> | null;
-  boot?: Pick<GmBoot, 'campaignId' | 'csrf'>;
-  // Fog (parity P1): the scene's fog entity, absent when the grid is too large.
-  fog?: Extract<GmEntity, { kind: 'fog' }> | null;
-  // Terrain (parity P2), likewise.
-  terrain?: Extract<GmEntity, { kind: 'terrain' }> | null;
-  // Tracker actors a token can link to (parity P3).
-  actors?: ReadonlyArray<Extract<GmEntity, { kind: 'actor' }>>;
-}
-
-const mediaUrl = (boot: Pick<GmBoot, 'campaignId'>, id: string | null) =>
-  id ? `/vtt/media/${encodeURIComponent(boot.campaignId)}/${encodeURIComponent(id)}` : null;
-
-// The selected entity's fields. A text field commits on blur or Enter, never
-// on every keystroke; a field the GM is editing is not overwritten by a frame
-// until they leave it (the key resets the field when the entity's version
-// changes while it is not focused).
-// The tray's one line about the tracker (parity P3). The mirror carries no
-// initiative order, so this says only how many are fighting and whose turn it is.
-function EncounterLine({ actors }: { actors: ReadonlyArray<Extract<GmEntity, { kind: 'actor' }>> }) {
-  const combatants = actors.filter((a) => a.id.startsWith('cmb_'));
-  if (combatants.length === 0) return <span className="vtt-empty">No encounter running.</span>;
-  const turn = combatants.find((a) => a.active);
-  return (
-    <span className="vtt-empty">
-      Encounter: {combatants.length} {combatants.length === 1 ? 'combatant' : 'combatants'}
-      {turn ? `, ${turn.name || 'unnamed'}'s turn` : ''}.
-    </span>
-  );
-}
-
-// Which tracker combatant or party character drives this token's HP and
-// conditions (parity P3). A link to an actor that is gone stays listed, so it
-// is visible and can be cleared.
-function TrackerLink({
-  entity,
-  actors,
-  enabled,
-  onIssue,
-}: {
-  entity: Extract<GmEntity, { kind: 'token' }>;
-  actors: ReadonlyArray<Extract<GmEntity, { kind: 'actor' }>>;
-  enabled: boolean;
-  onIssue: InspectorProps['onIssue'];
-}) {
-  const linked = entity.actorId ? actors.find((a) => a.id === entity.actorId) : undefined;
-  return (
-    <>
-      <label className="vtt-field">
-        <span>Tracker link</span>
-        <select
-          value={entity.actorId ?? ''}
-          disabled={!enabled}
-          onChange={(e) => {
-            const actorId = e.target.value || null;
-            if (actorId !== entity.actorId) onIssue(updateToken(entity, { actorId }));
-          }}
-        >
-          <option value="">None</option>
-          {actors.map((a) => (
-            <option key={a.id} value={a.id}>
-              {(a.name || 'Unnamed') + (a.pc ? ' (party)' : '') + (a.hidden ? ' (hidden)' : '')}
-            </option>
-          ))}
-          {entity.actorId && !linked && <option value={entity.actorId}>Not in the tracker now</option>}
-        </select>
-      </label>
-      {linked && (
-        <p className="vtt-empty">
-          {linked.hp} / {linked.maxHp} HP
-          {linked.conditions.length ? ` - ${linked.conditions.map((c) => conditionLabel(c.name, c.value ?? null)).join(', ')}` : ''}
-          {linked.hidden ? ' - hidden in the tracker, so not on the table' : ''}
-        </p>
-      )}
-    </>
-  );
-}
-
-export function Inspector({ entity, enabled, onIssue, onDeleted, scene, boot, fog, terrain, actors = [] }: InspectorProps) {
-  if (!entity || entity.kind === 'scene' || entity.kind === 'fog' || entity.kind === 'terrain' || entity.kind === 'actor') {
-    return (
-      <div className="vtt-inspector">
-        {scene && boot && (
-          <>
-            <h2 className="vtt-inspector-title">Scene</h2>
-            <ImagePicker
-              label="Background"
-              boot={boot}
-              current={scene.backgroundAssetId}
-              previewUrl={mediaUrl(boot, scene.backgroundAssetId)}
-              disabled={!enabled}
-              onChange={(backgroundAssetId) => onIssue(updateScene(scene, { backgroundAssetId }))}
-            />
-          </>
-        )}
-        {fog ? (
-          <>
-            <Toggle label="Fog of war" checked={fog.enabled} disabled={!enabled} onChange={(on) => onIssue(fogUpdate(fog, on))} />
-            <button
-              type="button"
-              className="vtt-danger"
-              disabled={!enabled}
-              onClick={() => window.confirm('Cover the whole scene with fog again?') && onIssue(fogReset(fog))}
-            >
-              Reset fog
-            </button>
-          </>
-        ) : (
-          scene && <p className="vtt-empty">This scene is too large for fog.</p>
-        )}
-        {terrain && terrain.cells.replace(/A/g, '') !== '' && (
-          <button
-            type="button"
-            className="vtt-danger"
-            disabled={!enabled}
-            onClick={() => window.confirm('Erase all painted terrain in this scene?') && onIssue(terrainReset(terrain))}
-          >
-            Reset terrain
-          </button>
-        )}
-        <p className="vtt-empty">Select a token, light or wall to inspect it.</p>
-      </div>
-    );
-  }
-  const remove = () => {
-    onIssue(deleteEntity(entity), entity.kind === 'token' ? { kind: 'token', id: entity.id, deleted: true } : null);
-    onDeleted();
-  };
-  return (
-    <div className="vtt-inspector" key={`${entity.kind}:${entity.id}`}>
-      {entity.kind === 'token' && (
-        <>
-          <h2 className="vtt-inspector-title">Token</h2>
-          <TextField
-            label="Label"
-            value={entity.label}
-            version={entity.version}
-            maxLength={80}
-            disabled={!enabled}
-            onCommit={(label) => label !== entity.label && onIssue(updateToken(entity, { label }), { kind: 'token', id: entity.id, patch: { label } })}
-          />
-          <label className="vtt-field">
-            <span>Size</span>
-            <select
-              value={String(entity.size)}
-              disabled={!enabled}
-              onChange={(e) => {
-                const size = Number(e.target.value);
-                onIssue(updateToken(entity, { size }), { kind: 'token', id: entity.id, patch: { size } });
-              }}
-            >
-              {[0.5, 1, 2, 3, 4].map((s) => (
-                <option key={s} value={String(s)}>
-                  {s === 0.5 ? 'Tiny' : s === 1 ? 'Medium' : s === 2 ? 'Large' : s === 3 ? 'Huge' : 'Gargantuan'}
-                </option>
-              ))}
-              {![0.5, 1, 2, 3, 4].includes(entity.size) && <option value={String(entity.size)}>{entity.size} squares</option>}
-            </select>
-          </label>
-          <Toggle
-            label="Hidden from the table"
-            checked={entity.hidden}
-            disabled={!enabled}
-            onChange={(hidden) => onIssue(updateToken(entity, { hidden }), { kind: 'token', id: entity.id, patch: { hidden } })}
-          />
-          <Toggle
-            label="Locked"
-            checked={entity.locked}
-            disabled={!enabled}
-            onChange={(locked) => onIssue(updateToken(entity, { locked }))}
-          />
-          <TrackerLink entity={entity} actors={actors} enabled={enabled} onIssue={onIssue} />
-          {boot && (
-            <ImagePicker
-              label="Art"
-              boot={boot}
-              current={entity.artAssetId}
-              previewUrl={mediaUrl(boot, entity.artAssetId)}
-              disabled={!enabled}
-              onChange={(artAssetId) => onIssue(updateToken(entity, { artAssetId }))}
-            />
-          )}
-        </>
-      )}
-      {entity.kind === 'light' && (
-        <>
-          <h2 className="vtt-inspector-title">Light</h2>
-          <TextField
-            label="Radius (px)"
-            value={String(entity.radius)}
-            version={entity.version}
-            maxLength={5}
-            disabled={!enabled}
-            onCommit={(text) => {
-              const radius = Number(text);
-              if (Number.isFinite(radius) && radius >= 0 && radius <= 16384 && radius !== entity.radius) {
-                onIssue(updateLight(entity, { radius }));
-              }
-            }}
-          />
-          <Toggle label="Hidden from the table" checked={entity.hidden} disabled={!enabled} onChange={(hidden) => onIssue(updateLight(entity, { hidden }))} />
-        </>
-      )}
-      {entity.kind === 'template' && (
-        <>
-          <h2 className="vtt-inspector-title">{TEMPLATE_SHAPES.find((t) => t.id === entity.shape)?.label ?? 'Template'}</h2>
-          <TextField
-            label="Size (squares)"
-            value={String(entity.size)}
-            version={entity.version}
-            maxLength={2}
-            disabled={!enabled}
-            onCommit={(text) => {
-              const size = Math.round(Number(text));
-              if (Number.isFinite(size) && size >= 1 && size <= 60 && size !== entity.size) onIssue(templateUpdate(entity, { size }));
-            }}
-          />
-          <Toggle
-            label="Hidden from the table"
-            checked={entity.hidden}
-            disabled={!enabled}
-            onChange={(hidden) => onIssue(templateUpdate(entity, { hidden }))}
-          />
-          <div className="vtt-field">
-            <span id={`tpl-colour-${entity.id}`}>Colour</span>
-            <div className="vtt-swatches" role="radiogroup" aria-labelledby={`tpl-colour-${entity.id}`}>
-              {TEMPLATE_COLORS.map((color) => {
-                const hex = `#${color.toString(16).padStart(6, '0')}`;
-                return (
-                  <button
-                    key={color}
-                    type="button"
-                    role="radio"
-                    aria-checked={entity.color === color}
-                    aria-label={hex}
-                    className="vtt-swatch"
-                    style={{ background: hex }}
-                    disabled={!enabled}
-                    onClick={() => entity.color !== color && onIssue(templateUpdate(entity, { color }))}
-                  />
-                );
-              })}
-            </div>
-          </div>
-          <p className="vtt-empty">Drag it, or use the arrow keys, to move it a square at a time.</p>
-        </>
-      )}
-      {entity.kind === 'wall' && (
-        <>
-          <h2 className="vtt-inspector-title">{DOOR_LABEL[entity.doorState]}</h2>
-          <label className="vtt-field">
-            <span>Kind</span>
-            <select
-              value={entity.doorState}
-              disabled={!enabled}
-              onChange={(e) => onIssue(setDoorState(entity, e.target.value as DoorState))}
-            >
-              {DOOR_STATES.map((d) => (
-                <option key={d} value={d}>
-                  {DOOR_LABEL[d]}
-                </option>
-              ))}
-            </select>
-          </label>
-        </>
-      )}
-      <button type="button" className="vtt-danger" disabled={!enabled} onClick={remove}>
-        Delete
-      </button>
-    </div>
-  );
-}
-
-function TextField(props: {
-  label: string;
-  value: string;
-  version: string;
-  maxLength: number;
-  disabled: boolean;
-  onCommit(value: string): void;
-}) {
-  const [draft, setDraft] = useState(props.value);
-  const [editing, setEditing] = useState(false);
-  // A newer version from the server replaces the field, unless the GM is
-  // typing in it right now (the legacy rule: never repaint a field mid-edit).
-  useEffect(() => {
-    if (!editing) setDraft(props.value);
-  }, [props.value, props.version, editing]);
-  const commit = () => {
-    setEditing(false);
-    const value = draft.trim();
-    if (value !== props.value) props.onCommit(value);
-  };
-  return (
-    <label className="vtt-field">
-      <span>{props.label}</span>
-      <input
-        value={draft}
-        maxLength={props.maxLength}
-        disabled={props.disabled}
-        onFocus={() => setEditing(true)}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-          if (e.key === 'Escape') {
-            setDraft(props.value);
-            setEditing(false);
-          }
-        }}
-      />
-    </label>
-  );
-}
-
-function Toggle(props: { label: string; checked: boolean; disabled: boolean; onChange(value: boolean): void }) {
-  return (
-    <label className="vtt-field vtt-field--toggle">
-      <input type="checkbox" checked={props.checked} disabled={props.disabled} onChange={(e) => props.onChange(e.target.checked)} />
-      <span>{props.label}</span>
-    </label>
   );
 }

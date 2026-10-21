@@ -101,7 +101,31 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+it('shows first-run guidance only after a successful empty scene list, not on loading or failure', async () => {
+  seed([]);
+  const live = {boot:{campaignId:'camp_empty',memberId:'gm_empty',csrf:'x'}, undo:new UndoManager()} as unknown as GmLive;
+  vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('offline'); }));
+  const view = render(<GmWorkspace sceneName="Empty" live={live} />);
+  expect(screen.queryByRole('heading', {name:'Set up your first scene'})).toBeNull();
+  await act(async () => {});
+  expect(screen.queryByRole('heading', {name:'Set up your first scene'})).toBeNull();
+  view.unmount();
+  vi.stubGlobal('fetch', vi.fn(async () => ({ok:true,json:async () => ({scenes:[]})})));
+  render(<GmWorkspace sceneName="Empty" live={live} />);
+  await act(async () => {});
+  expect(screen.getByRole('heading', {name:'Set up your first scene'})).toBeTruthy();
+});
+
 describe('map input', () => {
+  it('reselecting the same token opens Inspector, while mirror updates preserve the chosen tab', () => {
+    const { interaction } = setup();
+    act(() => interaction.onClick?.({x:96,y:96}, {kind:'token',id:'tok_hero'}, {alt:false}));
+    fireEvent.click(screen.getByRole('tab', {name:'TV'}));
+    act(() => seed([scene, {...hero, label:'Updated elsewhere'}, wall]));
+    expect(screen.getByRole('tab', {name:'TV'}).getAttribute('aria-selected')).toBe('true');
+    act(() => interaction.onClick?.({x:96,y:96}, {kind:'token',id:'tok_hero'}, {alt:false}));
+    expect(screen.getByRole('tab', {name:'Inspector'}).getAttribute('aria-selected')).toBe('true');
+  });
   it('a dropped token is a move with its current version and a moving overlay', () => {
     const { issued, interaction } = setup();
     act(() => interaction.onTokenDrop?.('tok_hero', 160, 96));
@@ -461,6 +485,7 @@ describe('fog of war (parity P1)', () => {
     fireEvent.click(screen.getByLabelText('Fog of war'));
     expect(issued.at(-1)?.draft).toEqual({ type: 'fog.update', expected: [{ kind: 'fog', id: 'fog', version: V1 }], payload: { enabled: true } });
     vi.stubGlobal('confirm', vi.fn(() => false));
+    fireEvent.click(screen.getByRole('tab', { name: 'Scene' }));
     fireEvent.click(screen.getByRole('button', { name: 'Reset fog' }));
     expect((issued.at(-1)?.draft as { type: string }).type).toBe('fog.update'); // declined: nothing sent
     vi.stubGlobal('confirm', vi.fn(() => true));
