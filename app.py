@@ -12392,6 +12392,20 @@ def api_my_campaigns():
     return jsonify({'campaigns': out, 'active': active})
 
 
+def _vtt_tabletop_url():
+    """L-1: the Tabletop entry for the active campaign, or None when the VTT
+    is off, there is no active campaign, or the campaign is outside the pilot
+    list. While it is set, the GM navigation shows Tabletop where it showed
+    the Map; /map itself stays reachable by its address (the launch fallback)."""
+    pilot = getattr(globals().get('VTT_SERVICE'), 'pilot', None)
+    if pilot is None:            # the VTT is off: no lookup on every page render
+        return None
+    cid = _active_campaign_id()
+    if not isinstance(cid, str) or not pilot.allows(cid):
+        return None
+    return '/vtt/gm?campaignId=' + urllib.parse.quote(cid, safe='')
+
+
 @app.context_processor
 def _inject_account_ctx():
     """Expose the logged-in account user, the active campaign, and its system to
@@ -12414,6 +12428,7 @@ def _inject_account_ctx():
         'cosmere_world': world,
         'cosmere_player_char': _cosmere_player_char_name(),
         'system_ui': _active_system_ui(),
+        'vtt_tabletop_url': _vtt_tabletop_url(),
         'advancement_mode': advancement,
         # The running deploy version, stamped into every page so the SSE hub can
         # compare it against the version reported on (re)connect and offer a reload.

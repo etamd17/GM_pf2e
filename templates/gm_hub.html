@@ -233,11 +233,12 @@
                         {% if encounter_count > 0 %}{{ encounter_count }} in initiative{% else %}no active combat{% endif %}
                     </span>
                 </a>
-                <a href="/map" class="tile tile--run">
+                {# L-1: with the VTT on for this campaign, the Tabletop takes the Map's place; /map stays reachable by address. #}
+                <a href="{{ vtt_tabletop_url or '/map' }}" class="tile tile--run">
                     <div class="tile__glyph"><svg viewBox="0 0 24 24"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21 3 6"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg></div>
-                    <h2 class="tile__title">Tactical Map</h2>
+                    <h2 class="tile__title">{% if vtt_tabletop_url %}Tabletop{% else %}Tactical Map{% endif %}</h2>
                     <p class="tile__desc">Shared scenes, linked tokens, live turns, health, and conditions.</p>
-                    <span class="pill" style="margin-top:var(--sp-3);">open table map</span>
+                    <span class="pill" style="margin-top:var(--sp-3);">{% if vtt_tabletop_url %}open the tabletop{% else %}open table map{% endif %}</span>
                 </a>
                 {% if active_system == 'cosmere' %}
                 <a href="/cosmere/gm/vitals" class="tile tile--run">

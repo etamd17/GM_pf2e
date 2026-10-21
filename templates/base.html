@@ -88,6 +88,10 @@
                     {% for ln in (system_ui.gm_nav if is_gm else system_ui.player_nav) %}
                     <a href="{{ ln.url }}" class="{{ 'text-accent-300 hover:text-accent-200' if ln.accent else 'text-base-300 hover:text-base-100' }} px-3 py-1.5 rounded transition-colors whitespace-nowrap"{% if ln.title %} title="{{ ln.title }}"{% endif %}>{{ ln.label }}</a>
                     {% endfor %}
+                    {% if is_gm and vtt_tabletop_url %}
+                    {# L-1: the VTT replaces the map at launch; /map stays reachable by address. #}
+                    <a href="{{ vtt_tabletop_url }}" class="text-accent-300 hover:text-accent-200 px-3 py-1.5 rounded transition-colors whitespace-nowrap" title="Open this campaign on the virtual tabletop">Tabletop</a>
+                    {% endif %}
                     {% if is_gm %}
                     <button type="button" onclick="window._qsOpen && window._qsOpen()" class="text-base-400 hover:text-base-200 px-2 py-1.5 rounded transition-colors whitespace-nowrap flex items-center gap-1" title="Quick Search (Cmd+K)">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
