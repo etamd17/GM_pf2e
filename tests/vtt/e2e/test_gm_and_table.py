@@ -129,6 +129,30 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
                      "the TV shows the Hall with its token")
     assert shown["surface"] == "table" and shown["scene"]["width"] == 1280
 
+    # U-4: keyboard Place and native drag both use the mirror's party actor.
+    gm.get_by_role("tab", name="Creatures", exact=True).click()
+    place_scout = gm.get_by_role("button", name="Place Table Scout (party)", exact=True)
+    place_scout.wait_for()
+    place_scout.focus()
+    gm.keyboard.press("Enter")
+    scout_state = wait_for(gm, lambda s: any(t["label"] == "Table Scout" and t.get("live") for t in s["tokens"]),
+                           "party placement links live HP")
+    scout_hp = next(t for t in scout_state["tokens"] if t["label"] == "Table Scout")["live"]["hp"]
+    assert scout_hp > 0
+    wait_for(tv, lambda s: any(t["label"] == "Table Scout" and (t.get("live") or {}).get("hp") == scout_hp for t in s["tokens"]),
+             "TV gets exact HP for the party token")
+    expect(gm.get_by_role("link", name="Open sheet for Table Scout", exact=True)).to_be_visible()
+    gm.once("dialog", lambda dialog: dialog.dismiss())
+    place_scout.click()
+    assert sum(t["label"] == "Table Scout" for t in probe(gm)["tokens"]) == 1
+    view = probe(gm)["viewport"]
+    gm.once("dialog", lambda dialog: dialog.accept())
+    place_scout.drag_to(gm.locator(".vtt-map-host"), target_position={
+        "x": view["x"] + 350 * view["scale"], "y": view["y"] + 350 * view["scale"]})
+    wait_for(gm, lambda s: sum(t["label"] == "Table Scout" and bool(t.get("live")) for t in s["tokens"]) == 2,
+             "native drag creates exactly one additional linked token")
+    shoot(gm, "u4-creatures")
+
     # --- move a token: the TV follows ---------------------------------------------------------
     start_x = token(shown, "tok_hero")["x"]
     click_token(gm, "tok_hero")
@@ -548,6 +572,16 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
     expect(observer.locator(f'.vtt-scene-picker option[value="{imported}"]')).to_have_count(0)
     assert probe(tv)["scene"]["width"] == 1280  # deletion did not move or blank the TV
     shoot(observer, "u3-deleted-elsewhere")
+    # The actual form, not a fetch or a direct /tracker link, enters this campaign.
+    gm.get_by_role("tab", name="Creatures", exact=True).click()
+    with gm.context.expect_event("request", predicate=lambda request: request.method == "POST" and request.url.endswith(f"/campaign/{site.cid}/activate")) as activation:
+        with gm.context.expect_page() as opened_tracker:
+            gm.locator(".vtt-dock").get_by_role("button", name="Open tracker", exact=True).click()
+    assert activation.value.header_value("origin") == site.url
+    tracker = opened_tracker.value
+    tracker.wait_for_url("**/tracker")
+    assert tracker.evaluate("window.opener === null")
+    tracker.close()
     assert gm.errors == [] and tv.errors == [] and observer.errors == []
 
 

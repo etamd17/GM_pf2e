@@ -1,11 +1,14 @@
 import { Inspector } from './Inspector';
 import { TurnControls } from './controls/TurnControls';
 import { ConditionPicker } from './controls/ConditionPicker';
+import { CreaturesPanel } from './controls/CreaturesPanel';
+import { TrackerLink } from './controls/TrackerLink';
+import { useCreaturePlacements } from './controls/useCreaturePlacements';
 import { BestiaryPanel } from './controls/BestiaryPanel';
 import { AreaEffectPanel,createAreaAttemptStore } from './controls/AreaEffectPanel';
 import { LightingControls,TokenVisionControls } from './controls/LightingControls';
 import { asCreature,type AddedCreature } from './actions/bestiary';
-import { freeSpotNear,placeCreature } from './actions/creatures';
+import { freeSpotNear,placeCreature,listCreatures } from './actions/creatures';
 export { Inspector } from './Inspector';
 import { navigateToScene } from './shell/sceneNavigation';
 import { SceneBar } from './shell/SceneBar';
@@ -23,6 +26,8 @@ import type { GmLive } from '../live/gm';
 import type { GmEntity } from '../protocol/frames';
 import { createRuler, ping, type RulerController } from './actions/transients';
 import { snapToGrid, snapTokenCentre, type Hit, type Point } from '../scene/interaction';
+import {screenToWorld,type Viewport} from '../scene/viewport';
+import type {DragEvent} from 'react';
 import type { RuntimeInteraction } from '../scene/SceneRuntime';
 import { useCommands } from '../state/commands';
 import { acceptsDurableInput, isTerminal, useConnection } from '../state/connection';
@@ -105,6 +110,10 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
   }, [live]);
   const lastApplied = useCommands((s) => s.lastApplied);
   const [zoom, setZoom] = useState(1);
+  const mapViewport=useRef<Viewport | null>(null);
+  const stageRef=useRef<HTMLElement | null>(null);
+  const draggingCreature=useRef<{actorId:string;sceneId:string} | null>(null);
+  const placements=useCreaturePlacements(entities,status);
   const [areaAttempts] = useState(createAreaAttemptStore);
   const [visionPreview,setVisionPreview] = useState(false);
   const viewport = useMemo(createViewportController, []);
@@ -533,11 +542,56 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
   const visibleTokens = scene?.tokens ?? [];
   const allEntities = [...entities.values()];
   const linkedActor = selected?.kind === 'token' ? actorEntities.find(a => a.id === selected.actorId) : undefined;
+  function placementScene() {
+    const host=stageRef.current?.querySelector('.vtt-map-host');
+    return {host,viewport:mapViewport.current};
+  }
+  function placeActor(actorId:string,dropPoint?:Point) {
+    // Re-read the mirror at the drop/click boundary; never place a stale row.
+    const creature=listCreatures(useEntities.getState().entities.values()).find(c=>c.actorId===actorId);
+    if(!inputEnabled || !scene || !sceneEntity || !creature || placements.isPending(actorId)) return;
+    if(creature.onScene.length && !window.confirm(`${creature.name} is already on this map. Place another linked token?`)) return;
+    const {host,viewport:currentView}=placementScene();
+    const rect=host?.getBoundingClientRect();
+    const centre=currentView && rect ? screenToWorld(currentView,{x:rect.width/2,y:rect.height/2}) : {x:scene.width/2,y:scene.height/2};
+    const point=dropPoint ?? freeSpotNear(centre,creature.size,scene);
+    const placement=placeCreature(creature,point,scene);
+    const commandId=issue(placement.draft,overlayFor(placement.draft));
+    if(commandId) {
+      placements.register({actorId,sceneId:sceneEntity.id,tokenId:placement.tokenId,commandId});
+      setAnnouncement(`Placing ${creature.name}.`);
+    }
+  }
+  function startCreatureDrag(actorId:string,event:DragEvent<HTMLButtonElement>) {
+    if(!inputEnabled || !sceneEntity || placements.isPending(actorId) || !entityOf('actor',actorId)) {event.preventDefault();return;}
+    chooseTool('select');
+    draggingCreature.current={actorId,sceneId:sceneEntity.id};
+    event.dataTransfer.setData('application/x-vtt-creature',actorId);event.dataTransfer.effectAllowed='copy';
+  }
+  function dragOverCreature(event:DragEvent<HTMLElement>) {
+    if(inputEnabled && sceneEntity && draggingCreature.current?.sceneId===sceneEntity.id &&
+      event.target instanceof Element && event.target.closest('.vtt-map-host') && event.dataTransfer.types.includes('application/x-vtt-creature')) {
+      event.preventDefault();event.dataTransfer.dropEffect='copy';
+    }
+  }
+  function dropCreature(event:DragEvent<HTMLElement>) {
+    const dragged=draggingCreature.current;draggingCreature.current=null;
+    const {host,viewport:currentView}=placementScene();
+    if(!dragged || dragged.sceneId!==sceneEntity?.id || !host || !currentView ||
+      !(event.target instanceof Element) || !event.target.closest('.vtt-map-host') ||
+      event.dataTransfer.getData('application/x-vtt-creature')!==dragged.actorId) return;
+    event.preventDefault();
+    const rect=host.getBoundingClientRect();
+    placeActor(dragged.actorId,screenToWorld(currentView,{x:event.clientX-rect.left,y:event.clientY-rect.top}));
+  }
   function placeAddedCreature(added:AddedCreature):boolean {
     if (!inputEnabled || !scene || !sceneEntity) return false;
     const creature = asCreature(added);
     const point = freeSpotNear({x:scene.width / 2,y:scene.height / 2},creature.size,scene);
-    return !!issue(placeCreature(creature,point,scene).draft);
+    const placement=placeCreature(creature,point,scene);
+    const commandId=issue(placement.draft,overlayFor(placement.draft));
+    if(commandId) placements.register({actorId:creature.actorId,sceneId:sceneEntity.id,tokenId:placement.tokenId,commandId});
+    return !!commandId;
   }
 
   return (
@@ -564,7 +618,7 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
         setTemplateShape={(shape) => { setTemplateShape(shape); setTemplateStart(null); }}
         setTemplateSize={setTemplateSize} setTerrainKind={setTerrainKind} />
 
-      <main className="vtt-stage">
+      <main className="vtt-stage" ref={stageRef} onDragOver={dragOverCreature} onDrop={dropCreature}>
         <NoticeBar live={live} />
         {(sceneDeleted || deletionApplied) && <div className="vtt-notice" role="status">
           <span>This scene was deleted. Choose another scene in the Editing picker, or create a new scene.</span>
@@ -579,7 +633,7 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
             visionPreview={visionPreview}
             scene={scene}
             label={`Map: ${sceneEntity?.name ?? sceneName}`}
-            onViewportChange={(v) => setZoom(v.scale)}
+            onViewportChange={(v) => {mapViewport.current=v;setZoom(v.scale);}}
             interaction={interaction}
             selection={selection}
             wallDraft={
@@ -617,11 +671,10 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
               {live && selected.kind === 'template' && sceneEntity && <AreaEffectPanel attempts={areaAttempts} key={`${sceneEntity.id}:${selected.id}`} boot={live.boot} template={selected} scene={sceneEntity} entities={allEntities} enabled={inputEnabled} />}
             </> :
             <p className="vtt-empty">Select a token, light, wall or template to inspect it.</p>,
-          creatures: <section><h2 className="vtt-inspector-title">Creatures</h2>
-            <p className="vtt-empty">Party and encounter from the tracker. Select a token to link it in Inspector.</p>
-            {actorEntities.length ? <ul>{actorEntities.map((a) => <li key={a.id}>{a.name}{a.pc ? ' (party)' : ''}</li>)}</ul> :
-              <p className="vtt-empty">No creatures in the tracker yet.</p>}
-            <a href="/tracker" target="_blank" rel="noopener noreferrer">Open live tracker</a>
+          creatures: <section>
+            {!isTerminal(status) && <CreaturesPanel entities={allEntities} enabled={inputEnabled && !!sceneEntity}
+              pendingActorIds={placements.pendingActorIds} onPlace={placeActor} onDragStart={startCreatureDrag} onDragEnd={()=>{draggingCreature.current=null;}}/>}
+            {live && <TrackerLink boot={live.boot}/>}
             {live && !isTerminal(status) && <BestiaryPanel key={live.boot.campaignId} boot={live.boot} entities={allEntities} enabled={inputEnabled && !!sceneEntity} onPlace={placeAddedCreature} />}</section>,
           scene: <><Inspector entity={null} enabled={inputEnabled} onIssue={issue} onDeleted={() => {}}
             scene={sceneEntity ?? null} fog={fogEntity ?? null} terrain={terrainEntity ?? null}

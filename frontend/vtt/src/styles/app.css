@@ -541,3 +541,12 @@ button:focus-visible,
 .vtt-scene-menu summary { cursor: pointer; padding: 6px; }
 .vtt-scene-menu-content { position: absolute; z-index: 30; top: 100%; right: 0; width: 260px; padding: 10px; border: 1px solid var(--border-rule); background: var(--bg-card); }
 .vtt-scene-menu form { display: grid; gap: 6px; }
+
+/* U-4: mirror-backed creature placement and campaign-aware tracker access. */
+.vtt-creatures { list-style: none; padding: 0; margin: 0; }
+.vtt-creature-row { display: grid; gap: 5px; padding-block: 10px; border-bottom: 1px solid var(--border-card); overflow-wrap: anywhere; }
+.vtt-creature-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.vtt-creature-actions [draggable="true"] { cursor: grab; }
+.vtt-tracker-form { display: inline; margin: 0; }
+.vtt-link-button { background: none; border: 0; padding: 4px 0; color: var(--gilt-200); text-decoration: underline; cursor: pointer; font: inherit; }
+.vtt-link-button:focus-visible { outline: 2px solid var(--gilt-200); outline-offset: 2px; }

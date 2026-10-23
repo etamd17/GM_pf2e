@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GmLive } from '../live/gm';
 import type { GmEntity } from '../protocol/frames';
 import { adaptEntities } from '../scene/adapt';
+import type {Viewport} from '../scene/viewport';
 import type { RuntimeInteraction } from '../scene/SceneRuntime';
 import { encodeFogBits } from '../protocol/semantics';
 import { useCommands } from '../state/commands';
@@ -17,7 +18,7 @@ import { resetProjectionForTest, useProjection } from '../state/projection';
 // command, with the edited entity's current version, through live.issue.
 
 const runtimes = vi.hoisted(
-  () => [] as Array<{ interaction?: RuntimeInteraction | undefined; selection: unknown; draft: unknown }>,
+  () => [] as Array<{ interaction?: RuntimeInteraction | undefined; selection: unknown; draft: unknown; viewportCallback?:((v:Viewport)=>void) | undefined }>,
 );
 
 vi.mock('../scene/SceneRuntime', () => ({
@@ -25,8 +26,10 @@ vi.mock('../scene/SceneRuntime', () => ({
     interaction?: RuntimeInteraction | undefined;
     selection: unknown = null;
     draft: unknown = null;
-    constructor(_host: HTMLElement, options: { interaction?: RuntimeInteraction }) {
+    viewportCallback?:((v:Viewport)=>void) | undefined;
+    constructor(_host: HTMLElement, options: { interaction?: RuntimeInteraction;onViewportChange?:(v:Viewport)=>void }) {
       this.interaction = options.interaction;
+      this.viewportCallback=options.onViewportChange;
       runtimes.push(this);
     }
     setScene() {}
@@ -759,4 +762,57 @@ it('delete navigation survives a newer scene-list refresh from the empty replace
   expect(reads).toBeGreaterThanOrEqual(3);
   await act(async()=>{finish({ok:true,json:async()=>({scenes:[other]})});});
   expect(navigateToScene).toHaveBeenCalledWith('scene_b');
+});
+
+
+const creatureActor=(id='chr_hero',name='Zarin',size=1)=>({kind:'actor',id,version:V1,name,size,pc:id.startsWith('chr_'),hp:17,maxHp:20,conditions:[],status:'',hidden:false,active:false,sheetUrl:null}) as Of<'actor'>;
+function creatureSetup(actor=creatureActor(),tokens:Of<'token'>[]=[]) {
+  seed([scene,actor,...tokens]);const setupResult=setup();
+  fireEvent.click(screen.getByRole('tab',{name:'Creatures'}));
+  const map=screen.getByRole('application',{name:'Map: Hall'});
+  vi.spyOn(map,'getBoundingClientRect').mockReturnValue({left:100,top:50,width:400,height:300,right:500,bottom:350,x:100,y:50,toJSON(){}});
+  act(()=>setupResult.runtime.viewportCallback?.({x:20,y:10,scale:2}));
+  return {...setupResult,map,actor,place:()=>screen.getByRole('button',{name:`Place ${actor.name} (${actor.id.startsWith('chr_') ? 'party' : 'encounter'})`})};
+}
+function creatureTransfer() {
+  const values:Record<string,string>={};
+  return {types:['application/x-vtt-creature'],setData:(key:string,value:string)=>{values[key]=value;},getData:(key:string)=>values[key] ?? '',effectAllowed:'',dropEffect:''};
+}
+it('Places one linked token near the current view centre and prevents repeated pending placement',()=>{
+  const {place,issued}=creatureSetup();fireEvent.click(place(),{detail:0});fireEvent.click(place());
+  expect(issued).toHaveLength(1);expect(issued[0]?.draft).toMatchObject({type:'token.create',payload:{actorId:'chr_hero',label:'Zarin',size:1,x:96,y:96}});
+  expect((place() as HTMLButtonElement).disabled).toBe(true);
+  act(()=>useCommands.getState().notify({kind:'applied',commandId:'cmd_0000000000000001',type:'token.create'}));
+  expect((place() as HTMLButtonElement).disabled).toBe(true); // receipt is not a mirror
+});
+it('drags a current creature to a zoomed map point in one linked token.create',()=>{
+  const {place,map,issued}=creatureSetup(creatureActor('cmb_ogre','Ogre',2));const dataTransfer=creatureTransfer();
+  fireEvent.dragStart(place(),{dataTransfer});fireEvent.dragOver(map,{dataTransfer});fireEvent(map,Object.assign(new MouseEvent('drop',{bubbles:true,clientX:420,clientY:310}),{dataTransfer}));fireEvent.dragEnd(place());
+  expect(issued).toHaveLength(1);expect(issued[0]?.draft).toMatchObject({type:'token.create',payload:{actorId:'cmb_ogre',label:'Ogre',size:2,x:128,y:128}});
+  expect(issued[0]?.overlay).toMatchObject({kind:'token',create:{size:2,x:128,y:128}});
+});
+it('requires duplicate confirmation and releases Place only when its token is mirrored',()=>{
+  const actor=creatureActor();const confirm=vi.spyOn(window,'confirm').mockReturnValue(false);
+  const {place,issued}=creatureSetup(actor,[{...hero,actorId:actor.id}]);
+  expect(screen.getByText('On this map (1)')).toBeTruthy();fireEvent.click(place());expect(issued).toHaveLength(0);
+  confirm.mockReturnValue(true);fireEvent.click(place());expect(issued).toHaveLength(1);
+  const payload=issued[0]!.draft.payload as Record<string,unknown>;
+  act(()=>seed([scene,actor,{...hero,actorId:actor.id},{...hero,id:String(payload.id),actorId:actor.id,x:320,y:320}]));
+  expect((place() as HTMLButtonElement).disabled).toBe(false);expect(screen.getByText('On this map (2)')).toBeTruthy();
+});
+it('drops nothing after the dragged actor disappears, and refuses external drops',()=>{
+  const {place,map,issued}=creatureSetup();const dataTransfer=creatureTransfer();
+  dataTransfer.setData('application/x-vtt-creature','chr_hero');fireEvent(map,Object.assign(new MouseEvent('drop',{bubbles:true,clientX:420,clientY:310}),{dataTransfer}));expect(issued).toHaveLength(0);
+  fireEvent.dragStart(place(),{dataTransfer});act(()=>seed([scene]));fireEvent(map,Object.assign(new MouseEvent('drop',{bubbles:true,clientX:420,clientY:310}),{dataTransfer}));expect(issued).toHaveLength(0);
+  expect(screen.queryByRole('button',{name:'Place Zarin (party)'})).toBeNull();
+});
+it('a rejected placement unlocks the actor without issuing a replacement',()=>{
+  const {place,issued}=creatureSetup();fireEvent.click(place());
+  act(()=>useCommands.getState().notify({kind:'rejected',commandId:'cmd_0000000000000001',type:'token.create',code:'stale',action:'none'} as never));
+  expect((place() as HTMLButtonElement).disabled).toBe(false);expect(issued).toHaveLength(1);
+});
+it('a disconnected drag or a drop outside the map cannot place a creature',()=>{
+  const {place,map,issued}=creatureSetup();const dataTransfer=creatureTransfer();
+  fireEvent.dragStart(place(),{dataTransfer});fireEvent.drop(screen.getByRole('main'),{dataTransfer,clientX:1,clientY:1});expect(issued).toHaveLength(0);
+  fireEvent.dragStart(place(),{dataTransfer});act(()=>useConnection.getState().setStatus('reconnecting'));fireEvent(map,Object.assign(new MouseEvent('drop',{bubbles:true,clientX:420,clientY:310}),{dataTransfer}));expect(issued).toHaveLength(0);
 });

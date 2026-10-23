@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { GmEntity } from '../../protocol/frames';
 import type { GmBoot } from '../../live/boot';
 import { createTurnController, currentTurn } from '../actions/turns';
+import { TrackerLink } from './TrackerLink';
 import { actionFeedback } from './feedback';
 
 export function TurnControls({boot,entities,enabled}: {boot:GmBoot;entities:readonly GmEntity[];enabled:boolean}) {
@@ -33,7 +34,7 @@ export function TurnControls({boot,entities,enabled}: {boot:GmBoot;entities:read
     <button type="button" disabled={!enabled || !turn || sending || waiting} onClick={() => void change('prev')}
       title="Previous turn does not undo applied start- or end-of-turn effects">Previous turn</button>
     <button type="button" disabled={!enabled || !turn || sending || waiting} onClick={() => void change('next')}>Next turn</button>
-    <a href="/tracker" target="_blank" rel="noopener noreferrer" title="Opens the tracker for the live session">Open live tracker</a>
+    <TrackerLink boot={boot}/>
     <span role="status">{sending ? 'Sending turn…' : waiting ? (message || 'Waiting for the tracker…') : message}</span>
   </section>;
 }
