@@ -3,7 +3,8 @@
 export type GmFrame = GmSnapshot | GmPatch;
 export type OpaqueToken = string;
 export type Id = string;
-export type GmEntity = GmScene | GmToken | GmLight | GmWall | FogState | GmTemplate | TerrainState | GmActor;
+export type GmEntity =
+  GmScene | GmToken | GmLight | GmWall | FogState | GmTemplate | TerrainState | GmActor | GmTablePointer;
 /**
  * @maxItems 24
  */
@@ -213,6 +214,15 @@ export interface LiveCondition {
   name: string;
   value: number | null;
 }
+/**
+ * What the table is showing (batch e-9). Campaign-wide: every GM snapshot carries it, with or without a scene open, and a patch upserts it whenever the table moves. sceneId null: the table shows nothing. Never sent to a table.
+ */
+export interface GmTablePointer {
+  kind: "table";
+  id: "table";
+  version: OpaqueToken;
+  sceneId: Id | null;
+}
 export interface GmPatch {
   schemaVersion: 1;
   frame: "patch";
@@ -229,6 +239,6 @@ export interface GmPatch {
   originCommandId?: OpaqueToken;
 }
 export interface GmEntityRef {
-  kind: "scene" | "token" | "light" | "wall" | "fog" | "template" | "terrain" | "actor";
+  kind: "scene" | "token" | "light" | "wall" | "fog" | "template" | "terrain" | "actor" | "table";
   id: Id;
 }

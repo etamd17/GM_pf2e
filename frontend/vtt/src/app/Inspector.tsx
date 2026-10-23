@@ -94,7 +94,7 @@ function TrackerLink({
 }
 
 export function Inspector({ entity, enabled, onIssue, onDeleted, scene, boot, fog, terrain, actors = [] }: InspectorProps) {
-  if (!entity || entity.kind === 'scene' || entity.kind === 'fog' || entity.kind === 'terrain' || entity.kind === 'actor') {
+  if (!entity || entity.kind === 'scene' || entity.kind === 'fog' || entity.kind === 'terrain' || entity.kind === 'actor' || entity.kind === 'table') {
     return (
       <div className="vtt-inspector">
         {scene && boot && (

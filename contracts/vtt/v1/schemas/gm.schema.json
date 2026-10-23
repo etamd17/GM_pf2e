@@ -30,7 +30,8 @@
             "fog",
             "template",
             "terrain",
-            "actor"
+            "actor",
+            "table"
           ]
         },
         "id": {
@@ -326,6 +327,9 @@
         },
         {
           "$ref": "#/definitions/GmActor"
+        },
+        {
+          "$ref": "#/definitions/GmTablePointer"
         }
       ]
     },
@@ -654,6 +658,39 @@
             }
           ],
           "description": "Feet one move covers (E-4), per system: PF2e Speed, Cosmere movement rate; null when unknown. The GM page measures a dragged token against it."
+        }
+      }
+    },
+    "GmTablePointer": {
+      "title": "GmTablePointer",
+      "description": "What the table is showing (batch e-9). Campaign-wide: every GM snapshot carries it, with or without a scene open, and a patch upserts it whenever the table moves. sceneId null: the table shows nothing. Never sent to a table.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "id",
+        "version",
+        "sceneId"
+      ],
+      "properties": {
+        "kind": {
+          "const": "table"
+        },
+        "id": {
+          "const": "table"
+        },
+        "version": {
+          "$ref": "common.schema.json#/definitions/OpaqueToken"
+        },
+        "sceneId": {
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/definitions/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       }
     }

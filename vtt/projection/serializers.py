@@ -101,6 +101,11 @@ def fog_entity(key: TokenKey, campaign_id: str, audience: str, fog) -> dict[str,
     return _with_version(key, campaign_id, audience, "fog", "fog", fields)
 
 
+def gm_table_pointer(key: TokenKey, campaign_id: str, scene_id: str | None) -> dict[str, Any]:
+    """What the table shows (batch e-9): campaign-wide, GM only, null for nothing."""
+    return _with_version(key, campaign_id, "gm", "table", "table", {"sceneId": scene_id})
+
+
 def gm_actor(key: TokenKey, campaign_id: str, actor_id: str, data: dict[str, Any]) -> dict[str, Any]:
     """A tracker actor (parity-3) as the GM sees it: the whole mirrored record."""
     fields = {

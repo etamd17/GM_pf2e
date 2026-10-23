@@ -5621,6 +5621,168 @@
     }
   },
   {
+    "id": "table1-gm-table-pointer-patch",
+    "schema": "gm",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "patch",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 1,
+      "upserted": [
+        {
+          "kind": "table",
+          "id": "table",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA",
+          "sceneId": "scene_a"
+        }
+      ],
+      "removed": []
+    }
+  },
+  {
+    "id": "table1-gm-table-pointer-cleared",
+    "schema": "gm",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "patch",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 1,
+      "upserted": [
+        {
+          "kind": "table",
+          "id": "table",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA",
+          "sceneId": null
+        }
+      ],
+      "removed": []
+    }
+  },
+  {
+    "id": "table1-invalid-table-pointer-extra-field",
+    "schema": "gm",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "patch",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 1,
+      "upserted": [
+        {
+          "kind": "table",
+          "id": "table",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA",
+          "sceneId": "scene_a",
+          "name": "Hall"
+        }
+      ],
+      "removed": []
+    }
+  },
+  {
+    "id": "table1-invalid-table-pointer-other-id",
+    "schema": "gm",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "patch",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 1,
+      "upserted": [
+        {
+          "kind": "table",
+          "id": "tv2",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA",
+          "sceneId": "scene_a"
+        }
+      ],
+      "removed": []
+    }
+  },
+  {
+    "id": "table1-gm-no-scene-snapshot-with-pointer",
+    "schema": "gm",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "snapshot",
+      "audience": "gm",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 0,
+      "campaignId": "campaign_a",
+      "sceneId": null,
+      "principal": {
+        "kind": "member",
+        "id": "user_gm",
+        "campaignRole": "gm"
+      },
+      "capabilities": [
+        "scene.prepare",
+        "scene.publish",
+        "token.move"
+      ],
+      "entities": [
+        {
+          "kind": "table",
+          "id": "table",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA",
+          "sceneId": null
+        }
+      ]
+    }
+  },
+  {
+    "id": "table1-invalid-no-scene-snapshot-with-token",
+    "schema": "gm",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "frame": "snapshot",
+      "audience": "gm",
+      "subscriptionId": "sub_AAAAAAAAAAAAAAAA",
+      "seq": 0,
+      "campaignId": "campaign_a",
+      "sceneId": null,
+      "principal": {
+        "kind": "member",
+        "id": "user_gm",
+        "campaignRole": "gm"
+      },
+      "capabilities": [
+        "scene.prepare",
+        "scene.publish",
+        "token.move"
+      ],
+      "entities": [
+        {
+          "kind": "table",
+          "id": "table",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA",
+          "sceneId": null
+        },
+        {
+          "kind": "token",
+          "id": "token_a",
+          "version": "ver_AAAAAAAAAAAAAAAA",
+          "x": 64,
+          "y": 64,
+          "size": 1,
+          "label": "Valeros",
+          "color": 13214542,
+          "artAssetId": null,
+          "actorId": "actor_a",
+          "hidden": false,
+          "locked": false,
+          "controllerIds": [
+            "user_a"
+          ]
+        }
+      ]
+    }
+  },
+  {
     "id": "parity3-gm-actor-removed",
     "schema": "gm",
     "valid": true,

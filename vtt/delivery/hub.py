@@ -192,6 +192,11 @@ class Hub:
                         else S.table_entities(self.key, scene, rows, fog_view, terrain_view, actors))
             if sub.audience == "table" and not entities:
                 sub.scene_id = None     # nothing published: the table sees no scene
+            if sub.audience == "gm":
+                # e-9: every GM, with or without a scene, knows what the table shows.
+                pointer = session.get(VttTablePointer, sub.campaign_id)
+                entities.append(S.gm_table_pointer(self.key, sub.campaign_id,
+                                                   pointer.scene_id if pointer else None))
             cursor = committed_position(session, sub.campaign_id)
         frame = S.snapshot_frame(sub.audience, sub.subscription_id, sub.campaign_id, sub.scene_id,
                                  self._principal_payload(sub.principal, sub.audience), entities)
@@ -269,8 +274,11 @@ class Hub:
         keys: set[tuple[str, str]] = set()
         actor_ids: set[str] = set()
         scene_changed = False
+        table_changed = False
         for r in rows:
             ev = r.event
+            if sub.audience == "gm" and ev.get("kind") == "table-pointer":
+                table_changed = True    # e-9: whatever scene this GM has open
             if ev.get("kind") == "actors":
                 # Campaign-wide (parity-3): no scene of its own.
                 if sub.scene_id is not None:
@@ -283,11 +291,11 @@ class Hub:
                 scene_changed = True
             elif kind == "entities":
                 keys.update((k, i) for k, i in ev.get("changed", []))
-        if not keys and not actor_ids and not scene_changed and origin_command_id is None:
+        if not keys and not actor_ids and not scene_changed and not table_changed and origin_command_id is None:
             sub.cursor = last           # nothing this subscription can see changed
             return True
-        if keys or actor_ids or scene_changed:
-            diff = self._diff(sub, keys, scene_changed, actor_ids)
+        if keys or actor_ids or scene_changed or table_changed:
+            diff = self._diff(sub, keys, scene_changed, actor_ids, table_changed)
             if diff is None:
                 self._recover(sub, "scene-changed", depth)
                 return False
@@ -377,7 +385,7 @@ class Hub:
         self.disconnect(sub.sid)
 
     def _diff(self, sub: Subscription, keys: set[tuple[str, str]], scene_changed: bool,
-              actor_ids: set[str] = frozenset()):
+              actor_ids: set[str] = frozenset(), table_changed: bool = False):
         """Project the named entities now and compare with what this subscription holds.
         Returns (upserted, removed, sent_after) without touching the subscription,
         or None when the subscription's scene itself went away. ``actor_ids``
@@ -387,10 +395,19 @@ class Hub:
         removed: list[dict[str, str]] = []
         sent_after = dict(sub.sent)
         with self.db.session() as session:
-            scene = self._scene(session, sub.campaign_id, sub.scene_id)
-            if scene is None or (sub.audience == "table" and not scene.published):
-                return None
             current: dict[tuple[str, str], dict[str, Any]] = {}
+            if table_changed:
+                # e-9: the GM's copy of what the table shows, scene or no scene.
+                pointer = session.get(VttTablePointer, sub.campaign_id)
+                current[("table", "table")] = S.gm_table_pointer(self.key, sub.campaign_id,
+                                                                 pointer.scene_id if pointer else None)
+                keys = keys | {("table", "table")}
+            scene = self._scene(session, sub.campaign_id, sub.scene_id)
+            if sub.audience == "gm" and sub.scene_id is None and not (scene_changed or actor_ids):
+                keys = {k for k in keys if k == ("table", "table")}
+                scene = None    # a GM with no scene open: only the table pointer can change
+            elif scene is None or (sub.audience == "table" and not scene.published):
+                return None
             if scene_changed:
                 # A scene change can move the grid, which moves the fog and what
                 # it covers: recheck the fog entity and, for the table, every
@@ -431,7 +448,7 @@ class Hub:
                 projected = S.gm_scene(self.key, scene) if sub.audience == "gm" else S.table_scene(self.key, scene)
                 current[("scene", scene.id)] = projected
                 keys = keys | {("scene", scene.id)}
-            entity_keys = [k for k in keys if k[0] not in ("scene", "fog", "terrain", "actor")]
+            entity_keys = [k for k in keys if k[0] not in ("scene", "fog", "terrain", "actor", "table")]
             if entity_keys:
                 rows = session.execute(
                     select(VttEntity).where(

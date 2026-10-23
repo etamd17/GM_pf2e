@@ -1,7 +1,7 @@
 {
   "batch": "scene-projection-1",
   "schemaVersion": 1,
-  "sourceDigest": "2b1f3671c5afb9ed97954217a72d8d278d56992339c565de234c6dc4bf5e7f9a",
+  "sourceDigest": "fd66f3d467554d6b9d4f1b0c60f972b49904268c724281a57ac3bce61d5a9096",
   "generator": {
     "versions": {
       "ajv": "8.20.0",
@@ -34,16 +34,16 @@
   },
   "outputs": {
     "ajv-runtime.mjs": "99c0e4ed98924e6341f2d043908a4537a102600fc8c90b188c561166f6d57013",
-    "fixtures.json": "825d9035ec157cc4eeafb890bef9f00bedd0d5527ff431adcaf4e87d47849b10",
+    "fixtures.json": "985eaa3d60bfb79eb4e287c57dd23af0c7112c69ff7fc3bc964cdfcc89807a47",
     "gm.validators.d.mts": "e8368e9524fe587782eb19bf06e63cb72abf41232e2641f7fa3ff07c56981d7e",
-    "gm.validators.mjs": "c56fbc6a7e4daf98fbf4b2163675d9559816ea9eb38ecbcadbf51d85e33815b6",
+    "gm.validators.mjs": "3b04d338446edd82e82fd66d3cc31c7f28a81122cb3587f55140c2ce431467f0",
     "table.validators.d.mts": "ce199f9114bd595f0718ddd6123fb305b0f3a2f1b0d82c51e7f59398fe0dc99c",
     "table.validators.mjs": "08ff9dff32abe936e2e785635515fa45d899b78eb1e6bd31c4cc586ee1ff2cad",
     "types/acknowledgement.d.ts": "1a1eb5985db5c138ad35ebf0de0a3c24836b2a5770d370f905153a6340391948",
     "types/bootstrap-rejection.d.ts": "1893ffa6bd97bc1c5a0a6a25fa6a7953718097520193037aef3bbfa243561e7f",
     "types/command.d.ts": "71992d50ba084b9bb2e03800b70077ff02c7a631ad7c9e9115a3b4d715fe2fad",
     "types/gm-subscribe.d.ts": "0d6b59c9c30714e479dc830123813bb2d10fa81029fd57ffe03691f781eaf3a4",
-    "types/gm.d.ts": "ea6b9261b50b9852bb64f54756ef8ce056eefe350b3e094c7d823f7740e6f8cb",
+    "types/gm.d.ts": "bf3d97445a3cd7a07481a3878dc193ffab30e5d8688b4494f78a477b2e8aaa81",
     "types/resync-required.d.ts": "cb66da6ab22abbdddeb9d4231e045b1bc15bfe41775f6b2bae1ae9422b1dc30a",
     "types/table-subscribe.d.ts": "4806b57abbe6a5ab579b4e1341b4fce5dad0ee6a81989fa4ceef6c1c80635c03",
     "types/table.d.ts": "f9581c492f1a09ee7c2913b09963ee60d096e8080573042ef431bd9166c7c3fd",

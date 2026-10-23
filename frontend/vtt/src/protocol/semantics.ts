@@ -79,7 +79,7 @@ export function fogOk(item: Record<string, unknown>): boolean {
 // - snapshot entities / patch upserted / patch removed: no repeated (kind, id);
 // - a patch never upserts and removes the same key;
 // - a snapshot has at most one scene entity and it is sceneId's; sceneId null
-//   means no entities;
+//   means no entities but the GM's table pointer (e-9);
 // - GM controllerIds and capabilities hold no repeats;
 // - a wall (GM, or the table's since E-6) is not zero-length.
 export function frameRulesHold(surface: FrameSurface, message: unknown): boolean {
@@ -98,7 +98,8 @@ export function frameRulesHold(surface: FrameSurface, message: unknown): boolean
     if (!distinct(entities.map(key))) return false;
     const scenes = entities.filter((e) => e.kind === 'scene');
     if (m.sceneId === null) {
-      if (entities.length > 0) return false;
+      // e-9: the GM's campaign-wide table pointer is the one exception.
+      if (entities.some((e) => e.kind !== 'table')) return false;
     } else if (scenes.length > 1 || scenes.some((s) => s.id !== m.sceneId)) {
       return false;
     }

@@ -15,7 +15,8 @@ Rules (each a ``ProtocolValidationError``):
   ``(kind, id)``;
 * a patch never upserts and removes the same key;
 * a snapshot carries at most one ``scene`` entity, and it is ``sceneId``'s;
-  ``sceneId: null`` means no entities at all;
+  ``sceneId: null`` means no entities other than the GM's ``table`` pointer
+  (batch e-9);
 * GM ``controllerIds`` and ``capabilities`` hold no repeats;
 * a wall (GM, or the table's since E-6) is not zero-length;
 * a ``fog`` entity (batch parity-1, GM and table): ``cols * rows`` is at most
@@ -161,7 +162,8 @@ def check_frame(schema_key: str, message) -> None:
         _no_repeats(_keys(entities), 'entity key')
         scenes = [e for e in entities if e.get('kind') == 'scene']
         if message.get('sceneId') is None:
-            if entities:
+            # e-9: the GM's campaign-wide table pointer is the one exception.
+            if any(e.get('kind') != 'table' for e in entities):
                 raise SemanticError('entities without a scene')
         elif len(scenes) > 1 or any(s.get('id') != message.get('sceneId') for s in scenes):
             raise SemanticError('scene entity does not match sceneId')

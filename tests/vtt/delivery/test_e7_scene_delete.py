@@ -48,7 +48,8 @@ def test_the_gm_viewing_it_is_resynced_to_no_scene_not_revoked(stack):
         assert [m["name"] for m in messages] == ["vtt.resync_required", "vtt.snapshot"]
         assert payload(messages[0])["reason"] == "scene-changed"
         snapshot = payload(messages[1])
-        assert snapshot["sceneId"] is None and snapshot["entities"] == []
+        assert snapshot["sceneId"] is None
+        assert [(e["kind"], e["sceneId"]) for e in snapshot["entities"]] == [("table", None)]   # e-9 pointer only
         assert client.is_connected(NAMESPACE)
 
 

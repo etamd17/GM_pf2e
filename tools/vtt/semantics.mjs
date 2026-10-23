@@ -6,7 +6,7 @@
 // - snapshot entities / patch upserted / patch removed: no repeated (kind, id)
 // - a patch never upserts and removes the same key
 // - a snapshot has at most one scene entity and it is sceneId's;
-//   sceneId null means no entities
+//   sceneId null means no entities but the GM's table pointer (e-9)
 // - GM controllerIds and capabilities hold no repeats
 // - a wall (GM, or the table's since E-6) is not zero-length
 // Commands: no repeated expected key; updates, moves, deletes and table
@@ -85,7 +85,8 @@ export function checkFrame(schemaKey, message) {
     if (!distinct(entities.map(key))) return false;
     const scenes = entities.filter((e) => e.kind === 'scene');
     if (message.sceneId === null) {
-      if (entities.length) return false;
+      // e-9: the GM's campaign-wide table pointer is the one exception.
+      if (entities.some((e) => e.kind !== 'table')) return false;
     } else if (scenes.length > 1 || scenes.some((s) => s.id !== message.sceneId)) {
       return false;
     }
