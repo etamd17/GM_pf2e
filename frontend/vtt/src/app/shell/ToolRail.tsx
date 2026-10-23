@@ -13,6 +13,7 @@ const GROUPS: ReadonlyArray<{id: Group; label: string; first: Tool; path: string
   {id:'terrain', label:'Terrain', first:'terrain', path:'M3 20 L9 5 L14 14 L18 8 L22 20 Z'},
 ];
 const GROUP_OF: Record<Tool,Group> = {select:'select',token:'place',light:'place',ruler:'measure',ping:'measure',template:'templates',wall:'walls',door:'walls','fog-reveal':'fog','fog-hide':'fog',terrain:'terrain'};
+const GROUP_KEY: Record<Group,string> = {select:'V',place:'P',measure:'M',templates:'A',walls:'W',fog:'F',terrain:'R'};
 const SUBTOOLS: Partial<Record<Group, ReadonlyArray<{id: Tool; label: string; hint: string}>>> = {
   place:[{id:'token',label:'Token',hint:'Click to place a token'}, {id:'light',label:'Light',hint:'Click to place a light'}],
   measure:[{id:'ruler',label:'Ruler',hint:'Drag to measure; the TV shows it too'}, {id:'ping',label:'Ping',hint:'Click to ping a spot on the TV'}],
@@ -57,7 +58,7 @@ export function ToolRail(p: Props) {
         aria-describedby={`tool-hint-${g.id}`} onClick={() => { if (group !== g.id || g.id === 'select') choose(g.first); }}>
         <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d={g.path} /></svg>
         <span>{g.label}</span>
-        <span className="vtt-tool-hint" role="tooltip" id={`tool-hint-${g.id}`}>{g.label}: Enter or Space when focused</span>
+        <span className="vtt-tool-hint" role="tooltip" id={`tool-hint-${g.id}`}>{g.label}: Enter or Space when focused; {GROUP_KEY[g.id]} with map/tool focus when shortcuts are enabled</span>
       </button>
       {group === g.id && <div className="vtt-subtools" role="group" aria-label={`${g.label} tools`}>
         {SUBTOOLS[g.id]?.map(t => <button type="button" key={t.id} className={`vtt-subtool ${p.tool === t.id ? 'is-active' : ''}`}

@@ -153,6 +153,39 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
              "native drag creates exactly one additional linked token")
     shoot(gm, "u4-creatures")
 
+    # U-7: place, select, open the menu and hide, using only the keyboard.
+    existing_ids = {t["id"] for t in probe(gm)["tokens"]}
+    map_host = gm.locator(".vtt-map-host")
+    map_host.focus()
+    gm.keyboard.press("p")
+    gm.keyboard.press("Enter")
+    new_state = wait_for(gm, lambda s: any(t["id"] not in existing_ids for t in s["tokens"]),
+                         "keyboard Place creates a token")
+    placed = next(t for t in new_state["tokens"] if t["id"] not in existing_ids)
+    wait_for(tv, lambda s: token(s, placed["id"]) is not None, "the placed token reaches the TV")
+    gm.keyboard.press("v")
+    token_button = gm.get_by_role("button", name=placed["label"], exact=True)
+    for _ in range(40):
+        gm.keyboard.press("Tab")
+        if token_button.evaluate("el => el === document.activeElement"):
+            break
+    else:
+        raise AssertionError("keyboard could not reach the token list")
+    expect(token_button).to_be_visible()
+    gm.keyboard.press("Enter")
+    gm.keyboard.press("Shift+F10")
+    menu = gm.get_by_role("dialog", name=f"Token actions: {placed['label']}", exact=True)
+    expect(menu).to_be_visible()
+    shoot(gm, "u7-token-menu")
+    # Close has initial focus; the next field is Hide from TV.
+    gm.keyboard.press("Tab")
+    expect(menu.get_by_role("button", name="Hide from TV", exact=True)).to_be_focused()
+    gm.keyboard.press("Enter")
+    wait_for(tv, lambda s: token(s, placed["id"]) is None, "keyboard hide removes the token from the TV")
+    assert token(wait_for(gm, lambda s: token(s, placed["id"])["hidden"], "GM keeps the hidden token"), placed["id"])
+    gm.keyboard.press("Escape")
+    expect(map_host).to_be_focused()
+
     # --- move a token: the TV follows ---------------------------------------------------------
     start_x = token(shown, "tok_hero")["x"]
     click_token(gm, "tok_hero")

@@ -1,4 +1,8 @@
 import { Inspector } from './Inspector';
+import { TokenActions } from './controls/TokenActions';
+import { ActionDialog } from './shell/ActionDialog';
+import { TOOL_KEYS, ignoresMapKey, hasMapToolFocus } from './shell/keyboard';
+import { useToolShortcuts } from './shell/useToolShortcuts';
 import { TurnControls } from './controls/TurnControls';
 import { ConditionPicker } from './controls/ConditionPicker';
 import { CreaturesPanel } from './controls/CreaturesPanel';
@@ -25,7 +29,7 @@ import { MapHost } from '../components/MapHost';
 import type { GmLive } from '../live/gm';
 import type { GmEntity } from '../protocol/frames';
 import { createRuler, ping, type RulerController } from './actions/transients';
-import { snapToGrid, snapTokenCentre, type Hit, type Point } from '../scene/interaction';
+import { hitTest, snapToGrid, snapTokenCentre, type Hit, type Point } from '../scene/interaction';
 import {screenToWorld,type Viewport} from '../scene/viewport';
 import type {DragEvent} from 'react';
 import type { RuntimeInteraction } from '../scene/SceneRuntime';
@@ -55,6 +59,7 @@ import {
   newEntityId,
   showOnTable,
   updateScene,
+  updateToken,
   type Draft,
   type TokenOverlay,
 } from './gmCommands';
@@ -123,6 +128,9 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
 
   const [tool, setTool] = useState<Tool>('select');
   const [selection, setSelection] = useState<Hit | null>(null);
+  const [tokenMenu, setTokenMenu] = useState<string | null>(null);
+  const [shortcutHelp, setShortcutHelp] = useState(false);
+  const [shortcutsEnabled, setShortcutsEnabled] = useToolShortcuts(live?.boot.memberId);
   const [wallStart, setWallStart] = useState<Point | null>(null);
   const [wallEnd, setWallEnd] = useState<Point | null>(null);
   // Templates and terrain (parity P2): the tool options, and a cone or line
@@ -167,6 +175,11 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
     }
   }
   const selected = selection ? (entityOf(selection.kind, selection.id) ?? null) : null;
+  const menuToken = tokenMenu ? entityOf('token', tokenMenu) as Of<'token'> | undefined : undefined;
+
+  useEffect(() => {
+    if (tokenMenu && (!menuToken || !showMap)) setTokenMenu(null);
+  }, [tokenMenu, menuToken, showMap]);
 
   // A selection whose entity is gone (deleted here or elsewhere) is dropped.
   useEffect(() => {
@@ -223,8 +236,8 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
-      const target = e.target as HTMLElement | null;
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')) return;
+      const target = e.target;
+      if (e.isComposing || e.repeat || e.keyCode === 229 || (target instanceof Element && target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="dialog"]'))) return;
       const key = e.key.toLowerCase();
       if (key === 'z') {
         e.preventDefault();
@@ -486,6 +499,12 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
       if (tool === 'template' && templateStart) setWallEnd(point); // the aim preview line
     },
     onKey: (e) => {
+      if (ignoresMapKey(e)) return false;
+      if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) {
+        if (selected?.kind !== 'token') return false;
+        setTokenMenu(selected.id);
+        return true;
+      }
       if (e.key === 'Escape') {
         setWallStart(null);
         setWallEnd(null);
@@ -543,7 +562,7 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
   const allEntities = [...entities.values()];
   const linkedActor = selected?.kind === 'token' ? actorEntities.find(a => a.id === selected.actorId) : undefined;
   function placementScene() {
-    const host=stageRef.current?.querySelector('.vtt-map-host');
+    const host=stageRef.current?.querySelector<HTMLElement>('.vtt-map-host');
     return {host,viewport:mapViewport.current};
   }
   function placeActor(actorId:string,dropPoint?:Point) {
@@ -594,8 +613,55 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
     return !!commandId;
   }
 
+  function pointerToken(event: { target: EventTarget; clientX: number; clientY: number }) {
+    if (!scene || !showMap || !(event.target instanceof Element) || !event.target.closest('.vtt-map-host')) return null;
+    const {host, viewport:currentView} = placementScene();
+    if (!host || !currentView) return null;
+    const rect = host.getBoundingClientRect();
+    const hit = hitTest(scene, screenToWorld(currentView, {x:event.clientX-rect.left, y:event.clientY-rect.top}), currentView.scale);
+    return hit?.kind === 'token' ? entityOf('token', hit.id) as Of<'token'> | undefined : null;
+  }
+  function openSheet(token: Of<'token'>) {
+    const actor = token.actorId ? entityOf('actor', token.actorId) as Of<'actor'> | undefined : undefined;
+    if (actor?.sheetUrl) window.open(actor.sheetUrl, '_blank', 'noopener,noreferrer');
+  }
+  function changeMenuToken(patch: Partial<Pick<Of<'token'>, 'hidden'|'locked'|'size'|'actorId'>>) {
+    // Re-read at the action boundary; a mirror update can delete or replace
+    // the menu's token without this render having painted yet.
+    const token = tokenMenu ? entityOf('token', tokenMenu) as Of<'token'> | undefined : undefined;
+    if (!inputEnabled || !token || (patch.actorId && !entityOf('actor', patch.actorId))) return;
+    const draft = updateToken(token, patch);
+    issue(draft, overlayFor(draft));
+    setTokenMenu(null);
+  }
+
   return (
-    <div className={`vtt-gm ${railOpen ? '' : 'is-rail-collapsed'} ${dockOpen ? '' : 'is-dock-collapsed'}`}>
+    <div className={`vtt-gm ${railOpen ? '' : 'is-rail-collapsed'} ${dockOpen ? '' : 'is-dock-collapsed'}`}
+      onKeyDownCapture={event => {
+        const e = event.nativeEvent;
+        if (ignoresMapKey(e) || !hasMapToolFocus(e.target)) return;
+        const focusedToken = e.target instanceof Element ? e.target.closest<HTMLButtonElement>('button[data-token-id]')?.dataset.tokenId : undefined;
+        if (focusedToken && e.key === 'Escape') {
+          event.preventDefault(); event.stopPropagation(); placementScene().host?.focus(); return;
+        }
+        if (focusedToken && (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey))) {
+          event.preventDefault(); event.stopPropagation(); selectEntity({kind:'token', id:focusedToken}); setTokenMenu(focusedToken); return;
+        }
+        if (shortcutsEnabled && (e.key === '?' || TOOL_KEYS[e.key.toLowerCase()])) {
+          event.preventDefault(); event.stopPropagation();
+          if (e.key === '?') setShortcutHelp(true);
+          else if (TOOL_KEYS[e.key.toLowerCase()] === 'select' || inputEnabled) chooseTool(TOOL_KEYS[e.key.toLowerCase()]!);
+          return;
+        }
+        if (e.key === 'Enter' && e.target instanceof Element && e.target.classList.contains('vtt-map-host') && tool === 'token' && inputEnabled && scene) {
+          const {host,viewport:currentView} = placementScene();
+          const rect = host?.getBoundingClientRect();
+          const point = currentView && rect ? screenToWorld(currentView, {x:rect.width/2,y:rect.height/2}) : {x:scene.width/2,y:scene.height/2};
+          interaction.onClick?.(point, null);
+          event.preventDefault(); event.stopPropagation(); return;
+        }
+        if (e.target instanceof Element && e.target.closest('.vtt-map-host, .vtt-token-selection') && interaction.onKey?.(e)) { event.preventDefault(); event.stopPropagation(); }
+      }}>
       <SceneBar scenes={live ? scenes : null} scene={sceneEntity ?? null} fallbackName={sceneName}
         enabled={inputEnabled} onOpen={openScene} onNew={newScene} onDelete={removeScene}
         onRename={name => sceneEntity && issue(updateScene(sceneEntity, { name }))}
@@ -604,6 +670,7 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
         canUndo={undoState.canUndo} canRedo={undoState.canRedo} nextUndo={undoState.next}
         onUndo={() => step('undo')} onRedo={() => step('redo')}>
         <ViewportButtons controls={viewport} enabled={showMap && renderer === 'ok'} />
+        <button type="button" onClick={() => setShortcutHelp(true)}>Keyboard help</button>
         <WorkspaceStatus pending={pending} zoom={zoom} status={status} />
       </SceneBar>
 
@@ -618,7 +685,11 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
         setTemplateShape={(shape) => { setTemplateShape(shape); setTemplateStart(null); }}
         setTemplateSize={setTemplateSize} setTerrainKind={setTerrainKind} />
 
-      <main className="vtt-stage" ref={stageRef} onDragOver={dragOverCreature} onDrop={dropCreature}>
+      <main className="vtt-stage" ref={stageRef} onDragOver={dragOverCreature} onDrop={dropCreature}
+        onContextMenu={event => {
+          const token = pointerToken(event);
+          if (token) {event.preventDefault(); chooseTool('select'); selectEntity({kind:'token',id:token.id}); setTokenMenu(token.id);}
+        }} onDoubleClick={event => { const token = tool === 'select' ? pointerToken(event) : null; if (token) openSheet(token); }}>
         <NoticeBar live={live} />
         {(sceneDeleted || deletionApplied) && <div className="vtt-notice" role="status">
           <span>This scene was deleted. Choose another scene in the Editing picker, or create a new scene.</span>
@@ -645,11 +716,21 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
             }
           />
         )}
+        {showMap && selected?.kind === 'token' && <div className="vtt-token-selection">
+          <span>{selected.label || 'Unnamed token'}</span>
+          <button type="button" aria-label="Token actions" aria-haspopup="dialog" onClick={() => setTokenMenu(selected.id)}>...</button>
+        </div>}
         {/* The canvas has an off-screen mirror for screen readers. */}
         <ul className="vtt-visually-hidden" aria-label="Tokens on the map">
           {visibleTokens.map((t) => (
             <li key={t.id}>
-              <button type="button" onClick={() => selectEntity({ kind: 'token', id: t.id })}>
+              <button type="button" data-token-id={t.id} onClick={() => selectEntity({ kind: 'token', id: t.id })}
+                onContextMenu={e => { e.preventDefault(); selectEntity({kind:'token',id:t.id}); setTokenMenu(t.id); }}
+                onKeyDown={e => {
+                  if (!ignoresMapKey(e.nativeEvent) && (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10'))) {
+                    e.preventDefault(); selectEntity({kind:'token',id:t.id}); setTokenMenu(t.id);
+                  }
+                }}>
                 {t.label || 'Unnamed token'}
                 {t.hidden ? ' (hidden from the table)' : ''}
               </button>
@@ -689,6 +770,17 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
       <footer className="vtt-tray" aria-label="Encounter">
         {live ? <TurnControls key={live.boot.campaignId} boot={live.boot} entities={allEntities} enabled={inputEnabled} /> : <EncounterLine actors={actorEntities} />}
       </footer>
+      {menuToken && showMap && <TokenActions token={menuToken} actors={actorEntities} enabled={inputEnabled}
+        onChange={changeMenuToken} onClose={() => setTokenMenu(null)} onDelete={() => {
+          const token = tokenMenu ? entityOf('token',tokenMenu) as Of<'token'> | undefined : undefined;
+          if (token && inputEnabled) {issue(deleteEntity(token), {kind:'token',id:token.id,deleted:true});setSelection(null);setTokenMenu(null);}
+        }} />}
+      {shortcutHelp && <ActionDialog title="Keyboard help" onClose={() => setShortcutHelp(false)}>
+        <label><input type="checkbox" checked={shortcutsEnabled} onChange={e => setShortcutsEnabled(e.target.checked)}/> Enable single-key tool shortcuts</label>
+        <p>With the map or tools focused: V Select, P Place token, M Measure, A Area template, W Wall, F Reveal fog, R Terrain, ? Help.</p>
+        <p>Focus the map and press Enter to place a token at the view centre. Tab to the token list to select one. Menu or Shift+F10 opens its actions; Escape closes. Escape from the token list returns to the map. Arrow keys move an unlocked selection; Delete removes it. Ctrl/Cmd+Z undoes; Shift+Ctrl/Cmd+Z redoes.</p>
+        <p>Tool shortcuts do not run while typing. Disable them above if you use single keys for assistive controls. All tools remain available as buttons.</p>
+      </ActionDialog>}
     </div>
   );
 }

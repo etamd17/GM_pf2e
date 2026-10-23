@@ -550,3 +550,26 @@ button:focus-visible,
 .vtt-tracker-form { display: inline; margin: 0; }
 .vtt-link-button { background: none; border: 0; padding: 4px 0; color: var(--gilt-200); text-decoration: underline; cursor: pointer; font: inherit; }
 .vtt-link-button:focus-visible { outline: 2px solid var(--gilt-200); outline-offset: 2px; }
+.vtt-token-selection {
+  position: absolute; top: 12px; right: 12px; z-index: 4;
+  display: flex; align-items: center; gap: 8px; max-width: calc(100% - 24px);
+  padding: 6px 10px; background: var(--bg-card); border: 1px solid var(--border-rule); border-radius: 6px;
+}
+.vtt-token-selection span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vtt-action-backdrop {
+  position: fixed; inset: 0; z-index: 100; background: #0009;
+  display: grid; place-items: center; padding: 16px;
+}
+.vtt-action-dialog {
+  display: flex; flex-direction: column; gap: 12px; width: min(440px, 100%);
+  max-height: calc(100dvh - 32px); overflow: auto; padding: 18px;
+  background: var(--bg-card); border: 1px solid var(--border-rule); border-radius: 8px;
+}
+.vtt-action-dialog header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.vtt-action-dialog h2 { margin: 0; font-size: 1.1rem; }
+.vtt-stage ul.vtt-visually-hidden:focus-within {
+  position: absolute; top: 60px; left: 12px; width: auto; height: auto;
+  max-width: calc(100% - 24px); max-height: 50%; overflow: auto;
+  clip: auto; clip-path: none; white-space: normal; z-index: 5;
+  padding: 12px 24px; background: var(--bg-card); border: 1px solid var(--border-rule);
+}

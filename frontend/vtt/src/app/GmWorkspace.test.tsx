@@ -98,6 +98,7 @@ function setup() {
 }
 
 beforeEach(() => {
+  localStorage.clear();
   runtimes.length = 0;
   resetProjectionForTest();
   useEntities.getState().clear();
@@ -815,4 +816,109 @@ it('a disconnected drag or a drop outside the map cannot place a creature',()=>{
   const {place,map,issued}=creatureSetup();const dataTransfer=creatureTransfer();
   fireEvent.dragStart(place(),{dataTransfer});fireEvent.drop(screen.getByRole('main'),{dataTransfer,clientX:1,clientY:1});expect(issued).toHaveLength(0);
   fireEvent.dragStart(place(),{dataTransfer});act(()=>useConnection.getState().setStatus('reconnecting'));fireEvent(map,Object.assign(new MouseEvent('drop',{bubbles:true,clientX:420,clientY:310}),{dataTransfer}));expect(issued).toHaveLength(0);
+});
+
+it('opens selected token actions by visible button, traps focus and restores the opener', () => {
+  const {interaction} = setup();
+  act(() => interaction.onClick?.({x:96,y:96}, {kind:'token',id:hero.id}));
+  const opener = screen.getByRole('button',{name:'Token actions'}); opener.focus(); fireEvent.click(opener);
+  const dialog = screen.getByRole('dialog',{name:'Token actions: Valeros'});
+  const close = within(dialog).getByRole('button',{name:'Close'});
+  expect(document.activeElement).toBe(close);
+  fireEvent.keyDown(close,{key:'Tab',shiftKey:true});
+  expect(document.activeElement).toBe(within(dialog).getByRole('button',{name:'Delete token'}));
+  fireEvent.keyDown(dialog,{key:'Escape'});
+  expect(screen.queryByRole('dialog')).toBeNull(); expect(document.activeElement).toBe(opener);
+});
+it('a focused token opens its own menu with Shift+F10 even if another token is selected', () => {
+  seed([scene,hero,{...hero,id:'tok_other',label:'Other',x:300}]);
+  const {interaction} = setup();act(() => interaction.onClick?.({x:96,y:96},{kind:'token',id:hero.id}));
+  fireEvent.keyDown(screen.getByRole('button',{name:'Other'}),{key:'F10',shiftKey:true});
+  expect(screen.getByRole('dialog',{name:'Token actions: Other'})).toBeTruthy();
+});
+it('menu hide and size commands use the latest mirror version and the undo/overlay path', () => {
+  const {interaction,issued} = setup();act(() => interaction.onClick?.({x:96,y:96},{kind:'token',id:hero.id}));
+  fireEvent.keyDown(screen.getByRole('application'),{key:'ContextMenu'});
+  act(() => seed([scene,{...hero,version:'v'+'B'.repeat(24)},wall]));
+  fireEvent.click(screen.getByRole('button',{name:'Hide from TV'}));
+  expect(issued[0]?.draft).toMatchObject({type:'token.update',payload:{hidden:true}});
+  expect(JSON.stringify(issued[0]?.draft)).toContain('v'+'B'.repeat(24));
+  expect(issued[0]?.overlay).toMatchObject({kind:'token',id:hero.id,patch:{hidden:true}});
+  fireEvent.click(screen.getByRole('button',{name:'Token actions'}));
+  fireEvent.change(within(screen.getByRole('dialog')).getByLabelText('Size (squares)'),{target:{value:'2'}});
+  expect(issued[1]?.draft).toMatchObject({type:'token.update',payload:{size:2}});
+});
+it('menu offers lock/link and only a resolved sheet, and delete needs confirmation', () => {
+  const actor = {...creatureActor(),id:'chr_menu',sheetUrl:'/sheet/resolved'};
+  seed([scene,hero,actor]);const {interaction,issued} = setup();
+  act(() => interaction.onClick?.({x:96,y:96},{kind:'token',id:hero.id}));
+  fireEvent.click(screen.getByRole('button',{name:'Token actions'}));
+  expect(screen.queryByRole('link',{name:'Open sheet'})).toBeNull();
+  fireEvent.click(screen.getByRole('button',{name:'Lock token'}));
+  expect(issued[0]?.draft).toMatchObject({type:'token.update',payload:{locked:true}});
+  fireEvent.click(screen.getByRole('button',{name:'Token actions'}));
+  fireEvent.change(within(screen.getByRole('dialog')).getByLabelText('Tracker link'),{target:{value:actor.id}});
+  expect(issued[1]?.draft).toMatchObject({type:'token.update',payload:{actorId:actor.id}});
+  act(() => seed([scene,{...hero,actorId:actor.id},actor]));
+  fireEvent.click(screen.getByRole('button',{name:'Token actions'}));
+  expect(screen.getByRole('link',{name:'Open sheet'}).getAttribute('href')).toBe('/sheet/resolved');
+  const confirm=vi.spyOn(window,'confirm').mockReturnValue(false);
+  fireEvent.click(screen.getByRole('button',{name:'Delete token'}));expect(issued).toHaveLength(2);
+  confirm.mockReturnValue(true);fireEvent.click(screen.getByRole('button',{name:'Delete token'}));
+  expect(issued[2]?.draft.type).toBe('entity.delete');
+});
+it('right click and double click use map coordinates, not the previous selection', () => {
+  const actor = {...creatureActor(),sheetUrl:'/sheet/resolved'};
+  seed([scene,{...hero,actorId:actor.id},actor]);
+  const {runtime}=setup();const map=screen.getByRole('application');
+  act(()=>runtime.viewportCallback?.({x:0,y:0,scale:1}));
+  const open=vi.spyOn(window,'open').mockImplementation(()=>null);
+  fireEvent.doubleClick(map,{clientX:96,clientY:96});expect(open).toHaveBeenCalledWith('/sheet/resolved','_blank','noopener,noreferrer');
+  fireEvent.contextMenu(map,{clientX:96,clientY:96});expect(screen.getByRole('dialog',{name:'Token actions: Valeros'})).toBeTruthy();
+});
+it('removed and disconnected tokens cannot be edited through an open menu', () => {
+  const {interaction,issued}=setup();act(()=>interaction.onClick?.({x:96,y:96},{kind:'token',id:hero.id}));
+  fireEvent.click(screen.getByRole('button',{name:'Token actions'}));
+  act(()=>useConnection.getState().setStatus('reconnecting'));
+  expect((screen.getByRole('button',{name:'Hide from TV'}) as HTMLButtonElement).disabled).toBe(true);
+  act(()=>seed([scene,wall]));expect(screen.queryByRole('dialog')).toBeNull();expect(issued).toHaveLength(0);
+});
+it.each([['v','Select'],['p','Token'],['m','Ruler'],['a','Templates'],['w','Wall'],['f','Reveal'],['r','Terrain']])('map shortcut %s selects %s', (key,label) => {
+  setup();fireEvent.keyDown(screen.getByRole('application'),{key});
+  expect(screen.getByRole('button',{name:label}).getAttribute('aria-pressed')).toBe('true');
+});
+it('single-key tools only run with map/tool focus and can be disabled in help', () => {
+  setup();fireEvent.keyDown(screen.getByRole('tab',{name:'Creatures'}),{key:'p'});
+  expect(screen.getByRole('button',{name:'Select'}).getAttribute('aria-pressed')).toBe('true');
+  fireEvent.keyDown(screen.getByRole('button',{name:'Select'}),{key:'p'});
+  expect(screen.getByRole('button',{name:'Token'}).getAttribute('aria-pressed')).toBe('true');
+  fireEvent.keyDown(screen.getByRole('application'),{key:'?'});
+  fireEvent.click(screen.getByRole('checkbox',{name:'Enable single-key tool shortcuts'}));
+  fireEvent.keyDown(screen.getByRole('dialog'),{key:'Escape'});
+  fireEvent.keyDown(screen.getByRole('application'),{key:'v'});
+  expect(screen.getByRole('button',{name:'Token'}).getAttribute('aria-pressed')).toBe('true');
+  fireEvent.click(screen.getByRole('button',{name:'Keyboard help'}));expect(screen.getByRole('dialog')).toBeTruthy();
+});
+it.each([{ctrlKey:true},{metaKey:true},{altKey:true},{isComposing:true},{repeat:true}])('does not switch or delete for excluded key event %j', init => {
+  const {interaction,issued}=setup();act(()=>interaction.onClick?.({x:96,y:96},{kind:'token',id:hero.id}));
+  fireEvent.keyDown(screen.getByRole('application'),{key:'p',...init});
+  fireEvent.keyDown(screen.getByRole('application'),{key:'Delete',...init});
+  expect(issued).toHaveLength(0);
+  expect(screen.getByRole('button',{name:'Select'}).getAttribute('aria-pressed')).toBe('true');
+});
+it('keyboard Place uses the visible viewport centre; Delete repeat never duplicates a command', () => {
+  const {runtime,interaction,issued}=setup();const map=screen.getByRole('application');
+  vi.spyOn(map,'getBoundingClientRect').mockReturnValue({width:400,height:300,left:0,top:0} as DOMRect);
+  act(()=>runtime.viewportCallback?.({x:0,y:0,scale:1}));
+  fireEvent.keyDown(map,{key:'p'});fireEvent.keyDown(map,{key:'Enter'});
+  expect(issued[0]?.draft).toMatchObject({type:'token.create',payload:{x:224,y:160}});
+  fireEvent.keyDown(map,{key:'v'});act(()=>interaction.onClick?.({x:96,y:96},{kind:'token',id:hero.id}));
+  fireEvent.keyDown(map,{key:'Delete'});fireEvent.keyDown(map,{key:'Delete',repeat:true});
+  expect(issued.filter(x=>x.draft.type==='entity.delete')).toHaveLength(1);
+});
+it('Escape leaves the focused token list for the map without deleting the selection', () => {
+  const {issued}=setup(); const button=screen.getByRole('button',{name:'Valeros'});
+  button.focus();fireEvent.click(button);fireEvent.keyDown(button,{key:'Escape'});
+  expect(document.activeElement).toBe(screen.getByRole('application'));
+  expect(screen.getByRole('button',{name:'Token actions'})).toBeTruthy();expect(issued).toHaveLength(0);
 });
