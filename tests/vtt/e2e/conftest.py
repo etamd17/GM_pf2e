@@ -52,17 +52,18 @@ campaign = campaigns.create_campaign("VTT harness", "pf2e", gm["id"])
 cid = campaign["id"]
 storage.set_live_campaign_id(cid)
 
-# U-4: a real, campaign-owned party character from a committed test export.
-# Keep it out of the encounter so the existing turn story is unchanged.
-with open("tests/fixtures/goel_l10.json", encoding="utf-8") as handle:
-    scout = json.load(handle)
-scout["build"]["name"] = "Table Scout"
-scout["build"]["size"] = 2
-scout["build"]["sizeName"] = "Medium"
-scout = storage.wrap_character(storage.new_id(), cid, "pf2e", scout, owner_user_id=gm["id"])
+# U-8's two campaign-owned party characters reuse a committed test export.
+# Keep them out of the encounter so the existing turn story is unchanged.
 os.makedirs(storage.party_dir(cid), exist_ok=True)
-with open(os.path.join(storage.party_dir(cid), "table_scout.json"), "w", encoding="utf-8") as handle:
-    json.dump(scout, handle)
+for stem, name in (("table_scout", "Table Scout"), ("table_guide", "Table Guide")):
+    with open("tests/fixtures/goel_l10.json", encoding="utf-8") as handle:
+        character = json.load(handle)
+    character["build"]["name"] = name
+    character["build"]["size"] = 2
+    character["build"]["sizeName"] = "Medium"
+    character = storage.wrap_character(storage.new_id(), cid, "pf2e", character, owner_user_id=gm["id"])
+    with open(os.path.join(storage.party_dir(cid), stem + ".json"), "w", encoding="utf-8") as handle:
+        json.dump(character, handle)
 
 db = Database(os.environ["DATABASE_URL"])
 W.create_scene(db, cid, "scene_hall", name="Hall", width=1280, height=960, published=True)

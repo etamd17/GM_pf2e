@@ -108,7 +108,9 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
         gm.set_viewport_size({"width": width, "height": 900})
         assert gm.evaluate("document.documentElement.scrollWidth <= innerWidth")
         shoot(gm, f"u2-shell-{width}")
-    gm.set_viewport_size({"width": 1280, "height": 800})
+    # U-8: exercise the session actions at a tablet viewport, not only a
+    # no-overflow screenshot. Restore desktop after the recovery check.
+    gm.set_viewport_size({"width": 1024, "height": 768})
     choose_tool(gm, "Terrain")
     gm.get_by_role("button", name="Erase terrain", exact=True).click()
     assert gm.get_by_label("Paint", exact=True).input_value() == "0"
@@ -142,6 +144,14 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
     wait_for(tv, lambda s: any(t["label"] == "Table Scout" and (t.get("live") or {}).get("hp") == scout_hp for t in s["tokens"]),
              "TV gets exact HP for the party token")
     expect(gm.get_by_role("link", name="Open sheet for Table Scout", exact=True)).to_be_visible()
+    # U-8: the second, distinct party actor is placed by drag, not a second
+    # token for the first actor. Retain the duplicate-guard check below too.
+    view = probe(gm)["viewport"]
+    gm.get_by_role("button", name="Place Table Guide (party)", exact=True).drag_to(
+        gm.locator(".vtt-map-host"), target_position={
+            "x": view["x"] + 420 * view["scale"], "y": view["y"] + 350 * view["scale"]})
+    wait_for(tv, lambda s: any(t["label"] == "Table Guide" and (t.get("live") or {}).get("hp", 0) > 0 for t in s["tokens"]),
+             "a different party creature placed by drag reaches the TV with live HP")
     gm.once("dialog", lambda dialog: dialog.dismiss())
     place_scout.click()
     assert sum(t["label"] == "Table Scout" for t in probe(gm)["tokens"]) == 1
@@ -216,6 +226,27 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
     wait_for(tv, lambda s: s["scene"]["backgroundUrl"] is None, "undo removes it from the TV")
     gm.keyboard.press("Control+Shift+z")
     wait_for(tv, lambda s: s["scene"]["background"] == "loaded", "redo brings it back")
+
+    # U-8 task 3: edit a different scene, including an actual draft token,
+    # without moving the table pointer. Then return to editing the TV scene.
+    displayed = probe(tv)
+    gm.locator(".vtt-scene-picker").select_option("scene_docks")
+    gm.wait_for_url("**sceneId=scene_docks**")
+    gm.get_by_text("live", exact=True).wait_for()
+    gm.get_by_text("Scene menu", exact=True).click()
+    gm.get_by_label("Scene name", exact=True).fill("Docks draft")
+    gm.get_by_role("button", name="Save name", exact=True).click()
+    expect(gm.get_by_label("Editing", exact=True)).to_contain_text("Docks draft")
+    choose_tool(gm, "Token")
+    click_scene(gm, 96, 96)
+    draft = wait_for(gm, lambda s: bool(s["tokens"]), "a token is created in the draft scene")["tokens"][0]
+    assert probe(tv)["scene"] == displayed["scene"], "editing a draft changed the TV scene"
+    assert token(probe(tv), draft["id"]) is None, "a draft token reached the TV"
+    expect(gm.get_by_label("On TV", exact=True)).to_contain_text("Hall")
+    gm.locator(".vtt-scene-picker").select_option("scene_hall")
+    gm.wait_for_url("**sceneId=scene_hall**")
+    gm.get_by_text("live", exact=True).wait_for()
+    choose_tool(gm, "Select")
 
     # --- fog of war (parity P1): applied on the server, so the TV never gets the token ------------
     click_scene(gm, 1200, 900)                        # nothing selected: the Scene section
@@ -398,14 +429,8 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
     wait_for(tv, lambda s: not (token(s, "tok_hero")["live"] or {}).get("conditions"), "condition picker decreases Frightened")
     shoot(gm, "consumers-conditions")
 
-    # --- ping and ruler on the TV (beta-1) -------------------------------------------------------
+    # --- U-8 tasks 5 and 6: ruler, then ping, including fog privacy -------------------------------
     # The hero's room is revealed; the right half, past the wall at x=640, is still fogged.
-    choose_tool(gm, "Ping")
-    click_scene(gm, 900, 300)                                       # under fog: never shown on the TV
-    tv.wait_for_timeout(400)
-    assert probe(tv)["transients"] == []
-    click_scene(gm, 200, 300)                                       # revealed: shown
-    wait_for(tv, lambda s: s["transients"] == [{"kind": "ping", "x": 200, "y": 300}], "the TV shows the ping")
     choose_tool(gm, "Ruler")
     state = probe(gm)
     view = state["viewport"]
@@ -421,7 +446,39 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
     gm.mouse.up()
     wait_for(tv, lambda s: not any(t["kind"] == "ruler" for t in s["transients"]), "the ruler clears after release",
              timeout_ms=6000)
+    # U-8 privacy: a ruler with a revealed start and a hidden endpoint must
+    # not be relayed to the TV. Observe throughout the gesture, not only
+    # after release (which would clear even an incorrectly relayed ruler).
+    gm.mouse.move(sx(96), sy(416))
+    gm.mouse.down()
+    gm.mouse.move(sx(900), sy(416))
+    wait_for(gm, lambda s: any(t["kind"] == "ruler" for t in s["transients"]), "GM sees its fog-crossing ruler")
+    for _ in range(8):
+        assert not any(t["kind"] == "ruler" for t in probe(tv)["transients"]), "a fog-crossing ruler reached the TV"
+        tv.wait_for_timeout(100)
+    gm.mouse.up()
+    choose_tool(gm, "Ping")
+    click_scene(gm, 900, 300)                                       # under fog: never shown on the TV
+    tv.wait_for_timeout(400)
+    assert probe(tv)["transients"] == []
+    click_scene(gm, 200, 300)                                       # revealed: shown
+    wait_for(tv, lambda s: s["transients"] == [{"kind": "ping", "x": 200, "y": 300}], "the TV shows the ping")
     choose_tool(gm, "Select")
+
+    # U-8 task 7: a real socket interruption, with the paired TV left open.
+    # Restarting the disposable harness server drops both connections. No
+    # reload or re-pair is allowed to satisfy the TV recovery assertion.
+    before_drop = probe(tv)
+    site.stop()
+    expect(tv.get_by_label("Reconnecting", exact=True)).to_be_visible(timeout=15000)
+    site.start()
+    wait_for(tv, lambda s: s["scene"] == before_drop["scene"]
+             and sorted(s["tokens"], key=lambda t: t["id"]) == sorted(before_drop["tokens"], key=lambda t: t["id"])
+             and s["templates"] == before_drop["templates"],
+             "the TV reconnects by itself with its current scene, background, fog, tokens, live HP and templates", timeout_ms=30000)
+    expect(tv.get_by_label("Reconnecting", exact=True)).to_have_count(0)
+    gm.get_by_text("live", exact=True).wait_for()
+    gm.set_viewport_size({"width": 1280, "height": 800})
 
     # --- bestiary to tracker (E-3) --------------------------------------------------------------
     # Search the PF2e bestiary, add a creature through the tracker's own add,
