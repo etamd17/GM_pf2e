@@ -3170,6 +3170,80 @@
     }
   },
   {
+    "id": "command-scene-duplicate",
+    "schema": "command",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_copy",
+      "type": "scene.duplicate",
+      "expected": [],
+      "payload": {
+        "sourceSceneId": "scene_a",
+        "name": "Battlefield (copy)"
+      }
+    }
+  },
+  {
+    "id": "command-invalid-scene-duplicate-with-expected",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_copy",
+      "type": "scene.duplicate",
+      "expected": [
+        {
+          "kind": "scene",
+          "id": "scene_a",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {
+        "sourceSceneId": "scene_a",
+        "name": "Battlefield (copy)"
+      }
+    }
+  },
+  {
+    "id": "command-invalid-scene-duplicate-without-source",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_copy",
+      "type": "scene.duplicate",
+      "expected": [],
+      "payload": {
+        "name": "Battlefield (copy)"
+      }
+    }
+  },
+  {
+    "id": "command-invalid-scene-duplicate-extra-field",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_copy",
+      "type": "scene.duplicate",
+      "expected": [],
+      "payload": {
+        "sourceSceneId": "scene_a",
+        "name": "Battlefield (copy)",
+        "published": true
+      }
+    }
+  },
+  {
     "id": "command-token-create",
     "schema": "command",
     "valid": true,

@@ -9,6 +9,7 @@ export type Command =
   | TableShow
   | TableClear
   | SceneDelete
+  | SceneDuplicate
   | TokenCreate
   | TokenUpdate
   | TokenMove
@@ -121,6 +122,26 @@ export interface SceneDelete {
    */
   expected: [ExpectedVersion];
   payload: EmptyPayload;
+}
+/**
+ * Copy a scene and everything on it into a new scene (batch e-8): sceneId is the new scene, as in scene.create. The copy is unpublished and not on the table.
+ */
+export interface SceneDuplicate {
+  schemaVersion: 1;
+  commandId: OpaqueToken;
+  campaignId: Id;
+  sceneId: Id;
+  type: "scene.duplicate";
+  /**
+   * @minItems 0
+   * @maxItems 0
+   */
+  expected: [];
+  payload: SceneDuplicatePayload;
+}
+export interface SceneDuplicatePayload {
+  sourceSceneId: Id;
+  name: string;
 }
 export interface TokenCreate {
   schemaVersion: 1;

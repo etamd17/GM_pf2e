@@ -20,6 +20,9 @@
       "$ref": "#/definitions/SceneDelete"
     },
     {
+      "$ref": "#/definitions/SceneDuplicate"
+    },
+    {
       "$ref": "#/definitions/TokenCreate"
     },
     {
@@ -421,6 +424,68 @@
         }
       },
       "description": "Delete a scene and everything on it (batch e-7). Version-checked: exactly one expected version, the scene's. Refused while the table shows the scene: clear the table first."
+    },
+    "SceneDuplicate": {
+      "title": "SceneDuplicate",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "campaignId",
+        "commandId",
+        "expected",
+        "payload",
+        "sceneId",
+        "schemaVersion",
+        "type"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "$ref": "common.schema.json#/definitions/SchemaVersion"
+        },
+        "commandId": {
+          "$ref": "common.schema.json#/definitions/OpaqueToken"
+        },
+        "campaignId": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "sceneId": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "type": {
+          "const": "scene.duplicate"
+        },
+        "expected": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 0,
+          "items": {
+            "$ref": "#/definitions/ExpectedVersion"
+          }
+        },
+        "payload": {
+          "$ref": "#/definitions/SceneDuplicatePayload"
+        }
+      },
+      "description": "Copy a scene and everything on it into a new scene (batch e-8): sceneId is the new scene, as in scene.create. The copy is unpublished and not on the table."
+    },
+    "SceneDuplicatePayload": {
+      "title": "SceneDuplicatePayload",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "sourceSceneId"
+      ],
+      "properties": {
+        "sourceSceneId": {
+          "$ref": "common.schema.json#/definitions/Id"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 120,
+          "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])"
+        }
+      }
     },
     "TokenCreatePayload": {
       "title": "TokenCreatePayload",

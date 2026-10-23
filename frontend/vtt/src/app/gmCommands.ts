@@ -126,6 +126,13 @@ export function deleteScene(scene: Of<'scene'>): Draft {
   return { type: 'scene.delete', sceneId: scene.id, expected: expect(scene), payload: {} };
 }
 
+// Batch e-8: copies a scene and everything on it into a new, unpublished scene
+// (sceneId is the new scene, as for createScene). Not undoable here; delete the
+// copy instead.
+export function duplicateScene(source: Of<'scene'>, newId: string, name: string): Draft {
+  return { type: 'scene.duplicate', sceneId: newId, expected: [], payload: { sourceSceneId: source.id, name } };
+}
+
 // --- fog (parity P1) --------------------------------------------------------------------------
 
 export type FogCell = [number, number];

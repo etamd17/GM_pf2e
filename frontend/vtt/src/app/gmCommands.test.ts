@@ -12,6 +12,7 @@ import {
   createWall,
   deleteEntity,
   deleteScene,
+  duplicateScene,
   moveToken,
   newEntityId,
   setDoorState,
@@ -66,6 +67,7 @@ const drafts: Array<[string, Draft]> = [
   ['show on table', showOnTable(scene)],
   ['clear table', clearTable(scene)],
   ['delete scene', deleteScene(scene)],
+  ['duplicate scene', duplicateScene(scene, newEntityId('scene'), 'Docks (copy)')],
 ];
 
 describe('GM command builders', () => {
@@ -77,7 +79,8 @@ describe('GM command builders', () => {
 
   it('every edit carries its target version, every create none', () => {
     for (const [, d] of drafts) {
-      if (d.type.endsWith('.create')) expect(d.expected).toEqual([]);
+      // A duplicate creates its new scene, so it carries no expected version either.
+      if (d.type.endsWith('.create') || d.type === 'scene.duplicate') expect(d.expected).toEqual([]);
       else expect(d.expected).toHaveLength(1);
     }
     expect(moveToken(token, 1, 1).expected).toEqual([{ kind: 'token', id: 'tok_1', version: V }]);

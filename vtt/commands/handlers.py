@@ -14,6 +14,7 @@ by a test (acceptance criterion 2).
 
 from __future__ import annotations
 
+import copy
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -220,6 +221,48 @@ def scene_delete(ctx: Context) -> dict[str, Any]:
     return {"kind": "scene", "sceneId": ctx.scene_id}
 
 
+def scene_duplicate(ctx: Context) -> dict[str, Any]:
+    """Copy a scene and everything on it into a new scene (batch e-8): the
+    scene settings, its tokens, lights, walls and templates (same ids, which
+    are per scene), its fog and its terrain, in one transaction. The command's
+    sceneId is the new scene, as for scene.create, so the size rule checks the
+    copy. The copy is unpublished and not on the table; /map import provenance
+    stays with the source."""
+    exists = ctx.session.execute(
+        select(VttScene).where(VttScene.campaign_id == ctx.campaign_id, VttScene.id == ctx.scene_id)
+        .with_for_update()
+    ).scalar_one_or_none()
+    if exists is not None:
+        raise Rejection("conflict")
+    source_id = ctx.payload["sourceSceneId"]
+    source = ctx.session.execute(
+        select(VttScene).where(VttScene.campaign_id == ctx.campaign_id, VttScene.id == source_id)
+        .with_for_update()
+    ).scalar_one_or_none()
+    if source is None:
+        raise Rejection("validation-failed")     # missing, or another campaign's (section 8)
+    ctx.session.add(VttScene(campaign_id=ctx.campaign_id, id=ctx.scene_id, name=ctx.payload["name"],
+                             width=source.width, height=source.height, grid_size=source.grid_size,
+                             show_grid=source.show_grid, background_asset_id=source.background_asset_id,
+                             published=False, lighting_enabled=source.lighting_enabled,
+                             default_vision=source.default_vision))
+    ctx.session.flush()
+    for row in ctx.session.execute(select(VttEntity).where(
+            VttEntity.campaign_id == ctx.campaign_id, VttEntity.scene_id == source_id)).scalars().all():
+        ctx.session.add(VttEntity(campaign_id=ctx.campaign_id, scene_id=ctx.scene_id, kind=row.kind, id=row.id,
+                                  hidden=row.hidden, data=copy.deepcopy(row.data)))
+    fog_row = ctx.session.get(VttFog, (ctx.campaign_id, source_id))
+    if fog_row is not None:
+        ctx.session.add(VttFog(campaign_id=ctx.campaign_id, scene_id=ctx.scene_id, enabled=fog_row.enabled,
+                               cols=fog_row.cols, rows=fog_row.rows, revealed=bytes(fog_row.revealed)))
+    terrain_row = ctx.session.get(VttTerrain, (ctx.campaign_id, source_id))
+    if terrain_row is not None:
+        ctx.session.add(VttTerrain(campaign_id=ctx.campaign_id, scene_id=ctx.scene_id, cols=terrain_row.cols,
+                                   rows=terrain_row.rows, cells=bytes(terrain_row.cells)))
+    ctx.session.flush()
+    return {"kind": "scene", "sceneId": ctx.scene_id}
+
+
 # --- fog (parity-1) ---------------------------------------------------------------------------
 
 def _fog_event(ctx: Context) -> dict[str, Any]:
@@ -392,6 +435,7 @@ POLICIES: dict[str, Policy] = {
     "table.show": Policy(_caps("scene.publish"), table_show),
     "table.clear": Policy(_caps("scene.publish"), table_clear, sizes_scene=False),
     "scene.delete": Policy(_caps("scene.prepare"), scene_delete, sizes_scene=False),
+    "scene.duplicate": Policy(_caps("scene.prepare"), scene_duplicate),
     "token.create": Policy(_caps("scene.prepare"), _create("token")),
     "token.update": Policy(_caps("scene.prepare"), _update("token")),
     "token.move": Policy(_caps("token.move"), _update("token", ("x", "y"))),
