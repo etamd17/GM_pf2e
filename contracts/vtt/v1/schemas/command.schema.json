@@ -569,6 +569,11 @@
               "type": "null"
             }
           ]
+        },
+        "order": {
+          "type": "integer",
+          "minimum": -1000000,
+          "maximum": 1000000
         }
       }
     },
@@ -686,6 +691,11 @@
               "type": "null"
             }
           ]
+        },
+        "order": {
+          "type": "integer",
+          "minimum": -1000000,
+          "maximum": 1000000
         }
       }
     },

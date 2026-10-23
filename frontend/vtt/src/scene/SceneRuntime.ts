@@ -1222,6 +1222,14 @@ export class SceneRuntime {
       view.root.destroy({ children: true });
       this.tokens.delete(id);
     }
+    // E-10: draw in the model's order (the adapter sorts by stacking order, then
+    // id). Children are otherwise drawn in the order they were added.
+    layer.sortableChildren = true;
+    let index = 0;
+    for (const model of scene.tokens) {
+      const view = this.tokens.get(model.id);
+      if (view) view.root.zIndex = index++;
+    }
   }
 }
 

@@ -175,6 +175,7 @@ export interface TokenCreatePayload {
    */
   controllerIds: Id[];
   vision?: number | null;
+  order?: number;
 }
 export interface TokenUpdate {
   schemaVersion: 1;
@@ -208,6 +209,7 @@ export interface TokenUpdatePayload {
    */
   controllerIds?: Id[];
   vision?: number | null;
+  order?: number;
 }
 export interface TokenMove {
   schemaVersion: 1;

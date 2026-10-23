@@ -191,6 +191,7 @@ export function adaptEntities(
         ...(e.hidden === true || actor?.hidden === true ? { hidden: true } : {}),
         ...(live ? { live } : {}),
         ...(actor && typeof actor.speed === 'number' && actor.speed > 0 ? { speed: actor.speed } : {}),
+        ...(typeof e.order === 'number' && e.order !== 0 ? { order: e.order } : {}),
         // E-6: the table's projection says how far a party token sees; the GM
         // works it out the same way (a player character's token, its own radius
         // or the scene's default), so the GM can preview the table's darkness.
@@ -243,7 +244,8 @@ export function adaptEntities(
     for (const id of [...cache[key].keys()]) if (!seen[key].has(id)) cache[key].delete(id);
   }
   const byId = <T extends { id: string }>(a: T, b: T) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
-  tokens.sort(byId);
+  // E-10: by stacking order first (a higher order draws on top), then by id.
+  tokens.sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || byId(a, b));
   lights.sort(byId);
   // E-6: what blocks sight. The table is sent only those segments (no door
   // state); the GM's walls say, and an open door does not block.

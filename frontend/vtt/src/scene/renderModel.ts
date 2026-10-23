@@ -27,6 +27,9 @@ export interface RenderToken {
   // GM only (E-4): feet one move covers, from the linked actor; the drag
   // reading measures against it. Not drawn on the token itself.
   readonly speed?: number;
+  // E-10: stacking order; tokens draw by (order, id), so a higher order is on top.
+  // Absent means 0.
+  readonly order?: number;
   // E-6: how far this token sees for the table (scene px), when lighting is on
   // and it is a party token; absent otherwise.
   readonly vision?: number;

@@ -108,6 +108,8 @@ export function inverseFor(draft: Draft, before: GmEntity | undefined): UndoEntr
     case 'token.update': {
       if (before?.kind !== 'token') return null;
       const back = pick(before, changed);
+      // E-10: a token never reordered has no order, which means 0.
+      if (changed.includes('order') && back.order === undefined) back.order = 0;
       return {
         kind: 'token',
         id: before.id,

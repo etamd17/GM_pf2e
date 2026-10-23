@@ -12,6 +12,7 @@ import {
   updateLight,
   updateScene,
   updateToken,
+  bringToFront,
   clearTable,
   createScene,
   fogReset,
@@ -50,6 +51,14 @@ describe('inverseFor', () => {
   it('a move moves back, against the version after the move', () => {
     const back = inverse(moveToken(token, 160, 96), token, { ...token, x: 160, version: V2 });
     expect(back).toEqual({ type: 'token.move', expected: [{ kind: 'token', id: 'tok_1', version: V2 }], payload: { id: 'tok_1', x: 96, y: 96 } });
+    expect(valid(back as Draft)).toBe(true);
+  });
+
+  it('bringing a never-reordered token to front undoes back to order 0 (E-10)', () => {
+    const front = bringToFront(token, [token, { ...token, id: 'tok_2', order: 4 }])!;
+    expect(front.payload).toEqual({ id: 'tok_1', order: 5 });
+    const back = inverse(front, token, { ...token, order: 5, version: V2 });
+    expect(back?.payload).toEqual({ id: 'tok_1', order: 0 });
     expect(valid(back as Draft)).toBe(true);
   });
 

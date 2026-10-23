@@ -69,6 +69,8 @@ def gm_entity(key: TokenKey, row) -> dict[str, Any]:
             "hidden": bool(row.hidden), "locked": bool(d.get("locked", False)),
             "controllerIds": list(d.get("controllerIds", [])), "vision": d.get("vision"),
         }
+        if d.get("order"):
+            fields["order"] = d["order"]    # e-10; 0 is never sent, so old versions stand
     elif row.kind == "light":
         fields = {"x": d["x"], "y": d["y"], "radius": d["radius"], "color": d.get("color", 0),
                   "hidden": bool(row.hidden)}
@@ -202,6 +204,8 @@ def table_entity(key: TokenKey, row, fog, actors: dict[str, dict[str, Any]], sce
             "color": d.get("color", 0), "artAssetId": d.get("artAssetId"), "actorId": d.get("actorId"),
             "live": table_live(actor),
         }
+        if d.get("order"):
+            fields["order"] = d["order"]    # e-10: the table stacks tokens as the GM does
         if lighting and actor is not None and actor.get("pc"):
             vision = d.get("vision")
             fields["vision"] = float(vision if vision is not None else (getattr(scene, "default_vision", 0) or 0))

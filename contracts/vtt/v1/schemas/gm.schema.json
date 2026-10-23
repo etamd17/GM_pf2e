@@ -206,6 +206,12 @@
             }
           ],
           "description": "E-6: this token's vision radius in scene pixels; null uses the scene's default. Only a party token (linked to a player character) sees for the table. Optional in the schema, always sent."
+        },
+        "order": {
+          "type": "integer",
+          "minimum": -1000000,
+          "maximum": 1000000,
+          "description": "Batch e-10: stacking order; tokens draw by (order, then arrival). Absent means 0, and 0 is never sent, so tokens that were never reordered keep their versions."
         }
       }
     },

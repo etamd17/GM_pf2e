@@ -52,11 +52,28 @@ export function moveToken(token: Of<'token'>, x: number, y: number): Draft {
 }
 
 export type TokenPatch = Partial<
-  Pick<Of<'token'>, 'label' | 'size' | 'color' | 'hidden' | 'locked' | 'artAssetId' | 'actorId' | 'vision'>
+  Pick<Of<'token'>, 'label' | 'size' | 'color' | 'hidden' | 'locked' | 'artAssetId' | 'actorId' | 'vision' | 'order'>
 >;
 
 export function updateToken(token: Of<'token'>, patch: TokenPatch): Draft {
   return { type: 'token.update', expected: expect(token), payload: { id: token.id, ...patch } };
+}
+
+// E-10: stacking. Tokens draw by (order, id); these move one token above or
+// below every other token on the scene with an ordinary, undoable token.update.
+// Null when it is already strictly on top (or at the bottom), so nothing is sent.
+const ORDER_LIMIT = 1_000_000;
+export function bringToFront(token: Of<'token'>, all: Iterable<Of<'token'>>): Draft | null {
+  const others = [...all].filter((t) => t.id !== token.id).map((t) => t.order ?? 0);
+  const top = others.length ? Math.max(...others) : -Infinity;
+  if ((token.order ?? 0) > top) return null;
+  return updateToken(token, { order: Math.min(ORDER_LIMIT, top + 1) });
+}
+export function sendToBack(token: Of<'token'>, all: Iterable<Of<'token'>>): Draft | null {
+  const others = [...all].filter((t) => t.id !== token.id).map((t) => t.order ?? 0);
+  const bottom = others.length ? Math.min(...others) : Infinity;
+  if ((token.order ?? 0) < bottom) return null;
+  return updateToken(token, { order: Math.max(-ORDER_LIMIT, bottom - 1) });
 }
 
 export function createLight(id: string, at: Point, gridSize: number): Draft {

@@ -250,6 +250,12 @@
           "minimum": 0,
           "maximum": 16384,
           "description": "E-6: how far this token sees, in scene pixels, when lighting is on and it is a party token (linked to a player character); absent otherwise. 0: it sees only by light."
+        },
+        "order": {
+          "type": "integer",
+          "minimum": -1000000,
+          "maximum": 1000000,
+          "description": "Batch e-10: stacking order; tokens draw by (order, then arrival). Absent means 0, and 0 is never sent, so tokens that were never reordered keep their versions."
         }
       }
     },

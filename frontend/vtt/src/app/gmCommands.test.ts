@@ -13,6 +13,8 @@ import {
   deleteEntity,
   deleteScene,
   duplicateScene,
+  bringToFront,
+  sendToBack,
   moveToken,
   newEntityId,
   setDoorState,
@@ -90,6 +92,17 @@ describe('GM command builders', () => {
     const command = wire(deleteScene(scene));
     expect(command.expected).toEqual([{ kind: 'scene', id: scene.id, version: V }]);
     expect(gm.validateCommand({ ...command, expected: [] })).toBe(false);
+  });
+
+  it('stacking moves one token above or below every other, and sends nothing when it already is (E-10)', () => {
+    const others = [token, { ...token, id: 'tok_2', order: 2 }, { ...token, id: 'tok_3', order: -3 }];
+    const front = bringToFront(token, others)!;
+    expect(front.payload).toEqual({ id: token.id, order: 3 });
+    expect(gm.validateCommand(wire(front))).toBe(true);
+    expect(sendToBack(token, others)!.payload).toEqual({ id: token.id, order: -4 });
+    expect(bringToFront({ ...token, order: 3 }, others)).toBeNull();
+    expect(sendToBack({ ...token, order: -4 }, others)).toBeNull();
+    expect(bringToFront(token, [token])).toBeNull();      // alone on the scene
   });
 
   it('new ids are Id-shaped and unique', () => {

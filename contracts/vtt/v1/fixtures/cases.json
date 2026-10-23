@@ -3296,6 +3296,75 @@
     }
   },
   {
+    "id": "order1-token-update-order",
+    "schema": "command",
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "token.update",
+      "expected": [
+        {
+          "kind": "token",
+          "id": "tok_1",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {
+        "id": "tok_1",
+        "order": 3
+      }
+    }
+  },
+  {
+    "id": "order1-invalid-order-out-of-range",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "token.update",
+      "expected": [
+        {
+          "kind": "token",
+          "id": "tok_1",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {
+        "id": "tok_1",
+        "order": 1000001
+      }
+    }
+  },
+  {
+    "id": "order1-invalid-order-fractional",
+    "schema": "command",
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "commandId": "cmd_0123456789abcdef",
+      "campaignId": "camp_a",
+      "sceneId": "scene_a",
+      "type": "token.update",
+      "expected": [
+        {
+          "kind": "token",
+          "id": "tok_1",
+          "version": "vAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ],
+      "payload": {
+        "id": "tok_1",
+        "order": 1.5
+      }
+    }
+  },
+  {
     "id": "command-token-move",
     "schema": "command",
     "valid": true,

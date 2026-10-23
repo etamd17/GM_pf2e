@@ -368,7 +368,7 @@ validate14.errors = vErrors;
 return errors === 0;
 }
 
-const schema24 = {"title":"TableToken","type":"object","additionalProperties":false,"required":["kind","id","version","x","y","size","label","color","artAssetId","actorId"],"properties":{"kind":{"const":"token"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"x":{"$ref":"common.schema.json#/definitions/Coord","description":"Token centre, in scene pixels."},"y":{"$ref":"common.schema.json#/definitions/Coord","description":"Token centre, in scene pixels."},"size":{"type":"number","minimum":0.25,"maximum":10},"label":{"$ref":"common.schema.json#/definitions/Label"},"color":{"$ref":"common.schema.json#/definitions/Color"},"artAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"actorId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"live":{"description":"Tracker state of the linked actor (parity-3); null when unlinked or the actor is absent. Always sent by the server.","anyOf":[{"$ref":"common.schema.json#/definitions/TableLive"},{"type":"null"}]},"vision":{"type":"number","minimum":0,"maximum":16384,"description":"E-6: how far this token sees, in scene pixels, when lighting is on and it is a party token (linked to a player character); absent otherwise. 0: it sees only by light."}}};
+const schema24 = {"title":"TableToken","type":"object","additionalProperties":false,"required":["kind","id","version","x","y","size","label","color","artAssetId","actorId"],"properties":{"kind":{"const":"token"},"id":{"$ref":"common.schema.json#/definitions/Id"},"version":{"$ref":"common.schema.json#/definitions/OpaqueToken"},"x":{"$ref":"common.schema.json#/definitions/Coord","description":"Token centre, in scene pixels."},"y":{"$ref":"common.schema.json#/definitions/Coord","description":"Token centre, in scene pixels."},"size":{"type":"number","minimum":0.25,"maximum":10},"label":{"$ref":"common.schema.json#/definitions/Label"},"color":{"$ref":"common.schema.json#/definitions/Color"},"artAssetId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"actorId":{"anyOf":[{"$ref":"common.schema.json#/definitions/Id"},{"type":"null"}]},"live":{"description":"Tracker state of the linked actor (parity-3); null when unlinked or the actor is absent. Always sent by the server.","anyOf":[{"$ref":"common.schema.json#/definitions/TableLive"},{"type":"null"}]},"vision":{"type":"number","minimum":0,"maximum":16384,"description":"E-6: how far this token sees, in scene pixels, when lighting is on and it is a party token (linked to a player character); absent otherwise. 0: it sees only by light."},"order":{"type":"integer","minimum":-1000000,"maximum":1000000,"description":"Batch e-10: stacking order; tokens draw by (order, then arrival). Absent means 0, and 0 is never sent, so tokens that were never reordered keep their versions."}}};
 const schema27 = {"type":"number","minimum":0,"maximum":16384};
 const schema29 = {"type":"string","maxLength":80,"pattern":"^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*(?![\\s\\S])","description":"Display text. Excludes C0/C1 controls, bidi overrides/isolates and unpaired surrogates; length counts code points."};
 const schema30 = {"type":"integer","minimum":0,"maximum":16777215};
@@ -1380,6 +1380,34 @@ var valid0 = _errs42 === errors;
 }
 else {
 var valid0 = true;
+}
+if(valid0){
+if(data.order !== undefined && func0.call(data, "order")){
+let data12 = data.order;
+const _errs44 = errors;
+if(!(((typeof data12 == "number") && (!(data12 % 1) && !isNaN(data12))) && (isFinite(data12)))){
+validate16.errors = [{instancePath:instancePath+"/order",schemaPath:"#/properties/order/type",keyword:"type",params:{type: "integer"},message:"must be integer"}];
+return false;
+}
+if(errors === _errs44){
+if((typeof data12 == "number") && (isFinite(data12))){
+if(data12 > 1000000 || isNaN(data12)){
+validate16.errors = [{instancePath:instancePath+"/order",schemaPath:"#/properties/order/maximum",keyword:"maximum",params:{comparison: "<=", limit: 1000000},message:"must be <= 1000000"}];
+return false;
+}
+else {
+if(data12 < -1000000 || isNaN(data12)){
+validate16.errors = [{instancePath:instancePath+"/order",schemaPath:"#/properties/order/minimum",keyword:"minimum",params:{comparison: ">=", limit: -1000000},message:"must be >= -1000000"}];
+return false;
+}
+}
+}
+}
+var valid0 = _errs44 === errors;
+}
+else {
+var valid0 = true;
+}
 }
 }
 }

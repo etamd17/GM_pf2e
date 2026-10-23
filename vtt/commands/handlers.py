@@ -29,7 +29,8 @@ from vtt.storage.models import (VttEntity, VttFog, VttImportedEntity, VttImporte
                                  VttTablePointer, VttTerrain)
 
 ENTITY_DATA = {
-    "token": ("x", "y", "size", "label", "color", "artAssetId", "actorId", "locked", "controllerIds", "vision"),
+    "token": ("x", "y", "size", "label", "color", "artAssetId", "actorId", "locked", "controllerIds", "vision",
+              "order"),
     "light": ("x", "y", "radius", "color"),
     "wall": ("x1", "y1", "x2", "y2", "doorState"),
     "template": ("shape", "x", "y", "aimX", "aimY", "size", "color"),

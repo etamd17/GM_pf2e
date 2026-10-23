@@ -24,6 +24,13 @@ describe('adaptEntities', () => {
     expect(out.walls.map((w) => w.kind)).toEqual(['wall', 'door']);
   });
 
+  it('stacks tokens by order, then id: a higher order draws on top (E-10)', () => {
+    const out = adaptEntities(map(scene, { ...token('c', 'v1'), order: -1 }, token('b', 'v1'), { ...token('a', 'v1'), order: 2 }));
+    expect(out.tokens.map((t) => t.id)).toEqual(['c', 'b', 'a']);
+    expect(out.tokens.map((t) => t.order)).toEqual([-1, undefined, 2]);
+    expect(adaptEntities(map(scene, token('b', 'v1'), token('a', 'v1'))).tokens.map((t) => t.id)).toEqual(['a', 'b']);
+  });
+
   it('a table projection has no walls and none are invented', () => {
     const out = adaptEntities(map(scene, token('a', 'v1')));
     expect(out.walls).toEqual([]);

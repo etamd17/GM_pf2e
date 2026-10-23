@@ -73,6 +73,10 @@ export interface TableToken {
    * E-6: how far this token sees, in scene pixels, when lighting is on and it is a party token (linked to a player character); absent otherwise. 0: it sees only by light.
    */
   vision?: number;
+  /**
+   * Batch e-10: stacking order; tokens draw by (order, then arrival). Absent means 0, and 0 is never sent, so tokens that were never reordered keep their versions.
+   */
+  order?: number;
 }
 /**
  * What the table may know of a linked token's tracker state (parity-3). Exact hp/maxHp for a player character, otherwise null; a non-PC has only status (Wounded at or below half, Dead at 0, null above half). active marks the creature whose turn it is.
