@@ -3,12 +3,13 @@ import type { GmEntity } from '../../protocol/frames';
 interface Summary { id: string; name: string; published: boolean; onTable: boolean }
 interface Props {
   scenes: readonly Summary[] | null;
+  onTvId:string | null | undefined;
   scene: Extract<GmEntity, { kind: 'scene' }> | null;
   fallbackName: string; enabled: boolean; canUndo: boolean; canRedo: boolean; nextUndo: string | null;
-  onOpen(id: string): void; onNew(): void; onRename(name:string): void; onDelete():void; onShow(): void; onClear(): void;
+  onOpen(id: string): void; onNew(): void; onDuplicate():void; onRename(name:string): void; onDelete():void; onShow(): void; onClear(): void;
   onUndo(): void; onRedo(): void; children: ReactNode;
 }
-function SceneMenu({scene,enabled,onRename,onDelete,onClear,known,onTv}:{scene:NonNullable<Props['scene']>;enabled:boolean;onRename:Props['onRename'];onDelete:Props['onDelete'];onClear:Props['onClear'];known:boolean;onTv:boolean}) {
+function SceneMenu({scene,enabled,onRename,onDuplicate,onDelete,onClear,known,onTv}:{scene:NonNullable<Props['scene']>;enabled:boolean;onRename:Props['onRename'];onDuplicate:Props['onDuplicate'];onDelete:Props['onDelete'];onClear:Props['onClear'];known:boolean;onTv:boolean}) {
   const [name,setName]=useState(scene.name);
   const trimmed=name.trim();
   return <details className="vtt-scene-menu"><summary>Scene menu</summary>
@@ -17,6 +18,7 @@ function SceneMenu({scene,enabled,onRename,onDelete,onClear,known,onTv}:{scene:N
         onChange={event=>setName(event.target.value)} /></label>
       <button className="vtt-topbar-btn" disabled={!enabled || !trimmed || trimmed === scene.name}>Save name</button>
     </form>
+    <button type="button" className="vtt-topbar-btn" disabled={!enabled} onClick={onDuplicate}>Duplicate scene</button>
     <button type="button" className="vtt-topbar-btn" disabled={!enabled || !known || onTv} onClick={()=>{
       if(enabled && known && !onTv && window.confirm(`Delete “${scene.name}”? This cannot be undone. Uploaded images stay.`)) onDelete();
     }}>Delete scene</button>
@@ -27,11 +29,11 @@ function SceneMenu({scene,enabled,onRename,onDelete,onClear,known,onTv}:{scene:N
 }
 // Navigation and TV writes deliberately remain separate callbacks.
 export function SceneBar(p: Props) {
-  const onTv=p.scenes?.find(s=>s.onTable);
-  const known=p.scenes !== null;
+  const onTv=p.scenes?.find(s=>s.id === p.onTvId);
+  const known=p.onTvId !== undefined;
   function show() {
     if(!p.enabled || !p.scene || !known) return;
-    if(onTv && onTv.id !== p.scene.id && !window.confirm(`Replace “${onTv.name}” on the TV with “${p.scene.name}”?`)) return;
+    if(p.onTvId && p.onTvId !== p.scene.id && !window.confirm(`Replace “${onTv?.name ?? 'another scene'}” on the TV with “${p.scene.name}”?`)) return;
     p.onShow();
   }
   return <header className="vtt-topbar">
@@ -40,14 +42,14 @@ export function SceneBar(p: Props) {
       onChange={e=>e.target.value && e.target.value !== p.scene?.id && p.onOpen(e.target.value)}>
       {!p.scene && <option value="">No scene</option>}
       {p.scene && !p.scenes.some(s=>s.id===p.scene!.id) && <option value={p.scene.id}>{p.scene.name}</option>}
-      {p.scenes.map(s=><option key={s.id} value={s.id}>{s.name}{s.onTable ? ' (On TV)' : ''}</option>)}
+      {p.scenes.map(s=><option key={s.id} value={s.id}>{s.name}{s.id === p.onTvId ? ' (On TV)' : ''}</option>)}
     </select> : <span className="vtt-scene-name">{p.scene?.name ?? p.fallbackName}</span>}</label>
-    <span className="vtt-tv-scene" aria-label="On TV" role="status">On TV: {known ? (onTv?.name ?? 'Nothing') : 'Unavailable'}</span>
+    <span className="vtt-tv-scene" aria-label="On TV" role="status">On TV: {known ? (p.onTvId ? (onTv?.name ?? 'Loading scene name…') : 'Nothing') : 'Unavailable'}</span>
     <button className="vtt-topbar-btn" disabled={!p.enabled} onClick={p.onNew}>New scene</button>
     {p.scene && <>
       <button className="vtt-topbar-btn" disabled={!p.enabled || !known} onClick={show}>Show on TV</button>
-      <button className="vtt-topbar-btn" disabled={!p.enabled || !known || !onTv} onClick={p.onClear}>Clear TV</button>
-      <SceneMenu key={p.scene.id} scene={p.scene} enabled={p.enabled} onRename={p.onRename} onDelete={p.onDelete} onClear={p.onClear} known={known} onTv={onTv?.id === p.scene.id}/>
+      <button className="vtt-topbar-btn" disabled={!p.enabled || !known || !p.onTvId} onClick={p.onClear}>Clear TV</button>
+      <SceneMenu key={p.scene.id} scene={p.scene} enabled={p.enabled} onRename={p.onRename} onDuplicate={p.onDuplicate} onDelete={p.onDelete} onClear={p.onClear} known={known} onTv={p.onTvId === p.scene.id}/>
     </>}
     <button className="vtt-topbar-btn" disabled={!p.enabled || !p.canUndo} onClick={p.onUndo}
       title={p.nextUndo ? `Undo ${p.nextUndo} (Ctrl+Z)` : 'Undo (Ctrl+Z)'}>Undo</button>

@@ -13,5 +13,5 @@ export function ignoresMapKey(e: KeyboardEvent): boolean {
 }
 
 export function hasMapToolFocus(target: EventTarget | null): boolean {
-  return target instanceof Element && !!target.closest('.vtt-map-host, .vtt-rail, .vtt-token-selection, [aria-label="Tokens on the map"]');
+  return target instanceof Element && !!target.closest('.vtt-map-host, .vtt-rail, .vtt-token-selection, .vtt-group-controls, [aria-label="Tokens on the map"]');
 }

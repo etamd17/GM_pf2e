@@ -573,3 +573,13 @@ button:focus-visible,
   clip: auto; clip-path: none; white-space: normal; z-index: 5;
   padding: 12px 24px; background: var(--bg-card); border: 1px solid var(--border-rule);
 }
+.vtt-group-controls {
+  margin-bottom: 12px; max-width: 100%;
+  padding: 8px; background: var(--bg-card); border: 1px solid var(--border-rule); border-radius: 6px;
+}
+.vtt-selection-launch { position: absolute; bottom: 12px; left: 12px; z-index: 6; }
+.vtt-group-controls p { font-size: 12px; color: var(--text-secondary); }
+.vtt-group-list { max-height: 150px; overflow: auto; }
+.vtt-group-list label { display: flex; gap: 6px; align-items: start; overflow-wrap: anywhere; }
+.vtt-group-buttons { display: flex; flex-wrap: wrap; gap: 4px; }
+.vtt-batch-results { max-height: 160px; overflow: auto; font-size: 12px; }

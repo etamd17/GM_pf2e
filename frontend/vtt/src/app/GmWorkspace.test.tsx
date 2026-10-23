@@ -72,6 +72,7 @@ const hero = {
 const wall = { kind: 'wall', id: 'wall_1', version: V1, x1: 0, y1: 0, x2: 128, y2: 0, doorState: 'closed' } as Of<'wall'>;
 
 function seed(entities: GmEntity[]) {
+  if(!entities.some(e=>e.kind==='table')) entities=[...entities,{kind:'table',id:'table',version:V1,sceneId:null}];
   const map = new Map(entities.map((e) => [`${e.kind}\u0000${e.id}`, e]));
   useEntities.getState().set(map);
   const projection = useProjection.getState();
@@ -921,4 +922,62 @@ it('Escape leaves the focused token list for the map without deleting the select
   button.focus();fireEvent.click(button);fireEvent.keyDown(button,{key:'Escape'});
   expect(document.activeElement).toBe(screen.getByRole('application'));
   expect(screen.getByRole('button',{name:'Token actions'})).toBeTruthy();expect(issued).toHaveLength(0);
+});
+it('duplicates a scene with a trimmed editable name and navigates only after applied',async()=>{
+  const prompt=vi.spyOn(window,'prompt').mockReturnValue('  Hall copy  ');
+  const {issued}=setup();fireEvent.click(screen.getByText('Scene menu'));fireEvent.click(screen.getByRole('button',{name:'Duplicate scene'}));
+  expect(prompt).toHaveBeenCalledWith(expect.any(String),'Hall (copy)');
+  expect(issued[0]?.draft).toMatchObject({type:'scene.duplicate',expected:[],payload:{sourceSceneId:scene.id,name:'Hall copy'}});
+  expect(navigateToScene).not.toHaveBeenCalled();
+  await act(async()=>useCommands.getState().notify({kind:'applied',commandId:'cmd_0000000000000001',type:'scene.duplicate'}));
+  expect(navigateToScene).toHaveBeenCalledWith(issued[0]?.draft.sceneId);
+});
+it('the socket pointer controls the TV badge/delete guard with no five-second poll',async()=>{
+  const intervals=vi.spyOn(window,'setInterval');
+  vi.stubGlobal('fetch',vi.fn(async()=>({ok:true,json:async()=>({scenes:[{id:scene.id,name:'Hall',onTable:true,published:true},{id:'scene_b',name:'Crypt',onTable:false,published:true}]})})));
+  const table=(id:string|null)=>({kind:'table',id:'table',version:V1,sceneId:id}) as Of<'table'>;
+  seed([scene,hero,table(scene.id)]);setup();await act(async()=>{});
+  expect(screen.getByLabelText('On TV').textContent).toContain('Hall');fireEvent.click(screen.getByText('Scene menu'));
+  expect((screen.getByRole('button',{name:'Delete scene'}) as HTMLButtonElement).disabled).toBe(true);
+  await act(async()=>seed([scene,hero,table('scene_b')]));
+  expect(screen.getByLabelText('On TV').textContent).toContain('Crypt');expect((screen.getByRole('button',{name:'Delete scene'}) as HTMLButtonElement).disabled).toBe(false);
+  expect(intervals.mock.calls.some(call=>call[1]===5000)).toBe(false);
+});
+it('ordering buttons use the published null guards and current token version',()=>{
+  seed([scene,hero,{...hero,id:'tok_b',label:'B',order:2}]);const {interaction,issued}=setup();
+  act(()=>interaction.onClick?.({x:96,y:96},{kind:'token',id:hero.id}));fireEvent.click(screen.getByRole('button',{name:'Token actions'}));
+  expect((screen.getByRole('button',{name:'Send to back'}) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(screen.getByRole('button',{name:'Bring to front'}));
+  expect(issued[0]?.draft).toMatchObject({type:'token.update',expected:[{id:hero.id,version:V1}],payload:{order:3}});
+});
+it('a group drag moves each unlocked member through issue and reports mixed outcomes without retries',()=>{
+  seed([scene,hero,{...hero,id:'tok_b',label:'B',x:224},{...hero,id:'tok_lock',label:'Locked',locked:true,x:352}]);
+  const {interaction,issued}=setup();fireEvent.click(screen.getByRole('button',{name:'Select tokens (0)'}));fireEvent.click(screen.getByRole('button',{name:'Select all'}));
+  act(()=>interaction.onTokenDrop?.(hero.id,160,96));
+  expect(issued).toHaveLength(2);expect(issued.find(i=>(i.draft.payload as {id:string}).id===hero.id)?.draft).toMatchObject({type:'token.move',payload:{id:hero.id,x:160,y:96}});
+  expect(issued.find(i=>(i.draft.payload as {id:string}).id==='tok_b')?.overlay).toMatchObject({kind:'token',id:'tok_b',patch:{x:288,y:96}});
+  act(()=>useCommands.getState().notify({kind:'applied',commandId:'cmd_0000000000000002'} as never));
+  act(()=>useCommands.getState().notify({kind:'rejected',commandId:'cmd_0000000000000001',code:'stale'} as never));
+  expect(screen.getByText(/1 applied; 1 rejected; 1 skipped/)).toBeTruthy();expect(screen.getByText('B [tok_b]: Rejected: stale')).toBeTruthy();expect(issued).toHaveLength(2);
+});
+it('copy/paste preserves locked and hidden fields with fresh ids and one create/overlay per token',()=>{
+  seed([scene,{...hero,hidden:true,locked:true,actorId:'chr_a'},{...hero,id:'tok_b',label:'B',x:224}]);
+  const {issued}=setup();fireEvent.click(screen.getByRole('button',{name:'Select tokens (0)'}));fireEvent.click(screen.getByRole('button',{name:'Select all'}));
+  const map=screen.getByRole('application');fireEvent.keyDown(map,{key:'c',ctrlKey:true});fireEvent.keyDown(map,{key:'v',ctrlKey:true});
+  expect(issued).toHaveLength(2);const hidden=issued.find(i=>(i.draft.payload as {hidden:boolean}).hidden);
+  expect(hidden?.draft).toMatchObject({type:'token.create',payload:{hidden:true,locked:true,actorId:'chr_a'}});
+  expect(hidden?.overlay).toMatchObject({create:{hidden:true}});expect((hidden?.draft.payload as {id:string}).id).not.toBe(hero.id);
+  fireEvent.keyDown(map,{key:'v',ctrlKey:true});expect(issued).toHaveLength(2);
+});
+it('shift-click toggles token membership without issuing commands',()=>{
+  const {runtime,issued}=setup();const map=screen.getByRole('application');act(()=>runtime.viewportCallback?.({x:0,y:0,scale:1}));
+  const click=()=>fireEvent(map,new MouseEvent('pointerdown',{bubbles:true,button:0,shiftKey:true,clientX:96,clientY:96}));
+  click();expect(screen.getByRole('button',{name:'Select tokens (1)'})).toBeTruthy();
+  click();expect(screen.getByRole('button',{name:'Select tokens (0)'})).toBeTruthy();expect(issued).toHaveLength(0);
+});
+it('a rejected scene copy releases its duplicate guard without navigating',()=>{
+  vi.spyOn(window,'prompt').mockReturnValue('Copy');const {issued}=setup();fireEvent.click(screen.getByText('Scene menu'));
+  fireEvent.click(screen.getByRole('button',{name:'Duplicate scene'}));fireEvent.click(screen.getByRole('button',{name:'Duplicate scene'}));expect(issued).toHaveLength(1);
+  act(()=>useCommands.getState().notify({kind:'rejected',commandId:'cmd_0000000000000001',type:'scene.duplicate',code:'conflict'} as never));
+  fireEvent.click(screen.getByRole('button',{name:'Duplicate scene'}));expect(issued).toHaveLength(2);expect(navigateToScene).not.toHaveBeenCalled();
 });

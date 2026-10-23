@@ -65,7 +65,7 @@ it('guidance uses explicit create and pairing actions', () => {
 });
 it('scene navigation does not publish or change the TV, with undo always present', () => {
   const onOpen = vi.fn(), onShow = vi.fn(), onRename = vi.fn();
-  render(<SceneBar scenes={[{id:'next', name:'Next room', published:false, onTable:false}]} scene={null}
+  render(<SceneBar onTvId={null} onDuplicate={vi.fn()} scenes={[{id:'next', name:'Next room', published:false, onTable:false}]} scene={null}
     fallbackName="Empty" enabled={false} canUndo={false} canRedo={false} nextUndo={null}
     onOpen={onOpen} onShow={onShow} onRename={onRename} onDelete={vi.fn()} onNew={vi.fn()} onClear={vi.fn()} onUndo={vi.fn()} onRedo={vi.fn()}>{null}</SceneBar>);
   fireEvent.change(screen.getByLabelText('Editing'), {target: {value:'next'}});

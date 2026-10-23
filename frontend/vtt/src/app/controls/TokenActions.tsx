@@ -2,8 +2,9 @@ import type { GmEntity } from '../../protocol/frames';
 import { ActionDialog } from '../shell/ActionDialog';
 type Token = Extract<GmEntity, { kind: 'token' }>;
 type Actor = Extract<GmEntity, { kind: 'actor' }>;
-export function TokenActions({ token, actors, enabled, onChange, onDelete, onClose }: {
+export function TokenActions({ token, actors, enabled, onChange, onDelete, onClose,canFront,canBack,onOrder }: {
   token: Token; actors: readonly Actor[]; enabled: boolean;
+  canFront:boolean;canBack:boolean;onOrder(direction:'front'|'back'):void;
   onChange(patch: Partial<Pick<Token, 'hidden' | 'locked' | 'size' | 'actorId'>>): void;
   onDelete(): void; onClose(): void;
 }) {
@@ -14,6 +15,8 @@ export function TokenActions({ token, actors, enabled, onChange, onDelete, onClo
     {actor?.hidden && <p>Hidden in the tracker; showing this token does not reveal it on the TV.</p>}
     <button type="button" disabled={!enabled} onClick={() => onChange({ locked: !token.locked })}>
       {token.locked ? 'Unlock token' : 'Lock token'}</button>
+    <button type="button" disabled={!enabled || !canFront} onClick={()=>onOrder('front')}>Bring to front</button>
+    <button type="button" disabled={!enabled || !canBack} onClick={()=>onOrder('back')}>Send to back</button>
     <label className="vtt-field">Size (squares)<select value={token.size} disabled={!enabled}
       onChange={e => onChange({ size: Number(e.target.value) })}>
       {[0.5, 1, 2, 3, 4].map(size => <option key={size} value={size}>{size}</option>)}

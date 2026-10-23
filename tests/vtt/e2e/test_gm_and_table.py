@@ -196,6 +196,30 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
     gm.keyboard.press("Escape")
     expect(map_host).to_be_focused()
 
+    # Multi-select uses a command and an undo entry per token.
+    scouts = [t for t in probe(gm)["tokens"] if t["label"] == "Table Scout"]
+    gm.get_by_role("button", name="Select tokens", exact=False).click()
+    selection_panel = gm.get_by_role("region", name="Token selection", exact=True)
+    selection_panel.get_by_role("button", name="Clear selection", exact=True).click()
+    for t in scouts:
+        selection_panel.locator("label").filter(has_text=t["id"]).get_by_role("checkbox").check()
+    selection_panel.get_by_role("button", name="Move selection right", exact=True).click()
+    wait_for(tv, lambda s: all(token(s, t["id"])["x"] == t["x"] + 64 for t in scouts), "both linked tokens move as a group")
+    expect(selection_panel.get_by_text("2 applied;", exact=False)).to_be_visible()
+    shoot(gm, "multi-select-panel")
+    selection_panel.get_by_role("button", name="Copy tokens", exact=True).click()
+    ids_before = {t["id"] for t in probe(gm)["tokens"]}
+    selection_panel.get_by_role("button", name="Paste tokens (2)", exact=True).click()
+    copied_state = wait_for(tv, lambda s: sum(t["label"] == "Table Scout" for t in s["tokens"]) == 4, "two copied linked party tokens reach the TV")
+    copies = [t for t in copied_state["tokens"] if t["id"] not in ids_before]
+    assert len(copies) == 2 and all(t.get("live", {}).get("hp", 0) > 0 for t in copies)
+    gm.get_by_role("button", name="Select tokens", exact=False).click()
+    map_host.focus()
+    for remaining in (1, 0):
+        gm.keyboard.press("Control+z")
+        wait_for(tv, lambda s: sum(token(s, t["id"]) is not None for t in copies) == remaining, "undo removes one copied token at a time")
+    shoot(gm, "multi-select-result")
+
     # --- move a token: the TV follows ---------------------------------------------------------
     start_x = token(shown, "tok_hero")["x"]
     click_token(gm, "tok_hero")
@@ -662,6 +686,20 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
     expect(observer.locator(f'.vtt-scene-picker option[value="{imported}"]')).to_have_count(0)
     assert probe(tv)["scene"]["width"] == 1280  # deletion did not move or blank the TV
     shoot(observer, "u3-deleted-elsewhere")
+    # The scene copy is prepared privately and opens only after applied.
+    gm.locator(".vtt-scene-picker").select_option("scene_hall")
+    gm.wait_for_url("**sceneId=scene_hall**")
+    gm.get_by_text("live", exact=True).wait_for()
+    tv_before_copy = probe(tv)["scene"]
+    tv_label_before_copy = gm.get_by_label("On TV", exact=True).inner_text()
+    gm.get_by_text("Scene menu", exact=True).click()
+    gm.once("dialog", lambda dialog: dialog.accept("Hall review copy"))
+    gm.get_by_role("button", name="Duplicate scene", exact=True).click()
+    gm.wait_for_url(lambda url: "sceneId=" in url and "sceneId=scene_hall" not in url)
+    gm.get_by_text("live", exact=True).wait_for()
+    expect(gm.get_by_label("Editing", exact=True)).to_contain_text("Hall review copy")
+    expect(gm.get_by_label("On TV", exact=True)).to_have_text(tv_label_before_copy)
+    assert probe(tv)["scene"] == tv_before_copy, "duplicating changed the TV"
     # The actual form, not a fetch or a direct /tracker link, enters this campaign.
     gm.get_by_role("tab", name="Creatures", exact=True).click()
     with gm.context.expect_event("request", predicate=lambda request: request.method == "POST" and request.url.endswith(f"/campaign/{site.cid}/activate")) as activation:

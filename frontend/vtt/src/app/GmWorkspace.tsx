@@ -1,4 +1,7 @@
 import { Inspector } from './Inspector';
+import { onTvSceneId } from './actions/tablePointer';
+import { groupMoves, pasteTokens, type GroupToken } from './controls/tokenGroups';
+import { useTokenBatch } from './controls/useTokenBatch';
 import { TokenActions } from './controls/TokenActions';
 import { ActionDialog } from './shell/ActionDialog';
 import { TOOL_KEYS, ignoresMapKey, hasMapToolFocus } from './shell/keyboard';
@@ -48,6 +51,9 @@ import {
   createWall,
   deleteEntity,
   deleteScene,
+  duplicateScene,
+  bringToFront,
+  sendToBack,
   fogReveal,
   fogReset,
   moveToken,
@@ -128,6 +134,10 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
 
   const [tool, setTool] = useState<Tool>('select');
   const [selection, setSelection] = useState<Hit | null>(null);
+  const [groupIds,setGroupIds]=useState<Set<string>>(new Set());
+  const [groupPanel,setGroupPanel]=useState(false);
+  const [copied,setCopied]=useState<GroupToken[]>([]);
+  const batch=useTokenBatch(status);
   const [tokenMenu, setTokenMenu] = useState<string | null>(null);
   const [shortcutHelp, setShortcutHelp] = useState(false);
   const [shortcutsEnabled, setShortcutsEnabled] = useToolShortcuts(live?.boot.memberId);
@@ -152,6 +162,7 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
     [projected, overlays],
   );
   const sceneEntity = useMemo(() => [...entities.values()].find((e): e is Of<'scene'> => e.kind === 'scene'), [entities]);
+  const tvSceneId = onTvSceneId(entities.values());
   const fogEntity = useMemo(() => [...entities.values()].find((e): e is Of<'fog'> => e.kind === 'fog'), [entities]);
   const terrainEntity = useMemo(
     () => [...entities.values()].find((e): e is Of<'terrain'> => e.kind === 'terrain'),
@@ -167,8 +178,9 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
   );
   // User selection opens Inspector, including reselecting the same token.
   // Mirror updates never steal the chosen tab.
-  function selectEntity(hit: Hit | null) {
+  function selectEntity(hit: Hit | null, keepGroup=false) {
     setSelection(hit);
+    if(!keepGroup) setGroupIds(new Set(hit?.kind==='token' ? [hit.id] : []));
     if (hit) {
       setSidebarTab('inspector');
       setDockOpen(true);
@@ -176,6 +188,12 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
   }
   const selected = selection ? (entityOf(selection.kind, selection.id) ?? null) : null;
   const menuToken = tokenMenu ? entityOf('token', tokenMenu) as Of<'token'> | undefined : undefined;
+  function toggleGroup(id:string) {
+    const next=new Set(groupIds);if(next.has(id)) next.delete(id);else next.add(id);
+    setGroupIds(next);
+    const primary=next.has(id)?id:next.values().next().value;
+    selectEntity(primary?{kind:'token',id:primary}:null,true);setGroupPanel(true);
+  }
 
   useEffect(() => {
     if (tokenMenu && (!menuToken || !showMap)) setTokenMenu(null);
@@ -195,7 +213,7 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
       const target = targetOf(draft);
       const before = target ? entityOf(target.kind, target.id) : undefined;
       const commandId = live.issue(draft, overlay);
-      if (commandId && (draft.type === 'table.show' || draft.type === 'table.clear')) tableCommands.current.add(commandId);
+      if (commandId && (draft.type.startsWith('scene.') || draft.type === 'table.show' || draft.type === 'table.clear')) tableCommands.current.add(commandId);
       return { commandId, inverse: commandId ? inverseFor(draft, before) : null };
     },
     [live],
@@ -273,11 +291,20 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
     void refreshScenes();
   }, [refreshScenes, sceneEntity?.version]);
 
-  // Other GMs can move the TV pointer without changing the scene being edited.
+  // The pointer arrives over the socket. Names/creates by another GM can be
+  // refreshed on focus without polling the pointer every five seconds.
   useEffect(() => {
-    const timer = window.setInterval(() => {void refreshScenes();},5000);
-    return () => {window.clearInterval(timer);++sceneListGeneration.current;};
+    const focus = () => {void refreshScenes();};
+    window.addEventListener('focus',focus);
+    return () => {window.removeEventListener('focus',focus);++sceneListGeneration.current;};
   },[refreshScenes]);
+  const missingPointerName = useRef<string | null>(null);
+  useEffect(() => {
+    if (!tvSceneId || scenes?.some(s => s.id === tvSceneId)) {missingPointerName.current=null;return;}
+    if (scenes && missingPointerName.current !== tvSceneId) {
+      missingPointerName.current=tvSceneId;void refreshScenes();
+    }
+  },[tvSceneId,scenes,refreshScenes]);
 
   // Showing or clearing the table moves the table pointer without changing
   // this scene, so the picker's "(on the table)" would go stale: refetch once
@@ -312,6 +339,11 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
   useEffect(() => {
     if (creatingScene && lastApplied === creatingScene.commandId) openScene(creatingScene.sceneId);
   }, [creatingScene, lastApplied, openScene]);
+  useEffect(()=>{
+    if(!creatingScene) return;
+    const check=()=>{const notice=useCommands.getState().notice;if(notice?.kind==='rejected' && notice.commandId===creatingScene.commandId) setCreatingScene(null);};
+    const stop=useCommands.subscribe(check);check();return stop;
+  },[creatingScene]);
 
   function newScene() {
     const name = window.prompt('Name the new scene', 'New scene')?.trim();
@@ -320,9 +352,17 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
     const commandId = issue(createScene(sceneId, name.slice(0, 120)));
     if (commandId) setCreatingScene({ commandId, sceneId });
   }
+  function copyScene() {
+    if (!inputEnabled || !sceneEntity || creatingScene) return;
+    const name=window.prompt('Name the duplicate scene (the TV stays unchanged)', `${sceneEntity.name} (copy)`)?.trim().slice(0,120);
+    if (!name) return;
+    const sceneId=newEntityId('scene');
+    const commandId=issue(duplicateScene(sceneEntity,sceneId,name));
+    if(commandId) setCreatingScene({commandId,sceneId});
+  }
 
   function removeScene() {
-    if(!inputEnabled || !sceneEntity || !scenes || scenes.some(s=>s.id===sceneEntity.id && s.onTable)) return;
+    if(!inputEnabled || !sceneEntity || tvSceneId === undefined || tvSceneId === sceneEntity.id) return;
     const commandId=issue(deleteScene(sceneEntity));
     if(commandId) {setDeletionApplied(false);setDeletingScene({commandId,sceneId:sceneEntity.id});}
   }
@@ -432,11 +472,12 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
   // --- map input ------------------------------------------------------------------------------
   const tokenCount = scene?.tokens.length ?? 0;
   const interaction: RuntimeInteraction = {
-    canDragToken: (id) => inputEnabled && tool === 'select' && !(entityOf('token', id) as Of<'token'> | undefined)?.locked,
+    canDragToken: (id) => {const token=entityOf('token',id) as Of<'token'>|undefined;return inputEnabled && !batch.busy && !(groupIds.has(id) && selectionPending) && tool==='select' && !!token && !token.locked;},
     onTokenDrop: (id, x, y) => {
       const token = entityOf('token', id) as Of<'token'> | undefined;
-      if (!token || !inputEnabled) return;
+      if (!token || token.locked || !inputEnabled || batch.busy) return;
       if (token.x === x && token.y === y) return;
+      if(groupIds.has(id) && groupIds.size>1) {moveSelection(x-token.x,y-token.y);selectEntity({kind:'token',id},true);return;}
       issue(moveToken(token, x, y), { kind: 'token', id, patch: { x, y } });
       selectEntity({ kind: 'token', id });
     },
@@ -510,14 +551,20 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
         setWallEnd(null);
         setTemplateStart(null);
         setSelection(null);
+        setGroupIds(new Set());
         return true;
       }
       if (!inputEnabled || !selected || !scene) return false;
+      if(selected.kind==='token' && groupIds.size>1 && groupIds.has(selected.id) && e.key.startsWith('Arrow')) {
+        const g=scene.gridSize;
+        moveSelection(e.key==='ArrowLeft'?-g:e.key==='ArrowRight'?g:0,e.key==='ArrowUp'?-g:e.key==='ArrowDown'?g:0);return true;
+      }
       // Delete only: Backspace is too easy to hit by accident on a map.
       if (
         e.key === 'Delete' &&
         (selected.kind === 'token' || selected.kind === 'light' || selected.kind === 'wall' || selected.kind === 'template')
       ) {
+        if(groupIds.size>1) {setAnnouncement('Open an individual token menu to delete it; group Delete is not supported.');return true;}
         issue(deleteEntity(selected), selected.kind === 'token' ? { kind: 'token', id: selected.id, deleted: true } : null);
         setSelection(null);
         return true;
@@ -634,11 +681,40 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
     issue(draft, overlayFor(draft));
     setTokenMenu(null);
   }
+  function selectedTokens() {
+    return [...groupIds].map(id=>entityOf('token',id) as GroupToken | undefined).filter((t):t is GroupToken=>!!t);
+  }
+  const selectionPending=[...overlays.values()].some(o=>o && groupIds.has(o.id));
+  function moveSelection(dx:number,dy:number) {
+    if(!inputEnabled || !sceneEntity || batch.busy || selectionPending) return;
+    const tokens=selectedTokens();
+    const skipped=[...groupIds].filter(id=>!tokens.some(t=>t.id===id && !t.locked)).map(id=>`${tokens.find(t=>t.id===id)?.label || 'Missing token'} [${id}]`);
+    const drafts=groupMoves(tokens,sceneEntity,dx,dy);
+    if(!drafts.length && !skipped.length) {setAnnouncement('The selection cannot move farther inside this scene.');return;}
+    batch.run(drafts.map(d=>({draft:d,name:`${tokens.find(t=>t.id===d.payload.id)?.label || 'Unnamed'} [${String(d.payload.id)}]`})),skipped,d=>issue(d,overlayFor(d)));
+  }
+  function copySelection() {
+    if(!inputEnabled || batch.busy || selectionPending) return;
+    const tokens=selectedTokens();setCopied(structuredClone(tokens));
+    setAnnouncement(`Copied ${tokens.length} tokens in this page. Pasting keeps their tracker links, locks and hidden flags.`);
+  }
+  function pasteSelection() {
+    if(!inputEnabled || !sceneEntity || !copied.length || batch.busy) return;
+    const drafts=pasteTokens(copied,sceneEntity);
+    batch.run(drafts.map((draft,i)=>({draft,name:`${copied[i]?.label || 'Unnamed token'} [${String(draft.payload.id)}]`})),[],d=>{
+      const overlay=overlayFor(d);
+      return issue(d,overlay && 'create' in overlay ? {...overlay,create:{...overlay.create,hidden:d.payload.hidden===true}} : overlay);
+    });
+  }
 
   return (
     <div className={`vtt-gm ${railOpen ? '' : 'is-rail-collapsed'} ${dockOpen ? '' : 'is-dock-collapsed'}`}
       onKeyDownCapture={event => {
         const e = event.nativeEvent;
+        if((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && !e.isComposing && e.keyCode!==229 && !e.repeat && hasMapToolFocus(e.target)
+          && e.target instanceof Element && !e.target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])') && ['c','v'].includes(e.key.toLowerCase())) {
+          event.preventDefault();event.stopPropagation();if(e.key.toLowerCase()==='c') copySelection();else pasteSelection();return;
+        }
         if (ignoresMapKey(e) || !hasMapToolFocus(e.target)) return;
         const focusedToken = e.target instanceof Element ? e.target.closest<HTMLButtonElement>('button[data-token-id]')?.dataset.tokenId : undefined;
         if (focusedToken && e.key === 'Escape') {
@@ -662,8 +738,9 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
         }
         if (e.target instanceof Element && e.target.closest('.vtt-map-host, .vtt-token-selection') && interaction.onKey?.(e)) { event.preventDefault(); event.stopPropagation(); }
       }}>
-      <SceneBar scenes={live ? scenes : null} scene={sceneEntity ?? null} fallbackName={sceneName}
+      <SceneBar scenes={live ? scenes : null} onTvId={tvSceneId} scene={sceneEntity ?? null} fallbackName={sceneName}
         enabled={inputEnabled} onOpen={openScene} onNew={newScene} onDelete={removeScene}
+        onDuplicate={copyScene}
         onRename={name => sceneEntity && issue(updateScene(sceneEntity, { name }))}
         onShow={() => sceneEntity && issue(showOnTable(sceneEntity))}
         onClear={() => sceneEntity && issue(clearTable(sceneEntity))}
@@ -686,6 +763,11 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
         setTemplateSize={setTemplateSize} setTerrainKind={setTerrainKind} />
 
       <main className="vtt-stage" ref={stageRef} onDragOver={dragOverCreature} onDrop={dropCreature}
+        onPointerDownCapture={event=>{
+          if(event.button===0 && event.shiftKey && tool==='select') {
+            const token=pointerToken(event);if(token) {event.preventDefault();event.stopPropagation();toggleGroup(token.id);}
+          }
+        }}
         onContextMenu={event => {
           const token = pointerToken(event);
           if (token) {event.preventDefault(); chooseTool('select'); selectEntity({kind:'token',id:token.id}); setTokenMenu(token.id);}
@@ -720,6 +802,7 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
           <span>{selected.label || 'Unnamed token'}</span>
           <button type="button" aria-label="Token actions" aria-haspopup="dialog" onClick={() => setTokenMenu(selected.id)}>...</button>
         </div>}
+        {showMap && <button type="button" className="vtt-selection-launch" aria-expanded={groupPanel} onClick={()=>{setGroupPanel(v=>!v);setSidebarTab('inspector');setDockOpen(true);}}>Select tokens ({selectedTokens().length})</button>}
         {/* The canvas has an off-screen mirror for screen readers. */}
         <ul className="vtt-visually-hidden" aria-label="Tokens on the map">
           {visibleTokens.map((t) => (
@@ -744,14 +827,36 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
 
       <WorkspaceSidebar open={dockOpen} onToggle={() => setDockOpen((v) => !v)} tab={sidebarTab} onTab={setSidebarTab}
         panels={{
-          inspector: selected && ['token', 'wall', 'light', 'template'].includes(selected.kind) ?
+          inspector: <>
+{showMap && <section className="vtt-group-controls" aria-label="Token selection">
+          <button type="button" aria-expanded={groupPanel} onClick={()=>setGroupPanel(v=>!v)}>{groupPanel ? 'Hide selection options' : 'Show selection options'} ({selectedTokens().length})</button>
+          {groupPanel && <>
+            <p>Shift-click tokens or use this list. Other selected tokens follow when the dragged token is dropped. Locked tokens stay put.</p>
+            <div className="vtt-group-list">{visibleTokens.map(t=><label key={t.id}>
+              <input type="checkbox" checked={groupIds.has(t.id)} onChange={()=>toggleGroup(t.id)}/>
+              {t.label || 'Unnamed'} [{t.id}] {(entityOf('token',t.id) as GroupToken | undefined)?.locked?'(locked)':''} {t.hidden?'(hidden)':''}
+            </label>)}</div>
+            <button type="button" onClick={()=>{setGroupIds(new Set(visibleTokens.map(t=>t.id)));const first=visibleTokens[0];selectEntity(first?{kind:'token',id:first.id}:null,true);}}>Select all</button>
+            <button type="button" onClick={()=>selectEntity(null)}>Clear selection</button>
+            <div className="vtt-group-buttons">{([['Left',-1,0],['Right',1,0],['Up',0,-1],['Down',0,1]] as const).map(([label,x,y])=>
+              <button type="button" key={label} disabled={!inputEnabled || batch.busy || selectionPending || !groupIds.size} onClick={()=>moveSelection(x*(sceneEntity?.gridSize ?? 0),y*(sceneEntity?.gridSize ?? 0))}>Move selection {label.toLowerCase()}</button>)}</div>
+            <button type="button" disabled={!inputEnabled || batch.busy || selectionPending || !groupIds.size} onClick={copySelection}>Copy tokens</button>
+            <button type="button" disabled={!inputEnabled || batch.busy || !copied.length} onClick={pasteSelection}>Paste tokens ({copied.length})</button>
+            <p>Copy stays in this page; reload clears it. Copies keep locks, hidden state and tracker links. Move and Copy wait for command receipts and the scene mirror. Undo reverses one token at a time.</p>
+          </>}
+          {!!batch.rows.length && <div role="status" className="vtt-batch-results">
+            <p>{batch.rows.filter(r=>r.result==='Applied').length} applied; {batch.rows.filter(r=>r.result.startsWith('Rejected')).length} rejected; {batch.rows.filter(r=>r.result.startsWith('Skipped')).length} skipped; {batch.rows.filter(r=>r.result==='Waiting').length} waiting; {batch.rows.filter(r=>r.result==='Not queued').length} not queued; {batch.rows.filter(r=>r.result.startsWith('Unknown')).length} unknown. Partial results are not atomic; nothing is retried automatically.</p>
+            <ul>{batch.rows.map((r,i)=><li key={i}>{r.name}: {r.result}</li>)}</ul>
+          </div>}
+        </section>}
+{selected && ['token', 'wall', 'light', 'template'].includes(selected.kind) ?
             <><Inspector entity={selected} enabled={inputEnabled} onIssue={issue} onDeleted={() => setSelection(null)}
               actors={actorEntities} {...(live ? { boot: live.boot } : {})} />
               {live && linkedActor && <ConditionPicker key={`${live.boot.campaignId}:${linkedActor.id}`} boot={live.boot} actor={linkedActor} enabled={inputEnabled} />}
               {selected.kind === 'token' && sceneEntity && <TokenVisionControls key={selected.id} token={selected} scene={sceneEntity} enabled={inputEnabled} onIssue={issue} />}
               {live && selected.kind === 'template' && sceneEntity && <AreaEffectPanel attempts={areaAttempts} key={`${sceneEntity.id}:${selected.id}`} boot={live.boot} template={selected} scene={sceneEntity} entities={allEntities} enabled={inputEnabled} />}
             </> :
-            <p className="vtt-empty">Select a token, light, wall or template to inspect it.</p>,
+            <p className="vtt-empty">Select a token, light, wall or template to inspect it.</p>}</>,
           creatures: <section>
             {!isTerminal(status) && <CreaturesPanel entities={allEntities} enabled={inputEnabled && !!sceneEntity}
               pendingActorIds={placements.pendingActorIds} onPlace={placeActor} onDragStart={startCreatureDrag} onDragEnd={()=>{draggingCreature.current=null;}}/>}
@@ -771,6 +876,15 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
         {live ? <TurnControls key={live.boot.campaignId} boot={live.boot} entities={allEntities} enabled={inputEnabled} /> : <EncounterLine actors={actorEntities} />}
       </footer>
       {menuToken && showMap && <TokenActions token={menuToken} actors={actorEntities} enabled={inputEnabled}
+        canFront={bringToFront(menuToken,allEntities.filter((e):e is Of<'token'>=>e.kind==='token')) !== null}
+        canBack={sendToBack(menuToken,allEntities.filter((e):e is Of<'token'>=>e.kind==='token')) !== null}
+        onOrder={direction=>{
+          const token=entityOf('token',menuToken.id) as Of<'token'> | undefined;
+          if(!inputEnabled || !token) return;
+          const tokens=[...useEntities.getState().entities.values()].filter((e):e is Of<'token'>=>e.kind==='token');
+          const draft=direction==='front' ? bringToFront(token,tokens) : sendToBack(token,tokens);
+          if(draft) issue(draft,overlayFor(draft));setTokenMenu(null);
+        }}
         onChange={changeMenuToken} onClose={() => setTokenMenu(null)} onDelete={() => {
           const token = tokenMenu ? entityOf('token',tokenMenu) as Of<'token'> | undefined : undefined;
           if (token && inputEnabled) {issue(deleteEntity(token), {kind:'token',id:token.id,deleted:true});setSelection(null);setTokenMenu(null);}
