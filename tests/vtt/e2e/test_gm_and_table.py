@@ -83,6 +83,12 @@ def choose_tool(page, label):
 def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
     from playwright.sync_api import expect
     gm = screens("gm")
+    panel_requests = []
+    def remember_panel(request):
+        name = request.url.rsplit("/", 1)[-1]
+        if name.endswith(".js") and name.startswith(("GmPanels-", "BestiaryPanel-", "AreaEffectPanel-", "LightingControls-")):
+            panel_requests.append(name)
+    gm.on("request", remember_panel)
     gm.goto(site.gm_url("scene_hall"))
     gm.get_by_text("live", exact=True).wait_for()
     # U-2: visible group labels, native keyboard activation, and distinct sub-tools.
@@ -118,6 +124,8 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
     assert gm.get_by_label("Paint", exact=True).input_value() == "1"
     choose_tool(gm, "Select")
 
+    assert panel_requests == [], "hidden panels loaded before their first use"
+
     # --- pair the TV with a one-time code ---------------------------------------------------
     tv = screens("table")
     tv.goto(site.url + "/vtt/table")
@@ -125,6 +133,11 @@ def test_a_session_on_the_gm_page_and_the_table_display(site, screens):
     gm.get_by_role("tab", name="TV", exact=True).click()
     gm.get_by_role("button", name="Pair a display").click()
     code = gm.locator(".vtt-code-value").inner_text()
+    gm.get_by_role("tab", name="Import", exact=True).click()
+    expect(gm.get_by_role("heading", name="Import from /map", exact=True)).to_be_visible()
+    gm.get_by_role("tab", name="TV", exact=True).click()
+    expect(gm.locator(".vtt-code-value")).to_have_text(code)
+    assert len([name for name in panel_requests if name.startswith("GmPanels-")]) == 1
     tv.get_by_label("Pairing code").fill(code)
     tv.get_by_role("button", name="Pair").click()
     shown = wait_for(tv, lambda s: s["scene"] is not None and token(s, "tok_hero") is not None,

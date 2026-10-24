@@ -1,4 +1,5 @@
 import { useCallback, useId, useMemo, useState, type ReactNode } from 'react';
+import { DeferredPanel } from './DeferredPanel';
 export const SIDEBAR_TABS = ['inspector', 'creatures', 'scene', 'tv', 'import'] as const;
 export type SidebarTab = typeof SIDEBAR_TABS[number];
 const LABELS: Record<SidebarTab, string> = { inspector: 'Inspector', creatures: 'Creatures', scene: 'Scene', tv: 'TV', import: 'Import' };
@@ -44,9 +45,9 @@ export function WorkspaceSidebar({open, onToggle, tab, onTab, panels}: Props) {
             document.getElementById(`${id}-${target}`)?.focus();
           }}>{LABELS[name]}</button>)}
       </div>
-      {/* Keep panels mounted: tab switches must not reset pairing, imports or edits. */}
+      {/* Mount on first use, then retain state while the tab is hidden. */}
       {SIDEBAR_TABS.map((name) => <section key={name} role="tabpanel" id={`${id}-${name}-panel`}
-        aria-labelledby={`${id}-${name}`} hidden={name !== tab}>{panels[name]}</section>)}
+        aria-labelledby={`${id}-${name}`} hidden={name !== tab}><DeferredPanel active={open && name === tab}>{panels[name]}</DeferredPanel></section>)}
     </div>
   </aside>;
 }

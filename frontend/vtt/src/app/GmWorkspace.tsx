@@ -11,9 +11,7 @@ import { ConditionPicker } from './controls/ConditionPicker';
 import { CreaturesPanel } from './controls/CreaturesPanel';
 import { TrackerLink } from './controls/TrackerLink';
 import { useCreaturePlacements } from './controls/useCreaturePlacements';
-import { BestiaryPanel } from './controls/BestiaryPanel';
-import { AreaEffectPanel,createAreaAttemptStore } from './controls/AreaEffectPanel';
-import { LightingControls,TokenVisionControls } from './controls/LightingControls';
+import { createAreaAttemptStore } from './controls/areaAttemptStore';
 import { asCreature,type AddedCreature } from './actions/bestiary';
 import { freeSpotNear,placeCreature,listCreatures } from './actions/creatures';
 export { Inspector } from './Inspector';
@@ -26,7 +24,7 @@ import { ViewportButtons } from './shell/ViewportButtons';
 import { ToolRail, type Tool } from './shell/ToolRail';
 import { EncounterLine } from './shell/EncounterLine';
 import { WorkspaceStatus } from './shell/WorkspaceStatus';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ConnectionBanner } from '../components/ConnectionBanner';
 import { MapHost } from '../components/MapHost';
 import type { GmLive } from '../live/gm';
@@ -69,7 +67,12 @@ import {
   type Draft,
   type TokenOverlay,
 } from './gmCommands';
-import { ImportPanel, PairingPanel } from './GmPanels';
+const ImportPanel=lazy(()=>import('./GmPanels').then(m=>({default:m.ImportPanel})));
+const PairingPanel=lazy(()=>import('./GmPanels').then(m=>({default:m.PairingPanel})));
+const BestiaryPanel=lazy(()=>import('./controls/BestiaryPanel').then(m=>({default:m.BestiaryPanel})));
+const AreaEffectPanel=lazy(()=>import('./controls/AreaEffectPanel').then(m=>({default:m.AreaEffectPanel})));
+const LightingControls=lazy(()=>import('./controls/LightingControls').then(m=>({default:m.LightingControls})));
+const TokenVisionControls=lazy(()=>import('./controls/LightingControls').then(m=>({default:m.TokenVisionControls})));
 import { NoticeBar } from './NoticeBar';
 import { decodeFogBits } from '../protocol/semantics';
 import { cellAt, chunk, floodRegion, regionCells, terrainKindAt, type FillWall } from '../scene/fogFill';
@@ -853,19 +856,19 @@ export function GmWorkspace({ sceneName, live = null }: Props) {
             <><Inspector entity={selected} enabled={inputEnabled} onIssue={issue} onDeleted={() => setSelection(null)}
               actors={actorEntities} {...(live ? { boot: live.boot } : {})} />
               {live && linkedActor && <ConditionPicker key={`${live.boot.campaignId}:${linkedActor.id}`} boot={live.boot} actor={linkedActor} enabled={inputEnabled} />}
-              {selected.kind === 'token' && sceneEntity && <TokenVisionControls key={selected.id} token={selected} scene={sceneEntity} enabled={inputEnabled} onIssue={issue} />}
-              {live && selected.kind === 'template' && sceneEntity && <AreaEffectPanel attempts={areaAttempts} key={`${sceneEntity.id}:${selected.id}`} boot={live.boot} template={selected} scene={sceneEntity} entities={allEntities} enabled={inputEnabled} />}
+              {selected.kind === 'token' && sceneEntity && <Suspense fallback={<p role="status">Loading vision controls...</p>}><TokenVisionControls key={selected.id} token={selected} scene={sceneEntity} enabled={inputEnabled} onIssue={issue} /></Suspense>}
+              {live && selected.kind === 'template' && sceneEntity && <Suspense fallback={<p role="status">Loading area controls...</p>}><AreaEffectPanel attempts={areaAttempts} key={`${sceneEntity.id}:${selected.id}`} boot={live.boot} template={selected} scene={sceneEntity} entities={allEntities} enabled={inputEnabled} /></Suspense>}
             </> :
             <p className="vtt-empty">Select a token, light, wall or template to inspect it.</p>}</>,
           creatures: <section>
             {!isTerminal(status) && <CreaturesPanel entities={allEntities} enabled={inputEnabled && !!sceneEntity}
               pendingActorIds={placements.pendingActorIds} onPlace={placeActor} onDragStart={startCreatureDrag} onDragEnd={()=>{draggingCreature.current=null;}}/>}
             {live && <TrackerLink boot={live.boot}/>}
-            {live && !isTerminal(status) && <BestiaryPanel key={live.boot.campaignId} boot={live.boot} entities={allEntities} enabled={inputEnabled && !!sceneEntity} onPlace={placeAddedCreature} />}</section>,
+            {live && !isTerminal(status) && <Suspense fallback={<p role="status">Loading bestiary...</p>}><BestiaryPanel key={live.boot.campaignId} boot={live.boot} entities={allEntities} enabled={inputEnabled && !!sceneEntity} onPlace={placeAddedCreature} /></Suspense>}</section>,
           scene: <><Inspector entity={null} enabled={inputEnabled} onIssue={issue} onDeleted={() => {}}
             scene={sceneEntity ?? null} fog={fogEntity ?? null} terrain={terrainEntity ?? null}
             {...(live ? { boot: live.boot } : {})} />
-            {sceneEntity && <LightingControls key={sceneEntity.id} scene={sceneEntity} enabled={inputEnabled} preview={visionPreview} onPreview={setVisionPreview} onIssue={issue} />}</>,
+            {sceneEntity && <Suspense fallback={<p role="status">Loading lighting controls...</p>}><LightingControls key={sceneEntity.id} scene={sceneEntity} enabled={inputEnabled} preview={visionPreview} onPreview={setVisionPreview} onIssue={issue} /></Suspense>}</>,
           tv: live ? <><p className="vtt-empty">Pairing authorizes a display. It does not report whether that display is online.</p>
             <PairingPanel boot={live.boot} /></> : <p className="vtt-empty">Connect to a campaign to pair a TV.</p>,
           import: live ? <ImportPanel boot={live.boot} onImported={() => void refreshScenes()} /> :

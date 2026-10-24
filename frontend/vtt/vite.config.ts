@@ -36,7 +36,15 @@ export default defineConfig(({ command }) => {
       emptyOutDir: true,
       manifest: true,
       sourcemap: env.VTT_SOURCEMAP === '1',
-      rollupOptions: { input },
+      rollupOptions: { input, output: {
+        // Keep shared React separate from the rendering chunk. Match only
+        // vendor modules: never pull GM authoring dependencies into the TV.
+        codeSplitting: {groups:[{
+          name:'react-vendor',
+          test:/[\\/]node_modules[\\/](?:react|react-dom|scheduler)[\\/]/,
+          includeDependenciesRecursively:false,
+        }]},
+      } },
     },
     server: {
       port: 5173,

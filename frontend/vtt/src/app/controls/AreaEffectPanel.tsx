@@ -2,27 +2,12 @@ import { useMemo, useState, useSyncExternalStore } from 'react';
 import type { GmBoot } from '../../live/boot';
 import type { GmEntity } from '../../protocol/frames';
 import { currentEncounterToken,newRequestId } from '../actions/bestiary';
-import { createAreaApplier,damageTypes,savesFor,templateTargets,type AreaRequest,type AreaResult } from '../actions/areaEffects';
+import { createAreaApplier,damageTypes,savesFor,templateTargets,type AreaRequest } from '../actions/areaEffects';
+import { createAreaAttemptStore,type Attempt } from './areaAttemptStore';
+export { createAreaAttemptStore } from './areaAttemptStore';
 import { actionFeedback } from './feedback';
 type Of<K extends GmEntity['kind']> = Extract<GmEntity,{kind:K}>;
 interface Review {signature:string;selected:string[];names:Record<string,string>}
-type Attempt = AreaRequest & {encounterToken:string | null;requestId:string};
-
-interface AttemptState {request:Attempt;answer:AreaResult | null;sending:boolean;names:Record<string,string>}
-// Owned by the workspace: selection changes must not forget an ambiguous write.
-export function createAreaAttemptStore() {
-  const records = new Map<string,AttemptState>();
-  const listeners = new Set<() => void>();
-  return {
-    get:(key:string) => records.get(key) ?? null,
-    set(key:string,value:AttemptState | null) {
-      if (value) records.set(key,value); else records.delete(key);
-      listeners.forEach(notify => notify());
-    },
-    subscribe(notify:() => void) {listeners.add(notify);return () => {listeners.delete(notify);};},
-  };
-}
-
 export function AreaEffectPanel({boot,template,scene,entities,enabled,attempts}:{attempts:ReturnType<typeof createAreaAttemptStore>;boot:GmBoot;template:Of<'template'>;scene:Of<'scene'>;entities:readonly GmEntity[];enabled:boolean}) {
   const areas = useMemo(() => createAreaApplier(boot),[boot.campaignId,boot.csrf]);
   const attemptKey = `${scene.id}:${template.id}`;

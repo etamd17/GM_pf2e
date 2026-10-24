@@ -21,9 +21,10 @@ import { scanHtml } from '../src/build/htmlScan.ts';
 const root = resolve(import.meta.dirname, '..');
 const outDir = mkdtempSync(join(tmpdir(), 'vtt-bundle-check-'));
 const FORBIDDEN = [/src\/app\/GmWorkspace/, /src\/bench\//, /src\/authoring\//];
+const generatedRuntimeFiles = new Set();
 const CDN = [/fonts\.googleapis\.com/, /fonts\.gstatic\.com/];
 
-function closure(manifest, entryKey) {
+function closure(manifest, entryKey, includeDynamic = true) {
   const seen = new Set();
   const stack = [entryKey];
   while (stack.length) {
@@ -32,7 +33,7 @@ function closure(manifest, entryKey) {
     const chunk = manifest[key];
     if (!chunk) throw new Error(`manifest has no entry ${key}`);
     seen.add(key);
-    for (const k of [...(chunk.imports ?? []), ...(chunk.dynamicImports ?? [])]) stack.push(k);
+    for (const k of [...(chunk.imports ?? []), ...(includeDynamic ? chunk.dynamicImports ?? [] : [])]) stack.push(k);
   }
   return [...seen].map((k) => manifest[k]);
 }
@@ -45,8 +46,13 @@ function modulesIn(chunks) {
     const mapPath = join(outDir, `${chunk.file}.map`);
     if (!existsSync(mapPath)) {
       // Rolldown emits no map for near-empty stub chunks (Pixi's worker shim).
-      // Anything substantial without a map cannot be audited, so it fails.
+      // Other unmapped chunks fail unless build metadata proves that they
+      // contain only the compiler's generated interop runtime (see below).
       const size = readFileSync(join(outDir, chunk.file)).length;
+      if (generatedRuntimeFiles.has(chunk.file)) {
+        modules.add('\0rolldown/runtime.js');
+        continue;
+      }
       if (size > 512) throw new Error(`missing source map for ${chunk.file} (${size} bytes)`);
       continue;
     }
@@ -70,7 +76,19 @@ try {
   process.env.VTT_SOURCEMAP = '1';
   process.env.VTT_OUT_DIR = outDir;
   delete process.env.VTT_BENCH;
-  await build({ root, logLevel: 'warn' });
+  await build({ root, logLevel: 'warn', plugins: [{
+    name: 'audit-generated-runtime',
+    generateBundle(_options, output) {
+      // The compiler's CJS interop helper has no source map. Prove its sole
+      // module identity from build metadata; never exempt by file name.
+      for (const chunk of Object.values(output)) {
+        if (chunk.type === 'chunk' && chunk.moduleIds.length === 1 &&
+            chunk.moduleIds[0] === '\0rolldown/runtime.js' &&
+            chunk.facadeModuleId === null && chunk.imports.length === 0 &&
+            chunk.dynamicImports.length === 0) generatedRuntimeFiles.add(chunk.fileName);
+      }
+    },
+  }] });
   const manifest = JSON.parse(readFileSync(join(outDir, '.vite', 'manifest.json'), 'utf-8'));
 
   const tableChunks = closure(manifest, 'table.html');
@@ -89,6 +107,24 @@ try {
     failed = true;
     console.error('FAIL: sanity check could not find GmWorkspace in the GM closure');
   }
+  // Keep real lazy boundaries, rather than only replacing an import's syntax.
+  const initialGmModules = modulesIn(closure(manifest, 'index.html', false));
+  for (const panel of ['GmPanels.tsx', 'controls/BestiaryPanel.tsx', 'controls/AreaEffectPanel.tsx', 'controls/LightingControls.tsx']) {
+    const suffix = `/src/app/${panel}`;
+    if ([...initialGmModules].some(m => m.endsWith(suffix)) || ![...gmModules].some(m => m.endsWith(suffix))) {
+      failed = true;
+      console.error(`FAIL: ${panel} must be reachable lazily, outside the initial GM closure`);
+    }
+  }
+  // Vite's unchanged default warning is 500 kB. Make that a release gate for
+  // every emitted JS chunk, including GM-only and dynamically loaded chunks.
+  let largest = 0;
+  for (const file of new Set(Object.values(manifest).map(c => c.file).filter(f => f.endsWith('.js')))) {
+    const size = readFileSync(join(outDir, file)).length;
+    largest = Math.max(largest, size);
+    if (size > 500_000) {failed = true;console.error(`FAIL: ${file} is ${size} bytes (limit 500000)`);}
+  }
+  console.log(`chunk budget: largest ${largest} bytes; lazy GM panel boundaries checked`);
 
   if (manifest['bench.html']) {
     failed = true;

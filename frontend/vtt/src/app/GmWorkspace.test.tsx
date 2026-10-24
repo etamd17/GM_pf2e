@@ -136,7 +136,7 @@ describe('map input', () => {
     vi.stubGlobal('fetch',vi.fn(async (url:string) => ({ok:true,json:async () => url.includes('/bestiary?') ?
       {outcome:'ok',encounterToken:'enc-1',results:[{ref:'secret.json',name:'Private adversary',level:1,size:1}]} : {scenes:[]}})));
     setup();fireEvent.click(screen.getByRole('tab',{name:'Creatures'}));
-    fireEvent.change(screen.getByLabelText('Search bestiary'),{target:{value:'private'}});
+    fireEvent.change(await screen.findByLabelText('Search bestiary'),{target:{value:'private'}});
     fireEvent.click(screen.getByRole('button',{name:'Search bestiary'}));
     await screen.findByRole('button',{name:'Add and place Private adversary'});
     act(() => useConnection.getState().setStatus('revoked'));
@@ -311,6 +311,7 @@ describe('inspector and scene bar', () => {
       ? { ok: true, status: 201, json: async () => ({ asset: { id: 'asset_new' } }) }
       : { ok: true, status: 200, json: async () => ({ scenes: [] }) })));
     const file = new File([new Uint8Array(8)], 'a.png', { type: 'image/png' });
+    fireEvent.click(screen.getByRole('tab', { name: 'Scene' }));
     // nothing selected: the scene section offers the background
     await act(async () => {
       fireEvent.change(screen.getByLabelText('Background file'), { target: { files: [file] } });
@@ -541,6 +542,7 @@ describe('fog of war (parity P1)', () => {
   it('turns fog on against its version, and asks before a reset', () => {
     act(() => seed([scene, hero, wall, fogOf(new Uint8Array(13), false)]));
     const { issued } = setup();
+    fireEvent.click(screen.getByRole('tab', { name: 'Scene' }));
     fireEvent.click(screen.getByLabelText('Fog of war'));
     expect(issued.at(-1)?.draft).toEqual({ type: 'fog.update', expected: [{ kind: 'fog', id: 'fog', version: V1 }], payload: { enabled: true } });
     vi.stubGlobal('confirm', vi.fn(() => false));
@@ -554,6 +556,7 @@ describe('fog of war (parity P1)', () => {
 
   it('a scene without a fog entity says it is too large for fog', () => {
     setup();
+    fireEvent.click(screen.getByRole('tab', { name: 'Scene' }));
     expect(screen.getByText('This scene is too large for fog.')).toBeTruthy();
   });
 });
