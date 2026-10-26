@@ -78,9 +78,9 @@ UI-03 bug list (from `tasks/UI-00.md` > Anything broken or risky; all checked on
 |---|---|---|---|---|---|
 | MB-00 | Mistborn rules backend (Era 1 and 2, Allomancy, Feruchemy, versioned rules packages, GM services) | codex | its strongest | done, reviewed by Claude (see below) | `GM_pf2e_cosmere_rules/docs/handoff/tasks/MB-00.md` |
 | MB-01 | Bring MB-00 up to date with main, move the Mistborn data out of git (installed like 5e), make the full test run green, open a PR | codex | strongest model, high effort (history rewrite + test-failure hunt) | done (PR #182 merged; private bundle installed) | `tasks/MB-01.md` |
-| MB-02 | Verify the 252 Mistborn records still blocked on source checks | claude | Opus, high | needs brief | - |
+| MB-02 | Verify the 252 Mistborn records still blocked on source checks | codex | strongest, high | ready (after MB-04) | `tasks/MB-02.md` |
 | MB-03 | Generators: make Mistborn content for Mistborn campaigns (found in UI-01) | codex | standard, medium | done (accepted by Claude) | `tasks/MB-03.md` |
-| MB-04 | Mistborn money: boxings and clips in wallets and the loot page under the Mistborn skin (today they show Roshar spheres) | - | - | waiting on user (how Mistborn currency should work) | - |
+| MB-04 | Mistborn money: boxings and clips in wallets and the loot page under the Mistborn skin (one fixed rate, both eras; Era 2 notes are boxings) | codex | standard, high | ready | `tasks/MB-04.md` |
 
 **MB-00 review (Claude, 2026-10-13):** accepted as a backend milestone, not ready to merge yet.
 - 1024 Cosmere tests pass on the branch (623 new + 401 existing).
@@ -140,6 +140,7 @@ Accepted as a design checkpoint. Notes:
 
 Newest first. One plain line per handoff: who, what, what's next.
 
+- 2026-10-26 User/Claude: Codex goes back to Mistborn. User decided Mistborn money is boxings and clips at one fixed rate in both eras (Era 2 banknotes are boxings), and moved MB-02 to Codex. Claude wrote briefs MB-04 and MB-02. Next: Codex builds MB-04, then MB-02; Claude reviews.
 - 2026-10-16 Claude: accepted CI-01. The dedicated step selects the same 950 PF2e tests the full suite did (no markers, no 5e-data dependency, only host-capability skips), so coverage is unchanged. Next: Codex rebases after #209, publishes and merges after green CI.
 - 2026-10-16 Codex: removed the duplicate PF2e run from the later CI step; the dedicated 950-test selection stays, YAML and file coverage checks pass. Next: Claude reviews the one-line workflow change, then publish and merge after green CI.
 - 2026-10-16 Codex: accepted MAP-R2 and MAP-R3 together; 62 focused privacy/SSE/route checks pass, 107 templates parse, JavaScript syntax and diff checks pass. Next: publish the combined PR and merge only after every CI job is green.
