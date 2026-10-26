@@ -139,6 +139,8 @@ Accepted as a design checkpoint. Notes:
 
 ## Log
 
+- 2026-10-26 Codex: MB-04 PR #221 hit new security advisories before tests. Updated only pypdf and filelock to the reported fixes, regenerated locks and passed the strict audit plus PDF checks. Next: fresh CI, then merge and verify production before MB-05.
+
 - 2026-10-26 Codex: Claude accepted MB-04 after checking GM-only money editing, plurals and styling in the browser; all 87 focused tests and 110 templates pass. Next: publish, merge after green CI, confirm production, then MB-05 before MB-02.
 
 - 2026-10-26 Codex: fixed MB-04 for recheck: only the GM can edit money, singular amounts read correctly, and wallets use styled pills and cards. All 87 focused tests pass. Next: Claude rechecks; after MB-04 merges, MB-05 fixes the Mistborn sheet/nav bleed before MB-02.
