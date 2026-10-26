@@ -1,0 +1,29 @@
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/cosmere_scadrial_wallet.css') }}">
+  <div class="cs-section-h cs-foldable">Boxings &amp; Goods <span style="text-transform:none; letter-spacing:0;">(awarded by the GM)</span></div>
+  <div id="cos-scadrial-wallet" data-pid="{{ actor_id }}">
+    {% set money = wallet.scadrial %}
+    <div class="cs-chips" aria-label="Money balance">
+      <span class="cs-chip">Boxings <b data-money-count="boxing">{{ money.boxing }}</b></span>
+      <span class="cs-chip">Clips <b data-money-count="clip">{{ money.clip }}</b></span>
+    </div>
+    <p class="cos-money-rate">1 boxing = 100 clips. Era 2 banknotes count as boxings.</p>
+    <div class="cs-wallet-total">Worth <b data-money-total aria-live="polite">{{ wallet_total_money }}</b></div>
+    {% if wallet_editable %}
+    <form data-money-form class="cos-money-form">
+      <label>Boxings <input name="boxing" type="number" min="0" max="1000000000000" step="1" value="{{ money.boxing }}"></label>
+      <label>Clips <input name="clip" type="number" min="0" max="1000000000000" step="1" value="{{ money.clip }}"></label>
+      <button type="submit">Save money</button>
+      <span data-money-status role="status"></span>
+    </form>
+    {% endif %}
+    <div data-money-goods class="cs-chips">
+      {% for it in wallet['items'] %}<span class="cs-chip">{{ it.name }}{% if it.qty and it.qty > 1 %} &times;{{ it.qty }}{% endif %}</span>{% endfor %}
+    </div>
+    <details data-money-legacy {% if not legacy_spheres %}hidden{% endif %}><summary>Roshar spheres (read-only, separate from money)</summary>
+      <div data-money-legacy-counts>
+      {% for gem, counts in legacy_spheres.items() %}<p>{{ gem|capitalize }}: {{ counts.broam }} broams, {{ counts.mark }} marks, {{ counts.chip }} chips</p>{% endfor %}
+      </div>
+    </details>
+    <script type="application/json" data-money-initial>{{ money|tojson }}</script>
+  </div>
+  <script src="{{ url_for('static', filename='js/cosmere_scadrial_wallet.js') }}" defer></script>

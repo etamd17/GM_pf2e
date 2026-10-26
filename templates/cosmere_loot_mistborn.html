@@ -1,0 +1,149 @@
+{% extends "cosmere_loot.html" %}
+{% block content %}
+<div class="cl-head">
+  <div>
+    <div class="cl-title">Boxings, Clips &amp; Spoils</div>
+    <div class="cl-sub">Mistborn money in both eras. Banknotes count as boxings; 1 boxing = 100 clips.</div>
+  </div>
+  <div class="cl-total">
+    <span class="cl-total-val" id="cl-total" role="status" aria-live="polite" aria-atomic="true">0</span>
+    <span class="cl-total-lbl">money earned</span>
+    <div class="cl-total-break" id="cl-total-break">Boxings and clips only; Roshar spheres stay separate.</div>
+  </div>
+</div>
+
+<form class="cl-form" id="cl-form">
+  <div class="cl-row">
+    <label>Recipient
+      <select id="cl-recipient"><option value="The Party">The Party</option></select>
+    </label>
+  </div>
+  <div class="cl-items" id="cl-items"></div>
+  <button type="button" class="cl-additem" id="cl-additem">+ add item</button>
+  <div class="cl-spheres">
+    <label>Boxings <input type="number" id="cl-boxing" min="0" max="1000000000000" step="1" value="0"></label>
+    <label>Clips <input type="number" id="cl-clip" min="0" max="1000000000000" step="1" value="0"></label>
+  </div>
+  <label style="margin-bottom:.8rem;">Note
+    <input type="text" id="cl-note" placeholder="e.g. recovered from the safe">
+  </label>
+  <button type="submit" class="cl-add">Record award</button>
+</form>
+
+<h2>Current party wallets</h2><div id="cl-wallets" class="cl-entries" style="margin-bottom:1.4rem;"></div>
+<h2>Awards</h2><div class="cl-entries" id="cl-entries"></div>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const DENOMINATIONS = ['broam','mark','chip'];
+
+  function fmtMoney(m){
+    return ['boxing','clip'].map(k => { const n = Number(m[k])||0; return n+' '+k+(n===1?'':'s'); }).join(', ');
+  }
+  function fmtSpheres(s, gem){
+    const parts = [];
+    for (const k of DENOMINATIONS){ const c = parseInt(s[k]||0, 10)||0; if (c) parts.push(c + ' ' + esc(gem) + ' ' + k + (c===1?'':'s')); }
+    return parts.join(', ');
+  }
+  function esc(t){ const d = document.createElement('div'); d.textContent = t==null?'':String(t); return d.innerHTML; }
+  function escAttr(t){ return esc(t).replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+
+  async function postJSON(url, body){
+    const response = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    let data = {};
+    try { data = await response.json(); } catch (_error) {}
+    if (!response.ok || !data.success) throw new Error(data.error || data.message || 'The loot change could not be saved.');
+    return data;
+  }
+  function showError(error){
+    const message = error && error.message ? error.message : 'The loot change could not be saved.';
+    if (window.pf2eToast) window.pf2eToast(message, 'danger');
+    else window.alert(message);
+  }
+
+  function addItemRow(name, qty){
+    const row = document.createElement('div');
+    row.className = 'cl-item';
+    row.innerHTML = '<input class="nm" type="text" placeholder="item" value="'+esc(name||'')+'">'
+      + '<input class="qty" type="number" min="1" value="'+(qty||1)+'">'
+      + '<button type="button" class="rm" title="remove">&times;</button>';
+    row.querySelector('.rm').onclick = () => row.remove();
+    $('cl-items').appendChild(row);
+  }
+
+  function render(data){
+    // recipient options: keep "The Party" + the roster
+    const rec = $('cl-recipient');
+    const cur = rec.value;
+    rec.innerHTML = '<option value="The Party">The Party</option>'
+      + (data.party||[]).map(p => '<option value="'+escAttr(p.name)+'">'+esc(p.name)+'</option>').join('');
+    if ([...rec.options].some(o => o.value === cur)) rec.value = cur;
+    $('cl-total').textContent = data.total_money || '0 boxings, 0 clips';
+    $('cl-wallets').innerHTML = (data.party||[]).map(p => '<div class="cl-entry"><div>'
+      + '<div class="cl-entry-who">'+esc(p.name)+'</div>'
+      + '<div class="cl-entry-loot cl-entry-sph">'+esc(fmtMoney((p.wallet||{}).scadrial||{}))+'</div>'
+      + '<div class="cl-entry-meta">Worth '+esc(p.wallet_total_money)+'</div></div></div>').join('')
+      + '<div class="cl-entry"><div><div class="cl-entry-who">Party total</div>'
+      + '<div class="cl-entry-loot cl-entry-sph">'+esc(data.party_wallet_total || '0 boxings, 0 clips')+'</div></div></div>';
+    // entries (newest first)
+    const wrap = $('cl-entries');
+    const entries = (data.entries||[]).slice().reverse();
+    if (!entries.length){ wrap.innerHTML = '<div class="cl-empty">No loot recorded yet. Award the party their first boxings or clips above.</div>'; return; }
+    wrap.innerHTML = '';
+    for (const e of entries){
+      const items = (e.items||[]).map(i => esc(i.name) + (i.qty>1 ? ' &times;'+i.qty : '')).join(', ');
+      const scadrial = e.currency === 'scadrial';
+      const sph = scadrial ? fmtMoney(e.scadrial||{})
+        : 'Roshar spheres (separate): '+fmtSpheres(e.spheres||{}, e.gem||'diamond');
+      const worth = scadrial ? e.value_money : String(e.value_marks||'0')+' diamond marks (separate)';
+      const when = e.timestamp ? new Date(e.timestamp).toLocaleDateString() : '';
+      const loot = [items, sph ? '<span class="cl-entry-sph">'+sph+'</span>' : ''].filter(Boolean).join(' &middot; ') || '&mdash;';
+      const div = document.createElement('div');
+      div.className = 'cl-entry';
+      div.innerHTML = '<div><div class="cl-entry-who">'+esc(e.recipient)+'</div>'
+        + '<div class="cl-entry-loot">'+loot+'</div>'
+        + '<div class="cl-entry-meta">Worth '+esc(worth)+'</div>'
+        + (e.note ? '<div class="cl-entry-note">'+esc(e.note)+'</div>' : '')
+        + '<div class="cl-entry-meta">'+when+'</div></div>'
+        + '<button class="cl-del" data-id="'+escAttr(e.id)+'">Remove</button>';
+      div.querySelector('.cl-del').onclick = () => del(e.id);
+      wrap.appendChild(div);
+    }
+  }
+
+  function load(){
+    fetch('/api/cosmere/loot').then(r => r.json()).then(render).catch(()=>{});
+  }
+  async function del(id){
+    try {
+      await postJSON('/api/cosmere/loot/delete', {id});
+      load();
+    } catch (error) {
+      showError(error);
+    }
+  }
+
+  $('cl-additem').onclick = () => addItemRow('', 1);
+  $('cl-form').onsubmit = async function(ev){
+    ev.preventDefault();
+    const items = [...document.querySelectorAll('#cl-items .cl-item')].map(r => ({
+      name: r.querySelector('.nm').value.trim(),
+      qty: parseInt(r.querySelector('.qty').value||1)||1,
+    })).filter(i => i.name);
+    const scadrial = {boxing: Number($('cl-boxing').value), clip: Number($('cl-clip').value)};
+    if (!items.length && !Object.values(scadrial).some(n => n > 0) && !$('cl-note').value.trim()) return;
+    try {
+      await postJSON('/api/cosmere/loot/add', {recipient: $('cl-recipient').value,
+        items, scadrial, note: $('cl-note').value.trim()});
+      $('cl-items').innerHTML = ''; $('cl-boxing').value = $('cl-clip').value = 0; $('cl-note').value = '';
+      load();
+    } catch (error) {
+      showError(error);
+    }
+  };
+
+  load();
+})();
+</script>
+{% endblock %}

@@ -826,7 +826,7 @@
   </section>
   <section>
   {% if pc %}
-  <div class="cs-section-h cs-foldable">Spheres &amp; Goods <span style="text-transform:none; letter-spacing:0;">(awarded by the GM)</span></div>
+{% if cosmere_world == 'mistborn' %}{% include '_cosmere_scadrial_wallet.html' %}{% else %}  <div class="cs-section-h cs-foldable">Spheres &amp; Goods <span style="text-transform:none; letter-spacing:0;">(awarded by the GM)</span></div>
   <div id="cos-wallet">
     {% set w = wallet or {} %}
     {% set sp = w.spheres or {} %}
@@ -851,7 +851,7 @@
       <span class="cs-chip">{{ it.name }}{% if it.qty and it.qty > 1 %} &times;{{ it.qty }}{% endif %}</span>
       {% endfor %}
     </div>
-  </div>
+  </div>{% endif %}
   {% endif %}
 
   </section>
@@ -1690,7 +1690,7 @@
       _csbSse.addEventListener('cosmere_player_state', function(e){
         try { const d=JSON.parse(e.data); if(d && d.pid===PID) applyRemoteState(d.play_state); } catch(ex){}
       });
-      // GM awarded loot to this PC -> repaint the Spheres & Goods panel live + toast.
+{% if cosmere_world != 'mistborn' %}      // GM awarded loot to this PC -> repaint the Spheres & Goods panel live + toast.
       _csbSse.addEventListener('cosmere_loot', function(e){
         try {
           const d=JSON.parse(e.data); if(!d || d.pid!==PID) return;
@@ -1724,7 +1724,7 @@
             return '<span class="cs-chip">'+_esc(it.name)+(it.qty>1?(' &times;'+it.qty):'')+'</span>'; }).join(''); }
           if(window.pf2eToast) window.pf2eToast('Loot received', 'success');
         } catch(ex){}
-      });
+      });{% endif %}
     } catch(e) {}
     refreshCombat();
 

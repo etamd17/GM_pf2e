@@ -78,9 +78,10 @@ UI-03 bug list (from `tasks/UI-00.md` > Anything broken or risky; all checked on
 |---|---|---|---|---|---|
 | MB-00 | Mistborn rules backend (Era 1 and 2, Allomancy, Feruchemy, versioned rules packages, GM services) | codex | its strongest | done, reviewed by Claude (see below) | `GM_pf2e_cosmere_rules/docs/handoff/tasks/MB-00.md` |
 | MB-01 | Bring MB-00 up to date with main, move the Mistborn data out of git (installed like 5e), make the full test run green, open a PR | codex | strongest model, high effort (history rewrite + test-failure hunt) | done (PR #182 merged; private bundle installed) | `tasks/MB-01.md` |
-| MB-02 | Verify the 252 Mistborn records still blocked on source checks | codex | strongest, high | ready (after MB-04) | `tasks/MB-02.md` |
+| MB-02 | Verify the 252 Mistborn records still blocked on source checks | codex | strongest, high | ready (after MB-05) | `tasks/MB-02.md` |
 | MB-03 | Generators: make Mistborn content for Mistborn campaigns (found in UI-01) | codex | standard, medium | done (accepted by Claude) | `tasks/MB-03.md` |
-| MB-04 | Mistborn money: boxings and clips in wallets and the loot page under the Mistborn skin (one fixed rate, both eras; Era 2 notes are boxings) | codex | standard, high | ready | `tasks/MB-04.md` |
+| MB-04 | Mistborn money: boxings and clips in wallets and the loot page under the Mistborn skin (one fixed rate, both eras; Era 2 notes are boxings) | codex | standard, high | done (accepted by Claude) | `tasks/MB-04.md` |
+| MB-05 | Mistborn skin bleed: sheet prompt and Workshop, nav tooltips, player-nav text-node error | codex | standard, high | ready (after MB-04) | `tasks/MB-05.md` |
 
 **MB-00 review (Claude, 2026-10-13):** accepted as a backend milestone, not ready to merge yet.
 - 1024 Cosmere tests pass on the branch (623 new + 401 existing).
@@ -137,6 +138,12 @@ Accepted as a design checkpoint. Notes:
 - Two of the bugs were checked on current `main` (marked above); the rest are unconfirmed.
 
 ## Log
+
+- 2026-10-26 Codex: Claude accepted MB-04 after checking GM-only money editing, plurals and styling in the browser; all 87 focused tests and 110 templates pass. Next: publish, merge after green CI, confirm production, then MB-05 before MB-02.
+
+- 2026-10-26 Codex: fixed MB-04 for recheck: only the GM can edit money, singular amounts read correctly, and wallets use styled pills and cards. All 87 focused tests pass. Next: Claude rechecks; after MB-04 merges, MB-05 fixes the Mistborn sheet/nav bleed before MB-02.
+
+- 2026-10-26 Codex: Mistborn wallets and loot now use boxings and clips separately from Roshar spheres. Exact reversals, saved-wallet checks and live updates are tested; the rate is sourced from the installed bundle. Next: Claude reviews MB-04 and checks both skins, then MB-02 source checks.
 
 Newest first. One plain line per handoff: who, what, what's next.
 
