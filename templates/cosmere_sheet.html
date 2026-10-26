@@ -576,7 +576,7 @@
         <div class="orb-val"><div class="orb-num">&mdash;</div></div>
       </div>
       <div class="orb-l">Investiture</div>
-      <div class="orb-hint" style="max-width:130px; text-align:center;">Swear a First Ideal to gain Stormlight.</div>
+      <div class="orb-hint" style="max-width:130px; text-align:center;">{% if cosmere_world == 'mistborn' %}No Investiture pool.{% else %}Swear a First Ideal to gain Stormlight.{% endif %}</div>
     </div>
     {% endif %}
   </div>
@@ -856,7 +856,7 @@
 
   </section>
   <section>
-  {% if fabrials or crafted or interactive %}
+  {% if fabrials or crafted or (interactive and cosmere_world != 'mistborn') %}
   <div class="cs-section-h cs-foldable">Fabrials <span style="text-transform:none; letter-spacing:0;">(tap &minus;/+ to spend &amp; recharge)</span></div>
   {% for f in fabrials %}
   <div class="cs-ability" style="margin-bottom:.5rem;">
@@ -871,7 +871,7 @@
   {% endfor %}
   {# Workshop-crafted unique fabrials (with their chosen upgrades/drawbacks) — JS-rendered so the workshop can update them live. #}
   <div id="cos-crafted-list"></div>
-  {% if interactive %}
+  {% if interactive and cosmere_world != 'mistborn' %}
   <details class="cs-workshop" id="cos-workshop">
     <summary>Fabrial Workshop <span class="muted" style="text-transform:none;">&mdash; invent a unique fabrial (Ch.7)</span></summary>
     <div class="ws-inner">

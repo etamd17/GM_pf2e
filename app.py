@@ -11831,13 +11831,21 @@ def _inject_account_ctx():
     from systems.cosmere.rules.profiles import normalize_theme
     world = normalize_theme(request_cfg)
     advancement = request_cfg.get('advancement_mode') or 'milestone'
+    system_ui = _active_system_ui()
+    if _active_system() == 'cosmere' and world == 'mistborn':
+        from dataclasses import replace
+        titles = {'/cosmere/generator': 'Scadrial names, NPCs, weather, loot',
+                  '/cosmere/loot': 'Boxings, clips & spoils ledger'}
+        system_ui = replace(system_ui, gm_nav=tuple(
+            replace(link, title=titles[link.url]) if link.url in titles else link
+            for link in system_ui.gm_nav))
     return {
         'account_user': u,
         'active_campaign': (_active_campaign_doc() if u else None),
         'active_system': _active_system(),
         'cosmere_world': world,
         'cosmere_player_char': _cosmere_player_char_name(),
-        'system_ui': _active_system_ui(),
+        'system_ui': system_ui,
         'advancement_mode': advancement,
         # The running deploy version, stamped into every page so the SSE hub can
         # compare it against the version reported on (re)connect and offer a reload.

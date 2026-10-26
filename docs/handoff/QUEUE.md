@@ -81,7 +81,7 @@ UI-03 bug list (from `tasks/UI-00.md` > Anything broken or risky; all checked on
 | MB-02 | Verify the 252 Mistborn records still blocked on source checks | codex | strongest, high | ready (after MB-05) | `tasks/MB-02.md` |
 | MB-03 | Generators: make Mistborn content for Mistborn campaigns (found in UI-01) | codex | standard, medium | done (accepted by Claude) | `tasks/MB-03.md` |
 | MB-04 | Mistborn money: boxings and clips in wallets and the loot page under the Mistborn skin (one fixed rate, both eras; Era 2 notes are boxings) | codex | standard, high | done (accepted by Claude) | `tasks/MB-04.md` |
-| MB-05 | Mistborn skin bleed: sheet prompt and Workshop, nav tooltips, player-nav text-node error | codex | standard, high | ready (after MB-04) | `tasks/MB-05.md` |
+| MB-05 | Mistborn skin bleed: sheet prompt and Workshop, nav tooltips, player-nav text-node error | codex | standard, high | done (accepted with heading fix) | `tasks/MB-05.md` |
 
 **MB-00 review (Claude, 2026-10-13):** accepted as a backend milestone, not ready to merge yet.
 - 1024 Cosmere tests pass on the branch (623 new + 401 existing).
@@ -139,6 +139,12 @@ Accepted as a design checkpoint. Notes:
 
 ## Log
 
+- 2026-10-26 Codex: fixed Claude's final MB-05 finding: empty Mistborn sheets no longer show a Fabrials heading, while carried devices and Stormlight stay visible; 91 tests and 110 templates pass. Next: publish, merge after green CI, verify production, then MB-02.
+
+- 2026-10-26 Codex: MB-04 merged in PR #221 after all four CI jobs passed; Railway production deployed successfully and health, readiness, login and both new wallet assets are verified. Next: Claude reviews MB-05, then MB-02 after its release.
+
+- 2026-10-26 Codex: MB-05 fixes the Mistborn sheet and navigation wording and the text-node tooltip error; 60 focused tests and all 110 templates pass. Next: Claude reviews both skins in the browser, then MB-02 after acceptance and release.
+
 - 2026-10-26 Codex: MB-04 PR #221 hit new security advisories before tests. Updated only pypdf and filelock to the reported fixes, regenerated locks and passed the strict audit plus PDF checks. Next: fresh CI, then merge and verify production before MB-05.
 
 - 2026-10-26 Codex: Claude accepted MB-04 after checking GM-only money editing, plurals and styling in the browser; all 87 focused tests and 110 templates pass. Next: publish, merge after green CI, confirm production, then MB-05 before MB-02.
@@ -149,6 +155,7 @@ Accepted as a design checkpoint. Notes:
 
 Newest first. One plain line per handoff: who, what, what's next.
 
+- 2026-10-26 Claude: reviewed MB-05 on desktop and phone in both skins: the Mistborn Investiture hint, Workshop and nav titles are fixed, the tooltip error is gone and Stormlight is unchanged (59 tests, 110 templates). One small change: hide the empty Fabrials heading on Mistborn sheets. Next: Codex fixes it, then commits, opens the PR and merges after green CI; then MB-02.
 - 2026-10-26 User/Claude: Codex goes back to Mistborn. User decided Mistborn money is boxings and clips at one fixed rate in both eras (Era 2 banknotes are boxings), and moved MB-02 to Codex. Claude wrote briefs MB-04 and MB-02. Next: Codex builds MB-04, then MB-02; Claude reviews.
 - 2026-10-16 Claude: accepted CI-01. The dedicated step selects the same 950 PF2e tests the full suite did (no markers, no 5e-data dependency, only host-capability skips), so coverage is unchanged. Next: Codex rebases after #209, publishes and merges after green CI.
 - 2026-10-16 Codex: removed the duplicate PF2e run from the later CI step; the dedicated 950-test selection stays, YAML and file coverage checks pass. Next: Claude reviews the one-line workflow change, then publish and merge after green CI.
