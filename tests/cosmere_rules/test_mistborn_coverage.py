@@ -18,7 +18,9 @@ pytestmark = pytest.mark.skipif(not registry_path().is_file(),
 
 
 def load_bundle():
-    return authoring.load_compiled_bundle(MISTBORN_DIR, COVERAGE_PATH)
+    # These contracts pin the original MB-00 transcription and its unresolved gaps.
+    # test_mistborn_review.py separately checks the current reviewed release.
+    return authoring.load_compiled_bundle(MISTBORN_DIR, COVERAGE_PATH, baseline=True)
 
 
 def test_coverage_has_one_entry_per_record_and_no_silent_disposition():

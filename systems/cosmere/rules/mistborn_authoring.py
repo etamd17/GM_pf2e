@@ -893,9 +893,9 @@ def _validate_source_page_mapping(page: Any) -> None:
     _require(pdf_end <= SOURCE_PAGE_COUNTS[artifact_id], "source page exceeds source page count")
 
 
-def _validate_record(record: Mapping[str, Any]) -> None:
+def _validate_record(record: Mapping[str, Any], *, version: str = PACKAGE_VERSION) -> None:
     _require(canonical_id(record.get("id")) == record["id"], "noncanonical record ID")
-    _require(record.get("version") == PACKAGE_VERSION, "wrong record version")
+    _require(record.get("version") == version, "wrong record version")
     _require(record.get("worlds") == ["scadrial"], "wrong record world")
     _require(record.get("eras") in (["era-1"], ["era-2"], ["era-1", "era-2"]),
              "wrong record era scope")
@@ -1109,8 +1109,29 @@ def compile_files(power_path: Path, content_path: Path, output_dir: Path,
     return bundle
 
 
-def load_compiled_bundle(output_dir: Path, coverage_path: Path) -> dict[str, Any]:
+def load_compiled_bundle(output_dir: Path, coverage_path: Path, *,
+                         baseline: bool = False) -> dict[str, Any]:
+    """Load the current release, or explicitly check its immutable audit baseline.
+
+    Source reviews retain the original shards and coverage as historical evidence;
+    callers get the reviewed release unless they request that baseline explicitly.
+    """
     manifest = _read_json(output_dir / "manifest.json")
+    coverage = _read_json(coverage_path)
+    if baseline and "baseline" in manifest:
+        return _load_bundle_documents(output_dir, manifest["baseline"], coverage["baseline"])
+    bundle = _load_bundle_documents(output_dir, manifest, coverage)
+    if "source_review" in manifest:
+        _require(isinstance(manifest.get("baseline"), dict)
+                 and isinstance(coverage.get("baseline"), dict), "missing review baseline")
+        from .mistborn_review import validate_source_review
+        original = _load_bundle_documents(output_dir, manifest["baseline"], coverage["baseline"])
+        validate_source_review(original, bundle)
+    return bundle
+
+
+def _load_bundle_documents(output_dir: Path, manifest: dict[str, Any],
+                           coverage: dict[str, Any]) -> dict[str, Any]:
     _require(manifest.get("schema_version") == SCHEMA_VERSION, "unsupported Mistborn manifest")
     _require(manifest.get("compiler_version") == COMPILER_VERSION, "wrong Mistborn compiler version")
     packages = []
@@ -1126,14 +1147,22 @@ def load_compiled_bundle(output_dir: Path, coverage_path: Path) -> dict[str, Any
         _require(len(package.get("records", [])) == descriptor.get("record_count"),
                  "package record-count mismatch")
         packages.append(package)
-    _require(len(packages) == 3, "missing Mistborn authoring package")
+    _require(len(packages) == 3 and {p["id"] for p in packages} == set(PACKAGE_SPECS),
+             "missing or duplicate Mistborn authoring package")
     _require(bundle_hash(packages) == manifest.get("bundle_hash"), "bundle hash mismatch")
     records = merge_normalized_records(record for package in packages for record in package["records"])
-    _require(len(records) == manifest.get("record_count") == 918, "manifest record-count mismatch")
+    reviewed = "source_review" in manifest
+    _require(not reviewed or isinstance(manifest["source_review"], dict), "invalid source review")
+    version = manifest["source_review"].get("release_version") if reviewed else PACKAGE_VERSION
+    _require(not reviewed or (isinstance(version, str) and re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version)
+                             and tuple(map(int, version.split("."))) > (1, 1, 0)),
+             "invalid reviewed release version")
+    _require({p["version"] for p in packages} == {version}, "mixed package versions")
+    _require(len(records) == manifest.get("record_count") and (reviewed or len(records) == 918),
+             "manifest record-count mismatch")
     for record in records.values():
-        _validate_record(record)
+        _validate_record(record, version=version)
     validate_reference_graph(records, manifest.get("external_references", []))
-    coverage = _read_json(coverage_path)
     _require(coverage.get("bundle_hash") == manifest["bundle_hash"], "coverage bundle mismatch")
     _require(coverage.get("summary", {}).get("record_count") == len(records), "coverage record-count mismatch")
     _require({entry.get("id") for entry in coverage.get("records", [])} == set(records),
