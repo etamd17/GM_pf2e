@@ -78,10 +78,10 @@ UI-03 bug list (from `tasks/UI-00.md` > Anything broken or risky; all checked on
 |---|---|---|---|---|---|
 | MB-00 | Mistborn rules backend (Era 1 and 2, Allomancy, Feruchemy, versioned rules packages, GM services) | codex | its strongest | done, reviewed by Claude (see below) | `GM_pf2e_cosmere_rules/docs/handoff/tasks/MB-00.md` |
 | MB-01 | Bring MB-00 up to date with main, move the Mistborn data out of git (installed like 5e), make the full test run green, open a PR | codex | strongest model, high effort (history rewrite + test-failure hunt) | done (PR #182 merged; private bundle installed) | `tasks/MB-01.md` |
-| MB-02 | Verify the 252 Mistborn records still blocked on source checks | codex | strongest, high | ready (after MB-05) | `tasks/MB-02.md` |
+| MB-02 | Verify the 252 Mistborn records still blocked on source checks | codex | strongest, high | done (accepted; private install is the user's step) | `tasks/MB-02.md` |
 | MB-03 | Generators: make Mistborn content for Mistborn campaigns (found in UI-01) | codex | standard, medium | done (accepted by Claude) | `tasks/MB-03.md` |
 | MB-04 | Mistborn money: boxings and clips in wallets and the loot page under the Mistborn skin (one fixed rate, both eras; Era 2 notes are boxings) | codex | standard, high | done (accepted by Claude) | `tasks/MB-04.md` |
-| MB-05 | Mistborn skin bleed: sheet prompt and Workshop, nav tooltips, player-nav text-node error | codex | standard, high | done (accepted with heading fix) | `tasks/MB-05.md` |
+| MB-05 | Mistborn skin bleed: sheet prompt and Workshop, nav tooltips, player-nav text-node error | codex | standard, high | done (PR #224 merged and deployed) | `tasks/MB-05.md` |
 
 **MB-00 review (Claude, 2026-10-13):** accepted as a backend milestone, not ready to merge yet.
 - 1024 Cosmere tests pass on the branch (623 new + 401 existing).
@@ -138,6 +138,12 @@ Accepted as a design checkpoint. Notes:
 - Two of the bugs were checked on current `main` (marked above); the rest are unconfirmed.
 
 ## Log
+
+- 2026-10-26 Claude: reviewed MB-02 and accepted it. Spot-checked the corrections against the source pages (Con Artist, Mistborn Assassin merged actions, Outlaw Boss knife). No removed record is still referenced, and no book text is in git. The review tests pass against the installed 1.1.1 release (18 passed, 0 skipped), and the rules suite has 640 passed and 4 skipped. Next: Codex commits, opens the PR and merges once every CI job is green. The user then installs the 1.1.1 archive on Railway and answers the Outlaw Boss knife question.
+
+- 2026-10-26 Codex: MB-02 ready for Claude review: all 252 source blockers accounted for (44 verified, 198 corrected, 9 removed, 1 still blocked); private 1.1.1 bundle installs with old pins and Stormlight preserved, 1192 tests and 110 templates pass. No push or Railway data install.
+
+- 2026-10-26 Codex: MB-05 merged in PR #224 with every CI job green, and production deployed successfully with healthy public checks. MB-02 has started from that main; the original 252 blocked records are reproduced and private source files remain outside git.
 
 - 2026-10-26 Codex: fixed Claude's final MB-05 finding: empty Mistborn sheets no longer show a Fabrials heading, while carried devices and Stormlight stay visible; 91 tests and 110 templates pass. Next: publish, merge after green CI, verify production, then MB-02.
 
