@@ -285,6 +285,7 @@ _CHARACTER_OWNER_RESOLUTION_GROUPS: tuple[CharacterResolutionGroup, ...] = (
             "cosmere_pc_rest",
             "cosmere_pc_sheet",
             "cosmere_pc_state",
+            "cosmere_pc_wallet",
         ),
     ),
     (

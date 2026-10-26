@@ -227,7 +227,7 @@ cross-platform Python 3.11 resolution and SHA-256 hashes. The generator itself i
 pinned in `requirements-dev.in`.
 
 ```bash
-python -m pip install "uv==0.11.23"
+python -m pip install "uv==0.13.4"
 uv pip compile requirements.in --universal --python-version 3.11 --generate-hashes --custom-compile-command "uv pip compile requirements.in --universal --python-version 3.11 --generate-hashes -o requirements.txt" -o requirements.txt
 uv pip compile requirements-dev.in --universal --python-version 3.11 --generate-hashes --custom-compile-command "uv pip compile requirements-dev.in --universal --python-version 3.11 --generate-hashes -o requirements-dev.txt" -o requirements-dev.txt
 python -m pip install --require-hashes -r requirements-dev.txt

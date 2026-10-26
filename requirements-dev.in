@@ -3,3 +3,6 @@
 pytest==9.1.1
 pip-audit==2.10.1
 uv==0.13.4
+
+# Security pin for the cachecontrol/pip-audit dependency.
+filelock==4.2.1

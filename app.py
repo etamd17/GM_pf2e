@@ -12168,10 +12168,44 @@ from systems.cosmere.spheres import (
     DENOMINATIONS as _SPHERE_DENOMINATIONS,
     GEMS as _COSMERE_GEMS,
     format_marks as _format_sphere_marks,
-    normalize_wallet as _normalize_cosmere_wallet,
+    normalize_wallet as _normalize_sphere_wallet,
     sphere_value as _cosmere_sphere_value,
     wallet_total as _cosmere_wallet_total,
 )
+
+
+from systems.cosmere import scadrial_money as _scadrial_money
+
+
+def _normalize_cosmere_wallet(wallet):
+    result = _normalize_sphere_wallet(wallet)
+    if isinstance(wallet, dict) and 'scadrial' in wallet:
+        result['scadrial'] = copy.deepcopy(wallet['scadrial'])
+    return result
+
+
+def _scadrial_wallet_payload(wallet):
+    return {'wallet': _scadrial_money.normalize_wallet(wallet),
+            'wallet_total_clips': _scadrial_money.wallet_total(wallet),
+            'wallet_total_money': _scadrial_money.format_money(_scadrial_money.wallet_total(wallet))}
+
+
+def _change_scadrial_loot(doc, items, money, *, debit=False):
+    wallet = _scadrial_money.normalize_wallet(doc.get('wallet'))
+    current = wallet['scadrial']
+    amount = _scadrial_money.validate_money(money)
+    # Reuse the existing goods handling on a detached, money-free document.
+    goods_doc = {'wallet': {'items': wallet['items']}}
+    goods_change = _debit_cosmere_loot if debit else _credit_cosmere_loot
+    goods_change(goods_doc, items, {})
+    for key in _scadrial_money.DENOMINATIONS:
+        value = current[key] + (-amount[key] if debit else amount[key])
+        if not 0 <= value <= _scadrial_money.MAX_COUNT:
+            raise ValueError(f'Wallet cannot reverse or receive this {key} award.')
+        current[key] = value
+    wallet['items'] = goods_doc['wallet']['items']
+    doc['wallet'] = wallet
+    return wallet
 
 
 def _sphere_value(spheres, gem='diamond'):
@@ -12186,7 +12220,8 @@ def cosmere_loot_view():
     sibling of /gm/loot; redirects out in non-Cosmere mode like the other tools."""
     if _active_system() != 'cosmere':
         return redirect(_active_system_ui().gm_home)
-    return render_template('cosmere_loot.html')
+    return render_template('cosmere_loot_mistborn.html' if _cosmere_world() == 'mistborn'
+                           else 'cosmere_loot.html')
 
 
 @app.route('/api/cosmere/loot')
@@ -12198,10 +12233,18 @@ def api_cosmere_loot():
     ledger = _load_loot_ledger()
     entries = []
     total_chips = 0
+    total_clips = 0
+    mistborn = _cosmere_world() == 'mistborn'
     for raw_entry in ledger.get('entries', []):
         if not isinstance(raw_entry, dict):
             continue
         entry = copy.deepcopy(raw_entry)
+        if entry.get('currency') == 'scadrial':
+            value = _scadrial_money.wallet_total({'scadrial': entry.get('scadrial')})
+            entry.update(value_clips=value, value_money=_scadrial_money.format_money(value))
+            total_clips += value
+            entries.append(entry)
+            continue
         gem = entry.get('gem') if entry.get('gem') in _COSMERE_GEMS else 'diamond'
         value_chips = _sphere_value(entry.get('spheres'), gem)
         entry['gem'] = gem
@@ -12212,8 +12255,16 @@ def api_cosmere_loot():
     party = []
     for d in _list_cosmere_pcs():
         b = d.get('build') or {}
-        party.append({'name': d.get('name') or b.get('name') or 'Unnamed',
-                      'level': b.get('level', 1)})
+        member = {'name': d.get('name') or b.get('name') or 'Unnamed',
+                  'level': b.get('level', 1)}
+        if mistborn:
+            member.update(_scadrial_wallet_payload(d.get('wallet')))
+        party.append(member)
+    if mistborn:
+        return jsonify({'entries': entries, 'party': party, 'total_clips': total_clips,
+                        'total_money': _scadrial_money.format_money(total_clips),
+                        'party_wallet_total': _scadrial_money.format_money(sum(
+                            member['wallet_total_clips'] for member in party))})
     return jsonify({'entries': entries, 'party': party, 'gems': list(_COSMERE_GEMS),
                     'total_chips': total_chips,
                     'total_marks': _format_sphere_marks(total_chips)})
@@ -12347,7 +12398,19 @@ def api_cosmere_loot_add():
     norm_items = [item for item in norm_items if item['qty']]
     norm_spheres = {k: max(0, int(spheres.get(k, 0) or 0))
                     for k in ('chip', 'mark', 'broam')}
-    wallet_changed = bool(norm_items or any(norm_spheres.values()))
+    mistborn = _cosmere_world() == 'mistborn'
+    if mistborn:
+        try:
+            money = _scadrial_money.validate_money(data.get('scadrial') or {})
+        except ValueError as exc:
+            return jsonify({'success': False, 'error': str(exc)}), 400
+        if any(norm_spheres.values()):
+            return jsonify({'success': False, 'error': 'Award boxings and clips in Mistborn.'}), 400
+        norm_spheres = {}
+    elif data.get('scadrial'):
+        return jsonify({'success': False, 'error': 'Award spheres in Stormlight.'}), 400
+    wallet_changed = bool(norm_items or any(norm_spheres.values()) or (
+        mistborn and any(money[key] for key in _scadrial_money.DENOMINATIONS)))
     from datetime import datetime as _dt_loot
     entry = {
         'id': str(uuid.uuid4()),
@@ -12358,6 +12421,8 @@ def api_cosmere_loot_add():
         'gem': gem,
         'note': (data.get('note') or '').strip()[:280],
     }
+    if mistborn:
+        entry.update(currency='scadrial', scadrial=money)
     pid = _cosmere_loot_recipient(recipient)
     if not pid:
         entry['ledger_only'] = True
@@ -12374,7 +12439,11 @@ def api_cosmere_loot_add():
                     return jsonify({'success': False, 'error': 'Loot recipient no longer exists.'}), 409
                 old_wallet = copy.deepcopy(doc.get('wallet'))
                 if wallet_changed:
-                    wallet = _credit_cosmere_loot(doc, norm_items, norm_spheres, gem)
+                    try:
+                        wallet = (_change_scadrial_loot(doc, norm_items, money) if mistborn else
+                                  _credit_cosmere_loot(doc, norm_items, norm_spheres, gem))
+                    except ValueError as exc:
+                        return jsonify({'success': False, 'error': str(exc)}), 409
                     try:
                         _save_cosmere_pc(doc, fsync=False)
                     except (OSError, ValueError):
@@ -12406,7 +12475,8 @@ def api_cosmere_loot_add():
                                            'wallet': wallet, 'items': norm_items,
                                            'spheres': norm_spheres, 'gem': gem,
                                            'wallet_total_marks': _format_sphere_marks(
-                                               _cosmere_wallet_total(wallet))})
+                                               _cosmere_wallet_total(wallet)),
+                                           **(_scadrial_wallet_payload(wallet) if mistborn else {})})
         except Exception:
             pass
     return jsonify({'success': True})
@@ -12433,11 +12503,13 @@ def api_cosmere_loot_delete():
         recipient = str(entry.get('recipient') or '')
         pid = None if entry.get('ledger_only') else _cosmere_loot_recipient(
             recipient, recipient_pid=entry.get('recipient_pid'))
+        scadrial = entry.get('currency') == 'scadrial'
         entry_spheres = entry.get('spheres') or {}
         wallet_changed = bool(entry.get('items') or any(
             max(0, int(entry_spheres.get(key, 0) or 0))
             for key in _SPHERE_DENOMINATIONS
-        ))
+        ) or (scadrial and any(_scadrial_money.normalize_money(entry.get('scadrial'))[key]
+                              for key in _scadrial_money.DENOMINATIONS)))
         if pid and wallet_changed:
             pc_path = _cosmere_pc_path(pid)
             if pc_path is None:
@@ -12451,9 +12523,11 @@ def api_cosmere_loot_delete():
                     }), 409
                 old_wallet = copy.deepcopy(doc.get('wallet'))
                 try:
-                    wallet = _debit_cosmere_loot(
-                        doc, entry.get('items') or [], entry.get('spheres') or {},
-                        entry.get('gem') if entry.get('gem') in _COSMERE_GEMS else 'diamond')
+                    wallet = (_change_scadrial_loot(doc, entry.get('items') or [],
+                                                    entry.get('scadrial') or {}, debit=True)
+                              if scadrial else _debit_cosmere_loot(
+                                  doc, entry.get('items') or [], entry.get('spheres') or {},
+                                  entry.get('gem') if entry.get('gem') in _COSMERE_GEMS else 'diamond'))
                 except (TypeError, ValueError) as exc:
                     return jsonify({'success': False, 'error': str(exc)}), 409
                 try:
@@ -12491,7 +12565,9 @@ def api_cosmere_loot_delete():
                                                    if entry.get('gem') in _COSMERE_GEMS
                                                    else 'diamond'),
                                            'wallet_total_marks': _format_sphere_marks(
-                                               _cosmere_wallet_total(wallet))})
+                                               _cosmere_wallet_total(wallet)),
+                                           **(_scadrial_wallet_payload(wallet)
+                                              if _cosmere_world() == 'mistborn' else {})})
         except Exception:
             pass
     return jsonify({'success': True})
@@ -15098,6 +15174,8 @@ def _broadcast_cosmere_player_state(doc, **extra):
             'focus_current': resources['focus']['current'],
             'investiture_current': resources['investiture']['current'],
         }
+        if _cosmere_world() == 'mistborn':
+            payload.update(_scadrial_wallet_payload(doc.get('wallet')))
         payload.update(extra)
         sse_broadcast('cosmere_player_state', payload)
     except Exception:
@@ -15713,7 +15791,8 @@ def _render_cosmere_pc_sheet(doc, capabilities=None):
         crest_glyph, crest_color = '', ''
     # Project legacy flat wallets into the v2 per-gem shape for display only.
     # Merely opening a sheet must never rewrite a saved character document.
-    wallet = _normalize_cosmere_wallet(doc.get('wallet'))
+    wallet = (_scadrial_money.normalize_wallet(doc.get('wallet')) if _world == 'mistborn'
+              else _normalize_cosmere_wallet(doc.get('wallet')))
     wallet_total_marks = _format_sphere_marks(_cosmere_wallet_total(wallet))
     return render_template(
         'cosmere_sheet.html', a=actor.to_summary(), actor_id=pid, can_delete=can_delete,
@@ -15731,6 +15810,9 @@ def _render_cosmere_pc_sheet(doc, capabilities=None):
         defense_names=systems.cosmere.DEFENSE_NAMES,
         pc=True, build=build.to_dict(), inventory=build.inventory.resolved(),
         wallet=wallet, wallet_total_marks=wallet_total_marks,
+        wallet_editable=bool(_is_gm()),
+        wallet_total_money=_scadrial_money.format_money(_scadrial_money.wallet_total(wallet)),
+        legacy_spheres=_normalize_sphere_wallet(doc.get('wallet'))['spheres'],
         infected=build.infected_records(),           # selected Infected Arts (cost + abilities)
         warnings=build.validate(), edit_url=url_for('cosmere_builder', pc=pid),
         radiant=build.order(),                       # canon OR homebrew order
@@ -16111,6 +16193,43 @@ def _sync_cosmere_pc_from_combatant(c):
             d, revision=int(getattr(c, 'character_revision', 0) or 0))
     except Exception:
         pass
+
+
+@app.route('/cosmere/pc/<pid>/wallet', methods=['POST'])
+def cosmere_pc_wallet(pid):
+    if _active_system() != 'cosmere' or _cosmere_world() != 'mistborn':
+        return jsonify({'ok': False, 'error': 'Mistborn only.'}), 400
+    if not _is_gm():
+        return jsonify({'ok': False, 'error': 'Only the GM may edit money.'}), 403
+    path = _cosmere_pc_path(pid)
+    if path is None:
+        return jsonify({'ok': False, 'error': 'Unknown character.'}), 404
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        return jsonify({'ok': False, 'error': 'Expected a money object.'}), 400
+    try:
+        money = _scadrial_money.validate_money(data.get('scadrial'))
+        expected = _scadrial_money.validate_money(data.get('expected'))
+    except ValueError as exc:
+        return jsonify({'ok': False, 'error': str(exc)}), 400
+    with _path_lock(path):
+        doc = _load_cosmere_pc(pid)
+        if not doc:
+            return jsonify({'ok': False, 'error': 'Unknown character.'}), 404
+        if not _is_gm():
+            return jsonify({'ok': False, 'error': 'Only the GM may edit money.'}), 403
+        wallet = _scadrial_money.normalize_wallet(doc.get('wallet'))
+        if wallet['scadrial'] != expected:
+            return jsonify({'ok': False, 'error': 'Money changed. Reload before saving.'}), 409
+        wallet['scadrial'] = money
+        doc['wallet'] = wallet
+        try:
+            _save_cosmere_pc(doc, fsync=False)
+        except (OSError, ValueError):
+            return jsonify({'ok': False, 'error': 'Money could not be saved.'}), 503
+    payload = _scadrial_wallet_payload(wallet)
+    _broadcast_cosmere_player_state(doc, **payload)
+    return jsonify({'ok': True, **payload})
 
 
 @app.route('/cosmere/pc/<pid>/state', methods=['POST'])
