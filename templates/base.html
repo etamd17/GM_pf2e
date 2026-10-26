@@ -946,7 +946,9 @@
         }
 
         function _findPill(target) {
-            return target.closest('.condition-pill[data-cond-name], .condition-toggle[data-cond-name], .cond-chip[data-cond-name], .cp[data-cond-name]');
+            var element = target && (typeof target.closest === 'function' ? target : target.parentElement);
+            return element && typeof element.closest === 'function'
+                ? element.closest('.condition-pill[data-cond-name], .condition-toggle[data-cond-name], .cond-chip[data-cond-name], .cp[data-cond-name]') : null;
         }
 
         // Desktop: hover
