@@ -1782,7 +1782,7 @@
       _csbSse.addEventListener('cosmere_player_state', function(e){
         try { const d=JSON.parse(e.data); if(d && d.pid===PID) applyRemoteState(d.play_state); } catch(ex){}
       });
-{% if cosmere_world != 'mistborn' and not mistborn_rules %}      // GM awarded loot to this PC -> repaint the Spheres & Goods panel live + toast.
+{% if cosmere_world != 'mistborn' %}      // GM awarded loot to this PC -> repaint the Spheres & Goods panel live + toast.
       _csbSse.addEventListener('cosmere_loot', function(e){
         try {
           const d=JSON.parse(e.data); if(!d || d.pid!==PID) return;
