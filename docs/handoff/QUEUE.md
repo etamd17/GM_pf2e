@@ -142,8 +142,9 @@ Accepted as a design checkpoint. Notes:
 
 ## Log
 
-- 2026-10-27 Claude: built MB-07 (user decision: wire the real Mistborn rules in). A GM can switch a fresh Cosmere campaign to Mistborn Era 1 or Era 2 rules, and every Cosmere page, the builder, bestiary, tracker and sheet actions work for Mistborn characters; Stormlight is unchanged. Next: Codex reviews the PR; then merge after green CI, and the user installs the 1.1.2 bundle.
 - 2026-10-28 Claude: built MB-08 from an MB-07 finding: a talent in a power's tree now needs that power unlocked, closing 16 talents that anyone could take. 150 Mistborn tests pass with the bundle. Next: Codex reviews; merge after green CI.
+
+- 2026-10-27 Claude: built MB-07 (user decision: wire the real Mistborn rules in). A GM can switch a fresh Cosmere campaign to Mistborn Era 1 or Era 2 rules, and every Cosmere page, the builder, bestiary, tracker and sheet actions work for Mistborn characters; Stormlight is unchanged. Next: Codex reviews the PR; then merge after green CI, and the user installs the 1.1.2 bundle.
 
 - 2026-10-26 Claude: the user decided the GM picks the Outlaw Boss knife's damage type at the table. Wrote MB-06: record that ruling in the private bundle as one archive for the user to install, then do a full Mistborn browser pass in both eras. Next: Codex takes MB-06; the user can wait for its single archive instead of installing 1.1.1.
 
