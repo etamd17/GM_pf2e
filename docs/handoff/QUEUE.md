@@ -66,6 +66,22 @@ UI-03 bug list (from `tasks/UI-00.md` > Anything broken or risky; all checked on
 | Cosmere tracker shows PF2e-only controls (MAP/agile, PF2e quick conditions, Elite/Weak, persistent damage, basic saves) | user: hide all PF2e in Cosmere -> UI-04 |
 | Campaign delete: the wording says "permanently delete" but it's moved to the trash | fixed in UI-03 |
 
+## Design system refresh (DS)
+
+Plan: `docs/design/DESIGN_DIRECTION.md` (2026-10-28). It applies seven outside design resources
+(beUI, Bencho, ui-layouts, SuperDesign, better-design, design-taste, motion-primitives) without
+changing any behaviour: ids, handlers, `data-*`, ARIA, form names, SSE and server rules stay as
+they are. 68 packages (DS-00 to DS-31, split into lettered PRs) are listed in its section 10, with
+owner, dependencies and acceptance. Each one gets a brief in `tasks/DS-xx-<slug>.md` before work
+starts. UI-11, UI-13, UI-15 and UI-16 above stay `ready` and do not wait for this. Five open
+questions for the user are in its section 12; Q1 (which PF2e palette is canonical) blocks DS-01.
+
+| ID | Task | Owner | Model | Status | Brief |
+|---|---|---|---|---|---|
+| DS-00 | Inventory diff tool: ids, data-*, handlers, ARIA, frozen class strings, before/after per route | claude | Opus, high | needs brief | - |
+| DS-01 | Tokens, `ds-tokens.css`, empty `ds.css`, notices file, contrast tool | claude | Opus, high | waiting on user (Q1, Q5) | - |
+| DS-02..DS-31 | The rest of section 10, in dependency order; nothing starts until DS-00 and DS-01 are merged | see plan | see plan | needs brief | - |
+
 ## CI maintenance
 
 | ID | Task | Owner | Model | Status | Brief |
@@ -141,6 +157,7 @@ Accepted as a design checkpoint. Notes:
 
 ## Log
 
+- 2026-10-28 Claude: wrote the design-direction plan (`docs/design/DESIGN_DIRECTION.md`), checked by three reviewers and two verify passes. Next: the user answers its five questions; Claude writes the DS-00 brief.
 - 2026-10-27 Claude: built MB-07 (user decision: wire the real Mistborn rules in). A GM can switch a fresh Cosmere campaign to Mistborn Era 1 or Era 2 rules, and every Cosmere page, the builder, bestiary, tracker and sheet actions work for Mistborn characters; Stormlight is unchanged. Next: Codex reviews the PR; then merge after green CI, and the user installs the 1.1.2 bundle.
 
 - 2026-10-26 Claude: the user decided the GM picks the Outlaw Boss knife's damage type at the table. Wrote MB-06: record that ruling in the private bundle as one archive for the user to install, then do a full Mistborn browser pass in both eras. Next: Codex takes MB-06; the user can wait for its single archive instead of installing 1.1.1.
