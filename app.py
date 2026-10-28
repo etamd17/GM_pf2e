@@ -9066,7 +9066,8 @@ def api_campaign():
         return jsonify(_load_campaign_config())
     if not _is_gm():
         return jsonify({'success': False, 'error': 'GM authentication required'}), 403
-    data = request.json or {}
+    # No truthiness fallback: [], 0, false, "" and null are not settings objects.
+    data = request.json
     if not isinstance(data, dict):
         return jsonify({'success': False, 'error': 'Send the campaign settings as an object.'}), 400
     rules_keys = sorted(_CAMPAIGN_RULES_KEYS & data.keys())

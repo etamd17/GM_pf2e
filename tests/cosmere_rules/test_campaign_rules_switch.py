@@ -191,11 +191,22 @@ def test_general_settings_route_refuses_rules_fields(campaign, field, value):
     assert path.read_bytes() == before
 
 
-def test_general_settings_route_refuses_a_body_that_is_not_an_object(campaign):
+@pytest.mark.parametrize('body', ['[]', '0', 'false', '""', 'null',
+                                  '["name"]', '7', 'true', '"name"'])
+def test_general_settings_route_refuses_a_body_that_is_not_an_object(campaign, body):
+    """Falsy bodies too: `request.json or {}` used to save them as empty settings."""
     host, path, pcs, client = campaign
     before = path.read_bytes()
-    assert client.post('/api/campaign', json=['name']).status_code == 400
+    response = client.post('/api/campaign', data=body, content_type='application/json')
+    assert response.status_code == 400, body
+    assert response.get_json()['error'] == 'Send the campaign settings as an object.'
     assert path.read_bytes() == before
+
+
+def test_general_settings_route_accepts_an_empty_object(campaign):
+    host, path, pcs, client = campaign
+    response = client.post('/api/campaign', data='{}', content_type='application/json')
+    assert response.status_code == 200 and response.get_json()['success']
 
 
 def test_general_settings_route_still_saves_the_intro_fields(campaign):
