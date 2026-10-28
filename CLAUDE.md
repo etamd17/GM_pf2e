@@ -82,6 +82,13 @@ python tools/check_templates.py   # Jinja parse check (CI runs this) — run aft
   only their own rules. A shared page (the tracker, for one) must hide another system's controls,
   vocabulary and conditions, not just relabel them, and its routes must refuse the wrong system's
   combatant. When you touch a shared page, check it for bleed.
+- **The Cosmere rules registry is verified once, at boot** (MB-11, `_autostart_cosmere_rules` at
+  the module tail, same exemptions as `_autostart_persistence`). A load blocks the single worker,
+  so keep it off the request path: a bundle upload hands its verified registry to
+  `use_default_registry` instead of clearing the cache. The private Mistborn data is installed on
+  the volume by a site admin at `/cosmere/admin/data` (never in git), and that page names the
+  installed release. `freeze` remembers strings that passed in bounded sets; `check_json` is its
+  copy-free form.
 - **Obsidian Session Operations** — the GM drives the live site from a pane inside their own prep.
   Two halves, and BOTH live in this repo now:
   - **Server**: `services/obsidian_sync.py` (bearer-authed blueprint at

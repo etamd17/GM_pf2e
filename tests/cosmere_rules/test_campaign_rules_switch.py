@@ -176,3 +176,33 @@ def test_mistborn_binding_helper_picks_newest_complete_release():
     binding = profiles.mistborn_campaign_binding('era-1', registry)
     assert {pin.version for pin in binding.enabled_packs} == {'1.10.0'}
     assert resolved == [binding]
+
+
+@pytest.mark.parametrize(('field', 'value'), [
+    ('rules_binding', {'core_package': 'anything'}), ('rules_binding', None),
+    ('cosmere_theme', 'mistborn'), ('cosmere_world', 'stormlight')])
+def test_general_settings_route_refuses_rules_fields(campaign, field, value):
+    """MB-11: /api/campaign took these unchecked, skipping the play-started lock."""
+    host, path, pcs, client = campaign
+    before = path.read_bytes()
+    response = client.post('/api/campaign', json={'name': 'Renamed', field: value})
+    assert response.status_code == 400
+    assert response.get_json()['fields'] == [field]
+    assert path.read_bytes() == before
+
+
+def test_general_settings_route_refuses_a_body_that_is_not_an_object(campaign):
+    host, path, pcs, client = campaign
+    before = path.read_bytes()
+    assert client.post('/api/campaign', json=['name']).status_code == 400
+    assert path.read_bytes() == before
+
+
+def test_general_settings_route_still_saves_the_intro_fields(campaign):
+    host, path, pcs, client = campaign
+    response = client.post('/api/campaign', json={
+        'name': 'Renamed', 'session_number': 3, 'tagline': 'T', 'next_session_at': 'Friday',
+        'intro': 'Hello', 'hero_image': ''})
+    assert response.status_code == 200 and response.get_json()['success']
+    stored = _stored(path)
+    assert (stored['name'], stored['session_number'], stored['intro']) == ('Renamed', 3, 'Hello')

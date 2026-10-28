@@ -8551,6 +8551,9 @@ MODULES_DIR = os.path.join(BASE_DIR, 'static', 'js', 'modules')
 # These fields have no synthetic defaults: a missing rules binding selects legacy
 # mechanics, whereas an explicitly stored null must remain visible and fail closed.
 _CAMPAIGN_OPTIONAL_CONFIG_KEYS = frozenset({'rules_binding', 'cosmere_theme'})
+# Written only by /api/cosmere/rules and /api/cosmere/world, which hold the
+# play-started lock and the world rules. The general settings route refuses them.
+_CAMPAIGN_RULES_KEYS = frozenset({'rules_binding', 'cosmere_theme', 'cosmere_world'})
 
 
 def _campaign_config_values(data):
@@ -9064,6 +9067,12 @@ def api_campaign():
     if not _is_gm():
         return jsonify({'success': False, 'error': 'GM authentication required'}), 403
     data = request.json or {}
+    if not isinstance(data, dict):
+        return jsonify({'success': False, 'error': 'Send the campaign settings as an object.'}), 400
+    rules_keys = sorted(_CAMPAIGN_RULES_KEYS & data.keys())
+    if rules_keys:
+        return jsonify({'success': False, 'fields': rules_keys,
+                        'error': 'Change the Cosmere rules and world from the GM hub.'}), 400
     cfg = _save_campaign_config(data)
     return jsonify({'success': True, 'campaign': cfg})
 
@@ -13905,13 +13914,33 @@ def _cosmere_site_admin():
     return bool(user and user.get('is_admin'))
 
 
+def _cosmere_rules_install_summary(registry):
+    """Which release is installed. The record count cannot say: it counts only
+    the first version of each package, so every release reads the same."""
+    from systems.cosmere.rules.profiles import mistborn_releases
+    releases = mistborn_releases(registry)
+    return {'release': releases[-1] if releases else None,
+            'older_releases': releases[:-1],
+            'packages': len(registry.pack_versions),
+            'hash': registry.package_hash}
+
+
 @app.get('/cosmere/admin/data')
 def cosmere_admin_data():
     if not _cosmere_site_admin():
         abort(403)
     from systems.cosmere.rules import paths
+    from systems.cosmere.rules.profiles import default_registry
     installed = paths.registry_path().is_file()
+    summary = problem = None
+    if installed:
+        try:
+            summary = _cosmere_rules_install_summary(default_registry())
+        except (ValueError, OSError) as error:
+            # Stay usable: this page is where a fixed bundle gets uploaded.
+            problem = str(error) or type(error).__name__
     return render_template('cosmere_admin_data.html', installed=installed,
+                           summary=summary, problem=problem,
                            data_dir=str(paths.install_dir()))
 
 
@@ -13920,7 +13949,7 @@ def api_cosmere_admin_data():
     if not _cosmere_site_admin():
         abort(403)
     from systems.cosmere.rules import datapack, paths
-    from systems.cosmere.rules.profiles import default_registry
+    from systems.cosmere.rules.profiles import default_registry, use_default_registry
     upload = request.files.get('file')
     if upload is None:
         return jsonify(error='Choose a Cosmere data bundle.'), 400
@@ -13929,15 +13958,18 @@ def api_cosmere_admin_data():
     temporary = dest.parent / f'.cosmere-upload-{uuid.uuid4().hex}'
     try:
         upload.save(temporary)
-        result = datapack.install(temporary, dest)
+        # The install verified the registry; serve that one rather than make
+        # the next page verify the same files again on the single worker.
+        result = datapack.install(temporary, dest, loaded=use_default_registry)
     except datapack.BundleError as error:
         return jsonify(error=str(error)), 422
     except OSError as error:
         return jsonify(error=f'Could not install Cosmere data ({error.strerror or error}).'), 500
     finally:
         temporary.unlink(missing_ok=True)
-    default_registry.cache_clear()
-    return jsonify(dict(result, installed=True))
+    summary = _cosmere_rules_install_summary(default_registry())
+    return jsonify(dict(result, release=summary['release'],
+                        older_releases=summary['older_releases'], installed=True))
 
 
 def _cosmere_build_input(data, existing=None):
@@ -29365,6 +29397,42 @@ _register_obsidian_sync(app, {
 # (including the Cosmere rebuilders defined mid-file) exists. The boot
 # load_libraries(restore_autosave=False) call above intentionally skips it.
 _restore_encounter_autosave()
+
+
+# --- BOOT-TIME COSMERE RULES LOAD ---
+def _autostart_cosmere_rules():
+    """Verify the Cosmere rules at boot instead of on someone's first Cosmere page.
+
+    The load blocks the single worker, and with it every request and live
+    stream, so it belongs before the worker serves anything. Same exemptions
+    as _autostart_persistence: the reloader parent never serves, and tests
+    manage the registry themselves.
+    """
+    import sys as _sys          # not imported at module scope in this file
+    if 'pytest' in _sys.modules or os.environ.get('PYTEST_CURRENT_TEST'):
+        return
+    if (os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
+            and os.environ.get('WERKZEUG_RUN_MAIN') != 'true'):
+        return
+    _preload_cosmere_rules()
+
+
+def _preload_cosmere_rules():
+    """A bad bundle must never stop the site booting: pages report it on use,
+    and /cosmere/admin/data stays up to take a fixed one."""
+    from systems.cosmere.rules.profiles import default_registry
+    started = time.monotonic()
+    try:
+        registry = default_registry()
+    except Exception as error:
+        print(f"[COSMERE] Rules not loaded at boot; pages will retry on use: {error!r}")
+        return None
+    print(f"[COSMERE] Rules loaded at boot: {len(registry.pack_versions)} package versions "
+          f"in {time.monotonic() - started:.1f}s")
+    return registry
+
+
+_autostart_cosmere_rules()
 
 
 if __name__ == '__main__':

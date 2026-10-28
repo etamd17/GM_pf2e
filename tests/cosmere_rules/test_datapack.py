@@ -1,6 +1,7 @@
 """Private bundle installation and the no-data Stormlight boundary."""
 from pathlib import Path
 import io
+import shutil
 import tarfile
 
 import pytest
@@ -78,3 +79,87 @@ def test_site_admin_upload_refreshes_rules_and_rejects_non_admin(tmp_path, monke
         assert "cosmere.mistborn.core" in default_registry().packs
     finally:
         default_registry.cache_clear()
+
+
+def _admin_client(host, monkeypatch, installed):
+    monkeypatch.setenv("COSMERE_DATA_DIR", str(installed))
+    monkeypatch.setattr(host, "_account_mode", lambda: False)
+    monkeypatch.setattr(host, "_cosmere_site_admin", lambda: True)
+    return host.app.test_client()
+
+
+def test_upload_serves_the_registry_it_verified_without_loading_it_again(tmp_path, monkeypatch):
+    """MB-11: a load blocks the single worker, so an install hands its
+    verified registry over instead of making the next page verify it again."""
+    import app as host
+    from systems.cosmere.rules import profiles
+
+    archive = datapack.build(FIXTURE, tmp_path / "upload.tar.gz")
+    client = _admin_client(host, monkeypatch, tmp_path / "installed")
+    default_registry.cache_clear()
+
+    def second_load():
+        raise AssertionError("the installed registry was verified a second time")
+
+    monkeypatch.setattr(profiles, "load_seed_registry", second_load)
+    try:
+        response = client.post("/api/cosmere/admin/data", data={
+            "file": (io.BytesIO(archive.read_bytes()), "upload.tar.gz")})
+        assert response.status_code == 200, response.get_json()
+        body = response.get_json()
+        assert (body["release"], body["older_releases"], body["packages"]) == ("1.1.0", [], 5)
+        assert body["hash"] == default_registry().package_hash
+        assert "cosmere.mistborn.core" in default_registry().packs
+    finally:
+        default_registry.cache_clear()
+
+
+def test_admin_page_names_the_installed_release(tmp_path, monkeypatch):
+    import app as host
+
+    installed = tmp_path / "installed"
+    datapack.install(datapack.build(FIXTURE, tmp_path / "bundle.tar.gz"), installed)
+    client = _admin_client(host, monkeypatch, installed)
+    default_registry.cache_clear()
+    try:
+        page = client.get("/cosmere/admin/data").get_data(as_text=True)
+        assert "Installed: Mistborn rules 1.1.0" in page
+        # One release, so the detail line ends at the hash with nothing older listed.
+        short = default_registry().package_hash[:8]
+        assert f"5 package versions, registry <code>{short}</code></div>" in page
+    finally:
+        default_registry.cache_clear()
+
+
+def test_admin_page_still_renders_when_the_installed_rules_do_not_load(tmp_path, monkeypatch):
+    import app as host
+
+    installed = tmp_path / "installed"
+    datapack.install(datapack.build(FIXTURE, tmp_path / "bundle.tar.gz"), installed)
+    (installed / "rules" / "registry.json").write_bytes(b"{}")
+    client = _admin_client(host, monkeypatch, installed)
+    default_registry.cache_clear()
+    try:
+        response = client.get("/cosmere/admin/data")
+        page = response.get_data(as_text=True)
+        assert response.status_code == 200
+        assert "Installed, but it does not load: invalid compiled registry fields" in page
+        assert 'id="install"' in page
+    finally:
+        default_registry.cache_clear()
+
+
+def test_a_bundle_holds_many_releases_but_not_unlimited_files(tmp_path):
+    """MB-11: each release adds three package files; 16 refused 1.1.4."""
+    tree = tmp_path / "tree"
+    shutil.copytree(FIXTURE, tree)
+    packages = tree / "rules" / "mistborn"
+    packages.mkdir()
+    for minor in range(20):
+        (packages / f"core-1.{minor}.0.json").write_text("{}", encoding="utf-8")
+    result = datapack.install(datapack.build(tree, tmp_path / "many.tar.gz"), tmp_path / "a")
+    assert result["packages"] == 5
+    for minor in range(20, 70):
+        (packages / f"core-1.{minor}.0.json").write_text("{}", encoding="utf-8")
+    with pytest.raises(datapack.BundleError, match="too many files"):
+        datapack.install(datapack.build(tree, tmp_path / "too-many.tar.gz"), tmp_path / "b")
