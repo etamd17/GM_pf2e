@@ -128,7 +128,7 @@
   </div>
   <div class="hero-sub">
     {% if c.is_radiant and c.order %}{{ c.order }}{% if c.spren %} <span class="dim">&middot; {{ c.spren }}</span>{% endif %}
-    {% else %}{{ c.ancestry }}{% if c.path %} <span class="dim">&middot; {{ c.path|capitalize }}</span>{% endif %}{% if c.culture %} <span class="dim">&middot; {{ c.culture }}</span>{% endif %}{% endif %}
+    {% else %}{{ c.ancestry }}{% if c.path %} <span class="dim">&middot; {{ c.path|capitalize }}</span>{% endif %}{% if c.culture %} <span class="dim">&middot; {{ c.culture }}</span>{% endif %}{% if c.metalborn %} <span class="dim">&middot; {{ c.metalborn.headline }}</span>{% endif %}{% endif %}
   </div>
 
   {# Derived-stat "why" hover hints — each defense is 10 + its governing

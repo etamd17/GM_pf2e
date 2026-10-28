@@ -8626,13 +8626,17 @@ def _request_campaign_config():
     g._request_campaign_config = cfg
     return cfg
 
-def _save_campaign_config(updates):
+def _save_campaign_config(updates, remove=()):
     """Merge whitelisted defaults and optional fields into campaign.json.
 
     Reads and rewrites the FULL existing file so the multi-campaign doc's own
     keys -- id / slug / system / members / system_config -- survive a config
     write (campaign.json is the same file the campaign doc lives in). Returns
-    the merged config view."""
+    the merged config view. ``remove`` deletes optional keys outright, because
+    a stored null is a deliberate fail-closed value, not an absence."""
+    remove = tuple(remove)
+    if not set(remove) <= _CAMPAIGN_OPTIONAL_CONFIG_KEYS:
+        raise ValueError(f'Only optional campaign keys can be removed: {remove!r}')
     if _persistence_runtime.sql_enabled():
         cid = _loaded_campaign_id()
         if not cid:
@@ -8641,6 +8645,8 @@ def _save_campaign_config(updates):
         if not full:
             raise _persistence_runtime.StoreUnavailable('Campaign is unavailable')
         full.update(_campaign_config_values(updates))
+        for key in remove:
+            full.pop(key, None)
         if 'session_number' in full:
             full['session_number'] = max(1, safe_int(full['session_number'], 1))
         _campaigns.save_campaign(full)
@@ -8663,6 +8669,8 @@ def _save_campaign_config(updates):
                 return _load_campaign_config()
             full = data
         full.update(_campaign_config_values(updates))
+        for key in remove:
+            full.pop(key, None)
         if 'session_number' in full:
             try:
                 full['session_number'] = max(1, int(full['session_number']))
@@ -12740,11 +12748,10 @@ def tracker_view():
     cosmere_adversaries, cosmere_pcs = [], []
     if _active_system() == 'cosmere':
         _seen_adv = set()
-        for d in systems.cosmere.adversary_docs():
-            s = d.get('system', {})
-            cosmere_adversaries.append({'id': d.get('_id'), 'name': d.get('name', 'Unknown'),
-                                        'tier': s.get('tier'), 'role': s.get('role'), 'custom': False})
-            _seen_adv.add(d.get('_id'))
+        for row in _cosmere_adversary_rows():
+            cosmere_adversaries.append({'id': row['id'], 'name': row['name'],
+                                        'tier': row['tier'], 'role': row['role'], 'custom': False})
+            _seen_adv.add(row['id'])
         # GM-authored homebrew adversaries — so the GM's saved custom enemies are
         # re-addable from the tracker's adversary picker, not just creatable as a
         # one-off. _cosmere_doc_by_id already resolves these for add-to-tracker.
@@ -13083,6 +13090,42 @@ def _build_cosmere_adversary_doc(data):
     }
 
 
+_MISTBORN_GM_CATALOGS = {}
+
+
+def _cosmere_mistborn_gm_catalog():
+    """The GM-scope catalog of a Mistborn-rules campaign, or None otherwise.
+
+    Pinned packages are immutable, so the catalog is cached per exact binding
+    and per loaded registry (a bundle install clears ``default_registry``)."""
+    from systems.cosmere.rules.profiles import default_registry, resolve_profile
+    if _cosmere_rules_choice() not in _COSMERE_MISTBORN_ERAS:
+        return None
+    config = _load_campaign_config()
+    key = (id(default_registry()), json.dumps(config['rules_binding'], sort_keys=True))
+    catalog = _MISTBORN_GM_CATALOGS.get(key)
+    if catalog is None:
+        catalog = resolve_profile(config, spoiler_scope='gm').catalog()
+        _MISTBORN_GM_CATALOGS.clear()        # one live campaign binding at a time
+        _MISTBORN_GM_CATALOGS[key] = catalog
+    return catalog
+
+
+def _cosmere_adversary_rows():
+    """Bestiary/picker rows: the era's Mistborn adversaries under Mistborn rules,
+    the Stormlight bestiary otherwise (never both)."""
+    catalog = _cosmere_mistborn_gm_catalog()
+    if catalog is not None:
+        from systems.cosmere.mistborn_adversaries import bestiary_rows
+        return bestiary_rows(catalog)
+    rows = []
+    for d in systems.cosmere.adversary_docs():
+        s = d.get('system', {})
+        rows.append({'id': d.get('_id'), 'name': d.get('name', 'Unknown'),
+                     'tier': s.get('tier'), 'role': s.get('role'), 'size': s.get('size')})
+    return rows
+
+
 def _cosmere_doc_by_id(actor_id):
     """An ingested Cosmere adversary doc by its Foundry _id (or None) -- across
     the base system bestiary, the ingested modules, AND per-campaign GM-authored
@@ -13094,6 +13137,12 @@ def _cosmere_doc_by_id(actor_id):
     for d in _load_cosmere_custom_adversaries():
         if isinstance(d, dict) and d.get('_id') == actor_id:
             return d
+    from systems.cosmere.mistborn_adversaries import (find_actor_document,
+                                                      is_catalog_adversary_id)
+    if is_catalog_adversary_id(actor_id):
+        catalog = _cosmere_mistborn_gm_catalog()
+        if catalog is not None:
+            return find_actor_document(catalog, actor_id)
     return None
 
 
@@ -13314,13 +13363,7 @@ def _restore_cosmere_combatant(item):
 @app.route('/cosmere/bestiary')
 def cosmere_bestiary():
     """Browse the ingested Cosmere adversaries (read-only reference)."""
-    advs = []
-    for d in systems.cosmere.adversary_docs():
-        s = d.get('system', {})
-        advs.append({
-            'id': d.get('_id'), 'name': d.get('name', 'Unknown'),
-            'tier': s.get('tier'), 'role': s.get('role'), 'size': s.get('size'),
-        })
+    advs = _cosmere_adversary_rows()
     advs.sort(key=lambda a: ((a['tier'] or 0), (a['name'] or '').lower()))
     return render_template('cosmere_bestiary.html', adversaries=advs)
 
@@ -13539,6 +13582,48 @@ def _cosmere_starting_kits():
     return starting_kits()
 
 
+def _mistborn_builder_context(build):
+    """Choices for the Mistborn builder, all from the campaign's pinned packages.
+
+    Talents are offered by tree: a metalborn path, ``allomancy.<metal>`` or
+    ``feruchemy.<metal>``, plus shared metallic talents. The page filters them
+    to what the current choices can take; the engine still validates the save.
+    """
+    from systems.cosmere.mistborn_build import (
+        ERA_METALS, METALBORN_PATH_ERAS, ORDINARY_HEROIC_PATHS, PATH_KEY_TO_PATH)
+    from systems.cosmere.mistborn_display import ERA_LABELS, PATH_LABELS
+    import systems.cosmere.lore as _lore
+    era = build.era
+    catalog = build.profile.catalog()['catalogs']
+    talents = []
+    for entry in catalog.get('talent', []):
+        data = (entry.get('parameters') or {}).get('data') or {}
+        if entry.get('eras') and era not in entry['eras']:
+            continue
+        talents.append({'id': entry['id'], 'name': entry['name'],
+                        'trees': [str(t) for t in (data.get('tree_memberships') or [])],
+                        'art': data.get('art'), 'metal': data.get('metal'),
+                        'prerequisites': list(entry.get('prerequisites') or []),
+                        'action_cost': data.get('action_cost')})
+    talents.sort(key=lambda t: t['name'].lower())
+    metalborn = [{'path': path, 'label': PATH_LABELS[path], 'key': key}
+                 for key, path in PATH_KEY_TO_PATH.items()
+                 if era in METALBORN_PATH_ERAS[path]]
+    metals = [{'metal': m, 'name': (_lore.METALS.get(m) or {}).get('name', m.title()),
+               'effect': (_lore.METALS.get(m) or {}).get('effect', ''),
+               'stores': _lore.FERUCHEMY_STORES.get(m, ''),
+               'tint': _lore.metal_tint(m)} for m in sorted(ERA_METALS.get(era, ()))]
+    skills = [{'code': code, 'name': name, 'attr': systems.cosmere.SKILL_ATTR[code]}
+              for code, name in systems.cosmere.SKILL_NAMES.items()
+              if code not in systems.cosmere.SURGE_SKILLS]
+    skills += [{'code': 'allomancy', 'name': 'Allomancy', 'attr': 'wil'},
+               {'code': 'feruchemy', 'name': 'Feruchemy', 'attr': 'int'}]
+    return {'build': build.to_dict(), 'era': era, 'era_label': ERA_LABELS.get(era, ''),
+            'heroic_paths': sorted(ORDINARY_HEROIC_PATHS), 'metalborn': metalborn,
+            'metals': metals, 'skills': skills, 'talents': talents,
+            'attr_names': systems.cosmere.ATTR_NAMES}
+
+
 def _cosmere_builder_context(build, hb_store=None):
     return build.profile.builder_context(build, hb_store or _cosmere_homebrew_store())
 
@@ -13557,7 +13642,7 @@ def cosmere_gm_hub():
     """
     if _active_system() != 'cosmere':
         return redirect(_active_system_ui().gm_home)
-    adv_count = len(systems.cosmere.adversary_docs())
+    adv_count = len(_cosmere_adversary_rows())
     camp = _active_campaign_doc() or {}
     cfg = _load_campaign_config()
     ready_count, ready_total = _cosmere_ready_counts()
@@ -13571,6 +13656,7 @@ def cosmere_gm_hub():
         session_number=cfg.get('session_number', 1),
         party=_cosmere_hub_party(),
         ready_count=ready_count, ready_total=ready_total,
+        rules_status=_cosmere_rules_status(),
     )
 
 
@@ -13667,6 +13753,22 @@ def api_cosmere_generate(gtype):
         gtype, world=_cosmere_world(), era=_cosmere_generator_era())})
 
 
+def _cosmere_card_identity(b):
+    """Roster/hub identity: the Radiant order for a Stormlight build, the
+    metalborn type and metals (under ``metalborn``) for a Mistborn one."""
+    from systems.cosmere.mistborn_display import card_identity, is_mistborn_build
+    if is_mistborn_build(b):
+        return card_identity(b)
+    import systems.cosmere.radiant as _rad
+    o = b.order()
+    return {
+        'is_radiant': b.is_radiant,
+        'order': o['name'] if o else '', 'spren': b.spren_name or (o['spren'] if o else ''),
+        'surges': [_rad.surge_name(s) for s in o['surges']] if (o and b.first_ideal_sworn) else [],
+        'accent': _rad.order_color(b.radiant_order) if b.is_radiant else _rad.DEFAULT_ACCENT,
+    }
+
+
 @app.route('/cosmere/pcs')
 def cosmere_pcs():
     import systems.cosmere.build as _cb
@@ -13675,7 +13777,6 @@ def cosmere_pcs():
     _hb_store = _cosmere_homebrew_store()
     for d in _list_cosmere_pcs():
         b = _cb.CosmereBuild(d.get('build'), homebrew=_hb_store)
-        o = b.order()
         resources = _cosmere_live_resources(d, build=b, homebrew=_hb_store)
         _ps = d.get('play_state') or {}
         cards.append({
@@ -13690,10 +13791,7 @@ def cosmere_pcs():
             'current_investiture': resources['investiture']['current'],
             'conditions': {k: v for k, v in (_ps.get('conditions') or {}).items() if v},
             'deflect': b.deflect_value(),
-            'is_radiant': b.is_radiant,
-            'order': o['name'] if o else '', 'spren': b.spren_name or (o['spren'] if o else ''),
-            'surges': [_rad.surge_name(s) for s in o['surges']] if (o and b.first_ideal_sworn) else [],
-            'accent': _rad.order_color(b.radiant_order) if b.is_radiant else _rad.DEFAULT_ACCENT,
+            **_cosmere_card_identity(b),
         })
     cards.sort(key=lambda c: c['name'].lower())
     return render_template('cosmere_pcs.html', pcs=cards,
@@ -15582,6 +15680,12 @@ def cosmere_builder():
              if existing else _cb.CosmereBuild(_cosmere_build_input({}), homebrew=_hb_store))
     if request.args.get('levelup') and existing:
         build.level += 1     # pre-bump for the leveler flow; the player allocates, then saves
+    from systems.cosmere.mistborn_display import is_mistborn_build
+    if is_mistborn_build(build):
+        return render_template('cosmere_builder_mistborn.html',
+                               pid=(existing or {}).get('id', ''), workflow=workflow,
+                               levelup=bool(request.args.get('levelup') and existing),
+                               **_mistborn_builder_context(build))
     ctx = _cosmere_builder_context(build, _hb_store)
     return render_template('cosmere_builder.html', pid=(existing or {}).get('id', ''), workflow=workflow, **ctx)
 
@@ -15713,6 +15817,9 @@ def _render_cosmere_pc_sheet(doc, capabilities=None):
         doc.get('build', {}).pop('notes', None)
     build = _cb.CosmereBuild(doc.get('build'), homebrew=_cosmere_homebrew_store())
     actor = systems.cosmere.CosmereActor(build.to_actor_doc())
+    from systems.cosmere.mistborn_display import is_mistborn_build
+    if is_mistborn_build(build):
+        return _render_mistborn_pc_sheet(doc, build, actor, capabilities)
     _u = _auth.current_user()
     # The owner (or the GM) gets the INTERACTIVE sheet: tap-to-roll skills/strikes
     # + live Health/Focus/Investiture steppers. Everyone else sees it read-only.
@@ -15834,6 +15941,110 @@ def _render_cosmere_pc_sheet(doc, capabilities=None):
     )
 
 
+def _attach_mistborn_sheet_actions(arts, build):
+    """Give each metal on the sheet panel the catalog actions it can run.
+
+    Only actions the Mistborn action API can apply deterministically are
+    offered: every Allomancy action (a ``spend``), and Feruchemy ``store-`` and
+    ``tap-`` actions (a start, and a stop while active). The API re-validates
+    each one against the character's metals and resources."""
+    catalog = build.profile.catalog()
+    by_prefix = {}
+    for record in (catalog.get('catalogs') or {}).get('action', []):
+        rid = record.get('id') if isinstance(record, dict) else None
+        if not isinstance(rid, str) or '.action.' not in rid:
+            continue
+        prefix, name = rid.rsplit('.action.', 1)
+        by_prefix.setdefault(prefix, []).append((name, record))
+    for art in ('allomancy', 'feruchemy'):
+        for row in arts[art]:
+            actions = []
+            for name, record in sorted(by_prefix.get(f"mistborn.{art}.{row['metal']}", ()),
+                                       key=lambda pair: pair[1].get('name') or pair[0]):
+                if art == 'allomancy':
+                    kind = 'spend'
+                elif name.startswith('store-'):
+                    kind = 'store'
+                elif name.startswith('tap-'):
+                    kind = 'tap'
+                else:
+                    continue
+                actions.append({'id': record['id'], 'name': record.get('name') or name,
+                                'kind': kind, 'summary': record.get('summary') or ''})
+            row['actions'] = actions
+
+
+def _render_mistborn_pc_sheet(doc, build, actor, capabilities=None):
+    """The shared Cosmere sheet for a Mistborn-rules character.
+
+    Same template and live-state plumbing as Stormlight; the Radiant, Ideal,
+    Surge, Shardblade and Fabrial values are empty so those sections stay hidden,
+    and ``metallic_arts`` drives the Allomancy/Feruchemy panel. Read-only on disk.
+    """
+    from systems.cosmere.mistborn_display import metallic_arts_panel
+    import systems.cosmere.lore as _lore
+    pid = doc['id']
+    _u = _auth.current_user()
+    interactive = capabilities.edit if capabilities is not None else _cosmere_can_act_on(doc)
+    can_delete = (capabilities.delete if capabilities is not None else
+                  (bool(_u) and doc.get('owner_user_id') == _u.get('id')) or _is_gm())
+    owner_private = (capabilities.owner_private if capabilities is not None else
+                     (bool(_u) and doc.get('owner_user_id') == _u.get('id')) or _is_gm())
+    ps = doc.get('play_state') if isinstance(doc.get('play_state'), dict) else {}
+    # The action API keeps Mistborn state in runtime_state; play_state is the
+    # older mirror, read only when no runtime exists yet.
+    runtime = doc.get('runtime_state') if isinstance(doc.get('runtime_state'), dict) else {}
+    arts = metallic_arts_panel(build, runtime if runtime.get('mistborn') else ps)
+    _attach_mistborn_sheet_actions(arts, build)
+    resources = _cosmere_live_resources(doc, build=build, homebrew=_cosmere_homebrew_store())
+    def _ps(key, default):
+        try:
+            return int(ps[key])
+        except (KeyError, TypeError, ValueError):
+            return int(default)
+    cur = {
+        'health': resources['health']['current'], 'focus': resources['focus']['current'],
+        'investiture': arts['investiture'], 'injuries': _ps('injuries', 0),
+        'enhanced': False,
+        'conditions': ps.get('conditions') if isinstance(ps.get('conditions'), dict) else {},
+        'shardblade': False, 'shardplate': False, 'squire': '', 'forsaken': False,
+        'goals': ps.get('goals') if isinstance(ps.get('goals'), list) else [],
+    }
+    _hm = (doc.get('house_metal') or '').lower()
+    if _hm in _lore.METALS:
+        crest_glyph, crest_color = 'cg-metal-' + _hm, _lore.metal_tint(_hm)
+    else:
+        crest_glyph, crest_color = '', ''
+    wallet = _scadrial_money.normalize_wallet(doc.get('wallet'))
+    skill_names = dict(systems.cosmere.SKILL_NAMES, allomancy='Allomancy', feruchemy='Feruchemy')
+    inventory = build.to_dict().get('inventory') or []
+    return render_template(
+        'cosmere_sheet.html', a=actor.to_summary(), actor_id=pid, can_delete=can_delete,
+        owner_private=owner_private,
+        crest_glyph=crest_glyph, crest_color=crest_color, house_metal=_hm,
+        ideal_states=[], derived=build.derived_stats(),
+        interactive=interactive, cur=cur, tier=actor.tier,
+        ready_to_level=bool(doc.get('ready_to_level')),
+        stormlight_actions=[], radiant_powers=[],
+        conditions=systems.cosmere.CONDITION_INFO,
+        actions=actor.actions, strikes=actor.strikes, traits=actor.traits,
+        skill_names=skill_names,
+        attr_names=systems.cosmere.ATTR_NAMES,
+        defense_names=systems.cosmere.DEFENSE_NAMES,
+        pc=True, build=build.to_dict(),
+        inventory=[item for item in inventory if isinstance(item, dict)],
+        wallet=wallet, wallet_total_marks='',
+        wallet_editable=bool(_is_gm()),
+        wallet_total_money=_scadrial_money.format_money(_scadrial_money.wallet_total(wallet)),
+        legacy_spheres=_normalize_sphere_wallet(doc.get('wallet'))['spheres'],
+        infected=[], warnings=build.validate(), edit_url=url_for('cosmere_builder', pc=pid),
+        radiant=None, first_ideal='', surge_names={}, singer_form=None,
+        shardblade=None, shardplate=None, has_take_squire=False, has_wound_regen=False,
+        radiant_variant=None, fabrials=[], crafting={}, crafted=[],
+        metallic_arts=arts, mistborn_rules=True, doc_revision=int(doc.get('revision', 0) or 0),
+    )
+
+
 def _cosmere_player_card(doc):
     """A rich, at-a-glance hero card for the Cosmere player hub: the stat block
     (defenses / deflect / health / focus / investiture), the six attributes, and
@@ -15841,8 +16052,9 @@ def _cosmere_player_card(doc):
     cards used elsewhere; the full sheet carries skills + abilities."""
     import systems.cosmere.build as _cb
     import systems.cosmere.radiant as _rad
+    from systems.cosmere.mistborn_display import is_mistborn_build
     b = _cb.CosmereBuild(doc.get('build'), homebrew=_cosmere_homebrew_store())
-    o = b.order()
+    _mistborn = is_mistborn_build(b)
     # Live values from the PC's runtime play_state (the same keys the Vitals
     # board + roster read), so the player's own landing shows how hurt/spent
     # they are -- not just the maxes. Falls back to the max when unset.
@@ -15867,11 +16079,9 @@ def _cosmere_player_card(doc):
         # magnitude), so the hub shows status at a glance instead of only in the
         # tracker -- parity with the PF2e player card's condition row.
         'conditions': {k: v for k, v in (_ps.get('conditions') or {}).items() if v},
-        'is_radiant': b.is_radiant,
-        'order': o['name'] if o else '', 'spren': b.spren_name or (o['spren'] if o else ''),
-        'ideals': b.ideals_sworn, 'first_ideal': b.first_ideal_sworn,
-        'surges': [_rad.surge_name(s) for s in o['surges']] if (o and b.first_ideal_sworn) else [],
-        'accent': _rad.order_color(b.radiant_order) if b.is_radiant else _rad.DEFAULT_ACCENT,
+        **_cosmere_card_identity(b),
+        'ideals': 0 if _mistborn else b.ideals_sworn,
+        'first_ideal': False if _mistborn else b.first_ideal_sworn,
     }
 
 
@@ -20662,8 +20872,97 @@ def api_cosmere_world():
     Pure theming (re-skins the whole Cosmere side); the ruleset is unchanged."""
     w = (request.get_json(silent=True) or request.form or {}).get('world')
     w = 'mistborn' if w == 'mistborn' else 'stormlight'
+    if w == 'stormlight' and _cosmere_rules_choice() in _COSMERE_MISTBORN_ERAS:
+        return jsonify({'ok': False, 'error': 'This campaign uses the Mistborn rules, '
+                        'so it keeps the Mistborn look.'}), 409
     _save_campaign_config({'cosmere_theme': w, 'cosmere_world': w})
     return jsonify({'ok': True, 'world': w})
+
+
+_COSMERE_MISTBORN_ERAS = ('era-1', 'era-2')
+
+
+def _cosmere_rules_choice():
+    """The campaign's rules: 'stormlight', 'era-1', 'era-2' or 'mixed'."""
+    config = _load_campaign_config()
+    if 'rules_binding' not in config:
+        return 'stormlight'
+    binding = config['rules_binding']
+    if not isinstance(binding, dict):
+        return 'mixed'
+    worlds = binding.get('allowed_worlds') or [binding.get('default_world')]
+    if binding.get('default_world') == 'scadrial' and worlds == ['scadrial'] \
+            and len(binding.get('allowed_eras') or []) == 1:
+        return binding['allowed_eras'][0]
+    return 'stormlight' if binding.get('default_world') == 'roshar' else 'mixed'
+
+
+def _cosmere_rules_change_blockers():
+    """Why this campaign's rules cannot change now (empty when they can).
+
+    A character, a staged encounter and a narrative scene each record the
+    campaign's exact package pins, so the rules may change only before any
+    of them exist."""
+    reasons = []
+    if os.path.isdir(COSMERE_PC_DIR) and any(
+            name.endswith('.json') for name in os.listdir(COSMERE_PC_DIR)):
+        reasons.append('it already has characters')
+    if ACTIVE_ENCOUNTER:
+        reasons.append('a fight is in progress')
+    for path, label in ((_cosmere_encounter_stage_path(), 'an encounter is staged'),
+                        (_cosmere_narrative_scene_path(), 'it has narrative scenes')):
+        if _storage.load_json(path, None):
+            reasons.append(label)
+    return reasons
+
+
+def _cosmere_rules_status():
+    from systems.cosmere.rules.profiles import mistborn_campaign_binding
+    from systems.cosmere.rules.schema import RulesValidationError
+    eras = []
+    for era in _COSMERE_MISTBORN_ERAS:
+        try:
+            mistborn_campaign_binding(era)
+        except RulesValidationError:
+            continue
+        eras.append(era)
+    blockers = _cosmere_rules_change_blockers()
+    return {'rules': _cosmere_rules_choice(), 'installed_eras': eras,
+            'can_change': not blockers, 'blockers': blockers}
+
+
+@app.route('/api/cosmere/rules', methods=['GET', 'POST'])
+@gm_required
+def api_cosmere_rules():
+    """Read or choose this campaign's rules: Stormlight, or Mistborn Era 1 / Era 2.
+
+    The look (`/api/cosmere/world`) stays a separate, free choice for Stormlight
+    rules. Mistborn rules pin the newest installed Mistborn release and force the
+    Mistborn look. Changing rules is refused once anything records the pins."""
+    from systems.cosmere.rules.profiles import mistborn_campaign_binding
+    from systems.cosmere.rules.schema import RulesValidationError, to_dict
+    if request.method == 'GET':
+        return jsonify(dict(_cosmere_rules_status(), ok=True))
+    choice = (request.get_json(silent=True) or request.form or {}).get('rules')
+    if choice not in ('stormlight', *_COSMERE_MISTBORN_ERAS):
+        return jsonify({'ok': False, 'error': 'Choose Stormlight, Mistborn Era 1 or Mistborn Era 2.'}), 400
+    if choice == _cosmere_rules_choice():
+        return jsonify(dict(_cosmere_rules_status(), ok=True))
+    blockers = _cosmere_rules_change_blockers()
+    if blockers:
+        return jsonify({'ok': False, 'blockers': blockers,
+                        'error': 'The rules can only change before play starts: '
+                                 + '; '.join(blockers) + '.'}), 409
+    if choice == 'stormlight':
+        _save_campaign_config({}, remove=('rules_binding',))
+    else:
+        try:
+            binding = mistborn_campaign_binding(choice)
+        except RulesValidationError as error:
+            return jsonify({'ok': False, 'error': str(error)}), 422
+        _save_campaign_config({'rules_binding': to_dict(binding),
+                               'cosmere_theme': 'mistborn', 'cosmere_world': 'mistborn'})
+    return jsonify(dict(_cosmere_rules_status(), ok=True))
 
 @app.route('/api/reorder_initiative', methods=['POST'])
 def reorder_initiative():
@@ -28085,12 +28384,14 @@ def _cosmere_status_party(docs):
                 return int(default)
         hmax = resources['health']['max']
         cur = resources['health']['current']
-        o = b.order()
+        identity = _cosmere_card_identity(b)
         out.append({
             'id': d.get('id'),
             'name': d.get('name', 'Unknown'),
             'ancestry': b.ancestry,
-            'class_name': (o['name'] if o else b.path) or '',
+            'class_name': (identity['order'] or (identity['metalborn']['label']
+                                                 if 'metalborn' in identity else '')
+                           or b.path) or '',
             'level': b.level,
             'ac': b.defenses().get('phy', 10),
             'defenses': b.defenses(), 'deflect': b.deflect_value(),

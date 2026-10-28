@@ -126,6 +126,19 @@
   .ws-btn { background:rgba(95,168,224,.16); border:1px solid rgba(95,168,224,.5); color:var(--accent); border-radius:8px; padding:.4rem .85rem; font-size:12.5px; cursor:pointer; margin-top:.3rem; }
   .ws-btn:hover { background:rgba(95,168,224,.26); }
   .ws-btn.primary { background:var(--order-accent,var(--accent)); color:#06242b; font-weight:700; border-color:var(--order-accent,var(--accent)); }
+  .cs-arts { margin-bottom:var(--sp-4); }
+  .cs-arts-h { font-family:var(--font-display); font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--text-on-dark-2); margin:0 0 .5rem; display:flex; flex-wrap:wrap; gap:.4rem; align-items:center; }
+  .cs-metal-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(170px, 1fr)); gap:.5rem; }
+  .cs-metal { border:1px solid color-mix(in srgb, var(--metal-tint) 35%, transparent); border-left:3px solid var(--metal-tint); border-radius:8px; padding:.5rem .65rem; background:rgba(255,255,255,0.02); }
+  .cs-metal .mn { font-weight:600; color:#e8eef5; }
+  .cs-metal .md { font-size:12px; color:var(--text-on-dark-3); margin:.15rem 0; }
+  .cs-metal .ms { font-size:11px; color:var(--text-on-dark-2); }
+  .cs-metal.is-burning, .cs-metal.is-tapping { background:color-mix(in srgb, var(--metal-tint) 12%, transparent); }
+  .cs-metal.is-depleted { opacity:.55; }
+  .cs-metal-acts { display:flex; flex-wrap:wrap; gap:.3rem; margin-top:.4rem; }
+  .cs-metal-act { font:inherit; font-size:11.5px; background:transparent; color:#e8eef5; border:1px solid color-mix(in srgb, var(--metal-tint) 50%, transparent); border-radius:6px; padding:.15rem .5rem; cursor:pointer; }
+  .cs-metal-act:hover { background:color-mix(in srgb, var(--metal-tint) 16%, transparent); }
+  .cs-metal-act.on { background:color-mix(in srgb, var(--metal-tint) 24%, transparent); }
   .cs-crafted { border-color:color-mix(in srgb, var(--order-accent,var(--accent)) 45%, transparent) !important; }
   .cs-crafted .ud { font-size:11px; margin-top:.25rem; } .cs-crafted .up { color:#7fd6a8; } .cs-crafted .dn { color:#f0a9a9; }
   .cs-skill.roll { cursor:pointer; transition:border-color .12s, background .12s; }
@@ -557,14 +570,14 @@
     {% if a.investiture_max %}
     {% set ipct = (cur.investiture / a.investiture_max) if a.investiture_max else 0 %}
     <div class="orb-w">
-      <div class="orb{{ ' dun' if cur.investiture <= 0 }}" id="orb-investiture" style="--orb-core:#f4fbff;--orb-mid:var(--order-accent,#7ec7ff);--orb-rim:#13456f;--orb-glow:color-mix(in srgb,var(--order-accent,#7ec7ff) 45%, transparent);"{% if interactive %} onclick="orbToggle(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();orbToggle(this)}" role="button" tabindex="0" aria-expanded="false" aria-label="Investiture &mdash; open Spend, Gain and Breathe controls" title="Tap for Spend / Gain / Breathe controls"{% endif %}>
+      <div class="orb{{ ' dun' if cur.investiture <= 0 }}" id="orb-investiture" style="--orb-core:#f4fbff;--orb-mid:var(--order-accent,#7ec7ff);--orb-rim:#13456f;--orb-glow:color-mix(in srgb,var(--order-accent,#7ec7ff) 45%, transparent);"{% if interactive and not mistborn_rules %} onclick="orbToggle(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();orbToggle(this)}" role="button" tabindex="0" aria-expanded="false" aria-label="Investiture &mdash; open Spend, Gain and Breathe controls" title="Tap for Spend / Gain / Breathe controls"{% endif %}{% if mistborn_rules %} title="Spent by burning metals: use the Metallic Arts tab"{% endif %}>
         <div class="orb-fill" id="fill-investiture" style="height:{{ (ipct*100)|round|int }}%;"></div>
         <div class="orb-spec"></div>
         <svg class="orb-arc" viewBox="0 0 108 108" aria-hidden="true"><circle class="trk" cx="54" cy="54" r="46"/><circle class="prg" id="arc-investiture" cx="54" cy="54" r="46" stroke-dasharray="{{ (ipct*289.0)|round(1) }} 289"/></svg>
         <div class="orb-val"><div class="orb-num" id="rv-investiture">{{ cur.investiture }}</div><div class="orb-max">/{{ a.investiture_max }}</div></div>
       </div>
       <div class="orb-l">Investiture</div>
-      {% if interactive %}<div class="orb-ctrl">
+      {% if interactive and not mistborn_rules %}<div class="orb-ctrl">
         <div class="cs-amt"><input type="number" class="cs-amt-in" value="1" min="1" aria-label="Investiture amount"><button class="cs-amt-btn spend" onclick="cosApply('investiture',-1,this)" title="Spend Investiture (power a surge)">Spend</button><button class="cs-amt-btn gain" onclick="cosApply('investiture',1,this)" title="Gain Investiture">Gain</button></div>
         <button class="cs-amt-btn breathe" onclick="cosBreathe()" title="Breathe Stormlight: refill Investiture to max">Breathe Stormlight</button>
       </div>{% endif %}
@@ -635,7 +648,7 @@
   </div>
   {% endif %}
   {# Attribute-derived sheet values (Ch.3) — auto-calculated. #}
-  {% if derived %}
+  {% if derived and derived.movement is defined %}
   <div class="cs-derived">
     <span title="Movement rate is derived from your Speed (Ch.3)."><b>Move</b> {{ derived.movement }} ft</span>
     <span title="Senses range is derived from your Awareness (Ch.3)."><b>Senses</b> {{ derived.senses }}{% if derived.senses != 'Unaffected' %} ft{% endif %}</span>
@@ -668,6 +681,7 @@
   {% if pc %}<div class="cs-tabs" role="tablist" aria-label="Character sheet sections">
     <button type="button" class="cs-tab" role="tab" data-tab="play" aria-selected="true" tabindex="0">Play</button>
     {% if pc and radiant %}<button type="button" class="cs-tab" role="tab" data-tab="radiant" aria-selected="false" tabindex="-1">Radiant</button>{% endif %}
+    {% if pc and metallic_arts %}<button type="button" class="cs-tab" role="tab" data-tab="arts" aria-selected="false" tabindex="-1">Metallic Arts</button>{% endif %}
     <button type="button" class="cs-tab" role="tab" data-tab="gear" aria-selected="false" tabindex="-1">Gear</button>
     <button type="button" class="cs-tab" role="tab" data-tab="character" aria-selected="false" tabindex="-1">Character</button>
   </div>{% endif %}
@@ -805,6 +819,84 @@
   {{ cs_infected_arts() }}
   </div>
   {% endif %}
+  {% if pc and metallic_arts %}
+  {% set ma = metallic_arts %}
+  <div class="cs-panel" role="tabpanel" data-panel="arts" tabindex="0" hidden>
+  {# --- Metallic Arts (Mistborn rules): read from the build and saved runtime --- #}
+  <div class="cs-section-h">Metallic Arts{% if ma.label %} &mdash; {{ ma.label }}{% endif %}{% if ma.era_label %} <span style="text-transform:none; letter-spacing:0; font-size:12px; color:var(--text-on-dark-3);">&middot; {{ ma.era_label }}</span>{% endif %}</div>
+  {% if not ma.allomancy and not ma.feruchemy %}
+  <p class="cs-hint">No Allomancy or Feruchemy. This hero relies on skill and nerve.</p>
+  {% endif %}
+  {% if ma.allomancy %}
+  <section class="cs-arts" aria-label="Allomancy">
+    <div class="cs-arts-h">Allomancy <span class="cs-chip">Rank {{ ma.allomancy_rank }}</span>
+      <span class="cs-chip">Investiture {{ ma.investiture }}/{{ ma.investiture_max }}</span>
+      {% if ma.scaling.allomancy.die %}<span class="cs-chip" title="Power die, range and limit at this rank">{{ ma.scaling.allomancy.die }} &middot; {{ ma.scaling.allomancy.range_ft }} ft</span>{% endif %}</div>
+    <div class="cs-metal-grid">
+    {% for m in ma.allomancy %}
+      <div class="cs-metal{{ ' is-burning' if m.burning }}{{ ' is-depleted' if m.depleted }}" style="--metal-tint:{{ m.tint }};">
+        <div class="mn">{{ m.name }}</div>
+        <div class="md">{{ m.effect }}</div>
+        <div class="ms">{{ m.state_label }}{% if m.burning %} &middot; burning{% endif %}{% if m.depleted %} &middot; depleted{% endif %}{% if m.vials %} &middot; {{ m.vials }} vial{{ 's' if m.vials != 1 }}{% endif %}</div>
+        {% if interactive and m.actions %}<div class="cs-metal-acts">{% for act in m.actions %}<button type="button" class="cs-metal-act" title="{{ act.summary }}" onclick='mbAction({{ act.id|tojson }}, "spend", {{ act.name|tojson }})'>{{ act.name }}</button>{% endfor %}</div>{% endif %}
+      </div>
+    {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+  {% if ma.feruchemy %}
+  <section class="cs-arts" aria-label="Feruchemy">
+    <div class="cs-arts-h">Feruchemy <span class="cs-chip">Rank {{ ma.feruchemy_rank }}</span>
+      {% if ma.scaling.feruchemy.die %}<span class="cs-chip" title="Power die, range and limit at this rank">{{ ma.scaling.feruchemy.die }}</span>{% endif %}</div>
+    <div class="cs-metal-grid">
+    {% for m in ma.feruchemy %}
+      <div class="cs-metal{{ ' is-storing' if m.mode == 'storing' }}{{ ' is-tapping' if m.mode == 'tapping' }}" style="--metal-tint:{{ m.tint }};">
+        <div class="mn">{{ m.name }} metalmind</div>
+        <div class="md">{{ m.effect }}</div>
+        <div class="ms">{{ m.charges }}/{{ m.charge_max }} charges{% if m.mode != 'idle' %} &middot; {{ m.mode }}{% endif %} &middot; {{ m.state_label }}</div>
+        {% if interactive and m.actions %}<div class="cs-metal-acts">{% for act in m.actions %}
+          {% if (act.kind == 'store' and m.mode == 'storing') or (act.kind == 'tap' and m.mode == 'tapping') %}
+          <button type="button" class="cs-metal-act on" onclick='mbAction({{ act.id|tojson }}, {{ (act.kind ~ "_stop")|tojson }}, {{ ("Stop " ~ act.name)|tojson }})'>Stop {{ act.name }}</button>
+          {% elif m.mode == 'idle' %}
+          <button type="button" class="cs-metal-act" title="{{ act.summary }}" onclick='mbAction({{ act.id|tojson }}, {{ (act.kind ~ "_start")|tojson }}, {{ act.name|tojson }}, {{ (m.charge_max - m.charges) if act.kind == "store" else m.charges }})'>{{ act.name }}</button>
+          {% endif %}{% endfor %}</div>{% endif %}
+      </div>
+    {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+  {% if interactive %}<div class="cs-result" id="mb-act-result" role="status" style="margin-top:.5rem;"></div>
+  <script>
+  // Metallic arts through the Mistborn action API: one request id per tap, the
+  // saved revision as the CAS guard, and a reload to show the server's result.
+  window.mbAction = function(actionId, kind, label, maxAmount){
+    var out = document.getElementById('mb-act-result');
+    var op = {kind: kind};
+    if (kind === 'spend') { op.amount = 1; }
+    else if (kind === 'store_start' || kind === 'tap_start') {
+      if (!(maxAmount > 0)) { out.textContent = kind === 'store_start' ? 'This metalmind is full.' : 'This metalmind is empty.'; return; }
+      var raw = prompt(label + ': how many charges? (1 to ' + maxAmount + ')', '1');
+      if (raw === null) return;
+      var n = parseInt(raw, 10);
+      if (!(n > 0) || n > maxAmount) { out.textContent = 'Choose between 1 and ' + maxAmount + ' charges.'; return; }
+      op.amount = n;
+    }
+    var rid = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : null;
+    if (!rid) { out.textContent = 'This browser cannot create a request id.'; return; }
+    out.textContent = label + '...';
+    fetch('/api/cosmere/pc/' + {{ actor_id|tojson }} + '/actions/' + encodeURIComponent(actionId), {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({expected_revision: {{ doc_revision|default(0) }}, request_id: rid, operation: op})})
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if (d && d.ok) { location.reload(); return; }
+        out.textContent = (d && d.error) || ('Could not apply ' + label + '.');
+      })
+      .catch(function(){ out.textContent = 'Could not apply ' + label + '.'; });
+  };
+  </script>{% endif %}
+  </div>
+  {% endif %}
   {% if pc %}<div class="cs-panel" role="tabpanel" data-panel="gear" tabindex="0" hidden>
   {% if pc %}
   <section>
@@ -826,7 +918,7 @@
   </section>
   <section>
   {% if pc %}
-{% if cosmere_world == 'mistborn' %}{% include '_cosmere_scadrial_wallet.html' %}{% else %}  <div class="cs-section-h cs-foldable">Spheres &amp; Goods <span style="text-transform:none; letter-spacing:0;">(awarded by the GM)</span></div>
+{% if cosmere_world == 'mistborn' or mistborn_rules %}{% include '_cosmere_scadrial_wallet.html' %}{% else %}  <div class="cs-section-h cs-foldable">Spheres &amp; Goods <span style="text-transform:none; letter-spacing:0;">(awarded by the GM)</span></div>
   <div id="cos-wallet">
     {% set w = wallet or {} %}
     {% set sp = w.spheres or {} %}
@@ -856,7 +948,7 @@
 
   </section>
   <section>
-  {% if fabrials or crafted or (interactive and cosmere_world != 'mistborn') %}
+  {% if fabrials or crafted or (interactive and cosmere_world != 'mistborn' and not mistborn_rules) %}
   <div class="cs-section-h cs-foldable">Fabrials <span style="text-transform:none; letter-spacing:0;">(tap &minus;/+ to spend &amp; recharge)</span></div>
   {% for f in fabrials %}
   <div class="cs-ability" style="margin-bottom:.5rem;">
@@ -871,7 +963,7 @@
   {% endfor %}
   {# Workshop-crafted unique fabrials (with their chosen upgrades/drawbacks) — JS-rendered so the workshop can update them live. #}
   <div id="cos-crafted-list"></div>
-  {% if interactive and cosmere_world != 'mistborn' %}
+  {% if interactive and cosmere_world != 'mistborn' and not mistborn_rules %}
   <details class="cs-workshop" id="cos-workshop">
     <summary>Fabrial Workshop <span class="muted" style="text-transform:none;">&mdash; invent a unique fabrial (Ch.7)</span></summary>
     <div class="ws-inner">

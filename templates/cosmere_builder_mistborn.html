@@ -1,0 +1,401 @@
+{% extends "base.html" %}
+{% block title %}Mistborn Character Builder{% endblock %}
+{% block extra_head %}
+  .mbb { color:#e8eef5; max-width:1100px; margin:0 auto; }
+  .mbb h2 { font-family:var(--font-display,serif); font-size:1.5rem; color:var(--accent); margin:1rem 0 .25rem; }
+  .mbb .sub { color:var(--text-on-dark-3); font-size:13px; margin:0 0 1rem; }
+  .mbb .layout { display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:var(--sp-5); align-items:start; }
+  @media (max-width: 860px) { .mbb .layout { grid-template-columns:minmax(0,1fr); } }
+  .mbb .sec { border:1px solid var(--border-card); border-radius:10px; padding:var(--sp-4); margin-bottom:var(--sp-4); background:rgba(255,255,255,0.02); }
+  .mbb .sec-h { font-size:12px; text-transform:uppercase; letter-spacing:.1em; color:var(--text-on-dark-3); margin:0 0 .65rem;
+                display:flex; justify-content:space-between; align-items:baseline; gap:.5rem; flex-wrap:wrap; }
+  .mbb label { display:block; font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-on-dark-3); margin-bottom:.2rem; }
+  .mbb input[type=text], .mbb input[type=number], .mbb select, .mbb textarea {
+    width:100%; background:var(--bg-input, rgba(0,0,0,.25)); color:#e8eef5; border:1px solid var(--border-card);
+    border-radius:6px; padding:.4rem .5rem; font:inherit; font-size:14px; }
+  .mbb textarea { min-height:3.2rem; }
+  .mbb .row { display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:.75rem; }
+  .mbb .budget { font-variant-numeric:tabular-nums; font-size:12px; color:var(--text-on-dark-2); }
+  .mbb .budget.over { color:#f87171; font-weight:600; }
+  .mbb .stepper { display:inline-flex; align-items:center; border:1px solid var(--border-card); border-radius:6px; overflow:hidden; }
+  .mbb .stepper button { background:transparent; color:#e8eef5; border:none; width:30px; height:30px; cursor:pointer; font-size:16px; }
+  .mbb .stepper button:hover { background:rgba(255,255,255,.06); }
+  .mbb .stepper output { min-width:28px; text-align:center; font-variant-numeric:tabular-nums; }
+  .mbb .grid-steps { display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:.4rem .9rem; }
+  .mbb .step-row { display:flex; justify-content:space-between; align-items:center; gap:.5rem; padding:.2rem 0; }
+  .mbb .step-row .nm small { color:var(--text-on-dark-3); text-transform:uppercase; font-size:10px; margin-left:.25rem; }
+  .mbb .metals { display:grid; grid-template-columns:repeat(auto-fill, minmax(190px, 1fr)); gap:.45rem; }
+  .mbb .metal { border:1px solid color-mix(in srgb, var(--metal-tint) 35%, transparent); border-left:3px solid var(--metal-tint);
+                border-radius:8px; padding:.4rem .55rem; display:flex; flex-direction:column; gap:.25rem; }
+  .mbb .metal .mn { display:flex; align-items:center; gap:.4rem; font-weight:600; }
+  .mbb .metal .md { font-size:11.5px; color:var(--text-on-dark-3); }
+  .mbb .metal select { font-size:12px; padding:.2rem .3rem; }
+  .mbb .metal.off { opacity:.55; }
+  .mbb .talent { display:flex; gap:.5rem; align-items:flex-start; padding:.35rem 0; border-bottom:1px solid rgba(255,255,255,.04);
+                 text-transform:none; letter-spacing:0; font-size:13.5px; color:#e8eef5; margin:0; }
+  .mbb .talent .tn { font-weight:600; }
+  .mbb .talent .tp { font-size:11.5px; color:var(--text-on-dark-3); overflow-wrap:anywhere; }
+  .mbb .talent > span { min-width:0; overflow-wrap:anywhere; }
+  .mbb .chip { display:inline-block; max-width:100%; overflow-wrap:anywhere; font-size:10.5px; border:1px solid var(--border-card); border-radius:999px; padding:0 .45rem; margin-left:.3rem; color:var(--text-on-dark-2); }
+  .mbb .panel { position:sticky; top:var(--sp-4); }
+  .mbb .stat { display:flex; justify-content:space-between; font-size:13px; padding:.15rem 0; }
+  .mbb .issues { font-size:12.5px; margin:.5rem 0 0; padding-left:1.1rem; color:#f0c674; }
+  .mbb .issues.hard { color:#f87171; }
+  .mbb .btn { background:transparent; color:#e8eef5; border:1px solid var(--border-card); border-radius:8px; padding:.5rem 1rem; cursor:pointer; font:inherit; }
+  .mbb .btn.primary { background:var(--accent); color:var(--bg-page); border-color:var(--accent); font-weight:600; }
+  .mbb .btn:disabled { opacity:.5; cursor:not-allowed; }
+  .mbb .muted { color:var(--text-on-dark-3); font-size:12px; }
+{% endblock %}
+{% block content %}
+{% include '_character_draft_controls.html' %}
+<div data-workflow-editor class="mbb">
+  <h2>{% if levelup %}Level up{% elif pid %}Edit character{% else %}New Mistborn character{% endif %}</h2>
+  <p class="sub">Mistborn rules &middot; {{ era_label }}. The rules engine checks every choice; problems show in the summary.</p>
+
+  <div class="layout">
+  <div>
+    <section class="sec" aria-labelledby="mb-basics">
+      <div class="sec-h" id="mb-basics">Who they are</div>
+      <div class="row">
+        <div><label for="f-name">Name</label><input type="text" id="f-name" value="{{ build.name }}"></div>
+        <div><label for="f-level">Level</label><input type="number" id="f-level" min="1" max="30" value="{{ build.level }}"></div>
+        <div><label for="f-ancestry">Ancestry</label>
+          <select id="f-ancestry">
+            {% for value, label in [('Human', 'Human'), ('Koloss-blooded', 'Koloss-blooded')] %}
+            <option value="{{ value }}"{{ ' selected' if (build.ancestry or 'Human')|lower == value|lower }}>{{ label }}</option>{% endfor %}
+          </select></div>
+        <div><label for="f-culture">Culture</label><input type="text" id="f-culture" value="{{ build.culture or '' }}"></div>
+        <div><label for="f-path">Starting path</label>
+          <select id="f-path">
+            <option value="">Choose a path</option>
+            {% for p in heroic_paths %}<option value="{{ p }}"{{ ' selected' if build.starting_path == p }}>{{ p|title }}</option>{% endfor %}
+          </select></div>
+        <div><label for="f-metalborn">Metalborn</label>
+          <select id="f-metalborn">
+            <option value="">None</option>
+            {% for m in metalborn %}<option value="{{ m.key }}" data-path="{{ m.path }}"{{ ' selected' if m.key in (build.metalborn_keys or []) }}>{{ m.label }}</option>{% endfor %}
+          </select></div>
+      </div>
+    </section>
+
+    <section class="sec" id="sec-allomancy" aria-labelledby="mb-allo" hidden>
+      <div class="sec-h" id="mb-allo">Allomantic metals <span class="muted" id="allo-hint"></span></div>
+      <div class="metals" id="allo-metals"></div>
+    </section>
+    <section class="sec" id="sec-feruchemy" aria-labelledby="mb-feru" hidden>
+      <div class="sec-h" id="mb-feru">Feruchemical metals <span class="muted" id="feru-hint"></span></div>
+      <div class="metals" id="feru-metals"></div>
+    </section>
+
+    <section class="sec" aria-labelledby="mb-attr">
+      <div class="sec-h" id="mb-attr">Attributes <span class="budget" id="b-attr"></span></div>
+      <div class="grid-steps" id="attr-steps"></div>
+    </section>
+
+    <section class="sec" aria-labelledby="mb-skills">
+      <div class="sec-h" id="mb-skills">Skills <span class="budget" id="b-skills"></span></div>
+      <div class="grid-steps" id="skill-steps"></div>
+    </section>
+
+    <section class="sec" aria-labelledby="mb-talents">
+      <div class="sec-h" id="mb-talents">Talents <span class="budget" id="b-talents"></span></div>
+      <label style="text-transform:none; letter-spacing:0; font-size:12.5px; display:flex; gap:.4rem; align-items:center; margin-bottom:.5rem;">
+        <input type="checkbox" id="f-all-talents"> Show every {{ era_label }} talent, not only your paths and metals</label>
+      <div id="talent-list"></div>
+    </section>
+
+    <section class="sec" aria-labelledby="mb-exp">
+      <div class="sec-h" id="mb-exp">Expertises <span class="budget" id="b-expertises"></span></div>
+      <label for="f-expertises">One per line</label>
+      <textarea id="f-expertises">{% for e in build.expertises or [] %}{{ e.name if e is mapping else e }}
+{% endfor %}</textarea>
+    </section>
+
+    <section class="sec" aria-labelledby="mb-story">
+      <div class="sec-h" id="mb-story">Story</div>
+      <div class="row">
+        {% for key, label in [('purpose','Purpose'), ('obstacle','Obstacle'), ('goals','Goals'), ('appearance','Appearance'), ('connections','Connections')] %}
+        <div><label for="f-{{ key }}">{{ label }}</label><textarea id="f-{{ key }}">{{ build[key] if build[key] is string else '' }}</textarea></div>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
+
+  <aside class="panel sec" aria-label="Character so far">
+    <div class="sec-h">So far</div>
+    <div id="pv-stats"></div>
+    <ul class="issues hard" id="pv-hard" hidden></ul>
+    <ul class="issues" id="pv-issues" hidden></ul>
+    <div id="gm-override" hidden style="margin-top:.6rem; font-size:12.5px;">
+      <label style="text-transform:none; letter-spacing:0; display:flex; gap:.4rem; align-items:center;">
+        <input type="checkbox" id="f-force"> GM override: save anyway</label></div>
+    <div style="margin-top:1rem; display:flex; gap:.5rem; flex-wrap:wrap;">
+      <button type="button" class="btn primary" id="btn-save" data-workflow-finish onclick="save()">{% if workflow.enabled %}Finish character{% else %}Save character{% endif %}</button>
+      <a class="btn" href="/cosmere/pcs" style="text-decoration:none;">Cancel</a>
+    </div>
+    <div class="muted" id="save-msg" role="status" style="margin-top:.5rem;"></div>
+  </aside>
+  </div>
+</div>
+
+<script>
+const PID = {{ pid|tojson }};
+const workflowConfig = {{ workflow|tojson }};
+const ERA = {{ era|tojson }};
+const BUILD = {{ build|tojson }};
+const METALS = {{ metals|tojson }};
+const SKILLS = {{ skills|tojson }};
+const TALENT_CATALOG = {{ talents|tojson }};
+const ATTR_NAMES = {{ attr_names|tojson }};
+const ATTR_KEYS = ['str','spd','int','wil','awa','pre'];
+const ALLOMANTIC = new Set(['misting','mistborn','twinborn']);
+const FERUCHEMICAL = new Set(['feruchemist','ferring','twinborn']);
+let draftController = null, draftRestoring = false;
+let ATTRS = Object.assign({str:0,spd:0,int:0,wil:0,awa:0,pre:0}, BUILD.attributes || {});
+let SKILL_RANKS = Object.assign({}, BUILD.skills || {});
+let ALLO = Object.assign({}, BUILD.allomantic_powers || {});
+let FERU = Object.assign({}, BUILD.feruchemical_powers || {});
+let TALENTS = (BUILD.talents || []).filter(t => t && t.id).map(t => ({id:t.id, name:t.name || t.id}));
+let LAST_PREVIEW = null, previewTimer = null;
+// The saved build every collect() starts from, so fields this form does not
+// edit (occupation, relationships, loyalties, personality, earned paths, ...)
+// survive a save. A restored draft replaces it with the draft's own build.
+let BASE = JSON.parse(JSON.stringify(BUILD));
+
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function metalbornPath(){ const o = $('f-metalborn').selectedOptions[0]; return o ? (o.dataset.path || '') : ''; }
+
+function stepper(id, value, label, sub){
+  return `<div class="step-row"><span class="nm">${esc(label)}${sub ? `<small>${esc(sub)}</small>` : ''}</span>`
+    + `<span class="stepper"><button type="button" aria-label="Lower ${esc(label)}" data-step="${id}" data-d="-1">&minus;</button>`
+    + `<output id="${id}" aria-live="polite">${value}</output>`
+    + `<button type="button" aria-label="Raise ${esc(label)}" data-step="${id}" data-d="1">+</button></span></div>`;
+}
+function renderAttrs(){
+  $('attr-steps').innerHTML = ATTR_KEYS.map(k => stepper('attr-' + k, ATTRS[k] || 0, ATTR_NAMES[k] || k)).join('');
+}
+function renderSkills(){
+  $('skill-steps').innerHTML = SKILLS.map(s => stepper('skill-' + s.code, SKILL_RANKS[s.code] || 0, s.name, s.attr)).join('');
+}
+// The metals a metalborn type works with: one chosen metal for a Misting or Ferring
+// (one of each for Twinborn), every era metal for a Mistborn or Feruchemist.
+function metalMode(art){
+  const path = metalbornPath();
+  if(art === 'allomancy'){ if(path === 'mistborn') return 'all'; return ALLOMANTIC.has(path) ? 'one' : 'none'; }
+  if(path === 'feruchemist') return 'all';
+  return FERUCHEMICAL.has(path) ? 'one' : 'none';
+}
+// Era 1 Mistings and Mistborn start with atium unlocked; every other unlock is a
+// server-granted goal reward, so the page offers only Nascent and Goal active.
+function atiumFixed(){ const p = metalbornPath(); return ERA === 'era-1' && (p === 'misting' || p === 'mistborn'); }
+function applyFixedStates(){ if(atiumFixed() && 'atium' in ALLO) ALLO.atium = 'unlocked'; }
+function stateOptions(art, metal, current){
+  const opts = {nascent:'Nascent', goal_active:'Goal active'};
+  if(current === 'unlocked') opts.unlocked = 'Unlocked';
+  const fixed = art === 'allomancy' && metal === 'atium' && atiumFixed();
+  return { html: Object.entries(fixed ? {unlocked:'Unlocked'} : opts)
+             .map(([v, l]) => `<option value="${v}" ${current === v ? 'selected' : ''}>${l}</option>`).join(''),
+           fixed };
+}
+function syncMetalSets(){
+  for(const [art, powers] of [['allomancy', ALLO], ['feruchemy', FERU]]){
+    const mode = metalMode(art);
+    if(mode === 'none'){ Object.keys(powers).forEach(k => delete powers[k]); }
+    else if(mode === 'all'){ METALS.forEach(m => { if(!powers[m.metal]) powers[m.metal] = 'nascent'; }); }
+    else { const keys = Object.keys(powers); keys.slice(1).forEach(k => delete powers[k]); }
+  }
+  applyFixedStates();
+}
+function renderMetals(){
+  for(const [art, powers, box, sec, hint] of [['allomancy', ALLO, 'allo-metals', 'sec-allomancy', 'allo-hint'],
+                                              ['feruchemy', FERU, 'feru-metals', 'sec-feruchemy', 'feru-hint']]){
+    const mode = metalMode(art);
+    $(sec).hidden = mode === 'none';
+    $(hint).textContent = mode === 'one' ? 'Choose one metal' : (mode === 'all' ? 'Every metal of this era' : '');
+    $(box).innerHTML = METALS.map(m => {
+      const held = m.metal in powers;
+      const pick = mode === 'one'
+        ? `<input type="radio" name="pick-${art}" value="${m.metal}" ${held ? 'checked' : ''} data-art="${art}" aria-label="${esc(m.name)}">`
+        : '';
+      const so = held ? stateOptions(art, m.metal, powers[m.metal]) : null;
+      const state = held ? `<select data-art="${art}" data-metal="${m.metal}" aria-label="${esc(m.name)} power state"${so.fixed ? ' disabled' : ''}>`
+        + so.html + `</select>` : '';
+      return `<div class="metal${held ? '' : ' off'}" style="--metal-tint:${m.tint};"><div class="mn">${pick}${esc(m.name)}</div>`
+        + `<div class="md">${esc(art === 'feruchemy' ? m.stores : m.effect)}</div>${state}</div>`;
+    }).join('');
+  }
+}
+// Engine prerequisite tokens ("power:allomancy.brass", "allomancy_rank>=4") as words.
+function prereqText(token){
+  return String(token).split('|').map(part => part
+    .replace(/^power:(allomancy|feruchemy)\.(\w+)$/, (m, art, metal) => art.charAt(0).toUpperCase() + art.slice(1) + ' ' + metal)
+    .replace(/^(allomancy|feruchemy)\.(\w+)$/, (m, art, metal) => art.charAt(0).toUpperCase() + art.slice(1) + ' ' + metal)
+    .replace(/^talent:/, 'talent ')
+    .replace(/>=/g, ' at least ').replace(/=/g, ' = ').replace(/_/g, ' ')).join(' or ');
+}
+function relevantTrees(){
+  const trees = new Set();
+  const path = metalbornPath();
+  if(path){ trees.add(path); if(path === 'mistborn') trees.add('misting'); }
+  Object.keys(ALLO).forEach(m => trees.add('allomancy.' + m));
+  Object.keys(FERU).forEach(m => trees.add('feruchemy.' + m));
+  return trees;
+}
+function renderTalents(){
+  const all = $('f-all-talents').checked, trees = relevantTrees(), chosen = new Set(TALENTS.map(t => t.id));
+  const anyArt = Object.keys(ALLO).length + Object.keys(FERU).length > 0;
+  const rows = TALENT_CATALOG.filter(t => all || chosen.has(t.id) || t.trees.some(tr => trees.has(tr))
+                                       || (anyArt && t.art === 'shared_metallic'));
+  $('talent-list').innerHTML = rows.length ? rows.map(t => `<label class="talent">`
+      + `<input type="checkbox" data-talent="${esc(t.id)}" ${chosen.has(t.id) ? 'checked' : ''}>`
+      + `<span><span class="tn">${esc(t.name)}</span>${t.action_cost ? `<span class="chip">${esc(t.action_cost)}</span>` : ''}`
+      + (t.trees.length ? `<span class="chip">${esc(t.trees.join(', '))}</span>` : '')
+      + (t.prerequisites.length ? `<div class="tp">Needs: ${esc(t.prerequisites.map(prereqText).join('; '))}</div>` : '')
+      + `</span></label>`).join('')
+    : '<p class="muted">Choose a metalborn type and metals to see their talents, or show every talent.</p>';
+}
+// MERGE START
+// Fields the server derives or owns. Resending a stale copy is either rejected
+// (Allomancy/Feruchemy ranks follow the skill ranks) or replaced anyway (grants,
+// pins, theme), so they are dropped and metal access is rederived from the powers.
+const SERVER_DERIVED = ['allomancy_rank', 'feruchemy_rank', 'metal_access',
+                        'advancement_bonus_grants', 'rules_binding', 'cosmere_theme'];
+const METALBORN_PATHS = ['misting', 'mistborn', 'feruchemist', 'ferring', 'twinborn'];
+function mergeCollected(base, edits){
+  const out = JSON.parse(JSON.stringify(base || {}));
+  SERVER_DERIVED.forEach(k => delete out[k]);
+  const oldStart = out.starting_path || '';
+  Object.assign(out, JSON.parse(JSON.stringify(edits)));
+  // Keep heroic paths acquired beyond the starting path. The engine re-adds
+  // metalborn paths from their keys, and the starting path is the form's choice.
+  const kept = (Array.isArray(base && base.heroic_paths) ? base.heroic_paths : [])
+    .filter(p => typeof p === 'string' && p && p !== oldStart && p !== edits.starting_path
+                 && !METALBORN_PATHS.includes(p));
+  out.heroic_paths = [...(edits.starting_path ? [edits.starting_path] : []), ...kept];
+  out.metal_access = {allomancy: Object.keys(out.allomantic_powers || {}).sort(),
+                      feruchemy: Object.keys(out.feruchemical_powers || {}).sort()};
+  return out;
+}
+// MERGE END
+function collect(){
+  const v = id => $(id).value;
+  const level = parseInt(v('f-level'), 10);
+  const edits = {
+    name: v('f-name').trim() || 'New Hero', level: Number.isInteger(level) && level > 0 ? level : 1,
+    origin_world: 'scadrial', era: ERA, ancestry: v('f-ancestry'), culture: v('f-culture'),
+    starting_path: v('f-path'), metalborn_keys: $('f-metalborn').value ? [$('f-metalborn').value] : [],
+    attributes: Object.assign({}, ATTRS),
+    skills: Object.fromEntries(Object.entries(SKILL_RANKS).filter(([, r]) => r > 0)),
+    talents: TALENTS.map(t => ({id: t.id, name: t.name})),
+    expertises: v('f-expertises').split('\n').map(s => s.trim()).filter(Boolean),
+    allomantic_powers: Object.assign({}, ALLO), feruchemical_powers: Object.assign({}, FERU),
+  };
+  ['purpose','obstacle','goals','appearance','connections'].forEach(k => edits[k] = v('f-' + k));
+  return mergeCollected(BASE, edits);
+}
+function budget(id, pair){
+  const el = $(id); if(!el || !pair) return;
+  el.textContent = pair[0] + ' / ' + pair[1];
+  el.classList.toggle('over', pair[0] > pair[1]);
+}
+function paintPreview(p){
+  LAST_PREVIEW = p;
+  if(p.budgets){ budget('b-attr', p.budgets.attr); budget('b-skills', p.budgets.skills);
+                 budget('b-talents', p.budgets.talents); budget('b-expertises', p.budgets.expertises); }
+  const d = p.defenses || {};
+  $('pv-stats').innerHTML = [['Health', p.health], ['Focus', p.focus], ['Investiture', p.investiture],
+      ['Physical defense', d.phy], ['Cognitive defense', d.cog], ['Spiritual defense', d.spi], ['Tier', p.tier]]
+    .filter(([, value]) => value !== undefined && value !== null)
+    .map(([k, value]) => `<div class="stat"><span>${k}</span><b>${esc(value)}</b></div>`).join('');
+  const hard = p.hard || [], soft = (p.issues || []).filter(i => !hard.includes(i));
+  $('pv-hard').hidden = !hard.length; $('pv-hard').innerHTML = hard.map(i => `<li>${esc(i)}</li>`).join('');
+  $('pv-issues').hidden = !soft.length; $('pv-issues').innerHTML = soft.map(i => `<li>${esc(i)}</li>`).join('');
+  const isGm = workflowConfig.enabled ? workflowConfig.canOverride : !!p.is_gm;
+  $('gm-override').hidden = !(hard.length && isGm);
+  $('btn-save').disabled = !!hard.length && !(isGm && $('f-force').checked);
+}
+function refreshPreview(){
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(() => {
+    fetch('/cosmere/builder/preview', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({id: PID, build: collect()})})
+      .then(r => r.json()).then(paintPreview)
+      .catch(() => { $('save-msg').textContent = 'Could not check the build.'; });
+  }, 150);
+}
+function changed(){ refreshPreview(); if(draftController && !draftRestoring) draftController.changed(); }
+function save(){
+  const force = !!(LAST_PREVIEW && (LAST_PREVIEW.hard || []).length && $('f-force').checked);
+  if(draftController){
+    draftController.finish({force: workflowConfig.canOverride && force}).catch(() => {});
+    return;
+  }
+  $('save-msg').textContent = 'Saving...';
+  fetch('/cosmere/builder', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({id: PID, build: collect(), force})})
+    .then(r => r.json()).then(d => {
+      if(d && d.ok){ window.location.href = d.url; return; }
+      $('save-msg').textContent = (d && d.error) || 'Save failed.';
+      if(d && d.hard) paintPreview(Object.assign({}, LAST_PREVIEW || {}, {hard: d.hard, issues: d.issues || []}));
+    })
+    .catch(() => { $('save-msg').textContent = 'Save failed.'; });
+}
+
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-step]'); if(!b) return;
+  const id = b.dataset.step, delta = parseInt(b.dataset.d, 10);
+  if(id.startsWith('attr-')){ const k = id.slice(5); ATTRS[k] = Math.max(0, (ATTRS[k] || 0) + delta); $(id).textContent = ATTRS[k]; }
+  else { const k = id.slice(6); SKILL_RANKS[k] = Math.max(0, (SKILL_RANKS[k] || 0) + delta); $(id).textContent = SKILL_RANKS[k]; }
+  changed();
+});
+document.addEventListener('change', e => {
+  const t = e.target;
+  if(t.id === 'f-metalborn'){ syncMetalSets(); renderMetals(); renderTalents(); }
+  else if(t.name && t.name.startsWith('pick-')){
+    const powers = t.dataset.art === 'allomancy' ? ALLO : FERU;
+    Object.keys(powers).forEach(k => delete powers[k]); powers[t.value] = 'nascent';
+    applyFixedStates(); renderMetals(); renderTalents();
+  } else if(t.dataset && t.dataset.metal){
+    (t.dataset.art === 'allomancy' ? ALLO : FERU)[t.dataset.metal] = t.value;
+  } else if(t.dataset && t.dataset.talent){
+    const id = t.dataset.talent;
+    if(t.checked){ const row = TALENT_CATALOG.find(r => r.id === id); TALENTS.push({id, name: row ? row.name : id}); }
+    else { TALENTS = TALENTS.filter(r => r.id !== id); }
+  } else if(t.id === 'f-all-talents'){ renderTalents(); return; }
+  else if(t.id === 'f-force'){ paintPreview(LAST_PREVIEW || {}); return; }
+  changed();
+});
+document.addEventListener('input', e => { if(e.target.matches('input[type=text], input[type=number], textarea')) changed(); });
+
+// DRAFT ADAPTER START
+function collectMistbornDraft(){
+  const fields = {};
+  document.querySelectorAll('input[id^="f-"],select[id^="f-"],textarea[id^="f-"]').forEach(el => {
+    fields[el.id] = el.type === 'checkbox' ? el.checked : el.value; });
+  return JSON.parse(JSON.stringify({kind:'cosmere_builder', payload_version:1,
+    form:{fields}, ui:{step:0}, submission:{build: collect()}}));
+}
+async function restoreMistbornDraft(inputs){
+  draftRestoring = true;
+  try {
+    const build = (inputs.submission || {}).build || {}, fields = (inputs.form || {}).fields || {};
+    BASE = JSON.parse(JSON.stringify(build));
+    Object.entries(fields).forEach(([id, value]) => { const el = $(id); if(!el) return;
+      if(el.type === 'checkbox') el.checked = !!value; else el.value = value; });
+    ATTRS = Object.assign({str:0,spd:0,int:0,wil:0,awa:0,pre:0}, build.attributes || {});
+    SKILL_RANKS = Object.assign({}, build.skills || {});
+    ALLO = Object.assign({}, build.allomantic_powers || {});
+    FERU = Object.assign({}, build.feruchemical_powers || {});
+    TALENTS = (build.talents || []).filter(t => t && t.id);
+    renderAttrs(); renderSkills(); renderMetals(); renderTalents(); refreshPreview();
+  } finally { draftRestoring = false; }
+}
+// DRAFT ADAPTER END
+
+renderAttrs(); renderSkills(); renderMetals(); renderTalents(); refreshPreview();
+if(workflowConfig.enabled){
+  draftController = CharacterDrafts.mount(workflowConfig, collectMistbornDraft, restoreMistbornDraft);
+}
+</script>
+{% endblock %}
