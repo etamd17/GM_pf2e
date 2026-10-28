@@ -261,3 +261,80 @@ def test_load_reuses_the_validated_packages_in_file_order(tmp_path):
         {key: document[key] for key in ("schema_version", "artifacts", "packs")})
     assert _bytes == (FIXTURE / "rules" / "registry.json").read_bytes().replace(b"\r\n", b"\n")
     assert dict(artifacts) == dict(loaded.artifacts)
+
+
+# The cases below came from mutation testing MB-11: each one fails on a
+# specific plausible regression that the corpus above let through.
+
+@pytest.mark.parametrize("value", [
+    _mapping_at(32, {"raw_text": 1}), _mapping_at(32, {"/abs": 1}),
+    _mapping_at(32, {1: "x"}), _mapping_at(32, {"": 1})])
+def test_bad_keys_at_the_depth_limit_fail_like_the_old_freeze(value):
+    """The key checks run in freeze's order: text, then depth, then content."""
+    expected = _outcome(_old_freeze, value)
+    assert expected[0] == "error"
+    assert _outcome(freeze, value) == expected
+    assert _outcome(check_json, value) == expected
+
+
+def test_a_str_subclass_cannot_reuse_a_remembered_pass():
+    freeze({"plain": "plain"})                  # remembered as text and as a key
+
+    class Sneaky(str):
+        def __hash__(self):
+            return hash("plain")
+
+        def __eq__(self, other):
+            return True
+
+    with pytest.raises(RulesValidationError, match="absolute paths"):
+        freeze(Sneaky("/etc/passwd"))
+    with pytest.raises(RulesValidationError, match="raw source content"):
+        check_json({Sneaky("raw_text"): 1})
+
+
+@pytest.mark.parametrize(("raw", "message"), [
+    (b'{"note": "/etc/passwd"}', "absolute paths are runtime input only"),
+    (b'{"raw_text": 1}', "raw source content is prohibited"),
+    (b'["data:image/png;base64,AAAA"]', "source/media payload is prohibited")])
+def test_read_json_applies_the_privacy_checks_itself(raw, message):
+    with pytest.raises(RulesValidationError, match=message):
+        compiler.read_json(raw)
+
+
+def test_an_exact_compiler_output_loads_without_reserializing(tmp_path, monkeypatch):
+    raw = (FIXTURE / "rules" / "registry.json").read_bytes().replace(b"\r\n", b"\n")
+
+    def reserialize(_value):
+        raise AssertionError("the byte comparison should have settled an exact file")
+
+    monkeypatch.setattr(registry, "canonical_json", reserialize)
+    for name, data in (("lf.json", raw), ("crlf.json", raw.replace(b"\n", b"\r\n"))):
+        registry.load_registry(_write(tmp_path, name, data))
+
+
+def test_a_load_builds_each_package_once(monkeypatch):
+    built = []
+    real = compiler.from_dict
+
+    def counting(cls, value):
+        if cls is schema.ContentPack:
+            built.append(value["id"])
+        return real(cls, value)
+
+    monkeypatch.setattr(compiler, "from_dict", counting)
+    monkeypatch.setattr(registry, "from_dict", counting)
+    loaded = registry.load_registry(FIXTURE / "rules" / "registry.json")
+    assert len(built) == len(loaded.pack_versions) == len(_registry_document()["packs"])
+
+
+def test_the_registry_hash_is_checked_before_anything_is_compiled(tmp_path, monkeypatch):
+    document = _registry_document()
+    document["package_hash"] = "0" * 64
+
+    def no_compile(_authoring):
+        raise AssertionError("compiled a registry whose hash is wrong")
+
+    monkeypatch.setattr(registry, "compile_and_validate", no_compile)
+    with pytest.raises(RulesValidationError, match="registry hash mismatch"):
+        registry.load_registry(_write(tmp_path, "hash.json", json.dumps(document).encode()))

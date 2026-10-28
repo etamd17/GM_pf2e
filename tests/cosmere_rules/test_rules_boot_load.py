@@ -60,3 +60,39 @@ def test_importing_the_app_loads_the_installed_rules(tmp_path):
     want = load_registry(installed / "rules" / "registry.json").package_hash
     assert f"HASH {want}" in result.stdout, result.stdout[-2000:]
     assert "Rules loaded at boot: 5 package versions" in result.stdout
+
+
+def test_the_boot_load_is_skipped_under_pytest(monkeypatch):
+    import app as host
+
+    calls = []
+    monkeypatch.setattr(host, "_preload_cosmere_rules", lambda: calls.append("loaded"))
+    host._autostart_cosmere_rules()
+    assert calls == []
+
+
+def test_the_reloader_parent_does_not_load_but_its_child_does(monkeypatch):
+    import app as host
+
+    calls = []
+    monkeypatch.setattr(host, "_preload_cosmere_rules", lambda: calls.append("loaded"))
+    monkeypatch.delitem(sys.modules, "pytest")
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.setenv("FLASK_DEBUG", "true")
+    monkeypatch.delenv("WERKZEUG_RUN_MAIN", raising=False)
+    host._autostart_cosmere_rules()
+    assert calls == []
+    monkeypatch.setenv("WERKZEUG_RUN_MAIN", "true")
+    host._autostart_cosmere_rules()
+    assert calls == ["loaded"]
+
+
+def test_no_kind_of_load_failure_stops_the_boot(monkeypatch, capsys):
+    import app as host
+
+    def broken():
+        raise KeyError("cosmere.core")
+
+    monkeypatch.setattr(profiles, "default_registry", broken)
+    assert host._preload_cosmere_rules() is None
+    assert "Rules not loaded at boot" in capsys.readouterr().out
