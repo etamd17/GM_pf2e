@@ -29189,6 +29189,24 @@ def _workflow_builder_bootstrap(system):
     return workflow, document
 
 
+def _workflow_draft_label(inputs):
+    """The character name a saved draft shows on the landing list.
+
+    Builders keep the name in different places: the Cosmere builders submit
+    ``{'build': {...}}`` and keep only field values in the form, the PF2e
+    builder submits ``{'name': ...}``. Read the submission first, then the form.
+    """
+    for section in ('submission', 'form'):
+        value = getattr(inputs, section, None) if inputs is not None else None
+        if not isinstance(value, dict):
+            continue
+        build = value.get('build') if isinstance(value.get('build'), dict) else value
+        name = build.get('name')
+        if isinstance(name, str) and name.strip():
+            return name.strip()
+    return 'Untitled character'
+
+
 def _workflow_landing_context():
     """Only the selected live campaign's author-private summaries and grants."""
     from core.character_workflows.capabilities import capabilities_for
@@ -29204,10 +29222,8 @@ def _workflow_landing_context():
     builder = '/player/builder' if context.system == 'pf2e' else '/cosmere/builder'
     try:
         for draft in _character_workflow_service().drafts.list(context):
-            form = draft.inputs.form if draft.inputs else {}
-            build = form.get('build') if isinstance(form.get('build'), dict) else form
             result['workflow_drafts'].append({'id': draft.id,
-                'name': build.get('name') or 'Untitled character', 'state': draft.state,
+                'name': _workflow_draft_label(draft.inputs), 'state': draft.state,
                 'url': builder + '?draft_id=' + draft.id})
         directory = (_storage.party_dir(context.campaign_id) if context.system == 'pf2e'
                      else _storage.cosmere_pc_dir(context.campaign_id))
