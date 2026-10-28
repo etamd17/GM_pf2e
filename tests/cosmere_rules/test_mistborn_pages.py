@@ -241,3 +241,89 @@ def test_sheet_offers_only_deterministic_metal_actions_and_a_burn_round_trips(mi
     after = host._load_cosmere_pc(misting)['runtime_state']['mistborn']['allomancy']['current_investiture']
     assert after == before - 1
     assert f'Investiture {after}/' in html
+
+
+# --- The builder's collector keeps what the form does not edit (MB-07 review) ---
+
+def _merge_source():
+    from pathlib import Path
+    source = (Path(__file__).resolve().parents[2] / 'templates' /
+              'cosmere_builder_mistborn.html').read_text(encoding='utf-8')
+    return source.split('// MERGE START', 1)[1].split('// MERGE END', 1)[0]
+
+
+def _run_merge(base, edits):
+    import shutil
+    import subprocess
+    node = shutil.which('node')
+    if not node:
+        pytest.skip('Node is unavailable')
+    script = _merge_source() + (
+        '\nprocess.stdout.write(JSON.stringify(mergeCollected('
+        + json.dumps(base) + ', ' + json.dumps(edits) + ')));')
+    done = subprocess.run([node, '-e', script], capture_output=True, text=True,
+                          encoding='utf-8', timeout=60, check=True)
+    return json.loads(done.stdout)
+
+
+UNEDITED = {'occupation': 'Smith', 'relationships': 'Owes a lord', 'loyalties': 'The crew',
+            'personality': 'Wry', 'notes': 'Keep this', 'goal_entitlements': [],
+            'inventory': [{'name': 'Rope'}], 'currency': {'clip': 3}, 'epic_choices': []}
+
+
+def test_collector_keeps_unedited_fields_and_drops_server_derived_ones():
+    base = dict(_build('misting'), **UNEDITED, heroic_paths=['agent', 'misting', 'scholarly-extra'],
+                allomancy_rank=2, feruchemy_rank=0, advancement_bonus_grants={'talents': 1},
+                rules_binding={'stale': True}, cosmere_theme='mistborn',
+                metal_access={'allomancy': ['steel'], 'feruchemy': []})
+    edits = {'name': 'Edited', 'starting_path': 'scholar', 'skills': {'allomancy': 3},
+             'allomantic_powers': {'tin': 'nascent'}, 'feruchemical_powers': {}}
+    out = _run_merge(base, edits)
+    for key, value in UNEDITED.items():
+        assert out[key] == value, key
+    assert out['name'] == 'Edited' and out['skills'] == {'allomancy': 3}
+    # The old starting path and metalborn paths go; an earned path stays.
+    assert out['heroic_paths'] == ['scholar', 'scholarly-extra']
+    for key in ('allomancy_rank', 'feruchemy_rank', 'advancement_bonus_grants',
+                'rules_binding', 'cosmere_theme'):
+        assert key not in out
+    assert out['metal_access'] == {'allomancy': ['tin'], 'feruchemy': []}
+
+
+def test_collector_does_not_mutate_its_base():
+    base = dict(_build('misting'), **UNEDITED)
+    before = json.loads(json.dumps(base))
+    _run_merge(base, {'name': 'x', 'starting_path': 'agent'})
+    assert base == before
+
+
+@NEEDS_PRIVATE_DATA
+def test_collector_output_saves_and_reloads_without_losing_fields(mistborn_campaign):
+    import systems.cosmere.build as cosmere_build
+    host, client, ids, pcs = mistborn_campaign('era-1')
+    pid = ids[0]
+    doc = host._load_cosmere_pc(pid)
+    doc['build'].update(occupation='Smith', relationships='Owes a lord',
+                        loyalties='The crew', personality='Wry')
+    host._save_cosmere_pc(doc)
+    existing = host._load_cosmere_pc(pid)
+    # What the page embeds as BUILD, then one edit through the real collector.
+    page_build = cosmere_build.CosmereBuild(existing['build']).to_dict()
+    payload = _run_merge(page_build, {
+        'name': 'Vin Edited', 'level': 1, 'origin_world': 'scadrial', 'era': 'era-1',
+        'ancestry': existing['build']['ancestry'], 'culture': '', 'starting_path': 'agent',
+        'metalborn_keys': existing['build']['metalborn_keys'],
+        'attributes': existing['build']['attributes'], 'skills': existing['build']['skills'],
+        'talents': [], 'expertises': [],
+        'allomantic_powers': existing['build']['allomantic_powers'],
+        'feruchemical_powers': existing['build']['feruchemical_powers']})
+    # Draft submission: publication builds the document through this function.
+    drafted = host._build_cosmere_document({'build': payload}, existing)
+    # Direct save through the builder route, then reload from disk.
+    saved = client.post('/cosmere/builder', json={'id': pid, 'build': payload}).get_json()
+    assert saved['ok'] is True, saved
+    reloaded = host._load_cosmere_pc(pid)
+    for result in (drafted['build'], reloaded['build']):
+        assert result['occupation'] == 'Smith' and result['relationships'] == 'Owes a lord'
+        assert result['loyalties'] == 'The crew' and result['personality'] == 'Wry'
+    assert reloaded['build']['name'] == 'Vin Edited'

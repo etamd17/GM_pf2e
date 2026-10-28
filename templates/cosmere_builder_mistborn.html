@@ -157,6 +157,10 @@ let ALLO = Object.assign({}, BUILD.allomantic_powers || {});
 let FERU = Object.assign({}, BUILD.feruchemical_powers || {});
 let TALENTS = (BUILD.talents || []).filter(t => t && t.id).map(t => ({id:t.id, name:t.name || t.id}));
 let LAST_PREVIEW = null, previewTimer = null;
+// The saved build every collect() starts from, so fields this form does not
+// edit (occupation, relationships, loyalties, personality, earned paths, ...)
+// survive a save. A restored draft replaces it with the draft's own build.
+let BASE = JSON.parse(JSON.stringify(BUILD));
 
 function $(id){ return document.getElementById(id); }
 function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -251,25 +255,44 @@ function renderTalents(){
       + `</span></label>`).join('')
     : '<p class="muted">Choose a metalborn type and metals to see their talents, or show every talent.</p>';
 }
+// MERGE START
+// Fields the server derives or owns. Resending a stale copy is either rejected
+// (Allomancy/Feruchemy ranks follow the skill ranks) or replaced anyway (grants,
+// pins, theme), so they are dropped and metal access is rederived from the powers.
+const SERVER_DERIVED = ['allomancy_rank', 'feruchemy_rank', 'metal_access',
+                        'advancement_bonus_grants', 'rules_binding', 'cosmere_theme'];
+const METALBORN_PATHS = ['misting', 'mistborn', 'feruchemist', 'ferring', 'twinborn'];
+function mergeCollected(base, edits){
+  const out = JSON.parse(JSON.stringify(base || {}));
+  SERVER_DERIVED.forEach(k => delete out[k]);
+  const oldStart = out.starting_path || '';
+  Object.assign(out, JSON.parse(JSON.stringify(edits)));
+  // Keep heroic paths acquired beyond the starting path. The engine re-adds
+  // metalborn paths from their keys, and the starting path is the form's choice.
+  const kept = (Array.isArray(base && base.heroic_paths) ? base.heroic_paths : [])
+    .filter(p => typeof p === 'string' && p && p !== oldStart && p !== edits.starting_path
+                 && !METALBORN_PATHS.includes(p));
+  out.heroic_paths = [...(edits.starting_path ? [edits.starting_path] : []), ...kept];
+  out.metal_access = {allomancy: Object.keys(out.allomantic_powers || {}).sort(),
+                      feruchemy: Object.keys(out.feruchemical_powers || {}).sort()};
+  return out;
+}
+// MERGE END
 function collect(){
   const v = id => $(id).value;
-  const keys = $('f-metalborn').value ? [$('f-metalborn').value] : [];
   const level = parseInt(v('f-level'), 10);
-  const build = {
+  const edits = {
     name: v('f-name').trim() || 'New Hero', level: Number.isInteger(level) && level > 0 ? level : 1,
     origin_world: 'scadrial', era: ERA, ancestry: v('f-ancestry'), culture: v('f-culture'),
-    starting_path: v('f-path'), heroic_paths: v('f-path') ? [v('f-path')] : [],
-    metalborn_keys: keys, attributes: Object.assign({}, ATTRS),
+    starting_path: v('f-path'), metalborn_keys: $('f-metalborn').value ? [$('f-metalborn').value] : [],
+    attributes: Object.assign({}, ATTRS),
     skills: Object.fromEntries(Object.entries(SKILL_RANKS).filter(([, r]) => r > 0)),
     talents: TALENTS.map(t => ({id: t.id, name: t.name})),
     expertises: v('f-expertises').split('\n').map(s => s.trim()).filter(Boolean),
     allomantic_powers: Object.assign({}, ALLO), feruchemical_powers: Object.assign({}, FERU),
-    metal_access: {allomancy: Object.keys(ALLO).sort(), feruchemy: Object.keys(FERU).sort()},
-    epic_choices: BUILD.epic_choices || [], goal_entitlements: BUILD.goal_entitlements || [],
-    inventory: BUILD.inventory || [], currency: BUILD.currency || {},
   };
-  ['purpose','obstacle','goals','appearance','connections'].forEach(k => build[k] = v('f-' + k));
-  return build;
+  ['purpose','obstacle','goals','appearance','connections'].forEach(k => edits[k] = v('f-' + k));
+  return mergeCollected(BASE, edits);
 }
 function budget(id, pair){
   const el = $(id); if(!el || !pair) return;
@@ -357,6 +380,7 @@ async function restoreMistbornDraft(inputs){
   draftRestoring = true;
   try {
     const build = (inputs.submission || {}).build || {}, fields = (inputs.form || {}).fields || {};
+    BASE = JSON.parse(JSON.stringify(build));
     Object.entries(fields).forEach(([id, value]) => { const el = $(id); if(!el) return;
       if(el.type === 'checkbox') el.checked = !!value; else el.value = value; });
     ATTRS = Object.assign({str:0,spd:0,int:0,wil:0,awa:0,pre:0}, build.attributes || {});
