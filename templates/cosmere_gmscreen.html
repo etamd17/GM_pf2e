@@ -42,7 +42,7 @@
 {% block content %}
 <div class="gms-head">
   <span class="gms-title">Cosmere GM Screen</span>
-  <span class="gms-sub">Stormlight rules at a glance &mdash; sourced from the live engine.</span>
+  <span class="gms-sub">{{ 'Cosmere' if cosmere_world == 'mistborn' else 'Stormlight' }} rules at a glance &mdash; sourced from the live engine.</span>
 </div>
 
 <nav class="gms-nav">
@@ -51,8 +51,10 @@
   <a href="#injuries">Injuries</a>
   <a href="#plot">Plot Die</a>
   <a href="#conditions">Conditions</a>
+  {% if cosmere_world != 'mistborn' %}
   <a href="#surges">Surges</a>
   <a href="#orders">Radiant Orders</a>
+  {% endif %}
   <a href="#rest">Rest</a>
   <a href="#skills">Skills</a>
   <a href="#quickref">Quick Ref</a>
@@ -124,6 +126,7 @@
     </div>
   </section>
 
+  {% if cosmere_world != 'mistborn' %}
   <section id="surges" class="gms-panel">
     <h2>Surges &amp; Stormlight</h2>
     <table class="gms-tbl">
@@ -141,13 +144,16 @@
     {% for a in stormlight %}<p class="gms-cond"><b>{{ a.name }}</b> &mdash; {{ a.description }}</p>{% endfor %}
     <p class="gms-def" style="margin-top:.4rem;"><b>First Ideal:</b> <i>{{ first_ideal }}</i></p>
   </section>
+  {% endif %}
 
   <section id="rest" class="gms-panel">
     <h2>Rest &amp; Recovery</h2>
     <p class="gms-def"><b>Short rest</b> &mdash; spend a recovery die to restore health or focus.</p>
     <p class="gms-def"><b>Long rest</b> &mdash; recover all health &amp; focus, and reduce your Exhausted penalty by 1.</p>
     <p class="gms-def"><b>Recover</b> (2 actions, once per scene) &mdash; spend a recovery die during combat.</p>
+    {% if cosmere_world != 'mistborn' %}
     <p class="gms-def" style="color:var(--text-on-dark-3);">Investiture (Stormlight) is regained only from infused spheres, not by resting.</p>
+    {% endif %}
     <p class="gms-def" style="margin-top:.6rem;"><b>Recovery die by Willpower</b></p>
     <table class="gms-tbl">
       <tr><th>Willpower</th><th>Recovery die</th></tr>
@@ -172,7 +178,9 @@
     <ul class="gms-list">
       <li><b>Health</b> = 10 + Strength at L1, growing by tier</li>
       <li><b>Focus</b> = 2 + Willpower</li>
+      {% if cosmere_world != 'mistborn' %}
       <li><b>Investiture</b> = 2 + the higher of Awareness / Presence (0 until Radiant)</li>
+      {% endif %}
     </ul>
     <p class="gms-def" style="margin-top:.6rem;"><b>Tiers &amp; max skill rank:</b> levels map to tiers 1&ndash;5 (T1 = L1&ndash;5 &hellip; T5 = L21+); max skill rank by tier = <b>{{ skill_rank_by_tier|join('/') }}</b>.</p>
   </section>
@@ -182,9 +190,10 @@
     <div class="gms-cols" style="column-width:210px;">
       {% for s in skills %}<p class="gms-cond" style="margin-bottom:.3rem;"><b>{{ s.name }}</b> <span style="color:var(--text-on-dark-3);">&middot; {{ s.attr }}</span></p>{% endfor %}
     </div>
-    <p class="gms-def" style="margin-top:.5rem; color:var(--text-on-dark-3);">Skill modifier = ranks + the governing attribute's score. These are the 18 basic skills; the 10 Surge skills unlock for Radiants.</p>
+    <p class="gms-def" style="margin-top:.5rem; color:var(--text-on-dark-3);">Skill modifier = ranks + the governing attribute's score. {% if cosmere_world == 'mistborn' %}These are the basic skills; consult the character sheet for Metallic Arts.{% else %}These are the 18 basic skills; the 10 Surge skills unlock for Radiants.{% endif %}</p>
   </section>
 
+  {% if cosmere_world != 'mistborn' %}
   <section id="orders" class="gms-panel wide">
     <h2>Radiant Orders</h2>
     <table class="gms-tbl">
@@ -199,6 +208,7 @@
       {% endfor %}
     </table>
   </section>
+  {% endif %}
 
 </div>
 <script>
@@ -240,7 +250,7 @@
     const nodes=[]; let tn; while(tn=walker.nextNode()) nodes.push(tn);
     nodes.forEach(node=>{
       for(const t of terms){
-        if(linked.has(t) || XREF[t]===here) continue;
+        if(linked.has(t) || XREF[t]===here || !document.getElementById(XREF[t])) continue;
         const idx = node.nodeValue.indexOf(t); if(idx<0) continue;
         const before=node.nodeValue[idx-1], after=node.nodeValue[idx+t.length];
         if((before && /\w/.test(before)) || (after && /\w/.test(after))) continue;
