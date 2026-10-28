@@ -426,11 +426,14 @@ def test_public_template_context_does_not_inherit_live_campaign_chrome(
             json={
                 "crest_image": "/campaign-assets/ALPHA-CREST-SENTINEL.png",
                 "scene_mood": "dread",
-                "cosmere_world": "mistborn",
                 "advancement_mode": "xp",
             },
         )
         assert saved["status"] == 200, saved
+        # The world is set through its own route; /api/campaign refuses it (MB-11).
+        world = _probe(gm_a_client, "/api/cosmere/world", method="POST",
+                       json={"world": "mistborn"})
+        assert world["status"] == 200 and world["json"]["world"] == "mistborn", world
 
         with application.app.test_request_context("/login"):
             chrome = application._inject_campaign_chrome()
