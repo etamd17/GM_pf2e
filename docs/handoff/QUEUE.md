@@ -78,8 +78,9 @@ answered its five questions on 2026-10-28 (section 12); PF2e goes back to the wa
 
 | ID | Task | Owner | Model | Status | Brief |
 |---|---|---|---|---|---|
-| DS-00 | Inventory diff tool: ids, data-*, handlers, ARIA, frozen class strings, before/after per route | claude | Opus, high | needs brief | - |
+| DS-00 | Inventory diff tool: ids, data-*, handlers, ARIA, frozen class strings, before/after per route | claude | Opus, high | review (Codex) | `tasks/DS-00-inventory-diff-tool.md` |
 | DS-01 | Tokens, `ds-tokens.css`, empty `ds.css`, notices file, contrast tool | claude | Opus, high | needs brief (after DS-00) | - |
+| DS-00b, DS-00c | VTT inventory script; Cosmere, 5e and account-mode fixtures for the tool | claude | Opus, high | needs brief | - |
 | DS-02..DS-31 | The rest of section 10, in dependency order; nothing starts until DS-00 and DS-01 are merged | see plan | see plan | needs brief | - |
 
 ## CI maintenance
@@ -157,6 +158,8 @@ Accepted as a design checkpoint. Notes:
 - Two of the bugs were checked on current `main` (marked above); the rest are unconfirmed.
 
 ## Log
+
+- 2026-10-28 Claude: built DS-00, the inventory diff tool (`tools/ui_inventory.py`): it fails a design PR that removes or changes any id, handler, ARIA, form control or script. 19 new tests pass; checked on 18 real PF2e pages in both modes. Next: Codex reviews; DS-00b/c add the VTT and other-system pages.
 
 - 2026-10-28 Claude: wrote the design-direction plan (`docs/design/DESIGN_DIRECTION.md`), checked by three reviewers and two verify passes. The user answered its five questions the same day (PF2e back to warm gilt). Next: Claude writes and builds DS-00.
 
