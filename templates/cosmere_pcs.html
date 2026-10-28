@@ -95,6 +95,7 @@
     <div class="pc-sub">
       {% if pc.is_radiant and pc.order %}{{ pc.order }}{% if pc.spren %} <span class="spren">&middot; {{ pc.spren }}</span>{% endif %}
       {% elif pc.path %}{{ pc.path|capitalize }}{% else %}Cosmere{% endif %}
+      {% if pc.metalborn %}<span class="spren">&middot; {{ pc.metalborn.headline }}</span>{% endif %}
     </div>
     <div class="pc-defs">
       <div class="pc-def"><div class="l">Phy</div><div class="v">{{ pc.defenses.phy }}</div></div>

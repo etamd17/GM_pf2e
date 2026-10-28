@@ -39,6 +39,16 @@ METALS = {
     'bendalloy': {'name': 'Bendalloy', 'family': 'temporal',    'effect': 'Speed time in a bubble'},
 }
 
+# What a Feruchemist's metalmind of each metal stores (one terse attribute).
+FERUCHEMY_STORES = {
+    'iron': 'Stores weight', 'steel': 'Stores physical speed', 'tin': 'Stores senses',
+    'pewter': 'Stores strength', 'zinc': 'Stores mental speed', 'brass': 'Stores warmth',
+    'copper': 'Stores memories', 'bronze': 'Stores wakefulness', 'aluminum': 'Stores identity',
+    'duralumin': 'Stores connection', 'chromium': 'Stores fortune', 'nicrosil': 'Stores Investiture',
+    'gold': 'Stores health', 'electrum': 'Stores determination', 'cadmium': 'Stores breath',
+    'bendalloy': 'Stores nutrition', 'atium': 'Stores age',
+}
+
 
 def metal_tint(key) -> str:
     """The family tint for a metal key (the Mistborn 'house metal' accent)."""

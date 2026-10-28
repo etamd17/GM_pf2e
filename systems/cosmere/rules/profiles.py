@@ -44,6 +44,41 @@ def package_pin(pack):
     return PackagePin(pack.id, pack.version, pack.package_hash)
 
 
+MISTBORN_ERAS = ('era-1', 'era-2')
+
+
+def _version_key(version):
+    return tuple(int(part) for part in str(version).split('.'))
+
+
+def mistborn_campaign_binding(era, registry=None):
+    """Pin the newest installed release that has both Mistborn core and ``era``.
+
+    Both packages come from one release so a campaign never mixes reviewed
+    content from different source checks.
+    """
+    require(era in MISTBORN_ERAS, 'Unknown Mistborn era.')
+    registry = registry or default_registry()
+    era_id = f'cosmere.mistborn.{era}'
+    by_version = {}
+    for pack in registry.pack_versions.values():
+        if pack.id in ('cosmere.mistborn.core', era_id):
+            slot = by_version.setdefault(pack.version, {})
+            require(pack.id not in slot, 'Ambiguous installed Mistborn package version.')
+            slot[pack.id] = pack
+    releases = sorted((version for version, slot in by_version.items() if len(slot) == 2),
+                      key=_version_key)
+    if not releases:
+        raise RulesValidationError('Install the Mistborn rules data first.')
+    release = by_version[releases[-1]]
+    binding = CosmereRulesBinding(
+        package_pin(registry.packs['cosmere.core']),
+        (package_pin(release['cosmere.mistborn.core']), package_pin(release[era_id])),
+        'scadrial', (era,))
+    registry.resolve_binding(binding)
+    return binding
+
+
 def normalize_theme(document=None):
     document = document or {}
     theme = document.get('cosmere_theme', document.get('cosmere_world', 'stormlight'))

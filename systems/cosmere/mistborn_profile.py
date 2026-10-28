@@ -121,6 +121,7 @@ class MistbornRulesProfile:
             trusted_advancement_bonus_grants=trusted_advancement_bonus_grants)
 
     def builder_context(self, build, homebrew=None):
+        build = getattr(build, "_implementation", build)   # the CosmereBuild facade
         build = build if isinstance(build, MistbornBuild) else self.create_build(build)
         return {"build": build.to_dict(), "catalog": self.catalog(),
                 "paths": sorted(self._path_rules), "era": build.era}

@@ -121,9 +121,29 @@
     <div class="flex flex-wrap justify-center items-center" style="gap:var(--sp-2); margin:calc(-1*var(--sp-5)) 0 var(--sp-6);">
       <span class="font-display" style="letter-spacing:.14em; text-transform:uppercase; font-size:10px; color:var(--text-on-dark-3);">World skin</span>
       <div role="group" aria-label="World skin" style="display:inline-flex; border:1px solid var(--border-card); border-radius:8px; overflow:hidden;">
-        <button type="button" onclick="cosWorld('stormlight')" aria-pressed="{{ 'true' if cosmere_world != 'mistborn' else 'false' }}" class="cw-btn{{ ' on' if cosmere_world != 'mistborn' }}">Stormlight</button>
+        <button type="button" onclick="cosWorld('stormlight')" aria-pressed="{{ 'true' if cosmere_world != 'mistborn' else 'false' }}" class="cw-btn{{ ' on' if cosmere_world != 'mistborn' }}"{% if rules_status.rules in ('era-1', 'era-2') %} disabled title="Mistborn rules keep the Mistborn look" style="opacity:.45; cursor:not-allowed;"{% endif %}>Stormlight</button>
         <button type="button" onclick="cosWorld('mistborn')" aria-pressed="{{ 'true' if cosmere_world == 'mistborn' else 'false' }}" class="cw-btn{{ ' on' if cosmere_world == 'mistborn' }}">Mistborn</button>
       </div>
+    </div>
+
+    {# ── Rules: which engine builds and runs characters. Fixed once play starts,
+         because characters, staged encounters and scenes record the exact rules. ── #}
+    {% set rs = rules_status %}
+    <div class="flex flex-wrap justify-center items-center" style="gap:var(--sp-2); margin:calc(-1*var(--sp-4)) 0 var(--sp-6);">
+      <span class="font-display" style="letter-spacing:.14em; text-transform:uppercase; font-size:10px; color:var(--text-on-dark-3);">Rules</span>
+      <div role="group" aria-label="Rules" style="display:inline-flex; border:1px solid var(--border-card); border-radius:8px; overflow:hidden;">
+        {% for key, label in [('stormlight', 'Stormlight'), ('era-1', 'Mistborn Era 1'), ('era-2', 'Mistborn Era 2')] %}
+        {% set unavailable = (key != 'stormlight' and key not in rs.installed_eras) %}
+        <button type="button" onclick="cosRules('{{ key }}')" aria-pressed="{{ 'true' if rs.rules == key else 'false' }}"
+                class="cw-btn{{ ' on' if rs.rules == key }}"
+                {% if rs.rules != key and (not rs.can_change or unavailable) %}disabled style="opacity:.45; cursor:not-allowed;"{% endif %}
+                {% if unavailable %}title="Install the Mistborn rules data first"{% endif %}>{{ label }}</button>
+        {% endfor %}
+      </div>
+      {% if not rs.can_change %}
+      <span style="font-size:11px; color:var(--text-on-dark-3);">Fixed: {{ rs.blockers | join('; ') }}.</span>
+      {% endif %}
+      <span id="cos-rules-msg" role="status" style="font-size:11px; color:var(--text-on-dark-3);"></span>
     </div>
 
     {# ── Combat CTA: resume a live fight, or a one-click on-ramp to start one.
@@ -277,6 +297,14 @@
 function cosWorld(w){
   fetch('/api/cosmere/world',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({world:w})})
     .then(function(r){return r.json();}).then(function(d){ if(d&&d.ok) location.reload(); }).catch(function(){});
+}
+// Rules switch: only before play starts; the server re-checks and explains a refusal.
+function cosRules(r){
+  var msg = document.getElementById('cos-rules-msg');
+  fetch('/api/cosmere/rules',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rules:r})})
+    .then(function(res){return res.json();})
+    .then(function(d){ if(d&&d.ok){ location.reload(); } else { msg.textContent = (d&&d.error) || 'Could not change the rules.'; } })
+    .catch(function(){ msg.textContent = 'Could not change the rules.'; });
 }
 // GM Screen tile: roll the Cosmere Plot Die at the table (Opportunity / Complication / Blank).
 function cosPlotDie(){

@@ -576,6 +576,7 @@ _POLICY_GROUPS: tuple[PolicyGroup, ...] = (
             "api_cosmere_table_pins",
             "api_cosmere_table_roll",
             "api_cosmere_world",
+            "api_cosmere_rules",
             "api_cosmere_rules_catalog",
             "api_cosmere_character_migration",
             "api_encounter_template_creatures",
