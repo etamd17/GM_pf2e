@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from copy import deepcopy
+import re
 
 from .stormlight_build import (ATTR_HARD_CAP, ATTR_KEYS, CREATION_ATTR_MAX,
                                ancestry_bonus_talents, attribute_points,
@@ -113,6 +114,9 @@ _RANK_SCALING = {
     4: {"limit": 4, "die": "d10", "range_ft": 160},
     5: {"limit": 5, "die": "d12", "range_ft": 320},
 }
+
+
+_POWER_TREE = re.compile(r"(allomancy|feruchemy)\.[a-z][a-z0-9_-]*")
 
 
 def _rank(value):
@@ -506,6 +510,16 @@ class MistbornBuild:
                               + ", ".join(unsupported) + ".")
             elif unmet:
                 issues.append(f"Talent {talent_id} prerequisites are not satisfied.")
+            # Each metal's talents form that power's tree: most chain from a root
+            # talent that requires the power, but a few list only a runtime
+            # condition. A talent whose every tree is a power tree therefore needs
+            # one of those powers, with the same meaning as a ``power:`` prerequisite.
+            power_trees = [str(tree).strip().lower()
+                           for tree in rule.get("tree_memberships") or ()]
+            if power_trees and all(_POWER_TREE.fullmatch(tree) for tree in power_trees) \
+                    and not any(self._has_power_reference(tree) for tree in power_trees):
+                issues.append(f"Talent {talent_id} belongs to the talent tree of a power "
+                              "this character does not have unlocked.")
         return issues
 
     def _path_issues(self):

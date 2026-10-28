@@ -84,6 +84,8 @@ UI-03 bug list (from `tasks/UI-00.md` > Anything broken or risky; all checked on
 | MB-05 | Mistborn skin bleed: sheet prompt and Workshop, nav tooltips, player-nav text-node error | codex | standard, high | done (PR #224 merged and deployed) | `tasks/MB-05.md` |
 | MB-06 | Mistborn browser pass across both eras (desktop/phone, GM/player), plus recording the user's Outlaw Boss knife ruling (GM decides the damage type) in the private bundle | codex | standard, high | done (accepted by Claude; public PR publishing) | `tasks/MB-06.md` |
 | MB-07 | Turn on the real Mistborn rules per campaign: GM rules switch, every Cosmere page working for Mistborn characters, Mistborn builder, era bestiary + tracker, sheet burn/store/tap | claude (Codex reviews) | Opus, high | done (PR #227 merged and deployed) | `tasks/MB-07.md` |
+| MB-08 | Power talent trees require the power (16 talents with only runtime prerequisites were open to anyone) | claude (Codex reviews) | Opus, high | done (PR #228 merged; deploy verifying) | `tasks/MB-08.md` |
+| MB-09 | Feruchemy Store/Tap Stop is free and does not consume the named-action slot | claude (Codex reviews) | standard, high | done (PR #229 merged; deploy verifying) | `tasks/MB-09.md` |
 | MB-10 | Draft labels, successful publish navigation and inline metalmind Charges | claude (Codex reviews) | standard, high | done (PR #230 merged and deployed) | `tasks/MB-10.md` |
 
 **MB-00 review (Claude, 2026-10-13):** accepted as a backend milestone, not ready to merge yet.
@@ -142,6 +144,8 @@ Accepted as a design checkpoint. Notes:
 
 ## Log
 
+- 2026-10-28 Codex: accepted MB-08 and MB-09 and merged PRs #228 and #229 after every CI job passed. Power-tree checks preserve ordinary and mixed trees; stopping a metalmind is free while restarting in the same turn stays refused. Preserved all task rows and logs in MB-06 queue reconciliation.
+
 - 2026-10-28 Codex: Claude accepted MB-06, including the real phone Charges row. Publishing the public wording changes and zero-count test fix; user verified production release 1.1.2 with 17 versions and registry 0d3e3e1b. Private release files remain local.
 
 - 2026-10-28 Claude: reviewed MB-06 and accepted it. The wording and skin fixes keep Stormlight's text; 48 UI tests and 18 release tests pass on rerun; the 1.1.2 archive matches its SHA; the Charges row is clean at 375px. Next: Codex commits, opens the PR and merges after green CI; then the user installs 1.1.2.
@@ -156,6 +160,8 @@ Accepted as a design checkpoint. Notes:
 
 - 2026-10-28 Codex: accepted MB-07 recheck b688a774; all 18 installed-data and original save-preservation checks passed. Merge waits for every CI job, then MB-06 resumes builder checks on main.
 - 2026-10-28 Codex: MB-07 PR #227 review requests a builder save-preservation fix (four existing story fields erased); installed tests 39 passed/1 expected skip, sheet/policy regressions 34 passed, added preservation probe fails. MB-06 continued: 82 local page/role/viewport checks, wording fixes, 28 focused UI tests passed; final interactive checks remain. No commit, merge or Railway install.
+
+- 2026-10-28 Claude: built MB-08 from an MB-07 finding: a talent in a power's tree now needs that power unlocked, closing 16 talents that anyone could take. 150 Mistborn tests pass with the bundle. Next: Codex reviews; merge after green CI.
 - 2026-10-27 Claude: built MB-07 (user decision: wire the real Mistborn rules in). A GM can switch a fresh Cosmere campaign to Mistborn Era 1 or Era 2 rules, and every Cosmere page, the builder, bestiary, tracker and sheet actions work for Mistborn characters; Stormlight is unchanged. Next: Codex reviews the PR; then merge after green CI, and the user installs the 1.1.2 bundle.
 - 2026-10-26 Codex: amended MB-06 bundle validates and installs with 17 versions and every old pin preserved; validators unchanged. Review tests give 17 passed and 1 KeyError at the zero-blocker count assertion. Stopped as instructed before browser work; archive and exact error are recorded. Next: Claude reviews the narrow test-only correction, then Codex resumes.
 - 2026-10-26 User/Claude: amended MB-06 to retain tracked/unspecified knife metadata and bump all three packages to 1.1.2. Validators stay unchanged. Next: Codex builds the 17-version archive, then resumes the local browser pass.
