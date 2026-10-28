@@ -327,3 +327,41 @@ def test_collector_output_saves_and_reloads_without_losing_fields(mistborn_campa
         assert result['occupation'] == 'Smith' and result['relationships'] == 'Owes a lord'
         assert result['loyalties'] == 'The crew' and result['personality'] == 'Wry'
     assert reloaded['build']['name'] == 'Vin Edited'
+
+
+@NEEDS_PRIVATE_DATA
+def test_store_uses_the_cards_charges_box_not_a_browser_prompt(mistborn_campaign):
+    import re
+    import shutil
+    import subprocess
+    node = shutil.which('node')
+    if not node:
+        pytest.skip('Node is unavailable')
+    host, client, ids, pcs = mistborn_campaign('era-1')
+    html = client.get(f'/cosmere/pc/{ids[1]}').get_data(as_text=True)
+    assert 'class="cs-metal-amt"' in html
+    assert re.search(r'"store_start", "Store Health", 4, this\)', html)
+    script = next(s for s in re.findall(r'<script>(.*?)</script>', html, re.S)
+                  if 'window.mbAction' in s)
+    harness = r'''
+const assert = require('node:assert/strict');
+global.window = global; window.crypto = {randomUUID: () => '0b5e7a1c-1d2e-4f3a-8b4c-5d6e7f8a9b0c'};
+global.prompt = () => { throw new Error('prompt must not be used'); };
+const out = {textContent: ''}; let sent = null;
+global.document = {getElementById: id => id === 'mb-act-result' ? out : null};
+global.fetch = (url, opts) => { sent = {url, body: JSON.parse(opts.body)};
+  return Promise.resolve({json: () => Promise.resolve({ok: false, error: 'stub'})}); };
+global.location = {reload() {}};
+''' + script + r'''
+const box = {value: '3'};
+const button = {closest: () => ({querySelector: () => box})};
+window.mbAction('mistborn.feruchemy.gold.action.store-health', 'store_start', 'Store Health', 4, button);
+assert.equal(sent.body.operation.kind, 'store_start');
+assert.equal(sent.body.operation.amount, 3);
+box.value = '9'; sent = null;
+window.mbAction('mistborn.feruchemy.gold.action.store-health', 'store_start', 'Store Health', 4, button);
+assert.equal(sent, null); assert.match(out.textContent, /between 1 and 4/);
+'''
+    done = subprocess.run([node, '-e', harness], capture_output=True, text=True,
+                          encoding='utf-8', timeout=60)
+    assert done.returncode == 0, done.stdout + done.stderr

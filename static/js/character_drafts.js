@@ -110,7 +110,10 @@
         set('publishing');
         try {
           const result=await request(apiBase+'/drafts/'+draft.id+'/publish','POST',publishAttempt);
-          dirty=false; set('committed'); onPublished(result); return result;
+          // The publication is acknowledged: nothing is pending, so release the
+          // leave-page guard before onPublished navigates to the character.
+          dirty=false; publishAttempt=null; set('committed'); destroy();
+          onPublished(result); return result;
         } catch (error) {
           // A definite validation failure is editable. An uncertain response
           // retains the same request key/revision until retry reconciles it.

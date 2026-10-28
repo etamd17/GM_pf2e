@@ -223,3 +223,21 @@ const c=CharacterDrafts.mount({initialDraft:initial},options.collect,options.res
 await tick();local=input('another tab');c.changed();await assert.rejects(c.saveNow());
 await els['draft-reload'].onclick();assert.equal(reloaded,true);c.destroy();
 ''')
+
+
+def test_successful_publication_releases_the_leave_page_guard():
+    # onPublished navigates to the character; a guard still armed by the
+    # acknowledged publish attempt would block that with a leave-page prompt.
+    node(r'''
+global.fetch=async(url,opts)=>{
+ const b=JSON.parse(opts.body);
+ if(url.endsWith('/publish')) return reply({character_id:'pc',url:'/characters/pc',revision:b.expected_revision});
+ return reply({draft:{...initial,revision:1,inputs:b.inputs}});
+};
+const c=CharacterDrafts.create(options);
+assert.equal(typeof events.beforeunload,'function');
+local=input('ready'); c.changed();
+await c.finish();
+assert.equal(published.length,1); assert.equal(states.at(-1)[0],'committed');
+assert.equal(events.beforeunload,undefined);
+''')

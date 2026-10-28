@@ -138,6 +138,8 @@
   .cs-metal-acts { display:flex; flex-wrap:wrap; gap:.3rem; margin-top:.4rem; }
   .cs-metal-act { font:inherit; font-size:11.5px; background:transparent; color:#e8eef5; border:1px solid color-mix(in srgb, var(--metal-tint) 50%, transparent); border-radius:6px; padding:.15rem .5rem; cursor:pointer; }
   .cs-metal-act:hover { background:color-mix(in srgb, var(--metal-tint) 16%, transparent); }
+  .cs-metal-amt-l { display:inline-flex; align-items:center; gap:.3rem; font-size:11px; color:var(--text-on-dark-3); }
+  .cs-metal-amt { width:3.2rem; font:inherit; font-size:12px; background:rgba(0,0,0,.25); color:#e8eef5; border:1px solid var(--border-card); border-radius:6px; padding:.1rem .3rem; }
   .cs-metal-act.on { background:color-mix(in srgb, var(--metal-tint) 24%, transparent); }
   .cs-crafted { border-color:color-mix(in srgb, var(--order-accent,var(--accent)) 45%, transparent) !important; }
   .cs-crafted .ud { font-size:11px; margin-top:.25rem; } .cs-crafted .up { color:#7fd6a8; } .cs-crafted .dn { color:#f0a9a9; }
@@ -854,11 +856,13 @@
         <div class="mn">{{ m.name }} metalmind</div>
         <div class="md">{{ m.effect }}</div>
         <div class="ms">{{ m.charges }}/{{ m.charge_max }} charges{% if m.mode != 'idle' %} &middot; {{ m.mode }}{% endif %} &middot; {{ m.state_label }}</div>
-        {% if interactive and m.actions %}<div class="cs-metal-acts">{% for act in m.actions %}
+        {% if interactive and m.actions %}<div class="cs-metal-acts">
+          {% if m.mode == 'idle' %}<label class="cs-metal-amt-l">Charges <input type="number" class="cs-metal-amt" min="1" max="{{ m.charge_max }}" value="1" aria-label="{{ m.name }} charges to store or tap"></label>{% endif %}
+          {% for act in m.actions %}
           {% if (act.kind == 'store' and m.mode == 'storing') or (act.kind == 'tap' and m.mode == 'tapping') %}
           <button type="button" class="cs-metal-act on" onclick='mbAction({{ act.id|tojson }}, {{ (act.kind ~ "_stop")|tojson }}, {{ ("Stop " ~ act.name)|tojson }})'>Stop {{ act.name }}</button>
           {% elif m.mode == 'idle' %}
-          <button type="button" class="cs-metal-act" title="{{ act.summary }}" onclick='mbAction({{ act.id|tojson }}, {{ (act.kind ~ "_start")|tojson }}, {{ act.name|tojson }}, {{ (m.charge_max - m.charges) if act.kind == "store" else m.charges }})'>{{ act.name }}</button>
+          <button type="button" class="cs-metal-act" title="{{ act.summary }}" onclick='mbAction({{ act.id|tojson }}, {{ (act.kind ~ "_start")|tojson }}, {{ act.name|tojson }}, {{ (m.charge_max - m.charges) if act.kind == "store" else m.charges }}, this)'>{{ act.name }}</button>
           {% endif %}{% endfor %}</div>{% endif %}
       </div>
     {% endfor %}
@@ -869,15 +873,17 @@
   <script>
   // Metallic arts through the Mistborn action API: one request id per tap, the
   // saved revision as the CAS guard, and a reload to show the server's result.
-  window.mbAction = function(actionId, kind, label, maxAmount){
+  window.mbAction = function(actionId, kind, label, maxAmount, button){
     var out = document.getElementById('mb-act-result');
     var op = {kind: kind};
     if (kind === 'spend') { op.amount = 1; }
     else if (kind === 'store_start' || kind === 'tap_start') {
       if (!(maxAmount > 0)) { out.textContent = kind === 'store_start' ? 'This metalmind is full.' : 'This metalmind is empty.'; return; }
-      var raw = prompt(label + ': how many charges? (1 to ' + maxAmount + ')', '1');
-      if (raw === null) return;
-      var n = parseInt(raw, 10);
+      // The card's own Charges box (no browser prompt: it is clearer at the
+      // table, works on every device and can be driven by tests).
+      var card = button && button.closest ? button.closest('.cs-metal') : null;
+      var box = card ? card.querySelector('.cs-metal-amt') : null;
+      var n = parseInt(box ? box.value : '1', 10);
       if (!(n > 0) || n > maxAmount) { out.textContent = 'Choose between 1 and ' + maxAmount + ' charges.'; return; }
       op.amount = n;
     }
