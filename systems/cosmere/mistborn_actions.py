@@ -410,6 +410,10 @@ def compile_mistborn_action(profile, document, action_id, payload, *,
             "effect": deepcopy(effect),
         },
     }
+    # Stopping a metalmind is free (user ruling 2026-10-28): it spends no
+    # action and neither needs nor uses the action's once-per-turn slot, so a
+    # store or tap can end in the same turn it began.
+    stopping = art == "feruchemy" and operation.get("kind") in {"store_stop", "tap_stop"}
     action = {
         "id": record["id"],
         "source_id": record["id"],
@@ -418,7 +422,8 @@ def compile_mistborn_action(profile, document, action_id, payload, *,
         "kind": "action",
         "activation": {
             "type": "utility",
-            "cost": deepcopy(_COSTS[raw_cost]),
+            "cost": ({"type": "free", "value": 0} if stopping
+                     else deepcopy(_COSTS[raw_cost])),
             "consume": [],
         },
         "test": {"requirements": deepcopy(mechanics.get("tests") or [])},
@@ -428,7 +433,7 @@ def compile_mistborn_action(profile, document, action_id, payload, *,
         "opportunity": None,
         "complication": None,
         "use_limit": None,
-        "allow_multiple": False,
+        "allow_multiple": stopping,
         "permissions": {},
     }
     return {

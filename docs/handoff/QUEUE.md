@@ -84,6 +84,8 @@ UI-03 bug list (from `tasks/UI-00.md` > Anything broken or risky; all checked on
 | MB-05 | Mistborn skin bleed: sheet prompt and Workshop, nav tooltips, player-nav text-node error | codex | standard, high | done (PR #224 merged and deployed) | `tasks/MB-05.md` |
 | MB-06 | Mistborn browser pass across both eras (desktop/phone, GM/player), plus recording the user's Outlaw Boss knife ruling (GM decides the damage type) in the private bundle | codex | standard, high | brief ready | `tasks/MB-06.md` |
 | MB-07 | Turn on the real Mistborn rules per campaign: GM rules switch, every Cosmere page working for Mistborn characters, Mistborn builder, era bestiary + tracker, sheet burn/store/tap | claude (Codex reviews) | Opus, high | done (PR #227 merged and deployed) | `tasks/MB-07.md` |
+| MB-08 | Power talent trees require the power (16 talents with only runtime prerequisites were open to anyone) | claude (Codex reviews) | Opus, high | done (PR #228 merged and deployed) | `tasks/MB-08.md` |
+| MB-09 | Stopping a metalmind (store or tap) is free and can follow a start in the same turn (user ruling) | claude (Codex reviews) | Opus, high | done (PR #229 merged and deployed) | `tasks/MB-09.md` |
 | MB-10 | Cosmere draft names, the leave-page prompt after publishing, metalmind Charges box instead of `prompt()` | claude (Codex reviews) | Opus, high | done (PR #230 merged and deployed) | `tasks/MB-10.md` |
 | MB-11 | Load the Cosmere rules once: 8x faster, at boot instead of on the first page, and an install hands over its verified registry. Admin page names the installed release; `/api/campaign` refuses rules fields; bundles may hold 64 files | claude (Codex reviews) | Opus, high | accepted (Codex) with one fix, now made; merge after green CI | `tasks/MB-11.md` |
 
@@ -148,6 +150,8 @@ Accepted as a design checkpoint. Notes:
 - 2026-10-28 Codex: MB-11 loader, oracle, boot and install handover checks look sound. One small fix remains: empty arrays and false/zero/null bodies must be refused instead of treated as empty settings.
 
 - 2026-10-28 Claude: checked the user's production install of the reviewed 1.1.2 bundle. It is verified as far as logs and a local replay can show: 17 package versions, hash 0d3e3e1b, and no campaign had been switched to Mistborn rules, so nothing is pinned to 1.1.0. Built MB-11 from what the check found. The rules load 8x faster, at boot instead of on the first page; an install no longer makes the next page re-verify; the admin page names the installed release; and `/api/campaign` refuses rules fields. Next: Codex reviews; merge after green CI.
+
+- 2026-10-28 Claude: built MB-08 from an MB-07 finding: a talent in a power's tree now needs that power unlocked, closing 16 talents that anyone could take. 150 Mistborn tests pass with the bundle. Next: Codex reviews; merge after green CI.
 
 - 2026-10-27 Claude: built MB-07 (user decision: wire the real Mistborn rules in). A GM can switch a fresh Cosmere campaign to Mistborn Era 1 or Era 2 rules, and every Cosmere page, the builder, bestiary, tracker and sheet actions work for Mistborn characters; Stormlight is unchanged. Next: Codex reviews the PR; then merge after green CI, and the user installs the 1.1.2 bundle.
 

@@ -838,3 +838,39 @@ def test_combat_duration_uses_server_live_phase_and_round(
     assert effect["expiry_state"] == {
         "phase": "fast_pc", "not_before_round": 5,
     }
+
+
+@pytest.mark.parametrize(("action_name", "start", "stop"), [
+    ("store-weight", "store_start", "store_stop"),
+    ("tap-weight", "tap_start", "tap_stop"),
+])
+def test_stopping_a_metalmind_is_free_in_the_same_turn(
+        ferring_api_env, action_name, start, stop):
+    # User ruling 2026-10-28: a stop spends no action and does not use, or
+    # need, the action's once-per-turn slot. Starting again is still limited.
+    host, client, pid, _binding_value = ferring_api_env
+    action_id = f"mistborn.feruchemy.iron.action.{action_name}"
+    started = client.post(f"/api/cosmere/pc/{pid}/actions/{action_id}", json={
+        "expected_revision": 0, "request_id": str(uuid.uuid4()),
+        "operation": {"kind": start, "amount": 1}})
+    assert started.status_code == 200, started.get_json()
+    after_start = host._load_cosmere_pc(pid)
+    remaining = after_start["runtime_state"]["turn"]["actions_remaining"]
+
+    stopped = client.post(f"/api/cosmere/pc/{pid}/actions/{action_id}", json={
+        "expected_revision": after_start["revision"],
+        "request_id": str(uuid.uuid4()),
+        "operation": {"kind": stop}})
+    assert stopped.status_code == 200, stopped.get_json()
+    after_stop = host._load_cosmere_pc(pid)
+    turn = after_stop["runtime_state"]["turn"]
+    assert turn["actions_remaining"] == remaining
+    assert after_stop["runtime_state"]["mistborn"]["feruchemy"]["by_metal"]["iron"][
+        "mode"] == "idle"
+
+    again = client.post(f"/api/cosmere/pc/{pid}/actions/{action_id}", json={
+        "expected_revision": after_stop["revision"],
+        "request_id": str(uuid.uuid4()),
+        "operation": {"kind": start, "amount": 1}})
+    assert again.status_code == 409
+    assert again.get_json()["code"] == "named_action_used"
