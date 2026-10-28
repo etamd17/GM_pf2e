@@ -883,8 +883,10 @@
       // table, works on every device and can be driven by tests).
       var card = button && button.closest ? button.closest('.cs-metal') : null;
       var box = card ? card.querySelector('.cs-metal-amt') : null;
-      var n = parseInt(box ? box.value : '1', 10);
-      if (!(n > 0) || n > maxAmount) { out.textContent = 'Choose between 1 and ' + maxAmount + ' charges.'; return; }
+      // A whole number only: "4.9", "" and "3abc" are refused, never rounded.
+      var raw = box ? String(box.value).trim() : '';
+      var n = raw === '' ? NaN : Number(raw);
+      if (!Number.isInteger(n) || n < 1 || n > maxAmount) { out.textContent = 'Choose a whole number of charges from 1 to ' + maxAmount + '.'; return; }
       op.amount = n;
     }
     var rid = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : null;

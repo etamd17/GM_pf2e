@@ -353,14 +353,26 @@ global.fetch = (url, opts) => { sent = {url, body: JSON.parse(opts.body)};
   return Promise.resolve({json: () => Promise.resolve({ok: false, error: 'stub'})}); };
 global.location = {reload() {}};
 ''' + script + r'''
-const box = {value: '3'};
-const button = {closest: () => ({querySelector: () => box})};
-window.mbAction('mistborn.feruchemy.gold.action.store-health', 'store_start', 'Store Health', 4, button);
-assert.equal(sent.body.operation.kind, 'store_start');
-assert.equal(sent.body.operation.amount, 3);
-box.value = '9'; sent = null;
-window.mbAction('mistborn.feruchemy.gold.action.store-health', 'store_start', 'Store Health', 4, button);
-assert.equal(sent, null); assert.match(out.textContent, /between 1 and 4/);
+const send = (kind, value, max, withBox = true) => {
+  sent = null; out.textContent = '';
+  const button = withBox ? {closest: () => ({querySelector: () => ({value})})}
+                         : {closest: () => ({querySelector: () => null})};
+  window.mbAction('mistborn.feruchemy.gold.action.x', kind, 'X', max, button);
+  return sent ? sent.body.operation.amount : null;
+};
+for (const kind of ['store_start', 'tap_start']) {
+  assert.equal(send(kind, '1', 4), 1, kind + ' 1');
+  assert.equal(send(kind, '4', 4), 4, kind + ' max');
+  assert.equal(send(kind, ' 3 ', 4), 3, kind + ' trimmed');
+  for (const bad of ['0', '5', '4.9', '1.5', '', '   ', '3abc', '-1', '1e1', 'NaN']) {
+    assert.equal(send(kind, bad, 4), null, kind + ' must refuse ' + JSON.stringify(bad));
+    assert.match(out.textContent, /whole number of charges from 1 to 4/);
+  }
+  assert.equal(send(kind, '1', 4, false), null, kind + ' must refuse a missing box');
+  assert.equal(send(kind, '1', 0), null, kind + ' with nothing to move');
+}
+assert.equal(send('store_start', '2', 2), 2);
+assert.equal(send('tap_start', '3', 2), null);
 '''
     done = subprocess.run([node, '-e', harness], capture_output=True, text=True,
                           encoding='utf-8', timeout=60)
