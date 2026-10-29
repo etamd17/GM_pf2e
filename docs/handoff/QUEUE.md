@@ -80,7 +80,7 @@ answered its five questions on 2026-10-28 (section 12); PF2e goes back to the wa
 |---|---|---|---|---|---|
 | DS-00 | Inventory diff tool: ids, data-*, handlers, ARIA, frozen class strings, before/after per route | claude | Opus, high | review (Codex) | `tasks/DS-00-inventory-diff-tool.md` |
 | DS-01 | Tokens, `ds-tokens.css`, empty `ds.css`, notices file, contrast tool | claude | Opus, high | needs brief (after DS-00) | - |
-| DS-00b, DS-00c | VTT inventory script; Cosmere, 5e and account-mode fixtures for the tool | claude | Opus, high | needs brief | - |
+| DS-00b | VTT inventory script (accessible names, roles, classes per shell component) | claude | Opus, high | needs brief | - |
 | DS-02..DS-31 | The rest of section 10, in dependency order; nothing starts until DS-00 and DS-01 are merged | see plan | see plan | needs brief | - |
 
 ## CI maintenance

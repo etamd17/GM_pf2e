@@ -22,8 +22,11 @@ body class, therefore fails, because tests freeze those strings exactly.
 Two capture modes:
 
 * ``--mode html`` (default) renders through the Flask test client in-process,
-  using a throwaway DATA_DIR seeded with the committed fixture characters and
-  legacy-open GM access. It sees server-rendered markup only.
+  in a throwaway DATA_DIR. ``--profile pf2e`` (default) uses legacy-open GM access
+  and the committed fixture party; ``account``, ``cosmere``, ``mistborn`` and
+  ``dnd5e`` sign in as the site owner of a fresh campaign of that system, which
+  covers the account, admin, Chronicle and other-system pages. It sees
+  server-rendered markup only.
 * ``--mode dom --base-url URL`` loads each route in headless Chromium against a
   running server, waits for scripts, then records the live DOM, once on load and
   once after selecting each ``[role=tab]`` control (``--click`` picks another
@@ -54,6 +57,8 @@ from html.parser import HTMLParser
 import importlib
 import json
 import os
+import random
+import re
 from pathlib import Path
 import shutil
 import sys
@@ -66,7 +71,7 @@ if str(REPO_ROOT) not in sys.path:
 FIXTURE_PCS = ("amadeus_l11.json", "gavin_l11.json", "goel_l10.json", "kyle_l10.json")
 
 # PF2e routes reachable in legacy-open mode with the fixture party. Routes that
-# need other systems or seeded campaigns are listed in docs/handoff/tasks/DS-00-inventory-diff-tool.md.
+# need other systems are captured with --profile (see PROFILES).
 DEFAULT_ROUTES = (
     "/", "/gm", "/party", "/tracker", "/gmscreen", "/encounter_builder",
     "/generator", "/gm/loot", "/gm/calendar", "/gm/stats", "/gm/threads",
@@ -312,42 +317,128 @@ def diff_inventories(before: dict, after: dict) -> tuple[list[str], list[str]]:
 
 
 @contextlib.contextmanager
-def _seeded_app():
-    """Import the real app against a throwaway, fixture-seeded DATA_DIR."""
+def _isolated_app(data_dir: str, gm_password: str = ""):
+    """Import the real app against a throwaway DATA_DIR."""
 
-    with tempfile.TemporaryDirectory(prefix="gm-pf2e-ui-inventory-") as data_dir:
-        party = Path(data_dir) / "party_data"
-        party.mkdir()
-        for name in FIXTURE_PCS:
-            shutil.copy(REPO_ROOT / "tests" / "fixtures" / name, party / name)
-        if "app" in sys.modules:
-            raise RuntimeError("capture must run in a fresh process; app is already imported")
-        # Mirrors tests/browser/conftest.py: everything the app writes stays in the
-        # throwaway directory, and host/database settings from the shell are dropped.
-        for key in ("DATABASE_URL", "PUBLIC_BASE_URL", "ALLOWED_HOSTS", "GUNICORN_CMD_ARGS"):
-            os.environ.pop(key, None)
-        os.environ.update({
-            "APP_ENV": "development", "DATA_DIR": data_dir, "GM_PASSWORD": "",
-            "SECRET_KEY": "ui-inventory-not-for-runtime",
-            "SESSION_STATE_PATH": str(Path(data_dir) / "session_state.json"),
-            # Same exemption the test suite uses: no persistence or probe threads.
-            "PYTEST_CURRENT_TEST": "ui-inventory",
-        })
-        with contextlib.redirect_stdout(sys.stderr):
-            module = importlib.import_module("app")
-        yield module.app
+    if "app" in sys.modules:
+        raise RuntimeError("capture must run in a fresh process; app is already imported")
+    # Mirrors tests/browser/conftest.py: everything the app writes stays in the
+    # throwaway directory, and host/database settings from the shell are dropped.
+    for key in ("DATABASE_URL", "PUBLIC_BASE_URL", "ALLOWED_HOSTS", "GUNICORN_CMD_ARGS"):
+        os.environ.pop(key, None)
+    os.environ.update({
+        "APP_ENV": "development", "DATA_DIR": data_dir, "GM_PASSWORD": gm_password,
+        "SECRET_KEY": "ui-inventory-not-for-runtime",
+        "SESSION_STATE_PATH": str(Path(data_dir) / "session_state.json"),
+        # Same exemption the test suite uses: no persistence or probe threads.
+        "PYTEST_CURRENT_TEST": "ui-inventory",
+    })
+    with contextlib.redirect_stdout(sys.stderr):
+        module = importlib.import_module("app")
+    yield module
 
 
-def capture_html(routes, hooks) -> dict:
+def _account_clients(module, system: str, theme: str | None):
+    """Site owner (admin + GM of one campaign of `system`) and an anonymous client.
+
+    The same POST flow as tests/test_dnd5e_app_integration.py, so the pages are
+    reached exactly as a signed-in GM reaches them in production (account mode).
+    """
+    from core import campaigns, storage
+
+    owner = module.app.test_client()
+    r = owner.post("/setup", data={"username": "owner", "password": "inventory1",
+                                    "display_name": "Owner"})
+    if r.status_code != 302:
+        raise RuntimeError(f"/setup answered {r.status_code}")
+    r = owner.post("/campaigns/new", data={"name": "Inventory table", "system": system})
+    if r.status_code != 302:
+        raise RuntimeError(f"/campaigns/new answered {r.status_code}")
+    cid = next(i for i in storage.list_campaign_ids()
+               if campaigns.get_campaign(i)["name"] == "Inventory table")
+    if theme:
+        doc = campaigns.get_campaign(cid)
+        doc["cosmere_theme"] = theme
+        campaigns.save_campaign(doc)
+    r = owner.post(f"/campaign/{cid}/activate")
+    if r.status_code != 302:
+        raise RuntimeError(f"activate answered {r.status_code}")
+    return {"gm": owner, "anon": module.app.test_client()}, cid
+
+
+# Account-mode profiles: (client, route). "{cid}" is the seeded campaign.
+COSMERE_ROUTES = (
+    ("gm", "/cosmere/gm"), ("gm", "/cosmere/gm/vitals"), ("gm", "/cosmere/gmscreen"),
+    ("gm", "/cosmere/generator"), ("gm", "/cosmere/loot"), ("gm", "/cosmere/bestiary"),
+    ("gm", "/cosmere/homebrew"), ("gm", "/cosmere/pcs"), ("gm", "/cosmere/combat"),
+    ("gm", "/cosmere/builder"), ("gm", "/cosmere/player"), ("gm", "/tracker"),
+)
+PROFILES = {
+    "account": ("pf2e", None, (
+        ("gm", "/me"), ("gm", "/campaign/{cid}/invites"), ("gm", "/campaigns/new"),
+        ("gm", "/admin/users"), ("gm", "/admin/campaigns"),
+        ("gm", "/chronicle"), ("gm", "/chronicle/manage"), ("gm", "/chronicle/journal"),
+        ("gm", "/chronicle/story"), ("gm", "/chronicle/lore"), ("gm", "/chronicle/cast"),
+        ("gm", "/chronicle/handouts"),
+        ("anon", "/"), ("anon", "/login"), ("anon", "/register"), ("anon", "/join"),
+    )),
+    "cosmere": ("cosmere", None, COSMERE_ROUTES),
+    "mistborn": ("cosmere", "mistborn", COSMERE_ROUTES),
+    "dnd5e": ("dnd5e", None, (
+        ("gm", "/dnd5e/gm"), ("gm", "/dnd5e/tracker"), ("gm", "/dnd5e/encounters"),
+        ("gm", "/dnd5e/bestiary"), ("gm", "/dnd5e/compendium"), ("gm", "/dnd5e/characters"),
+        ("gm", "/dnd5e/combat"), ("gm", "/dnd5e/gmscreen"), ("gm", "/dnd5e/admin/data"),
+    )),
+}
+
+
+GENERATED_ID = re.compile(r"\b[0-9a-f]{32}\b")
+
+
+def _get(client, url):
+    # Generators render random sample output on the server; a fixed seed per
+    # request keeps two captures of an unchanged page identical.
+    random.seed(0)
+    return client.get(url)
+
+
+def _record(resp, hooks, route, generated_ids=False):
+    entry = {"status": resp.status_code}
+    if resp.status_code == 200 and "html" in (resp.content_type or ""):
+        html = resp.get_data(as_text=True)
+        if generated_ids:
+            # Campaign and user ids are random per run; a changed id is not a design change.
+            html = GENERATED_ID.sub("{id}", html)
+        entry.update(inventory_html(html, hooks.get(route)))
+    return entry
+
+
+def capture_html(routes, hooks, profile: str = "pf2e") -> dict:
     out = {}
-    with _seeded_app() as flask_app:
-        client = flask_app.test_client()
-        for route in routes:
-            resp = client.get(route)
-            entry = {"status": resp.status_code}
-            if resp.status_code == 200 and "html" in (resp.content_type or ""):
-                entry.update(inventory_html(resp.get_data(as_text=True), hooks.get(route)))
-            out[route] = entry
+    with tempfile.TemporaryDirectory(prefix="gm-pf2e-ui-inventory-") as data_dir:
+        if profile == "pf2e":
+            # Legacy-open mode with the committed fixture party.
+            party = Path(data_dir) / "party_data"
+            party.mkdir()
+            for name in FIXTURE_PCS:
+                shutil.copy(REPO_ROOT / "tests" / "fixtures" / name, party / name)
+            with _isolated_app(data_dir) as module:
+                client = module.app.test_client()
+                for route in routes or DEFAULT_ROUTES:
+                    out[route] = _record(_get(client, route), hooks, route)
+            return out
+        system, theme, default = PROFILES[profile]
+        if system == "dnd5e":
+            from systems.dnd5e import content
+            if not content.available():
+                raise RuntimeError("5e content is not built here (see docs/dnd5e/HANDOFF.md)")
+        with _isolated_app(data_dir, gm_password="inventory-gm") as module:
+            clients, cid = _account_clients(module, system, theme)
+            pairs = [("gm", r) for r in routes] if routes else list(default)
+            for who, route in pairs:
+                url = route.replace("{cid}", cid)
+                key = route if who == "gm" else f"anon {route}"
+                out[key] = _record(_get(clients[who], url), hooks, route, generated_ids=True)
     return out
 
 
@@ -388,7 +479,10 @@ def main(argv=None) -> int:
     cap.add_argument("--out", required=True)
     cap.add_argument("--mode", choices=("html", "dom"), default="html")
     cap.add_argument("--base-url", help="running server for --mode dom")
-    cap.add_argument("--routes", nargs="*", help="routes to capture (default: the PF2e set)")
+    cap.add_argument("--routes", nargs="*", help="routes to capture (default: the profile's set)")
+    cap.add_argument("--profile", choices=("pf2e",) + tuple(PROFILES), default="pf2e",
+                     help="--mode html: pf2e = legacy-open with the fixture party; the others "
+                          "sign in as the owner of a fresh campaign (account mode)")
     cap.add_argument("--hooks", help="JSON file: {route: [visible text, ...]}")
     cap.add_argument("--allow-status", nargs="*", default=[], metavar="ROUTE=CODE",
                      help="routes expected not to answer 200, e.g. /gm/rest=302")
@@ -399,16 +493,24 @@ def main(argv=None) -> int:
     d.add_argument("after")
     args = ap.parse_args(argv)
 
+    if args.cmd == "capture" and args.mode == "html" and os.environ.get("PYTHONHASHSEED") != "0":
+        # Some pages serialise sets (the Cosmere builder's surge list), whose order
+        # changes with Python's per-process hash seed. Pin it so captures compare.
+        import subprocess
+        env = dict(os.environ, PYTHONHASHSEED="0")
+        return subprocess.call([sys.executable, str(Path(__file__).resolve())] + list(argv or sys.argv[1:]),
+                               env=env)
+
     if args.cmd == "capture":
-        routes = args.routes or list(DEFAULT_ROUTES)
+        routes = args.routes or []
         hooks = json.loads(Path(args.hooks).read_text(encoding="utf-8")) if args.hooks else {}
         if args.mode == "dom":
             if not args.base_url:
                 ap.error("--mode dom needs --base-url")
-            data = capture_dom(routes, hooks, args.base_url, args.click)
+            data = capture_dom(routes or list(DEFAULT_ROUTES), hooks, args.base_url, args.click)
         else:
-            data = capture_html(routes, hooks)
-        payload = {"mode": args.mode, "routes": data}
+            data = capture_html(routes, hooks, args.profile)
+        payload = {"mode": args.mode, "profile": args.profile, "routes": data}
         Path(args.out).write_text(json.dumps(payload, indent=1, sort_keys=True), encoding="utf-8")
         allowed = dict(item.split("=", 1) for item in args.allow_status)
         bad = [f"{r}={e['status']}" for r, e in data.items()
@@ -422,8 +524,9 @@ def main(argv=None) -> int:
 
     before = json.loads(Path(args.before).read_text(encoding="utf-8"))
     after = json.loads(Path(args.after).read_text(encoding="utf-8"))
-    if before.get("mode") != after.get("mode"):
-        print(f"capture modes differ ({before.get('mode')} vs {after.get('mode')}); compare like with like")
+    if (before.get("mode"), before.get("profile")) != (after.get("mode"), after.get("profile")):
+        print(f"captures differ in mode or profile ({before.get('mode')}/{before.get('profile')} vs "
+              f"{after.get('mode')}/{after.get('profile')}); compare like with like")
         return 2
     failures, additions = diff_inventories(before, after)
     for line in additions:

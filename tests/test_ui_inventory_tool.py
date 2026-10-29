@@ -161,3 +161,36 @@ def test_csrf_token_and_split_copy_do_not_cause_false_failures():
 def test_unclosed_form_is_still_recorded():
     inv = inventory_html('<form action="/x" method="post"><input name="q">')
     assert any("/x" in k for k in inv["forms"])
+
+
+class _Resp:
+    def __init__(self, html, status=200):
+        self.status_code, self.content_type, self._html = status, "text/html; charset=utf-8", html
+
+    def get_data(self, as_text=True):
+        return self._html
+
+
+def test_generated_ids_are_normalised_only_in_account_profiles():
+    from tools.ui_inventory import _record
+    a = '<a href="/campaign/' + "a" * 32 + '/invites">x</a>'
+    b = '<a href="/campaign/' + "b" * 32 + '/invites">x</a>'
+    assert _record(_Resp(a), {}, "/me", True) == _record(_Resp(b), {}, "/me", True)
+    assert _record(_Resp(a), {}, "/me") != _record(_Resp(b), {}, "/me")
+    assert _record(_Resp(a, 302), {}, "/me") == {"status": 302}
+
+
+def test_account_profile_renders_every_route(tmp_path):
+    """The account flow (setup, new campaign, activate) still reaches every page."""
+    import json
+    import subprocess
+    import sys
+    from pathlib import Path
+    out = tmp_path / "account.json"
+    root = Path(__file__).resolve().parents[1]
+    result = subprocess.run([sys.executable, "tools/ui_inventory.py", "capture", "--profile", "account",
+                             "--out", str(out)], cwd=root, capture_output=True, text=True,
+                            encoding="utf-8", timeout=600)
+    assert result.returncode == 0, result.stdout[-2000:] + result.stderr[-2000:]
+    routes = json.loads(out.read_text(encoding="utf-8"))["routes"]
+    assert len(routes) == 16 and {e["status"] for e in routes.values()} == {200}

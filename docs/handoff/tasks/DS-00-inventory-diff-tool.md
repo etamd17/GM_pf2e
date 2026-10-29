@@ -25,7 +25,8 @@ Every design-system package must prove it changed only presentation. This tool r
 - [x] A CSS-only edit diffs clean on all 18 default routes.
 - [x] A scratch edit that removes one id and adds a class to an ARIA-bearing element fails with exactly those two lines.
 - [x] Two captures of an unchanged checkout diff clean, in both modes (html: 18 routes; dom: 9 routes including the sheet, tracker, party and GM screen).
-- [x] `pytest -q tests/test_ui_inventory_tool.py` passes (new tests: 19).
+- [x] `pytest -q tests/test_ui_inventory_tool.py` passes (new tests: 21).
+- [x] DS-00c folded in: `--profile account|cosmere|mistborn|dnd5e` signs in as the owner of a fresh campaign of that system; every route answers 200, and four captures of each profile diff clean.
 - [x] Full non-browser suite: no new failures (numbers in the report).
 - [ ] VTT inventory script (`frontend/vtt/scripts/ui-inventory.mjs`): split out as **DS-00b**, see Follow-ups.
 
@@ -38,23 +39,26 @@ Every design-system package must prove it changed only presentation. This tool r
 
 ## Report
 
-- **Changed:** `tools/ui_inventory.py` (new), `tests/test_ui_inventory_tool.py` (new, 19 tests), this file.
+- **Changed:** `tools/ui_inventory.py` (new), `tests/test_ui_inventory_tool.py` (new, 21 tests), this file.
 - **Tests run:**
-  - `pytest -q tests/test_ui_inventory_tool.py` -> 19 passed.
+  - `pytest -q tests/test_ui_inventory_tool.py` -> 21 passed (one runs the account profile end to end in a subprocess).
+  - Profiles: pf2e 18 routes, account 16 (account home, invites, new campaign, admin, all Chronicle views, signed-out landing/login/register/join), cosmere 12, mistborn 12 (body carries `cosmere-mistborn`), dnd5e 9; all 200; four captures of each diff clean.
   - Full suite: see the line added below once the run finishes.
   - Real pages: html capture of 18 PF2e routes, all 200; CSS-only edit -> 0 failures; scratch break -> 2 failures, exit 1; two unchanged captures -> 0 failures in html mode and in dom mode.
 - **Review:** an independent adversarial review of the first version found real false negatives (handlers swapped between buttons, reordered scripts, a duplicated id, changed `style="display:none"`, renamed controls outside forms, edited option text and textarea content, missing `enctype`) and two false-positive sources (the per-session CSRF token, text hooks split by a tag). All are fixed and each has a test.
 - **Skipped / not verified:**
-  - Only PF2e routes are fixtured. Cosmere, Mistborn, 5e, Chronicle, account-mode pages (`/me`, login, campaign management), `/map`, mobile combat and the VTT are not captured yet; until **DS-00c** seeds them, packages touching those routes rely on gate 2's `git diff` grep and gate 8's browser smoke.
+  - Not captured: pages that need seeded characters in account mode (Cosmere and 5e sheets, builders with a character), the campaign takeover page (needs a second GM with a live session), `/map`, `/mobile_combat` and the VTT. Packages touching those rely on gate 2's `git diff` grep and gate 8's browser smoke until DS-00b and a later fixture pass.
+  - The dnd5e profile needs the built 5e content (`DND5E_DATA_DIR`); it refuses to run without it.
   - dom mode was run against the 9 routes listed above, not all 18.
 - **Known wrong / limitations:**
   - Two identical handlers swapped inside one container with no ids are not caught (hooks are keyed to the nearest id, not a full DOM path, to avoid failing on harmless markup reordering).
   - Any edit to an inline `<script>` fails by design: a design package must not change page JS. Moving CSS between `<style>` blocks is allowed.
   - Removing a Tailwind utility class fails; that is intended (JS may toggle it) but expect to justify each one.
   - `capture` must run in a fresh process (it refuses if `app` is already imported).
+  - html captures re-run themselves with `PYTHONHASHSEED=0` and seed `random` before each request: the Cosmere builder writes its surge list in set order (it changes with every server start, harmless at the table) and the generators render random samples, and both made two captures of an unchanged page differ. Account profiles also replace generated 32-hex campaign and user ids with `{id}`.
 - **Follow-ups (not done here):**
   - **DS-00b** (Claude): VTT `ui-inventory.mjs` from a vitest render of each shell component (accessible names, roles, classes).
-  - **DS-00c** (Claude): seeded Cosmere (Stormlight and Mistborn), 5e and account-mode fixtures so those routes are captured.
+  - Seed characters for the account-mode profiles so the Cosmere and 5e sheets and builders are captured too.
 
 ## Review
 <!-- reviewer appends numbered findings, or "accepted" -->
