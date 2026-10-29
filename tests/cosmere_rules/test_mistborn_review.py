@@ -94,7 +94,7 @@ def test_installed_review_covers_every_original_blocker_and_current_record(insta
     assert len(bundle['coverage']['source_review']['records'])==252
     assert sum(bundle['coverage']['source_review']['counts'].values())==252
     assert len({r['id'] for p in bundle['packages'] for r in p['records']})==bundle['manifest']['record_count']
-    assert bundle['coverage']['summary']['human_verification_record_count']==bundle['coverage']['source_review']['counts']['still blocked']
+    assert bundle['coverage']['summary']['human_verification_record_count']==bundle['coverage']['source_review']['counts'].get('still blocked', 0)
 
 
 def test_installed_review_retains_all_original_pins_and_stormlight_bytes(installed_review,tmp_path):

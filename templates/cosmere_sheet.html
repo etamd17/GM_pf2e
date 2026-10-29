@@ -586,7 +586,7 @@
     </div>
     {% else %}
     <div class="orb-w">
-      <div class="orb dun" title="Not a Radiant">
+      <div class="orb dun" title="{{ 'No Investiture pool' if cosmere_world == 'mistborn' else 'Not a Radiant' }}">
         <svg class="orb-arc" viewBox="0 0 108 108" aria-hidden="true"><circle class="trk" cx="54" cy="54" r="46"/></svg>
         <div class="orb-val"><div class="orb-num">&mdash;</div></div>
       </div>
@@ -1740,7 +1740,7 @@
       if(!(g.milestones||[]).every(Boolean)){ res('Mark all three milestones before concluding this goal.'); return; }
       const cat = (prompt('Reward category — Possession, Relationship, Status, or Other:', 'Possession') || '').trim();
       if(!cat) return;
-      const rwd = (prompt('Reward — what do you gain? (e.g. a fabrial or Shardplate, a companion or patron, a noble title)') || '').trim();
+      const rwd = (prompt('Reward — what do you gain? (e.g. {% if cosmere_world == 'mistborn' %}equipment, a companion or patron, a new position{% else %}a fabrial or Shardplate, a companion or patron, a noble title{% endif %})') || '').trim();
       g.concluded = true; g.reward = { category: cat, text: rwd };
       saveGoals();
       res('<span class="opp">Goal concluded</span> — ' + _gEsc(g.text) + (rwd ? (' &rarr; ' + _gEsc(rwd)) : ''), 'opp');

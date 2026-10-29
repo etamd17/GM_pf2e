@@ -49,7 +49,7 @@
         <select id="e-type" onchange="onType()">
           {% for t in types %}<option value="{{ t }}">{{ type_labels[t] }}</option>{% endfor %}
         </select></div>
-      <div><label>Name</label><input id="e-name" placeholder="e.g. Stoneward's Resolve"></div>
+      <div><label>Name</label><input id="e-name" placeholder="{{ 'e.g. Steady Nerves' if cosmere_world == 'mistborn' else "e.g. Stoneward's Resolve" }}"></div>
     </div>
 
     <!-- type-specific fields -->
@@ -69,7 +69,7 @@
       <div><label>Deflect (armor)</label><input id="e-deflect" type="number" min="0" placeholder="0"></div>
     </div>
     <div class="hb-row tf tf-culture">
-      <div><label>Cultural expertises (one per line)</label><textarea id="e-expertises" rows="2" placeholder="Alethi&#10;Military"></textarea></div>
+      <div><label>Cultural expertises (one per line)</label><textarea id="e-expertises" rows="2" placeholder="{{ 'Terris&#10;Military'|safe if cosmere_world == 'mistborn' else 'Alethi&#10;Military'|safe }}"></textarea></div>
     </div>
     <div class="hb-row tf tf-heroic_path">
       <div><label>Key talent name</label><input id="e-key_talent" placeholder="e.g. Resolute Stance"></div>
