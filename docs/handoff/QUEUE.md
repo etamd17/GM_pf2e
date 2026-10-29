@@ -98,11 +98,12 @@ answered its five questions on 2026-10-28 (section 12); PF2e goes back to the wa
 | MB-03 | Generators: make Mistborn content for Mistborn campaigns (found in UI-01) | codex | standard, medium | done (accepted by Claude) | `tasks/MB-03.md` |
 | MB-04 | Mistborn money: boxings and clips in wallets and the loot page under the Mistborn skin (one fixed rate, both eras; Era 2 notes are boxings) | codex | standard, high | done (accepted by Claude) | `tasks/MB-04.md` |
 | MB-05 | Mistborn skin bleed: sheet prompt and Workshop, nav tooltips, player-nav text-node error | codex | standard, high | done (PR #224 merged and deployed) | `tasks/MB-05.md` |
-| MB-06 | Mistborn browser pass across both eras (desktop/phone, GM/player), plus recording the user's Outlaw Boss knife ruling (GM decides the damage type) in the private bundle | codex | standard, high | done (accepted by Claude; public PR publishing) | `tasks/MB-06.md` |
+| MB-06 | Mistborn browser pass across both eras (desktop/phone, GM/player), plus recording the user's Outlaw Boss knife ruling (GM decides the damage type) in the private bundle | codex | standard, high | done (PR #232 merged; deploy verifying) | `tasks/MB-06.md` |
 | MB-07 | Turn on the real Mistborn rules per campaign: GM rules switch, every Cosmere page working for Mistborn characters, Mistborn builder, era bestiary + tracker, sheet burn/store/tap | claude (Codex reviews) | Opus, high | done (PR #227 merged and deployed) | `tasks/MB-07.md` |
-| MB-08 | Power talent trees require the power (16 talents with only runtime prerequisites were open to anyone) | claude (Codex reviews) | Opus, high | done (PR #228 merged; deploy verifying) | `tasks/MB-08.md` |
-| MB-09 | Feruchemy Store/Tap Stop is free and does not consume the named-action slot | claude (Codex reviews) | standard, high | done (PR #229 merged; deploy verifying) | `tasks/MB-09.md` |
+| MB-08 | Power talent trees require the power (16 talents with only runtime prerequisites were open to anyone) | claude (Codex reviews) | Opus, high | done (PR #228 merged and deployed) | `tasks/MB-08.md` |
+| MB-09 | Feruchemy Store/Tap Stop is free and does not consume the named-action slot | claude (Codex reviews) | standard, high | done (PR #229 merged and deployed) | `tasks/MB-09.md` |
 | MB-10 | Draft labels, successful publish navigation and inline metalmind Charges | claude (Codex reviews) | standard, high | done (PR #230 merged and deployed) | `tasks/MB-10.md` |
+| MB-11 | Load the Cosmere rules once: 8x faster, at boot instead of on the first page, and an install hands over its verified registry. Admin page names the installed release; `/api/campaign` refuses rules fields; bundles may hold 64 files | claude (Codex reviews) | Opus, high | accepted (Codex focused recheck); merge after green CI | `tasks/MB-11.md` |
 
 **MB-00 review (Claude, 2026-10-13):** accepted as a backend milestone, not ready to merge yet.
 - 1024 Cosmere tests pass on the branch (623 new + 401 existing).
@@ -159,6 +160,16 @@ Accepted as a design checkpoint. Notes:
 - Two of the bugs were checked on current `main` (marked above); the rest are unconfirmed.
 
 ## Log
+
+- 2026-10-29 Codex: MB-06 merged in PR #232 as 13fcb58d after all four current CI jobs succeeded. MB-11 now includes that main with both queue histories preserved; its new head must pass every CI job before merge. Production deploy verification continues.
+
+- 2026-10-28 Codex: MB-11 focused recheck accepted at 86e27987. All five original false/empty JSON cases refuse without saving, and {} stays accepted; installed-data campaign tests plus probe: 35 passed, 1 skipped. Earlier private gate: 829 passed, 1 skipped. Wait for every current CI job before merging and verifying production.
+
+- 2026-10-28 Claude: MB-11 review fix: `/api/campaign` now refuses `[]`, `0`, `false`, `""` and `null` as well as other non-object bodies, and `{}` still saves. The five new cases fail on the old line and pass now. Next: merge after every CI job is green.
+
+- 2026-10-28 Codex: MB-11 loader, oracle, boot and install handover checks look sound. One small fix remains: empty arrays and false/zero/null bodies must be refused instead of treated as empty settings.
+
+- 2026-10-28 Claude: checked the user's production install of the reviewed 1.1.2 bundle. It is verified as far as logs and a local replay can show: 17 package versions, hash 0d3e3e1b, and no campaign had been switched to Mistborn rules, so nothing is pinned to 1.1.0. Built MB-11 from what the check found. The rules load 8x faster, at boot instead of on the first page; an install no longer makes the next page re-verify; the admin page names the installed release; and `/api/campaign` refuses rules fields. Next: Codex reviews; merge after green CI.
 
 - 2026-10-28 Claude: wrote the design-direction plan (`docs/design/DESIGN_DIRECTION.md`), checked by three reviewers and two verify passes. The user answered its five questions the same day (PF2e back to warm gilt). Next: Claude writes and builds DS-00.
 
