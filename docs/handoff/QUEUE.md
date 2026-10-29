@@ -87,7 +87,7 @@ UI-03 bug list (from `tasks/UI-00.md` > Anything broken or risky; all checked on
 | MB-08 | Power talent trees require the power (16 talents with only runtime prerequisites were open to anyone) | claude (Codex reviews) | Opus, high | done (PR #228 merged and deployed) | `tasks/MB-08.md` |
 | MB-09 | Stopping a metalmind (store or tap) is free and can follow a start in the same turn (user ruling) | claude (Codex reviews) | Opus, high | done (PR #229 merged and deployed) | `tasks/MB-09.md` |
 | MB-10 | Cosmere draft names, the leave-page prompt after publishing, metalmind Charges box instead of `prompt()` | claude (Codex reviews) | Opus, high | done (PR #230 merged and deployed) | `tasks/MB-10.md` |
-| MB-11 | Load the Cosmere rules once: 8x faster, at boot instead of on the first page, and an install hands over its verified registry. Admin page names the installed release; `/api/campaign` refuses rules fields; bundles may hold 64 files | claude (Codex reviews) | Opus, high | accepted (Codex) with one fix, now made; merge after green CI | `tasks/MB-11.md` |
+| MB-11 | Load the Cosmere rules once: 8x faster, at boot instead of on the first page, and an install hands over its verified registry. Admin page names the installed release; `/api/campaign` refuses rules fields; bundles may hold 64 files | claude (Codex reviews) | Opus, high | accepted (Codex focused recheck); merge after green CI | `tasks/MB-11.md` |
 
 **MB-00 review (Claude, 2026-10-13):** accepted as a backend milestone, not ready to merge yet.
 - 1024 Cosmere tests pass on the branch (623 new + 401 existing).
@@ -144,6 +144,8 @@ Accepted as a design checkpoint. Notes:
 - Two of the bugs were checked on current `main` (marked above); the rest are unconfirmed.
 
 ## Log
+
+- 2026-10-28 Codex: MB-11 focused recheck accepted at 86e27987. All five original false/empty JSON cases refuse without saving, and {} stays accepted; installed-data campaign tests plus probe: 35 passed, 1 skipped. Earlier private gate: 829 passed, 1 skipped. Wait for every current CI job before merging and verifying production.
 
 - 2026-10-28 Claude: MB-11 review fix: `/api/campaign` now refuses `[]`, `0`, `false`, `""` and `null` as well as other non-object bodies, and `{}` still saves. The five new cases fail on the old line and pass now. Next: merge after every CI job is green.
 
