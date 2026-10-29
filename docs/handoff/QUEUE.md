@@ -66,6 +66,22 @@ UI-03 bug list (from `tasks/UI-00.md` > Anything broken or risky; all checked on
 | Cosmere tracker shows PF2e-only controls (MAP/agile, PF2e quick conditions, Elite/Weak, persistent damage, basic saves) | user: hide all PF2e in Cosmere -> UI-04 |
 | Campaign delete: the wording says "permanently delete" but it's moved to the trash | fixed in UI-03 |
 
+## Design system refresh (DS)
+
+Plan: `docs/design/DESIGN_DIRECTION.md` (2026-10-28). It applies seven outside design resources
+(beUI, Bencho, ui-layouts, SuperDesign, better-design, design-taste, motion-primitives) without
+changing any behaviour: ids, handlers, `data-*`, ARIA, form names, SSE and server rules stay as
+they are. 68 packages (DS-00 to DS-31, split into lettered PRs) are listed in its section 10, with
+owner, dependencies and acceptance. Each one gets a brief in `tasks/DS-xx-<slug>.md` before work
+starts. UI-11, UI-13, UI-15 and UI-16 above stay `ready` and do not wait for this. The user
+answered its five questions on 2026-10-28 (section 12); PF2e goes back to the warm gilt palette.
+
+| ID | Task | Owner | Model | Status | Brief |
+|---|---|---|---|---|---|
+| DS-00 | Inventory diff tool: ids, data-*, handlers, ARIA, frozen class strings, before/after per route | claude | Opus, high | needs brief | - |
+| DS-01 | Tokens, `ds-tokens.css`, empty `ds.css`, notices file, contrast tool | claude | Opus, high | needs brief (after DS-00) | - |
+| DS-02..DS-31 | The rest of section 10, in dependency order; nothing starts until DS-00 and DS-01 are merged | see plan | see plan | needs brief | - |
+
 ## CI maintenance
 
 | ID | Task | Owner | Model | Status | Brief |
@@ -143,6 +159,8 @@ Accepted as a design checkpoint. Notes:
 - Two of the bugs were checked on current `main` (marked above); the rest are unconfirmed.
 
 ## Log
+
+- 2026-10-28 Claude: wrote the design-direction plan (`docs/design/DESIGN_DIRECTION.md`), checked by three reviewers and two verify passes. The user answered its five questions the same day (PF2e back to warm gilt). Next: Claude writes and builds DS-00.
 
 - 2026-10-28 Codex: accepted MB-08 and MB-09 and merged PRs #228 and #229 after every CI job passed. Power-tree checks preserve ordinary and mixed trees; stopping a metalmind is free while restarting in the same turn stays refused. Preserved all task rows and logs in MB-06 queue reconciliation.
 
