@@ -25,10 +25,10 @@ Every design-system package must prove it changed only presentation. This tool r
 - [x] A CSS-only edit diffs clean on all 18 default routes.
 - [x] A scratch edit that removes one id and adds a class to an ARIA-bearing element fails with exactly those two lines.
 - [x] Two captures of an unchanged checkout diff clean, in both modes (html: 18 routes; dom: 9 routes including the sheet, tracker, party and GM screen).
-- [x] `pytest -q tests/test_ui_inventory_tool.py` passes (new tests: 22).
+- [x] `pytest -q tests/test_ui_inventory_tool.py` passes (new tests: 23).
 - [x] DS-00c folded in: `--profile account|cosmere|mistborn|dnd5e` signs in as the owner of a fresh campaign of that system; every route answers 200, and four captures of each profile diff clean.
 - [x] Full non-browser suite: no new failures (numbers in the report).
-- [x] DS-00b folded in: `frontend/vtt/src/app/uiInventory.test.tsx` (branch `claude/ds-00b-vtt-inventory` off `agent/claude-vtt-platform`, not pushed) renders the GM workspace, every sidebar tab and the Place/Measure/Fog tool rows, and with `VTT_UI_INVENTORY_OUT` set writes `{state: html}`; `ui_inventory.py import` turns that into a capture. It replaces the planned `ui-inventory.mjs`, because the shell needs jsdom and the test's mocks to render at all.
+- [x] DS-00b folded in: `frontend/vtt/src/app/uiInventory.test.tsx` (branch `claude/ds-00b-vtt-inventory` off `agent/claude-vtt-platform`, not pushed) renders the GM workspace, every sidebar tab, all six tool groups and the selected-token Inspector (13 states) and writes `{state: html}`; it runs only when `VTT_UI_INVENTORY_OUT` is set; `ui_inventory.py import` turns that into a capture. It replaces the planned `ui-inventory.mjs`, because the shell needs jsdom and the test's mocks to render at all.
 
 ## Out of scope / do not touch
 
@@ -39,17 +39,18 @@ Every design-system package must prove it changed only presentation. This tool r
 
 ## Report
 
-- **Changed:** `tools/ui_inventory.py` (new), `tests/test_ui_inventory_tool.py` (new, 22 tests), this file; on the VTT branch `frontend/vtt/src/app/uiInventory.test.tsx` (new).
+- **Changed:** `tools/ui_inventory.py` (new), `tests/test_ui_inventory_tool.py` (new, 23 tests), this file; on the VTT branch `frontend/vtt/src/app/uiInventory.test.tsx` (new).
 - **Tests run:**
-  - VTT: 9 states; three runs diff clean; renaming the `Map tools` label fails in all 9; `npm run typecheck` clean; `npx vitest run` -> 60 files, 908 tests passed. The first version snapshotted the TV tab before its lazy panel loaded (a flaky 14-line diff); it now waits for the DOM to settle.
+  - VTT: 13 states; repeated runs diff clean; renaming the `Map tools` label fails in every state; `npm run typecheck` clean; normal suite `npx vitest run` -> 59 files passed, 1 skipped (907 tests), three runs. Two flakes found and fixed: the TV tab was snapshotted before its lazy panel loaded (now waits for the DOM to settle), and the 13 renders running inside the normal suite made `GmWorkspace.test.tsx` "removes bestiary results when access ends" time out once, so the inventory render is now opt-in. React `useId` ids are numbered by first appearance on import, so mounting one more component does not fail every state.
   - `pytest -q tests/test_ui_inventory_tool.py` -> 22 passed (one runs the account profile end to end in a subprocess).
   - Profiles: pf2e 18 routes, account 16 (account home, invites, new campaign, admin, all Chronicle views, signed-out landing/login/register/join), cosmere 12, mistborn 12 (body carries `cosmere-mistborn`), dnd5e 9; all 200; four captures of each diff clean.
   - Full suite: see the line added below once the run finishes.
   - Real pages: html capture of 18 PF2e routes, all 200; CSS-only edit -> 0 failures; scratch break -> 2 failures, exit 1; two unchanged captures -> 0 failures in html mode and in dom mode.
+- **Second review (DS-00b/c):** found that the Mistborn profile changed only the skin (fixed: it now selects Mistborn Era 1 through `/api/cosmere/rules`, so the Mistborn builder and GM catalogue render; needs `COSMERE_DATA_DIR`), that a local `.env` could restore a real `DATABASE_URL` (fixed: set to a throwaway sqlite file), missing VTT states (fixed), `useId` renumbering (fixed), one shared `{id}` placeholder for campaign and user ids (fixed: `{cid}`/`{uid}`), loose redirect checks in the account flow (fixed: a redirect to `/login` now fails), and leaking environment such as `GM_PF2E_ABP` (fixed).
 - **Review:** an independent adversarial review of the first version found real false negatives (handlers swapped between buttons, reordered scripts, a duplicated id, changed `style="display:none"`, renamed controls outside forms, edited option text and textarea content, missing `enctype`) and two false-positive sources (the per-session CSRF token, text hooks split by a tag). All are fixed and each has a test.
 - **Skipped / not verified:**
   - Not captured: pages that need seeded characters in account mode (Cosmere and 5e sheets, builders with a character), the campaign takeover page (needs a second GM with a live session), `/map`, `/mobile_combat`, the VTT table/pairing screens and the token-selected Inspector. Packages touching those rely on gate 2's `git diff` grep and gate 8's browser smoke.
-  - The dnd5e profile needs the built 5e content (`DND5E_DATA_DIR`); it refuses to run without it.
+  - The dnd5e profile needs the built 5e content (`DND5E_DATA_DIR`) and the mistborn profile the private Mistborn rules (`COSMERE_DATA_DIR`); each refuses to run without them.
   - dom mode was run against the 9 routes listed above, not all 18.
 - **Known wrong / limitations:**
   - Two identical handlers swapped inside one container with no ids are not caught (hooks are keyed to the nearest id, not a full DOM path, to avoid failing on harmless markup reordering).

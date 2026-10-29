@@ -319,17 +319,31 @@ def diff_inventories(before: dict, after: dict) -> tuple[list[str], list[str]]:
     return failures, additions
 
 
+# Settings that would point the capture at real services or change what pages render.
+LEAKY_ENV = {"DATABASE_URL", "PUBLIC_BASE_URL", "ALLOWED_HOSTS", "GUNICORN_CMD_ARGS",
+             "GM_PF2E_ABP", "SETUP_TOKEN", "ANTHROPIC_API_KEY", "OWNERSHIP_BACKEND"}
+
+
 @contextlib.contextmanager
-def _isolated_app(data_dir: str, gm_password: str = ""):
+def _isolated_app(data_dir: str, gm_password: str = "", dnd5e_data: str | None = None,
+                  cosmere_data: str | None = None):
     """Import the real app against a throwaway DATA_DIR."""
 
     if "app" in sys.modules:
         raise RuntimeError("capture must run in a fresh process; app is already imported")
     # Mirrors tests/browser/conftest.py: everything the app writes stays in the
     # throwaway directory, and host/database settings from the shell are dropped.
-    for key in ("DATABASE_URL", "PUBLIC_BASE_URL", "ALLOWED_HOSTS", "GUNICORN_CMD_ARGS"):
-        os.environ.pop(key, None)
+    for key in list(os.environ):
+        if key in LEAKY_ENV or key.startswith(("RAILWAY_", "DND5E_", "COSMERE_")):
+            os.environ.pop(key, None)
+    if dnd5e_data:
+        os.environ["DND5E_DATA_DIR"] = dnd5e_data
+    if cosmere_data:  # private Mistborn rules, installed outside the checkout
+        os.environ["COSMERE_DATA_DIR"] = cosmere_data
     os.environ.update({
+        # app.py loads a local .env for any key that is missing, so the database
+        # is set explicitly to a throwaway file rather than merely removed.
+        "DATABASE_URL": "sqlite+pysqlite:///" + str(Path(data_dir) / "identity.db").replace("\\", "/"),
         "APP_ENV": "development", "DATA_DIR": data_dir, "GM_PASSWORD": gm_password,
         "SECRET_KEY": "ui-inventory-not-for-runtime",
         "SESSION_STATE_PATH": str(Path(data_dir) / "session_state.json"),
@@ -341,7 +355,7 @@ def _isolated_app(data_dir: str, gm_password: str = ""):
     yield module
 
 
-def _account_clients(module, system: str, theme: str | None):
+def _account_clients(module, system: str, rules: str | None):
     """Site owner (admin + GM of one campaign of `system`) and an anonymous client.
 
     The same POST flow as tests/test_dnd5e_app_integration.py, so the pages are
@@ -350,23 +364,34 @@ def _account_clients(module, system: str, theme: str | None):
     from core import campaigns, storage
 
     owner = module.app.test_client()
-    r = owner.post("/setup", data={"username": "owner", "password": "inventory1",
-                                    "display_name": "Owner"})
-    if r.status_code != 302:
-        raise RuntimeError(f"/setup answered {r.status_code}")
-    r = owner.post("/campaigns/new", data={"name": "Inventory table", "system": system})
-    if r.status_code != 302:
-        raise RuntimeError(f"/campaigns/new answered {r.status_code}")
+    def step(resp, what, bad_target="/login"):
+        target = resp.headers.get("Location", "")
+        if resp.status_code != 302 or target.rstrip("/").endswith(bad_target):
+            raise RuntimeError(f"{what} answered {resp.status_code} -> {target!r}")
+
+    step(owner.post("/setup", data={"username": "owner", "password": "inventory1",
+                                     "display_name": "Owner"}), "/setup")
+    step(owner.post("/campaigns/new", data={"name": "Inventory table", "system": system}),
+         "/campaigns/new")
     cid = next(i for i in storage.list_campaign_ids()
                if campaigns.get_campaign(i)["name"] == "Inventory table")
-    if theme:
-        doc = campaigns.get_campaign(cid)
-        doc["cosmere_theme"] = theme
-        campaigns.save_campaign(doc)
-    r = owner.post(f"/campaign/{cid}/activate")
-    if r.status_code != 302:
-        raise RuntimeError(f"activate answered {r.status_code}")
-    return {"gm": owner, "anon": module.app.test_client()}, cid
+    step(owner.post(f"/campaign/{cid}/activate"), "activate")
+    if rules:
+        # The real route: pins the installed Mistborn release and forces the look,
+        # so the Mistborn builder and GM catalogue render, not just the skin.
+        r = owner.post("/api/cosmere/rules", json={"rules": rules})
+        if r.status_code != 200 or not (r.get_json(silent=True) or {}).get("ok"):
+            raise RuntimeError(f"Mistborn rules not available; set COSMERE_DATA_DIR ({r.status_code}: "
+                               f"{(r.get_json(silent=True) or {}).get('error', '')})")
+    uid = next(iter(_users(module)))
+    return {"gm": owner, "anon": module.app.test_client()}, cid, uid
+
+
+def _users(module):
+    from core import auth
+    with module.app.test_request_context():  # the users memo lives on flask.g
+        users = auth._load_users()
+    return list(users.get("users", {}))  # user ids
 
 
 # Account-mode profiles: (client, route). "{cid}" is the seeded campaign.
@@ -386,13 +411,24 @@ PROFILES = {
         ("anon", "/"), ("anon", "/login"), ("anon", "/register"), ("anon", "/join"),
     )),
     "cosmere": ("cosmere", None, COSMERE_ROUTES),
-    "mistborn": ("cosmere", "mistborn", COSMERE_ROUTES),
+    "mistborn": ("cosmere", "era-1", COSMERE_ROUTES),
     "dnd5e": ("dnd5e", None, (
         ("gm", "/dnd5e/gm"), ("gm", "/dnd5e/tracker"), ("gm", "/dnd5e/encounters"),
         ("gm", "/dnd5e/bestiary"), ("gm", "/dnd5e/compendium"), ("gm", "/dnd5e/characters"),
         ("gm", "/dnd5e/combat"), ("gm", "/dnd5e/gmscreen"), ("gm", "/dnd5e/admin/data"),
     )),
 }
+
+
+# React's useId output (_r_0_, «r0», :r0:) comes from a global counter, so one
+# more component mounted earlier renumbers every id. Number them by first
+# appearance instead: the structure is still compared, the counter is not.
+REACT_ID = re.compile(r"_r_[0-9a-z]+_|«r[0-9a-z]+»|:r[0-9a-z]+:")
+
+
+def _number_react_ids(html: str) -> str:
+    seen: dict[str, str] = {}
+    return REACT_ID.sub(lambda m: seen.setdefault(m.group(0), f"{{rid{len(seen) + 1}}}"), html)
 
 
 GENERATED_ID = re.compile(r"\b[0-9a-f]{32}\b")
@@ -405,12 +441,15 @@ def _get(client, url):
     return client.get(url)
 
 
-def _record(resp, hooks, route, generated_ids=False):
+def _record(resp, hooks, route, known_ids=None):
     entry = {"status": resp.status_code}
     if resp.status_code == 200 and "html" in (resp.content_type or ""):
         html = resp.get_data(as_text=True)
-        if generated_ids:
-            # Campaign and user ids are random per run; a changed id is not a design change.
+        if known_ids is not None:
+            # Campaign and user ids are random per run. The seeded ones get their own
+            # placeholder, so a template that swaps one for the other still fails.
+            for value, label in known_ids.items():
+                html = html.replace(value, label)
             html = GENERATED_ID.sub("{id}", html)
         entry.update(inventory_html(html, hooks.get(route)))
     return entry
@@ -430,18 +469,21 @@ def capture_html(routes, hooks, profile: str = "pf2e") -> dict:
                 for route in routes or DEFAULT_ROUTES:
                     out[route] = _record(_get(client, route), hooks, route)
             return out
-        system, theme, default = PROFILES[profile]
+        system, rules, default = PROFILES[profile]
         if system == "dnd5e":
             from systems.dnd5e import content
             if not content.available():
                 raise RuntimeError("5e content is not built here (see docs/dnd5e/HANDOFF.md)")
-        with _isolated_app(data_dir, gm_password="inventory-gm") as module:
-            clients, cid = _account_clients(module, system, theme)
-            pairs = [("gm", r) for r in routes] if routes else list(default)
+        with _isolated_app(data_dir, gm_password="inventory-gm",
+                           dnd5e_data=os.environ.get("DND5E_DATA_DIR"),
+                           cosmere_data=os.environ.get("COSMERE_DATA_DIR")) as module:
+            clients, cid, uid = _account_clients(module, system, rules)
+            pairs = ([("anon", r[5:]) if r.startswith("anon ") else ("gm", r) for r in routes]
+                     if routes else list(default))
             for who, route in pairs:
                 url = route.replace("{cid}", cid)
                 key = route if who == "gm" else f"anon {route}"
-                out[key] = _record(_get(clients[who], url), hooks, route, generated_ids=True)
+                out[key] = _record(_get(clients[who], url), hooks, key, {cid: "{cid}", uid: "{uid}"})
     return out
 
 
@@ -502,7 +544,8 @@ def main(argv=None) -> int:
 
     if args.cmd == "import":
         states = json.loads(Path(args.states).read_text(encoding="utf-8"))
-        data = {name: {"status": 200, **inventory_html(html)} for name, html in states.items()}
+        data = {name: {"status": 200, **inventory_html(_number_react_ids(html))}
+                for name, html in states.items()}
         Path(args.out).write_text(json.dumps({"mode": "import", "profile": "vtt", "routes": data},
                                              indent=1, sort_keys=True), encoding="utf-8")
         print(f"inventoried {len(data)} states to {args.out}")

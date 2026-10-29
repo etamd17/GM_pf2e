@@ -175,9 +175,16 @@ def test_generated_ids_are_normalised_only_in_account_profiles():
     from tools.ui_inventory import _record
     a = '<a href="/campaign/' + "a" * 32 + '/invites">x</a>'
     b = '<a href="/campaign/' + "b" * 32 + '/invites">x</a>'
-    assert _record(_Resp(a), {}, "/me", True) == _record(_Resp(b), {}, "/me", True)
+    assert _record(_Resp(a), {}, "/me", {}) == _record(_Resp(b), {}, "/me", {})
     assert _record(_Resp(a), {}, "/me") != _record(_Resp(b), {}, "/me")
     assert _record(_Resp(a, 302), {}, "/me") == {"status": 302}
+    # The seeded campaign and user ids keep separate placeholders, so a template
+    # that puts the user id where the campaign id belongs still fails.
+    cid, uid = "c" * 32, "d" * 32
+    good = '<a href="/campaign/' + cid + '/invites">x</a>'
+    wrong = '<a href="/campaign/' + uid + '/invites">x</a>'
+    ids = {cid: "{cid}", uid: "{uid}"}
+    assert _record(_Resp(good), {}, "/me", ids) != _record(_Resp(wrong), {}, "/me", ids)
 
 
 def test_account_profile_renders_every_route(tmp_path):
@@ -206,3 +213,12 @@ def test_import_inventories_prerendered_states(tmp_path):
     cap = json.loads(out.read_text(encoding="utf-8"))
     assert cap["mode"] == "import" and cap["routes"]["workspace"]["status"] == 200
     assert any("Map tools" in k for k in cap["routes"]["workspace"]["aria"])
+
+
+def test_react_ids_are_numbered_by_appearance():
+    from tools.ui_inventory import _number_react_ids
+    a = '<div id="_r_0_-tab" aria-controls="_r_0_-panel"></div><p id="_r_1_"></p>'
+    b = '<div id="_r_4_-tab" aria-controls="_r_4_-panel"></div><p id="_r_9_"></p>'
+    assert _number_react_ids(a) == _number_react_ids(b)
+    swapped = '<div id="_r_1_-tab" aria-controls="_r_0_-panel"></div><p id="_r_1_"></p>'
+    assert _number_react_ids(a) != _number_react_ids(swapped)
