@@ -108,7 +108,7 @@
         <div class="font-display" style="font-size:10px; letter-spacing:0.18em; text-transform:uppercase; color:var(--text-on-dark-3); margin-bottom:var(--sp-1);">Game Master</div>
         <h1 class="font-display cos-hero" style="font-size:28px; letter-spacing:0.04em; margin:0 0 var(--sp-1);">{{ campaign_name }}</h1>
         <p class="font-flavor" style="font-size:12px; font-style:italic; color:var(--text-on-dark-3); margin:0 0 var(--sp-3);">
-            {% if char_count == 0 %}Build your party with &ldquo;+ New Character&rdquo; to begin.{% else %}Stormlight Command &amp; Tools{% endif %}
+            {% if char_count == 0 %}Build your party with &ldquo;+ New Character&rdquo; to begin.{% else %}{{ 'Mistborn' if cosmere_world == 'mistborn' else 'Stormlight' }} Command &amp; Tools{% endif %}
         </p>
         <div class="flex flex-wrap justify-center" style="gap: var(--sp-2);">
             <span class="pill accent">Characters <span class="v" id="hub-pill-chars">{{ char_count }}</span></span>
@@ -192,7 +192,7 @@
             <a href="/cosmere/gmscreen" class="tile__link" aria-label="Open GM Screen"></a>
             <div class="tile__glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 5h5.5v14H3zM8.5 5H15v14H8.5zM15 5h6v14h-6z"/><path d="M5 9h1.5M17 9h2"/></svg></div>
             <h2 class="tile__title">GM Screen</h2>
-            <p class="tile__desc">Cosmere rules at a glance &mdash; turn order, damage &amp; deflect, the injury spiral, conditions, Plot Die, surges.</p>
+            <p class="tile__desc">Cosmere rules at a glance &mdash; turn order, damage &amp; deflect, the injury spiral, conditions, Plot Die{% if cosmere_world != 'mistborn' %}, surges{% endif %}.</p>
             <div class="tile__qa">
                 <button type="button" class="qa-btn" onclick="cosPlotDie()">Roll Plot Die</button>
                 <span class="qa-out" id="qa-plot-out" role="status" aria-live="polite"></span>
@@ -206,35 +206,35 @@
         <a href="/cosmere/builder" class="tile">
             <div class="tile__glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="10" cy="8" r="3.2"/><path d="M4 20c0-3.3 2.7-6 6-6 1.2 0 2.3.3 3.2.9"/><path d="M18 14v6M15 17h6"/></svg></div>
             <h2 class="tile__title">Builder</h2>
-            <p class="tile__desc">Rulebook-guided creation &amp; leveling &mdash; attributes, paths, talents, Radiant Ideals &amp; surges.</p>
+            <p class="tile__desc">{% if cosmere_world == 'mistborn' %}Rulebook-guided creation &amp; leveling &mdash; attributes, paths, talents &amp; Metallic Arts.{% else %}Rulebook-guided creation &amp; leveling &mdash; attributes, paths, talents, Radiant Ideals &amp; surges.{% endif %}</p>
             <span class="pill" style="margin-top:var(--sp-3);">+ New Character</span>
         </a>
         <a href="/cosmere/pcs" class="tile">
             <div class="tile__glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="8.5" r="3"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5"/><circle cx="16.5" cy="9.5" r="2.3"/><path d="M13.5 20c.4-2.6 1.9-4.2 4-4.2 2 0 3.4 1.4 3.9 3.5"/></svg></div>
             <h2 class="tile__title">Characters</h2>
-            <p class="tile__desc">The party roster &mdash; defenses, health, Radiant order &amp; surges, at a glance.</p>
+            <p class="tile__desc">{% if cosmere_world == 'mistborn' %}The party roster &mdash; defenses, health &amp; Metallic Arts, at a glance.{% else %}The party roster &mdash; defenses, health, Radiant order &amp; surges, at a glance.{% endif %}</p>
             <span class="pill {% if char_count > 0 %}live{% endif %}" style="margin-top:var(--sp-3);">{{ char_count }} character{{ '' if char_count == 1 else 's' }}</span>
         </a>
         <a href="/cosmere/bestiary" class="tile">
             <div class="tile__glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 4c1.5 1.2 2.6 1.6 4 1.6S15.5 5.2 17 4c.6 3-.4 4.6-.4 4.6C18 10 19 12 19 15c0 3-3 5-7 5s-7-2-7-5c0-3 1-5 2.4-6.4C7.4 8.6 6.4 7 5 4z"/><path d="M9.5 12.5h.01M14.5 12.5h.01"/></svg></div>
             <h2 class="tile__title">Bestiary</h2>
-            <p class="tile__desc">The Stormlight adversaries &mdash; tier, role, and size for every foe in the starter set.</p>
+            <p class="tile__desc">{% if cosmere_world == 'mistborn' %}The adversary catalog &mdash; tier, role, and size for foes in your campaign's rules.{% else %}The Stormlight adversaries &mdash; tier, role, and size for every foe in the starter set.{% endif %}</p>
             <span class="pill" style="margin-top:var(--sp-3);">{{ adv_count }} adversaries</span>
         </a>
         <a href="/cosmere/homebrew" class="tile">
             <div class="tile__glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 3h6M10 3v6l-5 8.5A2 2 0 0 0 6.7 20.5h10.6a2 2 0 0 0 1.7-3L14 9V3"/><path d="M8 14h8"/></svg></div>
             <h2 class="tile__title">Homebrew</h2>
-            <p class="tile__desc">Author custom talents, items, ancestries, paths &amp; surges &mdash; same schema as canon, applied by the engine.</p>
+            <p class="tile__desc">{% if cosmere_world == 'mistborn' %}Manage your campaign's custom content and reference notes.{% else %}Author custom talents, items, ancestries, paths &amp; surges &mdash; same schema as canon, applied by the engine.{% endif %}</p>
             <span class="pill" style="margin-top:var(--sp-3);">Content shelf</span>
         </a>
         <div class="tile has-action">
             <a href="/cosmere/generator" class="tile__link" aria-label="Open Generators"></a>
             <div class="tile__glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1"/><circle cx="15" cy="15" r="1"/><circle cx="15" cy="9" r="1"/><circle cx="9" cy="15" r="1"/></svg></div>
             <h2 class="tile__title">Generators</h2>
-            <p class="tile__desc">Rosharan names, NPCs, highstorms, spheres &amp; loot, locations, plot hooks, rumors, and scene dressing.</p>
+            <p class="tile__desc">{% if cosmere_world == 'mistborn' %}Scadrial names, NPCs, weather, boxings, clips &amp; loot, locations, plot hooks, rumors, and scene dressing.{% else %}Rosharan names, NPCs, highstorms, spheres &amp; loot, locations, plot hooks, rumors, and scene dressing.{% endif %}</p>
             <div class="tile__qa">
                 <button type="button" class="qa-btn" onclick="cosRollNpc()">Roll an NPC</button>
-                <span class="qa-out"><span class="lbl">Roshar</span></span>
+                <span class="qa-out"><span class="lbl">{{ 'Scadrial' if cosmere_world == 'mistborn' else 'Roshar' }}</span></span>
             </div>
         </div>
     </div>
@@ -245,7 +245,7 @@
         <a href="/cosmere/loot" class="tile">
             <div class="tile__glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v5c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M5 11v5c0 1.7 3.1 3 7 3s7-1.3 7-3v-5"/></svg></div>
             <h2 class="tile__title">Loot Ledger</h2>
-            <p class="tile__desc">Spheres &amp; spoils &mdash; a running record of what the party has earned, by broam, mark, and chip.</p>
+            <p class="tile__desc">{% if cosmere_world == 'mistborn' %}Boxings, clips &amp; spoils &mdash; a running record of what the party has earned.{% else %}Spheres &amp; spoils &mdash; a running record of what the party has earned, by broam, mark, and chip.{% endif %}</p>
         </a>
         {% if active_cid %}
         <a href="/campaign/{{ active_cid }}/invites" class="tile">
@@ -281,7 +281,7 @@
 <div class="qa-modal" id="qa-npc-modal" role="dialog" aria-modal="true" aria-labelledby="qa-npc-title" onclick="if(event.target===this)cosCloseNpc()">
     <div class="qa-modal__panel">
         <div class="qa-modal__head">
-            <h3 id="qa-npc-title">Random Rosharan NPC</h3>
+            <h3 id="qa-npc-title">Random {{ 'Scadrian' if cosmere_world == 'mistborn' else 'Rosharan' }} NPC</h3>
             <button type="button" class="qa-modal__x" onclick="cosCloseNpc()" aria-label="Close">&times;</button>
         </div>
         <div class="qa-modal__body" id="qa-npc-body"></div>
