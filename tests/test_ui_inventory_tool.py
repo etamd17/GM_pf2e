@@ -194,3 +194,15 @@ def test_account_profile_renders_every_route(tmp_path):
     assert result.returncode == 0, result.stdout[-2000:] + result.stderr[-2000:]
     routes = json.loads(out.read_text(encoding="utf-8"))["routes"]
     assert len(routes) == 16 and {e["status"] for e in routes.values()} == {200}
+
+
+def test_import_inventories_prerendered_states(tmp_path):
+    import json
+    states = tmp_path / "states.json"
+    states.write_text(json.dumps({"workspace": '<nav aria-label="Map tools" class="vtt-rail"></nav>'}),
+                      encoding="utf-8")
+    out = tmp_path / "cap.json"
+    assert main(["import", str(states), "--out", str(out)]) == 0
+    cap = json.loads(out.read_text(encoding="utf-8"))
+    assert cap["mode"] == "import" and cap["routes"]["workspace"]["status"] == 200
+    assert any("Map tools" in k for k in cap["routes"]["workspace"]["aria"])

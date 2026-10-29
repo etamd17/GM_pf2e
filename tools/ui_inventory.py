@@ -43,6 +43,9 @@ inline ``<script>`` therefore fails: a design package must not change page JS.
 ``capture`` exits 1 if a route does not answer 200 (``--allow-status`` lists
 expected exceptions), because an unrendered route is not checked at all.
 
+``import STATES.json`` inventories HTML that something else rendered: the VTT
+client writes its GM-workspace states from ``src/app/uiInventory.test.tsx``.
+
 Optional ``--hooks FILE`` (JSON ``{"route": ["visible text", ...]}``) also counts
 copy that scripts or tests match on; a hook that disappears fails the diff.
 """
@@ -488,10 +491,22 @@ def main(argv=None) -> int:
                      help="routes expected not to answer 200, e.g. /gm/rest=302")
     cap.add_argument("--click", default='[role="tab"]',
                      help="--mode dom: panel-switching controls to select one by one")
+    imp = sub.add_parser("import", help="inventory pre-rendered HTML states (the VTT shell)")
+    imp.add_argument("states", help="JSON {state: html}, e.g. from frontend/vtt "
+                                    "src/app/uiInventory.test.tsx with VTT_UI_INVENTORY_OUT set")
+    imp.add_argument("--out", required=True)
     d = sub.add_parser("diff", help="fail on any removed or changed hook")
     d.add_argument("before")
     d.add_argument("after")
     args = ap.parse_args(argv)
+
+    if args.cmd == "import":
+        states = json.loads(Path(args.states).read_text(encoding="utf-8"))
+        data = {name: {"status": 200, **inventory_html(html)} for name, html in states.items()}
+        Path(args.out).write_text(json.dumps({"mode": "import", "profile": "vtt", "routes": data},
+                                             indent=1, sort_keys=True), encoding="utf-8")
+        print(f"inventoried {len(data)} states to {args.out}")
+        return 0
 
     if args.cmd == "capture" and args.mode == "html" and os.environ.get("PYTHONHASHSEED") != "0":
         # Some pages serialise sets (the Cosmere builder's surge list), whose order
