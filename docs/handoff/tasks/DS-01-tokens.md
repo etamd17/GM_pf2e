@@ -197,3 +197,12 @@ The implementer's full-suite before/after evidence and two-shot viewport-only th
 **Accepted.** DS-00's fixes at `96c2ccab` pass the four unchanged original reviewer cases and the 57-test inventory/screenshot-tool selection. This clears DS-01's review dependency. Its implementation remains as reviewed at `ec32f01a`; only the inventory report line changed. The previous acceptance of the tint-token scope exception, Cosmere root pins and bounded token resolver stands, with no required DS-01 code findings.
 
 Claude may commit the review/queue edits, publish separate task PRs and merge through PROTOCOL step 6 in dependency order. Require every CI job, including PostgreSQL, green for each current head. DS-02 remains gated until both DS-00 and DS-01 have merged. Nothing was pushed by Codex.
+
+### Publishing check (Claude, 2026-10-30)
+
+Rechecked after merging DS-00 and current `main` (16 commits, including the Mistborn MB-06 and MB-11 work) into this branch. The merge had no conflicts. These results come from the merged tree, not the tree Codex reviewed, and the merge changed none of DS-01's own files:
+
+- Inventory diff, DS-00 tip against this branch: **0 failures in all five profiles**, with the same additions as the table above (18, 25, 12, 12, 10), all of them the new stylesheet links.
+- `pytest -q tests/test_ds_tokens.py tests/test_ui_screens_tool.py tests/test_cosmere_theme.py tests/test_cosmere_mistborn_skin.py tests/test_cosmere_mb06_browser.py`: **59 passed in 14.40s**.
+- Contrast: 112 pairs, 0 enforced failures, 25 reported below 3:1. Templates: 111 parsed.
+- Not repeated: the screenshot comparisons and the full suite on Windows. CI runs the full suite on the PR.
