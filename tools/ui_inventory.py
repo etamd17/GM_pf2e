@@ -10,11 +10,12 @@ recordings:
     python tools/ui_inventory.py capture --out after.json
     python tools/ui_inventory.py diff before.json after.json
 
-Recorded per route: HTTP status, ids, ``data-*`` keys with values, inline
-``on*`` handlers, form contracts (action, method, every field's functional
-attributes and options), ``role``/``aria-*``/``tabindex`` tuples *including the
-element's full class string*, link targets, the ``<body>`` class string, and a
-count of every class token. ``diff`` fails on any removal or changed value and
+Recorded per route: HTTP status and redirect target, ids, ``data-*`` keys with
+values, inline ``on*`` handlers, form contracts (action, method, every field's
+functional attributes and options), every control's options and text in or out of
+a form, ``role``/``aria-*``/``tabindex`` tuples *including the element's full class
+string*, link targets per element, the ``<body>`` class string, and a count of
+every class token. ``diff`` fails on any removal or changed value and
 lists additions, which section 1.2 of docs/design/DESIGN_DIRECTION.md allows only
 in narrow cases. Adding a class to an element that carries ARIA, or changing the
 body class, therefore fails, because tests freeze those strings exactly.
@@ -33,7 +34,9 @@ Two capture modes:
   selector, for example ``.tab-btn`` for the PF2e sheet). This sees ids and
   handlers that JavaScript builds (``content-<type>``, ``rhp-<id>``,
   ``cond-btn-<cond>``). It clicks nothing else; only pass ``--click`` a selector
-  for controls that switch panels, never one that saves or rolls.
+  for controls that switch panels, never one that saves or rolls. A page that ends
+  up anywhere but the requested path (a login bounce, say) records as a 302 with no
+  hooks, exactly as ``--mode html`` does, because it is not the page that was asked for.
 
 Hooks are keyed to their element (own id, else nearest ancestor id + tag).
 Script order (external and inline, by content hash) and tab order are compared
@@ -41,7 +44,8 @@ exactly, an id that appears more often fails, and inline ``style`` display or
 visibility, ``hidden``, ``open`` and ``inert`` are recorded per element. Editing an
 inline ``<script>`` therefore fails: a design package must not change page JS.
 ``capture`` exits 1 if a route does not answer 200 (``--allow-status`` lists
-expected exceptions), because an unrendered route is not checked at all.
+expected exceptions), because an unrendered route is not checked at all, and marks
+the file so that ``diff`` refuses it: two captures of the same bounce compare equal.
 
 ``import STATES.json`` inventories HTML that something else rendered: the VTT
 client writes its GM-workspace states from ``src/app/uiInventory.test.tsx``.
@@ -66,6 +70,7 @@ from pathlib import Path
 import shutil
 import sys
 import tempfile
+from urllib.parse import unquote, urlsplit
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -95,11 +100,15 @@ CONTROL_ATTRS = {
 }
 VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta",
         "param", "source", "track", "wbr"}
+# Switches off every control inside it, so a new one fails rather than being an addition.
+FIELDSET_DISABLED = "fieldset disabled"
 # Per-session values that differ between two captures of an unchanged page.
 VOLATILE_VALUES = {"_csrf", "csrf_token"}
 
 
 STATIC_VERSION = re.compile(r"(/static/[^\s\"'?]+)\?v=[0-9A-Za-z._-]+")
+# _sse_hub.html stamps the running commit into every page's inline script.
+LOADED_VERSION = re.compile(r'(\bLOADED_VERSION = )"[^"]*"')
 
 
 def _static(url: str) -> str:
@@ -115,6 +124,11 @@ def _control_desc(tag: str, a: dict) -> str:
                 v = ""
             parts.append(f"{n}={v}")
     return tag + " " + " ".join(parts)
+
+
+def _field_desc(field: dict) -> str:
+    return (field["desc"] + (" [" + ",".join(field["options"]) + "]" if field["options"] else "")
+            + (" text=" + "".join(field["text"]).strip() if field["text"] else ""))
 
 
 class _Parser(HTMLParser):
@@ -176,6 +190,8 @@ class _Parser(HTMLParser):
         for flag in ("hidden", "open", "inert"):
             if flag in a:
                 c["state"][f"{anchor} {flag}"] += 1
+        if tag == "fieldset" and "disabled" in a:
+            c["state"][f"{anchor} {FIELDSET_DISABLED}"] += 1
         for decl in a.get("style", "").split(";"):
             if ":" in decl:
                 prop, val = (x.strip() for x in decl.split(":", 1))
@@ -183,7 +199,7 @@ class _Parser(HTMLParser):
                     c["state"][f"{anchor} style {prop.lower()}:{val}"] += 1
         for attr in ("href", "action", "formaction", "src"):
             if attr in a and tag in ("a", "form", "button", "input", "iframe", "link", "img", "script"):
-                c["links"][f"{tag} {attr}={_static(a[attr])} rel={a.get('rel', '')} target={a.get('target', '')}"] += 1
+                c["links"][f"{anchor} {tag} {attr}={_static(a[attr])} rel={a.get('rel', '')} target={a.get('target', '')}"] += 1
         if tag == "script":
             flags = " ".join(f for f in ("defer", "async") if f in a)
             if "type" in a:
@@ -193,23 +209,29 @@ class _Parser(HTMLParser):
             self._script = []
         if tag in ("script", "style"):
             self._skip_text += 1
-        if tag in ("input", "select", "textarea", "button"):
-            c["controls"][anchor + " " + _control_desc(tag, a)] += 1
+        if tag in ("select", "textarea", "datalist"):
+            self._flush_payload()  # the previous one was left unclosed
+        field = None
+        if tag in ("input", "select", "textarea", "button", "datalist"):
+            field = {"anchor": anchor, "desc": _control_desc(tag, a), "options": [], "text": []}
+            if tag == "select" or tag == "datalist":
+                self._select = field
+            elif tag == "textarea":
+                self._textarea = field
+            else:
+                c["controls"][anchor + " " + field["desc"]] += 1
         if tag == "form":
             if self._form is not None:
                 self._flush_form()  # a nested <form> is ignored by browsers; keep what we have
             head = " ".join(f"{k}={a.get(k, d)}" for k, d in (
                 ("action", ""), ("method", "get"), ("enctype", ""), ("target", ""), ("id", "")))
             self._form = {"head": head + (" novalidate" if "novalidate" in a else ""), "fields": []}
-        elif self._form is not None and tag in ("input", "select", "textarea", "button"):
-            field = {"desc": _control_desc(tag, a), "options": [], "text": []}
+        elif self._form is not None and field is not None and tag != "datalist":
             self._form["fields"].append(field)
-            if tag == "select":
-                self._select = field
-            if tag == "textarea":
-                self._textarea = field
         if tag == "option" and self._select is not None:
-            self._option = {"value": a.get("value"), "selected": "selected" in a, "text": []}
+            self._flush_option()  # </option> is optional
+            self._option = {"value": a.get("value"), "selected": "selected" in a,
+                            "disabled": "disabled" in a, "text": []}
         if tag not in VOID:
             self._stack.append((tag, a.get("id", "")))
 
@@ -221,23 +243,20 @@ class _Parser(HTMLParser):
     def handle_endtag(self, tag):
         if tag == "script" and self._script is not None:
             # Static URLs inside a script (the three.js import map) carry the
-            # deploy cache-buster, which differs between two checkouts.
+            # deploy cache-buster, and the SSE hub the commit: both differ between
+            # two checkouts of the same code.
             body = STATIC_VERSION.sub(r"\1", "".join(self._script).strip())
+            body = LOADED_VERSION.sub(r"\1", body)
             if body:
                 digest = hashlib.sha1(body.encode("utf-8")).hexdigest()[:12]
                 self.script_order.append("inline sha1=" + digest)
             self._script = None
         if tag in ("script", "style") and self._skip_text:
             self._skip_text -= 1
-        if tag == "option" and self._option is not None and self._select is not None:
-            o = self._option
-            value = o["value"] if o["value"] is not None else " ".join("".join(o["text"]).split())
-            self._select["options"].append(value + ("*" if o["selected"] else ""))
-            self._option = None
-        if tag == "select":
-            self._select = None
-        if tag == "textarea":
-            self._textarea = None
+        if tag == "option":
+            self._flush_option()
+        if tag in ("select", "textarea", "datalist"):
+            self._flush_payload()
         if tag == "form" and self._form is not None:
             self._flush_form()
         if tag in VOID:
@@ -247,11 +266,24 @@ class _Parser(HTMLParser):
                 del self._stack[i:]
                 break
 
+    def _flush_option(self):
+        if self._option is None or self._select is None:
+            return
+        o = self._option
+        value = o["value"] if o["value"] is not None else " ".join("".join(o["text"]).split())
+        self._select["options"].append(value + ("*" if o["selected"] else "") + ("!" if o["disabled"] else ""))
+        self._option = None
+
+    def _flush_payload(self):
+        # A select's options and a textarea's text are only known at its end tag.
+        self._flush_option()
+        for field in (self._select, self._textarea):
+            if field is not None:
+                self.c["controls"][field["anchor"] + " " + _field_desc(field)] += 1
+        self._select = self._textarea = None
+
     def _flush_form(self):
-        fields = " | ".join(
-            f["desc"] + (" [" + ",".join(f["options"]) + "]" if f["options"] else "")
-            + (" text=" + "".join(f["text"]).strip() if f["text"] else "")
-            for f in self._form["fields"])
+        fields = " | ".join(_field_desc(f) for f in self._form["fields"])
         self.c["forms"][self._form["head"] + " :: " + fields] += 1
         self._form = None
 
@@ -267,6 +299,7 @@ class _Parser(HTMLParser):
 
     def close(self):
         super().close()
+        self._flush_payload()
         if self._form is not None:  # an unclosed <form> still counts
             self._flush_form()
 
@@ -301,6 +334,8 @@ def diff_inventories(before: dict, after: dict) -> tuple[list[str], list[str]]:
         if b.get("status") != a.get("status"):
             failures.append(f"{route}: status {b.get('status')} -> {a.get('status')}")
             continue
+        if b.get("redirected_to") != a.get("redirected_to"):
+            failures.append(f"{route}: redirect {b.get('redirected_to')} -> {a.get('redirected_to')}")
         if b.get("body_class") != a.get("body_class"):
             failures.append(f"{route}: <body> class {b.get('body_class')!r} -> {a.get('body_class')!r}")
         for cat in ORDERED_CATEGORIES:
@@ -319,6 +354,8 @@ def diff_inventories(before: dict, after: dict) -> tuple[list[str], list[str]]:
                     if cat == "ids" and bc[key]:
                         # getElementById would now find a different element.
                         failures.append(f"{route}: ids duplicated: {key} x{bc[key]} -> x{ac[key]}")
+                    elif cat == "state" and key.endswith(FIELDSET_DISABLED):
+                        failures.append(f"{route}: state added x{ac[key] - bc[key]}: {key}")
                     else:
                         additions.append(f"{route}: {cat} added x{ac[key] - bc[key]}: {key}")
     return failures, additions
@@ -446,17 +483,22 @@ def _get(client, url):
     return client.get(url)
 
 
+def _normalise_ids(text, known_ids):
+    if known_ids is None:
+        return text
+    # Campaign and user ids are random per run. The seeded ones get their own
+    # placeholder, so a template that swaps one for the other still fails.
+    for value, label in known_ids.items():
+        text = text.replace(value, label)
+    return GENERATED_ID.sub("{id}", text)
+
+
 def _record(resp, hooks, route, known_ids=None):
     entry = {"status": resp.status_code}
     if resp.status_code == 200 and "html" in (resp.content_type or ""):
-        html = resp.get_data(as_text=True)
-        if known_ids is not None:
-            # Campaign and user ids are random per run. The seeded ones get their own
-            # placeholder, so a template that swaps one for the other still fails.
-            for value, label in known_ids.items():
-                html = html.replace(value, label)
-            html = GENERATED_ID.sub("{id}", html)
-        entry.update(inventory_html(html, hooks.get(route)))
+        entry.update(inventory_html(_normalise_ids(resp.get_data(as_text=True), known_ids), hooks.get(route)))
+    elif 300 <= resp.status_code < 400 and resp.headers.get("Location"):
+        entry["redirected_to"] = _normalise_ids(resp.headers["Location"], known_ids)
     return entry
 
 
@@ -492,6 +534,31 @@ def capture_html(routes, hooks, profile: str = "pf2e") -> dict:
     return out
 
 
+def _elsewhere(final_url: str, wanted_url: str) -> str | None:
+    """Where a navigation ended, when that is not the page that was asked for.
+
+    Any other path counts, not just /login: legacy mode bounces to /gm/login."""
+    def where(url):  # the browser reports a normalised address: %20, lower-case host
+        parts = urlsplit(url)
+        port = parts.port or {"http": 80, "https": 443}.get(parts.scheme)
+        return parts.hostname, port, unquote(parts.path).rstrip("/")
+
+    if where(final_url) == where(wanted_url):
+        return None
+    final = urlsplit(final_url)
+    return final.path + ("?" + final.query if final.query else "")
+
+
+def _open_page(page, url: str) -> dict:
+    resp = page.goto(url, wait_until="load")
+    page.wait_for_timeout(1500)
+    # Read the address after the wait, so a redirect from a script counts too.
+    target = _elsewhere(page.url, url)
+    if target is not None:
+        return {"status": 302, "redirected_to": target}
+    return {"status": resp.status if resp else 0}
+
+
 def capture_dom(routes, hooks, base_url: str, click: str = '[role="tab"]') -> dict:
     from playwright.sync_api import sync_playwright
 
@@ -500,24 +567,28 @@ def capture_dom(routes, hooks, base_url: str, click: str = '[role="tab"]') -> di
         browser = engine.chromium.launch(headless=True)
         page = browser.new_page(viewport={"width": 1440, "height": 900})
         for route in routes:
-            resp = page.goto(base_url.rstrip("/") + route, wait_until="load")
-            page.wait_for_timeout(1500)
-            status = resp.status if resp else 0
-            out[route] = {"status": status}
-            if status != 200:
+            url = base_url.rstrip("/") + route
+            out[route] = _open_page(page, url)
+            if out[route]["status"] != 200:
                 continue
             out[route].update(inventory_html(page.content(), hooks.get(route)))
             for i in range(page.locator(click).count()):
                 # Fresh load per tab, so one tab's state never leaks into the next.
-                page.goto(base_url.rstrip("/") + route, wait_until="load")
-                page.wait_for_timeout(1500)
+                loaded = _open_page(page, url)
+                if loaded["status"] != 200:
+                    out[f"{route}#tab{i}"] = loaded
+                    continue
                 tab = page.locator(click).nth(i)
                 if not tab.is_visible():
                     continue
                 key = f"{route}#tab{i}:{tab.get_attribute('id') or ''}"
                 tab.click()
                 page.wait_for_timeout(300)
-                out[key] = {"status": status, **inventory_html(page.content(), hooks.get(route))}
+                target = _elsewhere(page.url, url)
+                if target is not None:
+                    out[key] = {"status": 302, "redirected_to": target}
+                    continue
+                out[key] = {"status": 200, **inventory_html(page.content(), hooks.get(route))}
         browser.close()
     return out
 
@@ -573,11 +644,12 @@ def main(argv=None) -> int:
             data = capture_dom(routes or list(DEFAULT_ROUTES), hooks, args.base_url, args.click)
         else:
             data = capture_html(routes, hooks, args.profile)
-        payload = {"mode": args.mode, "profile": args.profile, "routes": data}
-        Path(args.out).write_text(json.dumps(payload, indent=1, sort_keys=True), encoding="utf-8")
         allowed = dict(item.split("=", 1) for item in args.allow_status)
-        bad = [f"{r}={e['status']}" for r, e in data.items()
+        bad = [f"{r}={e['status']}" + (f" -> {e['redirected_to']}" if "redirected_to" in e else "")
+               for r, e in data.items()
                if e["status"] != 200 and allowed.get(r.split("#")[0]) != str(e["status"])]
+        payload = {"mode": args.mode, "profile": args.profile, "routes": data, "unchecked": bad}
+        Path(args.out).write_text(json.dumps(payload, indent=1, sort_keys=True), encoding="utf-8")
         print(f"captured {len(data)} routes to {args.out}")
         if bad:
             # A route that does not render is not checked at all, so say so loudly.
@@ -590,6 +662,10 @@ def main(argv=None) -> int:
     if (before.get("mode"), before.get("profile")) != (after.get("mode"), after.get("profile")):
         print(f"captures differ in mode or profile ({before.get('mode')}/{before.get('profile')} vs "
               f"{after.get('mode')}/{after.get('profile')}); compare like with like")
+        return 2
+    unchecked = sorted(set(before.get("unchecked", [])) | set(after.get("unchecked", [])))
+    if unchecked:
+        print("NOT CHECKED, recapture first: " + ", ".join(unchecked))
         return 2
     failures, additions = diff_inventories(before, after)
     for line in additions:
