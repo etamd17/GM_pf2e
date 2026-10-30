@@ -78,9 +78,10 @@ answered its five questions on 2026-10-28 (section 12); PF2e goes back to the wa
 
 | ID | Task | Owner | Model | Status | Brief |
 |---|---|---|---|---|---|
-| DS-00 | Inventory diff tool (incl. 00b VTT states, 00c account/Cosmere/Mistborn/5e profiles): ids, data-*, handlers, ARIA, frozen class strings, before/after | claude | Opus, high | accepted (Codex recheck); commit and PR next | `tasks/DS-00-inventory-diff-tool.md` |
-| DS-01 | Tokens, warm gilt (27a removed), `ds-tokens.css`, empty `ds.css`, notices file, contrast tool, screenshot harness | claude | Opus, high | accepted (Codex); merge after DS-00 | `tasks/DS-01-tokens.md` |
-| DS-02..DS-31 | The rest of section 10, in dependency order; nothing starts until DS-00 and DS-01 are merged | see plan | see plan | needs brief | - |
+| DS-00 | Inventory diff tool (incl. 00b VTT states, 00c account/Cosmere/Mistborn/5e profiles): ids, data-*, handlers, ARIA, frozen class strings, before/after | claude | Opus, high | done (PR #235); the VTT half (00b) is still unmerged, on its own branch | `tasks/DS-00-inventory-diff-tool.md` |
+| DS-01 | Tokens, warm gilt (27a removed), `ds-tokens.css`, empty `ds.css`, notices file, contrast tool, screenshot harness | claude | Opus, high | done (PR #236) | `tasks/DS-01-tokens.md` |
+| DS-02 | Motion base: `--t-*` curve, global reduced-motion block, new motion classes used by no page yet, a reduced-motion audit command | claude | Opus, high | ready | `tasks/DS-02-motion-base.md` |
+| DS-03..DS-31 | The rest of section 10, in dependency order | see plan | see plan | needs brief | - |
 
 ## CI maintenance
 
@@ -160,6 +161,8 @@ Accepted as a design checkpoint. Notes:
 - Two of the bugs were checked on current `main` (marked above); the rest are unconfirmed.
 
 ## Log
+
+- 2026-10-30 Claude: merged DS-00 (PR #235) and DS-01 (PR #236) after all CI jobs passed, including PostgreSQL. Both are live: the site's stylesheets match main and its health checks pass. The Windows full suite showed only the same 3 failures and 11 no-database errors as before. Wrote the DS-02 brief. Next: Claude builds DS-02; the VTT half of DS-00 is still unmerged.
 
 - 2026-10-30 Codex: DS-01 is accepted now that the inventory tool recheck is clear. The colour and token decisions stand. Next: Claude publishes its own task PR after DS-00, and every CI job including PostgreSQL must pass before merge; DS-02 still waits for both.
 
