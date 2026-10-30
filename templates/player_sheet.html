@@ -3013,6 +3013,7 @@
     </style>
     <!-- Design system override (last in cascade — wins over inline styles) -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/system.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/ds.css') }}">
 </head>
 <body class="min-h-screen flex flex-col{% if not is_gm and player_name %} has-player-nav{% endif %}">
 

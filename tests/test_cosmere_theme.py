@@ -25,10 +25,13 @@ def _css() -> str:
 
 
 def _cosmere_token_block(css: str) -> str:
-    """The `body.system-cosmere { ... }` token declaration block (flat, so the
-    next '}' closes it)."""
-    i = css.index('body.system-cosmere {')
-    return css[i:css.index('}', i)]
+    """The theme overlay's `body.system-cosmere { ... }` block (flat, so the
+    next '}' closes it). Section 1b has a second, earlier block with the
+    colour-role cells (DS-01), so pick the one that defines the storm ramp."""
+    i = css.index('body.system-cosmere {', css.index('COSMERE (Stormlight) THEME OVERLAY'))
+    block = css[i:css.index('}', i)]
+    assert '--storm-50:' in block
+    return block
 
 
 def test_cosmere_remaps_the_whole_gilt_ramp():
