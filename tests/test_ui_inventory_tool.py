@@ -222,3 +222,17 @@ def test_react_ids_are_numbered_by_appearance():
     assert _number_react_ids(a) == _number_react_ids(b)
     swapped = '<div id="_r_1_-tab" aria-controls="_r_0_-panel"></div><p id="_r_1_"></p>'
     assert _number_react_ids(a) != _number_react_ids(swapped)
+
+
+def test_deploy_token_inside_an_inline_script_is_not_a_script_edit():
+    """The three.js import map embeds /static/... ?v=<deploy>, which differs
+    between two checkouts (found in DS-01). Only the token is ignored."""
+    def page(token, extra=""):
+        return ('<html><body><script type="importmap">{"imports": {"three": '
+                f'"/static/js/vendor/three.module.js?v={token}"}}}}{extra}</script></body></html>')
+    same = diff_inventories(_capture(page("1793330195")), _capture(page("1793215527")))
+    assert same[0] == []
+    edited = diff_inventories(_capture(page("1793330195")), _capture(page("1793215527", " ")))
+    assert edited[0] == []                       # whitespace at the end is stripped
+    changed = diff_inventories(_capture(page("1")), _capture(page("1", ', "x": "/y"')))
+    assert changed[0] and "script_order" in changed[0][0]
