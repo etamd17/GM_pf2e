@@ -4,7 +4,7 @@ import pytest
 PIL = pytest.importorskip("PIL")
 from PIL import Image  # noqa: E402
 
-from tools.ui_screens import compare  # noqa: E402
+from tools.ui_screens import _route_problem, compare  # noqa: E402
 
 
 def _png(path, size=(20, 10), color=(12, 10, 7), dot=None):
@@ -12,6 +12,29 @@ def _png(path, size=(20, 10), color=(12, 10, 7), dot=None):
     if dot:
         img.putpixel(dot, (255, 255, 255))
     img.save(path)
+
+
+def test_nothing_to_compare_is_a_failure_not_a_pass(tmp_path, capsys):
+    assert compare(tmp_path / "nope1", tmp_path / "nope2") == 1
+    # The wrong folder level: the images are one directory down.
+    (tmp_path / "before" / "pf2e").mkdir(parents=True), (tmp_path / "after" / "pf2e").mkdir(parents=True)
+    _png(tmp_path / "before" / "pf2e" / "x.png"), _png(tmp_path / "after" / "pf2e" / "x.png", dot=(1, 1))
+    assert compare(tmp_path / "before", tmp_path / "after") == 1
+    assert "NOTHING to compare" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(("status", "url", "route", "who", "bad"), [
+    (200, "http://h/gm", "/gm", "gm", False),
+    (200, "http://h/me", "/", "gm", False),
+    (200, "http://h/login", "/login", "gm", False),
+    (200, "http://h/login", "/", "anon", False),
+    (503, "http://h/dnd5e/gm", "/dnd5e/gm", "gm", True),
+    (500, "http://h/x", "/x", "anon", True),
+    (None, "http://h/x", "/x", "gm", True),
+    (200, "http://h/login?next=/gm", "/gm", "gm", True),
+])
+def test_an_error_page_or_a_login_bounce_is_not_a_screenshot(status, url, route, who, bad):
+    assert bool(_route_problem(status, url, route, who)) is bad
 
 
 def test_identical_screenshots_pass(tmp_path, capsys):

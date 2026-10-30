@@ -29,7 +29,7 @@ import design_tokens  # noqa: E402
 TEXT_ROLES = ["--c-text-1", "--c-text-2", "--c-text-3", "--c-text-on-surface-1",
               "--c-text-on-surface-2", "--c-text-on-surface-3", "--c-accent",
               "--c-danger-text", "--c-success-text", "--c-warn-text", "--c-info"]
-STATUS_TONES = ["danger", "success", "warn"]
+STATUS_TONES = ["danger", "success", "warn"]   # any other --c-<tone>-text is found by name
 EDGES = ["--c-line", "--c-line-strong", "--c-line-neutral"]
 HP = ["--c-hp-ok", "--c-hp-hurt", "--c-hp-bloodied", "--c-hp-crit", "--c-hp-down"]
 
@@ -94,11 +94,14 @@ def check(css: str | None = None):
                          "ratio": round(r, 2), "floor": floor, "enforced": enforced,
                          "ok": r >= floor})
 
-        for name in TEXT_ROLES:
+        # A new --c-*-text role is checked without being listed here.
+        named = sorted(n for n in col if n.endswith("-text") and n not in TEXT_ROLES)
+        for name in TEXT_ROLES + named:
             add("text", name, col[name], "--c-surface", surface, 4.5, True)
         add("text", "--c-on-accent", col["--c-on-accent"], "--c-accent",
             over(col["--c-accent"], surface), 4.5, True)
-        for tone in STATUS_TONES:
+        extra_tones = [n[4:-5] for n in named if n[:-5] in col]
+        for tone in STATUS_TONES + extra_tones:
             r, g, b, a = col[f"--c-{tone}"]
             fill = over((r, g, b, a * 0.22), surface)
             add("status-text", f"--c-{tone}-text", col[f"--c-{tone}-text"],
@@ -125,8 +128,9 @@ def main(argv):
                   f"{r['ratio']:>6.2f}  floor {r['floor']}  {mark}")
     failures = [r for r in rows if r["enforced"] and not r["ok"]]
     reported = [r for r in rows if not r["enforced"] and not r["ok"]]
+    # On stderr in --json mode, so stdout stays parseable.
     print(f"\n{len(rows)} pairs, {len(failures)} enforced failure(s), "
-          f"{len(reported)} reported below 3:1")
+          f"{len(reported)} reported below 3:1", file=sys.stderr if "--json" in argv else sys.stdout)
     return 1 if failures else 0
 
 

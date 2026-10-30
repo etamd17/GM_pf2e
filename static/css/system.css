@@ -254,6 +254,12 @@
    <body> as well as :root: a custom property resolves var() where it is
    declared, so a :root-only alias would keep the PF2e value inside
    body.system-cosmere, whose theme re-declares the primitives on <body>. */
+:root {
+    /* The tint behind section 27's hover and proficiency fills: warm gilt
+       (--gilt-300) as a triple, so it can take an alpha. */
+    --tint-27-rgb: 201, 163, 78;
+}
+
 :root,
 body {
     --c-page:      var(--bg-page);
@@ -321,9 +327,19 @@ body {
     --c-chart-5: #5fa8e0;
 }
 
+/* D&D 5e HP tiers are its own (dnd5e.css .d5-hpbar). There is no 5e "hurt" state,
+   so that role stays the PF2e value. Everything else waits for DS-24a (Q4). */
+body.system-dnd5e {
+    --c-hp-ok:       #5fbf7f;
+    --c-hp-bloodied: #e0b04a;
+    --c-hp-crit:     #e0603c;
+    --c-hp-down:     #555555;
+}
+
 /* Stormlight cells that are not plain aliases. Mistborn re-points the
    --storm-* ramp to pewter, so its chart follows automatically. */
 body.system-cosmere {
+    --tint-27-rgb: 210, 138, 61;      /* section 27's tints keep today's pixels */
     --c-on-accent: #06242b;
     --c-info:      var(--storm-200);
     --c-hp-ok:     #5fe6b0;      /* cosmere_gm_vitals.html:28 */
@@ -2794,7 +2810,7 @@ button[onclick^="rollAttack"]:hover {
     border-color: var(--accent) !important;
 }
 button[onclick^="rollDamage"] {
-    background: rgba(210, 138, 61, 0.06) !important;
+    background: rgba(var(--tint-27-rgb), 0.06) !important;
     border: 1px solid var(--border-strong) !important;
     color: var(--accent) !important;
 }
@@ -2841,7 +2857,7 @@ button[onclick^="rollDamage"]:hover {
     background: transparent !important;
 }
 .spell-entry:hover {
-    background: rgba(210, 138, 61, 0.05) !important;
+    background: rgba(var(--tint-27-rgb), 0.05) !important;
 }
 .spell-rank-header {
     font-family: var(--font-display) !important;
@@ -2862,12 +2878,12 @@ button[onclick^="rollDamage"]:hover {
     border-radius: 0 !important;
     padding: 6px 10px !important;
 }
-.inv-item:hover { background: rgba(210, 138, 61, 0.05) !important; }
+.inv-item:hover { background: rgba(var(--tint-27-rgb), 0.05) !important; }
 
 /* ── 27n. Profession letter chips — Pathbuilder uses small filled
    squares, not outlined letters. */
-.prof-t { background: rgba(210, 138, 61, 0.18) !important; color: var(--gilt-200) !important; border-color: rgba(210, 138, 61, 0.3) !important; }
-.prof-e { background: rgba(210, 138, 61, 0.32) !important; color: var(--gilt-100) !important; border-color: rgba(210, 138, 61, 0.5) !important; }
+.prof-t { background: rgba(var(--tint-27-rgb), 0.18) !important; color: var(--gilt-200) !important; border-color: rgba(var(--tint-27-rgb), 0.3) !important; }
+.prof-e { background: rgba(var(--tint-27-rgb), 0.32) !important; color: var(--gilt-100) !important; border-color: rgba(var(--tint-27-rgb), 0.5) !important; }
 .prof-m { background: var(--accent) !important; color: var(--ink-950) !important; border-color: var(--accent) !important; }
 .prof-l { background: #c43c3c !important; color: #fff !important; border-color: #c43c3c !important; }
 
@@ -3152,7 +3168,7 @@ button[onclick^="rollDamage"]:hover {
     padding: 4px var(--sp-2);
     border-radius: var(--r-sm);
 }
-.sr-row-roll:hover { background: rgba(210, 138, 61, 0.10); }
+.sr-row-roll:hover { background: rgba(var(--tint-27-rgb), 0.10); }
 .sr-row-roll:hover + .sr-row { border-top-color: transparent; }
 .sr-lbl {
     font-family: var(--font-display);
@@ -3187,7 +3203,7 @@ button[onclick^="rollDamage"]:hover {
 }
 .sr-ability:hover {
     border-color: var(--accent);
-    background: rgba(210, 138, 61, 0.08);
+    background: rgba(var(--tint-27-rgb), 0.08);
 }
 .sr-ability-lbl {
     font-family: var(--font-display);
@@ -3312,7 +3328,7 @@ button[onclick^="rollDamage"]:hover {
 }
 .sr-shield-action:hover { border-color: var(--accent); color: var(--accent); }
 .sr-shield-action.raised {
-    background: rgba(210, 138, 61, 0.18);
+    background: rgba(var(--tint-27-rgb), 0.18);
     color: var(--accent);
     border-color: var(--accent);
 }
@@ -3352,8 +3368,8 @@ button[onclick^="rollDamage"]:hover {
     align-items: baseline;
     gap: 4px;
     padding: 2px 8px;
-    background: rgba(210, 138, 61, 0.10);
-    border: 1px solid rgba(210, 138, 61, 0.35);
+    background: rgba(var(--tint-27-rgb), 0.10);
+    border: 1px solid rgba(var(--tint-27-rgb), 0.35);
     border-radius: 99px;
     font-family: var(--font-display);
     font-variant-numeric: tabular-nums lining-nums;

@@ -12,8 +12,9 @@ import design_tokens  # noqa: E402
 
 SYSTEM = (ROOT / "static" / "css" / "system.css").read_text(encoding="utf-8")
 TEMPLATES = ROOT / "templates"
-SYSTEM_PAGES = ["base", "campaign_intro", "mobile_combat", "player_builder",
-                "player_levelup", "player_sheet", "player_view"]
+# Found, not listed: a new standalone page that links system.css must link ds.css too.
+SYSTEM_PAGES = sorted(p.stem for p in TEMPLATES.glob("*.html")
+                      if "filename='css/system.css'" in p.read_text(encoding="utf-8"))
 TOKEN_PAGES = ["_account_base", "splash"]
 
 
@@ -40,6 +41,7 @@ def test_ds_tokens_css_holds_only_resolved_custom_properties():
 
 @pytest.mark.parametrize("name", SYSTEM_PAGES)
 def test_ds_css_is_linked_right_after_system_css(name):
+    assert len(SYSTEM_PAGES) >= 7
     lines = [l.strip() for l in _template(name).splitlines()]
     sys_at = next(i for i, l in enumerate(lines) if "filename='css/system.css'" in l)
     assert "url_for('static', filename='css/ds.css')" in lines[sys_at + 1]
@@ -62,6 +64,30 @@ def test_the_27a_override_is_gone_and_section_1_renders():
     assert body["--border-strong"] == "rgba(201, 163, 78, 0.28)"
 
 
+# Every token the removed 27a override set, as <body> resolved it before DS-01
+# (tools/design_tokens.py on cb5a29f5). A theme line lost later would fall through
+# to warm gilt inside a Cosmere page.
+COSMERE_BODY = {
+    "stormlight": {
+        "--bg-page": "#0b0f15", "--bg-card": "#131b26", "--bg-card-2": "#1a2431",
+        "--bg-input": "#0e141c", "--bg-sunken": "#0e141c", "--gilt-100": "#d3ecfb",
+        "--gilt-200": "#9fd2f2", "--gilt-300": "#5fa8e0", "--gilt-400": "#3d83bf",
+        "--border-card": "rgba(95, 168, 224, 0.16)", "--border-rule": "rgba(95, 168, 224, 0.30)",
+        "--border-strong": "rgba(95, 168, 224, 0.30)", "--text-on-cream": "#e7eef6",
+        "--text-on-cream-2": "#b9c6d6", "--text-on-cream-3": "#9fb1c4",
+        "--text-on-dark": "#e7eef6", "--text-on-dark-2": "#9fb2c6", "--text-on-dark-3": "#96a9bf",
+    },
+    "mistborn": {
+        "--bg-page": "#0d0d0e", "--bg-card": "#151518", "--bg-card-2": "#1d1d21",
+        "--bg-input": "#100f12", "--bg-sunken": "#100f12", "--gilt-100": "#d7dbe0",
+        "--gilt-200": "#c8cdd5", "--gilt-300": "#aab0ba", "--gilt-400": "#828892",
+        "--border-card": "rgba(202, 204, 212, 0.13)", "--border-rule": "rgba(202, 204, 212, 0.26)",
+        "--border-strong": "rgba(202, 204, 212, 0.26)", "--text-on-cream": "#e9e7e2",
+        "--text-on-cream-2": "#b3b2aa", "--text-on-cream-3": "#a9a89e",
+        "--text-on-dark": "#e9e7e2", "--text-on-dark-2": "#b3b2aa", "--text-on-dark-3": "#a9a89e",
+    },
+}
+
 # What <html> paints with on a Cosmere page before DS-01 (from the removed override).
 COSMERE_HTML = {"--bg-page": "#0d0c10", "--border-rule": "rgba(210, 138, 61, 0.30)",
                 "--text-on-dark": "#ebe9df", "--text-on-dark-3": "#a79d88"}
@@ -74,8 +100,91 @@ def test_cosmere_keeps_every_value_it_had_before_ds_01(theme):
     scrollbar (base.html) from :root, so those values are pinned on Cosmere pages."""
     html, body = design_tokens.computed(SYSTEM, theme)
     assert {k: html[k] for k in COSMERE_HTML} == COSMERE_HTML
-    assert body["--bg-page"] != "#0d0c10"            # the pin stays on <html> only
-    assert body["--border-strong"] == body["--border-rule"]
+    assert {k: body[k] for k in COSMERE_BODY[theme]} == COSMERE_BODY[theme]
+
+
+def test_section_27_tints_are_warm_on_pf2e_and_5e_and_unchanged_on_cosmere():
+    """The 27a orange also lived on as literals in later rules. Only the <html> pin
+    may still spell it."""
+    assert len(re.findall(r"rgba\(210, 138, 61", SYSTEM)) == 1
+    assert "--border-rule:     rgba(210, 138, 61, 0.30);" in SYSTEM
+    expected = {"pf2e": "201, 163, 78", "dnd5e": "201, 163, 78",
+                "stormlight": "210, 138, 61", "mistborn": "210, 138, 61"}
+    for theme, triple in expected.items():
+        assert design_tokens.computed(SYSTEM, theme)[1]["--tint-27-rgb"] == triple
+
+
+def test_5e_hp_roles_are_its_own_and_the_rest_stay_pf2e():
+    _, dnd = design_tokens.computed(SYSTEM, "dnd5e")
+    _, pf2e = design_tokens.computed(SYSTEM, "pf2e")
+    assert {k: dnd[k] for k in ("--c-hp-ok", "--c-hp-bloodied", "--c-hp-crit", "--c-hp-down")} == {
+        "--c-hp-ok": "#5fbf7f", "--c-hp-bloodied": "#e0b04a",
+        "--c-hp-crit": "#e0603c", "--c-hp-down": "#555555"}
+    assert dnd["--c-hp-hurt"] == pf2e["--c-hp-hurt"]
+    assert dnd["--c-accent"] == pf2e["--c-accent"]     # until the DS-24a mockup (Q4)
+
+
+def _tok(css, theme="pf2e"):
+    return design_tokens.computed(css, theme)
+
+
+def test_nested_var_fallbacks_resolve_as_a_browser_does():
+    css = ":root{--a:#111;--b:#222;--c:#333;" \
+          "--x:var(--a,color-mix(in srgb,var(--b) 50%,transparent));" \
+          "--y:var(--nope,var(--c));--z:var(--nope,var(--nada,#444))}"
+    html, _ = _tok(css)
+    assert (html["--x"], html["--y"], html["--z"]) == ("#111", "#333", "#444")
+
+
+def test_important_is_recognised_in_every_valid_spelling():
+    for spelling in ("!important", "! important", "!IMPORTANT"):
+        html, _ = _tok(":root{--z:#fff %s} :root{--z:#000}" % spelling)
+        assert html["--z"] == "#fff", spelling
+
+
+def test_html_has_specificity_counts_its_argument():
+    css = "html:has(> body.system-cosmere.cosmere-mistborn){--z:#111} html:has(> body.system-cosmere){--z:#222}"
+    assert _tok(css, "mistborn")[0]["--z"] == "#111"
+    assert _tok(css, "stormlight")[0]["--z"] == "#222"
+
+
+def test_strings_and_statement_at_rules_do_not_confuse_the_parser():
+    assert _tok(':root{--q:"}";--z:#fff}')[0] == {"--q": '"}"', "--z": "#fff"}
+    assert _tok(':root{--q:";";--z:#fff}')[0] == {"--q": '";"', "--z": "#fff"}
+    assert _tok(':root{--q:"/*";--z:#fff} .a{} :root{--y:"*/"}')[0]["--z"] == "#fff"
+    assert _tok("@import url(x.css);\n:root{--z:#fff}")[0] == {"--z": "#fff"}
+
+
+@pytest.mark.parametrize("css", [
+    ".system-cosmere{--c-x:#000}",
+    "body.system-cosmere:not(.cosmere-mistborn){--c-x:#000}",
+    "@supports (color:red){:root{--c-x:#000}}",
+    "@media a{@media b{:root{--fs-x:1}}}",
+])
+def test_a_token_the_resolver_cannot_model_is_an_error_not_a_silent_skip(css):
+    with pytest.raises(ValueError, match="does not|not model"):
+        _tok(":root{--c-x:#fff}" + css, "stormlight")
+
+
+def test_generated_file_covers_body_only_tokens_and_html_media_rules():
+    out = design_tokens.render_ds_tokens(
+        ":root{--c-a:#111} body{--c-x:#222} @media (max-width:640px){html{--fs-2xl:1rem !important}}")
+    assert "--c-x: #222;" in out and "--fs-2xl: 1rem !important;" in out
+
+
+def test_contrast_tool_checks_a_new_text_role_it_was_not_told_about():
+    weak = SYSTEM + "\n:root, body { --c-arcane: #5a3a8a; --c-arcane-text: #221133; }\n"
+    rows = check_contrast.check(weak)
+    assert any(r["fg"] == "--c-arcane-text" and r["kind"] == "text" and not r["ok"] for r in rows)
+    assert any(r["fg"] == "--c-arcane-text" and r["kind"] == "status-text" for r in rows)
+
+
+def test_contrast_json_output_parses(capsys):
+    import json
+    assert check_contrast.main(["x", "--json"]) == 0
+    captured = capsys.readouterr()
+    assert json.loads(captured.out)[0]["theme"] == "pf2e"
+    assert "enforced failure" in captured.err
 
 
 @pytest.mark.parametrize(("theme", "expected"), [
