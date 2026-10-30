@@ -205,4 +205,6 @@ Rechecked after merging DS-00 and current `main` (16 commits, including the Mist
 - Inventory diff, DS-00 tip against this branch: **0 failures in all five profiles**, with the same additions as the table above (18, 25, 12, 12, 10), all of them the new stylesheet links.
 - `pytest -q tests/test_ds_tokens.py tests/test_ui_screens_tool.py tests/test_cosmere_theme.py tests/test_cosmere_mistborn_skin.py tests/test_cosmere_mb06_browser.py`: **59 passed in 14.40s**.
 - Contrast: 112 pairs, 0 enforced failures, 25 reported below 3:1. Templates: 111 parsed.
-- Not repeated: the screenshot comparisons and the full suite on Windows. CI runs the full suite on the PR.
+- Windows full suite on `3492d6c9`: 5538 passed, 3 failed, 46 skipped, 1 xfailed, 11 errors, in 1:21:34. These are the same 3 failures and the same 11 PostgreSQL errors (no database set) as the baseline. CI ran PostgreSQL and all other jobs green.
+- Not repeated: the screenshot comparisons.
+- Live after merge (`ac4b878c`): production's `system.css`, `ds.css` and `ds-tokens.css` match `main`, and `/health` and `/ready` return 200. No signed-in page was checked in production.
