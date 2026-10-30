@@ -99,6 +99,9 @@ VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "met
 VOLATILE_VALUES = {"_csrf", "csrf_token"}
 
 
+STATIC_VERSION = re.compile(r"(/static/[^\s\"'?]+)\?v=[0-9A-Za-z._-]+")
+
+
 def _static(url: str) -> str:
     # The ?v= cache-buster changes with every edit to the file.
     return url.split("?", 1)[0] if url.startswith("/static/") else url
@@ -217,7 +220,9 @@ class _Parser(HTMLParser):
 
     def handle_endtag(self, tag):
         if tag == "script" and self._script is not None:
-            body = "".join(self._script).strip()
+            # Static URLs inside a script (the three.js import map) carry the
+            # deploy cache-buster, which differs between two checkouts.
+            body = STATIC_VERSION.sub(r"\1", "".join(self._script).strip())
             if body:
                 digest = hashlib.sha1(body.encode("utf-8")).hexdigest()[:12]
                 self.script_order.append("inline sha1=" + digest)
