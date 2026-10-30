@@ -104,8 +104,63 @@ def scopes(worlds, eras):
     return worlds, eras
 
 
-def freeze(value, depth=0):
-    """Copy normalized JSON into immutable containers; reject private runtime paths."""
+_DRIVE_PATH = re.compile(r"[A-Za-z]:[\\/]")
+_POSIX_PATH = re.compile(r"(?<![\w:/])/[^\s]+")
+_UNC_PATH = re.compile(r"(?<!\w)\\\\[^\\\s]+\\")
+_KEY_ACRONYM = re.compile(r"([A-Z]+)([A-Z][a-z])")
+_KEY_CAMEL = re.compile(r"([a-z0-9])([A-Z])")
+_KEY_SEPARATOR = re.compile(r"[-_\s]+")
+# Strings and keys that already passed. A registry repeats the same IDs, labels
+# and keys thousands of times, and one load walks it several times, so the
+# regexes below dominated a load. Failures are never remembered. Runtime input
+# passes through here too, so both sets share a hard bound (about 10 MB at
+# worst); the 1.1.2 registry needs under 6,500 entries and 220,000 characters.
+_PASSED_TEXT = set()
+_PASSED_KEYS = set()
+_PASSED_LIMIT = 1 << 15
+_PASSED_CHARS = 1 << 21
+_PASSED_MAX_LENGTH = 1 << 10
+_passed_chars = 0
+
+
+def _remember(passed, value):
+    global _passed_chars
+    if type(value) is not str or len(value) > _PASSED_MAX_LENGTH:
+        return
+    if (len(_PASSED_TEXT) + len(_PASSED_KEYS) >= _PASSED_LIMIT
+            or _passed_chars + len(value) > _PASSED_CHARS):
+        _PASSED_TEXT.clear()
+        _PASSED_KEYS.clear()
+        _passed_chars = 0
+    passed.add(value)
+    _passed_chars += len(value)
+
+
+def _check_text(value):
+    if type(value) is str and value in _PASSED_TEXT:
+        return
+    require(MEDIA_PAYLOAD.search(value) is None, "source/media payload is prohibited")
+    require(not (value.startswith(("/", "\\", "~/")) or _DRIVE_PATH.search(value)
+                 or _POSIX_PATH.search(value) or _UNC_PATH.search(value)),
+            "absolute paths are runtime input only")
+    _remember(_PASSED_TEXT, value)
+
+
+def _check_key(key, depth):
+    text(key, "JSON key")
+    require(depth <= 32, "JSON nesting limit exceeded")
+    _check_text(key)
+    if type(key) is str and key in _PASSED_KEYS:
+        return
+    normalized_key = _KEY_ACRONYM.sub(r"\1_\2", key)
+    normalized_key = _KEY_CAMEL.sub(r"\1_\2", normalized_key)
+    normalized_key = _KEY_SEPARATOR.sub("_", normalized_key).strip("_").lower()
+    require(normalized_key not in FORBIDDEN_KEYS, "raw source content is prohibited")
+    _remember(_PASSED_KEYS, key)
+
+
+def _walk_json(value, depth, build):
+    """freeze's checks in freeze's order; ``build`` also returns the frozen copy."""
     require(depth <= 32, "JSON nesting limit exceeded")
     if value is None or type(value) in (bool, int):
         return value
@@ -113,30 +168,49 @@ def freeze(value, depth=0):
         require(math.isfinite(value), "invalid JSON number")
         return value
     if isinstance(value, str):
-        require(MEDIA_PAYLOAD.search(value) is None, "source/media payload is prohibited")
-        require(not (value.startswith(("/", "\\", "~/")) or re.search(r"[A-Za-z]:[\\/]", value)
-                     or re.search(r"(?<![\w:/])/[^\s]+", value)
-                     or re.search(r"(?<!\w)\\\\[^\\\s]+\\", value)),
-                "absolute paths are runtime input only")
+        _check_text(value)
         return value
     if isinstance(value, Mapping):
-        result = {}
+        result = {} if build else None
         for key, item in value.items():
-            text(key, "JSON key")
-            freeze(key, depth + 1)
-            normalized_key = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", key)
-            normalized_key = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", normalized_key)
-            normalized_key = re.sub(r"[-_\s]+", "_", normalized_key).strip("_").lower()
-            require(normalized_key not in FORBIDDEN_KEYS, "raw source content is prohibited")
-            result[key] = freeze(item, depth + 1)
-        return MappingProxyType(result)
+            _check_key(key, depth + 1)
+            item = _walk_json(item, depth + 1, build)
+            if build:
+                result[key] = item
+        return MappingProxyType(result) if build else None
     if isinstance(value, (list, tuple)):
-        return tuple(freeze(item, depth + 1) for item in value)
+        if build:
+            return tuple(_walk_json(item, depth + 1, True) for item in value)
+        for item in value:
+            _walk_json(item, depth + 1, False)
+        return None
     raise RulesValidationError("invalid normalized JSON value")
+
+
+def freeze(value, depth=0):
+    """Copy normalized JSON into immutable containers; reject private runtime paths."""
+    return _walk_json(value, depth, True)
+
+
+def check_json(value):
+    """Apply every check ``freeze`` applies, without building the frozen copy."""
+    _walk_json(value, 0, False)
+
+
+_JSON_SCALARS = frozenset({str, int, float, bool, type(None)})
 
 
 def to_dict(value):
     """Return detached JSON-compatible data without mutating frozen records."""
+    kind = type(value)
+    # Exact JSON types reach the same branch below, just without the
+    # dataclass and ABC checks a registry walk pays over a million times.
+    if kind in _JSON_SCALARS:
+        return value
+    if kind is dict or kind is MappingProxyType:
+        return {key: to_dict(item) for key, item in value.items()}
+    if kind is list or kind is tuple:
+        return [to_dict(item) for item in value]
     if isinstance(value, CosmereRulesBinding):
         result = {field.name: to_dict(getattr(value, field.name)) for field in fields(value)}
         # A single-world binding predates ``allowed_worlds`` and is completely

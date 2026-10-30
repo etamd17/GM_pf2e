@@ -20,7 +20,8 @@ from .registry import load_registry
 MAX_ARCHIVE = 48 * 1024 * 1024
 MAX_UNPACKED = 32 * 1024 * 1024
 MAX_FILE = 12 * 1024 * 1024
-MAX_MEMBERS = 16
+# Each Mistborn release adds three package files; MAX_UNPACKED is the real bound.
+MAX_MEMBERS = 64
 REQUIRED = frozenset({"rules/authoring.json", "rules/registry.json"})
 OPTIONAL = frozenset({"rules/mistborn_coverage.json", "rules/mistborn/manifest.json"})
 PACKAGE_FILE = re.compile(r"rules/mistborn/(core|era-1|era-2)-[0-9]+\.[0-9]+\.[0-9]+\.json\Z")
@@ -37,7 +38,8 @@ def allowed(name: str) -> bool:
     return name in REQUIRED or name in OPTIONAL or bool(PACKAGE_FILE.fullmatch(name))
 
 
-def _validate_tree(root: Path) -> dict:
+def _validate_tree(root: Path):
+    """Return the install summary and the registry that was verified."""
     rules = root / "rules"
     authoring_path = rules / "authoring.json"
     registry_path = rules / "registry.json"
@@ -64,7 +66,7 @@ def _validate_tree(root: Path) -> dict:
         except (ValueError, OSError, UnicodeError) as error:
             raise BundleError(f"Invalid JSON in {path.name}.") from error
     return {"packages": len(registry.pack_versions), "records": len(registry.records),
-            "hash": registry.package_hash}
+            "hash": registry.package_hash}, registry
 
 
 def build(data_dir: str | Path, output: str | Path) -> Path:
@@ -87,8 +89,12 @@ def build(data_dir: str | Path, output: str | Path) -> Path:
     return output
 
 
-def install(archive_path: str | Path, dest: str | Path) -> dict:
-    """Validate an entire bundle, then replace the installed tree with rollback."""
+def install(archive_path: str | Path, dest: str | Path, *, loaded=None) -> dict:
+    """Validate an entire bundle, then replace the installed tree with rollback.
+
+    ``loaded`` receives the verified registry once the new tree is live, so the
+    caller can serve it without verifying the same files again.
+    """
     archive_path, dest = Path(archive_path), Path(dest)
     if archive_path.stat().st_size > MAX_ARCHIVE:
         raise BundleError("The bundle exceeds the upload limit.")
@@ -125,7 +131,7 @@ def install(archive_path: str | Path, dest: str | Path) -> dict:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 with target.open("wb") as handle:
                     shutil.copyfileobj(source, handle)
-        result = _validate_tree(stage)
+        result, registry = _validate_tree(stage)
         old_exists = dest.exists()
         if old_exists:
             os.replace(dest, backup)
@@ -137,6 +143,8 @@ def install(archive_path: str | Path, dest: str | Path) -> dict:
             raise
         if old_exists:
             shutil.rmtree(backup, ignore_errors=True)
+        if loaded is not None:
+            loaded(registry)
         return result
     finally:
         shutil.rmtree(stage, ignore_errors=True)

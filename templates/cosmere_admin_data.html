@@ -6,7 +6,16 @@
 Build a bundle on the machine with the private data using <code>python tools/cosmere_bundle.py</code>,
 then upload it here as the site administrator.</p>
 <ul class="list"><li class="row"><div><strong>Status</strong>
-  <div class="meta" id="status">{{ 'Installed' if installed else 'Not installed' }}</div>
+  {% if summary %}
+  <div class="meta" id="status">Installed: Mistborn rules {{ summary.release or 'none' }}</div>
+  <div class="meta" id="status-detail">{{ summary.packages }} package versions, registry <code>{{ summary.hash[:8] }}</code>{% if summary.older_releases %}. Also kept for campaigns pinned to them: {{ summary.older_releases|join(', ') }}{% endif %}</div>
+  {% elif installed %}
+  <div class="meta" id="status">Installed, but it does not load: {{ problem }}</div>
+  <div class="meta" id="status-detail">Upload a fixed bundle below.</div>
+  {% else %}
+  <div class="meta" id="status">Not installed</div>
+  <div class="meta" id="status-detail"></div>
+  {% endif %}
   <div class="meta">Directory: <code>{{ data_dir }}</code></div>
 </div></li></ul>
 <label for="bundle">Rules bundle (.tar.gz)</label>
@@ -30,8 +39,13 @@ then upload it here as the site administrator.</p>
         return body;
       }); })
       .then(function (body) {
-        result.textContent = 'Installed ' + body.packages + ' packages and ' + body.records + ' records.';
-        document.getElementById('status').textContent = 'Installed';
+        var detail = body.packages + ' package versions, registry ' + String(body.hash || '').slice(0, 8);
+        if (body.older_releases && body.older_releases.length) {
+          detail += '. Also kept for campaigns pinned to them: ' + body.older_releases.join(', ');
+        }
+        result.textContent = 'Installed Mistborn rules ' + (body.release || 'none') + ' (' + detail + ').';
+        document.getElementById('status').textContent = 'Installed: Mistborn rules ' + (body.release || 'none');
+        document.getElementById('status-detail').textContent = detail;
       })
       .catch(function (error) { result.textContent = error.message; })
       .finally(function () { button.disabled = false; });
