@@ -150,6 +150,84 @@
        glow each time. */
     --shadow-glow-gilt: 0 0 0 2px rgba(0,0,0,0.6), 0 0 12px rgba(201,163,78,0.45);
     --shadow-glow-ruby: 0 0 0 2px rgba(0,0,0,0.6), 0 0 12px rgba(168,58,58,0.45);
+
+    /* ── Design-system tokens (DS-01, docs/design/DESIGN_DIRECTION.md 5-6).
+       Additive: nothing above changes. Colour roles live in section 1b,
+       because they must re-resolve on <body> where the Cosmere themes
+       re-declare the primitives. static/css/ds-tokens.css mirrors these
+       values for pages without system.css; a test keeps the two equal. */
+
+    /* Type scale in rem, so it follows the user's default font size (5.2) */
+    --fs-2xs: 0.6875rem;   /* 11px, uppercase tracked labels only */
+    --fs-xs:  0.75rem;     /* 12px */
+    --fs-sm:  0.8125rem;   /* 13px */
+    --fs-md:  0.875rem;    /* 14px, default UI body */
+    --fs-lg:  1rem;        /* 16px */
+    --fs-xl:  1.25rem;     /* 20px */
+    --fs-2xl: 1.5rem;      /* 24px */
+    --fs-3xl: 1.75rem;     /* 28px */
+    --fs-num-hero: 2.25rem;
+    --fs-cine: clamp(2.875rem, 9vw, 8.25rem);
+    --lh-tight: 1.15;
+    --lh-ui:    1.35;
+    --lh-body:  1.55;
+    --lh-read:  1.62;
+    --fw-regular:  400;
+    --fw-medium:   500;
+    --fw-semibold: 600;
+
+    /* Density presets on the 4px grid (5.3) */
+    --pad-row:          var(--sp-2) var(--sp-3);
+    --pad-card:         var(--sp-4);
+    --pad-card-dense:   var(--sp-3);
+    --pad-control:      6px var(--sp-3);
+    --pad-control-lg:   10px var(--sp-4);
+    --gap-stack:        var(--sp-2);
+    --gap-section:      var(--sp-6);
+    --gap-page:         var(--sp-7);
+
+    /* Status dots, avatars and medallions only (5.4) */
+    --r-round: 999px;
+
+    /* Stacking for new .ds-* overlays (5.8). Legacy z-indexes keep their
+       values; the tracker's local --z-* names are left alone. */
+    --layer-raised:    10;
+    --layer-dropdown:  100;
+    --layer-banner:    130;
+    --layer-drawer:    150;
+    --layer-dock:      200;
+    --layer-modal:     300;
+    --layer-toast:     500;
+    --layer-search:    9000;
+    --layer-ambient:   9988;
+    --layer-flash:     9995;
+    --layer-flourish:  99990;
+    --layer-boss:      99991;
+    --layer-fab:       99995;
+    --layer-safety:    99999;
+    --layer-system:    100000;
+
+    /* Motion (6.1). --t-* above are untouched; DS-02 changes their curve. */
+    --dur-press:      120ms;
+    --dur-tip:        160ms;
+    --dur-tip-out:    100ms;
+    --dur-menu:       200ms;
+    --dur-menu-out:   140ms;
+    --dur-dialog:     220ms;
+    --dur-dialog-out: 150ms;
+    --dur-panel:      280ms;
+    --dur-panel-out:  180ms;
+    --dur-layout:     280ms;
+    --dur-value:      300ms;
+    --dur-flash:      400ms;
+    --ease-standard:  cubic-bezier(0.4, 0, 0.2, 1);
+    --ease-out:       cubic-bezier(0.22, 1, 0.36, 1);
+    --ease-exit:      cubic-bezier(0.4, 0, 1, 1);
+    --ease-move:      cubic-bezier(0.77, 0, 0.175, 1);    /* beUI EASE_IN_OUT, MIT */
+    --ease-drawer:    cubic-bezier(0.32, 0.72, 0, 1);     /* beUI EASE_DRAWER, MIT */
+    --ease-overshoot: cubic-bezier(0.34, 1.36, 0.64, 1);
+    --motion-distance:   1;
+    --motion-scale-from: 0.97;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -157,7 +235,111 @@
         --t-fast: 1ms;
         --t-base: 1ms;
         --t-slow: 1ms;
+        --motion-distance:   0;
+        --motion-scale-from: 1;
     }
+}
+
+/* Phones: the two largest working-screen sizes step down one size (5.2). */
+@media (max-width: 640px) {
+    :root {
+        --fs-2xl: 1.25rem;
+        --fs-3xl: 1.5rem;
+    }
+}
+
+/* ── 1b. Colour roles (DS-01, DESIGN_DIRECTION.md 5.1) ──────────────── */
+
+/* Components read roles only. Roles that alias a primitive are declared on
+   <body> as well as :root: a custom property resolves var() where it is
+   declared, so a :root-only alias would keep the PF2e value inside
+   body.system-cosmere, whose theme re-declares the primitives on <body>. */
+:root,
+body {
+    --c-page:      var(--bg-page);
+    --c-surface:   var(--bg-card);
+    --c-surface-2: var(--bg-card-2);
+    --c-sunken:    var(--bg-sunken);
+    --c-input:     var(--bg-input);
+    --c-overlay:   var(--bg-overlay);
+    --c-scrim:     rgba(0, 0, 0, 0.6);
+
+    --c-text-1: var(--text-on-dark);
+    --c-text-2: var(--text-on-dark-2);
+    --c-text-3: var(--text-on-dark-3);
+    --c-text-on-surface-1: var(--text-on-cream);
+    --c-text-on-surface-2: var(--text-on-cream-2);
+    --c-text-on-surface-3: var(--text-on-cream-3);
+
+    --c-line:         var(--border-card);
+    --c-line-strong:  var(--border-rule);
+    --c-line-neutral: var(--border-dark);
+
+    --c-accent:       var(--accent);
+    --c-accent-hover: var(--accent-hover);
+    --c-on-accent:    var(--ink-950);
+    --c-focus:        var(--gilt-200);
+    --c-wash-1: color-mix(in srgb, var(--c-text-1) 3%, transparent);   /* hover */
+    --c-wash-2: color-mix(in srgb, var(--c-text-1) 6%, transparent);   /* selected */
+
+    --c-danger:       var(--danger);
+    --c-danger-text:  var(--ruby-100);
+    --c-success:      var(--success);
+    --c-success-text: #9bc06f;
+    --c-warn:         var(--warn);
+    --c-warn-text:    #e0b65a;     /* literal: the Cosmere themes remap --gilt-200 */
+    --c-info:         var(--text-on-dark-2);
+
+    --c-hp-ok:       #7fae6e;
+    --c-hp-hurt:     #cfa54e;
+    --c-hp-bloodied: #dd9a52;
+    --c-hp-crit:     #d67a7a;
+    --c-hp-down:     var(--text-on-dark-3);
+
+    /* Scene moods: pill fill, pill border, page vignette
+       (tracker.html:222-226, _scene_mood.html:26-30). */
+    --c-mood-calm:          #d8b45e;
+    --c-mood-calm-line:     #e6c878;
+    --c-mood-calm-wash:     rgba(150, 108, 48, 0.16);
+    --c-mood-mystery:       #7a80c0;
+    --c-mood-mystery-line:  #9aa0e0;
+    --c-mood-mystery-wash:  rgba(76, 82, 176, 0.38);
+    --c-mood-tension:       #d49a3a;
+    --c-mood-tension-line:  #e6b45a;
+    --c-mood-tension-wash:  rgba(188, 118, 34, 0.42);
+    --c-mood-combat:        #c43c3c;
+    --c-mood-combat-line:   #e05a5a;
+    --c-mood-combat-wash:   rgba(162, 28, 28, 0.50);
+    --c-mood-dread:         #3f8a5c;
+    --c-mood-dread-line:    #5faa7c;
+    --c-mood-dread-wash:    rgba(40, 94, 64, 0.50);
+
+    --c-chart-1: #c9a34e;
+    --c-chart-2: #a83a3a;
+    --c-chart-3: #9a917a;
+    --c-chart-4: #e0b65a;
+    --c-chart-5: #5fa8e0;
+}
+
+/* Stormlight cells that are not plain aliases. Mistborn re-points the
+   --storm-* ramp to pewter, so its chart follows automatically. */
+body.system-cosmere {
+    --c-on-accent: #06242b;
+    --c-info:      var(--storm-200);
+    --c-hp-ok:     #5fe6b0;      /* cosmere_gm_vitals.html:28 */
+    --c-hp-hurt:   #e8a5a5;      /* cosmere_gm_vitals.html:45 */
+    --c-hp-crit:   #f28b8b;      /* cosmere_gm_vitals.html:46 */
+    --c-chart-1: var(--storm-100);
+    --c-chart-2: var(--storm-200);
+    --c-chart-3: var(--storm-300);
+    --c-chart-4: var(--storm-400);
+    --c-chart-5: var(--storm-500);
+}
+
+body.system-cosmere.cosmere-mistborn {
+    --c-on-accent: #0c0a07;
+    --c-focus:     #e9e7e2;
+    --c-info:      var(--text-on-dark-2);
 }
 
 /* ── 2. Override hostile legacy tokens from base.html / player_sheet  ─ */
@@ -2429,31 +2611,22 @@ button[onclick^="rollInitiative"],
    - Roll buttons that look like flat dark rectangles
    ════════════════════════════════════════════════════════════════════ */
 
-/* ── 27a. Slightly cooler page background + warmer accent. The values
-   are tuned by eye against Pathbuilder's screenshots. */
-:root,
-[data-theme="dark"], [data-theme="light"], [data-theme="parchment"],
-[data-theme="hi-contrast"], [data-theme="default"] {
-    --bg-page:    #0d0c10 !important;     /* slight blue-grey shift */
-    --bg-card:    #181820 !important;
-    --bg-card-2:  #22222e !important;
-    --bg-input:   #0a090d !important;
-    --bg-sunken:  #131319 !important;
-    --gilt-100:   #f4d99a !important;
-    --gilt-200:   #e8b66a !important;     /* PB-style amber */
-    --gilt-300:   #d28a3d !important;     /* PRIMARY ACCENT — slightly more orange */
-    --gilt-400:   #a86515 !important;
-    --border-card:   rgba(210, 138, 61, 0.16) !important;
-    --border-rule:   rgba(210, 138, 61, 0.30) !important;
-    --border-strong: rgba(255, 255, 255, 0.12) !important;
-    --text-on-cream:   #e8e6df !important;     /* primary text on cards */
-    --text-on-cream-2: #b8b4a6 !important;
-    --text-on-cream-3: #a79d88 !important;
-    --text-on-dark:    #ebe9df !important;
-    --text-on-dark-2:  #b8b4a6 !important;
-    --text-on-dark-3:  #a79d88 !important;
-}
+/* ── 27a. The cool-grey/orange :root override that lived here was removed in
+   DS-01: warm gilt (section 1) is the canonical PF2e palette (Evan, Q1,
+   DESIGN_DIRECTION.md section 12). Only the body background rule stays. */
 body { background: var(--bg-page) !important; }
+/* The Cosmere themes re-declare tokens only on <body>, but <html> paints with
+   :root values: its background (section 3), text colour, and the page
+   scrollbar (base.html's unscoped ::-webkit-scrollbar-thumb). Those came from
+   the removed override, so they are kept on Cosmere pages only, leaving
+   Stormlight and Mistborn pixel-identical. Inside <body> nothing changed.
+   A Cosmere screen package can switch these to the theme's own values. */
+html:has(> body.system-cosmere) {
+    --bg-page:         #0d0c10;
+    --border-rule:     rgba(210, 138, 61, 0.30);
+    --text-on-dark:    #ebe9df;
+    --text-on-dark-3:  #a79d88;
+}
 
 /* ── 27b. Top action toolbar — wide row, plain rectangles like
    Pathbuilder's "Rest / Add Condition / Add Custom Buff" strip. */

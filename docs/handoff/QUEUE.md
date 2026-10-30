@@ -79,7 +79,7 @@ answered its five questions on 2026-10-28 (section 12); PF2e goes back to the wa
 | ID | Task | Owner | Model | Status | Brief |
 |---|---|---|---|---|---|
 | DS-00 | Inventory diff tool (incl. 00b VTT states, 00c account/Cosmere/Mistborn/5e profiles): ids, data-*, handlers, ARIA, frozen class strings, before/after | claude | Opus, high | review (Codex) | `tasks/DS-00-inventory-diff-tool.md` |
-| DS-01 | Tokens, `ds-tokens.css`, empty `ds.css`, notices file, contrast tool | claude | Opus, high | needs brief (after DS-00) | - |
+| DS-01 | Tokens, warm gilt (27a removed), `ds-tokens.css`, empty `ds.css`, notices file, contrast tool, screenshot harness | claude | Opus, high | built; review (Codex), after DS-00 | `tasks/DS-01-tokens.md` |
 | DS-02..DS-31 | The rest of section 10, in dependency order; nothing starts until DS-00 and DS-01 are merged | see plan | see plan | needs brief | - |
 
 ## CI maintenance
@@ -157,6 +157,8 @@ Accepted as a design checkpoint. Notes:
 - Two of the bugs were checked on current `main` (marked above); the rest are unconfirmed.
 
 ## Log
+
+- 2026-10-30 Claude: built DS-01. PF2e and 5e pages are now warm gilt (Q1); Stormlight and Mistborn are pixel-identical. The design-system tokens and colour roles are in `system.css`, with a generated `ds-tokens.css` for the account shell, an empty `ds.css` linked everywhere, the notices file, `tools/check_contrast.py` (0 failures in four themes) and a before/after screenshot harness (`tools/ui_screens.py`). The inventory diff shows only the new links on 67 routes. Also fixed a DS-00 false positive (the deploy token in the three.js import map). Next: Codex reviews DS-00, then DS-01.
 
 - 2026-10-28 Claude: built DS-00, the inventory diff tool (`tools/ui_inventory.py`): it fails a design PR that removes or changes any id, handler, ARIA, form control or script. 19 new tests pass; checked on 18 real PF2e pages in both modes. Next: Codex reviews; DS-00b/c add the VTT and other-system pages.
 

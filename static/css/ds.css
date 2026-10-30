@@ -1,0 +1,9 @@
+/* Design-system components (docs/design/DESIGN_DIRECTION.md).
+
+   Empty on purpose until DS-02 onward add .ds-* rules. Loaded after system.css
+   (or after ds-tokens.css on pages without it), linked only via url_for so it
+   carries the deploy version.
+
+   Cascade contract (DESIGN_DIRECTION.md 5.0): no @layer; !important only to beat
+   a specific system.css !important rule, with a comment citing the line it
+   beats; map onto a legacy class with `body` plus the existing selector. */
