@@ -102,23 +102,23 @@
 **Contrast** (112 pairs in four themes): 0 enforced failures.
 
 - The PF2e figures match the plan's table: text-1 14.7, text-2 9.6, text-3 6.6, accent 7.4, danger 10.4, success 8.5, warn 9.3, info 9.6, focus 9.3.
-- 24 pairs are reported below 3:1, all of them hairlines and status-badge borders. Badges must therefore carry their meaning in text, never in the border alone.
+- 25 pairs are reported below 3:1: hairlines, status-badge borders, and 5e's `--c-hp-down` (#555555, its real `.is-down` value). Badges must therefore carry their meaning in text, never in the border alone.
 
 **Resolved tokens, before against after** (`tools/design_tokens.py` on both `system.css` files):
 
 - **Stormlight and Mistborn:** zero changed custom properties inside `<body>`, and zero among the values `<html>` paints with.
 - **PF2e:** 39 changed values, all of them the 27a set and the aliases built on it.
 
-**Screenshots** (`tools/ui_screens.py`, 67 routes at 2 sizes, before tree = `cb5a29f5`):
+**Screenshots** (`tools/ui_screens.py`, final code, 67 routes at 2 sizes, before tree = `cb5a29f5`). Every route on both trees loaded with no error status and no login bounce; the harness now fails the run otherwise.
 
 - **PF2e:** 36 of 36 images changed: the full cool-to-warm shift. Page heights are identical except the generator, whose output is random on every load.
 - **D&D 5e:** 16 of 18 images changed, the same shift. The two account-shell admin images are unchanged.
-- **Account shell:** unchanged, apart from two areas that differ between two runs of the same code: the date on `/admin/campaigns` and on `/me` (phone).
-  - Unchanged pages: `/`, `/login`, `/register`, `/join`, `/me` (desktop), `/admin/users`, `/campaigns/new`. `/campaign/<id>/invites` was captured under a different campaign id on each side, so it could not be paired.
-  - The Chronicle pages (which extend `base.html`) shift warm, as intended.
-- **Stormlight and Mistborn,** viewport-only: every image is equal except:
-  - the generator, which is random;
-  - 6 to 32 edge pixels around the floating d20 button on the builder, one level out of 255, which also differ between two runs of the same tree.
+- **Account shell:** 13 of 32 images are equal, including `/campaign/<id>/invites`, which now pairs across runs.
+  - Differences outside the Chronicle: the date on `/admin/campaigns` and `/me` (phone), and 1 px on `/join`.
+  - The 14 Chronicle images (those pages extend `base.html`) shift warm, as intended.
+- **Stormlight and Mistborn,** viewport-only, shot twice on each tree: **44 of 48 images have a before shot pixel-identical to an after shot.** The other 4 are the generator (random).
+  - A single before/after pair is not enough. These pages flip between two text renderings from run to run, by the same exact counts on unchanged code: 206, 373, 697, 979 px and so on, up to 135 levels on text edges. The first pass of this run showed those as differences, and the same-tree control showed them too.
+  - Future packages comparing themes should shoot twice and look for a match, not expect one pair to be equal.
 
 **Full-page shot artefact on the Mistborn builder** (not a rendering change).
 
@@ -129,26 +129,45 @@
 
 **Tests**
 
-- `tests/test_ds_tokens.py`: 19 passed. It covers:
+- `tests/test_ds_tokens.py`: 32 passed. It covers:
   - the generated file is current;
   - it holds only resolved custom properties;
   - each link's position;
   - the two pages without `system.css` never load it;
   - 27a is gone and section 1 renders;
-  - the Cosmere `<html>` pins;
+  - the Cosmere `<html>` pins, and all 18 removed tokens on `<body>` per theme against their pre-DS-01 values;
   - roles follow each theme;
   - the contrast floors, and that the tool fails when a role drops below them.
-- `tests/test_ui_screens_tool.py`: 3 passed.
+- `tests/test_ui_screens_tool.py`: 12 passed.
 - `tests/test_ui_inventory_tool.py`: 24 passed.
 - Templates: all 111 parse.
-- **Full suite (Windows, with both private data dirs set):** 5104 passed, 2 failed, 235 skipped, 1 xfailed, 11 errors, in 77 minutes.
-  - **The 2 failures were a real break, now fixed.** `tests/test_cosmere_theme.py` found "the" Cosmere theme block with `css.index('body.system-cosmere {')`, the first match. Section 1b's new role block now comes first, so two tests read the wrong block. The theme itself is unchanged. The helper now takes the block under the theme overlay banner and asserts it defines `--storm-50`. 22 passed after the fix (theme + token tests).
-  - **The 11 errors** are `tests/persistence/*postgresql*`, which need `DATABASE_URL` and fail without it. They do not touch CSS or templates; see the PostgreSQL line below.
+- **Full suite (Windows, whole suite, `9c70fadc`, both private data dirs set):** 5370 passed, 3 failed, 46 skipped, 1 xfailed, 11 errors, in 84 minutes.
+  - **The 3 failures are not from DS-01.** The same three fail the same way on `cb5a29f5`:
+    - `test_inventory_seed.py::test_seed_authoring_recompiles_to_identical_bytes_without_local_paths`: CRLF against LF at the end of a compiled file;
+    - `test_mistborn_adversaries.py::test_mistborn_adversary_statblock_and_tracker_add`: the expected action text is not on the page with the local private data;
+    - `test_dnd5e_render_and_db.py::test_db_matches_resolved_export`: it reads `dnd5e_data/` in the checkout and ignores `DND5E_DATA_DIR`.
+
+    They only show up once the data dirs are set, which DS-00's baseline run did not need. Causes are read from the error lines, not investigated further. Linux CI is the authority.
+  - **The 11 errors** are `tests/persistence/*postgresql*`, which need `DATABASE_URL` and fail without it. **They were not run locally:** Docker Desktop's engine would not start, even after a clean restart. They do not touch CSS or templates. Linux CI runs them; check that job on the PR.
+  - **One real break was found and fixed by an earlier full run.** `tests/test_cosmere_theme.py` found "the" Cosmere theme block with `css.index('body.system-cosmere {')`, the first match, and section 1b's new role block now comes first. The theme itself is unchanged. The helper now takes the block under the theme overlay banner and asserts it defines `--storm-50`.
   - DS-00's baseline was 4098 passed, 2 failed, 233 skipped, but it ran `--ignore=tests/pf2e_rules -m "not postgresql and not browser"`. This run was the whole suite, so the totals differ by design. Neither of the baseline's two SQL-backed failures recurred here.
+
+### Independent review (after the first build)
+
+Four reviewers read the diff, each with a second agent trying to refute what was found: 18 findings, 16 confirmed, 2 not defects. No confirmed finding broke a page today. All 16 are fixed: 15 in commit `9c70fadc`, with tests, and one in this report (a dangling pointer to a PostgreSQL line):
+
+- **The screenshot harness could pass without looking.** `compare` exited 0 on empty or wrong-level folders. `shoot` photographed 503 pages and login bounces, and failures did not set the exit code. All three now fail. The results above come from the fixed harness.
+- **A test did not guard what its name said.** `test_cosmere_keeps_every_value_it_had_before_ds_01` still passed with 13 Cosmere theme lines deleted.
+- **27a's orange survived as 12 `rgba(210, 138, 61, ...)` literals** in later rules (`.prof-t`, `.prof-e`, hover fills). The brief said to leave 27b onward alone, but the result was orange tints on warm gilt, against Q1. They now read `--tint-27-rgb`: gilt on PF2e and 5e, the old value on Cosmere, so Cosmere's pixels do not move. This goes slightly past the brief's "keep 27b onward"; it changes no selector and no property.
+- **5e HP roles** carried PF2e values instead of the plan's `.d5-hpbar` values. Nothing reads them yet.
+- **Tool edge cases:** `design_tokens.py` now handles nested `var()` fallbacks, strings, `@import`, all `!important` spellings and `html:has()` specificity, and raises on a token it cannot model. `check_contrast.py --json` parses, and new `--c-*-text` roles are checked without being listed.
+
+Not changed: the notices do not cite `--ease-out` (a standard curve, which the file's own rule exempts, though that identification is from memory), and the `ds.css` link test finding was not a defect, but it now finds pages by glob anyway.
 
 ### Known limits
 
-- **D&D 5e accent:** it stays the PF2e value until the DS-24a mockup (Q4). The 5e contrast column is therefore PF2e today.
+- **PostgreSQL tests** have not run on this branch; see the full-suite line.
+- **D&D 5e accent:** it stays the PF2e value until the DS-24a mockup (Q4). The 5e contrast column is PF2e today, apart from its HP tiers.
 - **Colour roles inside deeper theme scopes:** the roles re-resolve on `<body>` only. An element that re-declares a primitive further down (for example `.trk`'s local tokens) does not move the roles. No component uses roles yet; DS-04 onward should keep that in mind.
 - **The `<html>` pins on Cosmere pages** keep a PF2e-derived background under short content. That preserves today's pixels, not an ideal. Changing it is a Cosmere screen package's call, behind screenshots.
 - **Account pages not yet captured:** account-mode pages that need a seeded character (Cosmere and 5e sheets and builders), the campaign takeover page, `/map`, `/mobile_combat` and the VTT TV and pairing screens are still not in either harness (unchanged from DS-00).

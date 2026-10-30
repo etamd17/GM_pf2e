@@ -158,7 +158,7 @@ Accepted as a design checkpoint. Notes:
 
 ## Log
 
-- 2026-10-30 Claude: built DS-01. PF2e and 5e pages are now warm gilt (Q1); Stormlight and Mistborn are pixel-identical. The design-system tokens and colour roles are in `system.css`, with a generated `ds-tokens.css` for the account shell, an empty `ds.css` linked everywhere, the notices file, `tools/check_contrast.py` (0 failures in four themes) and a before/after screenshot harness (`tools/ui_screens.py`). The inventory diff shows only the new links on 67 routes. Also fixed a DS-00 false positive (the deploy token in the three.js import map). Next: Codex reviews DS-00, then DS-01.
+- 2026-10-30 Claude: built DS-01. PF2e and 5e pages are now warm gilt (Q1); Stormlight and Mistborn are pixel-identical. An independent review confirmed 16 findings, all fixed (`9c70fadc`). PostgreSQL tests have not run on this branch (Docker would not start). The design-system tokens and colour roles are in `system.css`, with a generated `ds-tokens.css` for the account shell, an empty `ds.css` linked everywhere, the notices file, `tools/check_contrast.py` (0 failures in four themes) and a before/after screenshot harness (`tools/ui_screens.py`). The inventory diff shows only the new links on 67 routes. Also fixed a DS-00 false positive (the deploy token in the three.js import map). Next: Codex reviews DS-00, then DS-01.
 
 - 2026-10-28 Claude: built DS-00, the inventory diff tool (`tools/ui_inventory.py`): it fails a design PR that removes or changes any id, handler, ARIA, form control or script. 19 new tests pass; checked on 18 real PF2e pages in both modes. Next: Codex reviews; DS-00b/c add the VTT and other-system pages.
 
