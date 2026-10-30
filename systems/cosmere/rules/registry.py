@@ -6,8 +6,8 @@ from pathlib import Path
 from types import MappingProxyType
 from collections.abc import Mapping
 
-from .compiler import (COMPILER_VERSION, MAX_JSON_BYTES, canonical_json, compile_registry,
-                       package_hash, read_json, validate_authoring)
+from .compiler import (COMPILER_VERSION, MAX_JSON_BYTES, canonical_json, compile_and_validate,
+                       package_hash, read_json)
 from .schema import (ContentPack, CosmereRulesBinding, PackagePin, RuleRecord,
                      SourceArtifact, from_dict, require, sha256)
 
@@ -66,7 +66,8 @@ def load_registry(path: Path, *, expected_hash: str | None = None) -> RulesRegis
     require(path.is_file() and not path.is_symlink(), "invalid registry file")
     require(path.stat().st_size <= MAX_JSON_BYTES, "JSON size limit exceeded")
     with path.open("rb") as handle:
-        data = read_json(handle.read(MAX_JSON_BYTES + 1))
+        raw = handle.read(MAX_JSON_BYTES + 1)
+    data = read_json(raw)
     require(isinstance(data, dict) and set(data) == {"schema_version", "compiler_version", "artifacts", "packs", "package_hash"}, "invalid compiled registry fields")
     require(data["compiler_version"] == COMPILER_VERSION, "unsupported compiler version")
     sha256(data["package_hash"])
@@ -75,10 +76,13 @@ def load_registry(path: Path, *, expected_hash: str | None = None) -> RulesRegis
         sha256(expected_hash)
         require(expected_hash == data["package_hash"], "trusted registry hash mismatch")
     authoring = {key: data[key] for key in ("schema_version", "artifacts", "packs")}
-    compiled = compile_registry(authoring)
-    require(canonical_json(data) == compiled, "compiled registry mismatch")
-    artifacts, packs = validate_authoring(authoring)
-    compiled_packs = tuple(from_dict(ContentPack, value) for value in data["packs"])
+    compiled, artifacts, packs = compile_and_validate(authoring)
+    # An installed registry is the compiler's exact output, so comparing bytes
+    # settles it; re-serializing is only needed for an equivalent rewrite.
+    require(raw.replace(b"\r\n", b"\n") == compiled or canonical_json(data) == compiled,
+            "compiled registry mismatch")
+    # Validation built these from data["packs"], in the same order.
+    compiled_packs = packs.all_versions()
     exact = {(pack.id, pack.version, pack.package_hash): pack for pack in compiled_packs}
     require(len(exact) == len(compiled_packs), "duplicate exact package identity")
     legacy = {}

@@ -1,6 +1,5 @@
 """Exact package-bound mechanics, with an adapter for legacy Stormlight builds."""
 from copy import deepcopy
-from functools import lru_cache
 from collections.abc import Mapping, Sequence
 from typing import Protocol
 
@@ -34,10 +33,31 @@ class CosmereRulesProfile(Protocol):
     def builder_context(self, build, homebrew=None) -> Mapping: ...
 
 
-@lru_cache(maxsize=1)
+_default_registry = None
+
+
 def default_registry():
-    """Deployed packages are immutable; verify the checked-in registry once."""
-    return load_seed_registry()
+    """Deployed packages are immutable; verify the installed registry once."""
+    global _default_registry
+    if _default_registry is None:
+        _default_registry = load_seed_registry()
+    return _default_registry
+
+
+def use_default_registry(registry):
+    """Serve a registry a bundle install has just verified, so the next page
+    does not verify the same files again."""
+    global _default_registry
+    _default_registry = registry
+
+
+def _forget_default_registry():
+    global _default_registry
+    _default_registry = None
+
+
+# The lru_cache this replaced was reset with cache_clear(); tests still do.
+default_registry.cache_clear = _forget_default_registry
 
 
 def package_pin(pack):
@@ -49,6 +69,19 @@ MISTBORN_ERAS = ('era-1', 'era-2')
 
 def _version_key(version):
     return tuple(int(part) for part in str(version).split('.'))
+
+
+def mistborn_releases(registry=None):
+    """Installed Mistborn releases, oldest first: each version that has the
+    core package and at least one era package."""
+    registry = registry or default_registry()
+    core, eras = 'cosmere.mistborn.core', {f'cosmere.mistborn.{era}' for era in MISTBORN_ERAS}
+    by_version = {}
+    for pack in registry.pack_versions.values():
+        if pack.id == core or pack.id in eras:
+            by_version.setdefault(pack.version, set()).add(pack.id)
+    return sorted((version for version, found in by_version.items()
+                   if core in found and found & eras), key=_version_key)
 
 
 def mistborn_campaign_binding(era, registry=None):

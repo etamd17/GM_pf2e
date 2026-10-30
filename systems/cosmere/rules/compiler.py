@@ -6,8 +6,8 @@ from dataclasses import replace
 import hashlib
 import json
 
-from .schema import (ContentPack, RulesValidationError, SPOILER_RANK, SourceArtifact, freeze,
-                     from_dict, require, sequence, to_dict)
+from .schema import (ContentPack, RulesValidationError, SPOILER_RANK, SourceArtifact,
+                     check_json, from_dict, require, sequence, to_dict)
 
 SCHEMA_VERSION = 1
 COMPILER_VERSION = "cosmere-rules-1"
@@ -42,7 +42,10 @@ class AuthoringPacks(Mapping):
 
 def canonical_json(value) -> bytes:
     try:
-        normalized = to_dict(freeze(to_dict(value)))
+        # Same bytes as to_dict(freeze(to_dict(value))): freeze only adds checks
+        # and immutable containers, which to_dict turned straight back.
+        normalized = to_dict(value)
+        check_json(normalized)
         result = (json.dumps(normalized, sort_keys=True, ensure_ascii=False,
                              separators=(",", ":"), allow_nan=False) + "\n").encode("utf-8")
     except (UnicodeError, RecursionError):
@@ -84,7 +87,7 @@ def read_json(raw: bytes):
         result = json.loads(raw.decode("utf-8"), object_pairs_hook=pairs, parse_constant=constant)
     except (UnicodeError, json.JSONDecodeError, RecursionError):
         raise RulesValidationError("invalid UTF-8 JSON") from None
-    freeze(result)
+    check_json(result)
     return result
 
 
@@ -153,8 +156,12 @@ def validate_authoring(data):
     # The compatibility Mapping intentionally exposes each ID's first seed.
     # Validate a coherent ID view with every authored version substituted so a
     # later immutable version cannot hide an invalid table graph behind v1.0.
+    # A first version's view is the legacy view itself, so it is checked once.
     legacy_view = dict(packs)
+    validate_authoring_tables(legacy_view)
     for pack in authored_packs:
+        if packs[pack.id] is pack:
+            continue
         version_view = dict(legacy_view)
         version_view[pack.id] = pack
         validate_authoring_tables(version_view)
@@ -162,6 +169,11 @@ def validate_authoring(data):
 
 
 def compile_registry(authoring) -> bytes:
+    return compile_and_validate(authoring)[0]
+
+
+def compile_and_validate(authoring):
+    """The compiled bytes plus the artifacts and packs that validation built."""
     artifacts, packs = validate_authoring(authoring)
     normalized = []
     for pack in sorted(packs.all_versions(), key=lambda p: (p.id, p.version)):
@@ -172,4 +184,4 @@ def compile_registry(authoring) -> bytes:
     output = {"schema_version": SCHEMA_VERSION, "compiler_version": COMPILER_VERSION,
               "artifacts": [to_dict(artifacts[key]) for key in sorted(artifacts)], "packs": normalized}
     output["package_hash"] = package_hash(output)
-    return canonical_json(output)
+    return canonical_json(output), artifacts, packs

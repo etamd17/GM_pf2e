@@ -52,12 +52,16 @@ def test_sheet_flavour_and_navigation_follow_world_without_changing_registry(mon
               if node['tag'] == 'a'}
     if world == 'mistborn':
         assert 'No Investiture pool.' in html
+        assert 'title="Not a Radiant"' not in html
+        assert 'e.g. equipment, a companion or patron, a new position' in html
         assert 'Swear a First Ideal to gain Stormlight.' not in html
         assert 'cos-workshop' not in ids and 'ws-effect' not in ids
         assert titles['/cosmere/generator'] == 'Scadrial names, NPCs, weather, loot'
         assert titles['/cosmere/loot'] == 'Boxings, clips & spoils ledger'
     else:
         assert 'Swear a First Ideal to gain Stormlight.' in html
+        assert 'title="Not a Radiant"' in html
+        assert 'e.g. a fabrial or Shardplate, a companion or patron, a noble title' in html
         assert 'cos-workshop' in ids and 'ws-effect' in ids
         assert titles['/cosmere/generator'] == 'Rosharan names, NPCs, weather, loot'
         assert titles['/cosmere/loot'] == 'Spheres & spoils ledger'
