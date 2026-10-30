@@ -122,9 +122,9 @@
     --shadow-2: 0 6px 24px rgba(0, 0, 0, 0.4);
 
     /* Motion — opacity + transform only, no keyframes */
-    --t-fast: 120ms ease;
-    --t-base: 180ms ease;
-    --t-slow: 280ms ease;
+    --t-fast: 120ms var(--ease-standard);
+    --t-base: 180ms var(--ease-standard);
+    --t-slow: 280ms var(--ease-standard);
 
     /* Type stack — strict role assignment */
     --font-display: 'Cinzel', 'Cormorant Garamond', Georgia, serif;

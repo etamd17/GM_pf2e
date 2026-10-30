@@ -10,6 +10,7 @@ and screenshots each route in headless Chromium:
     python tools/ui_screens.py shoot --profile pf2e --out shots/after/pf2e
     python tools/ui_screens.py shoot --repo ../before-tree --profile pf2e --out shots/before/pf2e
     python tools/ui_screens.py compare shots/before/pf2e shots/after/pf2e
+    python tools/ui_screens.py motion --profile pf2e
 
 ``--repo`` points at another checkout (for example a worktree of the base
 commit), so the same harness photographs the code before the change.
@@ -20,13 +21,18 @@ error status, or bounced a signed-in page to the login screen, so an error page
 can never pass as "pixel-equal".
 
 Pages are shot with reduced motion and CSS animations disabled, at 1440x900 and
-390x844 (full page). Everything runs locally against a throwaway DATA_DIR; the
+390x844 (full page). ``motion`` opens the same routes with reduced motion emulated
+and exits 1 if any animation that started during the load and the wait after it
+loops or runs at length, the proof that the block in ds.css holds (DS-02). It does
+not see animations started later by a click or a live update. Everything runs
+locally against a throwaway DATA_DIR; the
 seeded account is a local fixture, never a real login. Mistborn needs
 COSMERE_DATA_DIR and 5e needs DND5E_DATA_DIR, as for ui_inventory.
 """
 from __future__ import annotations
 
 import argparse
+import contextlib
 import importlib
 import os
 import re
@@ -53,13 +59,44 @@ def _route_problem(status, final_url: str, route: str, who: str) -> str | None:
     return None
 
 
-def shoot(repo: Path, profile: str, out: Path, routes=None, full_page: bool = True):
-    """Returns (written files, failed routes)."""
+# Runs before the page's own scripts. An animation that finishes during the wait is
+# gone from getAnimations() by the time the audit reads it, so note each one as it
+# starts. One collapsed to 0.01ms is over before this fires and leaves no row.
+MOTION_RECORDER_JS = """window.__motionRow = a => {
+    const timing = a.effect.getComputedTiming();
+    const target = a.effect.target;
+    return {name: a.animationName || a.constructor.name,
+            target: target ? target.tagName.toLowerCase() + (target.id ? '#' + target.id : '') : '',
+            duration: timing.duration, iterations: timing.iterations};
+};
+window.__motionSeen = [];
+document.addEventListener('animationstart', event => {
+    event.target.getAnimations({subtree: true})
+        .filter(a => a.animationName === event.animationName)
+        .forEach(a => window.__motionSeen.push(window.__motionRow(a)));
+}, true);"""
+
+# Everything except transitions: a transition only runs while something changes.
+MOTION_AUDIT_JS = """() => window.__motionSeen.concat(document.getAnimations()
+    .filter(a => !(typeof CSSTransition !== 'undefined' && a instanceof CSSTransition))
+    .map(window.__motionRow))"""
+
+
+def motion_problems(rows: list[dict]) -> list[str]:
+    """What a reduced-motion page must not still be doing. 1ms is well above the
+    0.01ms the block sets and well below anything a person could see."""
+    bad = [f"{r['name']} on {r['target']}: {r['iterations']} x {r['duration']}ms" for r in rows
+           if r["iterations"] != 1 or not isinstance(r["duration"], (int, float)) or r["duration"] > 1]
+    return list(dict.fromkeys(bad))
+
+
+@contextlib.contextmanager
+def _served(repo: Path, profile: str, routes=None):
+    """Serve the fixtured app; yields (port, session cookie or None, route triples)."""
     sys.path.insert(0, str(repo / "tools"))
     sys.path.insert(0, str(repo))
     os.chdir(repo)
     inv = importlib.import_module("ui_inventory")
-    out.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="gm-pf2e-ui-screens-") as data_dir:
         cookie, pairs = None, []
         if profile == "pf2e":
@@ -90,44 +127,79 @@ def shoot(repo: Path, profile: str, out: Path, routes=None, full_page: bool = Tr
         server = make_server("127.0.0.1", 0, module.app, threaded=True)
         port = server.server_port
         threading.Thread(target=server.serve_forever, daemon=True).start()
-        written, failed = [], []
         try:
-            from playwright.sync_api import sync_playwright
-            with sync_playwright() as pw:
-                browser = pw.chromium.launch(headless=True)
-                for name, (w, h) in VIEWPORTS.items():
-                    for who, template, route in pairs:
-                        context = browser.new_context(viewport={"width": w, "height": h},
-                                                      reduced_motion="reduce",
-                                                      device_scale_factor=1)
-                        if cookie and who == "gm":
-                            context.add_cookies([{"name": "session", "value": cookie,
-                                                  "domain": "127.0.0.1", "path": "/"}])
-                        page = context.new_page()
-                        path = out / f"{name}__{who}__{_slug(template)}.png"
-                        try:
-                            # Pages hold the SSE stream open, so the network
-                            # never idles: wait for load, then let scripts paint.
-                            response = page.goto(f"http://127.0.0.1:{port}{route}", wait_until="load")
-                            problem = _route_problem(response.status if response else None,
-                                                     page.url, route, who)
-                            if problem:
-                                raise RuntimeError(problem)
-                            # Web fonts landing after first paint leave controls
-                            # rastered differently; wait for them explicitly.
-                            page.evaluate("document.fonts.ready.then(() => true)")
-                            page.wait_for_timeout(1500)
-                            page.screenshot(path=str(path), full_page=full_page, animations="disabled")
-                            written.append(path)
-                        except Exception as error:   # one bad route must not stop the run
-                            print(f"FAILED {name} {route}: {error}", file=sys.stderr)
-                            failed.append(f"{name} {route}")
-                        finally:
-                            context.close()
-                browser.close()
+            yield port, cookie, pairs
         finally:
             server.shutdown()
+
+
+def _pages(port, cookie, pairs, init_script=None):
+    """Yields (viewport name, who, route template, route, loaded page) in reduced motion."""
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as pw:
+        executable = os.environ.get("PLAYWRIGHT_CHROMIUM_EXECUTABLE")
+        browser = pw.chromium.launch(headless=True, **({"executable_path": executable} if executable else {}))
+        for name, (w, h) in VIEWPORTS.items():
+            for who, template, route in pairs:
+                context = browser.new_context(viewport={"width": w, "height": h},
+                                              reduced_motion="reduce",
+                                              device_scale_factor=1)
+                if cookie and who == "gm":
+                    context.add_cookies([{"name": "session", "value": cookie,
+                                          "domain": "127.0.0.1", "path": "/"}])
+                page = context.new_page()
+                if init_script:
+                    page.add_init_script(init_script)
+                try:
+                    # Pages hold the SSE stream open, so the network
+                    # never idles: wait for load, then let scripts paint.
+                    response = page.goto(f"http://127.0.0.1:{port}{route}", wait_until="load")
+                    problem = _route_problem(response.status if response else None,
+                                             page.url, route, who)
+                    if problem:
+                        raise RuntimeError(problem)
+                    # Web fonts landing after first paint leave controls
+                    # rastered differently; wait for them explicitly.
+                    page.evaluate("document.fonts.ready.then(() => true)")
+                    page.wait_for_timeout(1500)
+                except Exception as error:   # one bad route must not stop the run
+                    yield name, who, template, route, error
+                else:
+                    yield name, who, template, route, page
+                finally:
+                    context.close()
+        browser.close()
+
+
+def shoot(repo: Path, profile: str, out: Path, routes=None, full_page: bool = True):
+    """Returns (written files, failed routes)."""
+    out.mkdir(parents=True, exist_ok=True)
+    written, failed = [], []
+    with _served(repo, profile, routes) as (port, cookie, pairs):
+        for name, who, template, route, page in _pages(port, cookie, pairs):
+            path = out / f"{name}__{who}__{_slug(template)}.png"
+            try:
+                if isinstance(page, Exception):
+                    raise page
+                page.screenshot(path=str(path), full_page=full_page, animations="disabled")
+                written.append(path)
+            except Exception as error:   # one bad route must not stop the run
+                print(f"FAILED {name} {route}: {error}", file=sys.stderr)
+                failed.append(f"{name} {route}")
     return written, failed
+
+
+def motion(repo: Path, profile: str, routes=None) -> tuple[int, list[str]]:
+    """Returns (pages checked, problems); a page that would not load is a problem."""
+    checked, problems = 0, []
+    with _served(repo, profile, routes) as (port, cookie, pairs):
+        for name, _who, _template, route, page in _pages(port, cookie, pairs, MOTION_RECORDER_JS):
+            if isinstance(page, Exception):
+                problems.append(f"{name} {route}: did not load: {page}")
+                continue
+            checked += 1
+            problems += [f"{name} {route}: {p}" for p in motion_problems(page.evaluate(MOTION_AUDIT_JS))]
+    return checked, problems
 
 
 def compare(before: Path, after: Path, diff_dir: Path | None = None) -> int:
@@ -181,7 +253,17 @@ def main(argv=None) -> int:
     c.add_argument("before")
     c.add_argument("after")
     c.add_argument("--diff")
+    m = sub.add_parser("motion")
+    m.add_argument("--profile", default="pf2e")
+    m.add_argument("--repo", default=str(HERE.parent))
+    m.add_argument("--routes", nargs="*")
     args = ap.parse_args(argv)
+    if args.cmd == "motion":
+        checked, problems = motion(Path(args.repo).resolve(), args.profile, args.routes)
+        for problem in problems:
+            print(f"MOTION {problem}")
+        print(f"{checked} pages checked, {len(problems)} problems")
+        return 1 if problems or not checked else 0
     if args.cmd == "shoot":
         out = Path(args.out).resolve()
         if os.environ.get("PYTHONHASHSEED") != "0":   # same reason as ui_inventory
