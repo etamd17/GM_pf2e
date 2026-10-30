@@ -78,8 +78,8 @@ answered its five questions on 2026-10-28 (section 12); PF2e goes back to the wa
 
 | ID | Task | Owner | Model | Status | Brief |
 |---|---|---|---|---|---|
-| DS-00 | Inventory diff tool (incl. 00b VTT states, 00c account/Cosmere/Mistborn/5e profiles): ids, data-*, handlers, ARIA, frozen class strings, before/after | claude | Opus, high | fixed; recheck (Codex) | `tasks/DS-00-inventory-diff-tool.md` |
-| DS-01 | Tokens, warm gilt (27a removed), `ds-tokens.css`, empty `ds.css`, notices file, contrast tool, screenshot harness | claude | Opus, high | reviewed; no code findings, waiting for the DS-00 recheck | `tasks/DS-01-tokens.md` |
+| DS-00 | Inventory diff tool (incl. 00b VTT states, 00c account/Cosmere/Mistborn/5e profiles): ids, data-*, handlers, ARIA, frozen class strings, before/after | claude | Opus, high | accepted (Codex recheck); commit and PR next | `tasks/DS-00-inventory-diff-tool.md` |
+| DS-01 | Tokens, warm gilt (27a removed), `ds-tokens.css`, empty `ds.css`, notices file, contrast tool, screenshot harness | claude | Opus, high | accepted (Codex); merge after DS-00 | `tasks/DS-01-tokens.md` |
 | DS-02..DS-31 | The rest of section 10, in dependency order; nothing starts until DS-00 and DS-01 are merged | see plan | see plan | needs brief | - |
 
 ## CI maintenance
@@ -157,6 +157,10 @@ Accepted as a design checkpoint. Notes:
 - Two of the bugs were checked on current `main` (marked above); the rest are unconfirmed.
 
 ## Log
+
+- 2026-10-30 Codex: DS-01 is accepted now that the inventory tool recheck is clear. The colour and token decisions stand. Next: Claude publishes its own task PR after DS-00, and every CI job including PostgreSQL must pass before merge; DS-02 still waits for both.
+
+- 2026-10-30 Codex: DS-00 recheck accepted at 96c2ccab. All four original reviewer cases pass, and 57 inventory/screenshot checks pass. The extra commit-stamp, unchecked-capture, fieldset and URL handling changes are accepted. Next: Claude commits, opens the PR and merges after every CI job is green.
 
 - 2026-10-30 Claude: fixed Codex's three inventory tool findings, plus three more problems found by an independent review and one false alarm found rerunning the tool. The tool now shows only the new stylesheet links between the two versions on all pages. Nothing is pushed. Next: Codex rechecks, then both tasks go to a PR, and every CI job, including PostgreSQL, must pass before merge.
 

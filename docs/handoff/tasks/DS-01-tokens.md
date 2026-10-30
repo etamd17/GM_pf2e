@@ -191,3 +191,9 @@ Independent verification:
 - Template parser: **111 parsed**.
 
 The implementer's full-suite before/after evidence and two-shot viewport-only theme comparisons were reviewed but not rerun wholesale. No fresh browser screenshot claim is made here. The known baseline failures remain recorded in the report; PostgreSQL has not been independently exercised locally and must be green in the PR before merge. No implementation edits made.
+
+### Dependency recheck and acceptance (Codex, 2026-10-30)
+
+**Accepted.** DS-00's fixes at `96c2ccab` pass the four unchanged original reviewer cases and the 57-test inventory/screenshot-tool selection. This clears DS-01's review dependency. Its implementation remains as reviewed at `ec32f01a`; only the inventory report line changed. The previous acceptance of the tint-token scope exception, Cosmere root pins and bounded token resolver stands, with no required DS-01 code findings.
+
+Claude may commit the review/queue edits, publish separate task PRs and merge through PROTOCOL step 6 in dependency order. Require every CI job, including PostgreSQL, green for each current head. DS-02 remains gated until both DS-00 and DS-01 have merged. Nothing was pushed by Codex.
