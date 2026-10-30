@@ -89,7 +89,7 @@
 
 ### Results
 
-**Inventory diff** (DS-00, each checkout running its own copy of the tool), with zero failures in all five profiles:
+**Inventory diff** (rerun 2026-10-30 with the fixed DS-00 tool on both trees; see the DS-00 report for the same-tree controls and the real-browser run), with zero failures in all five profiles:
 
 | Profile | Failures | Additions |
 |---|---|---|
@@ -171,3 +171,23 @@ Not changed: the notices do not cite `--ease-out` (a standard curve, which the f
 - **Colour roles inside deeper theme scopes:** the roles re-resolve on `<body>` only. An element that re-declares a primitive further down (for example `.trk`'s local tokens) does not move the roles. No component uses roles yet; DS-04 onward should keep that in mind.
 - **The `<html>` pins on Cosmere pages** keep a PF2e-derived background under short content. That preserves today's pixels, not an ideal. Changing it is a Cosmere screen package's call, behind screenshots.
 - **Account pages not yet captured:** account-mode pages that need a seeded character (Cosmere and 5e sheets and builders), the campaign takeover page, `/map`, `/mobile_combat` and the VTT TV and pairing screens are still not in either harness (unchanged from DS-00).
+
+## Review (Codex, 2026-10-30)
+
+**No required DS-01 code findings; dependency gate pending.** Reviewed `94e1b537..ec32f01a` after reviewing DS-00. DS-00 has three required tool fixes, so DS-01 is not yet cleared for publication. Recheck those first; then proceed through PROTOCOL step 6 and require every PR job, including PostgreSQL, to finish green.
+
+Requested decisions:
+
+1. **Accept the narrow `--tint-27-rgb` scope exception** (`static/css/system.css:260,342`). The 12 replacements retain selectors, properties and alpha values. PF2e and 5e receive the intended gilt triple; the explicit Cosmere override retains the original orange triple. This completes the user's warm-gilt decision without moving Cosmere's existing tints.
+2. **Accept the `html:has(> body.system-cosmere)` pins** (`system.css:2640`). They preserve the four root values used by the viewport background/text and page scrollbar. The unchanged Stormlight and Mistborn body theme declarations still win inside their content. The generated standalone tokens and additive stylesheet order are consistent with the brief.
+3. **Accept the fail-closed resolver for the approved package plan.** DS-02's planned `--t-*` aliases and one-level reduced-motion root overrides are supported and were probed. Later components belong in `ds.css`, and VTT tokens in `app.css`; neither is parsed by this system.css-only generator. A future genuinely new root-token construct must extend the resolver alongside the token change, rather than silently skipping it. Non-blocking limitation: descendant-only selectors containing a system body class, and component-local tokens under `@supports`, can also trigger the strict guard if put in system.css (`tools/design_tokens.py:243-247,157-164`). Narrowing that guard would help if file ownership changes; it does not block the approved subsequent packages.
+
+Independent verification:
+
+- `tests/test_ds_tokens.py`: **32 passed in 10.42s** (independent reviewer).
+- Existing inventory/screenshot-tool/Cosmere theme/skin tests: **45 passed in 158.76s**.
+- Generated token check: matches system.css.
+- Contrast CLI: **112 pairs, 0 enforced failures, 25 reported below 3:1**, matching the report's distinction between enforced text/focus checks and reported edges/fills.
+- Template parser: **111 parsed**.
+
+The implementer's full-suite before/after evidence and two-shot viewport-only theme comparisons were reviewed but not rerun wholesale. No fresh browser screenshot claim is made here. The known baseline failures remain recorded in the report; PostgreSQL has not been independently exercised locally and must be green in the PR before merge. No implementation edits made.

@@ -63,3 +63,55 @@ Every design-system package must prove it changed only presentation. This tool r
 
 ## Review
 <!-- reviewer appends numbered findings, or "accepted" -->
+
+### Codex review (2026-10-30)
+
+**Changes requested.** Reviewed DS-00 through `cb5a29f5`, including the inline deploy-token fix `94e1b537`, as present at `ec32f01a`. That deploy-token normalization is sound. Three required fixes remain in the behavior-preservation gate:
+
+1. **P2 - capture payloads for controls outside forms** (`tools/ui_inventory.py:204-212`). `_select` and `_textarea` payload collectors are created only while `_form` exists. A loose `<select id="month"><option value="10">October</option></select>` can change its value to `11`, and a loose `<textarea id="note">keep</textarea>` can change to `erased`, with no inventory difference. Existing loose controls include `calendar.html:51` and `cosmere_builder.html:247,427`. Collect option values/selected state and textarea content for every control independently of form membership, then associate the same field payload with its form when applicable. Add both regression cases.
+2. **P2 - retain element identity on target records** (`tools/ui_inventory.py:184-186`). Link targets are counted without `anchor`. Swapping `/save` and `/delete` between distinct `a#save` and `a#delete` produces no failures, despite changing which action each identified element performs. Include the existing own-id/nearest-id anchor in link/image/target records and test an identified-link swap. This is separate from the documented limitation for anonymous handlers in one container.
+3. **P2 - refuse a login bounce in DOM capture** (`tools/ui_inventory.py:503-509`, also each tab reload). Playwright follows a protected `/gm` request to `/login`; the final HTTP 200 and login form are recorded under `/gm`, and the capture exits 0. Verify the final navigation target before counting the requested page as checked, including tab reloads. The screenshot harness already has the corresponding login-bounce guard. Add a boundary regression that the DOM capture command refuses this case while a legitimate login-page capture remains allowed.
+
+**Verification:** the existing inventory/screenshot-tool/Cosmere theme/skin selection passed **45 tests in 158.76s**. Four additional reviewer cases (two loose-control payloads, one identified-link swap, one DOM login bounce) **all fail in 1.66s**, demonstrating the three gaps against the exact reviewed head. The DOM case stubs the Playwright boundary and runs the real `capture` command; no browser session is used. Reproductions are kept outside git under the reviewer's ignored `.superpowers/review-ds00-reviewer/test_review_inventory.py` and can be handed back directly.
+
+No implementation, commit, push or branch change was made in this worktree. Return these three fixes to Claude, then recheck before following PROTOCOL step 6.
+
+### Fixes for recheck (Claude, 2026-10-30)
+
+**The three requested fixes** (`tools/ui_inventory.py`, tests in `tests/test_ui_inventory_tool.py`):
+
+1. **Controls outside forms.** Every `select` and `textarea` now records its options, selected state and text under `controls`, in or out of a form. Fields inside a form still appear on the form too.
+2. **Link identity.** Link, image and script target records now carry the element's anchor (own id, else nearest ancestor id plus tag). Swapping destinations between two identified elements, or between two containers, fails.
+3. **Login bounce in DOM capture.** A page that ends anywhere but the requested path records as a 302 with its target and no hooks, the same contract as `--mode html`. This is checked after the wait, on every tab reload and after every tab click. It compares the path rather than looking for `/login`, because legacy mode bounces to `/gm/login`. The login page itself still captures.
+
+**Also fixed, past the three findings:**
+
+- **False failure on any two commits.** `_sse_hub.html` writes the running commit into an inline script (`LOADED_VERSION`), so any two commits showed a script edit on most pages. Only that value is now ignored. Found rerunning DS-01's before/after. DS-01's earlier zero-failure table was recorded before this fix, and I did not establish why that run missed it; the table below is a fresh run.
+- **A rejected capture was accepted as evidence.** Capture exited 1 but still wrote the file, and two identical bounces then diffed as `0 failure(s)`, exit 0. The file now lists its `unchecked` routes, and `diff` refuses it with exit 2. Exceptions declared with `--allow-status` are not listed.
+- **`fieldset disabled`.** It was not recorded at all. A new one now fails rather than being an addition, because it switches off every control inside it. Removing one fails too. No Jinja template uses `fieldset` today; the VTT client does.
+- **URL normalisation.** The bounce check compares decoded paths, lower-case hosts and default ports, so `/player/sheet/Go'el Thrall` is not reported as a redirect to its own `%20` form.
+- **Smaller additions.** `datalist` options, `option disabled`, options without `</option>`, and redirect targets, which are now compared in both modes.
+
+**Independent review of these fixes:** 3 reviewers with 17 adversarial checks, about 2.2M subagent tokens. 17 findings: 4 confirmed, which come to 3 distinct defects (the last three items above, two of the findings being the same URL defect), all fixed. 13 were refuted as unreachable on this app's pages or in a plausible design edit.
+
+**Limits accepted from those 13** (mechanics reproduce, no real page or plausible design edit reaches them): `optgroup` state and grouping are not recorded; option label text is not recorded when a value exists, so two options can swap labels unnoticed; textarea whitespace at the ends is stripped; a scripted redirect later than the fixed wait (1500 ms on load, 300 ms after a tab click) counts as rendered. Anonymous hooks inside one container can still swap, as documented.
+
+**Verification:**
+
+- `pytest -q tests/test_ui_inventory_tool.py tests/test_ui_screens_tool.py tests/test_ds_tokens.py tests/test_cosmere_theme.py tests/test_pf2e_player_sheet_ui.py`: **94 passed in 25.66s**. The inventory file holds 45 of those.
+- 15 of the then-39 fast tests failed against the old tool, which is the expected result. Of those 15, 14 were new; the other was the existing deploy-token test, because that tree's tool predates `94e1b537`. The 5 tests added after that run (the commit stamp, then four from the review) were not run against the old tool.
+- **Real Chromium, account-mode server, signed out:** `/me`, `/campaigns/new`, `/admin/users`, `/chronicle`, `/gm` and `/tracker` all recorded as 302 to `/login?next=...` with no hooks, exit 1. `/login` alone captured with exit 0. Diffing two bounced captures gave exit 2.
+- **New tool on both trees** (`cb5a29f5` against this branch, 67 routes):
+
+| Profile | Same-tree control | Failures | Additions |
+|---|---|---|---|
+| pf2e | 0 / 0 | 0 | 18 (`ds.css`) |
+| pf2e, real Chromium | not run | 0 | 18 (`ds.css`) |
+| account | 0 / 0 | 0 | 25 (16 `ds.css`, 9 `ds-tokens.css`) |
+| cosmere | 0 / 0 | 0 | 12 |
+| mistborn | 0 / 0 | 0 | 12 |
+| dnd5e | 0 / 0 | 0 | 10 (9 `ds.css`, 1 `ds-tokens.css`) |
+
+**Not rerun:** the full suite. Only `tools/ui_inventory.py` and its test file changed since the full run at `9c70fadc`. Nothing in the app imports that tool. CI runs the full suite on the PR. Codex's four reproduction cases live outside this worktree and I could not find them, so I wrote equivalent tests; please run the originals in the recheck.
+
+**Next:** Codex rechecks. Nothing is pushed.

@@ -166,6 +166,7 @@ def test_unclosed_form_is_still_recorded():
 class _Resp:
     def __init__(self, html, status=200):
         self.status_code, self.content_type, self._html = status, "text/html; charset=utf-8", html
+        self.headers = {}
 
     def get_data(self, as_text=True):
         return self._html
@@ -236,3 +237,242 @@ def test_deploy_token_inside_an_inline_script_is_not_a_script_edit():
     assert edited[0] == []                       # whitespace at the end is stripped
     changed = diff_inventories(_capture(page("1")), _capture(page("1", ', "x": "/y"')))
     assert changed[0] and "script_order" in changed[0][0]
+
+
+# Codex review of DS-00: each of these changed behaviour with no inventory difference.
+LOOSE = """<html><body class="p">
+<select id="month"><option value="10" selected>October</option><option value="12">December</option></select>
+<textarea id="note">keep</textarea>
+<input id="kind" list="kinds"><datalist id="kinds"><option value="weapon"></datalist>
+<a id="save" href="/save">Save</a><a id="delete" href="/delete">Delete</a>
+</body></html>"""
+
+
+def _ldiff(after_html):
+    return diff_inventories(_capture(LOOSE), _capture(after_html))
+
+
+def test_loose_select_options_and_selection_are_frozen():
+    assert _ldiff(LOOSE) == ([], [])
+    assert any("controls removed" in f and "[10*,12]" in f for f in _ldiff(LOOSE.replace('value="10"', 'value="11"'))[0])
+    assert _ldiff(LOOSE.replace(' selected>', '>'))[0]
+    assert _ldiff(LOOSE.replace('value="12">', 'value="12" disabled>'))[0]
+    assert _ldiff(LOOSE.replace('<option value="12">December</option>', ''))[0]
+
+
+def test_loose_textarea_text_is_frozen():
+    failures, _ = _ldiff(LOOSE.replace(">keep<", ">erased<"))
+    assert any("controls removed" in f and "text=keep" in f for f in failures)
+
+
+def test_datalist_options_are_frozen():
+    assert _ldiff(LOOSE.replace('value="weapon"', 'value="armor"'))[0]
+
+
+def test_payload_in_a_form_is_still_on_the_form_and_counts_once_as_a_control():
+    html = '<form action="/x"><select id="s" name="n"><option value="a">A</select><textarea name="t">x</textarea></form>'
+    inv = inventory_html(html)
+    assert list(inv["controls"].values()) == [1, 1]
+    assert any("[a]" in k for k in inv["controls"]) and any("text=x" in k for k in inv["controls"])
+    form = next(iter(inv["forms"]))
+    assert "[a]" in form and "text=x" in form
+
+
+def test_unclosed_options_and_selects_are_recorded():
+    inv = inventory_html('<select id="a"><option value="1"><option value="2" selected><select id="b"><option value="3">')
+    assert sorted(inv["controls"]) == ["#a select  [1,2*]", "#b select  [3]"]
+
+
+def test_links_swapped_between_identified_elements_fail():
+    swapped = LOOSE.replace("/save", "/TMP").replace("/delete", "/save").replace("/TMP", "/delete")
+    failures, _ = _ldiff(swapped)
+    assert any("links removed" in f and "#save a href=/save" in f for f in failures)
+    assert any("links removed" in f and "#delete a href=/delete" in f for f in failures)
+
+
+def test_links_swapped_between_containers_fail():
+    page = '<div id="a"><a href="/one">1</a></div><div id="b"><a href="/two">2</a></div>'
+    swapped = page.replace("/one", "/TMP").replace("/two", "/one").replace("/TMP", "/two")
+    assert diff_inventories(_capture(page), _capture(swapped))[0]
+
+
+def test_changed_redirect_target_fails():
+    def route(target):
+        return {"mode": "html", "routes": {"/x": {"status": 302, "redirected_to": target}}}
+    assert diff_inventories(route("/a"), route("/a")) == ([], [])
+    assert diff_inventories(route("/a"), route("/login"))[0] == ["/x: redirect /a -> /login"]
+
+
+def test_html_mode_records_the_redirect_target_with_ids_normalised():
+    from tools.ui_inventory import _record
+    resp = _Resp("", 302)
+    resp.headers = {"Location": "/campaign/" + "c" * 32 + "/x"}
+    assert _record(resp, {}, "/me", {"c" * 32: "{cid}"}) == {"status": 302, "redirected_to": "/campaign/{cid}/x"}
+
+
+class _Tab:
+    def __init__(self, page, i):
+        self.page, self.i = page, i
+
+    def is_visible(self):
+        return True
+
+    def get_attribute(self, _name):
+        return f"t{self.i}"
+
+    def click(self):
+        self.page.url = self.page.after_click.get(self.i, self.page.url)
+
+
+class _Page:
+    """The part of Playwright capture_dom touches: `final_urls` maps the nth load to where it ended."""
+
+    def __init__(self, final_urls, tabs=0, after_click=None, status=200):
+        self.final_urls, self.tabs, self.after_click, self.status = final_urls, tabs, after_click or {}, status
+        self.url, self.loads = "", 0
+
+    def goto(self, url, wait_until=None):
+        self.url = self.final_urls.get(self.loads, self.final_urls.get("*", url))
+        self.loads += 1
+        return type("R", (), {"status": self.status})()
+
+    def wait_for_timeout(self, _ms):
+        pass
+
+    def content(self):
+        return '<html><body class="login"><form action="/login" method="post"></form></body></html>'
+
+    def locator(self, _selector):
+        page = self
+        return type("L", (), {"count": lambda s: page.tabs, "nth": lambda s, i: _Tab(page, i)})()
+
+
+def _stub_playwright(monkeypatch, page):
+    import sys
+    import types
+
+    class Engine:
+        chromium = types.SimpleNamespace(launch=lambda **_k: types.SimpleNamespace(
+            new_page=lambda **_k: page, close=lambda: None))
+
+    class Ctx:
+        def __enter__(self):
+            return Engine()
+
+        def __exit__(self, *_a):
+            return False
+
+    sync_api = types.ModuleType("playwright.sync_api")
+    sync_api.sync_playwright = Ctx
+    monkeypatch.setitem(sys.modules, "playwright", types.ModuleType("playwright"))
+    monkeypatch.setitem(sys.modules, "playwright.sync_api", sync_api)
+
+
+def _dom(monkeypatch, tmp_path, page, *args):
+    import json
+    _stub_playwright(monkeypatch, page)
+    out = tmp_path / "dom.json"
+    code = main(["capture", "--mode", "dom", "--base-url", "http://127.0.0.1:5057", "--out", str(out), *args])
+    return code, json.loads(out.read_text(encoding="utf-8"))["routes"]
+
+
+def test_dom_capture_refuses_a_login_bounce(monkeypatch, tmp_path, capsys):
+    page = _Page({"*": "http://127.0.0.1:5057/login?next=/gm"})
+    code, routes = _dom(monkeypatch, tmp_path, page, "--routes", "/gm")
+    assert code == 1
+    assert routes == {"/gm": {"status": 302, "redirected_to": "/login?next=/gm"}}
+    assert "NOT CHECKED" in capsys.readouterr().out
+
+
+def test_dom_capture_refuses_the_legacy_login_bounce_too(monkeypatch, tmp_path):
+    code, routes = _dom(monkeypatch, tmp_path, _Page({"*": "http://127.0.0.1:5057/gm/login"}), "--routes", "/gm")
+    assert code == 1 and routes["/gm"]["redirected_to"] == "/gm/login"
+
+
+def test_dom_capture_still_allows_the_login_page_itself(monkeypatch, tmp_path):
+    code, routes = _dom(monkeypatch, tmp_path, _Page({}), "--routes", "/login")
+    assert code == 0 and routes["/login"]["status"] == 200 and routes["/login"]["body_class"] == "login"
+
+
+def test_dom_capture_ignores_query_fragment_and_trailing_slash(monkeypatch, tmp_path):
+    code, routes = _dom(monkeypatch, tmp_path, _Page({"*": "http://127.0.0.1:5057/gm/?x=1#top"}), "--routes", "/gm")
+    assert code == 0 and routes["/gm"]["status"] == 200
+
+
+def test_dom_capture_refuses_a_bounce_on_a_tab_reload(monkeypatch, tmp_path):
+    good = "http://127.0.0.1:5057/gm"
+    page = _Page({0: good, 1: good, 2: "http://127.0.0.1:5057/login"}, tabs=2)
+    code, routes = _dom(monkeypatch, tmp_path, page, "--routes", "/gm")
+    assert code == 1
+    assert routes["/gm"]["status"] == 200 and routes["/gm#tab0:t0"]["status"] == 200
+    assert routes["/gm#tab1"] == {"status": 302, "redirected_to": "/login"}
+
+
+def test_dom_capture_refuses_a_tab_click_that_leaves_the_page(monkeypatch, tmp_path):
+    page = _Page({}, tabs=1, after_click={0: "http://127.0.0.1:5057/login"})
+    code, routes = _dom(monkeypatch, tmp_path, page, "--routes", "/gm")
+    assert code == 1 and routes["/gm#tab0:t0"] == {"status": 302, "redirected_to": "/login"}
+
+
+def test_allow_status_can_still_expect_a_dom_redirect(monkeypatch, tmp_path):
+    page = _Page({"*": "http://127.0.0.1:5057/gm"})
+    code, routes = _dom(monkeypatch, tmp_path, page, "--routes", "/gm/rest", "--allow-status", "/gm/rest=302")
+    assert code == 0 and routes["/gm/rest"] == {"status": 302, "redirected_to": "/gm"}
+
+
+def test_commit_stamp_in_the_sse_hub_is_not_a_script_edit():
+    """_sse_hub.html writes the running commit into an inline script, so any two
+    commits differed (found rerunning DS-01). Only that one value is ignored."""
+    def page(stamp, rest="var a = 1;"):
+        return f'<html><body><script>var LOADED_VERSION = "{stamp}"; {rest}</script></body></html>'
+    assert diff_inventories(_capture(page("cb5a29f5")), _capture(page("ec32f01a"))) == ([], [])
+    assert diff_inventories(_capture(page("cb5a29f5")), _capture(page("ec32f01a", "var a = 2;")))[0]
+    other = '<html><body><script>var OTHER_VERSION = "{}";</script></body></html>'
+    assert diff_inventories(_capture(other.format("a")), _capture(other.format("b")))[0]
+
+
+# Independent review of the fixes above.
+def test_disabled_fieldset_is_frozen_both_ways():
+    plain = '<form action="/a"><fieldset><input name="a"></fieldset></form>'
+    off = plain.replace("<fieldset>", "<fieldset disabled>")
+    failures, _ = diff_inventories(_capture(plain), _capture(off))
+    assert any("state added" in f and "fieldset disabled" in f for f in failures)
+    failures, _ = diff_inventories(_capture(off), _capture(plain))
+    assert any("state removed" in f and "fieldset disabled" in f for f in failures)
+    assert diff_inventories(_capture(off), _capture(off)) == ([], [])
+    # Other new state stays an addition, as it always was.
+    failures, additions = diff_inventories(_capture(plain), _capture(plain.replace("<input", "<p hidden></p><input")))
+    assert failures == [] and any("state added" in a for a in additions)
+
+
+def test_diff_refuses_captures_that_recorded_unchecked_routes(monkeypatch, tmp_path, capsys):
+    bounced = _Page({"*": "http://127.0.0.1:5057/login"})
+    assert _dom(monkeypatch, tmp_path, bounced, "--routes", "/gm")[0] == 1
+    first = tmp_path / "first.json"
+    first.write_text((tmp_path / "dom.json").read_text(encoding="utf-8"), encoding="utf-8")
+    assert _dom(monkeypatch, tmp_path, bounced, "--routes", "/gm")[0] == 1
+    assert main(["diff", str(first), str(tmp_path / "dom.json")]) == 2
+    assert "NOT CHECKED, recapture first: /gm=302 -> /login" in capsys.readouterr().out
+
+
+def test_diff_accepts_a_capture_whose_exception_was_declared(monkeypatch, tmp_path):
+    page = _Page({"*": "http://127.0.0.1:5057/gm"})
+    args = ("--routes", "/gm/rest", "--allow-status", "/gm/rest=302")
+    assert _dom(monkeypatch, tmp_path, page, *args)[0] == 0
+    first = tmp_path / "first.json"
+    first.write_text((tmp_path / "dom.json").read_text(encoding="utf-8"), encoding="utf-8")
+    assert _dom(monkeypatch, tmp_path, page, *args)[0] == 0
+    assert main(["diff", str(first), str(tmp_path / "dom.json")]) == 0
+
+
+def test_dom_capture_does_not_mistake_url_normalisation_for_a_redirect(monkeypatch, tmp_path):
+    from tools.ui_inventory import _elsewhere
+    assert _elsewhere("http://h:1/player/sheet/Go'el%20Thrall", "http://h:1/player/sheet/Go'el Thrall") is None
+    assert _elsewhere("http://h/s/S%C3%A9ra", "http://h/s/Séra") is None
+    assert _elsewhere("http://localhost:5/x", "HTTP://LOCALHOST:5/x") is None
+    assert _elsewhere("http://localhost/x", "http://localhost:80/x") is None
+    assert _elsewhere("http://h:1/login", "http://h:1/x") == "/login"
+    assert _elsewhere("http://other:1/x", "http://h:1/x") == "/x"
+    page = _Page({"*": "http://127.0.0.1:5057/player/sheet/Go%20el"})
+    code, routes = _dom(monkeypatch, tmp_path, page, "--routes", "/player/sheet/Go el")
+    assert code == 0 and routes["/player/sheet/Go el"]["status"] == 200
