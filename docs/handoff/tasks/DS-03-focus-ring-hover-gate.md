@@ -86,7 +86,7 @@ Wrap these in `@media (hover: hover) and (pointer: fine)` **where they already l
 - `.tab-btn` and `.hp-input` etc. keep their existing cues as well as the ring.
 
 ## Keyboard-focus follow-up from DS-02
-DS-03 gives locked picker rows a visible ring: calculated 3.66:1 on the builder and measured 3.74:1 on level-up at the row's 0.55 opacity. No markup or script change is needed. The rest stays with **DS-15c** (visible row focus restyle) and **DS-09** (ARIA): `aria-disabled` rather than `disabled`, all reasons as visible text (the chip shows `reasons[0]` only and the rest are in `title`), and text feedback on Enter under reduced motion. `.cp-opt-override` rows get the ring the same way. The hidden remove controls at `player_levelup.html:1821` and `player_builder.html:1356` can't be reached by keyboard, and a ring can't fix that; record them in appendix A with a `BUG-UI-nn` id.
+DS-03 gives locked picker rows a visible ring: calculated at 3.66:1 on the builder and 3.74:1 on level-up at the row's 0.55 opacity; the ring itself was seen in a scratch-page screenshot, not on the live app. No markup or script change is needed. The rest stays with **DS-15c** (visible row focus restyle) and **DS-09** (ARIA): `aria-disabled` rather than `disabled`, all reasons as visible text (the chip shows `reasons[0]` only and the rest are in `title`), and text feedback on Enter under reduced motion. `.cp-opt-override` rows get the ring the same way. The hidden remove controls at `player_levelup.html:1821` and `player_builder.html:1356` can't be reached by keyboard, and a ring can't fix that; record them in appendix A with a `BUG-UI-nn` id.
 
 ## Acceptance
 - [ ] Section 11 gates, with these specifics:
