@@ -34,6 +34,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import importlib
+import json
 import os
 import re
 import sys
@@ -44,6 +45,10 @@ from urllib.parse import urlsplit
 
 VIEWPORTS = {"desktop": (1440, 900), "phone": (390, 844)}
 HERE = Path(__file__).resolve().parent
+# The CLI is also invoked as ``python tools/ui_screens.py``: in that form
+# Python places tools/, not the repository root, on sys.path.
+if str(HERE.parent) not in sys.path:
+    sys.path.insert(0, str(HERE.parent))
 
 
 def _slug(route: str) -> str:
@@ -202,6 +207,28 @@ def motion(repo: Path, profile: str, routes=None) -> tuple[int, list[str]]:
     return checked, problems
 
 
+def focus(repo: Path, profile: str, out: Path, routes=None) -> tuple[int, list[str]]:
+    """Audit real Tab stops and view-only expanded states, with image evidence."""
+    from tools.ui_focus import MEASUREMENT_METHOD, audit_states
+    out.mkdir(parents=True, exist_ok=True)
+    checked, problems, pages = 0, [], []
+    with _served(repo, profile, routes) as (port, cookie, pairs):
+        for viewport, who, template, route, page in _pages(port, cookie, pairs):
+            label = viewport + '_' + who + '_' + _slug(template)
+            if isinstance(page, Exception):
+                problems.append(f'{label}: did not load: {page}')
+                continue
+            checked += 1
+            rows, bad = audit_states(page, out / label, label, route)
+            pages.append(dict(viewport=viewport, role=who, route=template, stops=rows, problems=bad))
+            problems += bad
+            print(f'FOCUS {label}: {len(rows)} stops, {len(bad)} problems', flush=True)
+    (out / 'focus.json').write_text(json.dumps(dict(profile=profile,
+        measurement_method=MEASUREMENT_METHOD, pages=pages, problems=problems),
+        indent=2, ensure_ascii=False, allow_nan=False) + '\n', encoding='utf-8')
+    return checked, problems
+
+
 def compare(before: Path, after: Path, diff_dir: Path | None = None) -> int:
     from PIL import Image, ImageChops
     names = sorted({p.name for p in before.glob("*.png")} | {p.name for p in after.glob("*.png")})
@@ -257,7 +284,19 @@ def main(argv=None) -> int:
     m.add_argument("--profile", default="pf2e")
     m.add_argument("--repo", default=str(HERE.parent))
     m.add_argument("--routes", nargs="*")
+    f = sub.add_parser("focus")
+    f.add_argument("--profile", default="pf2e")
+    f.add_argument("--repo", default=str(HERE.parent))
+    f.add_argument("--routes", nargs="*")
+    f.add_argument("--out", required=True, help="directory for focus.json and focused-control screenshots")
     args = ap.parse_args(argv)
+    if args.cmd == 'focus':
+        out = Path(args.out).resolve()
+        checked, problems = focus(Path(args.repo).resolve(), args.profile, out, args.routes)
+        for problem in problems:
+            print(f'FOCUS {problem}')
+        print(f'{checked} pages checked, {len(problems)} problems')
+        return 1 if problems or not checked else 0
     if args.cmd == "motion":
         checked, problems = motion(Path(args.repo).resolve(), args.profile, args.routes)
         for problem in problems:

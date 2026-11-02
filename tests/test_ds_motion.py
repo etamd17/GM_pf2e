@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from tools.ui_screens import motion_problems
+from tests.test_ds_focus import FOCUS_SELECTORS, IMPORTANT_FOCUS_SELECTORS, selectors
 
 ROOT = Path(__file__).resolve().parents[1]
 DS = ROOT / "static" / "css" / "ds.css"
@@ -76,25 +77,24 @@ def test_the_reduced_motion_block_is_the_one_in_the_plan():
     assert "--motion-distance:" not in _ds() and "--motion-scale-from:" not in _ds()
 
 
-def test_important_only_in_the_global_reduced_motion_rule():
+def test_important_only_in_the_global_reduced_motion_or_named_focus_rules():
     for selector, body in _rules(_ds()):
         if "!important" in body:
-            assert selector == UNIVERSAL
+            assert selector == UNIVERSAL or set(selectors(selector)) <= IMPORTANT_FOCUS_SELECTORS
 
 
 def test_no_rule_reaches_an_existing_page():
-    """Every selector needs a new .ds-* class, bar the global rule and the listed cue."""
+    """Motion stays opt-in; DS-03's explicitly listed focus rules may reach existing controls."""
     in_reduce = {s for s, _ in _rules(_reduce())}
     seen = set()
     for selector, _ in _rules(_ds()):
         if selector == UNIVERSAL or selector.startswith(("from", "to", "0%", "50%")):
             continue
-        for part in selector.split(","):
-            part = part.strip()
+        for part in selectors(selector):
             if part in EXISTING_PAGE_RULES:
                 assert part in in_reduce, part
                 seen.add(part)
-            else:
+            elif part not in FOCUS_SELECTORS:
                 assert ".ds-" in part, part
     assert seen == EXISTING_PAGE_RULES
 

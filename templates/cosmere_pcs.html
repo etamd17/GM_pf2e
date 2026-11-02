@@ -11,7 +11,9 @@
   .pc-card { display:block; text-decoration:none; background:var(--bg-sunken,#131922);
              border:1px solid var(--border-card); border-left:4px solid var(--accent);
              border-radius:12px; padding:.85rem 1rem; transition:transform .12s, box-shadow .12s; }
+  @media (hover: hover) and (pointer: fine) {
   .pc-card:hover { transform:translateY(-2px); box-shadow:0 6px 22px rgba(0,0,0,.32); }
+  }
   .pc-top { display:flex; justify-content:space-between; align-items:baseline; gap:.5rem; }
   .pc-name { font-size:15px; font-weight:700; color:#e8eef5; }
   .pc-lv { font-size:11px; color:var(--text-on-dark-3); font-family:var(--font-ui); font-variant-numeric:tabular-nums; white-space:nowrap; }
