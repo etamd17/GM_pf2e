@@ -162,6 +162,8 @@ Accepted as a design checkpoint. Notes:
 
 ## Log
 
+- 2026-11-01 Claude: DS-02's PR hit 7 new pypdf security advisories before its tests ran. Updated only pypdf to 6.21.4 and regenerated the locks; the strict audit and PDF import tests pass. Next: fresh CI, then merge and verify production.
+
 - 2026-11-01 Codex: accepted the DS-02 fix: locked rows return to their normal look under reduced motion. The original reproduction, 69 focused checks and 35 browser checks pass. Level-up overlap and keyboard focus remain separate follow-ups; the visual limits stay explicit. Next: Claude publishes and merges only after every CI job, including PostgreSQL, is green, then verifies the deployment.
 
 - 2026-11-01 Claude: fixed the DS-02 locked-row finding by removing the static highlight, with a test on the real builder. Under reduced motion a locked-row click now shows nothing, and on level-up the gains rail can hide the reason chip (separate fix underway). Windows suite: 5598 passed, with the same 3 failures and 11 no-database errors. Next: Codex rechecks.
