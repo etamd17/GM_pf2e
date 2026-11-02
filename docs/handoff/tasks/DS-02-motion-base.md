@@ -141,3 +141,25 @@ Independent checks:
 - Full suite and PostgreSQL were not repeated locally. The existing known failures remain documented; every current CI job, including PostgreSQL, must pass before any merge.
 
 Only this task review and the queue are edited by Codex, left uncommitted. No implementation edits, commit or push. Return the one required fix to Claude for focused recheck before publication.
+
+### Codex recheck (2026-11-01)
+
+**Accepted at `1da240a2b27a60a860592d14ee22fe2ef3561060`; no required findings remain.** The implementation delta removes only the reduced-motion static locked-chip override and clarifies the generator comment. The other changes are the real-picker regression, its disposable server fixture, the static allowlist and the report. The earlier persistent-highlight finding is fixed.
+
+Independent checks against this exact local checkout:
+
+- Original reviewer real-builder reproduction, unchanged: **1 passed in 20.13s**. After real locked-row clicks, both no-preference and reduce return each chip to its baseline `filter: none`, although the legacy class remains attached.
+- `tests/test_ds_motion.py tests/test_ds_tokens.py tests/test_ui_screens_tool.py`: **69 passed in 8.43s**.
+- `tests/browser/test_ds_motion_browser.py`, real Chromium: **35 passed in 74.08s**. This includes the new actual-builder regression in both motion preferences, using rows 0, 1, 1 and comparing all computed properties except animation properties after settling. It also verifies the locked options never select.
+- No full-suite, screenshot matrix, PostgreSQL or Linux/gunicorn rerun by Codex for this narrow fix. Their reported results and limits above remain distinct from these independent checks.
+
+Rulings on the recheck questions:
+
+1. **Accept the absence of shake/flash under reduce for DS-02.** This follows the approved site-wide animation collapse. It is a documented loss of transient click feedback, not a claim that the picker is fully accessible. Do not restore a permanent highlight to compensate.
+2. **Correct the earlier review's visibility assumption.** The reason chip is not always visible on level-up: the pre-existing gains rail can cover it. That overlap is a real separate defect; suppressing motion makes the existing lack of visible explanation more apparent. Keep the rail fix separate as already underway, and verify visible lock reasons at desktop/phone sizes there. This acceptance does not certify that page's layout or accessibility.
+3. **The existing missing locked-row keyboard focus cue remains a follow-up.** Reduced motion also removes the Enter-triggered animation. The picker-owning task should provide a visible keyboard focus cue and an accessible explanation without depending on animation. It is not an additional DS-02 code change.
+4. **Builder coverage is sufficient for this shared-handler CSS removal.** The committed test exercises the actual renderer/handler rather than copied markup, and the unchanged original reviewer test passes. The reported one-off level-up probe is not promoted to committed coverage or a new independent reviewer check. The rail/picker task still needs its own level-up tests.
+
+The prior narrow pixel waiver and property/helper exceptions stand. Variable tiny corner counts do not justify widening the comparison tolerance or claiming literal pixel equality. The additional odd frames and Cosmere-player observations remain unattributed; the alternating runs fit noise but do not prove its cause. The interrupted earlier full run remains incomplete diagnostic evidence, not a success; the later completed run and three passing repeats did not reproduce its four unnamed failures. No new reproducible blocker is established by those reports.
+
+Claude may follow PROTOCOL step 6: commit this review and the queue update, incorporate the docs-only main update, push and open the task PR. **Every current-head CI job, including PostgreSQL and the Linux runtime/browser checks, must finish successfully before a normal merge; never use auto-merge.** Verify the production deployment afterwards. Codex leaves only the review and queue edits uncommitted; no implementation edits, commit or push.
