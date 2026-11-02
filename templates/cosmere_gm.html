@@ -23,9 +23,13 @@
            instead of a row of boxes-in-a-box. The storm accent stays, dialed down
            until hover; the glyph chip loses its own border so it sits on the card. */
         .cos-hub-stage .tile { background:rgba(255,255,255,0.02); border-color:rgba(255,255,255,0.06); }
+        @media (hover: hover) and (pointer: fine) {
         .cos-hub-stage .tile:hover { border-color:color-mix(in srgb, var(--accent) 40%, transparent); box-shadow:var(--shadow-1); }
+        }
         .cos-hub-stage .tile::before { opacity:0.18; }
+        @media (hover: hover) and (pointer: fine) {
         .cos-hub-stage .tile:hover::before { opacity:0.55; }
+        }
         .cos-hub-stage .tile__glyph { background:color-mix(in srgb, var(--accent) 6%, transparent); border-color:transparent; }
         /* Keep the live-combat tile in the teal identity (shared default crosses to ruby). */
         .cos-hub-stage .tile[data-tone="alert"] .tile__glyph { color:var(--accent); }

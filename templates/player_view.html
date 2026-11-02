@@ -107,10 +107,12 @@
             transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
             position:relative; overflow:hidden;
         }
+        @media (hover: hover) and (pointer: fine) {
         .card:hover {
             border-color:rgba(224,176,80,0.45);
             transform:translateY(-2px);
             box-shadow:0 10px 26px rgba(0,0,0,0.5);
+        }
         }
         .card.is-current { border-color:rgba(224,176,80,0.55); box-shadow:0 0 0 1px rgba(224,176,80,0.20), 0 8px 22px rgba(0,0,0,0.45); }
         /* The card the returning player claimed (localStorage) — same gilt

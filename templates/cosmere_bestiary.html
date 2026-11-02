@@ -10,7 +10,9 @@
   .cb-grid { display:grid; gap:.7rem; grid-template-columns:repeat(auto-fill, minmax(220px,1fr)); }
   .cb-card { display:block; text-decoration:none; background:var(--bg-sunken,#131922);
              border:1px solid var(--border-card); border-radius:11px; padding:.85rem 1rem; transition:all .12s; }
+  @media (hover: hover) and (pointer: fine) {
   .cb-card:hover { border-color:rgba(95,168,224,.5); transform:translateY(-1px); box-shadow:0 4px 18px rgba(95,168,224,.10); }
+  }
   .cb-nm { font-size:15px; font-weight:600; color:#e8eef5; }
   .cb-meta { margin-top:.45rem; display:flex; gap:.35rem; flex-wrap:wrap; }
   .cb-chip { font-size:10px; text-transform:uppercase; letter-spacing:.05em; padding:2px 8px; border-radius:999px;

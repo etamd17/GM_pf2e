@@ -5,7 +5,211 @@
 
    Cascade contract (DESIGN_DIRECTION.md 5.0): no @layer; !important only to beat
    a specific system.css !important rule, with a comment citing the line it
-   beats; map onto a legacy class with `body` plus the existing selector. */
+   beats; map onto a legacy class with `body` plus the existing selector.
+   DS-03 also permits focus opacity to beat the two cited inline opacities. */
+
+/* ── Keyboard focus (DS-03, DESIGN_DIRECTION.md 5.7) ───────────────────
+   :where() contributes no specificity; :focus-visible contributes (0,1,0).
+   The ring adds to existing borders and meaning-carrying shadows. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    outline: 2px solid var(--c-focus);
+    outline-offset: 2px;
+}
+:where(.ds-inset-focus):focus-visible { outline-offset: -2px; }
+/* base.html:45 makes both overflow axes scrollable, clipping outward nav rings.
+   Keep all four edges inside the existing links and search button. */
+body .nav-links :where(a, button):focus-visible { outline-offset: -2px; }
+/* system.css:5128-5139,5320-5326,5461: phone Chronicle tabs have no inline
+   padding, so an ordinary inset crosses label ink and base.html:107's nav stripe.
+   Keyboard-only geometry exception: 6px of compensating inline space keeps
+   glyphs, underline ink and following flow fixed, and leaves 2px between each
+   vertical stroke and the label box (fallback fonts overhang it, e.g. DejaVu's
+   "J"). Focused-strip hit boxes gain 12px and meet across the 12px gap; the
+   existing stripe extends 6px at each end until keyboard focus leaves. Native
+   focus does not scroll a partly visible tab, so the focused tab is the strip's
+   only snap target while focus is in it. */
+@media (max-width: 480px) {
+    body .chron-subnav:has(> .chron-tab:focus-visible) {
+        padding-inline: 6px;
+        margin-inline: -6px;
+        scroll-snap-type: x mandatory;
+    }
+    body .chron-subnav:has(> .chron-tab:focus-visible) > .chron-tab {
+        padding-inline: 6px;
+        margin-inline: -6px;
+    }
+    body .chron-subnav:has(> .chron-tab:focus-visible) > .chron-tab:focus-visible {
+        outline-offset: -4px;
+        scroll-snap-align: end;
+    }
+    body .chron-subnav:has(> .chron-tab:focus-visible) > .chron-tab[aria-current="page"]::after {
+        left: 6px;
+        right: 6px;
+    }
+}
+/* player_builder.html:125-126: desktop rows meet the vertical scrollport edge.
+   Its phone strip already has painting space (lines87-96), so keep that ring. */
+@media (min-width: 769px) {
+    body .builder-nav-list .nav-item:focus-visible { outline-offset: -2px; }
+}
+/* generator.html:248,252,256 clips controls which meet the Rapid Fire bar edges. */
+body .rapid-bar .rapid-clear:focus-visible,
+body .rapid-bar .rapid-btn:focus-visible { outline-offset: -2px; }
+/* tracker.html:1889-1895: the following normal-flow toolbar can cover the
+   setup summary's outward bottom stroke. Inset the real summary, not its panel. */
+body #pf2e-encounter-setup > summary:focus-visible,
+body #cos-encounter-setup > summary:focus-visible { outline-offset: -2px; }
+/* calendar.html:48-61: the adjacent month picker can cover Prev's right stroke. */
+body .cal-nav-btn:focus-visible { outline-offset: -2px; }
+/* cosmere_builder.html:112-133 clips phone wizard tabs. Three pixels keep the
+   whole stroke inside both the scrollport and the existing 1px selected border. */
+@media (max-width: 760px) {
+    body .bld .wiz-rail .wiz-tab:focus-visible { outline-offset: -3px; }
+}
+/* cosmere_builder_mistborn.html:20-23: the stepper clips its endpoint buttons. */
+body .mbb .stepper button:focus-visible { outline-offset: -2px; }
+
+/* Equipment rows/categories sit inside the clipped modal and nested list
+   (_pc_sheet/_modals.html:11-16). Clear their existing selection borders. */
+body #equip-list .equip-item:focus-visible { outline-offset: -3px; }
+body #equip-cat-btns .equip-cat:focus-visible { outline-offset: -3px; }
+/* Keep the renderer's .4 eligibility opacity (player_sheet.html:7361), while
+   using the existing bright text token for a contrasting composited ring. */
+body #equip-list .equip-item.opacity-40:focus-visible {
+    outline: 2px solid var(--c-text-1);
+    outline-offset: -4px;
+}
+/* The shared choice categories scroll horizontally (_choice_picker.html:33). */
+body #mod-tabs .mod-tab-btn:focus-visible { outline-offset: -3px; }
+/* beats system.css:628-631 (.tb:focus-visible offset:2px !important).
+   The condition toggle's selected border stays visible inside its scroller
+   (player_sheet.html:4274-4284); only move the existing focus outline. */
+body [data-cond-row] > button[data-cond-act="toggle"]:focus-visible {
+    outline-offset: -3px !important;
+}
+/* Play/Prep's segmented parent clips outward paint (player_sheet.html:1746). */
+body .caster-view-toggle button:focus-visible { outline-offset: -3px; }
+/* Scope the PF2e inventory scroller, not Cosmere's separate #inv-list.
+   Keep the tiny Drop glyph clear (_pc_sheet/_tab_inventory.html:92-110). */
+body #tab-inventory #inv-list .invested-toggle:focus-visible { outline-offset: -2px; }
+body #tab-inventory #inv-list button[onclick^="removeInvItem("]:focus-visible { outline-offset: 0; }
+
+/* gm_hub.html:72-73 stretches empty links through ::after. Paint the ring on
+   that actual hit area, inset so the tile's overflow cannot clip it. The static
+   empty anchor at gm_hub.html:250 must not add its own box over the tile glyph. */
+body .tile__link:focus-visible { outline: none; }
+body .tile__link:focus-visible::after {
+    outline: 2px solid var(--c-focus);
+    outline-offset: -2px;
+}
+/* player_view.html:108 clips the full-card anchor's outward ring. Keep this
+   existing overlay link's indicator inside its card, without moving its hit area. */
+body .card[data-char-name] > a.absolute.inset-0:focus-visible { outline-offset: -2px; }
+/* player_sheet.html:604-620: these compact pins sit beside bright text. Keep
+   their ring inside the existing 18px box, away from the neighbouring glyphs. */
+body .pin-fav-btn:focus-visible { outline-offset: -2px; }
+/* player_sheet.html:2515-2528: this fixed circle can sit beside Staff damage
+   text. Keep its ring inside its existing box without moving it or the pen. */
+body .whisper-fab:focus-visible { outline-offset: -2px; }
+/* player_sheet.html:2041,3127: the phone tab strip clips outward outlines.
+   Inset just its existing tabs; their width, glyphs and selection cues stay. */
+body .tab-bar-scroll .tab-btn:focus-visible { outline-offset: -2px; }
+/* system.css:752-755,2467 keeps a 2px accent underline on selected tabs.
+   Place the whole focus stroke above it; keep that selection cue unchanged. */
+body .tab-bar-scroll .tab-btn.active:focus-visible { outline-offset: -4px; }
+/* _choice_picker.html:35,336-340: a row can meet its nested scroll edge.
+   Inset the existing ring without changing eligibility ink, opacity or layout. */
+body #mod-list button:focus-visible { outline-offset: -2px; }
+/* cosmere_gm.html:13-15,127,140: the segmented groups clip outward rings.
+   Their selected accent-filled option needs the on-accent ink, not a light ring. */
+body .cw-btn:focus-visible { outline-offset: -2px; }
+body .cw-btn.on:focus-visible { outline: 2px solid var(--c-on-accent); }
+/* cosmere_builder.html:43-44 clips the glossary summary's outward ring. */
+body .cb-glossary > summary:focus-visible { outline-offset: -2px; }
+/* cosmere_gmscreen.html:23: keep inline link rings clear of adjacent punctuation. */
+body .gms-xref:focus-visible { outline-offset: 0; }
+
+/* beats system.css:750 (.tab-btn:focus-visible outline:none !important). */
+body .tab-btn:focus-visible {
+    outline: 2px solid var(--c-focus) !important;
+    outline-offset: 2px;
+}
+/* beats system.css:576; also covers party_view.html:227, player_sheet.html:437,
+   tracker.html:311,314 and panel-card inventory fields. */
+body .panel-card input:focus-visible,
+body .panel-card select:focus-visible,
+body .panel-card textarea:focus-visible,
+body .hp-input:focus-visible,
+body .tinput:focus-visible,
+body .tselect:focus-visible {
+    outline: 2px solid var(--c-focus) !important;
+    outline-offset: 2px;
+}
+
+/* beats dnd5e.css:52, which loads after this file. */
+body .d5-input:focus-visible,
+body .d5-select:focus-visible,
+body .d5-textarea:focus-visible { outline: 2px solid var(--c-focus); }
+/* beats _account_base.html:41; campaign_invites.html:9-12 stays more specific. */
+body input:focus-visible,
+body select:focus-visible { outline: 2px solid var(--c-focus); }
+/* beats campaign_intro.html:198. */
+body .field-input:focus-visible { outline: 2px solid var(--c-focus); }
+/* beats cosmere_bestiary.html:22. */
+body .cb-search:focus-visible { outline: 2px solid var(--c-focus); }
+/* beats generator.html:228. */
+body .gen-toolbar-input:focus-visible { outline: 2px solid var(--c-focus); }
+/* beats gmscreen.html:125. */
+body .gm-search-input:focus-visible { outline: 2px solid var(--c-focus); }
+/* beats loot_ledger.html:202. */
+body .form-group input:focus-visible,
+body .form-group select:focus-visible { outline: 2px solid var(--c-focus); }
+/* beats system.css:5548. */
+body .chron-doc-row__rename:focus-visible { outline: 2px solid var(--c-focus); }
+/* beats notes.html:13: the id must win, not just the input type. */
+body #nt-area:focus-visible { outline: 2px solid var(--c-focus); }
+/* beats player_sheet.html:2264,2274,2430,2543. */
+body .feat-note-input:focus-visible,
+body .inv-filter:focus-visible,
+body .class-cheatsheet summary:focus-visible,
+body .whisper-panel textarea:focus-visible { outline: 2px solid var(--c-focus); }
+/* beats tracker.html:186,203,526,644,780,790,799,851,863,1438.
+   The full quick-HP selector is needed to beat its (0,4,0) focus rule. */
+body .trk .ts-search input:focus-visible,
+body .trk .ts-select:focus-visible,
+body .trk .c-init input:focus-visible,
+body .trk .epithet-in:focus-visible,
+body .trk .c-hp-quick .qhp-in:focus-visible,
+body .trk .c-hp-ctrl input:focus-visible,
+body .trk .c-hp-ctrl select:focus-visible,
+body .trk .cp-add select:focus-visible,
+body .trk .cp-add input[type="number"]:focus-visible,
+body .trk .tactics-area:focus-visible { outline: 2px solid var(--c-focus); }
+/* beats tracker.html:927; deliberately not important: the inline error outline
+   written by _markPDInputError at tracker.html:4081 must still win. */
+body .trk .pd-row input:focus-visible { outline: 2px solid var(--c-focus); }
+/* beats player_sheet.html:2094's faint hi-contrast outline. */
+html[data-theme="hi-contrast"] body button:focus-visible,
+html[data-theme="hi-contrast"] body .tb:focus-visible { outline: 2px solid var(--c-focus); }
+/* beats the focus:outline-none utility in base.html:213, encounter_builder.html,
+   player_view.html:355 and the sheet modal/magic partials. Plain outline-none is
+   already beaten by the base rule and needs no override. */
+body .focus\:outline-none:focus-visible { outline: 2px solid var(--c-focus); }
+
+/* Reveal controls without changing their opacity at rest or their hover rules.
+   beats _tab_combat.html:154, _tab_feats.html:92, _tab_inventory.html:110,188,
+   _tab_pets.html:22 and player_levelup.html:1927. */
+body #tab-combat button[onclick^="deleteWeapon("]:focus-visible,
+body #tab-feats button[onclick^="rollFeature("]:focus-visible,
+body #tab-inventory button[onclick^="removeInvItem("]:focus-visible,
+body #tab-inventory button[onclick^="deleteSessionNote("]:focus-visible,
+body #tab-pets button[onclick^="removePet("]:focus-visible,
+body #ui-retrain-list button[onclick^="initRetrainFeat("]:focus-visible { opacity: 1; }
+/* beats gmscreen.html:335-337, including the card's hover selector. */
+body .gm-ref-card .gm-pin-btn:focus-visible { opacity: 1; }
+/* beats player_view.html:235,237 inline opacity; narrow DS-03 exception. */
+body .card button[onclick*="setMyChar("]:focus-visible,
+body .card button[onclick*="deleteChar("]:focus-visible { opacity: 1 !important; }
 
 /* ── Motion primitives (DS-02, DESIGN_DIRECTION.md 6.4) ─────────────────
    Definitions only: no page uses these classes yet. Screen packages attach them,

@@ -17,7 +17,9 @@
 
   /* Campaign cards */
   .cc{background:var(--card);border:1px solid var(--line);border-radius:13px;overflow:hidden;display:flex;flex-direction:column;transition:border-color .15s,transform .15s,box-shadow .15s;}
+  @media (hover: hover) and (pointer: fine) {
   .cc:hover{border-color:var(--line-strong);transform:translateY(-2px);box-shadow:0 14px 34px rgba(0,0,0,.4);}
+  }
   .cc-cover{height:60px;position:relative;display:flex;align-items:center;padding:0 16px;border-bottom:1px solid var(--line);}
   .cc-cover .sys{font-family:var(--font-display);font-size:10px;font-weight:700;letter-spacing:.22em;text-transform:uppercase;}
   .cc-cover .crest{position:absolute;right:12px;top:50%;transform:translateY(-50%);}
@@ -36,7 +38,9 @@
 
   /* Character cards */
   .ch{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--ac,#e0b65a);border-radius:11px;padding:14px 15px;display:flex;flex-direction:column;transition:border-color .15s,transform .15s;}
+  @media (hover: hover) and (pointer: fine) {
   .ch:hover{transform:translateY(-2px);border-color:var(--line-strong);}
+  }
   .ch-top{display:flex;align-items:center;gap:11px;margin-bottom:10px;}
   .ch-mono{width:38px;height:38px;border-radius:9px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:700;font-size:17px;color:var(--ac,#e0b65a);background:rgba(255,255,255,.04);border:1px solid var(--line);}
   .ch-name{font-family:var(--font-display);font-size:15.5px;color:var(--ink);margin:0;line-height:1.15;}

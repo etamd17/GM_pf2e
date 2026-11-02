@@ -1871,12 +1871,14 @@ body[style*="linear-gradient"] {
     transition: border-color var(--t-fast), background var(--t-fast) !important;
     transform: none !important;
 }
+@media (hover: hover) and (pointer: fine) {
 .choice-card:hover {
     background: var(--bg-card-2) !important;
     background-image: none !important;
     border-color: var(--accent) !important;
     transform: none !important;
     box-shadow: var(--shadow-1) !important;
+}
 }
 .choice-card.selected {
     border-color: var(--danger) !important;
@@ -3523,10 +3525,12 @@ button[onclick^="rollDamage"]:hover {
     text-decoration: none;
     transition: transform var(--t-fast), border-color var(--t-fast), box-shadow var(--t-fast);
 }
+@media (hover: hover) and (pointer: fine) {
 .tile:hover {
     transform: translateY(-2px);
     border-color: var(--accent);
     box-shadow: var(--shadow-1);   /* minimal pass: lighter hover lift (was shadow-2) */
+}
 }
 .tile::before {
     content: "";
@@ -3537,7 +3541,9 @@ button[onclick^="rollDamage"]:hover {
     opacity: 0.22;   /* minimal pass: calm the always-on accent bar (was 0.55; full on hover) */
     transition: opacity var(--t-fast);
 }
+@media (hover: hover) and (pointer: fine) {
 .tile:hover::before { opacity: 1; }
+}
 .tile__glyph {
     display: inline-flex;
     align-items: center;

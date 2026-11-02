@@ -81,7 +81,7 @@ answered its five questions on 2026-10-28 (section 12); PF2e goes back to the wa
 | DS-00 | Inventory diff tool (incl. 00b VTT states, 00c account/Cosmere/Mistborn/5e profiles): ids, data-*, handlers, ARIA, frozen class strings, before/after | claude | Opus, high | done (PR #235); the VTT half (00b) is still unmerged, on its own branch | `tasks/DS-00-inventory-diff-tool.md` |
 | DS-01 | Tokens, warm gilt (27a removed), `ds-tokens.css`, empty `ds.css`, notices file, contrast tool, screenshot harness | claude | Opus, high | done (PR #236) | `tasks/DS-01-tokens.md` |
 | DS-02 | Motion base: `--t-*` curve, global reduced-motion block, new motion classes used by no page yet, a reduced-motion audit command | claude | Opus, high | done (PR #238) | `tasks/DS-02-motion-base.md` |
-| DS-03 | Global focus ring and hover gate, plus a tab-through audit command | codex | standard, high | ready | `tasks/DS-03-focus-ring-hover-gate.md` |
+| DS-03 | Global focus ring and hover gate, plus a tab-through audit command | codex | standard, high | in-progress: PR #242 browser CI blocker | `tasks/DS-03-focus-ring-hover-gate.md` |
 | DS-04..DS-31 | The rest of section 10, in dependency order | see plan | see plan | needs brief | - |
 
 ## CI maintenance
@@ -162,6 +162,20 @@ Accepted as a design checkpoint. Notes:
 - Two of the bugs were checked on current `main` (marked above); the rest are unconfirmed.
 
 ## Log
+
+- 2026-11-02 Claude: found why the phone Chronicle rings failed on Linux CI. Linux shows a different fallback font, and its "J" runs under the ring; at the smallest phone width the last tab also stayed cut off. Fixed by giving the ring 2px of clearance and scrolling the focused tab into view; checked against the Linux font locally and in the real tests. Next: push the fix to PR #242 and merge once CI is green.
+
+- 2026-11-02 Codex: published accepted DS-03 as PR #242 after all 76 requested local checks passed, with stylesheets unchanged. PostgreSQL passed in CI, but six phone Chronicle checks failed on Linux. The PR is not merged. Next: Claude reviews the recorded failure before any CSS change or merge; local report and queue notes are uncommitted.
+
+- 2026-11-02 Codex: completed the three test fixes from Claude's acceptance. Both changed files passed all 76 tests; the stylesheets and application code are unchanged. Next: publish the accepted change and merge only after every CI job succeeds, including PostgreSQL. The full-stroke audit remains follow-up DS-03t.
+
+- 2026-11-02 Claude: rechecked DS-03 and accepted it. The menu-link rings now show on all four sides at normal size and at 200% zoom, the phone Chronicle tabs ring cleanly, and 588 focused checks pass. I accepted the phone Chronicle focus spacing and the audit's sampling limits as documented, not as proof. Next: Codex tightens three tests (no CSS change), then commits, opens the PR and merges once CI is green.
+
+- 2026-11-02 Codex: fixed the clipped menu highlights, stray tile ring and missed audit failures, and checked the expanded panels. The final Windows run has 5,625 tests passed, no test failures and the same eleven database setup errors; 588 focused checks passed. Remaining layout and measurement limits are recorded with local screenshots. Nothing is committed. Next: Claude rechecks the fixes and the listed review decisions.
+
+- 2026-11-02 Codex: added visible keyboard highlights and touch hover safeguards; 543 focused checks passed. Recorded overlay and rail problems separately. Next: Claude reviews the changes and, as the user chose, checks 200% browser zoom before accepting; nothing is committed.
+
+- 2026-11-02 Claude: reviewed DS-03 and sent it back with fixes. The focus ring around the top menu links is cut off on every page, one tile shows a stray second ring, and the new audit tool can miss a ring that blends into its background. The 200% browser zoom check is done: no page scrolls sideways, and rings look the same as at normal size. Next: Codex fixes the findings in the task file and reruns the full tests.
 
 - 2026-11-02 Claude: wrote the DS-03 brief for Codex: a visible focus ring everywhere, and no stuck tile or card hovers on touch. It also gives locked picker rows a ring; their explanation stays with DS-15c and DS-09. Corrected plan 5.7, whose check would have passed invisible rings. DS-02 follow-up: build logs show production installed pypdf 6.21.4; a live PDF import still needs someone signed in. Next: Codex builds DS-03.
 
