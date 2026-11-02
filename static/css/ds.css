@@ -1,9 +1,183 @@
 /* Design-system components (docs/design/DESIGN_DIRECTION.md).
 
-   Empty on purpose until DS-02 onward add .ds-* rules. Loaded after system.css
-   (or after ds-tokens.css on pages without it), linked only via url_for so it
-   carries the deploy version.
+   Loaded after system.css (or after ds-tokens.css on pages without it), linked
+   only via url_for so it carries the deploy version.
 
    Cascade contract (DESIGN_DIRECTION.md 5.0): no @layer; !important only to beat
    a specific system.css !important rule, with a comment citing the line it
    beats; map onto a legacy class with `body` plus the existing selector. */
+
+/* ── Motion primitives (DS-02, DESIGN_DIRECTION.md 6.4) ─────────────────
+   Definitions only: no page uses these classes yet. Screen packages attach them,
+   and press on legacy selectors is theirs too. */
+
+/* Press. Transforms do nothing on an inline box, so a link needs one. */
+.ds-press { transition: transform var(--dur-press) var(--ease-out); }
+a.ds-press { display: inline-block; }
+.ds-press:active { transform: scale(var(--motion-scale-from)); }
+
+/* Fade-rise entrance. Backwards fill only: a lingering transform would trap
+   position:fixed children and keep a stacking context after the entrance. */
+@keyframes ds-fade-rise {
+    from { opacity: 0; transform: translateY(calc(8px * var(--motion-distance))); }
+    to   { opacity: 1; transform: none; }
+}
+.ds-enter { animation: ds-fade-rise var(--dur-dialog) var(--ease-out) backwards; }
+
+/* Panel swap: entrance only, no exit */
+@keyframes ds-panel-swap {
+    from { opacity: 0; transform: translateY(calc(4px * var(--motion-distance))); }
+    to   { opacity: 1; transform: none; }
+}
+.ds-panel { animation: ds-panel-swap var(--dur-tip) var(--ease-out); }
+
+/* Disclosure: exactly one child, directly after its [aria-expanded] control.
+   Closed content is visibility:hidden so it cannot take keyboard focus; the
+   delay keeps it visible until the row has finished closing. Clipping ends once
+   it is open, so focus rings and menus inside are not cut off. */
+.ds-collapse {
+    display: grid;
+    grid-template-rows: 0fr;
+    visibility: hidden;
+    transition: grid-template-rows var(--dur-layout) var(--ease-standard),
+                visibility 0s linear var(--dur-layout);
+}
+.ds-collapse > * {
+    min-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: opacity var(--dur-tip-out) var(--ease-standard);
+}
+[aria-expanded="true"] + .ds-collapse {
+    grid-template-rows: 1fr;
+    visibility: visible;
+    transition: grid-template-rows var(--dur-layout) var(--ease-standard),
+                visibility 0s linear 0s;
+}
+[aria-expanded="true"] + .ds-collapse > * {
+    overflow: visible;
+    opacity: 1;
+    transition: opacity var(--dur-tip) var(--ease-standard),
+                overflow 0s linear var(--dur-layout) allow-discrete;
+}
+
+/* The same disclosure on a native <details>. Browsers without these features
+   open it instantly. Height is animated only here, as 6.4 names it. */
+@supports (interpolate-size: allow-keywords) and selector(::details-content) {
+    details.ds-details { interpolate-size: allow-keywords; }
+    details.ds-details::details-content {
+        height: 0;
+        overflow: clip;
+        opacity: 0;
+        transition: height var(--dur-layout) var(--ease-standard),
+                    opacity var(--dur-tip-out) var(--ease-standard),
+                    content-visibility var(--dur-layout) allow-discrete;
+    }
+    details.ds-details[open]::details-content {
+        height: auto;
+        overflow: visible;
+        opacity: 1;
+        transition: height var(--dur-layout) var(--ease-standard),
+                    opacity var(--dur-tip) var(--ease-standard),
+                    content-visibility var(--dur-layout) allow-discrete,
+                    overflow 0s linear var(--dur-layout) allow-discrete;
+    }
+}
+
+/* inline-block: a span chevron would not rotate otherwise. */
+.ds-chevron {
+    display: inline-block;
+    transition: transform var(--dur-layout) var(--ease-standard);
+}
+[aria-expanded="true"] > .ds-chevron,
+details[open] > summary .ds-chevron { transform: rotate(90deg); }
+
+/* Skeleton: new placeholder markup only */
+@keyframes ds-pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.55; }
+}
+.ds-skeleton {
+    display: block;
+    height: 12px;
+    border-radius: var(--r-sm);
+    background-color: var(--c-wash-2);
+    animation: ds-pulse 1.6s ease-in-out infinite;
+}
+
+/* Pending shimmer: short status text only ("Rolling..."). This is the one
+   animated gradient in the program (6.4). Text stays readable without it. */
+@keyframes ds-shimmer {
+    from { background-position: 100% 0; }
+    to   { background-position: -100% 0; }
+}
+.ds-shimmer { color: var(--c-text-3); }
+@supports (background-clip: text) or (-webkit-background-clip: text) {
+    .ds-shimmer {
+        background-image: linear-gradient(90deg, var(--c-text-3) 40%, var(--c-text-1) 50%, var(--c-text-3) 60%);
+        background-size: 200% 100%;
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        animation: ds-shimmer 2s linear infinite;
+    }
+}
+
+/* These classes set display, which would otherwise beat the hidden attribute. */
+a.ds-press[hidden], .ds-collapse[hidden], .ds-chevron[hidden], .ds-skeleton[hidden] { display: none; }
+
+/* Edge fade: existing overflow-x:auto strips */
+.ds-edge-fade {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+    mask-image: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+}
+
+@media (forced-colors: active) {
+    .ds-shimmer {
+        background-image: none;
+        color: CanvasText;
+        animation: none;
+    }
+}
+
+/* ── Reduced motion (6.3) ───────────────────────────────────────────────
+   Keyframes collapse to their end state and animationend still fires. Fades and
+   colour changes keep their token duration. Travel and scale go to nothing
+   through --motion-distance and --motion-scale-from, which system.css and
+   ds-tokens.css already set under this query. !important is deliberate: this
+   block must beat every per-feature animation rule, on any page. */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+    }
+
+    /* These change height or angle, which the two multipliers do not reach. */
+    .ds-collapse,
+    [aria-expanded="true"] + .ds-collapse,
+    .ds-chevron { transition: none; }
+    [aria-expanded="true"] + .ds-collapse > * {
+        transition: opacity var(--dur-tip) var(--ease-standard);
+    }
+    details.ds-details::details-content,
+    details.ds-details[open]::details-content {
+        transition: opacity var(--dur-tip-out) var(--ease-standard);
+    }
+
+    .ds-skeleton { animation: none; }
+    .ds-shimmer {
+        background-image: none;
+        color: var(--c-text-3);
+        animation: none;
+    }
+
+    /* generator.html's only "still loading" signal is an animation, so collapsing
+       it would leave nothing to see. Its script removes the class on success and on
+       error, so a static form resets. A class a script leaves attached must not get
+       one. `body` outranks the page's own inline rule, which loads after this file. */
+    body .gen-content.rerolling {
+        animation: none;
+        opacity: 0.55;
+    }
+}

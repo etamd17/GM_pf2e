@@ -80,7 +80,7 @@ answered its five questions on 2026-10-28 (section 12); PF2e goes back to the wa
 |---|---|---|---|---|---|
 | DS-00 | Inventory diff tool (incl. 00b VTT states, 00c account/Cosmere/Mistborn/5e profiles): ids, data-*, handlers, ARIA, frozen class strings, before/after | claude | Opus, high | done (PR #235); the VTT half (00b) is still unmerged, on its own branch | `tasks/DS-00-inventory-diff-tool.md` |
 | DS-01 | Tokens, warm gilt (27a removed), `ds-tokens.css`, empty `ds.css`, notices file, contrast tool, screenshot harness | claude | Opus, high | done (PR #236) | `tasks/DS-01-tokens.md` |
-| DS-02 | Motion base: `--t-*` curve, global reduced-motion block, new motion classes used by no page yet, a reduced-motion audit command | claude | Opus, high | ready | `tasks/DS-02-motion-base.md` |
+| DS-02 | Motion base: `--t-*` curve, global reduced-motion block, new motion classes used by no page yet, a reduced-motion audit command | claude | Opus, high | done (accepted; awaiting publication) | `tasks/DS-02-motion-base.md` |
 | DS-03..DS-31 | The rest of section 10, in dependency order | see plan | see plan | needs brief | - |
 
 ## CI maintenance
@@ -161,6 +161,16 @@ Accepted as a design checkpoint. Notes:
 - Two of the bugs were checked on current `main` (marked above); the rest are unconfirmed.
 
 ## Log
+
+- 2026-11-01 Claude: DS-02's PR hit 7 new pypdf security advisories before its tests ran. Updated only pypdf to 6.21.4 and regenerated the locks; the strict audit and PDF import tests pass. Next: fresh CI, then merge and verify production.
+
+- 2026-11-01 Codex: accepted the DS-02 fix: locked rows return to their normal look under reduced motion. The original reproduction, 69 focused checks and 35 browser checks pass. Level-up overlap and keyboard focus remain separate follow-ups; the visual limits stay explicit. Next: Claude publishes and merges only after every CI job, including PostgreSQL, is green, then verifies the deployment.
+
+- 2026-11-01 Claude: fixed the DS-02 locked-row finding by removing the static highlight, with a test on the real builder. Under reduced motion a locked-row click now shows nothing, and on level-up the gains rail can hide the reason chip (separate fix underway). Windows suite: 5598 passed, with the same 3 failures and 11 no-database errors. Next: Codex rechecks.
+
+- 2026-10-30 Codex: DS-02 needs one fix: a clicked locked option stays highlighted under reduced motion. Reproduced on the real builder; 69 focused and 33 existing browser tests pass. The tiny corner-pixel exception and disclosure/shimmer helpers are accepted as documented. Next: Claude fixes the feedback reset, then Codex rechecks before publishing.
+
+- 2026-10-30 Claude: built DS-02, the motion base: one easing curve, a site-wide reduced-motion block, new motion classes no page uses yet, and a `motion` audit command. Windows suite: 5596 passed, with the same 3 failures and 11 no-database errors. Two pages differ from main by 1/255 at corners, cause unknown; two reduced-motion rules touch existing pages. Next: Codex reviews.
 
 - 2026-10-30 Claude: merged DS-00 (PR #235) and DS-01 (PR #236) after all CI jobs passed, including PostgreSQL. Both are live: the site's stylesheets match main and its health checks pass. The Windows full suite showed only the same 3 failures and 11 no-database errors as before. Wrote the DS-02 brief. Next: Claude builds DS-02; the VTT half of DS-00 is still unmerged.
 
