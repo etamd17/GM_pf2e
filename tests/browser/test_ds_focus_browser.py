@@ -15,6 +15,31 @@ pytestmark = pytest.mark.browser
 ROOT = Path(__file__).resolve().parents[2]
 
 
+@pytest.fixture(autouse=True)
+def _retain_failed_focus_evidence(request, tmp_path):
+    """Copy a failing test's paired images and metrics where CI uploads them."""
+    yield
+    target = os.environ.get("BROWSER_ARTIFACT_DIR")
+    if not target or not getattr(request.node, "browser_failed", False):
+        return
+    out = Path(target) / ("ds03-" + re.sub(r"[^\w.-]+", "_", request.node.name))
+    for path in tmp_path.rglob("*"):
+        if path.is_file() and path.suffix in (".png", ".json"):
+            out.mkdir(parents=True, exist_ok=True)
+            (out / path.name).write_bytes(path.read_bytes())
+
+
+def _record_platform_fonts(page, selector, path):
+    """Record the font Chromium actually rendered, which differs by OS when web fonts are blocked."""
+    cdp = page.context.new_cdp_session(page)
+    cdp.send("DOM.enable")
+    cdp.send("CSS.enable")
+    root = cdp.send("DOM.getDocument")["root"]["nodeId"]
+    nodes = cdp.send("DOM.querySelectorAll", {"nodeId": root, "selector": selector})["nodeIds"]
+    path.write_text(json.dumps([cdp.send("CSS.getPlatformFontsForNode", {"nodeId": n})["fonts"]
+                                for n in nodes], indent=2), encoding="utf-8")
+
+
 @contextmanager
 def _focus_server(tmp_path_factory, profile, long_chronicle=False):
     """Keep the fixtured app out of pytest's already-imported application process."""
@@ -350,6 +375,9 @@ def test_chronicle_tabs_paint_all_four_edges_and_keep_the_current_underline(brow
         tabs = page.locator(".chron-subnav .chron-tab")
         assert tabs.count() == 6  # Real nav, seeded through published doc entries.
         resting = page.evaluate(geometry)
+        _record_platform_fonts(page, ".chron-subnav .chron-tab", tmp_path / "platform-fonts.json")
+        (tmp_path / "resting-geometry.json").write_text(json.dumps(resting, indent=2), encoding="utf-8")
+        page.locator(".chron-head").screenshot(path=str(tmp_path / "rest-head.png"))
         assert resting["pageWidth"] == resting["viewport"]
         # All normal section labels fit at the 320px reflow floor. The bounded
         # 280px overflow diagnostic fails on original and current CSS; it is not
