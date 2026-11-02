@@ -172,15 +172,12 @@ a.ds-press[hidden], .ds-collapse[hidden], .ds-chevron[hidden], .ds-skeleton[hidd
         animation: none;
     }
 
-    /* Two existing cues are carried only by an animation, so collapsing it would
-       leave nothing to see. Both get a static form; `body` outranks the page's
-       own inline rule, which loads after this file. */
-    body .gen-content.rerolling {   /* generator.html: the only "still loading" signal */
+    /* generator.html's only "still loading" signal is an animation, so collapsing
+       it would leave nothing to see. Its script removes the class on success and on
+       error, so a static form resets. A class a script leaves attached must not get
+       one. `body` outranks the page's own inline rule, which loads after this file. */
+    body .gen-content.rerolling {
         animation: none;
         opacity: 0.55;
-    }
-    body .cp-chip-flash {           /* _choice_picker.html: why a locked row refused */
-        animation: none;
-        filter: brightness(1.6);
     }
 }

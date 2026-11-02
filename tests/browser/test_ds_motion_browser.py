@@ -38,12 +38,9 @@ BODY = """
 #legacy { animation: legacy-loop 1s linear infinite; }
 @keyframes gen-pulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 0.30; } }
 .gen-content.rerolling { animation: gen-pulse 0.7s ease-in-out infinite; }
-@keyframes cp-chip-flash { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.6); } }
-.cp-chip-flash { animation: cp-chip-flash 0.32s ease; }
 </style>
 <div id=legacy>Legacy</div>
 <div id=gen class="gen-content rerolling">Rerolling</div>
-<span id=chip class=cp-chip-flash>Requires Power Attack</span>
 """
 
 
@@ -198,16 +195,69 @@ def test_reduced_motion_collapses_animations_and_keeps_text_readable(page):
     assert motion_problems(page.evaluate(MOTION_AUDIT_JS)) == []
 
 
-def test_two_cues_keep_a_static_form_under_reduce(page):
-    """The page's own rule comes after ds.css, as on the real pages."""
+def test_the_reroll_cue_keeps_a_static_form_under_reduce(page):
+    """The page's own rule comes after ds.css, as on the real page."""
     if page.reduced:
         assert _style(page, "#gen", "animationName") == "none"
         assert _style(page, "#gen", "opacity") == "0.55"
-        assert _style(page, "#chip", "animationName") == "none"
-        assert _style(page, "#chip", "filter") == "brightness(1.6)"
     else:
         assert _style(page, "#gen", "animationName") == "gen-pulse"
-        assert _style(page, "#chip", "animationName") == "cp-chip-flash"
+
+
+@pytest.mark.parametrize("motion", ["no-preference", "reduce"])
+def test_locked_row_feedback_returns_to_baseline_on_the_real_builder(browser, pf2e_site, motion):
+    """The picker leaves its classes attached, so nothing but the animation may change how they look."""
+    context = browser.new_context(reduced_motion=motion)
+    page = context.new_page()
+    page.set_default_timeout(12000)
+    try:
+        pf2e_site.login(page)
+        page.goto(pf2e_site.url + pf2e_site.builder)
+        page.wait_for_function("typeof openModal === 'function' && typeof renderModalList === 'function'")
+        # Known options for the page's own picker; the eligibility check, DOM and click handler are the real ones.
+        page.evaluate("""() => {
+            openModal('class');
+            window.ignorePrereqs = false;
+            state.level = 1;
+            mCtx.activeTabs = false;
+            mCtx.tab = 'all';
+            mCtx.data = [{name: 'Locked A', level: 99}, {name: 'Locked B', level: 99}];
+            renderModalList();
+            document.addEventListener('animationstart', e => {
+                (window.__started = window.__started || []).push(e.animationName);
+            }, true);
+        }""")
+        rows = page.locator("#mod-list button.cp-opt-locked")
+        assert rows.count() == 2
+        # Every computed property of the row and its chip, bar the animation's own.
+        look = """(row) => [row, row.querySelector('.cp-reason-chip')].map(el => {
+            const style = getComputedStyle(el);
+            return Object.fromEntries(Array.from(style)
+                .filter(name => !name.startsWith('animation'))
+                .map(name => [name, style.getPropertyValue(name)]));
+        })"""
+
+        def at_rest():
+            page.mouse.move(0, 0)
+            page.evaluate("document.activeElement.blur()")
+            page.wait_for_function("document.getAnimations().every(a => a.playState !== 'running' || a.effect.getComputedTiming().iterations === Infinity)")
+            return [rows.nth(i).evaluate(look) for i in range(2)]
+
+        before = at_rest()
+        # The second row twice: a repeat click restarts the feedback.
+        for i in (0, 1, 1):
+            rows.nth(i).click()
+            rows.nth(i).locator(".cp-chip-flash").wait_for()
+            page.wait_for_function("""row => row.getAnimations({subtree: true}).length === 0""",
+                                   arg=rows.nth(i).element_handle())
+        started = page.evaluate("window.__started")
+        assert started.count("cp-shake") == 3 and started.count("cp-chip-flash") == 3, started
+        assert at_rest() == before
+        # The reason stays on the row, and a locked row never selects.
+        assert rows.nth(0).locator(".cp-reason-chip").inner_text().strip()
+        assert page.evaluate("mCtx.active") is None
+    finally:
+        context.close()
 
 
 def test_forced_colours_keep_the_shimmer_readable(browser):

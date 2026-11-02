@@ -165,6 +165,16 @@ def site(request, tmp_path_factory):
         running.stop()
 
 
+@pytest.fixture(scope='module')
+def pf2e_site(tmp_path_factory):
+    """One PF2e server, for tests that need a real page but not every backend."""
+    running = Site(tmp_path_factory.mktemp('browser-pf2e'), 'json', 'pf2e')
+    try:
+        yield running
+    finally:
+        running.stop()
+
+
 @pytest.fixture(params=[{'width':390,'height':844},{'width':1440,'height':900}], ids=['mobile','desktop'])
 def viewport(request):
     return request.param

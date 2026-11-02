@@ -18,8 +18,8 @@ EXCEPTIONS = {"visibility": (".ds-collapse",),
               "overflow": (".ds-collapse > *", "::details-content"),
               "height": ("::details-content",),            # named by 6.4
               "content-visibility": ("::details-content",)}
-# The only rules that touch existing pages: static forms of two cues the block removes.
-EXISTING_PAGE_RULES = {"body .gen-content.rerolling", "body .cp-chip-flash"}
+# The only rule that touches an existing page: a static form of a cue the block removes.
+EXISTING_PAGE_RULES = {"body .gen-content.rerolling"}
 UNIVERSAL = "*, *::before, *::after"
 
 
@@ -83,7 +83,7 @@ def test_important_only_in_the_global_reduced_motion_rule():
 
 
 def test_no_rule_reaches_an_existing_page():
-    """Every selector needs a new .ds-* class, bar the global rule and the two listed cues."""
+    """Every selector needs a new .ds-* class, bar the global rule and the listed cue."""
     in_reduce = {s for s, _ in _rules(_reduce())}
     seen = set()
     for selector, _ in _rules(_ds()):
