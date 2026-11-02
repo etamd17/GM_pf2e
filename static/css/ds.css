@@ -21,24 +21,30 @@
 body .nav-links :where(a, button):focus-visible { outline-offset: -2px; }
 /* system.css:5128-5139,5320-5326,5461: phone Chronicle tabs have no inline
    padding, so an ordinary inset crosses label ink and base.html:107's nav stripe.
-   Keyboard-only geometry exception: compensating inline space keeps glyphs,
-   underline ink and following flow fixed. Focused-strip hit boxes gain 8px;
-   the existing stripe extends 4px at each end until keyboard focus leaves. */
+   Keyboard-only geometry exception: 6px of compensating inline space keeps
+   glyphs, underline ink and following flow fixed, and leaves 2px between each
+   vertical stroke and the label box (fallback fonts overhang it, e.g. DejaVu's
+   "J"). Focused-strip hit boxes gain 12px and meet across the 12px gap; the
+   existing stripe extends 6px at each end until keyboard focus leaves. Native
+   focus does not scroll a partly visible tab, so the focused tab is the strip's
+   only snap target while focus is in it. */
 @media (max-width: 480px) {
     body .chron-subnav:has(> .chron-tab:focus-visible) {
-        padding-inline: 4px;
-        margin-inline: -4px;
+        padding-inline: 6px;
+        margin-inline: -6px;
+        scroll-snap-type: x mandatory;
     }
     body .chron-subnav:has(> .chron-tab:focus-visible) > .chron-tab {
-        padding-inline: 4px;
-        margin-inline: -4px;
+        padding-inline: 6px;
+        margin-inline: -6px;
     }
     body .chron-subnav:has(> .chron-tab:focus-visible) > .chron-tab:focus-visible {
         outline-offset: -4px;
+        scroll-snap-align: end;
     }
     body .chron-subnav:has(> .chron-tab:focus-visible) > .chron-tab[aria-current="page"]::after {
-        left: 4px;
-        right: 4px;
+        left: 6px;
+        right: 6px;
     }
 }
 /* player_builder.html:125-126: desktop rows meet the vertical scrollport edge.

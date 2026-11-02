@@ -117,7 +117,7 @@ The strict focus gate remains open under the user's CSS-only scope decision; oth
 
 ## Report
 
-Accepted by Claude on 2026-11-02, including the Chronicle focus geometry and documented measurement limits. The three required test-only follow-ups are complete: both changed test files passed 76 tests, and every accepted runtime file plus all fourteen stylesheets stayed byte-identical. The branch is `codex/ds-03-focus-ring`, based on merged brief commit `12467c9d4f9f2c5750622cfb54a65b24129210f8`. The accepted stylesheet remains `e13b9f5d…`. Earlier verification records 588 focused passes and a Windows full run with 5,625 passed, 139 skipped, one xfailed, zero failed tests and the same eleven missing-PostgreSQL setup errors. Those historical fifteen-file hashes stayed unchanged during that full run; only the two test files were subsequently strengthened as required. The implementation/review history is retained below. The strict focus audit remains red with all other failures and coverage gaps reported; the full-stroke tool follow-up is DS-03t. Publication and merge follow PROTOCOL step 6, with every current CI job required to succeed.
+CI-blocked after conditional acceptance: PR #242 is published at `f97270ea486fa9e2582eb476a8cf666674c37b8e`, but its Linux browser job has six Chronicle phone failures. **Do not merge; the user's test-failure condition now requires fresh Claude review.** Details are in the final section below. The three required test-only follow-ups passed locally (76 tests), and every accepted runtime file plus all fourteen stylesheets stayed byte-identical. Claude's Chronicle geometry and documented sampling-limit rulings remain recorded unchanged; no CSS or threshold change has been made after acceptance. The branch is `codex/ds-03-focus-ring`, based on merged brief commit `12467c9d4f9f2c5750622cfb54a65b24129210f8`. The accepted stylesheet remains `e13b9f5d…`. Earlier verification records 588 focused passes and a Windows full run with 5,625 passed, 139 skipped, one xfailed, zero failed tests and the same eleven missing-PostgreSQL setup errors. Those historical fifteen-file hashes stayed unchanged during that full run; the required test strength changes followed later. The full-stroke mask remains DS-03t; this separate Linux test failure is a merge blocker.
 
 ### Changes
 
@@ -570,3 +570,79 @@ Implemented the three required test-strength fixes without changing any applicat
 Requested command: `python -m pytest -q -p no:cacheprovider tests/test_ds_focus.py tests/browser/test_ds_focus_browser.py` (the runner also supplied an isolated local `--basetemp`). **76 passed in 171.21s; no failures or skips.** All fourteen tracked CSS files match the before-run hashes, including `ds.css` SHA-256 `e13b9f5dbe6b25e1ee1c156373fbb7420ae3e1ae1a6743be5d697a0667f747d2`; every runtime file in the accepted snapshot also matches. The two test files were unchanged during their run. No additional full run, audit or Claude re-review is claimed or needed under the accepted instruction.
 
 Local ignored evidence: `recheck/accepted-prepublish/changed-tests.log`, `changed-tests.result.json`, `css-before.json` and `changed-tests-temp/`. The accepted sampling/coverage caveats and DS-03t follow-up remain unchanged. Ready to commit and publish, with merge blocked until every job on the final PR head is successful.
+
+## CI blocker after publication (Codex, 2026-11-02)
+
+Committed the accepted public diff and test-only follow-ups as **`f97270ea486fa9e2582eb476a8cf666674c37b8e`** and opened [PR #242](https://github.com/etamd17/GM_pf2e/pull/242). No auto-merge is enabled and no merge/deployment was triggered. A new-file EOF blank-line warning was removed during staging; that was formatting only. The application runtime and all fourteen CSS files remain unchanged from acceptance.
+
+CI run **41501166911**, exact head `f97270ea…`: `changes` and `postgresql` succeeded. The [browser job 125468910437](https://github.com/etamd17/GM_pf2e/actions/runs/41501166911/job/125468910437) failed in **Exercise real character workflows**: **6 failed, 156 passed, 4 skipped in 581.02s**. The main `test` job was still running when this blocker was recorded; its dependency audit, Gunicorn/gevent smoke, template parsing, deterministic PF2e contracts and 5e data build had succeeded. No current head change occurred.
+
+All six failures are `test_chronicle_tabs_paint_all_four_edges_and_keep_the_current_underline`:
+
+- `home-current` and `journal-current`, each at `reflow-floor` (320px), `phone375` and `phone390`.
+- At 320px: three unchanged samples cannot be distinguished from clipping (`measurementError`, line 382 in the committed file).
+- At 375/390px: independent `fullCoreMinimum` is **1.5643366362892583**, below the unchanged 3:1 threshold (line 385).
+- Both desktop Chronicle cases pass. The new nav, tile and roster follow-up cases did not fail. The tests use native Tab and seed all six real section links.
+
+The Linux job used **Chromium 156.0.8078.0**. The failing metadata key is 2; the test measures only the first and final links, so the final section link is the likely failing observation, but no crop is available to prove its physical cause. Do not label this flaky, blame fonts, or weaken the mask/threshold without evidence. No source/CSS correction has been attempted from that inference.
+
+CI retained no screenshots: the new tests write PNG/metadata to `tmp_path`, while the workflow uploads `BROWSER_ARTIFACT_DIR`. That retention gap is relevant to the next Linux investigation. The direct completed-job log was retrieved through the job-log API while the overall run continued; sanitized and raw copies are local under `recheck/accepted-prepublish/ci/`. The uploaded-artifact step reports no matching files.
+
+Local Linux reproduction was checked without changing system configuration or installing packages: Docker's Linux-engine pipe is absent; Ubuntu/WSL2 cannot start and reports `HCS_E_HYPERV_NOT_INSTALLED` (virtualization unavailable). No firmware/Windows-feature changes were attempted. The already-passing Windows run is not a substitute for this failed Linux gate.
+
+The user's acceptance explicitly required another Claude review if a test fails. **Hold PR #242 at this head for fresh review.** First obtain failing Chronicle PNGs/metadata on Linux via the existing CI artifact directory, then investigate the measured edge/overflow behavior before proposing any CSS change. The CI note and QUEUE status are left uncommitted locally for that review; the published implementation stays at the reviewed head. No duplicate CI run or unrelated test run was launched.
+
+## Linux evidence (Claude, 2026-11-02)
+
+With the user's approval I pushed a test-only commit, **`6f8f0fee`**. When a test in `test_ds_focus_browser.py` fails, it copies that test's PNGs and JSON into `BROWSER_ARTIFACT_DIR`. The Chronicle test now also records the platform font Chromium rendered (through CDP `CSS.getPlatformFontsForNode`), its resting geometry and an image of the header at rest. No CSS or thresholds changed.
+
+- **CI run 41508665684** on `6f8f0fee` failed the same 6 cases (6 failed, 156 passed, 4 skipped). Its artifact is `character-workflow-browser-failures`.
+- **Font:** Linux renders the labels in **DejaVu Sans**; Windows renders Segoe UI Semibold. Google Fonts are blocked in these tests, so this fallback is what CI measures.
+- **Tab 0 (Home) passes everywhere:** core minimum 7.01:1, no missing samples.
+- **Tab 5 (Journal) fails:**
+  - **At 375 and 390px:** core minimum **1.5643:1**. The DejaVu "J" hooks left of the label box, and the -4px ring's left stroke runs through it. The right stroke also sits against the final "l".
+  - **At 320px:** the strip overflows at rest (`scrollWidth` 297 > `clientWidth` 288 with DejaVu). In the focused image the last label is still cut ("Journa") and the ring has no right stroke; there are 3 missing and 3 uncertain samples.
+
+**Cause:** the compensated ring has zero horizontal clearance from the label box, so whether it passes depends on the fallback font. The 1.56:1 matches the 1.51:1 Codex measured earlier when an inset crossed label ink. This is not flakiness.
+
+**What a correction needs:** real, font-independent horizontal clearance between ring and text. At 320px it also needs a focus scroll that brings the whole last ring into view. A correction should be checked against DejaVu Sans on CI before acceptance. The thresholds stay as they are.
+
+## Correction and re-review (Claude, 2026-11-02)
+
+I measured fixes locally against the Linux font. With the user's approval I downloaded `DejaVuSans.ttf` 2.37.3 from jsDelivr (757,076 bytes) into my scratchpad, not the repo, and served it to the page as "Inter".
+
+**Fidelity check.** A temporary probe tab-walked all six tabs on `/chronicle` and `/chronicle/journal` at 320, 375, 390 and 1440 using the suite's own `measure`, `_full_straight_core_contrast` and `_assert_four_painted_edges`. With the old CSS it reproduced CI's pattern exactly: the same strip widths (297/288, 343, 358), and only tab 5 failing. The local core value is 1.01:1, against CI's 1.56:1; Windows rasterizes DejaVu slightly differently.
+
+**Candidates.** Four candidate designs were each measured with the probe, then judged:
+- **`minimal`:** the old rule with 6px of space instead of 4px, plus a keyboard-only snap. Passes everywhere. **Chosen.**
+- **`free`:** the same design with a longer spelling of the snap alignment. Passes everywhere.
+- **`nogeom`:** no hit-box change, but it copies the three system stripe colours into `ds.css`, needs `!important`, and leaves zero clip margin.
+- **`wide`:** only works because the focused strip happens to fit once the page gutter is absorbed, with 3px of slack.
+- One finding shaped all of them: `scroll-padding-inline` alone does nothing, because native Tab focus leaves a partly visible tab unscrolled (`scrollLeft` stays 0).
+
+**Change (in `ds.css`, the phone Chronicle block only):**
+- Compensating inline space goes from 4px to 6px on the strip and on each tab, and the current-tab underline insets by 6px.
+- `outline-offset` stays -4px, so each vertical stroke now sits 2px outside the label box. This clears DejaVu's 1px "J" overhang.
+- While a tab has keyboard focus, the strip is a `scroll-snap-type: x mandatory` container and the focused tab is its only snap target (`scroll-snap-align: end`). At 320px the focused last tab then scrolls fully into view.
+- `tests/test_ds_focus.py` `FOCUS_GEOMETRY_RULES` and the browser test's expected deltas (-6px x, +12px width) are updated to match. No thresholds changed.
+
+**Changed review decision.** This supersedes my earlier Chronicle geometry acceptance:
+- While keyboard focus is in the strip, tab hit boxes grow 12px instead of 8px. Neighbours now meet across the 12px gap without overlapping.
+- The nav stripe extends 6px at each end instead of 4px.
+- Touch and wheel panning of the strip is locked to the focused tab until keyboard focus leaves.
+
+I accept these for the same reasons as before: they are phone-only, keyboard-only, and glyphs and page flow stay fixed. The remaining limits:
+- A fallback font whose ink overhangs the label box by more than 2px would still touch the ring. Six pixels is the most the 12px gap allows, and an offset smaller than -4px hits the stripe (2.34:1).
+- The snap behaviour is verified in Chromium only. Firefox and Safari are untested; if they do not snap, the 320px clip simply returns there.
+
+**Results on the corrected source:**
+
+| Check | Result |
+|---|---|
+| Static focus/motion/token tests | 66 passed |
+| `test_ds_focus_browser.py` + `test_ui_focus_audit_browser.py` in Segoe UI, with Mistborn data | 99 passed in 259.55s |
+| Probe in DejaVu, real `ds.css` | All 6 tabs pass on both routes at all four widths; minimum core 8.3:1; invariants hold; hit delta +12px on phones, 0 at 1440 |
+| The real Chronicle test with DejaVu injected | 8 passed. This includes the exact restore after Shift+Tab, and the platform-font record confirms DejaVu Sans. |
+| 320px tab-5 crop, viewed | Whole "Journal" label and a four-sided ring, clear of the "J" |
+
+The temporary probe files are deleted. The full Windows suite was not rerun for this CSS-only change; Linux CI is the deciding check. **Next:** push this correction to PR #242, and merge only after every CI job is green, including browser and PostgreSQL.

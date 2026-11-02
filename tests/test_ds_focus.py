@@ -78,10 +78,10 @@ IMPORTANT_FOCUS_SELECTORS = {
 
 CHRONICLE_KEYBOARD_GATE = "body .chron-subnav:has(> .chron-tab:focus-visible)"
 FOCUS_GEOMETRY_RULES = {
-    CHRONICLE_KEYBOARD_GATE: {"padding-inline": "4px", "margin-inline": "-4px"},
-    CHRONICLE_KEYBOARD_GATE + " > .chron-tab": {"padding-inline": "4px", "margin-inline": "-4px"},
-    CHRONICLE_KEYBOARD_GATE + " > .chron-tab:focus-visible": {"outline-offset": "-4px"},
-    CHRONICLE_KEYBOARD_GATE + ' > .chron-tab[aria-current="page"]::after': {"left": "4px", "right": "4px"},
+    CHRONICLE_KEYBOARD_GATE: {"padding-inline": "6px", "margin-inline": "-6px", "scroll-snap-type": "x mandatory"},
+    CHRONICLE_KEYBOARD_GATE + " > .chron-tab": {"padding-inline": "6px", "margin-inline": "-6px"},
+    CHRONICLE_KEYBOARD_GATE + " > .chron-tab:focus-visible": {"outline-offset": "-4px", "scroll-snap-align": "end"},
+    CHRONICLE_KEYBOARD_GATE + ' > .chron-tab[aria-current="page"]::after': {"left": "6px", "right": "6px"},
 }
 FOCUS_SELECTORS |= FOCUS_GEOMETRY_RULES.keys()
 

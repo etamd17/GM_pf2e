@@ -417,8 +417,8 @@ def test_chronicle_tabs_paint_all_four_edges_and_keep_the_current_underline(brow
                 assert actual["html"] == original["html"]
                 assert actual["rect"]["y"] == original["rect"]["y"]
                 assert actual["rect"]["height"] == original["rect"]["height"]
-                assert actual["rect"]["x"] == original["rect"]["x"] - (4 if width <= 480 else 0)
-                assert actual["rect"]["width"] == original["rect"]["width"] + (8 if width <= 480 else 0)
+                assert actual["rect"]["x"] == original["rect"]["x"] - (6 if width <= 480 else 0)
+                assert actual["rect"]["width"] == original["rect"]["width"] + (12 if width <= 480 else 0)
             for left, right in zip(focused["tabs"], focused["tabs"][1:]):
                 assert left["rect"]["x"] + left["rect"]["width"] <= right["rect"]["x"]
             if width > 480:

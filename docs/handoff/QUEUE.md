@@ -81,7 +81,7 @@ answered its five questions on 2026-10-28 (section 12); PF2e goes back to the wa
 | DS-00 | Inventory diff tool (incl. 00b VTT states, 00c account/Cosmere/Mistborn/5e profiles): ids, data-*, handlers, ARIA, frozen class strings, before/after | claude | Opus, high | done (PR #235); the VTT half (00b) is still unmerged, on its own branch | `tasks/DS-00-inventory-diff-tool.md` |
 | DS-01 | Tokens, warm gilt (27a removed), `ds-tokens.css`, empty `ds.css`, notices file, contrast tool, screenshot harness | claude | Opus, high | done (PR #236) | `tasks/DS-01-tokens.md` |
 | DS-02 | Motion base: `--t-*` curve, global reduced-motion block, new motion classes used by no page yet, a reduced-motion audit command | claude | Opus, high | done (PR #238) | `tasks/DS-02-motion-base.md` |
-| DS-03 | Global focus ring and hover gate, plus a tab-through audit command | codex | standard, high | accepted; test fixes verified | `tasks/DS-03-focus-ring-hover-gate.md` |
+| DS-03 | Global focus ring and hover gate, plus a tab-through audit command | codex | standard, high | in-progress: PR #242 browser CI blocker | `tasks/DS-03-focus-ring-hover-gate.md` |
 | DS-04..DS-31 | The rest of section 10, in dependency order | see plan | see plan | needs brief | - |
 
 ## CI maintenance
@@ -162,6 +162,10 @@ Accepted as a design checkpoint. Notes:
 - Two of the bugs were checked on current `main` (marked above); the rest are unconfirmed.
 
 ## Log
+
+- 2026-11-02 Claude: found why the phone Chronicle rings failed on Linux CI. Linux shows a different fallback font, and its "J" runs under the ring; at the smallest phone width the last tab also stayed cut off. Fixed by giving the ring 2px of clearance and scrolling the focused tab into view; checked against the Linux font locally and in the real tests. Next: push the fix to PR #242 and merge once CI is green.
+
+- 2026-11-02 Codex: published accepted DS-03 as PR #242 after all 76 requested local checks passed, with stylesheets unchanged. PostgreSQL passed in CI, but six phone Chronicle checks failed on Linux. The PR is not merged. Next: Claude reviews the recorded failure before any CSS change or merge; local report and queue notes are uncommitted.
 
 - 2026-11-02 Codex: completed the three test fixes from Claude's acceptance. Both changed files passed all 76 tests; the stylesheets and application code are unchanged. Next: publish the accepted change and merge only after every CI job succeeds, including PostgreSQL. The full-stroke audit remains follow-up DS-03t.
 
