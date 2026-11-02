@@ -81,7 +81,8 @@ answered its five questions on 2026-10-28 (section 12); PF2e goes back to the wa
 | DS-00 | Inventory diff tool (incl. 00b VTT states, 00c account/Cosmere/Mistborn/5e profiles): ids, data-*, handlers, ARIA, frozen class strings, before/after | claude | Opus, high | done (PR #235); the VTT half (00b) is still unmerged, on its own branch | `tasks/DS-00-inventory-diff-tool.md` |
 | DS-01 | Tokens, warm gilt (27a removed), `ds-tokens.css`, empty `ds.css`, notices file, contrast tool, screenshot harness | claude | Opus, high | done (PR #236) | `tasks/DS-01-tokens.md` |
 | DS-02 | Motion base: `--t-*` curve, global reduced-motion block, new motion classes used by no page yet, a reduced-motion audit command | claude | Opus, high | done (PR #238) | `tasks/DS-02-motion-base.md` |
-| DS-03..DS-31 | The rest of section 10, in dependency order | see plan | see plan | needs brief | - |
+| DS-03 | Global focus ring and hover gate, plus a tab-through audit command | codex | standard, high | ready | `tasks/DS-03-focus-ring-hover-gate.md` |
+| DS-04..DS-31 | The rest of section 10, in dependency order | see plan | see plan | needs brief | - |
 
 ## CI maintenance
 
@@ -161,6 +162,8 @@ Accepted as a design checkpoint. Notes:
 - Two of the bugs were checked on current `main` (marked above); the rest are unconfirmed.
 
 ## Log
+
+- 2026-11-02 Claude: wrote the DS-03 brief for Codex: a visible focus ring everywhere, and no stuck tile or card hovers on touch. It also gives locked picker rows a ring; their explanation stays with DS-15c and DS-09. Corrected plan 5.7, whose check would have passed invisible rings. DS-02 follow-up: build logs show production installed pypdf 6.21.4; a live PDF import still needs someone signed in. Next: Codex builds DS-03.
 
 - 2026-11-01 Claude: merged DS-02 (PR #238) after all CI jobs passed, including PostgreSQL. It is live: the site's two stylesheets match main and its health checks pass; no signed-in page was checked. Next: DS-03 onward need briefs; the VTT half of DS-00 is still unmerged. Level-up rail and locked-row keyboard focus remain follow-ups.
 
