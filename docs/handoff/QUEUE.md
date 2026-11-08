@@ -29,7 +29,7 @@ before they become ready. Owners review each other's output under PROTOCOL.md.
 | PE-01 | State, command, migration and authority contract | claude | high; select current model | ready | [brief](tasks/PE-01-state-command-contract.md) |
 | PE-02 | Evidence-backed rules coverage and fixture matrix | codex | standard; high for review | ready | [brief](tasks/PE-02-rules-coverage.md) |
 | PE-03 | Review and map unmerged Obsidian recovery work | codex | standard; high for review | done | [brief](tasks/PE-03-obsidian-reuse-review.md) |
-| PE-04 | Review existing UI-18 picker/rail patch | codex | standard; high for review | ready | [brief](tasks/PE-04-ui18-review.md) |
+| PE-04 | Review existing UI-18 picker/rail patch | codex | standard; high for review | done (Codex accepted UI-18 with no findings; review in `tasks/UI-18-levelup-picker-rail.md`; PR #245) | [brief](tasks/PE-04-ui18-review.md) |
 | PE-05 | Reconcile UI-11 presentation after UI-18 disposition | codex | standard; high for review | blocked (PE-04) | [brief](tasks/PE-05-ui11-reconcile.md) |
 | PE-06 | Fix existing level-up HP preview inconsistency | claude | high; select current model | blocked (PE-04, PE-05) | [brief](tasks/PE-06-levelup-hp-consistency.md) |
 | PE-07 | Player journey mockups and UI contract | claude | high; select current model | ready | [brief](tasks/PE-07-player-ux-design.md) |
@@ -120,7 +120,7 @@ UI/UX design is Claude's by default; Codex implements mechanical parts from Clau
 | UI-14 | Cosmere tracker (B: phase/turn first, phase band) + check the Archer's missing strikes | claude | Opus, high | done (PR #205 merged after CI) | `tasks/UI-14-cosmere-tracker.md` |
 | UI-15 | Cosmere Party Vitals (B) + roster (A cards + attention summary) | codex | standard, high | ready | `tasks/UI-15-cosmere-vitals-and-roster.md` |
 | UI-16 | Cosmere loot (B: form beside searchable history, draft worth from the server table) | codex | standard, medium | ready after UI-05 | `tasks/UI-16-cosmere-loot.md` |
-| UI-18 | PF2e level-up: the gains rail covered the open picker (search field, locked rows and their reasons); keyboard focus on a locked row was hidden under it | claude | Opus, high | done (accepted by Codex; not merged) | `tasks/UI-18-levelup-picker-rail.md` |
+| UI-18 | PF2e level-up: the gains rail covered the open picker (search field, locked rows and their reasons); keyboard focus on a locked row was hidden under it | claude | Opus, high | done (accepted by Codex; PR #245) | `tasks/UI-18-levelup-picker-rail.md` |
 | UI-03 | Fix the seven confirmed bugs from the UI review | codex | standard | done (accepted by Claude) | `tasks/UI-03.md` |
 | UI-04 | Cosmere tracker: hide every PF2e-only control (user: each system stays separate) | codex | standard, high | done (accepted by Claude) | `tasks/UI-04-cosmere-tracker-separation.md` |
 | UI-05 | Cosmere spheres: gem changes value (rulebook table); wallets keep gems | codex | strongest, high | done (accepted by Claude) | `tasks/UI-05-cosmere-gem-values.md` |
