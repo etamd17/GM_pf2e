@@ -1,5 +1,22 @@
 # GM_pf2e — project guide for Claude Code
 
+## Approved player-release direction (2026-11-08)
+
+Read `docs/player-release/README.md` and the Player release section of
+`docs/handoff/QUEUE.md` before taking new work. The user approved the player-first
+plan and Stage 0 task briefing. PF2e plus D&D 2014/2024 are first; Obsidian owns GM
+prep, the website owns characters/live encounters, and results mirror back.
+This supersedes older GM-first priority and inventory-scope-hold statements below.
+New wiki and VTT/map implementation is parked; preserve its branches/evidence and
+maintain shipped tools. Retain encounter tracker/builder, lookup and generators.
+The VTT's staging acceptance is not a dependency of the player release.
+
+Do not restart existing work from stale queue labels: UI-11 and UI-18 have
+uncommitted patches, Obsidian v0.9 has unmerged recovery code, and DS-03 is merged.
+Review/reuse through PE-03/04/05. Do not modify the dirty source worktrees.
+Only `ready` tasks may be claimed; `blocked` briefs wait for integrated accepted
+dependencies and `needs brief` rows are decomposition placeholders.
+
 A Flask web app: a GM's table tool for **Pathfinder 2e** and the **Cosmere RPG**
 (Stormlight). Character builder + leveler, bestiary, live combat tracker, player
 sheets, GM screen — server-rendered, real-time over SSE, run in person at the table.
