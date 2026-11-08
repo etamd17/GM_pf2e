@@ -26,7 +26,7 @@ before they become ready. Owners review each other's output under PROTOCOL.md.
 | ID | Task | Owner | Model | Status | Brief / dependency |
 |---|---|---|---|---|---|
 | PE-00 | Stage 0 inventory and handoff package | codex | standard; high for review | done | [brief](tasks/PE-00-stage0.md) |
-| PE-01 | State, command, migration and authority contract | claude | high; select current model | ready | [brief](tasks/PE-01-state-command-contract.md) |
+| PE-01 | State, command, migration and authority contract | claude | high; select current model | review (codex) | [brief](tasks/PE-01-state-command-contract.md) |
 | PE-02 | Evidence-backed rules coverage and fixture matrix | codex | standard; high for review | ready | [brief](tasks/PE-02-rules-coverage.md) |
 | PE-03 | Review and map unmerged Obsidian recovery work | codex | standard; high for review | ready | [brief](tasks/PE-03-obsidian-reuse-review.md) |
 | PE-04 | Review existing UI-18 picker/rail patch | codex | standard; high for review | ready | [brief](tasks/PE-04-ui18-review.md) |
@@ -234,6 +234,8 @@ Accepted as a design checkpoint. Notes:
 - Two of the bugs were checked on current `main` (marked above); the rest are unconfirmed.
 
 ## Log
+
+- 2026-11-08 Claude: wrote PE-01, the rulebook for how character and encounter changes are saved, retried, checked and shared, with five worked examples (editing between sessions, a level-up during combat, a double purchase approval, two people wanting the same loot, an interrupted area spell). No product code changed. Next: Codex reviews it; PE-10 and PE-12 stay blocked until it is accepted and merged.
 
 - 2026-11-08 Codex: reviewed existing work and prepared the approved player-release task package. Five bounded Stage 0 tasks are ready; existing Obsidian recovery and UI-11/UI-18 patches must be reviewed before reuse. New wiki and VTT work is parked; original worktrees and live settings are unchanged. Next: Claude PE-01 and Codex PE-03, with PE-02/04/07 available in parallel.
 
