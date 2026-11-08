@@ -29,7 +29,7 @@ before they become ready. Owners review each other's output under PROTOCOL.md.
 | PE-01 | State, command, migration and authority contract | claude | high; select current model | ready | [brief](tasks/PE-01-state-command-contract.md) |
 | PE-02 | Evidence-backed rules coverage and fixture matrix | codex | standard; high for review | ready | [brief](tasks/PE-02-rules-coverage.md) |
 | PE-03 | Review and map unmerged Obsidian recovery work | codex | standard; high for review | done | [brief](tasks/PE-03-obsidian-reuse-review.md) |
-| PE-04 | Review existing UI-18 picker/rail patch | codex | standard; high for review | ready | [brief](tasks/PE-04-ui18-review.md) |
+| PE-04 | Review existing UI-18 picker/rail patch | codex | standard; high for review | done (Codex accepted UI-18 with no findings; review in `tasks/UI-18-levelup-picker-rail.md`; PR #245) | [brief](tasks/PE-04-ui18-review.md) |
 | PE-05 | Reconcile UI-11 presentation after UI-18 disposition | codex | standard; high for review | blocked (PE-04) | [brief](tasks/PE-05-ui11-reconcile.md) |
 | PE-06 | Fix existing level-up HP preview inconsistency | claude | high; select current model | blocked (PE-04, PE-05) | [brief](tasks/PE-06-levelup-hp-consistency.md) |
 | PE-07 | Player journey mockups and UI contract | claude | high; select current model | ready | [brief](tasks/PE-07-player-ux-design.md) |
@@ -120,6 +120,7 @@ UI/UX design is Claude's by default; Codex implements mechanical parts from Clau
 | UI-14 | Cosmere tracker (B: phase/turn first, phase band) + check the Archer's missing strikes | claude | Opus, high | done (PR #205 merged after CI) | `tasks/UI-14-cosmere-tracker.md` |
 | UI-15 | Cosmere Party Vitals (B) + roster (A cards + attention summary) | codex | standard, high | ready | `tasks/UI-15-cosmere-vitals-and-roster.md` |
 | UI-16 | Cosmere loot (B: form beside searchable history, draft worth from the server table) | codex | standard, medium | ready after UI-05 | `tasks/UI-16-cosmere-loot.md` |
+| UI-18 | PF2e level-up: the gains rail covered the open picker (search field, locked rows and their reasons); keyboard focus on a locked row was hidden under it | claude | Opus, high | done (accepted by Codex; PR #245) | `tasks/UI-18-levelup-picker-rail.md` |
 | UI-03 | Fix the seven confirmed bugs from the UI review | codex | standard | done (accepted by Claude) | `tasks/UI-03.md` |
 | UI-04 | Cosmere tracker: hide every PF2e-only control (user: each system stays separate) | codex | standard, high | done (accepted by Claude) | `tasks/UI-04-cosmere-tracker-separation.md` |
 | UI-05 | Cosmere spheres: gem changes value (rulebook table); wallets keep gems | codex | strongest, high | done (accepted by Claude) | `tasks/UI-05-cosmere-gem-values.md` |
@@ -235,6 +236,8 @@ Accepted as a design checkpoint. Notes:
 
 ## Log
 
+- 2026-11-08 Codex: accepted UI-18 with no findings. All 23 focused checks passed, all templates parse, and extra phone checks confirmed the fade and keyboard override. Next: Claude commits the review notes, opens the PR and merges after every CI job passes; the existing short-screen follow-ups remain separate.
+- 2026-11-08 Claude: UI-18 ready for review. On the level-up page, the progress rail no longer covers an open picker, so a locked row's reason and its focus ring show again. The GM override switch stays usable above the picker. 15 new browser checks pass. Next: Codex reviews.
 - 2026-11-08 Claude: accepted the Obsidian reuse review. Re-ran the checks on clean copies and got the same numbers, and all seven reported problems showed up again exactly as described. The old branch still must not be merged as a whole. Next: Codex commits, opens the docs-only PR and merges once checks pass.
 - 2026-11-08 Codex: completed the Obsidian reuse review. The focused checks passed on both copies, and extra probes found six issues to fix during reuse plus an older save-and-retry gap. The report maps what to keep and the order to bring it forward. Next: Claude reviews PE-03; website and installed plugin behavior are unchanged.
 - 2026-11-08 Codex: reviewed existing work and prepared the approved player-release task package. Five bounded Stage 0 tasks are ready; existing Obsidian recovery and UI-11/UI-18 patches must be reviewed before reuse. New wiki and VTT work is parked; original worktrees and live settings are unchanged. Next: Claude PE-01 and Codex PE-03, with PE-02/04/07 available in parallel.

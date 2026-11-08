@@ -2,7 +2,7 @@
 
 - **Owner:** codex (independent reviewer of Claude's implementation)
 - **Implementer responding to findings:** claude; Codex rechecks fixes.
-- **Status:** ready; review only
+- **Status:** done (see Report)
 - **Branch:** `codex/pe-04-ui18-review` from the recorded Stage 0 package commit (or current main after this package integrates), after all named dependencies are accepted and integrated. Record the exact starting SHA.
 - **Depends on:** none; DS-02 and DS-03 are merged.
 - **Context:** [existing-work audit](../../player-release/existing-player-work.md), [handoff protocol](../PROTOCOL.md), local sibling `GM_pf2e_ui18/docs/handoff/tasks/UI-18-levelup-picker-rail.md`, [DS-03](DS-03-focus-ring-hover-gate.md).
@@ -64,8 +64,12 @@ Confirm it before running; this brief does not require modifying that environmen
 
 ## Report
 
-Not started. Record patch identity, exact checks/results, unresolved acceptance
-evidence and numbered findings. No acceptance is implied by this brief.
+Done through the UI-18 task itself. Codex reviewed commit `ac829271` against
+`7aeb9549` and accepted it with no findings on 2026-11-08. The patch identity,
+the exact checks and their results, and the unresolved evidence (Linux,
+PostgreSQL, Railway) are recorded in that task's Review section:
+`tasks/UI-18-levelup-picker-rail.md`. Published as PR #245 and merged only
+after every CI job passed. PE-05 can start once that PR has merged.
 
 ## Review
 

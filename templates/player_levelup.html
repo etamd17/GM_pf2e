@@ -192,8 +192,36 @@
            back in so the rest of the header cannot start another picker. */
         body.picker-open #gains-rail { pointer-events: none; }
         body.picker-open #gm-override-switch { pointer-events: auto; }
-        body.picker-open #gains-rail-body { opacity: .45; transition: opacity .2s ease; }
-        @media (prefers-reduced-motion: reduce) { body.picker-open #gains-rail-body { transition: none; } }
+        /* The rail's box would also PAINT over the picker's search field and
+           first rows, hiding a locked row's reason chip and focus ring. So it
+           fades out with the overlay and only the switch stays, moved into a
+           48px band reserved at the top of the overlay (fixed px, not vh: on
+           phones vh and the overlay's height disagree while toolbars show).
+           The band is reserved for as long as the overlay is unhidden, so the
+           window never shifts. The fade keys off the overlay's own opacity-0:
+           it is still on for 10ms after opening and goes back on as closing
+           starts, so the rail is in place whenever the page shows through. */
+        body.picker-open #uni-modal { padding-top: 48px; }
+        #gains-rail { transition: background-color .2s ease, border-color .2s ease, visibility 0s; }
+        #gains-rail-header > h3, #gains-rail-body { transition: opacity .2s ease; }
+        body:has(#uni-modal:not(.hidden):not(.opacity-0)) #gains-rail {
+            background-color: transparent !important; border-color: transparent !important; /* beat the inline style */
+            visibility: hidden;
+            transition: background-color .2s ease, border-color .2s ease, visibility 0s linear .2s;
+        }
+        body:has(#uni-modal:not(.hidden):not(.opacity-0)) :is(#gains-rail-header > h3, #gains-rail-body) { opacity: 0; }
+        body:has(#uni-modal:not(.hidden):not(.opacity-0)) #gm-override-switch {
+            visibility: visible;
+            position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+            white-space: nowrap;
+            animation: lvl-switch-in .2s ease;
+        }
+        /* Off the rail it needs its own fill; :not(.armed) leaves the armed amber fill below in charge. */
+        body:has(#uni-modal:not(.hidden):not(.opacity-0)) #gm-override-switch:not(.armed) { background: var(--bg-card); }
+        @keyframes lvl-switch-in { from { opacity: 0; } }
+        @media (prefers-reduced-motion: reduce) {
+            #gains-rail, #gains-rail-header > h3, #gains-rail-body { transition: none !important; }
+        }
         #lvl-page-main { width: 100%; }
         @media (min-width: 900px) {
             #lvl-layout { flex-direction: row; align-items: flex-start; }
