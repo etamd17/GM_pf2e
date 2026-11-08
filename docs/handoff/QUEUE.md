@@ -48,6 +48,7 @@ UI/UX design is Claude's by default; Codex implements mechanical parts from Clau
 | UI-14 | Cosmere tracker (B: phase/turn first, phase band) + check the Archer's missing strikes | claude | Opus, high | done (PR #205 merged after CI) | `tasks/UI-14-cosmere-tracker.md` |
 | UI-15 | Cosmere Party Vitals (B) + roster (A cards + attention summary) | codex | standard, high | ready | `tasks/UI-15-cosmere-vitals-and-roster.md` |
 | UI-16 | Cosmere loot (B: form beside searchable history, draft worth from the server table) | codex | standard, medium | ready after UI-05 | `tasks/UI-16-cosmere-loot.md` |
+| UI-18 | PF2e level-up: the gains rail covered the open picker (search field, locked rows and their reasons); keyboard focus on a locked row was hidden under it | claude | Opus, high | review | `tasks/UI-18-levelup-picker-rail.md` |
 | UI-03 | Fix the seven confirmed bugs from the UI review | codex | standard | done (accepted by Claude) | `tasks/UI-03.md` |
 | UI-04 | Cosmere tracker: hide every PF2e-only control (user: each system stays separate) | codex | standard, high | done (accepted by Claude) | `tasks/UI-04-cosmere-tracker-separation.md` |
 | UI-05 | Cosmere spheres: gem changes value (rulebook table); wallets keep gems | codex | strongest, high | done (accepted by Claude) | `tasks/UI-05-cosmere-gem-values.md` |
@@ -81,7 +82,7 @@ answered its five questions on 2026-10-28 (section 12); PF2e goes back to the wa
 | DS-00 | Inventory diff tool (incl. 00b VTT states, 00c account/Cosmere/Mistborn/5e profiles): ids, data-*, handlers, ARIA, frozen class strings, before/after | claude | Opus, high | done (PR #235); the VTT half (00b) is still unmerged, on its own branch | `tasks/DS-00-inventory-diff-tool.md` |
 | DS-01 | Tokens, warm gilt (27a removed), `ds-tokens.css`, empty `ds.css`, notices file, contrast tool, screenshot harness | claude | Opus, high | done (PR #236) | `tasks/DS-01-tokens.md` |
 | DS-02 | Motion base: `--t-*` curve, global reduced-motion block, new motion classes used by no page yet, a reduced-motion audit command | claude | Opus, high | done (PR #238) | `tasks/DS-02-motion-base.md` |
-| DS-03 | Global focus ring and hover gate, plus a tab-through audit command | codex | standard, high | in-progress: PR #242 browser CI blocker | `tasks/DS-03-focus-ring-hover-gate.md` |
+| DS-03 | Global focus ring and hover gate, plus a tab-through audit command | codex | standard, high | done (PR #242) | `tasks/DS-03-focus-ring-hover-gate.md` |
 | DS-04..DS-31 | The rest of section 10, in dependency order | see plan | see plan | needs brief | - |
 
 ## CI maintenance
@@ -163,6 +164,7 @@ Accepted as a design checkpoint. Notes:
 
 ## Log
 
+- 2026-11-08 Claude: UI-18 ready for review. On the level-up page, the progress rail no longer covers an open picker, so a locked row's reason and its focus ring show again. The GM override switch stays usable above the picker. 15 new browser checks pass. Next: Codex reviews.
 - 2026-11-02 Claude: found why the phone Chronicle rings failed on Linux CI. Linux shows a different fallback font, and its "J" runs under the ring; at the smallest phone width the last tab also stayed cut off. Fixed by giving the ring 2px of clearance and scrolling the focused tab into view; checked against the Linux font locally and in the real tests. Next: push the fix to PR #242 and merge once CI is green.
 
 - 2026-11-02 Codex: published accepted DS-03 as PR #242 after all 76 requested local checks passed, with stylesheets unchanged. PostgreSQL passed in CI, but six phone Chronicle checks failed on Linux. The PR is not merged. Next: Claude reviews the recorded failure before any CSS change or merge; local report and queue notes are uncommitted.

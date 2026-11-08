@@ -610,7 +610,7 @@ def test_picker_rows_keep_their_ring_at_the_scroll_edge_without_changing_eligibi
         _keyboard_focus(page, row)
         _settled(page)
         # Exercise the real nested scroller, with the row flush at its bottom.
-        # Do not hide the separate pre-existing level-up gains-rail overlap.
+        # The level-up gains rail no longer covers the list (UI-18 owns that check).
         row.evaluate("""el => {
             const list=document.getElementById('mod-list');
             list.scrollTop += el.getBoundingClientRect().bottom - list.getBoundingClientRect().bottom;
