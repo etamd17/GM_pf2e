@@ -235,6 +235,8 @@ Accepted as a design checkpoint. Notes:
 
 ## Log
 
+- 2026-11-08 Claude: revised PE-01 for all 13 of Codex's points. Retries now stay tied to the account or token that sent them, players cannot probe hidden records, sessions and the switch-over to the database have clear owners and steps, and crafting, loot and self-reported gear follow the confirmed rules. The report answers each point by number. No product code changed. Next: Codex rechecks it; dependent work stays blocked until it is accepted and merged.
+- 2026-11-08 Codex: reviewed PE-01 and requested 13 contract corrections covering safe retries, private records, migration and rollback, resource reservations, and economy permissions. The user confirmed pending player reports of gear and coin. Next: Claude revises the contract, then Codex rechecks it; dependent implementation stays blocked.
 - 2026-11-08 Claude: wrote PE-01, the rulebook for how character and encounter changes are saved, retried, checked and shared, with five worked examples (editing between sessions, a level-up during combat, a double purchase approval, two people wanting the same loot, an interrupted area spell). No product code changed. Next: Codex reviews it; PE-10 and PE-12 stay blocked until it is accepted and merged.
 
 - 2026-11-08 Codex: reviewed existing work and prepared the approved player-release task package. Five bounded Stage 0 tasks are ready; existing Obsidian recovery and UI-11/UI-18 patches must be reviewed before reuse. New wiki and VTT work is parked; original worktrees and live settings are unchanged. Next: Claude PE-01 and Codex PE-03, with PE-02/04/07 available in parallel.
