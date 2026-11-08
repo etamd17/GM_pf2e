@@ -36,6 +36,10 @@ the Model column in `QUEUE.md` still says how much reasoning the step needs.
 
 1. **Brief** (author: usually Claude). Copy `TEMPLATE.md` to `tasks/<id>.md`, fill the
    brief half, add a row to `QUEUE.md` with status `ready` and the intended owner.
+   Use `blocked` when a brief exists but its named dependencies are not yet
+   accepted and integrated. `needs brief` rows are decomposition placeholders,
+   not executable assignments. Promote to `ready` only after the brief's base,
+   files and checks are reconciled with the accepted dependencies.
 2. **Claim.** The implementer sets the row to `in-progress` and works on the branch
    named in the brief (`<owner>/<id>-<slug>`, cut from the branch in the brief).
 3. **Implement.** Stay inside the brief's scope. Anything found out of scope goes in the
