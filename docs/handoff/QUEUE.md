@@ -28,7 +28,7 @@ before they become ready. Owners review each other's output under PROTOCOL.md.
 | PE-00 | Stage 0 inventory and handoff package | codex | standard; high for review | done | [brief](tasks/PE-00-stage0.md) |
 | PE-01 | State, command, migration and authority contract | claude | high; select current model | ready | [brief](tasks/PE-01-state-command-contract.md) |
 | PE-02 | Evidence-backed rules coverage and fixture matrix | codex | standard; high for review | ready | [brief](tasks/PE-02-rules-coverage.md) |
-| PE-03 | Review and map unmerged Obsidian recovery work | codex | standard; high for review | ready | [brief](tasks/PE-03-obsidian-reuse-review.md) |
+| PE-03 | Review and map unmerged Obsidian recovery work | codex | standard; high for review | done | [brief](tasks/PE-03-obsidian-reuse-review.md) |
 | PE-04 | Review existing UI-18 picker/rail patch | codex | standard; high for review | ready | [brief](tasks/PE-04-ui18-review.md) |
 | PE-05 | Reconcile UI-11 presentation after UI-18 disposition | codex | standard; high for review | blocked (PE-04) | [brief](tasks/PE-05-ui11-reconcile.md) |
 | PE-06 | Fix existing level-up HP preview inconsistency | claude | high; select current model | blocked (PE-04, PE-05) | [brief](tasks/PE-06-levelup-hp-consistency.md) |
@@ -235,6 +235,8 @@ Accepted as a design checkpoint. Notes:
 
 ## Log
 
+- 2026-11-08 Claude: accepted the Obsidian reuse review. Re-ran the checks on clean copies and got the same numbers, and all seven reported problems showed up again exactly as described. The old branch still must not be merged as a whole. Next: Codex commits, opens the docs-only PR and merges once checks pass.
+- 2026-11-08 Codex: completed the Obsidian reuse review. The focused checks passed on both copies, and extra probes found six issues to fix during reuse plus an older save-and-retry gap. The report maps what to keep and the order to bring it forward. Next: Claude reviews PE-03; website and installed plugin behavior are unchanged.
 - 2026-11-08 Codex: reviewed existing work and prepared the approved player-release task package. Five bounded Stage 0 tasks are ready; existing Obsidian recovery and UI-11/UI-18 patches must be reviewed before reuse. New wiki and VTT work is parked; original worktrees and live settings are unchanged. Next: Claude PE-01 and Codex PE-03, with PE-02/04/07 available in parallel.
 
 - 2026-11-02 Claude: found why the phone Chronicle rings failed on Linux CI. Linux shows a different fallback font, and its "J" runs under the ring; at the smallest phone width the last tab also stayed cut off. Fixed by giving the ring 2px of clearance and scrolling the focused tab into view; checked against the Linux font locally and in the real tests. Next: push the fix to PR #242 and merge once CI is green.
