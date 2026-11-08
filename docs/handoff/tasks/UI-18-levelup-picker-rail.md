@@ -75,4 +75,55 @@ CSS only, in the `body.picker-open` rules in `player_levelup.html`:
   - Pre-existing: at about 400px tall, the picker's own preview panel covers its list. Not the rail; that's why the short-phone test uses 390x600.
 
 ## Review
-<!-- reviewer appends numbered findings, or "accepted" -->
+
+**Accepted** (Codex, 2026-11-08). No findings against the acceptance list.
+Reviewed committed patch `ac829271d642d8d40ab758ac2717b3de0e5d710f`
+against `7aeb9549c1df2807935a4a44229284e13a5add1d`; the worktree was
+clean before review. Product code and tests were not edited during review.
+
+- The complete five-file diff is within scope. Removing the style blocks from
+  the before/after level-up template produces identical content. The shared
+  picker, builder template and DS stylesheet have identical Git blob hashes.
+  This independently confirms unchanged markup, IDs, handlers, classes and
+  ARIA; the implementer's zero-change route inventory result was not rerun.
+- Checked the selectors against actual opening/closing timers, stacking,
+  pointer events, the armed rule and global reduced-motion/focus rules.
+  Existing locked-choice feedback and override behavior are preserved.
+- Independently reran with the existing project Python environment:
+
+  ```text
+  python -m pytest -q tests/browser/test_levelup_picker_rail_browser.py tests/test_player_levelup_picker_layer.py --strict-markers
+    15 passed, 0 failed/skipped (27.76 s)
+  python -m pytest -q tests/browser/test_ds_focus_browser.py -k picker -m browser --strict-markers
+    6 passed, 61 deselected, 0 failed/skipped (21.13 s)
+  python -m pytest -q tests/browser/test_ds_motion_browser.py -k 'picker or locked_row' -m browser --strict-markers
+    2 passed, 33 deselected, 0 failed/skipped (93.92 s)
+  python tools/check_templates.py
+    all 111 templates parse
+  git diff 7aeb9549..ac829271 --check
+    clean
+  ```
+
+- Supplemented the submitted tests with real Chromium normal-motion traces at
+  390x844 and 390x600. The initial rail/switch remain in place while the overlay
+  is transparent; once open the rail is hidden and the switch is contained in
+  the viewport without overlapping the picker. Closing restores the switch to
+  the rail. Native Tab from search reaches the visible, focus-visible override
+  checkbox while its ancestor rail is hidden; Space arms and disarms the actual
+  handler, changing the fixture row's eligibility. No page errors. Reviewed the
+  retained phone screenshot. These probes used synthetic disposable app data.
+- Initial sandbox browser runs stalled before useful execution and were stopped
+  by their verified process IDs. The identical required checks completed with
+  local browser access outside the sandbox. A first scratch trace sampled too
+  short an opening window; its corrected run records the complete transition.
+  Neither setup attempt is counted as a passing test or a product failure.
+- The report's full-suite counts remain implementer evidence, not a fresh Codex
+  full-suite run. The 11 PostgreSQL setup errors do not constitute a wholly
+  green suite. Linux/browser/PostgreSQL CI must pass before merge; Railway and
+  Linux fonts have not been independently verified here.
+
+The three documented pre-existing follow-ups remain out of scope. This accepts
+the reviewed UI-18 patch for the normal PR process; it does not claim deployment.
+Claude should include these review/queue notes when committing and publishing.
+PE-05/UI-11 reconciliation remains blocked until this accepted outcome is
+integrated (or explicitly superseded); no overlapping template work began here.

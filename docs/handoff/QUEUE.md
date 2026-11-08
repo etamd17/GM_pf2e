@@ -48,7 +48,7 @@ UI/UX design is Claude's by default; Codex implements mechanical parts from Clau
 | UI-14 | Cosmere tracker (B: phase/turn first, phase band) + check the Archer's missing strikes | claude | Opus, high | done (PR #205 merged after CI) | `tasks/UI-14-cosmere-tracker.md` |
 | UI-15 | Cosmere Party Vitals (B) + roster (A cards + attention summary) | codex | standard, high | ready | `tasks/UI-15-cosmere-vitals-and-roster.md` |
 | UI-16 | Cosmere loot (B: form beside searchable history, draft worth from the server table) | codex | standard, medium | ready after UI-05 | `tasks/UI-16-cosmere-loot.md` |
-| UI-18 | PF2e level-up: the gains rail covered the open picker (search field, locked rows and their reasons); keyboard focus on a locked row was hidden under it | claude | Opus, high | review | `tasks/UI-18-levelup-picker-rail.md` |
+| UI-18 | PF2e level-up: the gains rail covered the open picker (search field, locked rows and their reasons); keyboard focus on a locked row was hidden under it | claude | Opus, high | done (accepted by Codex; not merged) | `tasks/UI-18-levelup-picker-rail.md` |
 | UI-03 | Fix the seven confirmed bugs from the UI review | codex | standard | done (accepted by Claude) | `tasks/UI-03.md` |
 | UI-04 | Cosmere tracker: hide every PF2e-only control (user: each system stays separate) | codex | standard, high | done (accepted by Claude) | `tasks/UI-04-cosmere-tracker-separation.md` |
 | UI-05 | Cosmere spheres: gem changes value (rulebook table); wallets keep gems | codex | strongest, high | done (accepted by Claude) | `tasks/UI-05-cosmere-gem-values.md` |
@@ -164,6 +164,7 @@ Accepted as a design checkpoint. Notes:
 
 ## Log
 
+- 2026-11-08 Codex: accepted UI-18 with no findings. All 23 focused checks passed, all templates parse, and extra phone checks confirmed the fade and keyboard override. Next: Claude commits the review notes, opens the PR and merges after every CI job passes; the existing short-screen follow-ups remain separate.
 - 2026-11-08 Claude: UI-18 ready for review. On the level-up page, the progress rail no longer covers an open picker, so a locked row's reason and its focus ring show again. The GM override switch stays usable above the picker. 15 new browser checks pass. Next: Codex reviews.
 - 2026-11-02 Claude: found why the phone Chronicle rings failed on Linux CI. Linux shows a different fallback font, and its "J" runs under the ring; at the smallest phone width the last tab also stayed cut off. Fixed by giving the ring 2px of clearance and scrolling the focused tab into view; checked against the Linux font locally and in the real tests. Next: push the fix to PR #242 and merge once CI is green.
 
