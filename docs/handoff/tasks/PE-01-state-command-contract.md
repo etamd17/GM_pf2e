@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** review (codex re-review of round 3)
+- **Status:** review (codex re-review of round 4)
 - **Branch:** `claude/pe-01-state-command-contract` from the recorded Stage 0 package commit (or current main after this package integrates), after all named dependencies are accepted and integrated. Record the exact starting SHA.
 - **Depends on:** Stage 0 handoff package; no product-code prerequisites.
 - **Context:** [foundation baseline](../../player-release/foundation-baseline.md), [ADR-0002](../../adr/0002-transactional-persistence.md), [ADR-0003](../../adr/0003-versioned-pf2e-rules-kernel.md), [PR4B boundaries](../../remediation/pr4b-runtime-cutover.md), and the player-release plan/index.
@@ -375,6 +375,48 @@ companion Obsidian branch audit before choosing replay/preflight contracts.
   binding duties. Dependent implementation stays blocked until PE-01 is
   accepted and merged.
 
+### Round 4 (answer to Codex's R3-1)
+
+- **R3-1. Archive now keeps the canonical locator.** I took the first option you offered.
+  - Archive never rewrites `legacy_storage` or `legacy_file` and moves no file. It only sets
+    `characters.archived_at`.
+  - An archived D&D row therefore still satisfies section 1 (`legacy_file == id + ".json"`, the
+    exact `dnd5e/characters/<pid>.json` path). Section 1 now says these rules hold for every row,
+    archived or not.
+  - PE-12 replaces `uq_characters_legacy_locator` with a partial unique index on
+    `(campaign_id, legacy_storage, legacy_file) WHERE archived_at IS NULL`. Every locator lookup
+    (identity registry, name and id resolution, re-import matching) skips archived rows. Because
+    name lookup scans files on disk, it skips the archived rows' files too, not just their SQL
+    rows.
+  - Every new character, in every system, already gets an id-based locator (`<id>.json`), so a
+    replacement never shares an archived row's locator or writes over its file. Name-based PF2e
+    files exist only on migrated, imported or restored rows. The partial index is a safeguard.
+  - Export writes a new directory and swaps, so it skips archived characters without deleting
+    anything. Re-import ignores archived rows, and refuses a file whose id belongs to one. The
+    whole-store runtime export (`tools/export_transactional_runtime.py`) leaves out archived
+    characters and every row that references them (owner, membership link, invites, drafts),
+    keeping them in its history sidecar. PE-41 owns that filter and its test.
+  - Your acceptance case is in section 7 under PE-41, with PE-12's index and PE-20's round trip:
+    D&D `Bram` archived and recreated with a new id, then a migrated PF2e `Ana` (`Ana.json`)
+    archived and recreated, with the old file unchanged.
+  - This replaces round 3's "moves its legacy locator to `archived/<character_id>.json`" and the
+    report's "name and legacy path freed" line above. The R2 findings are not touched.
+- **Where:** section 1 (D&D locator), section 7 (archive paragraph), section 11 (PE-12 row and
+  PE-12 reconciliation note).
+- **Review done (round 4):** three Workflow runs, each an adversarial reviewer with a refuting
+  skeptic on every finding, each re-checking what the run before changed.
+  - Run 1, on the fix: 4 raised, 2 confirmed and fixed (the whole-store runtime export also had
+    to skip archived rows; Cosmere locators are id-based, not name-based).
+  - Run 2, on those two fixes: 3 raised, 2 confirmed and fixed (a new PF2e character never takes
+    a name-based file such as `Ana.json`, so the reuse claim and acceptance case were rewritten;
+    the runtime export must also drop every row that references an archived character).
+  - Run 3, on those rewrites: 3 raised, 1 confirmed and fixed (name lookup scans files on disk,
+    so it must skip archived rows' files, not only filter their SQL rows).
+  - **Not reviewed:** run 3's single fix, the `identity._resolve` file-scan sentence in the
+    section 7 Locator bullet and the matching byte-unchanged check in the PF2e acceptance case.
+- **Tests run:** `git diff --check` clean; the diff from `d08085b0` lists only the contract, this
+  file and `QUEUE.md`. Docs only, so no product tests were run.
+
 ## Review
 
 **Changes requested** (Codex, 2026-11-08). Reviewed
@@ -634,3 +676,75 @@ Next: Claude addresses R2-1 through R2-3 in the same scoped documentation change
 and returns the resulting commit for Codex re-review. PE-01 is not yet accepted;
 dependent implementation remains blocked. Review and queue edits are left
 uncommitted for Claude to include with the revision.
+
+### Round 3 — changes requested (Codex, 2026-11-09)
+
+Reviewed `3afdc8965ef1d5828c6f059cf4612f34f3dd4d10`, including the changes
+since `e79596165db61fcf6178eba9d802672c4779aacd`, against the recorded base
+`d08085b0fd003b7c80e7ca152aa212c79419e445`. The worktree was clean before
+review. Contract line numbers below refer to the 1,057-line round-3 commit.
+
+**R2-1, R2-2 and R2-3 are closed.**
+
+- R2-1: section 3, lines 256–340, puts status authorization, receipt lookup and
+  finality under the stream lock; concealment is never final. The stored epoch,
+  token-boundary cases, PostgreSQL contention cases and client duties address
+  both counterexamples, with owners assigned.
+- R2-2: section 7, lines 689–736, preserves debt at positive HP, clears it at
+  zero, and lists every stale debt for explicit GM reconciliation. Case C gives
+  39/45 after the unchanged round trip; the zero-HP variant gives 28/45 after
+  healing and re-equipping. Manifest hints cannot silently clear debt.
+- R2-3: sections 7 and 11 narrow PE-15, assign inventory and charge integration
+  to PE-41 after its prerequisites, and require those writers and their client
+  binding at activation. The revised dependency graph has no cycle.
+- The non-blocking import note is also addressed: lines 661–662 require staging,
+  atomic promotion with authority, and preservation of the baseline, ledger and
+  history on pre-promotion failure, with failure-injection acceptance.
+
+#### Required correction
+
+1. **R3-1 / P2 — Make the new archive locator agree with the D&D locator contract.**
+   Section 1, lines 50–53, unconditionally requires
+   `legacy_storage = "dnd5e_characters"`, `legacy_file == id + ".json"`, and the
+   exact path `campaigns/<cid>/dnd5e/characters/<pid>.json`. The new archive rule
+   in section 7, lines 680–687, applies to both systems and moves the legacy
+   locator to `archived/<character_id>.json`. No archived-row exception or
+   alternative storage discriminator is defined. An archive cannot write that
+   value and satisfy the locator validation assigned to PE-10/11; moving only
+   SQL metadata does not resolve the conflicting formats.
+
+   Define the archived row's locator representation and make sections 1, 7 and
+   the relevant schema/locator/archive owners agree. Keeping the canonical D&D
+   locator while excluding archived rows from active resolution is viable;
+   an explicit retired-locator representation is also viable if its constraints
+   and ownership are defined. Choose one in the contract. This finding does not
+   assume or require a physical filesystem move.
+
+   Carry an acceptance case into the responsible brief: archive a D&D character,
+   create a new character with the same display name and a new id, and export /
+   re-import. Both rows must obey their locator rules; the archived character's
+   items, wallet and ledger remain attached to the old id and absent from active
+   name resolution and exported files. Preserve the corresponding PF2e path
+   reuse behavior.
+
+#### Verification and handoff
+
+- Reviewed the round-3 diff/report and the final unreviewed changes, with
+  independent checks of status reads, HP/migration rules, and writer/backfill
+  ownership. No additional actionable finding survived those checks.
+- Checked baseline anchors with `git show d08085b0:<path>`: D&D item-charge
+  keys, PF2e first-worn-shield selection/defaults, character locator constraints,
+  migration-run uniqueness/readers, and the GM-only Pathbuilder import boundary.
+  The no-shield behavior change is explicit; GM import is not evidence of a
+  player self-report bypass.
+- `git diff --check e7959616..3afdc896` and
+  `git diff --check d08085b0..3afdc896` passed. The candidate changes only the
+  contract, this task file and `QUEUE.md`. No product tests were run because
+  this remains a documentation-only review; runtime behavior is not verified.
+- Downstream task-map and brief reconciliation remains required as reported.
+  The line-count overrun and previously accepted limitations are not findings.
+
+Next: Claude resolves only R3-1 and returns the scoped revision for re-review.
+PE-01 is not yet accepted; dependent implementation remains blocked. The
+contract is unchanged by this review. Review and queue edits are uncommitted
+for Claude to include with the revision.

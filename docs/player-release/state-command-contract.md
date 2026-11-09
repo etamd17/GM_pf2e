@@ -51,6 +51,9 @@ match it.
   - `legacy_storage = "dnd5e_characters"` and `legacy_file = "<pid>.json"`, with
     `legacy_file == id + ".json"`.
   - The path must be exactly `campaigns/<cid>/dnd5e/characters/<pid>.json`.
+  - These rules hold for every row, archived or not. Archive never rewrites a locator, in
+    either system; it only sets `archived_at`, which removes the row from locator uniqueness
+    and every locator lookup (section 7).
 
 ## 2. State records, revisions and conflicts
 
@@ -679,12 +682,53 @@ routine. Every round-trip table falls into exactly one class. `campaign_state_au
 
 Wallets, ledger lines and economy records never cascade from `characters`; a character with
 ledger history is archived, not hard-deleted. Archive is one command with an event (PE-41 owns
-it, for both systems). It sets `characters.archived_at` (PE-12), removes the character from
-rosters, active encounters and name resolution, and moves its legacy locator to
-`archived/<character_id>.json`, so the name and path are free. A same-name create or import is
-refused only when a non-archived character resolves by that name. Export skips archived
-characters, and re-import leaves them and their items, wallet and ledger untouched: they are not
-"missing from the files".
+it, for both systems). It sets `characters.archived_at` (PE-12) and removes the character from
+rosters, active encounters and name resolution. It does not change `legacy_storage` or
+`legacy_file`, and moves no file:
+- **Locator.** An archived row keeps its canonical locator, so a D&D row still satisfies
+  section 1 (`legacy_file == id + ".json"`). PE-12 replaces `uq_characters_legacy_locator` with a
+  partial unique index on `(campaign_id, legacy_storage, legacy_file) WHERE archived_at IS NULL`
+  (`sqlite_where`/`postgresql_where`). Every locator lookup (the identity registry, name and id
+  resolution, re-import matching) skips archived rows. Because `identity._resolve` scans the
+  files on disk, PE-41 loads the registry for all of the campaign's rows, archived ones included,
+  and skips any file whose row has `archived_at` set before name or id matching and in
+  `identity_files`. Filtering the SQL query alone would turn the archived file into an
+  unregistered match and raise `character_identity_conflict`.
+- **Reuse.** A new character always gets an id-based locator (`<id>.json`). For D&D this follows
+  from section 1. For PF2e and Cosmere every create and import path already writes
+  `<new id>.json` (`save_new_character`, the Pathbuilder import route,
+  `core/character_workflows/publication.py`). Name-based PF2e files such as `Ana.json` exist only
+  on rows migrated from legacy storage or brought in by campaign import or restore. No command
+  gives an archived row's `legacy_file` to another row, so a replacement never shares a locator
+  or writes over an archived row's file. The partial index is a safeguard, and lookups,
+  including the file scan in `identity._resolve`, skip archived rows' files.
+- **Names.** A same-name create or import is refused only when a non-archived character resolves
+  by that name.
+- **Export and re-import.** Export writes a new directory and swaps (the `exporting` → `file`
+  row), so it skips archived characters without deleting anything. Re-import matches files only against
+  non-archived rows and leaves archived rows and their items, wallet and ledger untouched: they
+  are not "missing from the files". A file whose id belongs to an archived row is not
+  unarchived; the dry run lists it and the import refuses it until the GM removes that file.
+  The whole-store runtime export does the same. `tools/export_transactional_runtime.py`'s
+  `export_runtime` reads the archived character ids in its repeatable-read session and leaves the
+  shape of `migrate_transactional_store._database_records` unchanged. From that list it builds a
+  view without the archived characters and without every row that references them: their
+  `character_assignments`, `campaign_memberships.character_id` (set to null where it names one),
+  their invites and invite redemptions, and drafts and workflow receipts that target them.
+  `_write_legacy_tree`, `_verify_authority` and `build_plan` use that view; the history sidecar
+  and the post-staging `current_records` check use the full records. PE-41 owns this filter. Its
+  test archives a player-owned PF2e character with a membership link, an invite and an edit
+  draft, and adds an id-based same-name replacement. The export must succeed, leave the archived
+  character and its references out of the legacy tree, and keep them in the history sidecar. The
+  D&D case is added when PE-10/11 extend that tool to D&D storage.
+- **Acceptance (PE-41, with PE-12's index and PE-20's round trip).** Archive a D&D character
+  `Bram`, create a new D&D `Bram` with a new id, export and re-import. Both rows satisfy
+  section 1; the old row's items, wallet and ledger stay on the old id, and the old character is
+  absent from name resolution and from the exported files. Repeat with a migrated PF2e `Ana`
+  whose locator is `Ana.json`: the new `Ana` gets `<new id>.json`, the archived row keeps
+  `Ana.json`, and name resolution returns only the new row. `save_new_character`, the Pathbuilder
+  import and workflow publication each create the new `Ana` at `<new id>.json`, and the bytes of
+  `Ana.json` are unchanged afterwards.
 
 **HP floor debt across the round trip.** Legacy files cannot record a rest, and HP equal to the
 maximum does not prove one happened, so section 2's rule (the debt is cleared only when HP
@@ -1032,14 +1076,14 @@ campaigns (section 3). Round 3 (Codex R2-3): PE-15 no longer converts D&D invent
 currency; PE-41 converts the inventory and currency writers of both systems after PE-40, PE-15,
 PE-17 and PE-18b, so no task is assigned writers whose storage it cannot depend on. The brief limited this diff to the contract, the report and the queue
 row, so these must be reconciled when the briefs are written: `task-map.md` and the `QUEUE.md`
-rows and briefs for PE-15 (narrowed scope), PE-12 (its brief must allow altering `migration_runs` and `characters`, including the `stream_epoch` column, `characters.archived_at` and the scoping of `tools/export_transactional_runtime.py`; drop "creates only the new state structures"; and either take the scoped `MigrationRunRepository` lookup and new statuses or name PE-19/20 as their owner), PE-19/20/24/40/41/18b; PE-31a (drop "authority activation gate" from its title, which
+rows and briefs for PE-15 (narrowed scope), PE-12 (its brief must allow altering `migration_runs` and `characters`, including the `stream_epoch` column, `characters.archived_at` with the partial locator index, and the scoping of `tools/export_transactional_runtime.py` for `migration_runs` (PE-41 adds its archived-row filter); drop "creates only the new state structures"; and either take the scoped `MigrationRunRepository` lookup and new statuses or name PE-19/20 as their owner), PE-19/20/24/40/41/18b; PE-31a (drop "authority activation gate" from its title, which
 is now PE-24's); PE-36 (merge with, or depend on, PE-18b); PE-60. PE-03's phrase "PE-31a's
 authority/migration gate" (`obsidian-reuse-review.md`) now means PE-24.
 
 | Task | Owns from this contract |
 |---|---|
 | PE-10 / PE-11 | Section 1 system, storage discriminator, path and refusal rules |
-| PE-12 | `character_states` (`build`, `play`), `encounter_states`, `encounter_combatants` (composite FK), campaign clocks, `campaign_sessions` (one active per campaign, partial unique index), `campaign_state_authority`, pins, revisions; the `exported` status on the existing `migration_runs`, plus nullable `campaign_id` and `stream_epoch` columns (both NULL on legacy rows) and `kind` (import/export), an `aborted` status, uniqueness of `(campaign_id, kind, source_checksum, stream_epoch)` among runs not marked `aborted`, where any failure before promotion or the export swap marks the run `aborted`; legacy rows keep `campaign_id` NULL, `kind` is NOT NULL and backfilled to `import`, and a partial unique index on `source_checksum WHERE campaign_id IS NULL` keeps their current protection; a run records the campaign's `stream_epoch` read under the migration gate when its row is inserted (for an import, the `migrating` epoch, which `file → migrating` does not bump; for an export, the epoch after entering `exporting`); every legacy reader of `migration_runs` is scoped to `campaign_id IS NULL` (`MigrationRunRepository.get_by_source_checksum` and `start`, `tools/migrate_transactional_store.py`, and `tools/export_transactional_runtime.py::_envelopes`), with a test that a campaign import run does not change the runtime export; `characters.archived_at` (nullable) for section 7's archive; the export manifest is in `details` (PE-20); a retry inserts a new run; the populated-downgrade rule including `exporting`; one active encounter per campaign as a partial unique index (`sqlite_where`/`postgresql_where`, as `uq_character_assignments_one_owner` does). State rows cascade with their character; events keep their ids and have no FK. |
+| PE-12 | `character_states` (`build`, `play`), `encounter_states`, `encounter_combatants` (composite FK), campaign clocks, `campaign_sessions` (one active per campaign, partial unique index), `campaign_state_authority`, pins, revisions; the `exported` status on the existing `migration_runs`, plus nullable `campaign_id` and `stream_epoch` columns (both NULL on legacy rows) and `kind` (import/export), an `aborted` status, uniqueness of `(campaign_id, kind, source_checksum, stream_epoch)` among runs not marked `aborted`, where any failure before promotion or the export swap marks the run `aborted`; legacy rows keep `campaign_id` NULL, `kind` is NOT NULL and backfilled to `import`, and a partial unique index on `source_checksum WHERE campaign_id IS NULL` keeps their current protection; a run records the campaign's `stream_epoch` read under the migration gate when its row is inserted (for an import, the `migrating` epoch, which `file → migrating` does not bump; for an export, the epoch after entering `exporting`); every legacy reader of `migration_runs` is scoped to `campaign_id IS NULL` (`MigrationRunRepository.get_by_source_checksum` and `start`, `tools/migrate_transactional_store.py`, and `tools/export_transactional_runtime.py::_envelopes`), with a test that a campaign import run does not change the runtime export; `characters.archived_at` (nullable) for section 7's archive, with `uq_characters_legacy_locator` replaced by a partial unique index on `(campaign_id, legacy_storage, legacy_file) WHERE archived_at IS NULL`; the export manifest is in `details` (PE-20); a retry inserts a new run; the populated-downgrade rule including `exporting`; one active encounter per campaign as a partial unique index (`sqlite_where`/`postgresql_where`, as `uq_character_assignments_one_owner` does). State rows cascade with their character; events keep their ids and have no FK. |
 | PE-13 | Check order, conflict body, lock order, reconciliation hook (section 2). Repository-only invariant: the character's profile equals the campaign's. |
 | PE-14 | `campaign_streams`, `command_receipts`, `game_events`, `campaign_grants`, token scope and `replaces_credential_id`; per-type dependency sets and payload id fields, the authority fence, the digest including `override`, the code table, the operation-status read and `operation.abandon`, transaction steps, stream-locked authorization writes, `session.start/end` and the fail-closed session-history backfill; the greenlet contention test, the two transition-race cases and the server status-read cases (sections 2–4) |
 | PE-15 / PE-16-18 / PE-18b | Domain mapping, file-authority limits, PF2e constraints, the reservation rule (sections 2, 7). PE-15 converts every D&D `service.py` mutator except inventory, currency and the item-charge keys (`item:<uid>`/`item:i{idx}`) handled inside `resource_action` and `rest`, which PE-15's resource and rest commands hand to PE-41's item-charge handler, plus the build, play and details parts of the D&D `routes.py` writers (create, D&D Beyond and PDF import, portrait), the combatant-image write and the encounter log append (as encounter commands and events), and the GM owner route, which becomes a stream-locked assignment command (section 4). Encounter plans (`save_plan`/`delete_plan`) are GM prep files outside the command layer, exempt from the gate and the AST test; PE-18b converts PF2e build/level-up publish onto the command layer using existing derivation |
