@@ -19,7 +19,7 @@ implemented yet.
 |---|---|---|---|
 | `campaign_id` | `[0-9a-f]{32}` | existing stores | `core/request_context.py::CampaignContext` |
 | `character_id` | existing: ≤ 64 chars `[A-Za-z0-9_-]`; new: 32-hex | SQL `characters.id` (`ownership.register_character` keeps `doc.id` when it is ≤ 64 chars) | D&D: equals the file `pid` (`store.py::pc_path`). PF2e/Cosmere: the SQL id; the filename is only the locator. Never a display name. The dry run reports nonconforming ids. |
-| `item_id` | 32-hex (uuid4, globally unique) | server, on create/split/migration | D&D 12-hex `uid` is kept read-only as nullable `legacy_uid`; the D&D index keys `i{idx}` (`rules/character.py`, `routes.py`) are remapped. A PF2e stored entry gets one id each; same-name entries are never merged. Restore mints new ids. |
+| `item_id` | 32-hex (uuid4, globally unique) | server, on create/split/migration | D&D 12-hex `uid` is kept read-only as nullable `legacy_uid`; the D&D index keys `i{idx}` (`rules/character.py`, `routes.py`) are remapped. PE-40's backfill moves D&D `resources_used["item:<uid>"]` / `["item:i{idx}"]` into the matching item's `charges`. A PF2e stored entry gets one id each; same-name entries are never merged. PF2e shield fields (`shield_hp`, `shield_max_hp`, `shield_hardness`, `shield_bt`, `shield_ac_bonus`, `shield_name`) attach to the item for the first worn `build.armor` entry with `prof: shield`, the one `Character.__init__` selects; if there is none and any of those fields is set, the backfill mints a shield item named from `shield_name` (or "Shield") holding them, and the dry run lists it; if neither exists there is no shield item, and in db authority `shield_block`, `repair_shield` and `toggle_shield` refuse with `422 rule_violation` ("no shield"), a listed change from today's default 20-HP shield. Export writes the shield fields back to the build from that item. Restore mints new ids. |
 | `effect_id`, `encounter_id`, `combatant_id`, `action_id`, `prompt_id`, `event_id`, `advance_id` | 32-hex | server | D&D `cid` already matches the `combatant_id` format and is kept. PF2e/Obsidian `instance_id` becomes `legacy_ref`. `action_id` is server-minted; the row stores the initiating `operation_id`. |
 | `session_id` | new: `[a-z0-9][a-z0-9_-]{7,99}`, never truncated | GM session start (section 4) | Unique for the campaign's lifetime (section 4, Sessions). Today `start_session` accepts any string ≤ 120, the v0.9 plugin truncates folder names at 100, and main's `safeSegment` rewrites `:` and other characters (PE-03 F4). The new form is lowercase and filesystem-safe, so the plugin's folder name is the id itself, unchanged. Existing ids stay valid as history, and the dry run reports any that are not in the new form. |
 | `operation_id` | `[A-Za-z0-9_-]{16,128}` | client, once per attempt (section 3) | The legacy Obsidian `command_id` (`COMMAND_ID_RE`) stays on the legacy route until PE-60. |
@@ -253,26 +253,91 @@ The request body (db authority) for every player, GM, tracker and Obsidian mutat
     under the new identity, because the new identity has a different receipt key and the command
     could apply twice.
   - A quarantined operation is shown as "outcome unknown" until it is reconciled.
-  - **Status read.** `GET .../operations/<operation_id>?principal=<kind>:<id>` returns the
-    receipt's status, code and event ids, or `not_found`. It is allowed for the GM, for the same
-    principal while it is still valid, and for a token minted by the campaign's GM as the
-    recorded replacement (`replaces_credential_id`) of the original token. Any other caller gets
-    the same `not_found` as a missing receipt.
-  - **`not_found` is final only when the original request can no longer commit:** its epoch is
-    no longer current (check 2 refuses it), or its principal is an integration token revoked
-    under the stream lock (revocation is permanent). A membership or assignment removal is not
-    final, because it can be reversed and a role refusal writes no receipt. Otherwise the request
-    may still be in flight, and the client must not offer a new operation yet. It either resends the same
-    operation unchanged under the original principal and campaign (same receipt key, so it
-    applies at most once), or calls `operation.abandon`.
+  - **Status read.**
+    `GET .../operations/<operation_id>?principal=<kind>:<id>&epoch=<n>`, where `epoch` is the
+    epoch the client stored with the operation. It runs as **one short transaction holding the
+    campaign's stream lock**, the same lock every command commit holds. Inside that single
+    observation it re-reads the reader's authorization from SQL (section 4, step 4), looks up the
+    receipt, and reads the current `stream_epoch` and the original principal's token status. A
+    command either committed before this observation (its receipt is visible) or has not taken
+    the lock yet. The read is authorized for the GM, for the same principal while it is still
+    valid, and for a token minted by the campaign's GM as the recorded replacement
+    (`replaces_credential_id`) of the original token. Its answers:
+
+    | Answer | When | Final? |
+    |---|---|---|
+    | `200 {"state": "committed" \| "rejected" \| "abandoned", ...}` | authorized; a receipt exists (status, code, event ids, projected for the reader) | yes |
+    | `200 {"state": "absent_final"}` | authorized; no receipt; and in this same observation the original can never commit: the stored `epoch` is below the current `stream_epoch` (check 2 refuses it for ever), or the original principal is an integration token whose revocation has committed (revocation is permanent) | yes |
+    | `200 {"state": "absent_pending"}` | authorized; no receipt; the original could still commit (current epoch and a principal that is still valid, or one whose loss can be reversed, such as a membership or assignment removal) | no |
+    | `404 not_found` | the reader is not authorized for this principal's receipts, whether or not a receipt exists | **never** |
+
+  - **`epoch` is required.** A missing or non-integer value gets `400 bad_envelope`, never a
+    default. The server cannot check it: it must be the value the binding above stored. Any
+    listing or handoff of a quarantined operation to another reader (the plugin's list for the GM,
+    below) carries the stored `{operation_id, principal, epoch}` together. A reader that does not
+    have the stored epoch cannot use epoch-based finality, and resolves with `operation.abandon`.
+    `absent_final` echoes the epoch it relied on.
+  - **`absent_final` means the operation will never apply.** A refusal receipt from the original
+    attempt's refusal transaction (or an `abandon`) may still appear after it, and a later read then
+    returns that receipt. Neither changes state.
+  - **Only `absent_final` (or a receipt) establishes the outcome.** A `404` is concealment, not
+    absence. A client must never treat it as final, and must never derive finality by combining
+    a `404` or an `absent_pending` with an epoch change or a revocation it observed separately.
+    For example, if user B on the same browser finds user A's quarantined operation, B's reads
+    return `404`; the operation stays quarantined for A or the GM, and B never issues a new
+    operation in its place.
+  - When the answer is `absent_pending` or `404`, the request may still be in flight, and the
+    client must not offer a new operation yet. It either resends the same operation unchanged
+    under the original principal and campaign (same receipt key, so it applies at most once), or
+    an authorized principal calls `operation.abandon`, the serialized resolution when absence
+    cannot be established.
   - **`operation.abandon {operation_id, principal}`** (the same principal while valid, the
     replacement token above, or the GM), under the stream lock: if a receipt exists it answers
     from it; otherwise it inserts a `rejected` receipt with code `abandoned` for that key. A late
     arrival of the original then gets `409 abandoned` whatever its digest. Only after a final
-    answer from the read or from `abandon` may the client offer a **new** operation.
-  - The plugin lists its quarantined operation ids so the GM can reconcile them.
-  - PE-60 applies this to the plugin's local queues (PE-03 F2/F3). PE-14 acceptance includes a
-    late arrival after a `not_found` read.
+    answer (a receipt, `absent_final`, or `abandon`'s answer) may the client offer a **new**
+    operation.
+  - The plugin lists each quarantined operation's id, principal and stored epoch, so the GM can
+    reconcile them.
+  - PE-60 applies this to the plugin's local queues (PE-03 F2/F3).
+  - **Acceptance for the status read.** Server cases (PE-14):
+    - a late arrival after an `absent_pending` read commits once, and the next read returns it;
+    - command X commits, then a token revocation or an epoch change commits, then the read:
+      it returns X's receipt, never `absent_final`;
+    - **concurrent** (PostgreSQL, contending sessions): while X holds the stream lock with its
+      receipt uncommitted, a status read **blocks** until X ends, then returns X's receipt (or
+      `absent_pending` if X rolled back); a read that takes the lock before X returns
+      `absent_pending`, and X waits for it. A fault-injected commit of X followed by a revocation
+      or epoch bump, placed between the read's receipt lookup and its epoch/token read, never
+      yields `absent_final`;
+    - an unauthorized reader (another editor of the same character) gets `404` both when A's
+      receipt exists and when it does not: with A a user, at the current epoch and with a stored
+      epoch below the current one; with A an integration token, also after its revocation.
+      Authorization is evaluated before the receipt lookup and the finality tests;
+    - an authorized reader (the GM, or a token the GM minted with `replaces_credential_id` = A's
+      token) reading after A's token revocation commits, with no receipt, gets `absent_final`
+      echoing the stored epoch; while A's token is replaced but not yet revoked it gets
+      `absent_pending`;
+    - a same-campaign token that is not the recorded replacement of A's token gets `404`. A token
+      recorded for another campaign is refused at the existing token boundary (`401`, or
+      `403 token_campaign_mismatch`) before the handler runs. A token whose
+      `replaces_credential_id` names a credential of another campaign is never treated as a
+      recorded replacement, even in its own campaign. None of these responses carries a receipt
+      or an `absent_*` state;
+    - an authorized reader with a stale stored epoch and a committed receipt gets the receipt,
+      never `absent_final`;
+    - a GM reading a listed plugin operation with its listed epoch, while that epoch is still
+      current and the token valid, gets `absent_pending`; a read without `epoch` gets `400`;
+    - a refusal receipt written after an `absent_final` read: the next read returns it, and
+      nothing is applied.
+
+    Client cases, owned by the tasks that make each website writer send envelopes (PE-15,
+    PE-17/18, PE-18b, PE-41, and every later task that adds such a writer: PE-30/32-34,
+    PE-42..48, each wiring it to the same binding and rerunning these cases), and by PE-60 for
+    the plugin:
+    - a read that returned `absent_pending` or `404`, followed by a revocation or an epoch
+      change, is never upgraded to final; a new read is required;
+    - B's client keeps A's operation quarantined and never offers B a new operation for it.
 - **Epoch.** The envelope carries the stream epoch it was prepared under. The authority fence
   (check 2) refuses any other epoch with `409 resync_required` before the receipt is looked up,
   so nothing is written or replayed. This stops a retry from crossing an authority flip, where
@@ -493,8 +558,8 @@ target awaiting a `gm_ruling` prompt stays `pending`) blocks only itself.
     `session.end`. With a GM `override`, the same transaction cancels them first.
 - **Unsupported content** (`manual` in PE-02) declares a single `gm_ruling` prompt. The GM
   applies the outcome with manual-adjustment commands:
-  - `character.play.adjust`: GM any field through adapter validation; owner/editor only the
-    permitted own conditions.
+  - `character.play.adjust`: GM any field through adapter validation, including
+    `hp_floor_debt`; owner/editor only the permitted own conditions.
   - `encounter.creature.adjust`: GM only.
   - `wallet.gm_adjust` and `item.gm_grant`: GM only.
 
@@ -592,9 +657,9 @@ An unknown value is a startup error. Mixed authority inside one campaign is not 
 
 | From → To | Preconditions | Effect |
 |---|---|---|
-| `file` → `migrating` (the **activation gate**, PE-24) | Preconditions:<br>- `OWNERSHIP_BACKEND=sql`.<br>- Every character has a SQL identity (D&D after PE-11/15).<br>- No pending publications.<br>- The item/wallet/ledger foundation exists (PE-40) with its id backfill in the dry run, and container/equipment/investment storage exists (PE-41).<br>- **Every** existing mutation route for the system goes through the command layer: D&D through PE-15's adapter over all `service.py` mutators; PF2e vitals, conditions and resources (PE-17/18), build and level-up publish wrapping the existing derivation (PE-18b), and inventory (PE-40/41); PF2e encounter writers (add/remove combatant, round/turn, creature HP and effects) through PE-17/18. The legacy Obsidian blueprint (`process_command`) refuses every mutating command for a non-`file` campaign until PE-60 ports it (section 3). An AST inventory test, like `tests/test_pc_save_reload_race.py`, enforces all of this, including that refusal.<br>- A PE-19 rehearsal import of the same campaign, including gear and wallets, passed.<br>- No legacy `current_session` in `runtime.json` has status `live`; otherwise refused, naming it, until the GM ends it.<br><br>Then:<br>1. Take the campaign's **migration gate** exclusively. File-authority writers hold it shared for their whole read-modify-write, so this waits for writers in flight.<br>2. Flip the state.<br>3. Flush PF2e dirty state (`_flush_pending_persistence`).<br>4. Snapshot. | The campaign's writes return `503 migration_in_progress`. Gear is always migrated with the rest; it is never omitted and authority is never mixed. |
-| `migrating` → `db` | The dry run is recomputed on the step-4 snapshot. It must be clean, or explicitly accepted; an acceptance counts only for a report whose `source_checksum` equals that snapshot's. The session-history backfill is complete or accepted (section 4). Import; verify counts and checksums; no unresolved identity. Otherwise `migrating → file`. | db authoritative; `stream_epoch += 1` |
-| `migrating` → `file` | Abort | Only this attempt's state rows are deleted. Receipts, events and the authority row are kept; `stream_epoch += 1` |
+| `file` → `migrating` (the **activation gate**, PE-24) | Preconditions:<br>- `OWNERSHIP_BACKEND=sql`.<br>- Every character has a SQL identity (D&D after PE-11/15).<br>- No pending publications.<br>- The item/wallet/ledger foundation exists (PE-40) with its id backfill in the dry run, and PE-41's container/equipment/investment storage and inventory writers for both systems are integrated.<br>- **Every** existing mutation route for the system goes through the command layer: D&D build, play and encounter mutators in `service.py` (vitals, resources, rest, build and level changes, notes, effects, extras, flags, `combat_action`) through PE-15's adapter, except the item-charge keys (`item:<uid>`/`item:i{idx}`) handled inside `resource_action` and `rest`, which PE-15's resource and rest commands hand to PE-41's item-charge handler (checked by a behavioural test, not the AST test); D&D inventory and currency mutators (`inventory_action`, `grant_equipment`, `set_currency`) and that item-charge handler through PE-41; the D&D `routes.py` writers as listed under PE-15 and PE-41 in section 11; PF2e vitals, conditions and resources (PE-17/18), build and level-up publish wrapping the existing derivation (PE-18b), and the inventory, equipment and currency routes listed under PE-41; `loot_ledger/<id>/award`, `loot_ledger/add` and `loot_ledger/delete` refuse with `503 migration_in_progress` before any write until PE-47/48 replace them; PF2e encounter writers (add/remove combatant, round/turn, creature HP and effects) through PE-17/18. The legacy Obsidian blueprint (`process_command`) refuses every mutating command for a non-`file` campaign until PE-60 ports it (section 3). An AST inventory test, like `tests/test_pc_save_reload_race.py`, enforces all of this over `app.py`, `systems/dnd5e/service.py`, `systems/dnd5e/routes.py`, `services/obsidian_sync.py` and `services/character_workflows.py`, including those refusals, and fails if any other module registers a mutating route.<br>- Every website client that sends envelopes binds, quarantines and status-reads pending operations per section 3, with the client cases passing.<br>- PE-41 has switched the D&D and PF2e derivation's item input to `item_instances`, with its acceptance case passing.<br>- A PE-19 rehearsal import of the same campaign, including gear and wallets, passed.<br>- No legacy `current_session` in `runtime.json` has status `live`; otherwise refused, naming it, until the GM ends it.<br><br>Then:<br>1. Take the campaign's **migration gate** exclusively. File-authority writers hold it shared for their whole read-modify-write, so this waits for writers in flight.<br>2. Flip the state.<br>3. Flush PF2e dirty state (`_flush_pending_persistence`).<br>4. Snapshot. | The campaign's writes return `503 migration_in_progress`. Gear is always migrated with the rest; it is never omitted and authority is never mixed. |
+| `migrating` → `db` | The dry run is recomputed on the step-4 snapshot. It must be clean, or explicitly accepted; an acceptance counts only for a report whose `source_checksum` equals that snapshot's. The session-history backfill is complete or accepted (section 4). Import into staging rows; verify counts and checksums; no unresolved identity. Otherwise `migrating → file`. | One transaction promotes the staged rows over the live (or stale) rows and flips authority; db authoritative; `stream_epoch += 1` |
+| `migrating` → `file` | Abort, or any failure before the promotion commits | Only this attempt's staging rows are discarded. The previous stale baseline (rows, hidden item fields, `hp_floor_debt`), the ledger, receipts and events are untouched, and the authority row is kept (only `authority → file` and `stream_epoch += 1` change), so a retry reconciles exactly once. PE-24 acceptance injects a failure at each import step, then retries. |
 | `db` → `exporting` | GM/admin tool, under the stream lock. **Refused** while a session is active, or while any db-only record is non-terminal: actions, prompts, transfers, purchase requests, crafting projects, loot requests or unconfirmed self-reports. Nothing is force-cancelled. | Writes return `503 migration_in_progress`; `stream_epoch += 1` |
 | `exporting` → `file` | Reverse-export **current** state to a new directory per the round-trip table below; verify; swap | Files authoritative; `stream_epoch += 1` |
 | `exporting` → `db` | Abort | No change to db rows; `stream_epoch += 1` |
@@ -607,13 +672,38 @@ routine. Every round-trip table falls into exactly one class. `campaign_state_au
 
 | Rows | On export | While in file authority | On re-import |
 |---|---|---|---|
-| `character_states`, `encounter_states`, `encounter_combatants`, effects | Written to legacy files with `item_id`/`effect_id`/`encounter_id`/`combatant_id` | Files are authoritative; db rows are marked stale | Stale rows are **replaced** in place from the files, keeping those ids; each replaced row takes revision = stale revision + 1. Encounters absent from the files (ended) are kept. Db-only play fields are kept from the stale row: `hp_floor_debt` (cleared if the file HP is 0 or the maximum) and `origin: reconciliation` choice prompts. |
-| `item_instances` and `wallets` with holder = **character** | Written into each character's legacy inventory/currency with `item_id`. Only fields the legacy format represents are written; unrevealed properties are never written to a player-readable file. | Files are authoritative; db rows are marked stale | Matched by `item_id`. Fields the legacy format represents (name, qty, equipped, notes, charges) come from the file. Db-only fields (unrevealed properties, container, invested/attuned where the format lacks them) are kept from the stale row with the same `item_id`. A stale item missing from the files is deleted with an `item.file_era_removed` event. An item with no id is minted; if an `item_id` appears more than once, the first occurrence keeps it and the others are minted. Each wallet's difference from its stale balance is one `file_era_reconcile` ledger line: a decrease is applied, an increase is credited to `unconfirmed_cp`. Minted items, and matched items whose other file properties improved, are flagged `self_reported`. A quantity increase on a matched item keeps the stale quantity on that `item_id` and mints the increase as a separate `self_reported` item, so confirmed and pending stacks never merge. The dry run lists all of these, and the GM confirms them as in section 8. A character new in the files opens its wallet from 0 under the same rules; a character missing from the files has its items removed with events and its wallet zeroed by one `file_era_reconcile` line. |
+| `character_states`, `encounter_states`, `encounter_combatants`, effects | Written to legacy files with `item_id`/`effect_id`/`encounter_id`/`combatant_id` | Files are authoritative; db rows are marked stale | Stale rows are **replaced** in place from the files, keeping those ids; each replaced row takes revision = stale revision + 1. Encounters absent from the files (ended) are kept. Db-only play fields are kept from the stale row: `origin: reconciliation` choice prompts, and `hp_floor_debt` under the rule below. |
+| `item_instances` and `wallets` with holder = **character** | Written into each character's legacy inventory/currency with `item_id`. Only fields the legacy format represents are written; unrevealed properties are never written to a player-readable file. | Files are authoritative; db rows are marked stale | Matched by `item_id`. Fields the legacy format represents (name, qty, equipped, notes, charges) come from the file; for D&D, export sets each entry's `uid` to its `item_id` and writes its charges at `resources_used["item:<item_id>"]`; re-import reads each entry's charges from `item:<its uid>`, or `item:i{idx}` when it has none (PE-40's backfill rule), and the dry run lists orphaned `item:*` keys. Db-only fields (unrevealed properties, container, invested/attuned where the format lacks them) are kept from the stale row with the same `item_id`. A stale item missing from the files is deleted with an `item.file_era_removed` event. An item with no id is minted; if an `item_id` appears more than once, the first occurrence keeps it and the others are minted. Each wallet's difference from its stale balance is one `file_era_reconcile` ledger line: a decrease is applied, an increase is credited to `unconfirmed_cp`. Minted items, and matched items whose other file properties improved, are flagged `self_reported`. A quantity increase on a matched item keeps the stale quantity on that `item_id` and mints the increase as a separate `self_reported` item, so confirmed and pending stacks never merge. The dry run lists all of these, and the GM confirms them as in section 8. A character new in the files opens its wallet from 0 under the same rules; a character missing from the files has its items removed with events and its wallet zeroed by one `file_era_reconcile` line. |
 | `item_instances` and `wallets` with holder = **stash** or **shop**; `ledger_lines`; purchase, transfer, project and loot records (all terminal, by the precondition); terminal action and prompt rows; campaign clocks; receipts, events, grants | Not exported | **Frozen**: these are db-only features, unavailable in file authority | Preserved. Re-import only appends: `file_era_reconcile` lines and the events of this table. |
 | `campaign_sessions` | Not exported (no session is active, by the precondition) | Legacy `runtime.json` sessions, as today | Preserved, and the file-era session ids are backfilled as `ended` rows (section 4) |
 
 Wallets, ledger lines and economy records never cascade from `characters`; a character with
-ledger history is archived, not hard-deleted.
+ledger history is archived, not hard-deleted. Archive is one command with an event (PE-41 owns
+it, for both systems). It sets `characters.archived_at` (PE-12), removes the character from
+rosters, active encounters and name resolution, and moves its legacy locator to
+`archived/<character_id>.json`, so the name and path are free. A same-name create or import is
+refused only when a non-archived character resolves by that name. Export skips archived
+characters, and re-import leaves them and their items, wallet and ledger untouched: they are not
+"missing from the files".
+
+**HP floor debt across the round trip.** Legacy files cannot record a rest, and HP equal to the
+maximum does not prove one happened, so section 2's rule (the debt is cleared only when HP
+reaches 0 or a rest sets HP to the maximum) cannot be decided from the files alone:
+- **Kept** from the stale row whenever the file HP is above 0. An unchanged round trip therefore
+  changes nothing.
+- **Cleared** when the file HP is 0, because section 2 clears it at 0 too.
+- **Explicit reconciliation.** On every re-import the dry run lists **every** character whose
+  stale debt is above 0, whatever the files show, because a file-era rest or a drop to 0 HP may
+  have settled it and the files cannot prove either way. The manifest in the campaign's latest
+  `migration_runs` export row records, per character, the HP, the effective maximum and a
+  checksum of every play field the system's rest command writes (including slots, hit dice,
+  resources, pact slots, effects, conditions, death/dying state, D&D exhaustion, temp HP and
+  `max_hp_reduction`), computed over canonical values in which an absent key equals its default
+  (0, `{}`, `[]`, death saves 0/0, not stable, conditions at 0/false). The listing shows whether
+  these changed, as a hint only. For a character
+  whose file HP is above 0, the debt stays until the GM clears or sets it with
+  `character.play.adjust` (field `hp_floor_debt`, GM only, with an event); a character at file HP
+  0 is listed as "cleared at 0 HP". It is never settled by guessing.
 
 **PE-20 acceptance cases.** A PC has 100 gp, a potion, and a cloak with an unrevealed property in
 a backpack. Export.
@@ -629,7 +719,21 @@ a backpack. Export.
 - **Accepted limitation.** Legacy files record only net balances, so file-era spending offsets
   file-era additions: in case B, 20 gp of the 70 gp added becomes available without GM
   confirmation. The dry run flags every wallet with any file-era change, so the GM can check it.
-  A PC exported at 1/37 HP with debt 6 still has debt 6 after re-import.
+- **C, no-op round trip with HP debt.** A PC at 3/45 unequips the item (1/37, debt 6), then heals
+  36 (37/37, debt 6). Export, then re-import the unchanged files. The debt is still 6, and
+  re-equipping gives 39/45, exactly as it would have without the round trip. The unchanged
+  case is listed too, with no change hinted. Variants, each of which must list the character
+  with the debt still 6 until the GM acts (listing never depends on a detected change):
+  - the PC drops to 0 and is healed to 20 in file authority (hint: HP changed);
+  - the PC takes 10 damage and takes a long rest back to 37/37, with nothing else spent (no field
+    differs);
+  - the PC drops to 0 and is healed back to exactly 37/37 (no field differs);
+  - the PC re-equips the item in file authority, giving 37/45 (hint: the maximum changed).
+
+  One variant clears the debt: the PC drops to 0 in file authority and is left at 0 HP. Re-import
+  sets the debt to 0 and lists the character as "cleared at 0 HP"; healing to 20 and re-equipping
+  then gives 28/45 (where a kept debt would give 22/45). The hints are informational; the test
+  asserts the listing and the debt.
 
 - **No silent fallback.** In db authority a missing row is an error and files are never read. In
   file authority the new tables are ignored, apart from the frozen db-only rows above.
@@ -750,7 +854,7 @@ a backpack. Export.
   changes the slot.
 - **Replacing `capabilities_for`.** This matrix replaces
   `core/character_workflows/capabilities.py::capabilities_for` only for routes already detached
-  from live caches (PE-21/22). D&D joins after its route integration (PE-11/PE-15), not merely
+  from live caches (PE-21/22). D&D joins after its route integration (PE-11/PE-15, and PE-41 for inventory routes), not merely
   after its schema (PE-10).
 
 ## 9. Economy state machines
@@ -909,8 +1013,9 @@ flowchart LR
   PE13 --> PE16[PE-16 PF2e detached read] --> PE17[PE-17/18 PF2e families]
   PE14 --> PE17
   PE17 --> PE18b[PE-18b PF2e build/level-up publish wrapper]
-  PE13 & PE14 --> PE40[PE-40 items, wallets, ledger, id backfill] --> PE41[PE-41 containers/equipment/investment]
-  PE15 & PE17 & PE41 --> PE19[PE-19 dry run + isolated rehearsal import incl. gear, never activates] --> PE20[PE-20 reverse export + round trip, isolated]
+  PE11 & PE13 & PE14 --> PE40[PE-40 items, wallets, ledger, id backfill]
+  PE40 & PE15 & PE17 & PE18b --> PE41[PE-41 containers/equipment/investment + D&D and PF2e inventory/currency writers]
+  PE41 --> PE19[PE-19 dry run + isolated rehearsal import incl. gear, never activates] --> PE20[PE-20 reverse export + round trip, isolated]
   PE20 --> PE21[PE-21/22 policy per family, file authority]
   PE19 & PE20 & PE18b --> PE24[PE-24 activation gate per campaign]
   PE02 & PE14 --> PE30[PE-30 action lifecycle]
@@ -923,26 +1028,28 @@ flowchart LR
 The dependency correction (Codex finding 7): the item/wallet/ledger foundation (PE-40/41) now
 comes **before** the rehearsal and activation, and PE-19 no longer activates. Every db-only
 feature waits for PE-24. Until PE-60, the legacy Obsidian route refuses mutations for db
-campaigns (section 3). The brief limited this diff to the contract, the report and the queue
+campaigns (section 3). Round 3 (Codex R2-3): PE-15 no longer converts D&D inventory and
+currency; PE-41 converts the inventory and currency writers of both systems after PE-40, PE-15,
+PE-17 and PE-18b, so no task is assigned writers whose storage it cannot depend on. The brief limited this diff to the contract, the report and the queue
 row, so these must be reconciled when the briefs are written: `task-map.md` and the `QUEUE.md`
-rows for PE-19/20/24/40/41/18b; PE-31a (drop "authority activation gate" from its title, which
+rows and briefs for PE-15 (narrowed scope), PE-12 (its brief must allow altering `migration_runs` and `characters`, including the `stream_epoch` column, `characters.archived_at` and the scoping of `tools/export_transactional_runtime.py`; drop "creates only the new state structures"; and either take the scoped `MigrationRunRepository` lookup and new statuses or name PE-19/20 as their owner), PE-19/20/24/40/41/18b; PE-31a (drop "authority activation gate" from its title, which
 is now PE-24's); PE-36 (merge with, or depend on, PE-18b); PE-60. PE-03's phrase "PE-31a's
 authority/migration gate" (`obsidian-reuse-review.md`) now means PE-24.
 
 | Task | Owns from this contract |
 |---|---|
 | PE-10 / PE-11 | Section 1 system, storage discriminator, path and refusal rules |
-| PE-12 | `character_states` (`build`, `play`), `encounter_states`, `encounter_combatants` (composite FK), campaign clocks, `campaign_sessions` (one active per campaign, partial unique index), `campaign_state_authority`, pins, revisions; the `exported` status on the existing `migration_runs`; the populated-downgrade rule including `exporting`; one active encounter per campaign as a partial unique index (`sqlite_where`/`postgresql_where`, as `uq_character_assignments_one_owner` does). State rows cascade with their character; events keep their ids and have no FK. |
+| PE-12 | `character_states` (`build`, `play`), `encounter_states`, `encounter_combatants` (composite FK), campaign clocks, `campaign_sessions` (one active per campaign, partial unique index), `campaign_state_authority`, pins, revisions; the `exported` status on the existing `migration_runs`, plus nullable `campaign_id` and `stream_epoch` columns (both NULL on legacy rows) and `kind` (import/export), an `aborted` status, uniqueness of `(campaign_id, kind, source_checksum, stream_epoch)` among runs not marked `aborted`, where any failure before promotion or the export swap marks the run `aborted`; legacy rows keep `campaign_id` NULL, `kind` is NOT NULL and backfilled to `import`, and a partial unique index on `source_checksum WHERE campaign_id IS NULL` keeps their current protection; a run records the campaign's `stream_epoch` read under the migration gate when its row is inserted (for an import, the `migrating` epoch, which `file → migrating` does not bump; for an export, the epoch after entering `exporting`); every legacy reader of `migration_runs` is scoped to `campaign_id IS NULL` (`MigrationRunRepository.get_by_source_checksum` and `start`, `tools/migrate_transactional_store.py`, and `tools/export_transactional_runtime.py::_envelopes`), with a test that a campaign import run does not change the runtime export; `characters.archived_at` (nullable) for section 7's archive; the export manifest is in `details` (PE-20); a retry inserts a new run; the populated-downgrade rule including `exporting`; one active encounter per campaign as a partial unique index (`sqlite_where`/`postgresql_where`, as `uq_character_assignments_one_owner` does). State rows cascade with their character; events keep their ids and have no FK. |
 | PE-13 | Check order, conflict body, lock order, reconciliation hook (section 2). Repository-only invariant: the character's profile equals the campaign's. |
-| PE-14 | `campaign_streams`, `command_receipts`, `game_events`, `campaign_grants`, token scope and `replaces_credential_id`; per-type dependency sets and payload id fields, the authority fence, the digest including `override`, the code table, the operation-status read and `operation.abandon`, transaction steps, stream-locked authorization writes, `session.start/end` and the fail-closed session-history backfill; the greenlet contention test, the two transition-race cases and the late-arrival case (sections 2–4) |
-| PE-15 / PE-16-18 / PE-18b | Domain mapping, file-authority limits, PF2e constraints, the reservation rule (sections 2, 7); PE-18b converts PF2e build/level-up publish onto the command layer using existing derivation |
+| PE-14 | `campaign_streams`, `command_receipts`, `game_events`, `campaign_grants`, token scope and `replaces_credential_id`; per-type dependency sets and payload id fields, the authority fence, the digest including `override`, the code table, the operation-status read and `operation.abandon`, transaction steps, stream-locked authorization writes, `session.start/end` and the fail-closed session-history backfill; the greenlet contention test, the two transition-race cases and the server status-read cases (sections 2–4) |
+| PE-15 / PE-16-18 / PE-18b | Domain mapping, file-authority limits, PF2e constraints, the reservation rule (sections 2, 7). PE-15 converts every D&D `service.py` mutator except inventory, currency and the item-charge keys (`item:<uid>`/`item:i{idx}`) handled inside `resource_action` and `rest`, which PE-15's resource and rest commands hand to PE-41's item-charge handler, plus the build, play and details parts of the D&D `routes.py` writers (create, D&D Beyond and PDF import, portrait), the combatant-image write and the encounter log append (as encounter commands and events), and the GM owner route, which becomes a stream-locked assignment command (section 4). Encounter plans (`save_plan`/`delete_plan`) are GM prep files outside the command layer, exempt from the gate and the AST test; PE-18b converts PF2e build/level-up publish onto the command layer using existing derivation |
 | PE-19 | Dry-run report and rehearsal import into an isolated database, including gear and wallets through PE-40/41's id backfill and storage (section 7). It never changes a live campaign's authority. |
 | PE-20 | Reverse export writer and both mapping directions of the round-trip table, with its acceptance cases, tested in isolation without a live authority flip (section 7) |
 | PE-24 (new, needs brief) | The activation gate: `file → migrating → db` for one campaign, migration gate, abort, and `db → exporting → file` (section 7) |
 | PE-21 / PE-22 | Permission matrix per converted family (section 8) |
 | PE-30 → PE-32/33/34 | Action and effect tables and lifecycle (section 5); PE-30 briefs the table owner |
-| PE-31 / PE-60 / PE-61 | Section 6 cursors and projections; plugin digest and cursor migration; preview binding |
-| PE-40 | `item_instances`, `wallets`, `ledger_lines`, locks, id backfill; no cascade from `characters` (section 7). PE-41: containers/investment. PE-42: transfers. PE-43/44: shops and purchases. PE-45/46: projects and downtime. PE-47/48: stash, requests, QM. |
+| PE-31 / PE-60 / PE-61 | Section 6 cursors and projections; plugin digest and cursor migration; preview binding. PE-60 also owns section 3's client side in the plugin. On the website, section 3's client side (pending-operation binding, quarantine, status-read handling and the client cases) belongs to each task that makes a website writer send envelopes (PE-15, PE-17/18, PE-18b, PE-41, and every later one: PE-30/32-34, PE-42..48), and PE-24 requires it for the writers that exist at activation |
+| PE-40 | `item_instances`, `wallets`, `ledger_lines`, locks, id backfill; no cascade from `characters` (section 7). PE-41 (after PE-40, PE-15, PE-17 and PE-18b, whose adapters and commands supply derivation, the max-HP hook and the create/import commands): containers, equipment and investment storage, and conversion of the inventory, equipment and currency writers for both systems, and switching the D&D and PF2e derivation's item input to `item_instances`. D&D: `inventory_action`, `grant_equipment`, `set_currency`, the item-charge keys (`item:<uid>`/`item:i{idx}`) handled inside `resource_action` and `rest`, which PE-15's resource and rest commands hand to PE-41's item-charge handler, the item and wallet rows of character create and of D&D Beyond and PDF import (wallet opened at the imported balance), and PC delete, which becomes archive (section 7). PF2e: `add_item`, `remove_item`, `adjust_consumable`, `update_wealth`, `equip_armor`, `update_sheet` (armor fields), `add_weapon`, `delete_weapon`, `toggle_two_hand`, `set_shield_stats`, `repair_shield` and `shield_block`'s shield-HP write (shield HP, broken and destroyed live on the shield's item row; `shield_raised` stays in the PF2e `play` row with `reaction_used`, because it is turn-scoped and is cleared by PE-17/18's turn advance (`_apply_start_of_turn`), daily prep and long rest, so `toggle_shield` is a PE-17/18 play command that reads the shield item's destroyed state and refuses a destroyed shield; `shield_block`'s character HP and reaction parts go through PE-17/18's vitals command), `delete_character`, which becomes archive (section 7), and the equipment, weapon, armor and money rows of `save_new_character` and `import_pathbuilder`. PE-18b owns the create/import command and its build parts; PE-41 adds the gear and wallet rows to it. A new character's wallet opens at the created or imported balance. On an existing character the wallet is kept (`money` is not imported, as today) and any balance change is a ledger line. On `import_pathbuilder` over an existing character, each imported equipment, weapon and armor entry is matched against that character's item rows with `origin: pathbuilder` by `(kind, name)`, same-name rows pairing up in stored order; a matched row keeps its `item_id`, charges, container, shield state and db-only fields, and quantity and worn changes are applied in place with an event; unmatched imported entries are minted with `origin: pathbuilder`; Pathbuilder-origin rows with no imported counterpart are removed with an `item.import_removed` event; rows not minted from Pathbuilder (added in the app, by loot or by a transfer) are never touched. The import preview lists every match, mint and removal, and the commit applies exactly that list. A same-name `save_new_character` over an existing non-archived character is refused in db authority; and `send_loot` (its item and coin writes; in db authority it skips the legacy ledger append, and the wallet's `ledger_lines` record the coins). `loot_ledger/<id>/award`, `loot_ledger/add` and `loot_ledger/delete` refuse with `503` before any write in db authority until PE-47/48 replace them; the dry run reports existing entries. Acceptance: a non-inventory command whose result depends on an item derives identically before and after activation (D&D fire damage with an equipped fire-resistance item; a long rest with a Con-setting item; PF2e AC, check penalty, speed penalty and bulk for a PC whose armor was set with `equip_armor` and one adjusted with `update_sheet`). PE-42: transfers. PE-43/44: shops and purchases. PE-45/46: projects and downtime. PE-47/48: stash, requests, QM. |
 
 **Not decided here, by design:**
 - each feature's `commit_point` and support level (PE-02/PE-30);
