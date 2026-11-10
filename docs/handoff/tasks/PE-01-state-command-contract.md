@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** done (Codex accepted round 4; commit/PR/merge pending)
+- **Status:** done (Codex accepted round 4; merged in PR #247, `3b1c1f40`; downstream briefs reconciled 2026-11-10)
 - **Branch:** `claude/pe-01-state-command-contract` from the recorded Stage 0 package commit (or current main after this package integrates), after all named dependencies are accepted and integrated. Record the exact starting SHA.
 - **Depends on:** Stage 0 handoff package; no product-code prerequisites.
 - **Context:** [foundation baseline](../../player-release/foundation-baseline.md), [ADR-0002](../../adr/0002-transactional-persistence.md), [ADR-0003](../../adr/0003-versioned-pf2e-rules-kernel.md), [PR4B boundaries](../../remediation/pr4b-runtime-cutover.md), and the player-release plan/index.

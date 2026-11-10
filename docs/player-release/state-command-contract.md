@@ -1,6 +1,8 @@
 # Player release: state, command and authority contract (PE-01)
 
-**Status:** proposed for Codex review.
+**Status:** accepted (Codex, round 4, 2026-11-09; merged in PR #247). Review history is in
+[PE-01](../handoff/tasks/PE-01-state-command-contract.md). Changing a rule still needs a
+revision and a new review (see below).
 **Base:** `origin/main` `d08085b0` (PR #243). Source anchors are symbols on that commit, linked
 rather than copied.
 

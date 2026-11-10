@@ -18,7 +18,9 @@ ready/priority entries below where they conflict; historical logs remain intact.
 New wiki and VTT/map work is parked, shipped tools retain maintenance, and
 Cosmere/Mistborn expansion follows the PF2e plus D&D 2014/2024 release.
 
-Five Stage 0 tasks are ready for bounded review/design/contracts. Blocked briefs
+PE-00, PE-01, PE-03 and PE-04 are done. PE-02, PE-07, PE-10 and PE-12 are ready.
+Dependencies follow section 11 of the accepted
+[state and command contract](../player-release/state-command-contract.md). Blocked briefs
 cannot be claimed until accepted dependencies are integrated. Needs-brief rows
 are planned slices and must be split/written against actual accepted contracts
 before they become ready. Owners review each other's output under PROTOCOL.md.
@@ -26,45 +28,47 @@ before they become ready. Owners review each other's output under PROTOCOL.md.
 | ID | Task | Owner | Model | Status | Brief / dependency |
 |---|---|---|---|---|---|
 | PE-00 | Stage 0 inventory and handoff package | codex | standard; high for review | done | [brief](tasks/PE-00-stage0.md) |
-| PE-01 | State, command, migration and authority contract | claude | high; select current model | done (accepted; merge pending) | [brief](tasks/PE-01-state-command-contract.md) |
+| PE-01 | State, command, migration and authority contract | claude | high; select current model | done (accepted; PR #247) | [brief](tasks/PE-01-state-command-contract.md) |
 | PE-02 | Evidence-backed rules coverage and fixture matrix | codex | standard; high for review | ready | [brief](tasks/PE-02-rules-coverage.md) |
 | PE-03 | Review and map unmerged Obsidian recovery work | codex | standard; high for review | done | [brief](tasks/PE-03-obsidian-reuse-review.md) |
 | PE-04 | Review existing UI-18 picker/rail patch | codex | standard; high for review | done (Codex accepted UI-18 with no findings; review in `tasks/UI-18-levelup-picker-rail.md`; PR #245) | [brief](tasks/PE-04-ui18-review.md) |
 | PE-05 | Reconcile UI-11 presentation after UI-18 disposition | codex | standard; high for review | blocked (PE-04) | [brief](tasks/PE-05-ui11-reconcile.md) |
 | PE-06 | Fix existing level-up HP preview inconsistency | claude | high; select current model | blocked (PE-04, PE-05) | [brief](tasks/PE-06-levelup-hp-consistency.md) |
 | PE-07 | Player journey mockups and UI contract | claude | high; select current model | ready | [brief](tasks/PE-07-player-ux-design.md) |
-| PE-10 | Extend D&D campaign/character identity constraints | claude | high; select current model | blocked (PE-01) | [brief](tasks/PE-10-dnd5e-identity.md) |
+| PE-10 | Extend D&D campaign/character identity constraints | claude | high; select current model | ready | [brief](tasks/PE-10-dnd5e-identity.md) |
 | PE-11 | D&D locator, ownership, import/export integration | claude | high; select current model | blocked (PE-10) | [brief](tasks/PE-11-dnd5e-locator.md) |
-| PE-12 | Character and encounter state schema | claude | high; select current model | blocked (PE-01) | [brief](tasks/PE-12-game-state-schema.md) |
-| PE-13 | Campaign-scoped state repositories and optimistic revisions | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-12 |
-| PE-14 | Command receipt, gameplay event and outbox primitives | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-01, PE-12, PE-13 |
-| PE-15 | D&D state adapter preserving build revisions | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-11, PE-13, PE-14 |
+| PE-12 | Character/encounter state, session, clock and authority tables; `migration_runs` and `characters.archived_at` changes | claude | high; select current model | ready | [brief](tasks/PE-12-game-state-schema.md) |
+| PE-13 | Campaign-scoped state repositories, revision check order, conflict body and lock order | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-12 |
+| PE-14 | Campaign streams, command receipts, gameplay events (the outbox), grants, operation-status read, session start/end and stream-locked authorization writes | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-01, PE-12, PE-13 |
+| PE-15 | D&D state adapter: build, play and encounter commands preserving build revisions (inventory, currency and item charges go to PE-41) | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-11, PE-13, PE-14 |
 | PE-16 | PF2e detached read/derive adapter | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-01, PE-02, PE-13 |
-| PE-17 | PF2e vitals command migration | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-16, PE-14 |
-| PE-18 | PF2e conditions/resources command migration | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-17 |
-| PE-19 | Migration dry-run and identity/state reconciliation | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-15, PE-18 |
-| PE-20 | Current-state reverse export and recovery rehearsal | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-19 |
+| PE-17 | PF2e vitals command migration, including `shield_block` HP and reaction | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-16, PE-14 |
+| PE-18 | PF2e conditions/resources command migration, including `toggle_shield`; with PE-17, the PF2e encounter writers | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-17 |
+| PE-18b | PF2e build/level-up publish and create/import command on the command layer, wrapping existing derivation | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-17, PE-18 |
+| PE-19 | Dry-run report and isolated rehearsal import, including gear and wallets; never changes live authority | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-15, PE-18, PE-41 |
+| PE-20 | Reverse export writer and round-trip mapping, tested in isolation without a live authority flip | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-19 |
 | PE-21 | Anytime read access for detached character routes | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-15, PE-16, PE-20 |
 | PE-22 | Anytime writes for converted operation families only | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-18, PE-15, PE-20 |
 | PE-23 | Cross-campaign and concurrent-save regression evidence | codex | standard; high for review | needs brief | [map](../player-release/task-map.md); PE-21, PE-22 |
+| PE-24 | Per-campaign activation gate: file → migrating → db, migration gate, abort, db → exporting → file | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-18b, PE-19, PE-20 |
 | PE-30 | Pending action, dice, costs and correction contract | claude | high; select current model | blocked (PE-01, PE-02, PE-13, PE-14) | [brief](tasks/PE-30-action-lifecycle.md) |
 | PE-31 | Inactive server snapshot/replay primitives | claude | high; select current model | blocked (PE-01, PE-03, PE-13, PE-14) | [brief](tasks/PE-31-snapshot-replay.md) |
-| PE-31a | Snapshot/replay endpoint adapters and authority activation gate | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-31, PE-15, PE-18, PE-19, PE-20 |
+| PE-31a | Snapshot/replay endpoint adapters and replay activation | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-31, PE-24 |
 | PE-31b | Shared-hub reconnect coordination and client race tests | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-31a |
-| PE-32 | PF2e targeted action resolution; split by action family | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-30, PE-18 |
-| PE-33 | D&D targeted action resolution; both editions | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-30, PE-15 |
+| PE-32 | PF2e targeted action resolution; split by action family | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-30, PE-24, PE-18 |
+| PE-33 | D&D targeted action resolution; both editions | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-30, PE-24, PE-15 |
 | PE-34 | Effect clocks, own-condition commands and corrections | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-32, PE-33 |
 | PE-35 | D&D shared private drafts and publication (absorbs 5E-05) | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-11, PE-15 |
-| PE-36 | PF2e authoritative build/draft publication; reconcile PR6/PR7 | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-02, PE-16, PE-14 |
-| PE-37 | GM advancement unlocks and retraining transitions; split by workflow | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-35, PE-36 |
-| PE-40 | Stable item instance migration and inventory authority | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-13, PE-19 |
-| PE-41 | Persisted containers/equipment/investment/attunement | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-40 |
-| PE-42 | Accepted transfers and pending-item locks | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-40, PE-14 |
-| PE-43 | Persistent shops and catalog purchase requests | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-40 |
+| PE-36 | PF2e drafts and publication on PE-18b's publish command; reconcile PR6/PR7 | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-02, PE-16, PE-14, PE-18b |
+| PE-37 | GM advancement unlocks and retraining transitions; split by workflow | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-35, PE-36, PE-24 |
+| PE-40 | Item instances, wallets, ledger lines, locks and id backfill (no cascade from characters) | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-11, PE-13, PE-14 |
+| PE-41 | Containers/equipment/investment/attunement storage; D&D and PF2e inventory, equipment and currency writers, item charges, character archive, and item input to derivation | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-40, PE-15, PE-17, PE-18, PE-18b |
+| PE-42 | Accepted transfers and pending-item locks | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-40, PE-24, PE-14 |
+| PE-43 | Persistent shops and catalog purchase requests | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-40, PE-24 |
 | PE-44 | GM-approved atomic purchase fulfillment | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-43, PE-14 |
-| PE-45 | Crafting project/recipe records and validated inputs | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-40, PE-02 |
+| PE-45 | Crafting project/recipe records and validated inputs | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-40, PE-24, PE-02 |
 | PE-46 | GM downtime and retry-safe crafting completion | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-45, PE-14 |
-| PE-47 | Shared stash and loot reservations | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-40, PE-14 |
+| PE-47 | Shared stash and loot reservations | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-40, PE-24, PE-14 |
 | PE-48 | Narrow quartermaster grant and atomic loot finalization | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-47 |
 | PE-50 | PF2e integrated Play view from accepted UI contract | codex | standard; high for review | needs brief | [map](../player-release/task-map.md); PE-07, PE-32, PE-34, PE-31b |
 | PE-51 | D&D integrated Play view from accepted UI contract | codex | standard; high for review | needs brief | [map](../player-release/task-map.md); PE-07, PE-33, PE-34, PE-31b |
@@ -72,7 +76,7 @@ before they become ready. Owners review each other's output under PROTOCOL.md.
 | PE-53 | Advancement UI bound to authoritative previews | codex | standard; high for review | needs brief | [map](../player-release/task-map.md); PE-07, PE-37, PE-05, PE-06 |
 | PE-54 | Compact phone companion and touch/keyboard verification | codex | standard; high for review | needs brief | [map](../player-release/task-map.md); PE-50, PE-51, PE-52, PE-53, PE-55 |
 | PE-55 | My Characters, noncombat sheets, prepare/rest and access/error states; split by system | codex | standard; high for review | needs brief | [map](../player-release/task-map.md); PE-07, PE-21, PE-22, PE-35, PE-36 |
-| PE-60 | Port accepted Obsidian recovery slices without old-base merge | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-03, PE-31a |
+| PE-60 | Port the Obsidian plugin to the command envelope (section 3 client side, digest and cursor migration) and accepted recovery slices; no old-base merge | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-03, PE-31a |
 | PE-61 | System-aware room/effect preview and atomic launch | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-60, PE-32, PE-33, PE-34 |
 | PE-62 | Obsidian GM approvals and downtime controls | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-60, PE-37, PE-44, PE-46, PE-48 |
 | PE-63 | All-origin live summaries and complete session history | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-60, PE-31a, PE-34, PE-37, PE-41, PE-42, PE-44, PE-46, PE-48 |
@@ -236,6 +240,7 @@ Accepted as a design checkpoint. Notes:
 
 ## Log
 
+- 2026-11-10 Claude: merged PE-01 (PR #247) and brought the task map, queue and affected briefs in line with it. The order of work now matches the contract: gear storage comes before the practice migration, a new step (PE-24) is the only one that switches a campaign over, and everything that needs the new storage waits for it. PE-10 and PE-12 are ready; PE-12's brief grew to cover the migration-record and archive changes the contract gives it. For Codex: the contract calls unsupported content `manual`, while the PE-02 brief says "GM ruling/unsupported"; please align them in PE-02. PE-05 can be unblocked now that UI-18 is merged; that is left for Codex. No product code changed. Next: Claude starts PE-12 or PE-10 (one at a time, since both change the same table).
 - 2026-11-10 Claude: committed Codex's PE-01 acceptance, merged main's UI-18 and Obsidian review notes into the queue, and opened the docs-only PR. No product code changed. Next: merge once `changes` passes, then reconcile the task map and downstream briefs with the accepted contract before PE-10 or PE-12 becomes ready.
 - 2026-11-09 Codex: accepted PE-01 round 4 with no remaining findings. Archived characters keep their file locations, stay out of active lookup and export, and cannot be overwritten by a new character with the same name. Next: Claude commits the review, reconciles the queue with main, opens the docs-only PR and merges after the required check passes; downstream briefs must be reconciled before implementation starts.
 - 2026-11-09 Claude: fixed Codex's last PE-01 point. Archiving a character no longer moves its saved-file location, so D&D characters keep the location format they require; archived characters are simply left out when the site looks characters up, so a new character can reuse the name. No product code changed. Next: Codex rechecks it; dependent work stays blocked until it is accepted and merged.
