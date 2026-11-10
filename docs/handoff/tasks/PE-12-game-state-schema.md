@@ -24,27 +24,34 @@ not activate it or import player data.
 Allowed files: `core/persistence/models.py`; `core/persistence/__init__.py` (exports
 of the new models only); `core/persistence/repositories.py` (`MigrationRunRepository`
 only); `tools/migrate_transactional_store.py` and
-`tools/export_transactional_runtime.py` (their `migration_runs` readers only); one new
+`tools/export_transactional_runtime.py` (their `migration_runs` readers only);
+`core/persistence/runtime.py` (`_REQUIRED_REVISION` only); one new
 `migrations/versions/` revision; `tests/persistence/test_game_state_schema.py`; and
 focused adjustments to `tests/persistence/test_database_and_models.py`,
-`test_migrate_transactional_store.py`, `test_export_runtime.py` and
-`test_postgresql_concurrency.py`. Use PE-01's accepted names and field contract.
+`test_migrate_transactional_store.py`, `test_export_runtime.py`,
+`test_postgresql_concurrency.py` and `test_runtime_backend.py`, plus rebase-only
+adjustments to PE-10's `test_dnd5e_identity_schema.py` if PE-10 merged first. Use PE-01's accepted names and field contract.
 
 1. Add `character_states` keyed `(campaign_id, character_id, domain)` for the
    `build` and `play` domains (section 2), with validated payload/schema and
    rules-pin metadata and an independent revision per domain. The D&D `build`
    revision replaces `build_rev`. State rows cascade with their character.
-2. Add `encounter_states` scoped by campaign/encounter id, with roster reference,
-   turn/round state, effect references, rules pins and revision. Enforce one active
-   encounter per campaign with a partial unique index.
+2. Add `encounter_states` keyed `(campaign_id, encounter_id)` (section 2) with
+   status, round/turn, initiative order, creature vitals and effects, rules pins,
+   clock anchors and an encounter revision. The roster is `encounter_combatants`
+   (step 3). Enforce one active encounter per campaign with a partial unique index
+   on `(campaign_id) WHERE status = 'active'`.
 3. Add `encounter_combatants` keyed `(campaign_id, encounter_id, combatant_id)`, with
    `kind`, a creature ref and a nullable `character_id` under a composite FK to
    `characters(campaign_id, id)`, so a character from another campaign cannot be
    referenced. Add campaign clocks keyed `(campaign_id, clock)` for `world` and
-   `downtime`, each with a value and a revision. Add `campaign_sessions` with primary
-   key `(campaign_id, session_id)` and a partial unique index allowing one `active`
-   row per campaign (section 4). Add `campaign_state_authority` (one row per
-   campaign: authority, `stream_epoch >= 1`, change metadata; section 1 and 7).
+   `downtime`, each with a value and a revision. Add
+   `campaign_sessions(campaign_id, session_id, status, started_at, started_by,
+   origin, ended_at, ended_by)` with primary key `(campaign_id, session_id)` and a
+   partial unique index on `(campaign_id) WHERE status = 'active'` (section 4). Add
+   `campaign_state_authority(campaign_id, authority, stream_epoch, changed_at,
+   source_checksum)`, one row per campaign, with authority in `file`, `migrating`,
+   `db`, `exporting` and `stream_epoch >= 1` (sections 1 and 7).
    Partial indexes use `sqlite_where`/`postgresql_where`, as
    `uq_character_assignments_one_owner` does. Events keep their ids and have no FK.
 4. Alter `migration_runs`:
@@ -59,7 +66,11 @@ focused adjustments to `tests/persistence/test_database_and_models.py`,
    `MigrationRunRepository.get_by_source_checksum` and `start`,
    `tools/migrate_transactional_store.py` (including its any-run emptiness check,
    `select(MigrationRun).limit(1)`, which one campaign run would otherwise turn into
-   a refusal), and `tools/export_transactional_runtime.py::_envelopes`.
+   a refusal), and `tools/export_transactional_runtime.py::_envelopes`. The runtime
+   export's history sidecar (`select(MigrationRun).order_by(MigrationRun.id)`) stays
+   unscoped on purpose: section 7 keeps full history there. Record whether
+   `migration_runs.campaign_id` has a foreign key to `campaigns` and why (the
+   contract does not say).
 
    PE-12 owns the repository support for campaign runs and its tests: a scoped
    start that takes `campaign_id`, `kind` and the `stream_epoch` the caller read
@@ -73,6 +84,9 @@ focused adjustments to `tests/persistence/test_database_and_models.py`,
    `(campaign_id, legacy_storage, legacy_file) WHERE archived_at IS NULL`
    (section 7). Archive never rewrites a locator. The archive command,
    archive-aware lookups and the export's archived-row filter belong to PE-41.
+   On SQLite this needs a batch rebuild of `characters`. If PE-10 merged first, the
+   rebuilt table keeps PE-10's system, storage and `legacy_file = id + '.json'`
+   checks unchanged on upgrade and downgrade, and the migration test asserts this.
 6. Define nonnegative revisions, uniqueness and referential constraints and
    timestamp behavior from PE-01. Avoid mutable JSON defaults shared across
    instances. Do not precompute game mechanics in SQL.
@@ -85,7 +99,20 @@ focused adjustments to `tests/persistence/test_database_and_models.py`,
      status `exported` newer than their last committed command;
    - refuse offline (`as_sql`), as `20261001_0002` does (convention, not a
      contract rule).
-8. Test SQLite and PostgreSQL schema behavior using isolated synthetic records.
+
+   The contract's rule covers the new tables only. For the two existing tables this
+   revision alters, take these defaults (brief judgment; confirm in review, and
+   revise PE-01 if Codex reads them as rule changes):
+   - refuse while any `characters.archived_at` is set, since dropping the column
+     would silently return archived characters to lookups and name resolution;
+   - once every check passes, delete `migration_runs` rows with `campaign_id` set
+     (transition machinery for the tables being dropped) before restoring
+     `uq_migration_runs_source_checksum`; test it with an aborted run and its
+     retry sharing a `source_checksum`.
+8. Set `core/persistence/runtime.py::_REQUIRED_REVISION` to this revision, or
+   SQL and shadow mode refuse to start after `alembic upgrade head`. Whichever of
+   PE-10 and PE-12 lands second sets it to the final single head.
+9. Test SQLite and PostgreSQL schema behavior using isolated synthetic records.
    Record state repositories, receipt/event tables and runtime adapters as
    follow-ups for PE-13 and PE-14.
 
@@ -107,13 +134,13 @@ revise PE-01 rather than this brief.
 - [ ] Invalid revisions, duplicate state keys and cross-campaign identity links fail as specified; repository-only invariants are explicitly documented rather than falsely claimed as database checks.
 - [ ] At most one `active` `campaign_sessions` row and at most one active encounter per campaign (partial unique indexes, on SQLite and PostgreSQL). An `encounter_combatants` row cannot name a character from another campaign. Deleting a character deletes its state rows.
 - [ ] Two non-aborted runs with the same `(campaign_id, kind, source_checksum, stream_epoch)` are refused. An `aborted` run does not block a new run with the same key. Two legacy rows with the same `source_checksum` are still refused.
-- [ ] `MigrationRunRepository.get_by_source_checksum`/`start`, `tools/migrate_transactional_store.py` and `tools/export_transactional_runtime.py::_envelopes` ignore campaign runs, with a test that a campaign import run does not change the runtime export and does not make a legacy whole-store import refuse.
+- [ ] `MigrationRunRepository.get_by_source_checksum`/`start`, `tools/migrate_transactional_store.py` and `tools/export_transactional_runtime.py::_envelopes` ignore campaign runs, with tests that a campaign import run does not change `_envelopes`/`envelope_metadata` or the exported legacy tree (the history sidecar still lists it), and that the legacy import's any-run check ignores rows with `campaign_id` set.
 - [ ] The locator index refuses two non-archived rows with the same `(campaign_id, legacy_storage, legacy_file)` and does not count rows with `archived_at` set.
 - [ ] Two model instances do not share mutable payload defaults.
-- [ ] Empty migration downgrade succeeds. Populated downgrade is refused while any campaign is `db`, `migrating` or `exporting`; while any `campaign_sessions` or campaign clock row exists; while character-held state rows lack an `exported` run newer than their last committed command, including when a second, unfinished export follows an older successful one; and when run offline.
-- [ ] `python -m pytest -q tests/persistence/test_database_and_models.py tests/persistence/test_game_state_schema.py tests/persistence/test_migrate_transactional_store.py tests/persistence/test_export_runtime.py tests/persistence/test_postgresql_concurrency.py` passes.
+- [ ] Empty migration downgrade succeeds. Populated downgrade is refused while any campaign is `db`, `migrating` or `exporting`; while any `campaign_sessions` or campaign clock row exists; while character-held state rows lack an `exported` run newer than their last committed command, including when a second, unfinished export follows an older successful one; while any character is archived; and when run offline. A downgrade that passes removes campaign runs, including an aborted run and its retry with the same `source_checksum`, and restores the legacy unique constraint.
+- [ ] `python -m pytest -q tests/persistence/test_database_and_models.py tests/persistence/test_game_state_schema.py tests/persistence/test_migrate_transactional_store.py tests/persistence/test_export_runtime.py tests/persistence/test_postgresql_concurrency.py tests/persistence/test_runtime_backend.py` passes.
 - [ ] `python -m pytest tests/persistence/test_game_state_schema.py -q -m postgresql --strict-markers` executes and passes the new PostgreSQL-marked cases against an isolated test database; zero collected/skipped cases are not acceptance.
-- [ ] `python -m alembic heads` reports one integrated head and `git diff --check` passes.
+- [ ] `python -m alembic heads` reports one integrated head, `_REQUIRED_REVISION` names it, and `git diff --check` passes.
 - [ ] Existing route responses, authority settings and worker count are unchanged.
 
 ## Out of scope / do not touch

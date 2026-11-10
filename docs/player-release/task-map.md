@@ -71,7 +71,7 @@ Dependencies below follow section 11 of the accepted [state and command contract
 ## Scheduling constraints
 
 - PE-01 and PE-03 are accepted; Codex can start PE-02. PE-04 is a review of existing work, not permission to modify its source worktree. PE-07 design may proceed against provisional API bindings, but UI code waits for accepted contracts and the user's visual selection.
-- PE-10, PE-12, PE-14 and PE-40 add Alembic migrations: integrate in order, rebase the rest, and maintain one migration head. PE-10 and PE-12 both alter `characters`; whichever lands second must keep the other's constraints intact.
+- PE-10, PE-12, PE-14 and PE-40 add Alembic migrations, as do later schema tasks (PE-41 storage, the action/effect tables from PE-30's follow-ons, and PE-42..48 records): integrate in order, rebase the rest, maintain one migration head, and keep `core/persistence/runtime.py::_REQUIRED_REVISION` on that head. PE-10 and PE-12 both alter `characters`; whichever lands second must keep the other's constraints intact.
 - Serialize PE-04, PE-05 and PE-06 around `templates/player_levelup.html`. Review-only verdict, accepted source integration, presentation port, and mechanics correction are distinct steps.
 - Serialize shared `app.py`, route-policy, persistence-model and event-delivery edits by explicit task ownership. Parallel work uses separate modules and tests.
 - PE-01 sets the envelope and invariants; PE-30 only elaborates action lifecycle against them. If PE-30 requires a change, revise/review PE-01 rather than create a second protocol.

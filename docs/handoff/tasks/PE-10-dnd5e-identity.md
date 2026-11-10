@@ -19,8 +19,9 @@ schema/repository support only; it does not activate SQL ownership for D&D route
 ## Approach
 
 Allowed product files are `core/persistence/models.py`,
-`core/persistence/repositories.py`, one new revision under `migrations/versions/`,
-and focused tests under `tests/persistence/`.
+`core/persistence/repositories.py`, `core/persistence/runtime.py`
+(`_REQUIRED_REVISION` only), one new revision under `migrations/versions/`,
+and focused tests under `tests/persistence/` (including `test_runtime_backend.py`).
 
 1. Extend campaign/character system constraints and repository validation to the
    `dnd5e` system string (system strings are exactly `pf2e`, `dnd5e` and `cosmere`) and
@@ -42,6 +43,9 @@ and focused tests under `tests/persistence/`.
 4. Add `tests/persistence/test_dnd5e_identity_schema.py` and extend existing model/
    transactional tests where needed. Serialize migration ownership with PE-12;
    rebase onto the newest accepted migration head before merging, with one final head.
+   Set `core/persistence/runtime.py::_REQUIRED_REVISION` to that head, or SQL and
+   shadow mode refuse to start after `alembic upgrade head`; whichever of PE-10 and
+   PE-12 lands second sets it to the final head.
 
 ## Acceptance
 
@@ -49,7 +53,7 @@ and focused tests under `tests/persistence/`.
 - [ ] D&D campaign/character identities and owner assignments persist with `system = 'dnd5e'`, `legacy_storage = 'dnd5e_characters'` and `legacy_file == id + '.json'`.
 - [ ] Unknown systems/stores, a D&D `legacy_file` other than `id + '.json'`, a D&D id outside ≤ 64 `[A-Za-z0-9_-]`, duplicate non-archived locators, mismatched campaign relationships and attempted cross-campaign identity reassignment fail.
 - [ ] Migration upgrade/downgrade tests cover an empty D&D store and refusal to discard incompatible nonempty state.
-- [ ] `python -m pytest -q tests/persistence/test_database_and_models.py tests/persistence/test_transactional_services.py tests/persistence/test_dnd5e_identity_schema.py` passes.
+- [ ] `python -m pytest -q tests/persistence/test_database_and_models.py tests/persistence/test_transactional_services.py tests/persistence/test_dnd5e_identity_schema.py tests/persistence/test_runtime_backend.py` passes.
 - [ ] `python -m pytest tests/persistence -q -m postgresql --strict-markers` passes against an isolated test database; report missing setup explicitly rather than counting skipped checks as verification.
 - [ ] `python -m alembic heads` reports one migration head after integration; `git diff --check` passes.
 - [ ] Codex accepts the schema/repository diff before PE-11 is marked ready.

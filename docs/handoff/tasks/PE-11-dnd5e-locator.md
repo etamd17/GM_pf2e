@@ -65,8 +65,8 @@ are the runtime export anchors. Preserve current recovery barriers.
   `_write_legacy_tree`, `_verify_authority` and `build_plan` to D&D storage only, so
   PE-41's filter can wrap them. Open point for the PE-41 brief and Codex: contract
   section 7 says the D&D archived-row export case is added "when PE-10/11 extend that
-  tool", but PE-11 lands before `archived_at` exists, so that case most likely
-  belongs with PE-41's filter.
+  tool". PE-41 owns the filter and lands after PE-11 (through PE-40), so PE-41 most
+  likely adds that D&D case once PE-11 has extended the tool to D&D storage.
 
 <!-- ============ REPORT (written by the implementer) ============ -->
 
