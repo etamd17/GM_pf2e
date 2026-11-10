@@ -247,6 +247,12 @@ client recovery is no reason to activate it early. PE-70 failure injection must
 include F1-F7 plus cross-client response loss, privacy and replay. None of these
 ports, schema changes, installations or activation steps occurred in PE-03.
 
+Note (2026-11-10, PE-01 acceptance): the activation gate is now its own task.
+"PE-31a's authority/migration gate" above means PE-24, the per-campaign
+activation gate (`file → migrating → db`, migration gate, abort,
+`db → exporting → file`). PE-31a is now replay activation only and depends on
+PE-24 and PE-31. The other PE-31a mentions in this report are unchanged.
+
 ## Verification record
 
 Windows, Node `v24.12.0`, Python `3.11.9`, pytest `9.1.1`. Both baselines used

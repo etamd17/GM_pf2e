@@ -6,6 +6,12 @@ This package completes that review/briefing deliverable. Stage 0's contract,
 coverage, reuse-review and visual-design tasks are still to be performed; this is
 not a claim that every P0 exit gate is complete or that product implementation began.
 
+Status 2026-11-10: PE-01's [state and command contract](state-command-contract.md)
+is accepted and merged, and PE-03 (reuse review) is done. The task map, queue and
+briefs are reconciled with the contract's section 11; PE-10 and PE-12 are ready.
+The "five ready" and "blocked" notes below are the Stage 0 snapshot; `QUEUE.md`
+holds current status.
+
 ## Start here
 
 1. [Decisions](decisions.md): fixed product scope; do not repeat discovery.
