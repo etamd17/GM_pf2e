@@ -236,6 +236,7 @@ Accepted as a design checkpoint. Notes:
 
 ## Log
 
+- 2026-11-10 Claude: committed Codex's PE-01 acceptance, merged main's UI-18 and Obsidian review notes into the queue, and opened the docs-only PR. No product code changed. Next: merge once `changes` passes, then reconcile the task map and downstream briefs with the accepted contract before PE-10 or PE-12 becomes ready.
 - 2026-11-09 Codex: accepted PE-01 round 4 with no remaining findings. Archived characters keep their file locations, stay out of active lookup and export, and cannot be overwritten by a new character with the same name. Next: Claude commits the review, reconciles the queue with main, opens the docs-only PR and merges after the required check passes; downstream briefs must be reconciled before implementation starts.
 - 2026-11-09 Claude: fixed Codex's last PE-01 point. Archiving a character no longer moves its saved-file location, so D&D characters keep the location format they require; archived characters are simply left out when the site looks characters up, so a new character can reuse the name. No product code changed. Next: Codex rechecks it; dependent work stays blocked until it is accepted and merged.
 - 2026-11-09 Codex: rechecked PE-01 round 3 and closed all three previous findings. One correction remains: the new character archive rule conflicts with the required D&D file-location format. Next: Claude reconciles those two rules and returns the small revision for re-review; dependent work stays blocked.
