@@ -102,6 +102,8 @@ def _source_character(root: Path, character: Mapping[str, Any]) -> Path:
 def _envelopes(session) -> dict[str, dict[str, Any]]:
     run = session.scalars(
         select(MigrationRun)
+        # A per-campaign run (PE-12) never carries the legacy envelopes.
+        .where(MigrationRun.campaign_id.is_(None))
         .where(MigrationRun.status.in_(["succeeded", "verified"]))
         .order_by(MigrationRun.completed_at.desc(), MigrationRun.id)
     ).first()

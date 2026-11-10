@@ -335,3 +335,36 @@ def test_windows_export_preserves_destination_created_during_publication(
         assert load(output / 'keep.json') == {'keep': True}
     else:
         assert list(output.iterdir()) == []
+
+
+def test_campaign_runs_do_not_change_the_runtime_export(imported_store, tmp_path):
+    """PE-12: `_envelopes` reads legacy runs only; the history still lists every run."""
+    from core.persistence import MigrationRun, MigrationRunRepository
+
+    source, url, database = imported_store
+    baseline = exporter.export_runtime(source, url, tmp_path / "before", quiesced=True)
+    with database.session() as session:
+        envelopes_before = exporter._envelopes(session)
+    with database.transaction() as session:
+        repository = MigrationRunRepository(session)
+        for kind, status in (("import", "succeeded"), ("export", "exported")):
+            run = repository.start_campaign_run(
+                campaign_id=CAMPAIGN, kind=kind, source_checksum="f" * 64,
+                stream_epoch=2, tool_version="test")
+            repository.finish(run, status=status)
+            # Newer than the legacy import, so an unscoped reader would pick it.
+            run.completed_at = datetime(2099, 1, 1, tzinfo=timezone.utc)
+    with database.session() as session:
+        assert exporter._envelopes(session) == envelopes_before
+        campaign_runs = session.query(MigrationRun).filter(
+            MigrationRun.campaign_id.isnot(None)).count()
+    assert campaign_runs == 2
+
+    report = exporter.export_runtime(source, url, tmp_path / "after", quiesced=True)
+    assert report["verified"] is True
+    assert report["source_digest"] == baseline["source_digest"]
+    assert load(tmp_path / "after" / "users.json") == load(tmp_path / "before" / "users.json")
+    history = load(tmp_path / "after" / exporter.HISTORY_FILENAME)
+    runs = history["migration_runs"]
+    assert len(runs) == 3
+    assert sorted(run["kind"] for run in runs) == ["export", "import", "import"]

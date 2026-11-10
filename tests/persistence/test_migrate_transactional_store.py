@@ -873,3 +873,28 @@ def test_duplicate_campaign_id_across_live_and_trash_blocks_import(tmp_path):
 
     assert plan["import_allowed"] is False
     assert "duplicate_campaign_id" in _conflict_codes(plan)
+
+
+def test_legacy_import_ignores_per_campaign_runs(tmp_path):
+    """PE-12: a campaign run sharing the snapshot checksum is a different stream."""
+    from core.persistence import MigrationRunRepository
+
+    source = _copy_fixture(tmp_path / "legacy")
+    plan = migration.build_plan(source)
+    database_url, database = _sqlite_database(tmp_path)
+    with database.transaction() as session:
+        campaign_run = MigrationRunRepository(session).start_campaign_run(
+            campaign_id=CAMPAIGN_ID, kind="import", source_checksum=plan["source_digest"],
+            stream_epoch=1, tool_version="test")
+        MigrationRunRepository(session).finish(campaign_run, status="succeeded")
+        campaign_run_id = campaign_run.id
+    database.dispose()
+
+    first = migration.import_store(source, database_url, expected_digest=plan["source_digest"])
+    second = migration.import_store(source, database_url, expected_digest=plan["source_digest"])
+
+    assert first["status"] == "imported"
+    assert first["migration_run_id"] != campaign_run_id
+    assert second["status"] == "already_imported"
+    assert second["migration_run_id"] == first["migration_run_id"]
+    assert migration.verify_store(source, database_url)["verified"] is True

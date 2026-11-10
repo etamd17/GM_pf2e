@@ -289,6 +289,21 @@ class InvitationRepository:
         return entity
 
 
+_CAMPAIGN_RUN_KINDS = frozenset({"import", "export"})
+# Legacy whole-store runs keep their historical statuses.  A campaign attempt
+# that fails before promotion or the export swap is ``aborted`` (never
+# ``failed``), so its retry can insert a new row.
+_FINISH_STATUSES = {
+    "legacy": frozenset({"succeeded", "failed", "verified"}),
+    "import": frozenset({"succeeded", "aborted"}),
+    "export": frozenset({"exported", "aborted"}),
+}
+
+
+def _run_scope(run: MigrationRun) -> str:
+    return "legacy" if run.campaign_id is None else run.kind
+
+
 class MigrationRunRepository:
     def __init__(self, session: Session) -> None:
         self.session = session
@@ -297,9 +312,17 @@ class MigrationRunRepository:
         return self.session.get(MigrationRun, run_id)
 
     def get_by_source_checksum(self, source_checksum: str) -> MigrationRun | None:
+        """Return the legacy whole-store run for a checksum.
+
+        Scoped to ``campaign_id IS NULL``: a per-campaign run may share the
+        checksum of the legacy import it started from and must never be
+        mistaken for it.
+        """
+
         return self.session.scalar(
             select(MigrationRun).where(
-                MigrationRun.source_checksum == source_checksum
+                MigrationRun.campaign_id.is_(None),
+                MigrationRun.source_checksum == source_checksum,
             )
         )
 
@@ -328,6 +351,62 @@ class MigrationRunRepository:
         self.session.flush()
         return entity
 
+    def start_campaign_run(
+        self,
+        *,
+        campaign_id: str,
+        kind: str,
+        source_checksum: str,
+        stream_epoch: int,
+        tool_version: str | None,
+        source_path: str | None = None,
+        entity_counts: dict[str, Any] | None = None,
+        details: dict[str, Any] | None = None,
+    ) -> MigrationRun:
+        """Start (or rejoin) one per-campaign import or export attempt.
+
+        The caller reads ``stream_epoch`` under the migration gate.  The same
+        attempt asked twice returns its live row; once that row is
+        ``aborted`` a retry inserts a new one (PE-01 section 7).
+        """
+
+        if not isinstance(campaign_id, str) or not campaign_id:
+            raise ValueError("campaign_id is required for a campaign run")
+        if kind not in _CAMPAIGN_RUN_KINDS:
+            raise ValueError("unknown migration run kind")
+        if (
+            isinstance(stream_epoch, bool)
+            or not isinstance(stream_epoch, int)
+            or stream_epoch < 1
+        ):
+            raise ValueError("stream_epoch must be a positive integer")
+        existing = self.session.scalar(
+            select(MigrationRun).where(
+                MigrationRun.campaign_id == campaign_id,
+                MigrationRun.kind == kind,
+                MigrationRun.source_checksum == source_checksum,
+                MigrationRun.stream_epoch == stream_epoch,
+                MigrationRun.status != "aborted",
+            )
+        )
+        if existing is not None:
+            return existing
+        entity = MigrationRun(
+            source_checksum=source_checksum,
+            source_path=source_path,
+            campaign_id=campaign_id,
+            kind=kind,
+            stream_epoch=stream_epoch,
+            status="running",
+            tool_version=tool_version,
+            entity_counts=dict(entity_counts or {}),
+            details=dict(details or {}),
+            started_at=utc_now(),
+        )
+        self.session.add(entity)
+        self.session.flush()
+        return entity
+
     def finish(
         self,
         run: MigrationRun,
@@ -336,7 +415,7 @@ class MigrationRunRepository:
         entity_counts: dict[str, Any] | None = None,
         details: dict[str, Any] | None = None,
     ) -> MigrationRun:
-        if status not in {"succeeded", "failed", "verified"}:
+        if status not in _FINISH_STATUSES[_run_scope(run)]:
             raise ValueError("unknown migration result status")
         run.status = status
         if entity_counts is not None:
