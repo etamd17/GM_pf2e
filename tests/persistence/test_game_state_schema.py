@@ -634,7 +634,11 @@ def _add_export(connection, run_id, status, completed_at, *, checksum="out", epo
 def _downgrade_refused(url, message):
     completed = _alembic(url, "downgrade", PREVIOUS, check=False)
     assert completed.returncode != 0
-    assert message in completed.stderr
+    # Match the raised error only: Alembic's own "Running downgrade ..." log
+    # line also lands on stderr and contains words like "authority".
+    errors = [line for line in completed.stderr.splitlines()
+              if line.startswith("RuntimeError: ")]
+    assert errors and message in errors[-1], completed.stderr
     engine = create_engine(url)
     try:
         with engine.connect() as connection:
@@ -652,22 +656,23 @@ def test_downgrade_refused_while_campaign_is_not_file_authority(sqlite_url, auth
                 "INSERT INTO campaign_state_authority (campaign_id, authority, stream_epoch,"
                 " changed_at) VALUES ('c1', :authority, 2, '2026-11-01')", authority=authority)
     engine.dispose()
-    _downgrade_refused(sqlite_url, "authority")
+    _downgrade_refused(sqlite_url, "campaign state authority is not file for c1 (" + authority)
 
 
-@pytest.mark.parametrize("statement", [
-    "INSERT INTO campaign_sessions (campaign_id, session_id, status, origin)"
-    " VALUES ('c1', 'old', 'ended', 'backfill')",
-    "INSERT INTO campaign_clocks (campaign_id, clock, value, revision, updated_at)"
-    " VALUES ('c1', 'world', 0, 0, '2026-11-01')",
-    "UPDATE characters SET archived_at = '2026-11-01' WHERE id = 'pc1'",
+@pytest.mark.parametrize("statement, refusal", [
+    ("INSERT INTO campaign_sessions (campaign_id, session_id, status, origin)"
+     " VALUES ('c1', 'old', 'ended', 'backfill')", "session rows exist"),
+    ("INSERT INTO campaign_clocks (campaign_id, clock, value, revision, updated_at)"
+     " VALUES ('c1', 'world', 0, 0, '2026-11-01')", "campaign clock rows exist"),
+    ("UPDATE characters SET archived_at = '2026-11-01' WHERE id = 'pc1'",
+     "archived characters exist"),
 ])
-def test_downgrade_refused_for_rows_it_cannot_represent(sqlite_url, statement):
+def test_downgrade_refused_for_rows_it_cannot_represent(sqlite_url, statement, refusal):
     engine = _upgraded_with_rows(sqlite_url)
     with engine.begin() as connection:
         _insert(connection, statement)
     engine.dispose()
-    _downgrade_refused(sqlite_url, "downgrade")
+    _downgrade_refused(sqlite_url, refusal)
 
 
 def test_downgrade_refused_without_a_newer_verified_export(sqlite_url):
@@ -678,7 +683,7 @@ def test_downgrade_refused_without_a_newer_verified_export(sqlite_url):
         # A later export that never finished does not count.
         _add_export(connection, "x2", "running", None, checksum="out2", epoch=3)
     engine.dispose()
-    _downgrade_refused(sqlite_url, "export")
+    _downgrade_refused(sqlite_url, "state rows in c1 have no newer verified export")
 
 
 def test_downgrade_refused_with_state_and_no_export(sqlite_url):
@@ -686,7 +691,7 @@ def test_downgrade_refused_with_state_and_no_export(sqlite_url):
     with engine.begin() as connection:
         _add_state(connection, "2026-11-03 00:00:00")
     engine.dispose()
-    _downgrade_refused(sqlite_url, "export")
+    _downgrade_refused(sqlite_url, "state rows in c1 have no newer verified export")
 
 
 def test_downgrade_after_verified_export_drops_state_and_campaign_runs(sqlite_url):
@@ -941,7 +946,8 @@ def test_postgresql_upgrade_downgrade_round_trip(postgres_schema):
             _add_state(connection, "2026-11-03 00:00:00")
             _add_export(connection, "x1", "exported", "2026-11-02 00:00:00")
         completed = _alembic(migrated_url, "downgrade", PREVIOUS, check=False)
-        assert completed.returncode != 0 and "export" in completed.stderr
+        assert completed.returncode != 0
+        assert "RuntimeError: downgrade refused: state rows in c1 have no newer" in completed.stderr
         with engine.begin() as connection:
             _add_export(connection, "x2", "exported", "2026-11-05 00:00:00",
                         checksum="out2", epoch=3)
