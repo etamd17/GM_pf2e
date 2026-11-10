@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** review (codex re-review of round 4)
+- **Status:** done (Codex accepted round 4; commit/PR/merge pending)
 - **Branch:** `claude/pe-01-state-command-contract` from the recorded Stage 0 package commit (or current main after this package integrates), after all named dependencies are accepted and integrated. Record the exact starting SHA.
 - **Depends on:** Stage 0 handoff package; no product-code prerequisites.
 - **Context:** [foundation baseline](../../player-release/foundation-baseline.md), [ADR-0002](../../adr/0002-transactional-persistence.md), [ADR-0003](../../adr/0003-versioned-pf2e-rules-kernel.md), [PR4B boundaries](../../remediation/pr4b-runtime-cutover.md), and the player-release plan/index.
@@ -748,3 +748,48 @@ Next: Claude resolves only R3-1 and returns the scoped revision for re-review.
 PE-01 is not yet accepted; dependent implementation remains blocked. The
 contract is unchanged by this review. Review and queue edits are uncommitted
 for Claude to include with the revision.
+
+### Round 4 — accepted (Codex, 2026-11-09)
+
+**Accepted with no remaining findings.** Reviewed
+`e5858eced16b265d893fbb7440626e3b3a64fe61`, specifically the R3-1 changes since
+`3afdc8965ef1d5828c6f059cf4612f34f3dd4d10`, against recorded base
+`d08085b0fd003b7c80e7ca152aa212c79419e445`. The worktree was clean before
+review. This accepts the documentation contract, not an implemented cutover.
+
+**R3-1 is closed.** Section 1 now preserves the canonical D&D locator for active
+and archived rows. Section 7 leaves both locator fields and files unchanged,
+assigns the partial active-row index to PE-12, and assigns archive-aware lookup
+and export handling to PE-41. Replacement characters receive new ids and
+id-based filenames. Export/re-import preserves archived rows and their economy
+history without making them active again.
+
+The final unreviewed fix is accepted: section 7, lines 692–696, requires loading
+archived registry metadata and excluding its files before name/id matching and
+`identity_files` accumulation. This matches the baseline file-scan behavior of
+`core/character_workflows/identity.py::_resolve`; filtering SQL rows alone would
+not suffice. Lines 724–731 carry the D&D replacement and migrated PF2e
+`Ana.json` cases, including byte-for-byte preservation of the old file across
+all three creation/publication paths.
+
+Verification:
+- Read the complete round-4 diff and report, with independent checks of the
+  locator/file-scan correction and the runtime-export/history handling.
+- Checked baseline source with `git show d08085b0:<path>`: identity resolution,
+  account-mode `save_new_character` and Pathbuilder import, workflow publication,
+  locator uniqueness, and the runtime export's filtered-tree, verification and
+  full-history boundaries. Its existing writer-quiescence precondition remains
+  applicable.
+- `git diff --check 3afdc896..e5858ece` and
+  `git diff --check d08085b0..e5858ece` passed. The candidate contains only the
+  contract, this task file and `QUEUE.md`.
+- No product tests were run: no executable code changed. The implementation
+  cases belong to the named downstream briefs. Previously closed R2 findings
+  were not reopened; this revision does not change their rules.
+
+Next: Claude includes these review/queue edits, reconciles the queue with main,
+pushes, opens the docs-only PR and merges once `changes` passes, following the
+handoff protocol. Dependent implementation waits for that merge and for its
+task-map/brief reconciliation before any task becomes ready. Review and queue
+edits are left uncommitted for Claude; the contract body is unchanged by this
+review.

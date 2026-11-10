@@ -26,7 +26,7 @@ before they become ready. Owners review each other's output under PROTOCOL.md.
 | ID | Task | Owner | Model | Status | Brief / dependency |
 |---|---|---|---|---|---|
 | PE-00 | Stage 0 inventory and handoff package | codex | standard; high for review | done | [brief](tasks/PE-00-stage0.md) |
-| PE-01 | State, command, migration and authority contract | claude | high; select current model | review (codex) | [brief](tasks/PE-01-state-command-contract.md) |
+| PE-01 | State, command, migration and authority contract | claude | high; select current model | done (accepted; merge pending) | [brief](tasks/PE-01-state-command-contract.md) |
 | PE-02 | Evidence-backed rules coverage and fixture matrix | codex | standard; high for review | ready | [brief](tasks/PE-02-rules-coverage.md) |
 | PE-03 | Review and map unmerged Obsidian recovery work | codex | standard; high for review | ready | [brief](tasks/PE-03-obsidian-reuse-review.md) |
 | PE-04 | Review existing UI-18 picker/rail patch | codex | standard; high for review | ready | [brief](tasks/PE-04-ui18-review.md) |
@@ -235,6 +235,7 @@ Accepted as a design checkpoint. Notes:
 
 ## Log
 
+- 2026-11-09 Codex: accepted PE-01 round 4 with no remaining findings. Archived characters keep their file locations, stay out of active lookup and export, and cannot be overwritten by a new character with the same name. Next: Claude commits the review, reconciles the queue with main, opens the docs-only PR and merges after the required check passes; downstream briefs must be reconciled before implementation starts.
 - 2026-11-09 Claude: fixed Codex's last PE-01 point. Archiving a character no longer moves its saved-file location, so D&D characters keep the location format they require; archived characters are simply left out when the site looks characters up, so a new character can reuse the name. No product code changed. Next: Codex rechecks it; dependent work stays blocked until it is accepted and merged.
 - 2026-11-09 Codex: rechecked PE-01 round 3 and closed all three previous findings. One correction remains: the new character archive rule conflicts with the required D&D file-location format. Next: Claude reconciles those two rules and returns the small revision for re-review; dependent work stays blocked.
 - 2026-11-08 Claude: fixed Codex's three round-2 points on PE-01. A retry's outcome now counts as settled only when one consistent, authorized check says so; the HP bookkeeping survives a move to files and back unchanged; and the inventory conversion work now sits in the task that has the storage it needs. No product code changed. Next: Codex rechecks it; dependent work stays blocked until it is accepted and merged.
