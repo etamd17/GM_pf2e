@@ -18,7 +18,7 @@ ready/priority entries below where they conflict; historical logs remain intact.
 New wiki and VTT/map work is parked, shipped tools retain maintenance, and
 Cosmere/Mistborn expansion follows the PF2e plus D&D 2014/2024 release.
 
-PE-00, PE-01, PE-03 and PE-04 are done. PE-02, PE-07, PE-10 and PE-12 are ready.
+PE-00, PE-01, PE-03 and PE-04 are done. PE-02, PE-07 and PE-10 are ready; PE-12 is in review.
 Dependencies follow section 11 of the accepted
 [state and command contract](../player-release/state-command-contract.md). Blocked briefs
 cannot be claimed until accepted dependencies are integrated. Needs-brief rows
@@ -37,7 +37,7 @@ before they become ready. Owners review each other's output under PROTOCOL.md.
 | PE-07 | Player journey mockups and UI contract | claude | high; select current model | ready | [brief](tasks/PE-07-player-ux-design.md) |
 | PE-10 | Extend D&D campaign/character identity constraints | claude | high; select current model | ready | [brief](tasks/PE-10-dnd5e-identity.md) |
 | PE-11 | D&D locator, ownership, import/export integration | claude | high; select current model | blocked (PE-10) | [brief](tasks/PE-11-dnd5e-locator.md) |
-| PE-12 | Character/encounter state, session, clock and authority tables; `migration_runs` and `characters.archived_at` changes | claude | high; select current model | ready | [brief](tasks/PE-12-game-state-schema.md) |
+| PE-12 | Character/encounter state, session, clock and authority tables; `migration_runs` and `characters.archived_at` changes | claude | high; select current model | review | [brief](tasks/PE-12-game-state-schema.md) |
 | PE-13 | Campaign-scoped state repositories, revision check order, conflict body and lock order | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-12 |
 | PE-14 | Campaign streams, command receipts, gameplay events (the outbox), grants, operation-status read, session start/end and stream-locked authorization writes | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-01, PE-12, PE-13 |
 | PE-15 | D&D state adapter: build, play and encounter commands preserving build revisions (inventory, currency and item charges go to PE-41) | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-11, PE-13, PE-14 |
@@ -240,6 +240,7 @@ Accepted as a design checkpoint. Notes:
 
 ## Log
 
+- 2026-11-10 Claude: built PE-12, the storage that will hold character sheets, live encounters, session history, campaign clocks and which side (files or database) is in charge of each campaign. Nothing reads it yet; the site still runs on files. Taking the change back out is refused unless every campaign's state has first been written back to files. Two review passes found that a failed upgrade or rollback could leave a local test database half-changed; that is fixed and tested. Tests pass on Windows and on PostgreSQL in CI (draft PR #249). Next: Codex reviews PE-12; PE-10 waits until it merges, since both change the characters table.
 - 2026-11-10 Claude: merged PE-01 (PR #247) and brought the task map, queue and affected briefs in line with it. The order of work now matches the contract: gear storage comes before the practice migration, a new step (PE-24) is the only one that switches a campaign over, and everything that needs the new storage waits for it. PE-10 and PE-12 are ready; PE-12's brief grew to cover the migration-record and archive changes the contract gives it. For Codex: the contract calls unsupported content `manual`, while the PE-02 brief says "GM ruling/unsupported"; please align them in PE-02. PE-05 can be unblocked now that UI-18 is merged; that is left for Codex. No product code changed. Next: Claude starts PE-12 or PE-10 (one at a time, since both change the same table).
 - 2026-11-10 Claude: committed Codex's PE-01 acceptance, merged main's UI-18 and Obsidian review notes into the queue, and opened the docs-only PR. No product code changed. Next: merge once `changes` passes, then reconcile the task map and downstream briefs with the accepted contract before PE-10 or PE-12 becomes ready.
 - 2026-11-09 Codex: accepted PE-01 round 4 with no remaining findings. Archived characters keep their file locations, stay out of active lookup and export, and cannot be overwritten by a new character with the same name. Next: Claude commits the review, reconciles the queue with main, opens the docs-only PR and merges after the required check passes; downstream briefs must be reconciled before implementation starts.

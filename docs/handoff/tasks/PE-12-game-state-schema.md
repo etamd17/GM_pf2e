@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** ready (PE-01 accepted and merged in PR #247; brief reconciled with its section 11 on 2026-11-10)
+- **Status:** review (implemented 2026-11-10 on `claude/pe-12-game-state-schema` from `aaec6f19`; draft PR #249 for CI evidence)
 - **Branch:** `claude/pe-12-game-state-schema` from current main (at or after `3b1c1f40`). Record the exact starting SHA.
 - **Depends on:** [PE-01](PE-01-state-command-contract.md). Coordinate migration merge order with PE-10: both alter `characters`, so whichever lands second rebases onto the other and keeps its constraints intact (one Alembic head).
 - **Context:** [PE-01 contract](../../player-release/state-command-contract.md) sections 1, 2, 4 (Sessions), 7 and 9, and the PE-12 row and reconciliation note in section 11; [foundation baseline](../../player-release/foundation-baseline.md), [ADR-0002](../../adr/0002-transactional-persistence.md), `core/persistence/models.py`, `core/persistence/database.py::Database`, `core/persistence/repositories.py::MigrationRunRepository`, `tools/migrate_transactional_store.py`, `tools/export_transactional_runtime.py::_envelopes`, existing migration conventions (including `20261001_0002`'s online empty-store downgrade check).
@@ -160,11 +160,81 @@ revise PE-01 rather than this brief.
 <!-- ============ REPORT (written by the implementer) ============ -->
 
 ## Report
-- **Changed:** Pending.
-- **Tests run:** Pending.
-- **Skipped / not verified:** Pending.
-- **Known wrong / limitations:** Pending.
-- **Follow-ups (not done here):** Pending.
+- **Branch / base:** `claude/pe-12-game-state-schema`, cut from main at `aaec6f19`.
+- **Changed:**
+  - `core/persistence/models.py`:
+    - New tables: `CharacterState`, `EncounterState`, `EncounterCombatant`, `CampaignClock`, `CampaignSession` and `CampaignStateAuthority`.
+    - `Character.archived_at` added. `uq_characters_legacy_locator` is replaced by the partial index `uq_characters_active_legacy_locator WHERE archived_at IS NULL`.
+    - `MigrationRun` gains `campaign_id`, `kind` (NOT NULL, default `import`) and `stream_epoch`.
+    - `MigrationRun` gains four checks:
+      - `known_kind`;
+      - `known_status`, which allows `exported` and `aborted`;
+      - `scope`: legacy rows have no campaign, no epoch, kind `import` and a legacy status; campaign rows have both set, with epoch >= 1;
+      - `exported_is_export`.
+    - `MigrationRun` gets two partial unique indexes:
+      - `uq_migration_runs_legacy_source_checksum WHERE campaign_id IS NULL`;
+      - `uq_migration_runs_campaign_attempt (campaign_id, kind, source_checksum, stream_epoch) WHERE campaign_id IS NOT NULL AND status <> 'aborted'`.
+  - Migration `20261110_0003`:
+    - PostgreSQL uses plain ALTERs.
+    - SQLite rebuilds `characters` and `migration_runs` with `copy_from` shapes, so CHECK names and indexes survive.
+    - On SQLite the whole revision runs in one explicit transaction, after refusing enforced foreign keys and pre-existing FK violations. It runs `foreign_key_check` again after the rebuild.
+    - Existing runs are backfilled `kind='import'`. An unknown legacy status is refused up front.
+  - Populated downgrade:
+    - Refused offline.
+    - Refused while any campaign authority is `migrating`, `db` or `exporting`.
+    - Refused while session rows, clock rows or archived characters exist.
+    - Refused while any campaign's newest state write (character state, encounter or combatant rows) has no `exported` run completed at or after it.
+    - When allowed, it drops the state tables and deletes the per-campaign runs before restoring both uniques.
+  - `MigrationRunRepository`:
+    - `get_by_source_checksum` and `start` are scoped to `campaign_id IS NULL`.
+    - New `start_campaign_run`: it validates its inputs, rejoins the same non-aborted attempt, and inserts a new row after an abort.
+    - `finish` accepts statuses by scope: legacy runs take succeeded/failed/verified; campaign imports take succeeded/aborted; campaign exports take exported/aborted. A campaign run finishes exactly once.
+  - Tools: the any-run check in `migrate_transactional_store` and `export_transactional_runtime._envelopes` are scoped to legacy runs. The history sidecar still lists every run; new columns are appended last, so existing key order is unchanged.
+  - `_REQUIRED_REVISION` is now `20261110_0003`. Package exports were added.
+  - Tests:
+    - New `tests/persistence/test_game_state_schema.py` (60 cases, 2 of them PostgreSQL).
+    - One case each added to the migrate and export tests.
+    - The table-set test and the runtime revision test were updated.
+- **Decisions (brief judgment points):**
+  - Stale marker: no column. Rows are stale when `campaign_state_authority.authority = 'file'`, so staleness cannot disagree with authority.
+  - "Last committed command": compared per campaign as the maximum `updated_at` across `character_states`, `encounter_states` and `encounter_combatants`, against the newest `exported` run's `completed_at`. Encounter rows are included as well as character rows, which is the conservative reading.
+  - `migration_runs.campaign_id` has no FK. A run is evidence and must outlive its campaign, as receipts and events do.
+  - The downgrade refuses while any `archived_at` is set, and deletes campaign runs once every other check passes.
+  - Enums: domain `build`/`play`; rules profile `pf2e`/`dnd5e-2014`/`dnd5e-2024`; encounter and session status `active`/`ended`; combatant kind `pc`/`creature`, where a `pc` row needs a character; clock `world`/`downtime`; authority `file`/`migrating`/`db`/`exporting`.
+  - Session `started_at` is nullable so that file-era ids can be backfilled.
+  - Combatant rows cascade with both their encounter and their character.
+- **Tests run (Windows, repo venv):**
+  - Brief acceptance set without the PostgreSQL marker: `pytest -q tests/persistence/test_database_and_models.py tests/persistence/test_game_state_schema.py tests/persistence/test_migrate_transactional_store.py tests/persistence/test_export_runtime.py tests/persistence/test_postgresql_concurrency.py tests/persistence/test_runtime_backend.py -m "not postgresql"` gave 163 passed, 8 deselected. That was before the review fixes; the full persistence run below covers the final code.
+  - `pytest -q tests/persistence -m "not postgresql"` gave 301 passed, 15 deselected, after review round 1.
+  - `pytest -q tests/persistence/test_game_state_schema.py -m "not postgresql"` gave 58 passed, 2 deselected after review round 2.
+  - The two rollback tests fail if the explicit BEGIN is removed; checked by mutation.
+  - `alembic heads` reports `20261110_0003 (head)`.
+  - On a fresh SQLite file, `alembic upgrade head` followed by `alembic check` reports "No new upgrade operations detected". The migrated SQLite schema matches `create_all`: constraint names, indexes and columns.
+  - `git diff --check aaec6f19` is clean.
+  - Full non-PG suite: `pytest -q --ignore=tests/pf2e_rules -m "not postgresql and not browser"` -> 4418 passed, 233 skipped, 195 deselected, 1 xfailed (run on `e8acb2a6`, before the review fixes; those touched only persistence code and tests, re-run above).
+- **Skipped / not verified:**
+  - **The PostgreSQL cases were not run locally.** Docker and WSL cannot start on this machine (virtualization is disabled). They ran in CI's `postgresql` job instead: on draft PR #249 at `66516d17`, `alembic upgrade head` + `alembic check` -> "No new upgrade operations detected" on PostgreSQL, and `pytest -q tests/persistence -m postgresql` -> 15 passed (includes the 2 new PE-12 cases).
+  - The offline PostgreSQL DDL is checked by the existing check-name test, which passes.
+- **Review:** two adversarial rounds (workflow; 17 agents in all).
+  - Confirmed and fixed:
+    1. A failed SQLite downgrade dropped the state tables under a head stamp, and nothing could recover it.
+    2. A failed SQLite upgrade left `_alembic_tmp_characters`, which blocked every retry.
+    3. The same root cause as 1 and 2, reported again: SQLite DDL autocommitted before the first data change.
+    4. The downgrade-refusal tests matched words that Alembic's own log line always prints.
+    5. Hardening: re-finishing an exported run could have moved its `completed_at` past newer state.
+  - Rejected with reasons:
+    - The PostgreSQL downgrade check-then-drop takes no locks. A downgrade runs with the app quiesced.
+    - Locator lookups ignore `archived_at`. That belongs to PE-41.
+    - `start_campaign_run` is check-then-insert. Concurrency is serialized by the PE-24 migration gate.
+    - Rejoining a terminal run is intended.
+- **Known wrong / limitations:**
+  - On SQLite the downgrade's timestamp comparison is a string comparison. It is correct for values the ORM writes (one fixed format, UTC). A hand-written value in a different format could compare wrongly.
+  - The diff is about 1,950 lines, most of them tests (the brief's guideline is about 500). The migration alone is about 470 lines because of the SQLite rebuild shapes.
+- **Follow-ups (not done here):**
+  - PE-13: repositories must set `updated_at` on every state write. The downgrade's export check depends on it.
+  - PE-14: session-id uniqueness against folder keys.
+  - PE-19/24: staging rows for import and the migration gate that serializes `start_campaign_run`.
+  - PE-41: archive-aware locator lookups (`core/persistence/ownership.py`) now that two rows can share a locator.
 
 ## Review
 <!-- Codex appends numbered findings or acceptance. -->
