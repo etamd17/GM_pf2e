@@ -411,6 +411,20 @@ def test_campaign_run_finish_rejects_statuses_for_another_kind(sqlite_database, 
             repository.finish(run, status=status)
 
 
+def test_campaign_run_finishes_only_once(sqlite_database):
+    with sqlite_database.transaction() as session:
+        repository = MigrationRunRepository(session)
+        run = repository.start_campaign_run(campaign_id="c1", kind="export",
+                                            source_checksum="s", stream_epoch=2,
+                                            tool_version="t")
+        repository.finish(run, status="exported")
+        completed_at = run.completed_at
+        for status in ("exported", "aborted"):
+            with pytest.raises(ValueError, match="already finished"):
+                repository.finish(run, status=status)
+        assert run.status == "exported" and run.completed_at == completed_at
+
+
 @pytest.mark.parametrize("status", ["exported", "aborted"])
 def test_legacy_run_finish_rejects_campaign_statuses(sqlite_database, status):
     with sqlite_database.transaction() as session:
@@ -701,6 +715,108 @@ def test_downgrade_after_verified_export_drops_state_and_campaign_runs(sqlite_ur
             assert connection.execute(text("PRAGMA foreign_key_check")).all() == []
     finally:
         engine.dispose()
+
+
+_STATE_TABLES = {"character_states", "encounter_states", "encounter_combatants",
+                 "campaign_clocks", "campaign_sessions", "campaign_state_authority"}
+
+
+def _schema_snapshot(url):
+    engine = create_engine(url)
+    try:
+        inspector = inspect(engine)
+        with engine.connect() as connection:
+            version = connection.execute(text(
+                "SELECT version_num FROM alembic_version")).scalar()
+        return {
+            "version": version,
+            "tables": set(inspector.get_table_names()),
+            "characters": {c["name"] for c in inspector.get_columns("characters")},
+            "migration_runs": {c["name"] for c in inspector.get_columns("migration_runs")},
+        }
+    finally:
+        engine.dispose()
+
+
+def _dangle_a_membership(url):
+    engine = create_engine(url)
+    try:
+        with engine.begin() as connection:  # foreign keys are off on this engine
+            connection.execute(text(
+                "INSERT INTO campaign_memberships (campaign_id, user_id, role, joined_at,"
+                " updated_at) VALUES ('c1', 'ghost', 'player', '2026-10-01', '2026-10-01')"))
+    finally:
+        engine.dispose()
+
+
+def test_sqlite_upgrade_refuses_existing_foreign_key_violations_before_any_change(sqlite_url):
+    _alembic(sqlite_url, "upgrade", PREVIOUS)
+    engine = create_engine(sqlite_url)
+    _seed_previous_schema(engine)
+    engine.dispose()
+    _dangle_a_membership(sqlite_url)
+    before = _schema_snapshot(sqlite_url)
+    completed = _alembic(sqlite_url, "upgrade", "head", check=False)
+    assert completed.returncode != 0
+    assert "before the revision changed anything" in completed.stderr
+    assert _schema_snapshot(sqlite_url) == before
+
+
+def test_failed_sqlite_upgrade_rolls_back_every_step(sqlite_url):
+    """A failure after both table rebuilds leaves the 0002 file untouched."""
+    _alembic(sqlite_url, "upgrade", PREVIOUS)
+    engine = create_engine(sqlite_url)
+    _seed_previous_schema(engine)
+    with engine.begin() as connection:
+        # Makes the last step (creating the state tables) fail.
+        connection.execute(text("CREATE TABLE campaign_clocks (x INTEGER)"))
+    engine.dispose()
+    before = _schema_snapshot(sqlite_url)
+    assert _alembic(sqlite_url, "upgrade", "head", check=False).returncode != 0
+    after = _schema_snapshot(sqlite_url)
+    assert after == before
+    assert not any(name.startswith("_alembic_tmp") for name in after["tables"])
+    engine = create_engine(sqlite_url)
+    try:
+        with engine.connect() as connection:
+            assert _counts(connection) == _PRESERVED
+    finally:
+        engine.dispose()
+
+
+def test_failed_sqlite_downgrade_rolls_back_every_step(sqlite_url):
+    """A failure after the state tables are dropped restores them."""
+    engine = _upgraded_with_rows(sqlite_url)
+    with engine.begin() as connection:
+        _add_state(connection, "2026-11-03 00:00:00")
+        _add_export(connection, "x1", "exported", "2026-11-04 00:00:00")
+        # Makes the last step (rebuilding `characters`) fail.
+        connection.execute(text("CREATE TABLE _alembic_tmp_characters (x INTEGER)"))
+    engine.dispose()
+    before = _schema_snapshot(sqlite_url)
+    assert _alembic(sqlite_url, "downgrade", PREVIOUS, check=False).returncode != 0
+    after = _schema_snapshot(sqlite_url)
+    assert after == before and _STATE_TABLES <= after["tables"]
+    engine = create_engine(sqlite_url)
+    try:
+        with engine.connect() as connection:
+            assert connection.execute(text(
+                "SELECT COUNT(*) FROM character_states")).scalar() == 1
+            assert connection.execute(text(
+                "SELECT COUNT(*) FROM migration_runs WHERE campaign_id IS NOT NULL")).scalar() == 1
+    finally:
+        engine.dispose()
+
+
+def test_sqlite_downgrade_refuses_existing_foreign_key_violations(sqlite_url):
+    engine = _upgraded_with_rows(sqlite_url)
+    engine.dispose()
+    _dangle_a_membership(sqlite_url)
+    before = _schema_snapshot(sqlite_url)
+    completed = _alembic(sqlite_url, "downgrade", PREVIOUS, check=False)
+    assert completed.returncode != 0
+    assert "before the revision changed anything" in completed.stderr
+    assert _schema_snapshot(sqlite_url) == before
 
 
 def test_offline_downgrade_is_refused(sqlite_url):

@@ -65,11 +65,34 @@ def _require_sqlite_foreign_keys_off(connection):
             'migrations/env.py, which leaves them off.')
 
 
-def _require_sqlite_foreign_keys_intact(connection):
+def _require_sqlite_foreign_keys_intact(connection, when):
     problems = connection.exec_driver_sql('PRAGMA foreign_key_check').fetchall()
     if problems:
         raise RuntimeError(
-            'foreign key check failed after the table rebuild: %r' % (problems[:5],))
+            'foreign key check failed %s: %r' % (when, problems[:5]))
+
+
+def _prepare_sqlite(connection):
+    """Make the whole SQLite revision one transaction, after checking it can run.
+
+    Alembic treats SQLite DDL as non-transactional, and pysqlite opens a
+    transaction only at the first INSERT/UPDATE/DELETE, so every CREATE, DROP
+    and batch rebuild before that would commit on its own.  A failure part way
+    through (or a crash) would then leave a half-migrated file stamped with
+    the old revision and an ``_alembic_tmp_*`` table that blocks every retry,
+    or, on downgrade, the state tables gone under a head stamp.  An explicit
+    BEGIN puts the DDL, the data changes and Alembic's version stamp in one
+    transaction that commits or rolls back as a unit.
+
+    Foreign-key violations that already exist are refused first, so the
+    post-rebuild check can only fail for a violation this revision caused.
+    """
+
+    _require_sqlite_foreign_keys_off(connection)
+    _require_sqlite_foreign_keys_intact(connection, 'before the revision changed anything; '
+                                                    'repair these rows first')
+    if not connection.connection.dbapi_connection.in_transaction:
+        connection.exec_driver_sql('BEGIN')
 
 
 def _count(connection, sql):
@@ -154,9 +177,7 @@ def upgrade():
     if not context.as_sql:
         connection = op.get_bind()
         if sqlite:
-            _require_sqlite_foreign_keys_off(connection)
-        # Check every precondition before the first change: SQLite DDL is not
-        # transactional here, so a late failure would leave a half-migrated file.
+            _prepare_sqlite(connection)
         unknown = _count(connection,
                          'SELECT COUNT(*) FROM migration_runs WHERE status NOT IN '
                          "('running', 'succeeded', 'failed', 'verified')")
@@ -169,7 +190,7 @@ def upgrade():
     _create_state_tables()
 
     if sqlite and not context.as_sql:
-        _require_sqlite_foreign_keys_intact(op.get_bind())
+        _require_sqlite_foreign_keys_intact(op.get_bind(), 'after the table rebuild')
 
 
 def _upgrade_characters(sqlite):
@@ -423,7 +444,7 @@ def downgrade():
     connection = op.get_bind()
     sqlite = _is_sqlite(connection)
     if sqlite:
-        _require_sqlite_foreign_keys_off(connection)
+        _prepare_sqlite(connection)
     _refuse_unrepresentable_state(connection)
 
     for table in _NEW_TABLES:
@@ -459,7 +480,7 @@ def downgrade():
             batch.drop_column('archived_at')
             batch.create_unique_constraint('uq_characters_legacy_locator',
                                            ['campaign_id', 'legacy_storage', 'legacy_file'])
-        _require_sqlite_foreign_keys_intact(connection)
+        _require_sqlite_foreign_keys_intact(connection, 'after the table rebuild')
     else:
         op.drop_column('characters', 'archived_at')
         op.create_unique_constraint('uq_characters_legacy_locator', 'characters',

@@ -415,8 +415,14 @@ class MigrationRunRepository:
         entity_counts: dict[str, Any] | None = None,
         details: dict[str, Any] | None = None,
     ) -> MigrationRun:
-        if status not in _FINISH_STATUSES[_run_scope(run)]:
+        if status not in _FINISH_STATUSES.get(_run_scope(run), ()):
             raise ValueError("unknown migration result status")
+        # A campaign run finishes once.  Re-finishing an exported run would
+        # move its completed_at past state written since, which is exactly
+        # what the populated downgrade compares against.  (Legacy runs keep
+        # their succeeded -> verified step.)
+        if run.campaign_id is not None and run.status != "running":
+            raise ValueError("campaign migration run is already finished")
         run.status = status
         if entity_counts is not None:
             run.entity_counts = dict(entity_counts)
