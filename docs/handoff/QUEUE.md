@@ -18,7 +18,7 @@ ready/priority entries below where they conflict; historical logs remain intact.
 New wiki and VTT/map work is parked, shipped tools retain maintenance, and
 Cosmere/Mistborn expansion follows the PF2e plus D&D 2014/2024 release.
 
-PE-00, PE-01, PE-03 and PE-04 are done. PE-02, PE-07 and PE-10 are ready; PE-12 is in review.
+PE-00, PE-01, PE-03, PE-04 and PE-12 are done. PE-02 and PE-07 are ready; PE-10 is in review.
 Dependencies follow section 11 of the accepted
 [state and command contract](../player-release/state-command-contract.md). Blocked briefs
 cannot be claimed until accepted dependencies are integrated. Needs-brief rows
@@ -35,9 +35,9 @@ before they become ready. Owners review each other's output under PROTOCOL.md.
 | PE-05 | Reconcile UI-11 presentation after UI-18 disposition | codex | standard; high for review | blocked (PE-04) | [brief](tasks/PE-05-ui11-reconcile.md) |
 | PE-06 | Fix existing level-up HP preview inconsistency | claude | high; select current model | blocked (PE-04, PE-05) | [brief](tasks/PE-06-levelup-hp-consistency.md) |
 | PE-07 | Player journey mockups and UI contract | claude | high; select current model | ready | [brief](tasks/PE-07-player-ux-design.md) |
-| PE-10 | Extend D&D campaign/character identity constraints | claude | high; select current model | ready | [brief](tasks/PE-10-dnd5e-identity.md) |
+| PE-10 | Extend D&D campaign/character identity constraints | claude | high; select current model | review | [brief](tasks/PE-10-dnd5e-identity.md) |
 | PE-11 | D&D locator, ownership, import/export integration | claude | high; select current model | blocked (PE-10) | [brief](tasks/PE-11-dnd5e-locator.md) |
-| PE-12 | Character/encounter state, session, clock and authority tables; `migration_runs` and `characters.archived_at` changes | claude | high; select current model | done (accepted; merge waits for browser CI) | [brief](tasks/PE-12-game-state-schema.md) |
+| PE-12 | Character/encounter state, session, clock and authority tables; `migration_runs` and `characters.archived_at` changes | claude | high; select current model | done (merged in PR #249) | [brief](tasks/PE-12-game-state-schema.md) |
 | PE-13 | Campaign-scoped state repositories, revision check order, conflict body and lock order | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-12 |
 | PE-14 | Campaign streams, command receipts, gameplay events (the outbox), grants, operation-status read, session start/end and stream-locked authorization writes | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-01, PE-12, PE-13 |
 | PE-15 | D&D state adapter: build, play and encounter commands preserving build revisions (inventory, currency and item charges go to PE-41) | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-11, PE-13, PE-14 |
@@ -240,6 +240,7 @@ Accepted as a design checkpoint. Notes:
 
 ## Log
 
+- 2026-11-11 Claude: merged PE-12 (PR #249) once all four checks passed, then built PE-10. The database can now hold D&D campaigns and characters alongside PF2e and Cosmere ones. Each D&D character's record must point at its own file, and a character can no longer be moved to another campaign or rules system by an ordinary save. Taking the change back out is refused while any D&D record exists. Nothing on the site uses this yet. Persistence tests: 347 passed; PostgreSQL runs in CI. Next: Codex reviews the draft PR; PE-11 waits for its acceptance.
 - 2026-11-11 Codex: accepted PE-12 review 3 with no remaining code findings. Undoing a finish now also clears the remembered result after it has been read. All 306 local persistence checks passed, as did the main and PostgreSQL CI jobs. Browser CI still fails downloading dependencies from the Ubuntu mirror. Next: Claude commits the review, gets all four checks green and merges; dependent work waits for that merge. Nothing was committed or merged by this review.
 - 2026-11-11 Claude: fixed PE-12 R2-1. Undoing part of a save after looking at a finished export record now also undoes what the program remembers, so a retry sees the record as still open. Persistence tests: 306 passed. The browser CI failure was a download mirror outage; the new push reruns it. Next: Codex re-reviews draft PR #249; nothing is merged.
 - 2026-11-11 Codex: re-reviewed PE-12 and closed both original findings. One correction remains: reading a finish result before rolling back a savepoint leaves the returned object and a retry showing a finish that was rolled back. All 305 local persistence checks passed; PostgreSQL CI passed. Browser CI failed installing dependencies because the Ubuntu mirror could not resolve; the main job was still running. Next: Claude fixes R2-1, reruns browser CI and returns for re-review with all four jobs green; nothing was committed or merged.

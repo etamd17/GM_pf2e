@@ -95,6 +95,20 @@ class User(Base):
         ),
     )
 
+# PE-01 section 1: system strings are exactly these.
+SYSTEMS = ("pf2e", "dnd5e", "cosmere")
+SYSTEM_CHECK = "system in ('pf2e', 'dnd5e', 'cosmere')"
+LEGACY_STORAGES = ("party_data", "cosmere_pcs", "dnd5e_characters")
+LEGACY_STORAGE_CHECK = (
+    "legacy_storage in ('party_data', 'cosmere_pcs', 'dnd5e_characters')"
+)
+DND5E_LOCATOR_CHECK = (
+    "(system = 'dnd5e' AND legacy_storage = 'dnd5e_characters'"
+    " AND legacy_file = id || '.json')"
+    " OR (system <> 'dnd5e' AND legacy_storage <> 'dnd5e_characters')"
+)
+
+
 class Campaign(Base):
     __tablename__ = "campaigns"
 
@@ -127,7 +141,7 @@ class Campaign(Base):
     source_checksum: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     __table_args__ = (
-        CheckConstraint("system in ('pf2e', 'cosmere')", name="known_system"),
+        CheckConstraint(SYSTEM_CHECK, name="known_system"),
         CheckConstraint(
             "session_number >= 0", name="session_number_nonnegative"
         ),
@@ -177,11 +191,11 @@ class Character(Base):
             sqlite_where=text("archived_at IS NULL"),
             postgresql_where=text("archived_at IS NULL"),
         ),
-        CheckConstraint(
-            "legacy_storage in ('party_data', 'cosmere_pcs')",
-            name="known_legacy_storage",
-        ),
-        CheckConstraint("system in ('pf2e', 'cosmere')", name="known_system"),
+        CheckConstraint(LEGACY_STORAGE_CHECK, name="known_legacy_storage"),
+        CheckConstraint(SYSTEM_CHECK, name="known_system"),
+        # PE-01 section 1: a D&D character lives at dnd5e/characters/<id>.json,
+        # on every row, archived or not; no other system uses that store.
+        CheckConstraint(DND5E_LOCATOR_CHECK, name="dnd5e_locator"),
     )
 
 
