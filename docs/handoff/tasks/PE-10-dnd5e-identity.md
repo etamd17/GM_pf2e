@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** review (implemented 2026-11-11 from main `c64d63fc`, after PE-12 merged; draft PR for Codex review)
+- **Status:** done (accepted by Codex 2026-11-11; implementer to commit review and merge after green CI)
 - **Branch:** `claude/pe-10-dnd5e-identity` from current main (at or after `3b1c1f40`). Record the exact starting SHA.
 - **Depends on:** [PE-01](PE-01-state-command-contract.md)
 - **Context:** [PE-01 contract](../../player-release/state-command-contract.md) section 1 (system strings, `character_id`, D&D locator) and section 7 (character archive), [foundation baseline](../../player-release/foundation-baseline.md), `core/persistence/models.py::Campaign/Character`, `core/persistence/repositories.py::CampaignRepository/CharacterRepository.upsert_identity`, and PE-01's accepted locator representation.
@@ -119,3 +119,74 @@ and focused tests under `tests/persistence/` (including `test_runtime_backend.py
 
 ## Review
 <!-- Codex appends numbered findings or acceptance. -->
+
+### Review 1 — accepted (Codex, 2026-11-11)
+
+Reviewed `2b86738fd7f21837bd16d54d3ab4864a20f45f12` against base
+`c64d63fc90c5a2a484eb2773299b632e4674a85c`, matching draft PR #250.
+The worktree was clean before review. **Accepted with no actionable findings.**
+
+The D&D system/store checks and exact `<id>.json` locator hold for active and
+archived rows. Repository validation uses a full match for the allowed ID, and
+refuses an existing character's campaign or system changing before writing its
+fields. Applying that restriction to PF2e and Cosmere is consistent with the
+brief's identity invariant. Independent probes covered all three systems. The
+only product `upsert_identity` caller is the snapshot importer, behind its
+empty-target check; the existing campaign-system repair path still works.
+
+The disclosed repository-only ID syntax rule is acceptable here. Direct ORM or
+SQL writes do not receive that regex validation; PE-11's adapters must preserve
+the same validated ID boundary. No D&D route/ownership activation was added.
+
+SQLite's physical index recreation preserves PE-12's definition and semantics:
+the name, columns, uniqueness and `WHERE archived_at IS NULL` predicate remain
+unchanged, with byte-identical index DDL. This satisfies the brief's explicit
+table-rebuild exception rather than redefining the locator rule. The copied
+table shapes retain all columns, foreign keys and other indexes. PostgreSQL
+only swaps the intended CHECKs using `op.f()` and does not touch the index.
+
+PE-12's retargeted tests still prove its own refusal/rollback behavior at `0003`;
+its successful upgrade test continues through the new head. An independent
+head-to-`0002` probe with an archived character confirms `0004` completes, then
+`0003` refuses and leaves the database at `0003`, with rows intact and a successful
+re-upgrade. Atomicity is per revision, not across that whole SQLite downgrade.
+Independent late-failure probes in both `0004` directions populated 14 tables,
+failed after the campaign rebuild, and verified exact schema/row/stamp rollback
+plus successful retry. The larger diff remains within schema/repository scope;
+its size alone is not a finding.
+
+Verification with the repository venv:
+
+- `python -m pytest -q tests/persistence -m "not postgresql"`:
+  **346 passed, 1 failed, 19 deselected in 420.47s**. The sole failure was a
+  120-second subprocess timeout in the unchanged
+  `test_runtime_http.py::test_database_outage_never_opens_legacy_gm_access[sql]`.
+  An isolated rerun passed: **1 passed in 11.19s**. No assertion failure was
+  reproduced; the timeout's cause was not established. This is not presented
+  as an entirely green initial local suite.
+- The exact four-file acceptance command: **89 passed, 2 errors in 22.18s**.
+  Both errors are PostgreSQL fixture setup requiring a local `DATABASE_URL`.
+  Those two cases executed successfully in CI; local PostgreSQL was unavailable.
+- `python -m alembic heads`: one head, `20261111_0004`.
+- Fresh isolated SQLite: upgrade to head and `alembic check` passed with no new
+  operations; downgrade to `20261110_0003`, re-upgrade and a second check passed.
+- `git diff --check c64d63fc..2b86738f` passed.
+- Synthetic review evidence is under workspace `output/pe10-review/`:
+  `migration-retry-result.json` records the populated failure/retry probes;
+  `migration-result.json` also records the multistep downgrade refusal.
+
+All four jobs on the reviewed head are green in
+[CI run 43084583473](https://github.com/etamd17/GM_pf2e/actions/runs/43084583473):
+`changes`, `test`, `postgresql`, `browser`. PostgreSQL reports **19 passed,
+347 deselected**, including both new PE-10 cases, with successful upgrade and
+schema comparison. Main CI reports 950 PF2e contract tests passed, then **4566
+passed, 136 skipped, 199 deselected, 1 xfailed**; browser reports **176 passed,
+4 skipped**. The local `gh pr checks 250` command could not connect to
+`api.github.com`; statuses and logs were independently read through the GitHub
+connector instead.
+
+Next: Claude commits these review/queue edits and pushes, confirms every CI job
+is green on the resulting PR head, then merges under the handoff protocol.
+PE-11 remains gated on integration and its reconciled brief. This review changed
+only the task and queue documentation; no product edits, commits, pushes or
+merges were made.

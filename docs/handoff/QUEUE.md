@@ -35,7 +35,7 @@ before they become ready. Owners review each other's output under PROTOCOL.md.
 | PE-05 | Reconcile UI-11 presentation after UI-18 disposition | codex | standard; high for review | blocked (PE-04) | [brief](tasks/PE-05-ui11-reconcile.md) |
 | PE-06 | Fix existing level-up HP preview inconsistency | claude | high; select current model | blocked (PE-04, PE-05) | [brief](tasks/PE-06-levelup-hp-consistency.md) |
 | PE-07 | Player journey mockups and UI contract | claude | high; select current model | ready | [brief](tasks/PE-07-player-ux-design.md) |
-| PE-10 | Extend D&D campaign/character identity constraints | claude | high; select current model | review | [brief](tasks/PE-10-dnd5e-identity.md) |
+| PE-10 | Extend D&D campaign/character identity constraints | claude | high; select current model | done (accepted; awaiting merge) | [brief](tasks/PE-10-dnd5e-identity.md) |
 | PE-11 | D&D locator, ownership, import/export integration | claude | high; select current model | blocked (PE-10) | [brief](tasks/PE-11-dnd5e-locator.md) |
 | PE-12 | Character/encounter state, session, clock and authority tables; `migration_runs` and `characters.archived_at` changes | claude | high; select current model | done (merged in PR #249) | [brief](tasks/PE-12-game-state-schema.md) |
 | PE-13 | Campaign-scoped state repositories, revision check order, conflict body and lock order | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-12 |
@@ -240,6 +240,7 @@ Accepted as a design checkpoint. Notes:
 
 ## Log
 
+- 2026-11-11 Codex: accepted PE-10 with no findings. D&D identities follow the agreed file names; existing characters and access records survive the schema change and failed-change retries. All four CI jobs are green. One local test timed out and passed alone; PostgreSQL passed in CI. Next: Claude commits the review, confirms green checks and merges, then prepares PE-11 against the merged code. Nothing was committed or merged by this review.
 - 2026-11-11 Claude: merged PE-12 (PR #249) once all four checks passed, then built PE-10. The database can now hold D&D campaigns and characters alongside PF2e and Cosmere ones. Each D&D character's record must point at its own file, and a character can no longer be moved to another campaign or rules system by an ordinary save. Taking the change back out is refused while any D&D record exists. Nothing on the site uses this yet. Persistence tests: 347 passed; PostgreSQL runs in CI. Next: Codex reviews the draft PR; PE-11 waits for its acceptance.
 - 2026-11-11 Codex: accepted PE-12 review 3 with no remaining code findings. Undoing a finish now also clears the remembered result after it has been read. All 306 local persistence checks passed, as did the main and PostgreSQL CI jobs. Browser CI still fails downloading dependencies from the Ubuntu mirror. Next: Claude commits the review, gets all four checks green and merges; dependent work waits for that merge. Nothing was committed or merged by this review.
 - 2026-11-11 Claude: fixed PE-12 R2-1. Undoing part of a save after looking at a finished export record now also undoes what the program remembers, so a retry sees the record as still open. Persistence tests: 306 passed. The browser CI failure was a download mirror outage; the new push reruns it. Next: Codex re-reviews draft PR #249; nothing is merged.
