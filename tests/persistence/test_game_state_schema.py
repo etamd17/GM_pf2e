@@ -45,6 +45,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 NOW = datetime(2026, 11, 10, 12, 0, tzinfo=timezone.utc)
 PIN = {"ruleset_id": "pf2e-legacy-unknown", "manifest_sha256": None}
 HEAD = runtime._REQUIRED_REVISION
+# This module's own revision. Downgrade and failure cases stop here so they
+# exercise 20261110_0003's guards, not those of a later revision (PE-10).
+PE12 = "20261110_0003"
 PREVIOUS = "20261001_0002"
 
 
@@ -837,7 +840,7 @@ def _upgraded_with_rows(url):
     _alembic(url, "upgrade", PREVIOUS)
     engine = create_engine(url)
     _seed_previous_schema(engine)
-    _alembic(url, "upgrade", "head")
+    _alembic(url, "upgrade", PE12)
     return engine
 
 
@@ -873,7 +876,7 @@ def _downgrade_refused(url, message):
     try:
         with engine.connect() as connection:
             assert connection.execute(text(
-                "SELECT version_num FROM alembic_version")).scalar() == HEAD
+                "SELECT version_num FROM alembic_version")).scalar() == PE12
     finally:
         engine.dispose()
 
@@ -991,7 +994,7 @@ def test_sqlite_upgrade_refuses_existing_foreign_key_violations_before_any_chang
     engine.dispose()
     _dangle_a_membership(sqlite_url)
     before = _schema_snapshot(sqlite_url)
-    completed = _alembic(sqlite_url, "upgrade", "head", check=False)
+    completed = _alembic(sqlite_url, "upgrade", PE12, check=False)
     assert completed.returncode != 0
     assert "before the revision changed anything" in completed.stderr
     assert _schema_snapshot(sqlite_url) == before
@@ -1007,7 +1010,7 @@ def test_failed_sqlite_upgrade_rolls_back_every_step(sqlite_url):
         connection.execute(text("CREATE TABLE campaign_clocks (x INTEGER)"))
     engine.dispose()
     before = _schema_snapshot(sqlite_url)
-    assert _alembic(sqlite_url, "upgrade", "head", check=False).returncode != 0
+    assert _alembic(sqlite_url, "upgrade", PE12, check=False).returncode != 0
     after = _schema_snapshot(sqlite_url)
     assert after == before
     assert not any(name.startswith("_alembic_tmp") for name in after["tables"])
@@ -1055,10 +1058,10 @@ def test_sqlite_downgrade_refuses_existing_foreign_key_violations(sqlite_url):
 
 
 def test_offline_downgrade_is_refused(sqlite_url):
-    completed = _alembic(sqlite_url, "downgrade", f"{HEAD}:{PREVIOUS}", "--sql",
+    completed = _alembic(sqlite_url, "downgrade", f"{PE12}:{PREVIOUS}", "--sql",
                          check=False)
     assert completed.returncode != 0
-    assert "online" in completed.stderr
+    assert "game-state downgrade requires an online export check" in completed.stderr
 
 
 def test_sqlite_upgrade_refuses_when_foreign_keys_are_enforced(tmp_path, monkeypatch):

@@ -7,6 +7,7 @@ workflow service combine invite, membership, ownership, and audit writes.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Any
 
@@ -21,11 +22,15 @@ from .models import (
     CharacterAssignment,
     Invitation,
     MigrationRun,
+    LEGACY_STORAGES,
+    SYSTEMS,
     User,
     utc_now,
 )
 
 MAX_INDEXED_USERNAME_BYTES = 2_000
+# PE-01 section 1: an existing character id, which for D&D is the file pid.
+_DND5E_CHARACTER_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
 
 
 def normalize_username(username: str) -> str:
@@ -123,7 +128,7 @@ class CampaignRepository:
         source_payload: dict[str, Any] | None = None,
         source_checksum: str | None = None,
     ) -> Campaign:
-        if system not in {"pf2e", "cosmere"}:
+        if system not in SYSTEMS:
             raise ValueError("unknown campaign system")
         entity = self.get(campaign_id)
         if entity is None:
@@ -192,19 +197,36 @@ class CharacterRepository:
         created_at: datetime | None = None,
         updated_at: datetime | None = None,
     ) -> Character:
-        if system not in {"pf2e", "cosmere"}:
+        if system not in SYSTEMS:
             raise ValueError("unknown character system")
-        if legacy_storage not in {"party_data", "cosmere_pcs"}:
+        if legacy_storage not in LEGACY_STORAGES:
             raise ValueError("unknown legacy character store")
+        legacy_file = str(legacy_file)
+        if (system == "dnd5e") != (legacy_storage == "dnd5e_characters"):
+            raise ValueError("D&D characters, and only they, use dnd5e_characters")
+        if system == "dnd5e":
+            # PE-01 section 1: the id is the file pid and names the file.
+            if not isinstance(character_id, str) or not _DND5E_CHARACTER_ID.fullmatch(
+                character_id
+            ):
+                raise ValueError("invalid D&D character id")
+            if legacy_file != character_id + ".json":
+                raise ValueError("D&D legacy_file must be the character id + '.json'")
         entity = self.get(character_id)
         if entity is None:
             entity = Character(id=character_id)
             self.session.add(entity)
+        elif entity.campaign_id != campaign_id or entity.system != system:
+            # An identity belongs to one campaign and one rules system; a
+            # routine upsert never moves or converts it.
+            raise ValueError(
+                "character identity already exists in another campaign or system"
+            )
         entity.campaign_id = campaign_id
         entity.system = system
         entity.display_name = display_name
         entity.legacy_storage = legacy_storage
-        entity.legacy_file = str(legacy_file)
+        entity.legacy_file = legacy_file
         entity.source_schema_version = source_schema_version
         entity.content_checksum = content_checksum
         entity.created_at = created_at or entity.created_at or utc_now()

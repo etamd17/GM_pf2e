@@ -178,7 +178,12 @@ def test_postgresql_offline_migration_preserves_orm_check_constraint_names():
     }
     assert check_names
     for constraint_name, table_name in check_names.items():
-        assert completed.stdout.count(constraint_name) == 1
+        # Defined exactly once, unless a later revision drops and re-adds it
+        # (PE-10 widens the system checks): every drop is followed by an add.
+        defined = completed.stdout.count(f"CONSTRAINT {constraint_name} CHECK")
+        dropped = completed.stdout.count(f"DROP CONSTRAINT {constraint_name}")
+        assert defined == dropped + 1, constraint_name
+        assert completed.stdout.count(constraint_name) == defined + dropped
         double_prefixed = f"ck_{table_name}_{constraint_name}"
         assert double_prefixed not in completed.stdout
 
