@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** review (Codex R2-1 answered 2026-11-11; returned for re-review on draft PR #249)
+- **Status:** done (Codex review 3 accepted 2026-11-11; merge blocked until browser CI passes)
 - **Branch:** `claude/pe-12-game-state-schema` from current main (at or after `3b1c1f40`). Record the exact starting SHA.
 - **Depends on:** [PE-01](PE-01-state-command-contract.md). Coordinate migration merge order with PE-10: both alter `characters`, so whichever lands second rebases onto the other and keeps its constraints intact (one Alembic head).
 - **Context:** [PE-01 contract](../../player-release/state-command-contract.md) sections 1, 2, 4 (Sessions), 7 and 9, and the PE-12 row and reconciliation note in section 11; [foundation baseline](../../player-release/foundation-baseline.md), [ADR-0002](../../adr/0002-transactional-persistence.md), `core/persistence/models.py`, `core/persistence/database.py::Database`, `core/persistence/repositories.py::MigrationRunRepository`, `tools/migrate_transactional_store.py`, `tools/export_transactional_runtime.py::_envelopes`, existing migration conventions (including `20261001_0002`'s online empty-store downgrade check).
@@ -502,3 +502,68 @@ and confirm the main test job before returning for acceptance.
 Next: Claude addresses R2-1, preserves both closed original findings, reruns the
 focused regression and required checks, and returns the updated PR for re-review
 with all four CI jobs green. Review and queue edits are uncommitted. No merge.
+
+### Review 3 — accepted; merge blocked by browser CI (Codex, 2026-11-11)
+
+Reviewed `6f8f821880e644ce74648933c0d59ab3bfe77b6b` against the previously
+reviewed `20a882b894448ddb0b4c762042736036d38a80e0`, matching PR #249's head.
+The worktree was clean before review. **R2-1 is closed. No remaining code
+findings.** Both original review-1 findings remain closed. This accepts the
+implementation; it does not waive the all-green CI requirement for merging.
+
+The conditional update and affected-row check still decide whether a campaign
+run may finish. After it wins, the same-value ORM update registers the object
+with the current transaction, so a rollback invalidates fields even after the
+caller has read them. The extra update is acceptable: it stays inside the same
+transaction holding the winning write lock, uses the same completion timestamp,
+and cannot be reached by a refused finish. Legacy completion is unchanged.
+
+The new regression reads all four returned fields before rollback, then checks
+the object, stored status/time and same-object rejoin, followed by a successful
+finish. Independent probes also covered inner rollback, released-inner then
+outer rollback, and full rollback. The reported outer-before-open-inner rollback
+limitation reproduces with an ordinary ORM write as well; no non-test caller
+uses `begin_nested`. This is acceptable for this task. Future PE-24 callers must
+unwind nested scopes inner-first, as normal nested context managers do.
+
+The in-memory aware-UTC timestamp and SQLite's reloaded naive-UTC timestamp
+represent the same instant. The timestamp probe confirmed both updates use the
+same value, rollback clears it, retry writes a new value, and a refused repeated
+finish does not move it. The owning-session requirement remains acceptable.
+
+Verification on the reviewed head:
+
+- Repository venv, `python -m pytest -q tests/persistence -m "not postgresql"`:
+  **306 passed, 17 deselected in 346.65s**.
+- `python -m alembic heads`: exactly `20261110_0003 (head)`.
+- Fresh isolated SQLite file: `python -m alembic upgrade head`, then
+  `python -m alembic check`, passed with no new upgrade operations detected.
+- `python ..\output\pe12-review-r2\finish_savepoint_probe.py .`: both cases
+  show `running` for the returned object, stored row and same-object rejoin.
+- Independent archived-copy mutation: six selected baseline tests passed;
+  restoring only the expire-only method from `20a882b8` failed the new test at
+  its post-rollback assertion (`test_game_state_schema.py:607`). Evidence:
+  workspace `output/pe12-review-r3/mutation-result.json`. Additional probes:
+  `nested_finish_probe.py` and `timestamp-result.json` in that directory.
+- `git diff --check 20a882b8..6f8f8218` passed. Product changes in this round
+  are confined to the finish correction and its regression tests.
+
+CI checked through the GitHub connector on
+[run 43053080292](https://github.com/etamd17/GM_pf2e/actions/runs/43053080292):
+`changes`, `test` and `postgresql` passed. The main job reports 950 PF2e contract
+tests passed, then 4525 passed, 136 skipped, 197 deselected and 1 xfailed in the
+main suite. PostgreSQL reports **17 passed, 306 deselected**, including the new
+rollback regression, and a successful upgrade/schema comparison.
+
+`browser` is still failed at dependency installation: the runner could not
+resolve `azure.archive.ubuntu.com`, and browser tests were skipped. The latest
+observed run is completed/failed, not all green. This is an infrastructure
+failure, not a new code finding. The requested `gh pr checks 249` CLI could not
+connect to `api.github.com` locally; the connector supplied the job statuses and
+logs above. A queued rerun has not been counted as a pass.
+
+Next: Claude commits these review/queue edits and pushes them, obtains green
+`changes`, `test`, `postgresql` and `browser` checks on the resulting PR head,
+then merges under the handoff protocol. Do not bypass the browser check or use
+auto-merge. Dependent work remains unready until PE-12 is integrated. This
+review made no product edits, commits, pushes or merges.
