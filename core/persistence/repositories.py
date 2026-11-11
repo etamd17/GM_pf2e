@@ -10,8 +10,9 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from .models import (
     Campaign,
@@ -289,6 +290,21 @@ class InvitationRepository:
         return entity
 
 
+_CAMPAIGN_RUN_KINDS = frozenset({"import", "export"})
+# Legacy whole-store runs keep their historical statuses.  A campaign attempt
+# that fails before promotion or the export swap is ``aborted`` (never
+# ``failed``), so its retry can insert a new row.
+_FINISH_STATUSES = {
+    "legacy": frozenset({"succeeded", "failed", "verified"}),
+    "import": frozenset({"succeeded", "aborted"}),
+    "export": frozenset({"exported", "aborted"}),
+}
+
+
+def _run_scope(run: MigrationRun) -> str:
+    return "legacy" if run.campaign_id is None else run.kind
+
+
 class MigrationRunRepository:
     def __init__(self, session: Session) -> None:
         self.session = session
@@ -297,9 +313,17 @@ class MigrationRunRepository:
         return self.session.get(MigrationRun, run_id)
 
     def get_by_source_checksum(self, source_checksum: str) -> MigrationRun | None:
+        """Return the legacy whole-store run for a checksum.
+
+        Scoped to ``campaign_id IS NULL``: a per-campaign run may share the
+        checksum of the legacy import it started from and must never be
+        mistaken for it.
+        """
+
         return self.session.scalar(
             select(MigrationRun).where(
-                MigrationRun.source_checksum == source_checksum
+                MigrationRun.campaign_id.is_(None),
+                MigrationRun.source_checksum == source_checksum,
             )
         )
 
@@ -328,6 +352,62 @@ class MigrationRunRepository:
         self.session.flush()
         return entity
 
+    def start_campaign_run(
+        self,
+        *,
+        campaign_id: str,
+        kind: str,
+        source_checksum: str,
+        stream_epoch: int,
+        tool_version: str | None,
+        source_path: str | None = None,
+        entity_counts: dict[str, Any] | None = None,
+        details: dict[str, Any] | None = None,
+    ) -> MigrationRun:
+        """Start (or rejoin) one per-campaign import or export attempt.
+
+        The caller reads ``stream_epoch`` under the migration gate.  The same
+        attempt asked twice returns its live row; once that row is
+        ``aborted`` a retry inserts a new one (PE-01 section 7).
+        """
+
+        if not isinstance(campaign_id, str) or not campaign_id:
+            raise ValueError("campaign_id is required for a campaign run")
+        if kind not in _CAMPAIGN_RUN_KINDS:
+            raise ValueError("unknown migration run kind")
+        if (
+            isinstance(stream_epoch, bool)
+            or not isinstance(stream_epoch, int)
+            or stream_epoch < 1
+        ):
+            raise ValueError("stream_epoch must be a positive integer")
+        existing = self.session.scalar(
+            select(MigrationRun).where(
+                MigrationRun.campaign_id == campaign_id,
+                MigrationRun.kind == kind,
+                MigrationRun.source_checksum == source_checksum,
+                MigrationRun.stream_epoch == stream_epoch,
+                MigrationRun.status != "aborted",
+            )
+        )
+        if existing is not None:
+            return existing
+        entity = MigrationRun(
+            source_checksum=source_checksum,
+            source_path=source_path,
+            campaign_id=campaign_id,
+            kind=kind,
+            stream_epoch=stream_epoch,
+            status="running",
+            tool_version=tool_version,
+            entity_counts=dict(entity_counts or {}),
+            details=dict(details or {}),
+            started_at=utc_now(),
+        )
+        self.session.add(entity)
+        self.session.flush()
+        return entity
+
     def finish(
         self,
         run: MigrationRun,
@@ -336,13 +416,73 @@ class MigrationRunRepository:
         entity_counts: dict[str, Any] | None = None,
         details: dict[str, Any] | None = None,
     ) -> MigrationRun:
-        if status not in {"succeeded", "failed", "verified"}:
+        if status not in _FINISH_STATUSES.get(_run_scope(run), ()):
             raise ValueError("unknown migration result status")
+        if run.campaign_id is not None:
+            return self._finish_campaign_run(
+                run, status=status, entity_counts=entity_counts, details=details
+            )
+        # Legacy runs keep their succeeded -> verified step.
         run.status = status
         if entity_counts is not None:
             run.entity_counts = dict(entity_counts)
         if details is not None:
             run.details = dict(details)
         run.completed_at = utc_now()
+        self.session.flush()
+        return run
+
+    def _finish_campaign_run(
+        self,
+        run: MigrationRun,
+        *,
+        status: str,
+        entity_counts: dict[str, Any] | None,
+        details: dict[str, Any] | None,
+    ) -> MigrationRun:
+        """Finish a campaign run exactly once, judged by the stored row.
+
+        Re-finishing an exported run would move its ``completed_at`` past
+        state written since, which is exactly what the populated downgrade
+        compares against.  The caller's object may be stale (sessions do not
+        expire on commit, and another session may have finished the run), so
+        the guard is a compare-and-set on the row itself: the UPDATE only
+        matches while the stored status is still ``running``.  On PostgreSQL a
+        concurrent finisher blocks on the row lock and then re-evaluates the
+        predicate, so exactly one of two racing finishes wins.
+
+        The caller's in-memory status is deliberately not consulted: only
+        the stored row decides.
+        """
+
+        if run not in self.session:
+            raise ValueError("migration run is not attached to this session")
+        values: dict[str, Any] = {"status": status, "completed_at": utc_now()}
+        if entity_counts is not None:
+            values["entity_counts"] = dict(entity_counts)
+        if details is not None:
+            values["details"] = dict(details)
+        # Push any pending change to this row first, so the UPDATE below
+        # cannot be overwritten by a later flush of stale attributes.
+        self.session.flush()
+        result = self.session.execute(
+            update(MigrationRun)
+            .where(MigrationRun.id == run.id, MigrationRun.status == "running")
+            .values(**values)
+            .execution_options(synchronize_session=False)
+        )
+        if result.rowcount != 1:
+            raise ValueError("campaign migration run is already finished")
+        # The UPDATE above won the row; now write the same values through the
+        # ORM and flush.  That second, unconditional UPDATE changes nothing in
+        # the row, but it makes this transaction (or SAVEPOINT) track the
+        # object, so a rollback expires it as it would any ORM change.  Merely
+        # expiring or copying the values would not: a SAVEPOINT rollback only
+        # expires objects the ORM itself flushed, so the object (and a rejoin
+        # through start_campaign_run, which returns it from the identity map)
+        # could keep claiming a finish the database no longer has.
+        for key, value in values.items():
+            setattr(run, key, value)
+            flag_modified(run, key)
         self.session.flush()
         return run

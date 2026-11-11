@@ -2181,8 +2181,12 @@ def import_store(
                 raise MigrationToolError(
                     f"migration run {existing.id} is in unexpected status {existing.status!r}"
                 )
+            # Only legacy whole-store runs mean "imported from another
+            # snapshot"; per-campaign runs (PE-12) are a different stream.
             other_run = session.scalar(
-                api["select"](api["MigrationRun"]).limit(1)
+                api["select"](api["MigrationRun"])
+                .where(api["MigrationRun"].campaign_id.is_(None))
+                .limit(1)
             )
             if other_run is not None or _target_has_rows(session, api):
                 raise MigrationToolError(

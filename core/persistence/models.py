@@ -156,16 +156,26 @@ class Character(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
     )
+    # PE-01 section 7: an archived character keeps its row (and its state,
+    # ledger and event history) but leaves name resolution and file export.
+    archived_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     __table_args__ = (
         UniqueConstraint(
             "campaign_id", "id", name="uq_characters_campaign_id_id"
         ),
-        UniqueConstraint(
+        # A file may be re-created after its character is archived, so the
+        # locator is unique only among live rows.
+        Index(
+            "uq_characters_active_legacy_locator",
             "campaign_id",
             "legacy_storage",
             "legacy_file",
-            name="uq_characters_legacy_locator",
+            unique=True,
+            sqlite_where=text("archived_at IS NULL"),
+            postgresql_where=text("archived_at IS NULL"),
         ),
         CheckConstraint(
             "legacy_storage in ('party_data', 'cosmere_pcs')",
@@ -487,12 +497,20 @@ class AuditEvent(Base):
 
 
 class MigrationRun(Base):
+    """Evidence of one import or export.
+
+    Legacy whole-store imports keep ``campaign_id``/``stream_epoch`` NULL and
+    stay unique by checksum.  Per-campaign runs (PE-01 section 7) record the
+    campaign's ``stream_epoch`` read under the migration gate; an attempt that
+    fails before promotion or the export swap is marked ``aborted`` and a
+    retry inserts a new row.  There is deliberately no foreign key to
+    ``campaigns``: a run is evidence and must outlive the campaign it moved.
+    """
+
     __tablename__ = "migration_runs"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
-    source_checksum: Mapped[str] = mapped_column(
-        String(64), nullable=False, unique=True
-    )
+    source_checksum: Mapped[str] = mapped_column(String(64), nullable=False)
     source_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     tool_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -507,4 +525,302 @@ class MigrationRun(Base):
     )
     completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+    campaign_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    kind: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="import", server_default=text("'import'")
+    )
+    stream_epoch: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint("kind in ('import', 'export')", name="known_kind"),
+        CheckConstraint(
+            "status in ('running', 'succeeded', 'failed', 'verified', "
+            "'exported', 'aborted')",
+            name="known_status",
+        ),
+        # Legacy runs: no campaign, no epoch, import only, legacy statuses.
+        # Campaign runs: both columns set and the epoch is a real one.
+        CheckConstraint(
+            "(campaign_id IS NULL AND stream_epoch IS NULL AND kind = 'import' "
+            "AND status NOT IN ('exported', 'aborted')) OR "
+            "(campaign_id IS NOT NULL AND stream_epoch IS NOT NULL "
+            "AND stream_epoch >= 1)",
+            name="scope",
+        ),
+        CheckConstraint(
+            "status <> 'exported' OR kind = 'export'", name="exported_is_export"
+        ),
+        Index(
+            "uq_migration_runs_legacy_source_checksum",
+            "source_checksum",
+            unique=True,
+            sqlite_where=text("campaign_id IS NULL"),
+            postgresql_where=text("campaign_id IS NULL"),
+        ),
+        Index(
+            "uq_migration_runs_campaign_attempt",
+            "campaign_id",
+            "kind",
+            "source_checksum",
+            "stream_epoch",
+            unique=True,
+            sqlite_where=text("campaign_id IS NOT NULL AND status <> 'aborted'"),
+            postgresql_where=text("campaign_id IS NOT NULL AND status <> 'aborted'"),
+        ),
+    )
+
+
+# --------------------------------------------------------------------------
+# PE-12: transactional game state (PE-01 sections 1, 2, 4 and 7).
+#
+# These tables are created empty.  Nothing reads or writes them until a
+# campaign's authority row says ``db`` (PE-13/PE-24); until then the JSON
+# files stay authoritative and these rows, if any, are a stale baseline.
+# Staleness is derived from ``campaign_state_authority.authority = 'file'``
+# rather than stored per row, so it can never disagree with the authority.
+
+RULES_PROFILES = ("pf2e", "dnd5e-2014", "dnd5e-2024")
+_RULES_PROFILE_CHECK = "rules_profile in ('pf2e', 'dnd5e-2014', 'dnd5e-2024')"
+
+
+class CharacterState(Base):
+    """One versioned document per character and domain (``build``/``play``)."""
+
+    __tablename__ = "character_states"
+
+    campaign_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    character_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    domain: Mapped[str] = mapped_column(String(16), primary_key=True)
+    schema_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    revision: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
+    rules_profile: Mapped[str] = mapped_column(String(32), nullable=False)
+    # The ruleset/content pin (PE-01 section 1), kept beside the payload so a
+    # reader never has to parse the payload to learn which rules apply.
+    content: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict, server_default=text("'{}'")
+    )
+    payload: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict, server_default=text("'{}'")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
+
+    __table_args__ = (
+        CheckConstraint("domain in ('build', 'play')", name="known_domain"),
+        CheckConstraint(_RULES_PROFILE_CHECK, name="known_rules_profile"),
+        CheckConstraint("schema_version >= 1", name="schema_version_positive"),
+        CheckConstraint("revision >= 0", name="revision_nonnegative"),
+        ForeignKeyConstraint(
+            ["campaign_id", "character_id"],
+            ["characters.campaign_id", "characters.id"],
+            name="fk_character_states_character_campaign",
+            ondelete="CASCADE",
+        ),
+    )
+
+
+class EncounterState(Base):
+    """A live or ended encounter: order, turn, creature vitals and effects."""
+
+    __tablename__ = "encounter_states"
+
+    campaign_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("campaigns.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    encounter_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    round: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
+    turn: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
+    # Ordered combatant ids.
+    initiative: Mapped[list[Any]] = mapped_column(
+        JSON, nullable=False, default=list, server_default=text("'[]'")
+    )
+    # Creature vitals and effects keyed by combatant id; PC vitals live in
+    # the character's ``play`` state, never here.
+    payload: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict, server_default=text("'{}'")
+    )
+    clock_anchors: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict, server_default=text("'{}'")
+    )
+    rules_profile: Mapped[str] = mapped_column(String(32), nullable=False)
+    content: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict, server_default=text("'{}'")
+    )
+    schema_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    revision: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
+
+    __table_args__ = (
+        CheckConstraint("status in ('active', 'ended')", name="known_status"),
+        CheckConstraint(_RULES_PROFILE_CHECK, name="known_rules_profile"),
+        CheckConstraint("round >= 0", name="round_nonnegative"),
+        CheckConstraint("turn >= 0", name="turn_nonnegative"),
+        CheckConstraint("schema_version >= 1", name="schema_version_positive"),
+        CheckConstraint("revision >= 0", name="revision_nonnegative"),
+        Index(
+            "uq_encounter_states_one_active",
+            "campaign_id",
+            unique=True,
+            sqlite_where=text("status = 'active'"),
+            postgresql_where=text("status = 'active'"),
+        ),
+    )
+
+
+class EncounterCombatant(Base):
+    """A combatant row; a PC row points at its character in the same campaign."""
+
+    __tablename__ = "encounter_combatants"
+
+    campaign_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    encounter_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    combatant_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    character_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    creature_ref: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # The file-era instance key, so an import maps each combatant exactly once.
+    legacy_ref: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
+
+    __table_args__ = (
+        CheckConstraint("kind in ('pc', 'creature')", name="known_kind"),
+        CheckConstraint(
+            "kind <> 'pc' OR character_id IS NOT NULL", name="pc_has_character"
+        ),
+        ForeignKeyConstraint(
+            ["campaign_id", "encounter_id"],
+            ["encounter_states.campaign_id", "encounter_states.encounter_id"],
+            name="fk_encounter_combatants_encounter",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["campaign_id", "character_id"],
+            ["characters.campaign_id", "characters.id"],
+            name="fk_encounter_combatants_character_campaign",
+            ondelete="CASCADE",
+        ),
+        Index(
+            "ix_encounter_combatants_character",
+            "campaign_id",
+            "character_id",
+        ),
+    )
+
+
+class CampaignClock(Base):
+    """The campaign's world and downtime clocks (PE-01 section 5)."""
+
+    __tablename__ = "campaign_clocks"
+
+    campaign_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("campaigns.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    clock: Mapped[str] = mapped_column(String(16), primary_key=True)
+    value: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
+    revision: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
+
+    __table_args__ = (
+        CheckConstraint("clock in ('world', 'downtime')", name="known_clock"),
+        CheckConstraint("value >= 0", name="value_nonnegative"),
+        CheckConstraint("revision >= 0", name="revision_nonnegative"),
+    )
+
+
+class CampaignSession(Base):
+    """A play session; ids are never reused, at most one is active."""
+
+    __tablename__ = "campaign_sessions"
+
+    campaign_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("campaigns.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    session_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    # Nullable: file-era ids are backfilled as ended rows with unknown times.
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    started_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    origin: Mapped[str] = mapped_column(String(32), nullable=False)
+    ended_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    ended_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint("status in ('active', 'ended')", name="known_status"),
+        CheckConstraint(
+            "status <> 'active' OR (ended_at IS NULL AND ended_by IS NULL)",
+            name="active_not_ended",
+        ),
+        Index(
+            "uq_campaign_sessions_one_active",
+            "campaign_id",
+            unique=True,
+            sqlite_where=text("status = 'active'"),
+            postgresql_where=text("status = 'active'"),
+        ),
+    )
+
+
+class CampaignStateAuthority(Base):
+    """Which store is authoritative for a campaign's game state (section 7)."""
+
+    __tablename__ = "campaign_state_authority"
+
+    campaign_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("campaigns.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    authority: Mapped[str] = mapped_column(String(16), nullable=False)
+    stream_epoch: Mapped[int] = mapped_column(Integer, nullable=False)
+    changed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    source_checksum: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "authority in ('file', 'migrating', 'db', 'exporting')",
+            name="known_authority",
+        ),
+        CheckConstraint("stream_epoch >= 1", name="stream_epoch_positive"),
     )

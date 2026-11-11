@@ -134,12 +134,18 @@ def test_username_normalization_rejects_values_unsafe_for_unique_index():
 def test_schema_exposes_the_approved_additive_tables():
     assert set(Base.metadata.tables) == {
         "audit_events",
+        "campaign_clocks",
         "campaign_memberships",
+        "campaign_sessions",
+        "campaign_state_authority",
         "campaigns",
         "character_assignments",
         "character_drafts",
+        "character_states",
         "character_workflow_receipts",
         "characters",
+        "encounter_combatants",
+        "encounter_states",
         "invite_redemptions",
         "invites",
         "migration_runs",

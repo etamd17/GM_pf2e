@@ -29,7 +29,7 @@ _cached_database: Database | None = None
 _cached_url: str | None = None
 _database_lock = threading.Lock()
 # PR4B uses the unchanged PR4A schema. Update alongside future schema migrations.
-_REQUIRED_REVISION = "20261001_0002"
+_REQUIRED_REVISION = "20261110_0003"
 
 
 class StoreUnavailable(RuntimeError):
