@@ -12,6 +12,7 @@ from typing import Any
 
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from .models import (
     Campaign,
@@ -472,9 +473,16 @@ class MigrationRunRepository:
         )
         if result.rowcount != 1:
             raise ValueError("campaign migration run is already finished")
-        # Expire what the UPDATE wrote so the next read comes from the row.
-        # Copying the values onto the object instead would survive a SAVEPOINT
-        # rollback (which only expires objects the ORM itself changed) and
-        # leave the object claiming a finish the database no longer has.
-        self.session.expire(run, list(values))
+        # The UPDATE above won the row; now write the same values through the
+        # ORM and flush.  That second, unconditional UPDATE changes nothing in
+        # the row, but it makes this transaction (or SAVEPOINT) track the
+        # object, so a rollback expires it as it would any ORM change.  Merely
+        # expiring or copying the values would not: a SAVEPOINT rollback only
+        # expires objects the ORM itself flushed, so the object (and a rejoin
+        # through start_campaign_run, which returns it from the identity map)
+        # could keep claiming a finish the database no longer has.
+        for key, value in values.items():
+            setattr(run, key, value)
+            flag_modified(run, key)
+        self.session.flush()
         return run

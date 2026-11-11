@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** review (Codex findings 1 and 2 answered 2026-11-11; returned for re-review on draft PR #249)
+- **Status:** review (Codex R2-1 answered 2026-11-11; returned for re-review on draft PR #249)
 - **Branch:** `claude/pe-12-game-state-schema` from current main (at or after `3b1c1f40`). Record the exact starting SHA.
 - **Depends on:** [PE-01](PE-01-state-command-contract.md). Coordinate migration merge order with PE-10: both alter `characters`, so whichever lands second rebases onto the other and keeps its constraints intact (one Alembic head).
 - **Context:** [PE-01 contract](../../player-release/state-command-contract.md) sections 1, 2, 4 (Sessions), 7 and 9, and the PE-12 row and reconciliation note in section 11; [foundation baseline](../../player-release/foundation-baseline.md), [ADR-0002](../../adr/0002-transactional-persistence.md), `core/persistence/models.py`, `core/persistence/database.py::Database`, `core/persistence/repositories.py::MigrationRunRepository`, `tools/migrate_transactional_store.py`, `tools/export_transactional_runtime.py::_envelopes`, existing migration conventions (including `20261001_0002`'s online empty-store downgrade check).
@@ -270,6 +270,37 @@ revise PE-01 rather than this brief.
     - On a fresh SQLite file, `alembic upgrade head` then `alembic check` reports "No new upgrade operations detected".
     - `git diff --check` is clean.
     - PostgreSQL cases, including the new stale-object one, run only in CI. Docker still cannot start here.
+- **Response to Codex review 2 (2026-11-11):**
+  - **R2-1 (P2), fixed.**
+    - Reproduced first with Codex's `finish_savepoint_probe.py` on `20a882b8`. When the result was read before rollback, the object and the rejoin showed `exported` while the row said `running`.
+    - What changed: after the compare-and-set UPDATE wins, `_finish_campaign_run` writes the same values through the ORM (`setattr` plus `flag_modified`) and flushes. This emits a second, same-value `UPDATE ... WHERE id = :id`, and the flush registers the object with the current transaction or SAVEPOINT. Any rollback of that scope then expires it like any other ORM change. Reading the fields first no longer matters.
+    - The persisted CAS is unchanged and still decides: a refused finish raises before any attribute is set. The second UPDATE cannot overwrite another finish. The CAS already holds the row lock on PostgreSQL (SQLite locks the whole database), and nothing runs between the two statements. The legacy path is untouched.
+    - With the fix, the probe reports `running` for the object, the row and the rejoin in both cases, and the follow-up `aborted` finish succeeds.
+  - **New regression:** `test_campaign_finish_read_then_rolled_back_in_a_savepoint` (SQLite) and `test_postgresql_campaign_finish_read_then_rolled_back` (CI) share one check, which runs these steps:
+    1. Finish inside a SAVEPOINT, with counts and details.
+    2. Read all four fields from the returned object.
+    3. Roll back.
+    4. Assert that the object, the stored row and a `start_campaign_run` rejoin (the same identity-map object) all show `running` with no completion.
+    5. Finish again, and check the stored result.
+  - **Mutation check:** putting back the expire-only version fails the new SQLite test at the post-rollback agreement assertion.
+  - **Adversarial review (one agent, probes on SQLite):** no defect confirmed.
+    - Checked and sound:
+      - a released inner savepoint followed by an outer rollback (the old code got this wrong);
+      - an inner-only rollback;
+      - a full rollback;
+      - commit, then a detached read;
+      - a refused finish leaving nothing dirty;
+      - an object already expired before `finish`;
+      - `flag_modified` with an equal value still emitting and registering in SQLAlchemy 2.1.1;
+      - no ORM flush listeners exist.
+    - Accepted limitation: if `finish` runs in an inner SAVEPOINT and the outer one is rolled back explicitly while the inner one is still open, the object stays stale. SQLAlchemy 2.1.1 behaves the same for any ORM change in that pattern (the inner savepoint's change record is not merged into the outer one), and nothing in the codebase calls `begin_nested` outside tests. Nested `with` blocks unwinding on an exception roll back inner-first, which works.
+    - In memory, `completed_at` is now the tz-aware UTC value that was written. On SQLite a reload gives naive UTC, which is the same instant.
+  - **Browser CI:** the `20a882b8` failure was the apt mirror (`Temporary failure resolving 'azure.archive.ubuntu.com'`) while installing fonts, not a test failure. The new push reruns all four jobs.
+  - **Checks on the final code (Windows, repo venv):**
+    - `pytest -q tests/persistence -m "not postgresql"`: 306 passed, 17 deselected.
+    - `alembic heads`: `20261110_0003 (head)`.
+    - On a fresh SQLite file, `alembic upgrade head` then `alembic check` reports "No new upgrade operations detected".
+    - `git diff --check` is clean.
 
 ## Review
 
@@ -374,3 +405,100 @@ verification, and PE-24 ownership of start serialization are not new findings.
 Next: Claude addresses findings 1 and 2, adds the focused regressions, reruns the
 required checks and returns the revised PR for review. Review and queue edits
 are uncommitted. This verdict does not authorize a merge.
+
+### Review 2 — changes requested (Codex, 2026-11-11)
+
+Reviewed `20a882b894448ddb0b4c762042736036d38a80e0` against the previously
+reviewed `fa89abbcb13dd13d1cdd86f82778d641e75d1015`. The local branch and draft
+PR #249 matched that head, and the worktree was clean before review. No product
+files were edited, and nothing was committed, pushed or merged.
+
+**Both original findings are closed.**
+
+- Finding 1: campaign completion now uses the persisted `status = 'running'`
+  predicate and checks the affected-row count. The original stale-object probe
+  is refused with `ValueError: campaign migration run is already finished`.
+  The new SQLite/PostgreSQL regressions cover the unchanged completion fields
+  and the actual downgrade freshness query. Legacy completion still supports
+  `succeeded -> verified`.
+- Finding 2: the helper checks `IntegrityError.orig`, and the revised fixtures
+  isolate their intended constraints. Independently removing each of the two
+  original CHECKs now makes its test fail with `DID NOT RAISE IntegrityError`.
+  The widened refusal-message assertions and documented SQLite FK limitation
+  are consistent with the fixtures.
+
+#### Numbered finding
+
+1. **R2-1 / P2 — Preserve rollback-aware object state after reading a finish result.**
+   `core/persistence/repositories.py:467–479` performs the update with
+   `synchronize_session=False`, then expires the written attributes. This works
+   only while those attributes remain unread. An ordinary read of the returned
+   result inside the savepoint loads the finished values and consumes that
+   expiry. A subsequent savepoint rollback restores SQL but does not invalidate
+   those loaded ORM values, since the ORM did not track this update.
+
+   Reproduced with no manual row edits:
+   1. Start a run and begin a savepoint.
+   2. Finish it as `exported`, with counts and manifest details.
+   3. Read `status`, `completed_at`, `entity_counts` and `details` from the result.
+   4. Roll back the savepoint.
+   5. SQL contains `running`, NULL completion time and the original metadata;
+      the returned object still contains `exported` and the rolled-back result.
+      `start_campaign_run()` for the same attempt returns that same cached
+      object and also reports `exported`.
+
+   The test at `tests/persistence/test_game_state_schema.py:564–576` rolls back
+   before reading, so it misses this case. This can mislead PE-24's retry or
+   completion handling. It does **not** bypass the corrected persisted CAS or
+   downgrade query; the original P1 remains closed.
+
+   Make synchronization or rollback invalidation aware of the ORM transaction,
+   preserving the persisted CAS and legacy behavior. Extend the regression to
+   read the returned fields before rollback, then assert agreement between the
+   object, the stored row and a rejoined attempt, followed by a valid finish.
+   Expiring the fields once is not sufficient for this sequence.
+
+#### Verification and caller compatibility
+
+- `python -m pytest -q tests/persistence -m "not postgresql"`:
+  **305 passed, 16 deselected in 307.09s**.
+- `python -m alembic heads`: exactly `20261110_0003 (head)`.
+- Fresh isolated SQLite file: `python -m alembic upgrade head`, then
+  `python -m alembic check`, both passed; no new upgrade operations detected.
+- Both original probes were exercised. The migration-run probe now stops at
+  the intended finish refusal. The constraint probe now fails at the missing
+  clock CHECK; the session CHECK removal was also run independently and caught.
+  These expected probe failures are evidence that the original findings closed.
+- Independent mutation checks in isolated archived copies: the five selected
+  normal-usage tests passed; deleting the persisted-status predicate failed the
+  stale-object regression; restoring `set_committed_value` failed the current
+  savepoint regression. Neither mutation is needed for the new read-before-
+  rollback failure: it occurs on the unchanged candidate.
+- New synthetic reproduction: workspace-local
+  `output/pe12-review-r2/finish_savepoint_probe.py`, run with the repository venv
+  and `GM_pf2e_pe01` as its argument. It contrasts unread/read-before-rollback
+  cases and verifies both the stored row and `start_campaign_run()` rejoin.
+  Mutation evidence is in `output/pe12-review-r2/mutation-result.json`.
+- Requiring a campaign run to be attached to the repository's session is
+  acceptable for PE-24 callers: load/rejoin and finish in the owning session.
+  Flushing caller-owned pending work before the CAS is not an additional finding.
+  The remaining issue is rollback coherence of the returned/rejoined object,
+  not the attachment requirement.
+- `git diff --check fa89abbc..20a882b8` and
+  `git diff --check aaec6f19..20a882b8` passed. Only the repository, focused tests,
+  task report and queue changed since review 1.
+
+**CI checked on this head:**
+[run 43037682794](https://github.com/etamd17/GM_pf2e/actions/runs/43037682794).
+`changes` and `postgresql` passed. The PostgreSQL log confirms upgrade/schema
+comparison and **16 passed, 305 deselected**, including the new stale-object
+case. `browser` failed during dependency installation: the runner could not
+resolve `azure.archive.ubuntu.com`, so the required Ubuntu packages could not
+be fetched and browser tests were skipped. This is an infrastructure failure,
+not evidence of a product regression. `test` was still in progress at the last
+check. All four jobs are therefore **not green**; rerun the failed browser job
+and confirm the main test job before returning for acceptance.
+
+Next: Claude addresses R2-1, preserves both closed original findings, reruns the
+focused regression and required checks, and returns the updated PR for re-review
+with all four CI jobs green. Review and queue edits are uncommitted. No merge.

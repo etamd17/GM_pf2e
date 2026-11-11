@@ -576,6 +576,56 @@ def test_campaign_finish_rolled_back_in_a_savepoint_can_finish_again(sqlite_data
         assert session.get(MigrationRun, run.id).status == "aborted"
 
 
+def _run_fields(run):
+    return (run.status, run.completed_at, run.entity_counts, run.details)
+
+
+def _check_finish_read_then_rolled_back(database):
+    """Codex PE-12 R2-1: the finish result is read before the SAVEPOINT rolls back.
+
+    Reading the returned fields must not leave the object, the stored row and
+    a rejoined attempt disagreeing once the finish is undone; afterwards the
+    run must still finish normally.
+    """
+
+    attempt = {"campaign_id": "c1", "kind": "export", "source_checksum": "s",
+               "stream_epoch": 1, "tool_version": "t"}
+    stored_row = text("SELECT status, completed_at FROM migration_runs WHERE id = :id")
+    with database.transaction() as session:
+        repository = MigrationRunRepository(session)
+        run = repository.start_campaign_run(**attempt)
+        savepoint = session.begin_nested()
+        returned = repository.finish(run, status="exported",
+                                     entity_counts={"characters": 2},
+                                     details={"manifest": "rolled-back"})
+        status, completed_at, counts, details = _run_fields(returned)
+        assert (status, counts, details) == (
+            "exported", {"characters": 2}, {"manifest": "rolled-back"})
+        assert completed_at is not None
+        savepoint.rollback()
+
+        assert _run_fields(run) == ("running", None, {}, {})
+        assert tuple(session.execute(stored_row, {"id": run.id}).one()) == (
+            "running", None)
+        rejoined = repository.start_campaign_run(**attempt)
+        assert rejoined is run
+        assert _run_fields(rejoined) == ("running", None, {}, {})
+
+        repository.finish(run, status="exported", entity_counts={"characters": 3},
+                          details={"manifest": "kept"})
+        assert run.status == "exported"
+        assert run.entity_counts == {"characters": 3}
+    with database.session() as session:
+        stored = session.get(MigrationRun, run.id)
+        assert (stored.status, stored.entity_counts, stored.details) == (
+            "exported", {"characters": 3}, {"manifest": "kept"})
+        assert stored.completed_at is not None
+
+
+def test_campaign_finish_read_then_rolled_back_in_a_savepoint(sqlite_database):
+    _check_finish_read_then_rolled_back(sqlite_database)
+
+
 def test_campaign_finish_records_the_stored_values_on_the_caller(sqlite_database):
     with sqlite_database.transaction() as session:
         repository = MigrationRunRepository(session)
@@ -1113,6 +1163,11 @@ def test_postgresql_partial_indexes_and_composite_keys(postgres_database):
              match=_pg("uq_migration_runs_legacy_source_checksum"))
     _refused(postgres_database, _run("snap", campaign_id="c1", stream_epoch=1),
              match=_pg("uq_migration_runs_campaign_attempt"))
+
+
+@pytest.mark.postgresql
+def test_postgresql_campaign_finish_read_then_rolled_back(postgres_database):
+    _check_finish_read_then_rolled_back(postgres_database)
 
 
 @pytest.mark.postgresql
