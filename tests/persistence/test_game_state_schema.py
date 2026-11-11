@@ -9,6 +9,7 @@ environment configures logging globally and must not leak into other tests.
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 import uuid
@@ -98,11 +99,39 @@ def _seed(database, *campaigns):
             session.add(_character("pc-" + campaign_id, campaign_id))
 
 
-def _refused(database, *rows):
-    with pytest.raises(IntegrityError), database.transaction() as session:
+def _refused(database, *rows, match):
+    """Insert ``rows`` and require the refusal to come from ``match``.
+
+    ``match`` is a regex searched in the driver's own message only (not the
+    SQL statement SQLAlchemy appends).  SQLite names the CHECK constraint and
+    lists the columns of a violated unique key, so those refusals are pinned
+    by the message.  SQLite reports every foreign-key failure with the same
+    text, so an FK refusal is pinned only by its fixture: each such row
+    breaks exactly one foreign key.  PostgreSQL names every constraint and
+    index.
+    """
+    with pytest.raises(IntegrityError) as caught, database.transaction() as session:
         for row in rows:
             session.add(row)
             session.flush()
+    message = str(caught.value.orig)
+    assert re.search(match, message), message
+
+
+def _check(name):
+    return r"CHECK constraint failed: %s$" % re.escape(name)
+
+
+def _unique(table, *columns):
+    return r"UNIQUE constraint failed: %s$" % re.escape(
+        ", ".join(table + "." + column for column in columns))
+
+
+_FOREIGN_KEY = r"^FOREIGN KEY constraint failed$"
+
+
+def _pg(name):
+    return r'constraint "%s"' % re.escape(name)
 
 
 # --------------------------------------------------------------------------
@@ -127,25 +156,28 @@ def test_build_and_play_round_trip_with_independent_revisions(sqlite_database):
     assert rows["play"].rules_profile == "pf2e" and rows["play"].content == PIN
 
 
-@pytest.mark.parametrize("change", [
-    {"revision": -1}, {"domain": "inventory"}, {"rules_profile": "cosmere"},
-    {"schema_version": 0},
+@pytest.mark.parametrize("change, constraint", [
+    ({"revision": -1}, "revision_nonnegative"),
+    ({"domain": "inventory"}, "known_domain"),
+    ({"rules_profile": "cosmere"}, "known_rules_profile"),
+    ({"schema_version": 0}, "schema_version_positive"),
 ])
-def test_character_state_rejects_invalid_values(sqlite_database, change):
+def test_character_state_rejects_invalid_values(sqlite_database, change, constraint):
     _seed(sqlite_database, "c1")
     row = _state("c1", "pc-c1", "play")
     for key, value in change.items():
         setattr(row, key, value)
-    _refused(sqlite_database, row)
+    _refused(sqlite_database, row, match=_check("ck_character_states_" + constraint))
 
 
 def test_character_state_key_is_unique_and_campaign_scoped(sqlite_database):
     _seed(sqlite_database, "c1", "c2")
     with sqlite_database.transaction() as session:
         session.add(_state("c1", "pc-c1", "play"))
-    _refused(sqlite_database, _state("c1", "pc-c1", "play"))
+    _refused(sqlite_database, _state("c1", "pc-c1", "play"),
+             match=_unique("character_states", "campaign_id", "character_id", "domain"))
     # The composite FK refuses a character that belongs to another campaign.
-    _refused(sqlite_database, _state("c1", "pc-c2", "play"))
+    _refused(sqlite_database, _state("c1", "pc-c2", "play"), match=_FOREIGN_KEY)
 
 
 def test_state_rows_cascade_with_their_character(sqlite_database):
@@ -222,17 +254,22 @@ def test_one_active_encounter_per_campaign(sqlite_database):
     with sqlite_database.transaction() as session:
         session.add_all([_encounter("c1", "e1"), _encounter("c1", "old", status="ended"),
                          _encounter("c1", "older", status="ended"), _encounter("c2", "e9")])
-    _refused(sqlite_database, _encounter("c1", "e2"))
-    _refused(sqlite_database, _encounter("c1", "e3", status="paused"))
+    _refused(sqlite_database, _encounter("c1", "e2"),
+             match=_unique("encounter_states", "campaign_id"))
+    _refused(sqlite_database, _encounter("c1", "e3", status="paused"),
+             match=_check("ck_encounter_states_known_status"))
 
 
-@pytest.mark.parametrize("change", [{"round": -1}, {"turn": -1}, {"revision": -1}])
-def test_encounter_rejects_negative_counters(sqlite_database, change):
+@pytest.mark.parametrize("change, constraint", [
+    ({"round": -1}, "round_nonnegative"), ({"turn": -1}, "turn_nonnegative"),
+    ({"revision": -1}, "revision_nonnegative"),
+])
+def test_encounter_rejects_negative_counters(sqlite_database, change, constraint):
     _seed(sqlite_database, "c1")
     row = _encounter("c1", "e1")
     for key, value in change.items():
         setattr(row, key, value)
-    _refused(sqlite_database, row)
+    _refused(sqlite_database, row, match=_check("ck_encounter_states_" + constraint))
 
 
 def test_combatant_cannot_reference_another_campaigns_character(sqlite_database):
@@ -241,13 +278,15 @@ def test_combatant_cannot_reference_another_campaigns_character(sqlite_database)
         session.add(_encounter("c1", "e1"))
     _refused(sqlite_database, EncounterCombatant(
         campaign_id="c1", encounter_id="e1", combatant_id="k1", kind="pc",
-        character_id="pc-c2"))
+        character_id="pc-c2"), match=_FOREIGN_KEY)
     # A PC combatant must name its character.
     _refused(sqlite_database, EncounterCombatant(
-        campaign_id="c1", encounter_id="e1", combatant_id="k2", kind="pc"))
+        campaign_id="c1", encounter_id="e1", combatant_id="k2", kind="pc"),
+        match=_check("ck_encounter_combatants_pc_has_character"))
     # A combatant must belong to an encounter of the same campaign.
     _refused(sqlite_database, EncounterCombatant(
-        campaign_id="c2", encounter_id="e1", combatant_id="k3", kind="creature"))
+        campaign_id="c2", encounter_id="e1", combatant_id="k3", kind="creature"),
+        match=_FOREIGN_KEY)
 
 
 # --------------------------------------------------------------------------
@@ -255,14 +294,21 @@ def test_combatant_cannot_reference_another_campaigns_character(sqlite_database)
 
 
 def test_campaign_clocks(sqlite_database):
-    _seed(sqlite_database, "c1")
+    _seed(sqlite_database, "c1", "c2")
     with sqlite_database.transaction() as session:
         session.add_all([CampaignClock(campaign_id="c1", clock="world", value=600, revision=2),
                          CampaignClock(campaign_id="c1", clock="downtime", value=3, revision=0)])
-    _refused(sqlite_database, CampaignClock(campaign_id="c1", clock="world", value=1, revision=0))
-    _refused(sqlite_database, CampaignClock(campaign_id="c1", clock="round", value=1, revision=0))
-    _refused(sqlite_database, CampaignClock(campaign_id="c1", clock="downtime", value=-1,
-                                            revision=0))
+    _refused(sqlite_database, CampaignClock(campaign_id="c1", clock="world", value=1, revision=0),
+             match=_unique("campaign_clocks", "campaign_id", "clock"))
+    _refused(sqlite_database, CampaignClock(campaign_id="c1", clock="round", value=1, revision=0),
+             match=_check("ck_campaign_clocks_known_clock"))
+    # c2 has no clocks yet, so only the value can be wrong here.
+    _refused(sqlite_database, CampaignClock(campaign_id="c2", clock="downtime", value=-1,
+                                            revision=0),
+             match=_check("ck_campaign_clocks_value_nonnegative"))
+    _refused(sqlite_database, CampaignClock(campaign_id="c2", clock="world", value=0,
+                                            revision=-1),
+             match=_check("ck_campaign_clocks_revision_nonnegative"))
 
 
 def _session(campaign_id, session_id, status="active", **extra):
@@ -273,7 +319,7 @@ def _session(campaign_id, session_id, status="active", **extra):
 
 
 def test_one_active_session_per_campaign_and_ids_never_reused(sqlite_database):
-    _seed(sqlite_database, "c1", "c2")
+    _seed(sqlite_database, "c1", "c2", "c3")
     with sqlite_database.transaction() as session:
         session.add_all([
             _session("c1", "session-0001"),
@@ -283,10 +329,17 @@ def test_one_active_session_per_campaign_and_ids_never_reused(sqlite_database):
                             origin="backfill"),
             _session("c2", "session-0001"),
         ])
-    _refused(sqlite_database, _session("c1", "session-0002"))
-    _refused(sqlite_database, _session("c1", "session-0000", "ended"))
-    _refused(sqlite_database, _session("c1", "session-0003", "ended_badly"))
-    _refused(sqlite_database, _session("c2", "session-0004", "active", ended_at=NOW))
+    _refused(sqlite_database, _session("c1", "session-0002"),
+             match=_unique("campaign_sessions", "campaign_id"))
+    _refused(sqlite_database, _session("c1", "session-0000", "ended"),
+             match=_unique("campaign_sessions", "campaign_id", "session_id"))
+    _refused(sqlite_database, _session("c1", "session-0003", "ended_badly"),
+             match=_check("ck_campaign_sessions_known_status"))
+    # c3 has no sessions, so neither key can be the reason for these refusals.
+    _refused(sqlite_database, _session("c3", "session-0004", "active", ended_at=NOW),
+             match=_check("ck_campaign_sessions_active_not_ended"))
+    _refused(sqlite_database, _session("c3", "session-0005", "active", ended_by="gm"),
+             match=_check("ck_campaign_sessions_active_not_ended"))
 
 
 def test_campaign_state_authority(sqlite_database):
@@ -295,11 +348,14 @@ def test_campaign_state_authority(sqlite_database):
         session.add(CampaignStateAuthority(campaign_id="c1", authority="file",
                                            stream_epoch=1, changed_at=NOW))
     _refused(sqlite_database, CampaignStateAuthority(campaign_id="c1", authority="db",
-                                                     stream_epoch=2, changed_at=NOW))
+                                                     stream_epoch=2, changed_at=NOW),
+             match=_unique("campaign_state_authority", "campaign_id"))
     _refused(sqlite_database, CampaignStateAuthority(campaign_id="c2", authority="shadow",
-                                                     stream_epoch=1, changed_at=NOW))
+                                                     stream_epoch=1, changed_at=NOW),
+             match=_check("ck_campaign_state_authority_known_authority"))
     _refused(sqlite_database, CampaignStateAuthority(campaign_id="c2", authority="db",
-                                                     stream_epoch=0, changed_at=NOW))
+                                                     stream_epoch=0, changed_at=NOW),
+             match=_check("ck_campaign_state_authority_stream_epoch_positive"))
 
 
 # --------------------------------------------------------------------------
@@ -312,7 +368,8 @@ def test_locator_unique_only_among_active_rows(sqlite_database):
         session.add(_character("old-ana", "c1", legacy_file="Ana.json", archived_at=NOW))
         session.add(_character("new-ana", "c1", legacy_file="Ana.json"))
         session.add(_character("older-ana", "c1", legacy_file="Ana.json", archived_at=NOW))
-    _refused(sqlite_database, _character("third-ana", "c1", legacy_file="Ana.json"))
+    _refused(sqlite_database, _character("third-ana", "c1", legacy_file="Ana.json"),
+             match=_unique("characters", "campaign_id", "legacy_storage", "legacy_file"))
 
 
 # --------------------------------------------------------------------------
@@ -337,26 +394,29 @@ def test_migration_run_uniqueness(sqlite_database):
             _run("abc", campaign_id="c1", stream_epoch=1),
             _run("abc", campaign_id="c2", stream_epoch=1),
         ])
-    _refused(sqlite_database, _run("legacy"))
+    _refused(sqlite_database, _run("legacy"),
+             match=_unique("migration_runs", "source_checksum"))
     _refused(sqlite_database, _run("abc", campaign_id="c1", stream_epoch=1,
-                                   status="succeeded"))
+                                   status="succeeded"),
+             match=_unique("migration_runs", "campaign_id", "kind", "source_checksum",
+                           "stream_epoch"))
 
 
-@pytest.mark.parametrize("values", [
-    {"kind": "rollback", "campaign_id": "c1", "stream_epoch": 1},
-    {"status": "lost"},
-    {"campaign_id": "c1"},
-    {"stream_epoch": 3},
-    {"kind": "export"},
-    {"campaign_id": "c1", "stream_epoch": 0},
-    {"status": "exported", "campaign_id": "c1", "stream_epoch": 1},
-    {"status": "aborted"},
+@pytest.mark.parametrize("values, constraint", [
+    ({"kind": "rollback", "campaign_id": "c1", "stream_epoch": 1}, "known_kind"),
+    ({"status": "lost"}, "known_status"),
+    ({"campaign_id": "c1"}, "scope"),
+    ({"stream_epoch": 3}, "scope"),
+    ({"kind": "export"}, "scope"),
+    ({"campaign_id": "c1", "stream_epoch": 0}, "scope"),
+    ({"status": "exported", "campaign_id": "c1", "stream_epoch": 1}, "exported_is_export"),
+    ({"status": "aborted"}, "scope"),
 ])
-def test_migration_run_rejects_invalid_shapes(sqlite_database, values):
+def test_migration_run_rejects_invalid_shapes(sqlite_database, values, constraint):
     row = _run("x")
     for key, value in values.items():
         setattr(row, key, value)
-    _refused(sqlite_database, row)
+    _refused(sqlite_database, row, match=_check("ck_migration_runs_" + constraint))
 
 
 def test_legacy_repository_readers_ignore_campaign_runs(sqlite_database):
@@ -423,6 +483,126 @@ def test_campaign_run_finishes_only_once(sqlite_database):
             with pytest.raises(ValueError, match="already finished"):
                 repository.finish(run, status=status)
         assert run.status == "exported" and run.completed_at == completed_at
+
+
+def _unexported_campaigns(database):
+    query = text(_load_migration()._STATE_ROWS_WITHOUT_NEWER_EXPORT)
+    with database.session() as session:
+        return session.execute(query).scalars().all()
+
+
+def _check_stale_finish_is_refused(database, monkeypatch):
+    """Codex PE-12 finding 1, replayed with two separately loaded objects.
+
+    The export finishes at 10:00, state is written at 11:00, and an object
+    loaded before the first finish tries to finish the same run at 12:00.
+    That second finish must be refused by the stored row, and the downgrade's
+    export check must still see c1's 11:00 state as unexported.
+    """
+
+    from core.persistence import repositories  # noqa: PLC0415
+
+    at = {"now": datetime(2026, 11, 10, 10, 0, tzinfo=timezone.utc)}
+    monkeypatch.setattr(repositories, "utc_now", lambda: at["now"])
+    _seed(database, "c1")
+    with database.transaction() as session:
+        run_id = MigrationRunRepository(session).start_campaign_run(
+            campaign_id="c1", kind="export", source_checksum="out", stream_epoch=1,
+            tool_version="t").id
+
+    with database.session() as stale_session:
+        # Loaded while the run is still running, and kept: sessions do not
+        # expire on commit, so nothing refreshes it behind the caller's back.
+        stale = stale_session.get(MigrationRun, run_id)
+        assert stale.status == "running"
+        stale_session.commit()
+
+        with database.transaction() as session:
+            run = session.get(MigrationRun, run_id)
+            MigrationRunRepository(session).finish(
+                run, status="exported", entity_counts={"files": 3},
+                details={"manifest": "first"})
+        assert stale.status == "running"
+
+        with database.transaction() as session:
+            later = _state("c1", "pc-c1", "play")
+            later.updated_at = datetime(2026, 11, 10, 11, 0, tzinfo=timezone.utc)
+            session.add(later)
+        assert _unexported_campaigns(database) == ["c1"]
+
+        at["now"] = datetime(2026, 11, 10, 12, 0, tzinfo=timezone.utc)
+        for status in ("exported", "aborted"):
+            with pytest.raises(ValueError, match="already finished"):
+                MigrationRunRepository(stale_session).finish(
+                    stale, status=status, entity_counts={"files": 99},
+                    details={"manifest": "second"})
+            stale_session.commit()
+        # Nothing the refused finish carried is left pending on the object.
+        assert not stale_session.dirty
+
+    with database.session() as session:
+        stored = session.get(MigrationRun, run_id)
+        assert stored.status == "exported"
+        completed_at = stored.completed_at
+        if completed_at.tzinfo is None:  # SQLite hands back naive UTC
+            completed_at = completed_at.replace(tzinfo=timezone.utc)
+        assert completed_at == datetime(2026, 11, 10, 10, 0, tzinfo=timezone.utc)
+        assert stored.entity_counts == {"files": 3}
+        assert stored.details == {"manifest": "first"}
+    assert _unexported_campaigns(database) == ["c1"]
+
+
+def test_stale_campaign_run_object_cannot_finish_again(sqlite_url, monkeypatch):
+    database = Database(sqlite_url)
+    try:
+        database.create_schema()
+        _check_stale_finish_is_refused(database, monkeypatch)
+    finally:
+        database.dispose()
+
+
+def test_campaign_finish_rolled_back_in_a_savepoint_can_finish_again(sqlite_database):
+    with sqlite_database.transaction() as session:
+        repository = MigrationRunRepository(session)
+        run = repository.start_campaign_run(campaign_id="c1", kind="export",
+                                            source_checksum="s", stream_epoch=1,
+                                            tool_version="t")
+        savepoint = session.begin_nested()
+        repository.finish(run, status="exported")
+        savepoint.rollback()
+        assert run.status == "running" and run.completed_at is None
+        repository.finish(run, status="aborted")
+    with sqlite_database.session() as session:
+        assert session.get(MigrationRun, run.id).status == "aborted"
+
+
+def test_campaign_finish_records_the_stored_values_on_the_caller(sqlite_database):
+    with sqlite_database.transaction() as session:
+        repository = MigrationRunRepository(session)
+        run = repository.start_campaign_run(campaign_id="c1", kind="import",
+                                            source_checksum="s", stream_epoch=1,
+                                            tool_version="t")
+        repository.finish(run, status="succeeded", entity_counts={"characters": 2},
+                          details={"note": "ok"})
+        assert run.status == "succeeded" and run.completed_at is not None
+        assert not session.dirty
+    with sqlite_database.session() as session:
+        stored = session.get(MigrationRun, run.id)
+        assert (stored.status, stored.entity_counts, stored.details) == (
+            "succeeded", {"characters": 2}, {"note": "ok"})
+
+
+def test_legacy_run_still_moves_from_succeeded_to_verified(sqlite_database):
+    with sqlite_database.transaction() as session:
+        repository = MigrationRunRepository(session)
+        run = repository.start(source_checksum="s", source_path=None, tool_version="t")
+        repository.finish(run, status="succeeded")
+    with sqlite_database.transaction() as session:
+        # A separately loaded object, as the import tool's verify step uses.
+        run = session.get(MigrationRun, run.id)
+        MigrationRunRepository(session).finish(run, status="verified")
+    with sqlite_database.session() as session:
+        assert session.get(MigrationRun, run.id).status == "verified"
 
 
 @pytest.mark.parametrize("status", ["exported", "aborted"])
@@ -914,19 +1094,31 @@ def test_postgresql_partial_indexes_and_composite_keys(postgres_database):
                          _session("c1", "s1"),
                          _session("c1", "s0", "ended", ended_at=NOW, ended_by="gm"),
                          _state("c1", "pc-c1", "play")])
-    _refused(postgres_database, _encounter("c1", "e2"))
-    _refused(postgres_database, _session("c1", "s2"))
-    _refused(postgres_database, _state("c1", "pc-c2", "build"))
+    _refused(postgres_database, _encounter("c1", "e2"),
+             match=_pg("uq_encounter_states_one_active"))
+    _refused(postgres_database, _session("c1", "s2"),
+             match=_pg("uq_campaign_sessions_one_active"))
+    _refused(postgres_database, _state("c1", "pc-c2", "build"),
+             match=_pg("fk_character_states_character_campaign"))
     with postgres_database.transaction() as session:
         session.add(_character("old", "c1", legacy_file="Ana.json", archived_at=NOW))
         session.add(_character("new", "c1", legacy_file="Ana.json"))
-    _refused(postgres_database, _character("dup", "c1", legacy_file="Ana.json"))
+    _refused(postgres_database, _character("dup", "c1", legacy_file="Ana.json"),
+             match=_pg("uq_characters_active_legacy_locator"))
     with postgres_database.transaction() as session:
         session.add_all([_run("snap"), _run("snap", campaign_id="c1", stream_epoch=1,
                                             status="aborted"),
                          _run("snap", campaign_id="c1", stream_epoch=1)])
-    _refused(postgres_database, _run("snap"))
-    _refused(postgres_database, _run("snap", campaign_id="c1", stream_epoch=1))
+    _refused(postgres_database, _run("snap"),
+             match=_pg("uq_migration_runs_legacy_source_checksum"))
+    _refused(postgres_database, _run("snap", campaign_id="c1", stream_epoch=1),
+             match=_pg("uq_migration_runs_campaign_attempt"))
+
+
+@pytest.mark.postgresql
+def test_postgresql_stale_campaign_run_object_cannot_finish_again(postgres_database,
+                                                                  monkeypatch):
+    _check_stale_finish_is_refused(postgres_database, monkeypatch)
 
 
 @pytest.mark.postgresql

@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** review (implemented 2026-11-10 on `claude/pe-12-game-state-schema` from `aaec6f19`; draft PR #249 for CI evidence)
+- **Status:** review (Codex findings 1 and 2 answered 2026-11-11; returned for re-review on draft PR #249)
 - **Branch:** `claude/pe-12-game-state-schema` from current main (at or after `3b1c1f40`). Record the exact starting SHA.
 - **Depends on:** [PE-01](PE-01-state-command-contract.md). Coordinate migration merge order with PE-10: both alter `characters`, so whichever lands second rebases onto the other and keeps its constraints intact (one Alembic head).
 - **Context:** [PE-01 contract](../../player-release/state-command-contract.md) sections 1, 2, 4 (Sessions), 7 and 9, and the PE-12 row and reconciliation note in section 11; [foundation baseline](../../player-release/foundation-baseline.md), [ADR-0002](../../adr/0002-transactional-persistence.md), `core/persistence/models.py`, `core/persistence/database.py::Database`, `core/persistence/repositories.py::MigrationRunRepository`, `tools/migrate_transactional_store.py`, `tools/export_transactional_runtime.py::_envelopes`, existing migration conventions (including `20261001_0002`'s online empty-store downgrade check).
@@ -235,6 +235,142 @@ revise PE-01 rather than this brief.
   - PE-14: session-id uniqueness against folder keys.
   - PE-19/24: staging rows for import and the migration gate that serializes `start_campaign_run`.
   - PE-41: archive-aware locator lookups (`core/persistence/ownership.py`) now that two rows can share a locator.
+- **Response to Codex review 1 (2026-11-11):**
+  1. **Finding 1 (P1), fixed.**
+     - What changed: `MigrationRunRepository.finish` now hands campaign runs to `_finish_campaign_run`. That method flushes pending work, then runs one `UPDATE migration_runs ... WHERE id = :id AND status = 'running'`, and refuses with "already finished" unless exactly one row changed. The caller's in-memory status is no longer consulted. On PostgreSQL, a second concurrent finisher waits on the row lock, re-checks the predicate after the first commits, matches zero rows and is refused.
+     - After a successful finish, the method expires the attributes it wrote, so the next read comes from the row. My first version copied the values onto the object with `set_committed_value`. The follow-up review showed that a SAVEPOINT rollback then left the object claiming a finish the database no longer had. That is fixed and has its own test.
+     - It now refuses a run object that is not attached to the repository's session.
+     - Legacy runs (`campaign_id IS NULL`) take the old path unchanged, so `succeeded -> verified` still works.
+     - New tests:
+       - `test_stale_campaign_run_object_cannot_finish_again` (SQLite file) and `test_postgresql_stale_campaign_run_object_cannot_finish_again` (CI) replay Codex's sequence with two separately loaded objects. The export finishes at 10:00, state is written at 11:00, and the stale object's finish at 12:00 is refused with both `exported` and `aborted`. Status, `completed_at`, `entity_counts` and `details` keep the first finish's values, nothing is left dirty, and the migration's real `_STATE_ROWS_WITHOUT_NEWER_EXPORT` query still reports c1 afterwards.
+       - `test_campaign_finish_rolled_back_in_a_savepoint_can_finish_again`.
+       - `test_campaign_finish_records_the_stored_values_on_the_caller`.
+       - `test_legacy_run_still_moves_from_succeeded_to_verified`, which uses a separately loaded object.
+  2. **Finding 2 (P2), fixed, and widened to every model refusal test.**
+     - `_refused` now takes a required `match=` and searches the driver's own message (`IntegrityError.orig`), not the SQL text.
+     - SQLite refusals are pinned to the CHECK name (`CHECK constraint failed: ck_...`) or to the exact unique-key column list. PostgreSQL refusals are pinned to the constraint or index name.
+     - The clock test now writes the negative value and a negative revision to a campaign with no clocks. The session test writes active-with-`ended_at` and active-with-`ended_by` to a campaign with no sessions.
+     - SQLite reports every foreign-key failure with the same text, so the three SQLite FK refusals are pinned by their fixtures, each of which breaks exactly one foreign key. The helper's docstring says so.
+  - **Mutation checks (each run against the changed code, then restored):**
+    - Dropping the `status = 'running'` predicate fails the stale-object regression.
+    - Restoring the copy-onto-object version fails the savepoint test.
+    - Removing `ck_campaign_clocks_value_nonnegative` fails the clock test.
+    - Neutralising `ck_campaign_sessions_active_not_ended` fails the session test.
+    - The follow-up review independently mutated each of the 6 clock and session constraints; all 6 were caught.
+  - **Follow-up review:** a workflow of 8 agents, with a reviewer and a refuter per claim.
+    - Confirmed and fixed:
+      - the savepoint issue above;
+      - the FK docstring overclaimed;
+      - the PostgreSQL regression compared `completed_at` with `.replace(tzinfo=utc)`, which would fail on a server whose TimeZone is not UTC. It now normalises only naive values.
+    - Refuted: "the pre-UPDATE flush writes a stale object's own pending edits". That write comes from the caller committing its own edits, and it lands the same way without `finish`. `finish` writes none of its own values when it refuses.
+  - **Checks on the final code (Windows, repo venv):**
+    - `pytest -q tests/persistence -m "not postgresql"`: 305 passed, 16 deselected.
+    - `test_game_state_schema.py` alone: 62 passed, 3 deselected.
+    - `alembic heads`: `20261110_0003 (head)`.
+    - On a fresh SQLite file, `alembic upgrade head` then `alembic check` reports "No new upgrade operations detected".
+    - `git diff --check` is clean.
+    - PostgreSQL cases, including the new stale-object one, run only in CI. Docker still cannot start here.
 
 ## Review
-<!-- Codex appends numbered findings or acceptance. -->
+
+**Changes requested** (Codex, 2026-11-10). Reviewed
+`fa89abbcb13dd13d1cdd86f82778d641e75d1015` against base
+`aaec6f19bc122f8b11e54a49a8b9531b4a3dc6fd`, matching the current head of
+[draft PR #249](https://github.com/etamd17/GM_pf2e/pull/249). The worktree was
+clean before review. No commit, push, merge or product-code edit was made.
+
+### Numbered findings
+
+1. **P1 — Enforce campaign-run finish-once against the persisted status.**
+   `core/persistence/repositories.py:424–432` checks only the caller's ORM
+   object's `run.status`. Two sessions can load the same running export. After
+   session A finishes and commits, session B's retained object still says
+   `running`; its later, sequential `finish()` succeeds and moves `completed_at`.
+   The new test at `tests/persistence/test_game_state_schema.py:414–425` only
+   reuses one object and therefore misses this case.
+
+   Reproduced with synthetic records: the first finish records 10:00, encounter
+   state is written at 11:00, and the stale object's second finish records 12:00.
+   The migration's actual `_STATE_ROWS_WITHOUT_NEWER_EXPORT` query reports that
+   campaign before the second finish and omits it afterwards, despite no fresh
+   export. This can defeat the safeguard that prevents dropping unexported state
+   (`20261110_0003_game_state_schema.py:408–409`).
+
+   Make campaign completion conditional on the stored row still being `running`,
+   for example with an atomic compare-and-set that refuses a zero-row update.
+   A rejected second finish must leave status, completion time and other result
+   fields unchanged. Preserve the legacy `succeeded -> verified` path. Add a
+   regression using separately loaded ORM objects, including the export-freshness
+   consequence. This is not the deferred `start_campaign_run` check-then-insert
+   race: the reproduced finishes run sequentially, and the current caller contract
+   does not require a fresh run object at completion.
+
+2. **P2 — Isolate the intended CHECK violations in two model tests.**
+   At `tests/persistence/test_game_state_schema.py:264–265`, the negative clock
+   value also duplicates the existing `(c1, downtime)` primary key. At line 289,
+   the active session with `ended_at` also conflicts with c2's existing active
+   session. Both use the generic `_refused` helper, so unrelated uniqueness
+   failures can make them pass.
+
+   Independently removed `ck_campaign_clocks_value_nonnegative` and
+   `ck_campaign_sessions_active_not_ended` from fresh in-memory metadata and ran
+   the corresponding committed test functions unchanged: both still passed.
+   Use otherwise valid, nonconflicting fixtures and check the intended constraint
+   violation. Each test must fail if its intended CHECK is absent. The separate
+   downgrade-refusal helper at lines 634–641 correctly checks the `RuntimeError:`
+   line; that earlier Alembic-log issue is fixed.
+
+### Verification
+
+- Required local suite, using the repository venv:
+  `python -m pytest -q tests/persistence -m "not postgresql"`:
+  **300 passed, 1 failed, 15 deselected in 396.44s**. The failure was a
+  120-second subprocess timeout in
+  `test_runtime_http.py::test_database_outage_never_opens_legacy_gm_access[sql]`,
+  not an assertion failure. Its targeted rerun passed: **1 passed in 11.24s**.
+  This is not recorded as a new product finding or misreported as an entirely
+  green first run.
+- `python -m alembic heads`: exactly `20261110_0003 (head)`.
+- `python -m alembic upgrade head` followed by `python -m alembic check` on a
+  new, isolated SQLite file: passed; **No new upgrade operations detected**.
+- Additional synthetic SQLite probes injected a late upgrade failure and a late
+  downgrade failure. In both directions the complete schema, every row and the
+  Alembic stamp were unchanged after failure. Removing the injected collision
+  and retrying succeeded, preserved legacy values, and left a clean
+  `foreign_key_check`. Migrated CHECK names and expressions matched the models.
+- Inspected PostgreSQL plain ALTERs, `op.f` use for CHECK operations, model/index
+  parity, composite FKs and cascades. Live PostgreSQL was verified through CI,
+  not locally.
+- Campaign-run scoping probes preserved all **4 runtime legacy files** and all
+  **5 legacy reverse-export files** byte-for-byte before/after adding campaign
+  runs. Runtime history retained all runs; the deliberately changing history
+  sidecar and manifest were excluded from the runtime legacy-file comparison.
+- `git diff --check aaec6f19..fa89abbc` passed. Changed paths are within the brief.
+
+**CI checked on the reviewed head:**
+[run 42925552222](https://github.com/etamd17/GM_pf2e/actions/runs/42925552222)
+has all four jobs completed successfully: `changes`, `test`, `postgresql`, and
+`browser`. The main `test` job's log records 950 PF2e package checks passed,
+then **4520 passed, 136 skipped, 195 deselected, 1 xfailed** in its main pytest
+run. The PostgreSQL log records successful migration/schema comparison and
+**15 passed, 301 deselected**. PR #249 remains draft and unmerged.
+
+Supplemental probes are local review evidence under the workspace's
+`output/pe12-review/`, outside the product worktree:
+`migration_run_probe.py`, `constraint_probes.py`, `migration_retry_probe.py`
+and `migration-retry-result.json`. They use only synthetic data. The first two
+reproduce the numbered findings; the third verifies rollback and retry behavior.
+
+### Judgment calls and next step
+
+Accepted within this schema task: deriving stale state from authority; comparing
+the maximum state-row `updated_at` per campaign against completed exports;
+retaining migration-run evidence without a campaign FK; blocking downgrade for
+archived characters; and deleting campaign-run machinery only after the downgrade
+guards pass. PE-13 must maintain UTC `updated_at` on every write, as the report
+states. The known SQLite timestamp-format limit, diff size, CI-only PostgreSQL
+verification, and PE-24 ownership of start serialization are not new findings.
+
+Next: Claude addresses findings 1 and 2, adds the focused regressions, reruns the
+required checks and returns the revised PR for review. Review and queue edits
+are uncommitted. This verdict does not authorize a merge.

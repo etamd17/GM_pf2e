@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from .models import (
@@ -417,12 +417,11 @@ class MigrationRunRepository:
     ) -> MigrationRun:
         if status not in _FINISH_STATUSES.get(_run_scope(run), ()):
             raise ValueError("unknown migration result status")
-        # A campaign run finishes once.  Re-finishing an exported run would
-        # move its completed_at past state written since, which is exactly
-        # what the populated downgrade compares against.  (Legacy runs keep
-        # their succeeded -> verified step.)
-        if run.campaign_id is not None and run.status != "running":
-            raise ValueError("campaign migration run is already finished")
+        if run.campaign_id is not None:
+            return self._finish_campaign_run(
+                run, status=status, entity_counts=entity_counts, details=details
+            )
+        # Legacy runs keep their succeeded -> verified step.
         run.status = status
         if entity_counts is not None:
             run.entity_counts = dict(entity_counts)
@@ -430,4 +429,52 @@ class MigrationRunRepository:
             run.details = dict(details)
         run.completed_at = utc_now()
         self.session.flush()
+        return run
+
+    def _finish_campaign_run(
+        self,
+        run: MigrationRun,
+        *,
+        status: str,
+        entity_counts: dict[str, Any] | None,
+        details: dict[str, Any] | None,
+    ) -> MigrationRun:
+        """Finish a campaign run exactly once, judged by the stored row.
+
+        Re-finishing an exported run would move its ``completed_at`` past
+        state written since, which is exactly what the populated downgrade
+        compares against.  The caller's object may be stale (sessions do not
+        expire on commit, and another session may have finished the run), so
+        the guard is a compare-and-set on the row itself: the UPDATE only
+        matches while the stored status is still ``running``.  On PostgreSQL a
+        concurrent finisher blocks on the row lock and then re-evaluates the
+        predicate, so exactly one of two racing finishes wins.
+
+        The caller's in-memory status is deliberately not consulted: only
+        the stored row decides.
+        """
+
+        if run not in self.session:
+            raise ValueError("migration run is not attached to this session")
+        values: dict[str, Any] = {"status": status, "completed_at": utc_now()}
+        if entity_counts is not None:
+            values["entity_counts"] = dict(entity_counts)
+        if details is not None:
+            values["details"] = dict(details)
+        # Push any pending change to this row first, so the UPDATE below
+        # cannot be overwritten by a later flush of stale attributes.
+        self.session.flush()
+        result = self.session.execute(
+            update(MigrationRun)
+            .where(MigrationRun.id == run.id, MigrationRun.status == "running")
+            .values(**values)
+            .execution_options(synchronize_session=False)
+        )
+        if result.rowcount != 1:
+            raise ValueError("campaign migration run is already finished")
+        # Expire what the UPDATE wrote so the next read comes from the row.
+        # Copying the values onto the object instead would survive a SAVEPOINT
+        # rollback (which only expires objects the ORM itself changed) and
+        # leave the object claiming a finish the database no longer has.
+        self.session.expire(run, list(values))
         return run
