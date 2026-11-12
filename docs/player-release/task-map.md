@@ -18,12 +18,14 @@ Dependencies below follow section 11 of the accepted [state and command contract
 | PE-05 | P3 carryover | Codex | blocked | PE-04 | [Reconcile UI-11 presentation after UI-18 disposition](../handoff/tasks/PE-05-ui11-reconcile.md) |
 | PE-06 | P3 carryover | Claude | blocked | PE-04, PE-05 | [Fix existing level-up HP preview inconsistency](../handoff/tasks/PE-06-levelup-hp-consistency.md) |
 | PE-07 | P0 | Claude | ready | — | [Player journey mockups and UI contract](../handoff/tasks/PE-07-player-ux-design.md) |
-| PE-10 | P1 | Claude | ready | PE-01 | [Extend D&D campaign/character identity constraints](../handoff/tasks/PE-10-dnd5e-identity.md) |
-| PE-11 | P1 | Claude | blocked | PE-10 | [D&D locator, ownership, import/export integration](../handoff/tasks/PE-11-dnd5e-locator.md) |
-| PE-12 | P1 | Claude | ready | PE-01 | [Character/encounter state, session, clock and authority tables; `migration_runs` and `characters.archived_at` changes](../handoff/tasks/PE-12-game-state-schema.md) |
+| PE-10 | P1 | Claude | done (PR #250) | PE-01 | [Extend D&D campaign/character identity constraints](../handoff/tasks/PE-10-dnd5e-identity.md) |
+| PE-11a | P1 | Claude | ready | PE-10 | [D&D locator, read-side identity and forward-import planning](../handoff/tasks/PE-11a-dnd5e-locator.md) |
+| PE-11b | P1 | Claude | blocked | PE-11a | [SQL-mode campaign-archive restore for D&D characters](../handoff/tasks/PE-11b-dnd5e-archive-restore.md) |
+| PE-11c | P1 | Claude | blocked | PE-11a | [Runtime reverse export of D&D characters](../handoff/tasks/PE-11c-dnd5e-runtime-export.md) |
+| PE-12 | P1 | Claude | done (PR #249) | PE-01 | [Character/encounter state, session, clock and authority tables; `migration_runs` and `characters.archived_at` changes](../handoff/tasks/PE-12-game-state-schema.md) |
 | PE-13 | P1 | Claude | needs brief | PE-12 | Campaign-scoped state repositories, revision check order, conflict body and lock order |
 | PE-14 | P1 | Claude | needs brief | PE-01, PE-12, PE-13 | Campaign streams, command receipts, gameplay events (the outbox), grants, operation-status read, session start/end and stream-locked authorization writes |
-| PE-15 | P1 | Claude | needs brief | PE-11, PE-13, PE-14 | D&D state adapter: build, play and encounter commands preserving build revisions (inventory, currency and item charges go to PE-41) |
+| PE-15 | P1 | Claude | needs brief | PE-11a, PE-11b, PE-11c, PE-13, PE-14 | D&D state adapter: build, play and encounter commands preserving build revisions (inventory, currency and item charges go to PE-41) |
 | PE-16 | P1 | Claude | needs brief | PE-01, PE-02, PE-13 | PF2e detached read/derive adapter |
 | PE-17 | P1 | Claude | needs brief | PE-16, PE-14 | PF2e vitals command migration, including `shield_block` HP and reaction |
 | PE-18 | P1 | Claude | needs brief | PE-17 | PF2e conditions/resources command migration, including `toggle_shield`; with PE-17, the PF2e encounter writers |
@@ -41,10 +43,10 @@ Dependencies below follow section 11 of the accepted [state and command contract
 | PE-32 | P2 | Claude | needs brief | PE-30, PE-24, PE-18 | PF2e targeted action resolution; split by action family |
 | PE-33 | P2 | Claude | needs brief | PE-30, PE-24, PE-15 | D&D targeted action resolution; both editions |
 | PE-34 | P2 | Claude | needs brief | PE-32, PE-33 | Effect clocks, own-condition commands and corrections |
-| PE-35 | P3 | Claude | needs brief | PE-11, PE-15 | D&D shared private drafts and publication (absorbs 5E-05) |
+| PE-35 | P3 | Claude | needs brief | PE-11a, PE-11b, PE-11c, PE-15 | D&D shared private drafts and publication (absorbs 5E-05) |
 | PE-36 | P3 | Claude | needs brief | PE-02, PE-16, PE-14, PE-18b | PF2e drafts and publication on PE-18b's publish command; reconcile PR6/PR7 |
 | PE-37 | P3 | Claude | needs brief | PE-35, PE-36, PE-24 | GM advancement unlocks and retraining transitions; split by workflow |
-| PE-40 | P1 | Claude | needs brief | PE-11, PE-13, PE-14 | Item instances, wallets, ledger lines, locks and id backfill (no cascade from characters) |
+| PE-40 | P1 | Claude | needs brief | PE-11a, PE-13, PE-14 | Item instances, wallets, ledger lines, locks and id backfill (no cascade from characters) |
 | PE-41 | P1 | Claude | needs brief | PE-40, PE-15, PE-17, PE-18, PE-18b | Containers/equipment/investment/attunement storage; D&D and PF2e inventory, equipment and currency writers, item charges, character archive, and item input to derivation |
 | PE-42 | P4 | Claude | needs brief | PE-40, PE-24, PE-14 | Accepted transfers and pending-item locks |
 | PE-43 | P4 | Claude | needs brief | PE-40, PE-24 | Persistent shops and catalog purchase requests |

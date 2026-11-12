@@ -18,7 +18,7 @@ ready/priority entries below where they conflict; historical logs remain intact.
 New wiki and VTT/map work is parked, shipped tools retain maintenance, and
 Cosmere/Mistborn expansion follows the PF2e plus D&D 2014/2024 release.
 
-PE-00, PE-01, PE-03, PE-04 and PE-12 are done. PE-02 and PE-07 are ready; PE-10 is in review.
+PE-00, PE-01, PE-03, PE-04, PE-10 and PE-12 are done. PE-02, PE-07 and PE-11a are ready.
 Dependencies follow section 11 of the accepted
 [state and command contract](../player-release/state-command-contract.md). Blocked briefs
 cannot be claimed until accepted dependencies are integrated. Needs-brief rows
@@ -35,12 +35,14 @@ before they become ready. Owners review each other's output under PROTOCOL.md.
 | PE-05 | Reconcile UI-11 presentation after UI-18 disposition | codex | standard; high for review | blocked (PE-04) | [brief](tasks/PE-05-ui11-reconcile.md) |
 | PE-06 | Fix existing level-up HP preview inconsistency | claude | high; select current model | blocked (PE-04, PE-05) | [brief](tasks/PE-06-levelup-hp-consistency.md) |
 | PE-07 | Player journey mockups and UI contract | claude | high; select current model | ready | [brief](tasks/PE-07-player-ux-design.md) |
-| PE-10 | Extend D&D campaign/character identity constraints | claude | high; select current model | done (accepted; awaiting merge) | [brief](tasks/PE-10-dnd5e-identity.md) |
-| PE-11 | D&D locator, ownership, import/export integration | claude | high; select current model | blocked (PE-10) | [brief](tasks/PE-11-dnd5e-locator.md) |
+| PE-10 | Extend D&D campaign/character identity constraints | claude | high; select current model | done (merged in PR #250) | [brief](tasks/PE-10-dnd5e-identity.md) |
+| PE-11a | D&D locator, read-side identity and forward-import planning | claude | high; select current model | ready | [brief](tasks/PE-11a-dnd5e-locator.md) |
+| PE-11b | SQL-mode campaign-archive restore for D&D characters | claude | high; select current model | blocked (PE-11a) | [brief](tasks/PE-11b-dnd5e-archive-restore.md) |
+| PE-11c | Runtime reverse export of D&D characters | claude | high; select current model | blocked (PE-11a) | [brief](tasks/PE-11c-dnd5e-runtime-export.md) |
 | PE-12 | Character/encounter state, session, clock and authority tables; `migration_runs` and `characters.archived_at` changes | claude | high; select current model | done (merged in PR #249) | [brief](tasks/PE-12-game-state-schema.md) |
 | PE-13 | Campaign-scoped state repositories, revision check order, conflict body and lock order | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-12 |
 | PE-14 | Campaign streams, command receipts, gameplay events (the outbox), grants, operation-status read, session start/end and stream-locked authorization writes | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-01, PE-12, PE-13 |
-| PE-15 | D&D state adapter: build, play and encounter commands preserving build revisions (inventory, currency and item charges go to PE-41) | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-11, PE-13, PE-14 |
+| PE-15 | D&D state adapter: build, play and encounter commands preserving build revisions (inventory, currency and item charges go to PE-41) | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-11a, PE-11b, PE-11c, PE-13, PE-14 |
 | PE-16 | PF2e detached read/derive adapter | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-01, PE-02, PE-13 |
 | PE-17 | PF2e vitals command migration, including `shield_block` HP and reaction | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-16, PE-14 |
 | PE-18 | PF2e conditions/resources command migration, including `toggle_shield`; with PE-17, the PF2e encounter writers | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-17 |
@@ -58,10 +60,10 @@ before they become ready. Owners review each other's output under PROTOCOL.md.
 | PE-32 | PF2e targeted action resolution; split by action family | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-30, PE-24, PE-18 |
 | PE-33 | D&D targeted action resolution; both editions | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-30, PE-24, PE-15 |
 | PE-34 | Effect clocks, own-condition commands and corrections | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-32, PE-33 |
-| PE-35 | D&D shared private drafts and publication (absorbs 5E-05) | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-11, PE-15 |
+| PE-35 | D&D shared private drafts and publication (absorbs 5E-05) | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-11a, PE-11b, PE-11c, PE-15 |
 | PE-36 | PF2e drafts and publication on PE-18b's publish command; reconcile PR6/PR7 | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-02, PE-16, PE-14, PE-18b |
 | PE-37 | GM advancement unlocks and retraining transitions; split by workflow | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-35, PE-36, PE-24 |
-| PE-40 | Item instances, wallets, ledger lines, locks and id backfill (no cascade from characters) | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-11, PE-13, PE-14 |
+| PE-40 | Item instances, wallets, ledger lines, locks and id backfill (no cascade from characters) | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-11a, PE-13, PE-14 |
 | PE-41 | Containers/equipment/investment/attunement storage; D&D and PF2e inventory, equipment and currency writers, item charges, character archive, and item input to derivation | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-40, PE-15, PE-17, PE-18, PE-18b |
 | PE-42 | Accepted transfers and pending-item locks | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-40, PE-24, PE-14 |
 | PE-43 | Persistent shops and catalog purchase requests | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-40, PE-24 |
@@ -240,6 +242,7 @@ Accepted as a design checkpoint. Notes:
 
 ## Log
 
+- 2026-11-11 Claude: merged PE-10 (PR #250) once all four checks passed, then checked the PE-11 brief against the merged code. It was too big for one change (about 700 lines against a 500-line limit) and missed some of how D&D characters are stored, so it is now three tasks. PE-11a teaches the shared code and the import planner to recognize D&D character files; it is ready. PE-11b (restoring a D&D campaign backup) and PE-11c (the rollback export) wait for it. Until the D&D pages move over (PE-15), the D&D character file stays the source of truth for who owns a character. Found while checking: since PE-10, a database-mode rehearsal that creates a D&D campaign can no longer produce a rollback export. Production runs file mode, so nothing live is affected; PE-11a fixes it. Next: Codex checks the decisions in the three briefs, then Claude builds PE-11a.
 - 2026-11-11 Codex: accepted PE-10 with no findings. D&D identities follow the agreed file names; existing characters and access records survive the schema change and failed-change retries. All four CI jobs are green. One local test timed out and passed alone; PostgreSQL passed in CI. Next: Claude commits the review, confirms green checks and merges, then prepares PE-11 against the merged code. Nothing was committed or merged by this review.
 - 2026-11-11 Claude: merged PE-12 (PR #249) once all four checks passed, then built PE-10. The database can now hold D&D campaigns and characters alongside PF2e and Cosmere ones. Each D&D character's record must point at its own file, and a character can no longer be moved to another campaign or rules system by an ordinary save. Taking the change back out is refused while any D&D record exists. Nothing on the site uses this yet. Persistence tests: 347 passed; PostgreSQL runs in CI. Next: Codex reviews the draft PR; PE-11 waits for its acceptance.
 - 2026-11-11 Codex: accepted PE-12 review 3 with no remaining code findings. Undoing a finish now also clears the remembered result after it has been read. All 306 local persistence checks passed, as did the main and PostgreSQL CI jobs. Browser CI still fails downloading dependencies from the Ubuntu mirror. Next: Claude commits the review, gets all four checks green and merges; dependent work waits for that merge. Nothing was committed or merged by this review.
