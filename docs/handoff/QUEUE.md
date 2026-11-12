@@ -98,6 +98,16 @@ before they become ready. Owners review each other's output under PROTOCOL.md.
 Done: 5E-00 data stays out of git; 5E-01 merged as PR #175; 5E-02 data installed on Railway,
 checked live, and survived a redeploy (2026-10-13).
 
+## PF2e sheet maintenance
+
+Requested by the GM 2026-11-12; design approved by the user the same day:
+[spec](../superpowers/specs/2026-11-12-pf2e-sheet-edit-design.md).
+
+| ID | Task | Owner | Model | Status | Brief |
+|---|---|---|---|---|---|
+| SE-01 | Sheet edit part 1: meta fields (deity fix) and GM-only stat adjustments | claude | Opus, high | ready | [brief](tasks/SE-01-pf2e-sheet-edit-core.md) |
+| SE-02 | Sheet edit part 2: feats/features, companion edit, Import JSON | claude | Opus, high | blocked (SE-01; sheet save-bug fixes) | [brief](tasks/SE-02-pf2e-sheet-edit-lists.md) |
+
 ## UI/UX (PF2e + Cosmere)
 
 Approved directions for 18 screens are recorded in `tasks/UI-00.md` (Codex's design review; the
@@ -239,6 +249,8 @@ Accepted as a design checkpoint. Notes:
 - Two of the bugs were checked on current `main` (marked above); the rest are unconfirmed.
 
 ## Log
+
+- 2026-11-12 Claude: designed a way for the GM and the owning player to fix a character on its own sheet without re-importing from Pathbuilder. The user approved the design: anyone can fix details such as the deity, only the GM can nudge numbers up or down, and the engine still computes every stat. Next: Claude builds part 1 (SE-01) and Codex reviews it; part 2 waits for part 1 and the save-bug fixes.
 
 - 2026-11-11 Codex: accepted PE-10 with no findings. D&D identities follow the agreed file names; existing characters and access records survive the schema change and failed-change retries. All four CI jobs are green. One local test timed out and passed alone; PostgreSQL passed in CI. Next: Claude commits the review, confirms green checks and merges, then prepares PE-11 against the merged code. Nothing was committed or merged by this review.
 - 2026-11-11 Claude: merged PE-12 (PR #249) once all four checks passed, then built PE-10. The database can now hold D&D campaigns and characters alongside PF2e and Cosmere ones. Each D&D character's record must point at its own file, and a character can no longer be moved to another campaign or rules system by an ordinary save. Taking the change back out is refused while any D&D record exists. Nothing on the site uses this yet. Persistence tests: 347 passed; PostgreSQL runs in CI. Next: Codex reviews the draft PR; PE-11 waits for its acceptance.
