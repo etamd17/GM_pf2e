@@ -2,6 +2,7 @@
 
 <!-- ============ BRIEF (written before work starts) ============ -->
 
+- **Status:** review (Codex)
 - **Owner:** claude (stat derivation and save format are high-risk: Claude implements)
 - **Reviewer:** codex
 - **Branch:** `claude/se-01-pf2e-sheet-edit-core` from current main. Record the starting SHA.
@@ -95,10 +96,53 @@ The GM can also add signed adjustments to engine-computed numbers. Both survive 
 <!-- ============ REPORT (written by the implementer) ============ -->
 
 ## Report
+- **Starting SHA:** `93aede06` (main); spec and plan commits `f96f4cdd`..`359dc435`.
 - **Changed:**
-- **Tests run:**
+  - `core/sheet_edits.py` (new): patch validation and merge. Only `meta` and `adjust` are accepted; `feats` and `features` return 400 until SE-02.
+  - `app.py` `Character`:
+    - `sheet_edits` is read first; ability adjustments are applied in the mods loop.
+    - `_adj` terms are added to AC, the saves, Perception, class DC, spell attack (spell DC), HP (with a floor of 1 only when adjusted), speed, the skills and lores.
+    - The breakdown tooltips show `GM adj`.
+    - `_apply_sheet_meta` runs at the end of `__init__`.
+    - New `adjusted_keys` and `display_name`.
+  - `app.py` routes: `POST /api/sheet_edits/<pc_name>` (owner or GM; a non-GM `adjust` gets 403) and `/reset` (GM). Both validate before the read, flush before the read via `require_pc_json`, and broadcast `pc_update`.
+  - `app.py` sheet render: `_sheet_edit_numbers`, `_sheet_edit_pathbuilder_meta`; `sheet_edits` added to `PRESERVE_KEYS`.
+  - `core/route_policy.py`: `update_sheet_edits` (owner or GM by `pc_name`), `reset_sheet_edits` (live campaign GM).
+  - Templates:
+    - New `_pc_sheet/_edit_modal.html` (native `<dialog>`; the Numbers tab is rendered only for the GM).
+    - New `_pc_sheet/_js_sheet_edit.html` (event listeners only).
+    - Entry points in the `⋯` menu and the meta rail.
+    - Header shows `display_name`; GM markers on the adjusted header stats.
+    - A new `<style>` block after `ds.css`.
+  - `tests/test_pf2e_player_sheet_ui.py`: the UI-10 inventory parser skips `data-se-additive` subtrees. The existing digests are unchanged.
+- **Tests run** (Python 3.11 venv, `DATA_DIR=$(mktemp -d)`):
+  - `pytest -q tests/test_sheet_edits.py`: 61 passed.
+  - `pytest -q tests/test_pc_snapshots.py tests/test_pb_ground_truth.py`: all passed, including the 4 live-party snapshots (local `party_data/` copied in); no snapshot regenerated.
+  - `pytest -q tests/test_pc_save_reload_race.py tests/test_inline_handler_escaping.py tests/test_player_sheet_inline_handlers.py tests/test_pf2e_player_sheet_ui.py tests/test_route_policy_inventory.py tests/test_access_policy_unit.py`: passed.
+  - `python tools/check_templates.py`: all 113 templates parse.
+  - Full `pytest -q`: 5462 passed, 37 failed, 187 errors.
+    - That failure set is identical before and after the change.
+    - All 27 non-browser failures also fail on unmodified main `93aede06` locally.
+    - The 10 browser failures and all errors need Playwright or PostgreSQL, which are not installed locally; CI runs both.
+- **Dev server** (isolated `DATA_DIR`, browser pane):
+  - The GM fixed Go'el's deity to Ragathiel; it survived a merge re-import of the stale "Rathathiel" file.
+  - AC +1 showed 27 -> 28 in the modal and in the header with the GM marker.
+  - With `GM_PASSWORD` set, the player session shows no Numbers tab; `adjust` returned 403 "Only the GM can adjust numbers."; a meta edit returned 200 and kept the GM's adjustment.
+- **Final review:** a fresh reviewer (Opus) found 0 critical, 2 important and 3 minor issues.
+  - Fixed, each with a test that failed first:
+    - Lore adjustments ignored on builder-made PCs (`lore: x` key).
+    - No `pc_update` broadcast after a save.
+    - A large negative spell DC adjustment hid the Spell DC row (re-graded to important).
 - **Skipped / not verified:**
+  - `tests/test_pb_import_correctness.py` does not exist on main, so it was not run.
+  - Not verified on Railway.
 - **Known wrong / limitations:**
+  - The Numbers tab's "computed" column includes the active conditions, raised shield, buffs and the HP floor, so the shown baseline can be off by those; the saved delta is still correct.
+  - A hand-edited file with a non-dict `sheet_edits` section makes the edit route 500.
+  - A `meta.size` override also changes the map token footprint, which goes beyond display.
+  - Over the brief's ~500-line budget: about 1,000 lines, of which 392 are tests.
 - **Follow-ups (not done here):**
+  - Show `display_name` on tracker rows, the player encounter view and the GM party board. This was deferred because `tracker.html` is high-risk and those views key on `pc.name`.
+  - SE-02.
 
 ## Review

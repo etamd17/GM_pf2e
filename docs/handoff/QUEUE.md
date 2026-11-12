@@ -105,7 +105,7 @@ Requested by the GM 2026-11-12; design approved by the user the same day:
 
 | ID | Task | Owner | Model | Status | Brief |
 |---|---|---|---|---|---|
-| SE-01 | Sheet edit part 1: meta fields (deity fix) and GM-only stat adjustments | claude | Opus, high | ready | [brief](tasks/SE-01-pf2e-sheet-edit-core.md) |
+| SE-01 | Sheet edit part 1: meta fields (deity fix) and GM-only stat adjustments | claude | Opus, high | review (Codex) | [brief](tasks/SE-01-pf2e-sheet-edit-core.md) |
 | SE-02 | Sheet edit part 2: feats/features, companion edit, Import JSON | claude | Opus, high | blocked (SE-01; sheet save-bug fixes) | [brief](tasks/SE-02-pf2e-sheet-edit-lists.md) |
 
 ## UI/UX (PF2e + Cosmere)
@@ -250,6 +250,7 @@ Accepted as a design checkpoint. Notes:
 
 ## Log
 
+- 2026-11-12 Claude: built part 1 of sheet editing (SE-01). The GM or the player can now fix a character's details, such as Go'el's deity, on the sheet, and the fix survives re-importing from Pathbuilder. Only the GM can nudge numbers up or down, and players see a small GM marker on those. All new tests pass; the only failing tests also fail on main or need a browser/database this machine lacks. Next: Codex reviews the PR; part 2 waits for the save-bug fixes (#252) to merge.
 - 2026-11-12 Claude: designed a way for the GM and the owning player to fix a character on its own sheet without re-importing from Pathbuilder. The user approved the design: anyone can fix details such as the deity, only the GM can nudge numbers up or down, and the engine still computes every stat. Next: Claude builds part 1 (SE-01) and Codex reviews it; part 2 waits for part 1 and the save-bug fixes.
 
 - 2026-11-11 Codex: accepted PE-10 with no findings. D&D identities follow the agreed file names; existing characters and access records survive the schema change and failed-change retries. All four CI jobs are green. One local test timed out and passed alone; PostgreSQL passed in CI. Next: Claude commits the review, confirms green checks and merges, then prepares PE-11 against the merged code. Nothing was committed or merged by this review.
