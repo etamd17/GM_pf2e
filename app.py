@@ -25459,6 +25459,60 @@ def remove_pet(pc_name):
     save_and_reload_character(pc_name, pc_json, file_path)
     return jsonify({"success": True})
 
+def _sheet_edits_error(error):
+    return jsonify({"success": False, "error": str(error)}), error.status
+
+
+def _save_sheet_edits(pc_name, apply):
+    """Read-modify-write of build['sheet_edits'] for one PC.
+
+    Flushes live state before the read (require_pc_json), so an edit can never
+    revert HP or conditions still sitting in the debounced flush."""
+    pc_json, file_path, err = require_pc_json(pc_name)
+    if err:
+        return err
+    build = pc_json.get('build', pc_json)
+    edits = apply(build.get('sheet_edits') if isinstance(build.get('sheet_edits'), dict) else {})
+    if edits:
+        build['sheet_edits'] = edits
+    else:
+        build.pop('sheet_edits', None)
+    save_and_reload_character(pc_name, pc_json, file_path)
+    return jsonify({"success": True, "sheet_edits": edits})
+
+
+@app.route('/api/sheet_edits/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
+def update_sheet_edits(pc_name):
+    """SE-01: correct a PF2e character on its sheet without a re-import.
+
+    The owner and the GM may change details (meta); only the GM may adjust
+    numbers. Validation runs before the file is read, so a rejected patch
+    writes nothing. Spec: docs/superpowers/specs/2026-11-12-pf2e-sheet-edit-design.md."""
+    from core.sheet_edits import SheetEditError, merge_patch, validate_patch
+    try:
+        clean = validate_patch(request.get_json(silent=True), is_gm=_is_gm())
+    except SheetEditError as error:
+        return _sheet_edits_error(error)
+    return _save_sheet_edits(pc_name, lambda current: merge_patch(current, clean))
+
+
+@app.route('/api/sheet_edits/<pc_name>/reset', methods=['POST'])
+@gm_required
+def reset_sheet_edits(pc_name):
+    """GM only: clear one section of the sheet edit layer, or all of it."""
+    data = request.get_json(silent=True)
+    section = data.get('section') if isinstance(data, dict) else None
+    if section not in (None, 'meta', 'adjust'):
+        return jsonify({"success": False, "error": "Section must be 'meta' or 'adjust'."}), 400
+
+    def apply(current):
+        if section is None:
+            return {}
+        return {k: v for k, v in current.items() if k != section}
+    return _save_sheet_edits(pc_name, apply)
+
+
 @app.route('/api/send_initiative/<pc_name>', methods=['POST'])
 @require_pc_self_or_gm
 def send_initiative(pc_name):

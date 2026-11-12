@@ -194,3 +194,111 @@ def test_adjusted_keys_marker(app_module, goel_doc):
     assert _mk(app_module, goel_doc, {'adjust': {'ac': 1}}).adjusted_keys == frozenset({'ac'})
     c = _mk(app_module, goel_doc, {'adjust': {'will': -1}})
     assert 'GM adj -1' in c.will_breakdown
+
+
+# ---------------------------------------------------------------- Task 3: routes (isolated subprocess)
+
+import os
+import subprocess
+import sys
+import textwrap
+
+_REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+_ROUTE_PRELUDE = '''
+import tempfile, os, json
+from urllib.parse import quote
+os.environ['DATA_DIR'] = tempfile.mkdtemp(); os.environ['GM_PASSWORD'] = ''
+import app as A
+c = A.app.test_client(); J = {'X-Requested-With': 'XMLHttpRequest'}
+pb = json.load(open('tests/fixtures/goel_l10.json', encoding='utf-8'))
+assert c.post('/api/import_pathbuilder', json=pb, headers=J).status_code == 200
+name = pb['build']['name']; url = '/api/sheet_edits/' + quote(name)
+path = A.get_pc_file_path(name)
+def raw(): return open(path, 'rb').read()
+def build(): return json.loads(raw()).get('build', {})
+'''
+
+
+def _route(body):
+    script = 'import sys, os\nsys.path.insert(0, os.getcwd())\n' + _ROUTE_PRELUDE + textwrap.dedent(body)
+    r = subprocess.run([sys.executable, '-c', script], capture_output=True, text=True, cwd=_REPO)
+    assert 'ROUTE_OK' in r.stdout, 'stdout:\n%s\nstderr:\n%s' % (r.stdout, r.stderr[-3000:])
+
+
+def test_route_meta_roundtrip():
+    _route('''
+        r = c.post(url, json={'meta': {'deity': 'Ragathiel'}}, headers=J)
+        assert r.status_code == 200, r.get_data(as_text=True)
+        assert r.get_json()['sheet_edits'] == {'meta': {'deity': 'Ragathiel'}}
+        assert build()['sheet_edits']['meta']['deity'] == 'Ragathiel'
+        assert build()['deity'] == 'Rathathiel'            # Pathbuilder data untouched
+        assert A.PARTY_LIBRARY[name].deity == 'Ragathiel'
+        r = c.post(url, json={'meta': {'deity': ''}}, headers=J)
+        assert r.status_code == 200 and 'sheet_edits' not in build()
+        assert A.PARTY_LIBRARY[name].deity == 'Rathathiel'
+        print('ROUTE_OK')
+    ''')
+
+
+def test_route_owner_adjust_403():
+    _route('''
+        A._is_gm = lambda: False      # GM_PASSWORD '' keeps @require_pc_self_or_gm open
+        before = raw()
+        r = c.post(url, json={'adjust': {'ac': 1}}, headers=J)
+        assert r.status_code == 403, r.status_code
+        assert r.get_json()['success'] is False and 'GM' in r.get_json()['error']
+        assert raw() == before
+        assert c.post(url, json={'meta': {'deity': 'Ragathiel'}}, headers=J).status_code == 200
+        print('ROUTE_OK')
+    ''')
+
+
+def test_route_bad_input_400_file_unchanged():
+    _route('''
+        before = raw()
+        for body in ({'meta': {'size': 'Colossal'}}, {'adjust': {'ac': '2'}}, {'nope': 1}, []):
+            r = c.post(url, json=body, headers=J)
+            assert r.status_code == 400, (body, r.status_code)
+            assert r.get_json()['error'], body
+        r = c.post(url, data='not json', headers=dict(J, **{'Content-Type': 'application/json'}))
+        assert r.status_code == 400, r.status_code
+        assert raw() == before
+        print('ROUTE_OK')
+    ''')
+
+
+def test_route_unknown_pc_404():
+    _route('''
+        r = c.post('/api/sheet_edits/' + quote('Nobody Here'), json={'meta': {'deity': 'X'}}, headers=J)
+        assert r.status_code == 404, r.status_code
+        print('ROUTE_OK')
+    ''')
+
+
+def test_route_flushes_dirty_hp_first():
+    _route('''
+        A.PARTY_LIBRARY[name].current_hp = 5
+        A._persist_pc_combat_state(name)                   # dirty, not yet flushed
+        assert c.post(url, json={'meta': {'deity': 'Ragathiel'}}, headers=J).status_code == 200
+        assert build()['current_hp'] == 5, build().get('current_hp')
+        assert A.PARTY_LIBRARY[name].current_hp == 5
+        print('ROUTE_OK')
+    ''')
+
+
+def test_route_gm_adjust_and_reset():
+    _route('''
+        base_ac = A.PARTY_LIBRARY[name].ac
+        r = c.post(url, json={'adjust': {'ac': 2}, 'meta': {'deity': 'Ragathiel'}}, headers=J)
+        assert r.status_code == 200
+        assert A.PARTY_LIBRARY[name].ac == base_ac + 2
+        r = c.post(url + '/reset', json={'section': 'adjust'}, headers=J)
+        assert r.status_code == 200 and build()['sheet_edits'] == {'meta': {'deity': 'Ragathiel'}}
+        assert A.PARTY_LIBRARY[name].ac == base_ac
+        assert c.post(url + '/reset', json={'section': 'bogus'}, headers=J).status_code == 400
+        assert c.post(url + '/reset', json={}, headers=J).status_code == 200 and 'sheet_edits' not in build()
+        A._is_gm = lambda: False
+        assert c.post(url + '/reset', json={}, headers=J).status_code == 403
+        print('ROUTE_OK')
+    ''')
