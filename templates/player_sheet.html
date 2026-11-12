@@ -3014,6 +3014,57 @@
     <!-- Design system override (last in cascade — wins over inline styles) -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/system.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/ds.css') }}">
+    <style>
+    /* SE-01 sheet edit modal + GM adjustment marker. Separate block, after the
+       design-system sheets, so the pinned UI-10 block above is untouched. */
+    .se-modal { border: 1px solid var(--border-strong); border-radius: 10px; padding: 0;
+        width: min(640px, calc(100vw - 32px)); max-height: calc(100vh - 48px);
+        background: var(--surface-raised, var(--bg-raised)); color: var(--text-primary); }
+    .se-modal::backdrop { background: rgba(0, 0, 0, 0.7); }
+    .se-modal .se-shell { display: flex; flex-direction: column; max-height: calc(100vh - 48px); }
+    .se-modal .se-head { display: flex; align-items: center; justify-content: space-between;
+        padding: 14px 18px; border-bottom: 1px solid var(--border-strong); }
+    .se-modal .se-head h2 { font-size: 18px; color: var(--accent-gold-light); margin: 0; }
+    .se-modal .se-x { background: none; border: 0; color: var(--text-muted); font-size: 22px; cursor: pointer; }
+    .se-modal .se-tabs { display: flex; gap: 4px; padding: 8px 18px 0; }
+    .se-modal .se-tab { background: none; border: 0; border-bottom: 2px solid transparent;
+        color: var(--text-muted); padding: 8px 12px; min-height: 40px; cursor: pointer; font-size: 13px; }
+    .se-modal .se-tab.is-active { color: var(--text-primary); border-bottom-color: var(--accent-gold-light); }
+    .se-modal .se-panel { padding: 14px 18px; overflow-y: auto; }
+    .se-modal .se-panel[hidden] { display: none; }
+    .se-modal .se-hint { font-size: 12px; color: var(--text-muted); margin: 0 0 12px; }
+    .se-modal .se-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .se-modal .se-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; font-size: 12px; color: var(--text-muted); }
+    .se-modal .se-field em { font-style: normal; opacity: 0.75; }
+    .se-modal .se-field input, .se-modal .se-field select { background: var(--bg-raised); color: var(--text-primary);
+        border: 1px solid var(--border-strong); border-radius: 6px; padding: 8px 10px; font-size: 14px; min-height: 40px; }
+    .se-modal .se-field input::placeholder { color: var(--text-muted); opacity: 0.7; }
+    .se-modal .se-group { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+        color: var(--text-muted); margin: 14px 0 6px; }
+    .se-modal .se-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 4px 16px; }
+    .se-modal .se-num { display: grid; grid-template-columns: 1fr 36px 64px 36px; align-items: center; gap: 8px;
+        font-size: 13px; padding: 3px 0; }
+    .se-modal .se-num-calc { color: var(--text-muted); text-align: right; }
+    .se-modal .se-num-adj { width: 64px; background: var(--bg-raised); color: var(--text-primary);
+        border: 1px solid var(--border-strong); border-radius: 6px; padding: 6px; text-align: center; min-height: 36px; }
+    .se-modal .se-num-out { font-weight: 600; text-align: right; }
+    .se-modal .se-num.is-adjusted .se-num-out { color: var(--accent-gold-light); }
+    .se-modal .se-link { background: none; border: 0; color: var(--text-muted); text-decoration: underline;
+        font-size: 12px; margin-top: 12px; cursor: pointer; }
+    .se-modal .se-error { margin: 0 18px; padding: 8px 10px; border-radius: 6px; font-size: 13px;
+        background: rgba(220, 38, 38, 0.12); border: 1px solid rgba(220, 38, 38, 0.4); color: #fca5a5; }
+    .se-modal .se-error[hidden] { display: none; }
+    .se-modal .se-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 18px;
+        border-top: 1px solid var(--border-strong); }
+    .se-modal .se-foot .tb[disabled] { opacity: 0.5; cursor: wait; }
+    .se-rail-edit { display: block; margin: 0 0 8px auto; background: none; border: 1px solid var(--border-strong);
+        border-radius: 6px; color: var(--text-muted); font-size: 11px; padding: 4px 10px; cursor: pointer; }
+    .se-rail-edit:hover { color: var(--text-primary); }
+    .gm-adj-dot { display: inline-block; margin-left: 4px; padding: 0 4px; border-radius: 3px; font-size: 8px;
+        line-height: 13px; letter-spacing: 0.05em; vertical-align: middle;
+        color: var(--accent-gold-light); border: 1px solid currentColor; }
+    @media (max-width: 600px) { .se-modal .se-row { grid-template-columns: 1fr; } }
+    </style>
 </head>
 <body class="min-h-screen flex flex-col{% if not is_gm and player_name %} has-player-nav{% endif %}">
 
@@ -3153,6 +3204,7 @@
     </div>
 
 {% include "_pc_sheet/_modals.html" %}
+{% include "_pc_sheet/_edit_modal.html" %}
 
     <script>
         const pcName = {{ pc.name | tojson | safe }};
@@ -10368,6 +10420,7 @@
     </script>
 
 {% include "_pc_sheet/_context_menu.html" %}
+{% include "_pc_sheet/_js_sheet_edit.html" %}
 
     <script>
     // ═════════════════════════════════════════════════════════════════

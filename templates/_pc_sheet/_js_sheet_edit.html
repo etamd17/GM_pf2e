@@ -1,0 +1,138 @@
+{# SE-01: sheet edit modal behaviour. Event listeners only (no inline handlers),
+   so a character name with an apostrophe can never break a button. #}
+<script>
+(function () {
+    'use strict';
+    var dialog = document.getElementById('se-modal');
+    if (!dialog) return;
+    var pcName = dialog.getAttribute('data-pc-name') || '';
+    var url = '/api/sheet_edits/' + encodeURIComponent(pcName);
+    var errorBox = dialog.querySelector('[data-se-error]');
+    var saveBtn = dialog.querySelector('[data-se-save]');
+
+    // Values as rendered, so Save only sends what the user changed.
+    var initial = {};
+    dialog.querySelectorAll('[data-se-meta], [data-se-adjust]').forEach(function (el) {
+        initial[fieldKey(el)] = el.value;
+    });
+
+    function fieldKey(el) {
+        return el.hasAttribute('data-se-adjust') ? 'adj:' + el.getAttribute('data-se-adjust') : 'meta:' + el.name;
+    }
+
+    function showError(message) {
+        errorBox.textContent = message;
+        errorBox.hidden = !message;
+    }
+
+    function selectTab(name) {
+        dialog.querySelectorAll('[data-se-tab]').forEach(function (tab) {
+            var on = tab.getAttribute('data-se-tab') === name;
+            tab.classList.toggle('is-active', on);
+            tab.setAttribute('aria-selected', on ? 'true' : 'false');
+        });
+        dialog.querySelectorAll('[data-se-panel]').forEach(function (panel) {
+            panel.hidden = panel.getAttribute('data-se-panel') !== name;
+        });
+    }
+
+    function open(event) {
+        if (event) event.preventDefault();
+        if (typeof closePlayerOverflow === 'function') closePlayerOverflow();
+        showError('');
+        selectTab('details');
+        if (typeof dialog.showModal === 'function') dialog.showModal();
+        else dialog.setAttribute('open', '');
+    }
+
+    function close() {
+        if (typeof dialog.close === 'function') dialog.close();
+        else dialog.removeAttribute('open');
+    }
+
+    function refreshOutput(input) {
+        var row = input.closest('.se-num');
+        var out = row && row.querySelector('[data-se-out]');
+        var adj = parseInt(input.value, 10) || 0;
+        if (out) out.textContent = (parseInt(input.getAttribute('data-se-computed'), 10) || 0) + adj;
+        if (row) row.classList.toggle('is-adjusted', adj !== 0);
+    }
+
+    function buildPatch() {
+        var meta = {}, adjust = {};
+        dialog.querySelectorAll('[data-se-meta]').forEach(function (el) {
+            if (el.value === initial[fieldKey(el)]) return;
+            meta[el.name] = el.hasAttribute('data-se-list')
+                ? el.value.split(',').map(function (s) { return s.trim(); }).filter(Boolean)
+                : el.value.trim();
+        });
+        var bad = null;
+        dialog.querySelectorAll('[data-se-adjust]').forEach(function (el) {
+            if (el.value === initial[fieldKey(el)]) return;
+            var raw = el.value.trim() === '' ? '0' : el.value.trim();
+            if (!/^[-+]?\d+$/.test(raw)) { bad = el.getAttribute('aria-label'); return; }
+            adjust[el.getAttribute('data-se-adjust')] = parseInt(raw, 10);
+        });
+        if (bad) throw new Error(bad + ' must be a whole number.');
+        var patch = {};
+        if (Object.keys(meta).length) patch.meta = meta;
+        if (Object.keys(adjust).length) patch.adjust = adjust;
+        return patch;
+    }
+
+    async function post(target, body) {
+        saveBtn.disabled = true;
+        showError('');
+        try {
+            var res = await fetch(target, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+                body: JSON.stringify(body)
+            });
+            var data = null;
+            try { data = await res.json(); } catch (_) { data = null; }
+            if (!res.ok || !data || data.success !== true) {
+                var msg = (data && (data.error || data.message)) || ('Save failed (HTTP ' + res.status + ').');
+                if (res.status === 503 && data && data.description) msg = data.description;
+                showError(msg);
+                return;
+            }
+            window.location.reload();
+        } catch (err) {
+            showError('Could not reach the server. Nothing was saved.');
+        } finally {
+            saveBtn.disabled = false;
+        }
+    }
+
+    function save() {
+        var patch;
+        try { patch = buildPatch(); } catch (err) { showError(err.message); return; }
+        if (!Object.keys(patch).length) { close(); return; }
+        post(url, patch);
+    }
+
+    document.querySelectorAll('[data-sheet-edit-open]').forEach(function (btn) {
+        btn.addEventListener('click', open);
+    });
+    dialog.querySelectorAll('[data-se-close]').forEach(function (btn) {
+        btn.addEventListener('click', close);
+    });
+    dialog.querySelectorAll('[data-se-tab]').forEach(function (tab) {
+        tab.addEventListener('click', function () { selectTab(tab.getAttribute('data-se-tab')); });
+    });
+    dialog.querySelectorAll('[data-se-adjust]').forEach(function (input) {
+        input.addEventListener('input', function () { refreshOutput(input); });
+        refreshOutput(input);
+    });
+    var resetBtn = dialog.querySelector('[data-se-reset-numbers]');
+    if (resetBtn) resetBtn.addEventListener('click', function () {
+        if (!confirm('Clear every GM adjustment on this character?')) return;
+        post(url + '/reset', {section: 'adjust'});
+    });
+    saveBtn.addEventListener('click', save);
+    dialog.addEventListener('click', function (event) {
+        if (event.target === dialog) close();   // backdrop click
+    });
+})();
+</script>

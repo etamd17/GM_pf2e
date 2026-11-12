@@ -22910,6 +22910,49 @@ def player_sheet(pc_name):
     return redirect(url_for('player_view'))
 
 
+_SE_ABILITY_LABELS = (('str', 'Strength'), ('dex', 'Dexterity'), ('con', 'Constitution'),
+                     ('int', 'Intelligence'), ('wis', 'Wisdom'), ('cha', 'Charisma'))
+
+
+def _sheet_edit_numbers(pc):
+    """Rows for the GM Numbers tab: what the engine computes now (without the
+    GM adjustment) next to the adjustment, so the GM edits a delta, never a
+    fixed value. SE-01."""
+    rows = [{'key': k, 'label': label, 'group': 'Ability modifiers',
+             'computed': pc.mods.get(k, 0) - pc._adj(k), 'adj': pc._adj(k)}
+            for k, label in _SE_ABILITY_LABELS]
+    totals = [('ac', 'Armor Class', pc.ac), ('fortitude', 'Fortitude', pc.fort),
+              ('reflex', 'Reflex', pc.ref), ('will', 'Will', pc.will),
+              ('perception', 'Perception', pc.perception), ('hp_max', 'Max HP', pc.hp),
+              ('speed', 'Speed', pc.speed), ('class_dc', 'Class DC', pc.class_dc)]
+    if pc.spell_attack > 0:
+        totals.append(('spell_dc', 'Spell DC', pc.spell_dc))
+    rows += [{'key': k, 'label': label, 'group': 'Defenses and DCs',
+              'computed': value - pc._adj(k), 'adj': pc._adj(k)} for k, label, value in totals]
+    for skill in pc.skills:
+        name = skill['name']
+        key = 'skill:' + (('lore:' + name[len('Lore: '):]) if name.startswith('Lore: ') else name).lower()
+        rows.append({'key': key, 'label': name, 'group': 'Skills',
+                     'computed': safe_int(skill['total'], 0) - pc._adj(key), 'adj': pc._adj(key)})
+    return rows
+
+
+def _sheet_edit_pathbuilder_meta(pc):
+    """The imported values the Details tab shows as placeholders, so a player
+    can see what clearing a field brings back."""
+    build = getattr(pc, '_build_ref', None) or {}
+    meta = pc.sheet_edits.get('meta') if isinstance(pc.sheet_edits.get('meta'), dict) else {}
+    added = {str(x).lower() for x in meta.get('senses') or []}
+    return {
+        'display_name': pc.name,
+        'deity': safe_str(build.get('deity'), ''),
+        'sanctification': safe_str(build.get('sanctification'), ''),
+        'background': safe_str(build.get('background'), ''),
+        'languages': ', '.join(str(x) for x in (build.get('languages') or [])),
+        'senses': ', '.join(s for s in pc.senses if str(s).lower() not in added),
+    }
+
+
 def _render_pf2e_sheet(actor, capabilities=None):
     """Read-only capabilities never select an acting character."""
     interactive = capabilities is None or capabilities.edit
@@ -22923,7 +22966,10 @@ def _render_pf2e_sheet(actor, capabilities=None):
         # The legacy sheet performs spell-state migrations on startup. A
         # read-only render deliberately includes none of its mutation scripts.
         return render_template('player_sheet_readonly.html', pc=actor)
+    gm_view = _is_gm()
     return render_template('player_sheet.html', pc=actor, owner_private=owner_private,
+        is_gm=gm_view, se_numbers=_sheet_edit_numbers(actor) if gm_view else [],
+        se_pb=_sheet_edit_pathbuilder_meta(actor),
         weapons_json=json.dumps(BUILDER_WEAPONS), builder_armor=BUILDER_ARMOR,
         armor_json=json.dumps(BUILDER_ARMOR), spells_json=json.dumps([
             {'name': s['name'], 'level': s['level'], 'traditions': s['traditions']} for s in BUILDER_SPELLS]),

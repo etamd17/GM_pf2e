@@ -302,3 +302,59 @@ def test_route_gm_adjust_and_reset():
         assert c.post(url + '/reset', json={}, headers=J).status_code == 403
         print('ROUTE_OK')
     ''')
+
+
+# ---------------------------------------------------------------- Task 4: sheet UI
+
+from urllib.parse import quote
+
+
+def _render(app_module, monkeypatch, doc, *, gm=True):
+    pc = app_module.Character(copy.deepcopy(doc), file_path='')
+    monkeypatch.setattr(app_module, 'PARTY_LIBRARY', {pc.name: pc})
+    monkeypatch.setattr(app_module, '_sync_party_from_disk', lambda: None)
+    monkeypatch.setattr(app_module, '_active_system', lambda: 'pf2e')
+    monkeypatch.setattr(app_module, '_account_mode', lambda: False)
+    monkeypatch.setattr(app_module, '_is_gm', lambda: gm)
+    r = app_module.app.test_client().get('/player/sheet/' + quote(pc.name))
+    assert r.status_code == 200
+    return r.get_data(as_text=True)
+
+
+def test_sheet_has_edit_modal_and_entry_points(app_module, monkeypatch, goel_doc):
+    html = _render(app_module, monkeypatch, goel_doc)
+    assert 'id="se-modal"' in html
+    assert html.count('data-sheet-edit-open') >= 2          # overflow menu + meta rail
+    assert 'id="se-numbers"' in html
+
+
+def test_numbers_tab_gm_only(app_module, monkeypatch, goel_doc):
+    html = _render(app_module, monkeypatch, goel_doc, gm=False)
+    assert 'id="se-modal"' in html and 'id="se-numbers"' not in html
+    assert 'data-se-adjust=' not in html
+
+
+def test_numbers_rows_show_computed_values(app_module, monkeypatch, goel_doc):
+    doc = copy.deepcopy(goel_doc)
+    doc['build']['sheet_edits'] = {'adjust': {'ac': 2}}
+    html = _render(app_module, monkeypatch, doc)
+    base_ac = _mk(app_module, goel_doc).ac
+    assert f'data-se-adjust="ac" data-se-computed="{base_ac}" value="2"' in html
+    assert 'data-se-adjust="skill:religion"' in html and 'data-se-adjust="str"' in html
+    assert 'class="gm-adj-dot"' in html                     # AC carries the marker
+
+
+def test_display_name_rendered_keys_unchanged(app_module, monkeypatch, goel_doc):
+    doc = copy.deepcopy(goel_doc)
+    doc['build']['sheet_edits'] = {'meta': {'display_name': 'Go\'el the <Red>', 'deity': 'Ragathiel'}}
+    html = _render(app_module, monkeypatch, doc)
+    assert 'Go&#39;el the &lt;Red&gt;' in html and '<Red>' not in html
+    assert '/player/levelup/Go%27el%20Thrall' in html
+    assert 'Ragathiel' in html
+
+
+def test_meta_fields_prefilled_with_pathbuilder_placeholders(app_module, monkeypatch, goel_doc):
+    doc = copy.deepcopy(goel_doc)
+    doc['build']['sheet_edits'] = {'meta': {'deity': 'Ragathiel'}}
+    html = _render(app_module, monkeypatch, doc, gm=False)
+    assert 'name="deity" value="Ragathiel" placeholder="Rathathiel"' in html
