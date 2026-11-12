@@ -59,3 +59,138 @@ def test_merge_empty_list_clears_and_list_dedupes():
 
 def test_merge_from_none():
     assert merge_patch(None, validate_patch({'adjust': {'hp_max': 5}}, is_gm=True)) == {'adjust': {'hp_max': 5}}
+
+
+# ---------------------------------------------------------------- Task 2: Character applies the layer
+
+import copy
+import json
+from pathlib import Path
+
+_FIXTURES = Path(__file__).parent / 'fixtures'
+
+GETTERS = {
+    'ac': lambda c: c.ac, 'fortitude': lambda c: c.fort, 'reflex': lambda c: c.ref,
+    'will': lambda c: c.will, 'perception': lambda c: c.perception,
+    'class_dc': lambda c: c.class_dc, 'speed': lambda c: c.speed, 'hp_max': lambda c: c.hp,
+    'spell_dc': lambda c: c.spell_dc,
+}
+
+
+@pytest.fixture(scope='module')
+def app_module():
+    import app
+    return app
+
+
+@pytest.fixture
+def goel_doc():
+    return json.loads((_FIXTURES / 'goel_l10.json').read_text(encoding='utf-8'))
+
+
+def _mk(app_module, doc, edits=None):
+    doc = copy.deepcopy(doc)
+    if edits is not None:
+        doc['build']['sheet_edits'] = edits
+    return app_module.Character(doc, '')
+
+
+def _skills(c):
+    return {s['name']: int(s['total']) for s in c.skills}
+
+
+def _numbers(c):
+    out = {k: g(c) for k, g in GETTERS.items()}
+    out.update({'mods': dict(c.mods), 'skills': _skills(c)})
+    return out
+
+
+def test_no_edits_identical(app_module, goel_doc):
+    base = _numbers(_mk(app_module, goel_doc))
+    assert _numbers(_mk(app_module, goel_doc, {})) == base
+    assert _numbers(_mk(app_module, goel_doc, {'meta': {}, 'adjust': {}})) == base
+
+
+@pytest.mark.parametrize('key', sorted(GETTERS))
+def test_each_adjust_moves_only_its_stat(app_module, goel_doc, key):
+    base = _numbers(_mk(app_module, goel_doc))
+    got = _numbers(_mk(app_module, goel_doc, {'adjust': {key: 2}}))
+    for other in GETTERS:
+        assert got[other] == base[other] + (2 if other == key else 0), other
+    assert got['skills'] == base['skills'] and got['mods'] == base['mods']
+
+
+def test_con_adjust_flows_to_hp_and_fort(app_module, goel_doc):
+    base = _mk(app_module, goel_doc)
+    c = _mk(app_module, goel_doc, {'adjust': {'con': 1}})
+    assert c.mods['con'] == base.mods['con'] + 1
+    assert c.fort == base.fort + 1
+    assert c.hp == base.hp + base.level
+    assert any(a['label'] == 'CON' and a['mod'].startswith('+4') for a in c.ability_display)
+
+
+def test_skill_adjust(app_module, goel_doc):
+    base = _skills(_mk(app_module, goel_doc))
+    got = _skills(_mk(app_module, goel_doc, {'adjust': {'skill:religion': 3}}))
+    assert got['Religion'] == base['Religion'] + 3
+    assert {k: v for k, v in got.items() if k != 'Religion'} == {k: v for k, v in base.items() if k != 'Religion'}
+    c = _mk(app_module, goel_doc, {'adjust': {'skill:religion': 3}})
+    assert 'GM adj +3' in next(s['breakdown'] for s in c.skills if s['name'] == 'Religion')
+
+
+def test_frightened_still_applies(app_module, goel_doc):
+    doc = copy.deepcopy(goel_doc)
+    base = _mk(app_module, doc).ac
+    doc['build']['conditions'] = {'frightened': 1}
+    assert _mk(app_module, doc, {'adjust': {'ac': 1}}).ac == base + 1 - 1
+
+
+def test_spell_dc_adjust_needs_a_caster(app_module):
+    doc = {'build': {'name': 'Plain Fighter', 'class': 'Fighter', 'ancestry': 'Human', 'level': 1,
+                     'abilities': {'str': 4, 'dex': 2, 'con': 2, 'int': 0, 'wis': 1, 'cha': 0}}}
+    base = _mk(app_module, doc)
+    assert base.spell_attack == 0
+    c = _mk(app_module, doc, {'adjust': {'spell_dc': 2}})
+    assert c.spell_attack == 0 and c.spell_dc == 0
+
+
+def test_hp_floor(app_module):
+    doc = {'build': {'name': 'Frail', 'class': 'Wizard', 'ancestry': 'Elf', 'level': 1,
+                     'abilities': {'str': 0, 'dex': 2, 'con': -1, 'int': 4, 'wis': 1, 'cha': 0},
+                     'current_hp': 9}}
+    c = _mk(app_module, doc, {'adjust': {'hp_max': -20}})
+    assert c.hp == 1 and c.current_hp == 1
+
+
+def test_meta_overrides_and_clear(app_module, goel_doc):
+    c = _mk(app_module, goel_doc, {'meta': {
+        'deity': 'Ragathiel', 'sanctification': 'Holy', 'languages': ['Common', 'Empyrean'],
+        'senses': ['Scent (imprecise) 30 feet'], 'size': 'Large', 'background': 'Acolyte'}})
+    assert c.deity == 'Ragathiel' and c.sanctification == 'Holy'
+    assert c.languages == ['Common', 'Empyrean'] and c.size == 'Large' and c.background == 'Acolyte'
+    assert c.senses[0] == 'Darkvision' and 'Scent (imprecise) 30 feet' in c.senses
+    assert _mk(app_module, goel_doc, {'meta': {'size': 'Large'}}).deity == 'Rathathiel'
+
+
+def test_display_name_default_and_set(app_module, goel_doc):
+    assert _mk(app_module, goel_doc).display_name == "Go'el Thrall"
+    c = _mk(app_module, goel_doc, {'meta': {'display_name': "Go'el the Red"}})
+    assert c.display_name == "Go'el the Red" and c.name == "Go'el Thrall"
+
+
+def test_edits_survive_reimport(app_module, goel_doc):
+    existing = copy.deepcopy(goel_doc)
+    existing['build']['sheet_edits'] = {'meta': {'deity': 'Ragathiel'}, 'adjust': {'ac': 1}}
+    stale = copy.deepcopy(goel_doc)
+    assert stale['build']['deity'] == 'Rathathiel'
+    merged = app_module._merge_pf2e_import(existing, stale)
+    c = app_module.Character(merged, '')
+    assert c.deity == 'Ragathiel'
+    assert c.ac == _mk(app_module, goel_doc).ac + 1
+
+
+def test_adjusted_keys_marker(app_module, goel_doc):
+    assert _mk(app_module, goel_doc).adjusted_keys == frozenset()
+    assert _mk(app_module, goel_doc, {'adjust': {'ac': 1}}).adjusted_keys == frozenset({'ac'})
+    c = _mk(app_module, goel_doc, {'adjust': {'will': -1}})
+    assert 'GM adj -1' in c.will_breakdown

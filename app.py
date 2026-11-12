@@ -5114,6 +5114,11 @@ class Character:
         build = data.get('build') or data
         self._build_ref = build
         if not isinstance(build, dict): build = {}
+        # Sheet edit layer (SE-01): corrections made on the sheet instead of by
+        # a Pathbuilder re-import. Read before anything derives, because ability
+        # adjustments feed every later number. See core/sheet_edits.py.
+        _se = build.get('sheet_edits')
+        self.sheet_edits = _se if isinstance(_se, dict) else {}
 
         # Which game system this actor belongs to (flat-additive envelope key;
         # defaults to pf2e for legacy/unstamped PCs). Dispatched on at load time.
@@ -5302,6 +5307,7 @@ class Character:
                 # Pathbuilder format — raw value IS the modifier
                 mod = raw
             
+            mod += self._adj(k)
             self.mods[k] = mod
             
             display_mod = f"+{mod}" if mod >= 0 else str(mod)
@@ -6192,11 +6198,14 @@ class Character:
         # Drained directly reduces Max HP
         drained_val = self.conditions.get('drained', 0)
         self.hp -= (drained_val * self.level)
+        _hp_adj = self._adj('hp_max')
+        if _hp_adj:
+            self.hp = max(1, self.hp + _hp_adj)
         
         self.current_hp = safe_int(build.get('current_hp'), self.hp)
         if self.current_hp > self.hp: self.current_hp = self.hp # Cap it
         
-        self.base_speed = safe_int(attributes.get('speed'), 25) + safe_int(attributes.get('speedBonus'), 0) + self.get_rule_mod('speed')
+        self.base_speed = safe_int(attributes.get('speed'), 25) + safe_int(attributes.get('speedBonus'), 0) + self.get_rule_mod('speed') + self._adj('speed')
         if 'fleet' in [f['name'].lower() for f in self.feats]: self.base_speed += 5
         toggle_speed = self.toggle_effects_summary.get('speed', 0)
         # The -10 ft encumbered penalty is gated with the Clumsy one: see
@@ -6685,6 +6694,42 @@ class Character:
         # pre-engine condition-count map kept for back-compat with
         # the highest_buff calculator).
         self.pc_active_effects = list(build.get('pc_active_effects') or [])
+        self._apply_sheet_meta()
+
+    def _adj(self, key):
+        """GM adjustment for one stat from the sheet edit layer (0 when absent)."""
+        adjust = self.sheet_edits.get('adjust')
+        return safe_int(adjust.get(key), 0) if isinstance(adjust, dict) else 0
+
+    @property
+    def adjusted_keys(self):
+        adjust = self.sheet_edits.get('adjust')
+        if not isinstance(adjust, dict):
+            return frozenset()
+        return frozenset(k for k, v in adjust.items() if safe_int(v, 0))
+
+    def _gm_adj_part(self, key):
+        v = self._adj(key)
+        return (f"GM adj +{v}" if v > 0 else f"GM adj {v}") if v else ''
+
+    def _apply_sheet_meta(self):
+        """Display overrides from the sheet edit layer. Pathbuilder data is
+        untouched, so clearing a field brings the imported value back."""
+        self.display_name = self.name
+        meta = self.sheet_edits.get('meta')
+        if not isinstance(meta, dict):
+            return
+        for key in ('deity', 'sanctification', 'size', 'background'):
+            if isinstance(meta.get(key), str) and meta[key].strip():
+                setattr(self, key, meta[key].strip())
+        if isinstance(meta.get('display_name'), str) and meta['display_name'].strip():
+            self.display_name = meta['display_name'].strip()
+        if isinstance(meta.get('languages'), list) and meta['languages']:
+            self.languages = [str(x) for x in meta['languages']]
+        if isinstance(meta.get('senses'), list):
+            seen = {str(x).lower() for x in self.senses}
+            self.senses = list(self.senses) + [
+                str(x) for x in meta['senses'] if str(x).lower() not in seen]
 
     def get_rule_mod(self, selector):
         if selector not in self.rule_modifiers: return 0
@@ -6761,7 +6806,7 @@ class Character:
         effective_dex = min(self.mods.get('dex', 0), self.ac_dex_cap)
         prof_bonus = prof_val + self.level if prof_val > 0 else 0
         abp_ac = self._abp('defense_potency')
-        return 10 + self.ac_item + effective_dex + prof_bonus + abp_ac + self.get_rule_mod('ac')
+        return 10 + self.ac_item + effective_dex + prof_bonus + abp_ac + self.get_rule_mod('ac') + self._adj('ac')
 
     @property
     def ac(self):
@@ -6773,13 +6818,13 @@ class Character:
         circ_pen = 2 if (self.conditions.get('prone') or self.conditions.get('off_guard')) else 0
         shield_bonus = self.shield_ac_bonus if self.shield_raised else 0
         toggle_ac = self.toggle_effects_summary.get('ac', 0)
-        return base_ac - self.get_status_penalty('dex') + self.highest_buff - circ_pen + self.get_rule_mod('ac') + toggle_ac + shield_bonus
+        return base_ac - self.get_status_penalty('dex') + self.highest_buff - circ_pen + self.get_rule_mod('ac') + toggle_ac + shield_bonus + self._adj('ac')
     
     def _calc_save(self, stat_key, prof_key):
         prof_val = safe_int(self.proficiencies.get(prof_key), 2)
         base = self.mods.get(stat_key, 0) if prof_val == 0 else self.mods.get(stat_key, 0) + self.level + prof_val
         abp_save = self._abp('save_potency')
-        return base + abp_save - self.get_status_penalty(stat_key) + self.highest_buff + self.get_rule_mod(prof_key) + self.get_rule_mod('saving-throw')
+        return base + abp_save - self.get_status_penalty(stat_key) + self.highest_buff + self.get_rule_mod(prof_key) + self.get_rule_mod('saving-throw') + self._adj(prof_key)
 
     @property
     def fort(self): return self._calc_save('con', 'fortitude')
@@ -6809,6 +6854,8 @@ class Character:
         rm = self.get_rule_mod(prof_key)
         if rm:
             parts.append(f"feat {sign(rm)}")
+        if self._adj(prof_key):
+            parts.append(self._gm_adj_part(prof_key))
         return f"{label}: " + " · ".join(parts)
 
     @property
@@ -6825,7 +6872,7 @@ class Character:
         prof_val = safe_int(self.proficiencies.get('perception'), 2)
         base = self.mods.get('wis', 0) if prof_val == 0 else self.mods.get('wis', 0) + self.level + prof_val
         abp_perc = self._abp('perception_potency')
-        return base + abp_perc - self.get_status_penalty('wis') + self.highest_buff + self.get_rule_mod('perception')
+        return base + abp_perc - self.get_status_penalty('wis') + self.highest_buff + self.get_rule_mod('perception') + self._adj('perception')
 
     @property
     def initiative_mod(self):
@@ -6842,7 +6889,7 @@ class Character:
             key_options = [subclass_info["key_ability"]]
             
         key_mod = max([self.mods.get(stat, 0) for stat in key_options]) if key_options else 0
-        return 10 + self.level + prof + key_mod - self.get_status_penalty()
+        return 10 + self.level + prof + key_mod - self.get_status_penalty() + self._adj('class_dc')
 
     @property
     def spell_attack(self):
@@ -6918,7 +6965,9 @@ class Character:
         if key_mod is None:
             key_mod = 0
 
-        return self.level + prof + key_mod - self.get_status_penalty(ability_used)
+        attack = self.level + prof + key_mod - self.get_status_penalty(ability_used)
+        # A spell DC adjustment never turns a non-caster into one.
+        return attack + self._adj('spell_dc') if attack > 0 else attack
 
     @property
     def spell_dc(self):
@@ -6947,6 +6996,7 @@ class Character:
         if bonus_hp: parts.append(f"+{bonus_hp} flat bonus")
         if hp_rule_mod: parts.append(f"+{hp_rule_mod} feats")
         if drained: parts.append(f"-{drained} Drained")
+        if self._adj('hp_max'): parts.append(self._gm_adj_part('hp_max'))
         return " + ".join(parts) + f" = {self.hp}"
 
     @property
@@ -6962,7 +7012,7 @@ class Character:
             if skill == 'stealth': val -= self.stealth_penalty
             
             penalty = self.get_status_penalty(stat)
-            total_mod = val - penalty + self.highest_buff + self.get_rule_mod(skill.lower())
+            total_mod = val - penalty + self.highest_buff + self.get_rule_mod(skill.lower()) + self._adj('skill:' + skill.lower())
             
             prof_letter = {0:'U', 2:'T', 4:'E', 6:'M', 8:'L'}.get(prof_val, 'U')
             # Human-readable breakdown string for roll-button tooltips — lets
@@ -6986,6 +7036,8 @@ class Character:
             rule_mod_val = self.get_rule_mod(skill.lower())
             if rule_mod_val:
                 parts.append(f"feat {sign(rule_mod_val)}")
+            if self._adj('skill:' + skill.lower()):
+                parts.append(self._gm_adj_part('skill:' + skill.lower()))
             breakdown = " · ".join(parts)
             res.append({'name': skill.title(), 'stat': stat.upper(), 'prof_val': prof_val, 'prof_letter': prof_letter, 'total': f"+{total_mod}" if total_mod >= 0 else str(total_mod), 'penalty': penalty, 'breakdown': breakdown})
             
@@ -6993,7 +7045,7 @@ class Character:
             if skill.startswith('lore:'):
                 stat = 'int'
                 val = self.mods.get(stat, 0) if prof_val == 0 else self.mods.get(stat, 0) + self.level + prof_val
-                total_mod = val - self.get_status_penalty(stat) + self.highest_buff + self.get_rule_mod(skill.lower())
+                total_mod = val - self.get_status_penalty(stat) + self.highest_buff + self.get_rule_mod(skill.lower()) + self._adj('skill:' + skill.lower())
                 prof_letter = {0:'U', 2:'T', 4:'E', 6:'M', 8:'L'}.get(prof_val, 'U')
                 display_name = "Lore: " + skill.replace('lore:', '').strip().title()
                 res.append({'name': display_name, 'stat': stat.upper(), 'prof_val': prof_val, 'prof_letter': prof_letter, 'total': f"+{total_mod}" if total_mod >= 0 else str(total_mod)})
@@ -26389,6 +26441,7 @@ def _merge_pf2e_import(existing: dict, imported: dict) -> dict:
         'pets_custom',  # Preserve custom pets
         'level_history', 'monk_paths', 'half_boosts',
         'persistent_damage',
+        'sheet_edits',  # SE-01: sheet corrections outlive a Pathbuilder re-import
     ]
 
     # Start with existing build as base
