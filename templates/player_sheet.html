@@ -7911,8 +7911,13 @@
                 }
                 html += `</div></div>`;
             });
-            
-            _setPrepState(cIdx, prepState);
+
+            // Keep the resized slot arrays in memory only. Rendering is not an
+            // edit: persisting here wrote (and toasted "Spell prep saved") on
+            // every page load. Any real change goes through _setPrepState,
+            // which saves the whole map including these arrays.
+            if (!window._preparedSpells) window._preparedSpells = {};
+            window._preparedSpells[cIdx] = prepState;
             ui.innerHTML = html || "<div class='text-xs italic text-center' style='color:var(--text-muted);'>No spell slots available.</div>";
 
             document.querySelectorAll('#prep-ui-'+cIdx+' .spell-slot-cb').forEach((cb) => {

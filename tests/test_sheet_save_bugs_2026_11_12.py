@@ -188,3 +188,13 @@ def test_a_removed_import_stays_removed_when_pathbuilder_still_lists_it():
     build['pets_removed'] = [imported]
     character = app_module.Character(raw, file_path='kyle.json')
     assert imported not in [p['name'] for p in character.pets]
+
+
+def test_rendering_the_prep_ui_does_not_save():
+    """renderPrepUI runs on every page load; a save there wrote the PC file and
+    popped a "Spell prep saved" toast with no user action (it landed inside a
+    focus-ring screenshot in tests/browser/test_ds_focus_browser.py)."""
+    sheet = _sheet()
+    body = sheet[sheet.index('function renderPrepUI(cIdx, caster)'):]
+    body = body[:body.index('\n        function ', 1)]
+    assert '_setPrepState(' not in body and '_saveSpellState(' not in body
