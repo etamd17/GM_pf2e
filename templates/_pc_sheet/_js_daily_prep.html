@@ -98,22 +98,30 @@
 
             overlay.querySelector('#dp-long-rest').addEventListener('click', async () => {
                 const heal = overlay.querySelector('#dp-heal-full').checked;
-                // Save current prep state first
-                await _saveSpellState();
-                // Long rest — but DON'T clear prepared_spells; we just set them.
-                // The /api/daily_prep clears them, so we instead call a no-clear variant.
-                // Actually we call daily_prep AFTER preserving the prep we just chose.
-                // Simplest: call daily_prep, then re-save the prep we want kept.
-                const prepToKeep = JSON.parse(JSON.stringify(window._preparedSpells || {}));
-                await fetch('/api/daily_prep/' + pcNameEncoded, {
-                    method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({heal_full: heal})
-                });
-                // Re-apply the prep the player just chose.
-                window._preparedSpells = prepToKeep;
-                window._castPrep = {};
-                window._expendedSlots = {};
-                await _saveSpellState();
+                const btn = overlay.querySelector('#dp-long-rest');
+                // One request: daily_prep resets the day AND writes the prep
+                // chosen here, so there is no window where the server holds a
+                // cleared prep list.
+                try { await window._spellStateReady; } catch (_) {}
+                if (!window._spellStateLoaded) {
+                    if (window.pf2eToast) window.pf2eToast('Prep not saved: could not load current state. Reload the sheet.', 'danger');
+                    return;
+                }
+                btn.disabled = true;
+                let res, data = {};
+                try {
+                    res = await fetch('/api/daily_prep/' + pcNameEncoded, {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({heal_full: heal, prepared_spells: window._preparedSpells || {}})
+                    });
+                    try { data = await res.json(); } catch (_) {}
+                } catch (e) { res = null; }
+                if (!res || !res.ok || !data.success) {
+                    btn.disabled = false;
+                    const msg = (data && data.error) || (res ? 'HTTP ' + res.status : 'connection lost');
+                    if (window.pf2eToast) window.pf2eToast('Prep not saved: ' + msg, 'danger');
+                    return;
+                }
                 window.location.reload();
             });
             // On close, restore the original ui-prep div so the magic tab keeps working
