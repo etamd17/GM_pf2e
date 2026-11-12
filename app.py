@@ -6966,8 +6966,11 @@ class Character:
             key_mod = 0
 
         attack = self.level + prof + key_mod - self.get_status_penalty(ability_used)
-        # A spell DC adjustment never turns a non-caster into one.
-        return attack + self._adj('spell_dc') if attack > 0 else attack
+        # A spell DC adjustment never turns a non-caster into one, and never
+        # takes a caster's DC away (the sheet hides Spell DC at 0).
+        if attack > 0 and self._adj('spell_dc'):
+            return max(1, attack + self._adj('spell_dc'))
+        return attack
 
     @property
     def spell_dc(self):
@@ -7045,7 +7048,8 @@ class Character:
             if skill.startswith('lore:'):
                 stat = 'int'
                 val = self.mods.get(stat, 0) if prof_val == 0 else self.mods.get(stat, 0) + self.level + prof_val
-                total_mod = val - self.get_status_penalty(stat) + self.highest_buff + self.get_rule_mod(skill.lower()) + self._adj('skill:' + skill.lower())
+                total_mod = (val - self.get_status_penalty(stat) + self.highest_buff + self.get_rule_mod(skill.lower())
+                             + self._adj('skill:lore:' + skill.lower()[len('lore:'):].strip()))
                 prof_letter = {0:'U', 2:'T', 4:'E', 6:'M', 8:'L'}.get(prof_val, 'U')
                 display_name = "Lore: " + skill.replace('lore:', '').strip().title()
                 res.append({'name': display_name, 'stat': stat.upper(), 'prof_val': prof_val, 'prof_letter': prof_letter, 'total': f"+{total_mod}" if total_mod >= 0 else str(total_mod)})
@@ -22931,7 +22935,7 @@ def _sheet_edit_numbers(pc):
               'computed': value - pc._adj(k), 'adj': pc._adj(k)} for k, label, value in totals]
     for skill in pc.skills:
         name = skill['name']
-        key = 'skill:' + (('lore:' + name[len('Lore: '):]) if name.startswith('Lore: ') else name).lower()
+        key = 'skill:' + (('lore:' + name[len('Lore: '):].strip()) if name.startswith('Lore: ') else name).lower()
         rows.append({'key': key, 'label': name, 'group': 'Skills',
                      'computed': safe_int(skill['total'], 0) - pc._adj(key), 'adj': pc._adj(key)})
     return rows
@@ -25524,6 +25528,8 @@ def _save_sheet_edits(pc_name, apply):
     else:
         build.pop('sheet_edits', None)
     save_and_reload_character(pc_name, pc_json, file_path)
+    # Open player sheets repaint from the pc_update derived block.
+    _broadcast_pc_state(pc_name)
     return jsonify({"success": True, "sheet_edits": edits})
 
 

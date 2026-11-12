@@ -50,7 +50,8 @@ def _adjust_key(raw):
         if skill in SKILLS:
             return key
         if skill.startswith('lore:') and skill[len('lore:'):].strip():
-            return key
+            # Pathbuilder writes 'lore:warfare', the in-app builder 'lore: warfare'.
+            return 'skill:lore:' + skill[len('lore:'):].strip()
     raise SheetEditError(f'Unknown stat to adjust: {raw!r}.')
 
 

@@ -358,3 +358,35 @@ def test_meta_fields_prefilled_with_pathbuilder_placeholders(app_module, monkeyp
     doc['build']['sheet_edits'] = {'meta': {'deity': 'Ragathiel'}}
     html = _render(app_module, monkeypatch, doc, gm=False)
     assert 'name="deity" value="Ragathiel" placeholder="Rathathiel"' in html
+
+
+# ---------------------------------------------------------------- Final review fixes
+
+def test_lore_adjust_matches_builder_lore_keys(app_module, goel_doc):
+    # The in-app builder writes 'lore: warfare' (space after the colon).
+    doc = copy.deepcopy(goel_doc)
+    doc['build'].setdefault('proficiencies', {})['lore: warfare'] = 2
+    base = _skills(_mk(app_module, doc))['Lore: Warfare']
+    key = validate_patch({'adjust': {'skill:lore: warfare': 3}}, is_gm=True)['adjust']
+    assert key == {'skill:lore:warfare': 3}
+    c = _mk(app_module, doc, {'adjust': key})
+    assert _skills(c)['Lore: Warfare'] == base + 3
+    row = next(r for r in app_module._sheet_edit_numbers(c) if r['label'] == 'Lore: Warfare')
+    assert row['key'] == 'skill:lore:warfare' and row['adj'] == 3 and row['computed'] == base
+
+
+def test_large_negative_spell_dc_adjust_keeps_a_spell_dc(app_module, goel_doc):
+    c = _mk(app_module, goel_doc, {'adjust': {'spell_dc': -20}})
+    assert c.spell_dc > 0
+    assert any(r['key'] == 'spell_dc' for r in app_module._sheet_edit_numbers(c))
+
+
+def test_route_save_broadcasts_pc_state():
+    _route('''
+        sent = []
+        A._broadcast_pc_state = lambda n, *a, **k: sent.append(n)
+        assert c.post(url, json={'adjust': {'ac': 1}}, headers=J).status_code == 200
+        assert c.post(url + '/reset', json={}, headers=J).status_code == 200
+        assert sent == [name, name], sent
+        print('ROUTE_OK')
+    ''')
