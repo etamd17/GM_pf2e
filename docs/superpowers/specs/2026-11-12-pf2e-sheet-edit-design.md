@@ -34,7 +34,7 @@ One preserved layer inside the character document:
 build['sheet_edits'] = {
   "meta": {
     "display_name": str, "deity": str, "sanctification": str,
-    "languages": [str], "senses": [str], "size": str, "background_text": str
+    "languages": [str], "senses": [str], "size": str, "background": str
   },
   "adjust": {            # ints in [-20, 20]; absent or 0 = no adjustment
     "str", "dex", "con", "int", "wis", "cha",
@@ -53,6 +53,8 @@ build['sheet_edits'] = {
 }
 ```
 
+- `meta.background` overrides only the displayed background name (e.g. a typo in
+  "Acolyte"). It changes no boosts or skills, and there is no separate backstory field.
 - An absent key means "no edit". Clearing a meta field deletes its key, which
   reverts it to the Pathbuilder value.
 - `sheet_edits` is added to `PRESERVE_KEYS` in `_merge_pf2e_import`, so an
@@ -75,7 +77,7 @@ Each step is a small additive change; the existing derivation is untouched.
   `ancestry_features` display. `custom` entries are appended as plain text features
   with no mechanics.
 - **Meta:** overrides `deity`, `sanctification`, `languages`, `senses` (merged with
-  the derived senses), `size` and the background text after they are read.
+  the derived senses), `size` and `background` (display only) after they are read.
   `display_name` becomes a new attribute, `self.display_name`, which defaults to
   `self.name`.
 - **Total adjustments** go through one helper, `self._adj(key) -> int` (0 when
@@ -101,7 +103,7 @@ Validation runs before any write; a rejected request writes nothing.
 **Validation:**
 - Adjustments must be integers in [-20, 20] with keys from the allowed set.
 - Size must be one of Tiny, Small, Medium, Large, Huge or Gargantuan.
-- Text is capped at 80 characters (name and deity) and 4000 characters (background).
+- Text is capped at 80 characters (names, deity, background).
 - Languages and senses are capped at 30 items.
 - Feat names must be non-empty. A name not in the compendium is allowed as homebrew.
 
@@ -115,7 +117,7 @@ repaint path moves.
 - **Entry points:** "Edit character" in the `⋯` overflow menu, and a pencil on the
   left-rail meta card.
 - **Details tab** (GM and owner):
-  - Display name, deity, sanctification, a size select and background text.
+  - Display name, deity, sanctification, a size select and the background name.
   - Languages and senses as chip inputs.
   - Each field's placeholder is the Pathbuilder value.
 - **Numbers tab** (GM only; not rendered for players):

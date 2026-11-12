@@ -16,7 +16,7 @@
 ## Goal
 
 The GM and the owning player can fix a PF2e character's meta fields on the sheet
-(display name, deity, sanctification, languages, senses, size, background text).
+(display name, deity, sanctification, languages, senses, size, background name; display only).
 The GM can also add signed adjustments to engine-computed numbers. Both survive an
 "Update <name>" re-import, and every failed save reports an error.
 
