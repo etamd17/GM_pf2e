@@ -12,7 +12,60 @@ import re
 from . import runtime
 
 
+# Logical character storage -> path parts below ``campaigns/<cid>/``. The
+# storage value is what SQL records; ``dnd5e_characters`` is never a directory.
+LEGACY_STORAGE_DIRS = {
+    'party_data': ('party_data',),
+    'cosmere_pcs': ('cosmere_pcs',),
+    'dnd5e_characters': ('dnd5e', 'characters'),
+}
+_STORAGE_BY_DIRS = {parts: storage for storage, parts in LEGACY_STORAGE_DIRS.items()}
+
+# The only system each storage may hold (mirrors DND5E_LOCATOR_CHECK).
+STORAGE_SYSTEMS = {
+    'party_data': 'pf2e',
+    'cosmere_pcs': 'cosmere',
+    'dnd5e_characters': 'dnd5e',
+}
+
+DND5E_WRITE_REFUSED = 'D&D characters are not written through the shared adapter until PE-15'
+
+
+def is_dnd5e_character_id(value):
+    """Exact D&D character id: 32 lowercase hex characters, nothing else.
+
+    Deliberately not ``systems.dnd5e.store.valid_id``: its ``re.match`` with
+    ``$`` also accepts a trailing newline, which SQL identities refuse.
+    """
+    return isinstance(value, str) and re.fullmatch(r'[0-9a-f]{32}', value) is not None
+
+
+def storage_relative_parts(legacy_storage):
+    try:
+        return LEGACY_STORAGE_DIRS[legacy_storage]
+    except (KeyError, TypeError):
+        raise ValueError('unknown character storage') from None
+
+
+def storage_system(legacy_storage):
+    try:
+        return STORAGE_SYSTEMS[legacy_storage]
+    except (KeyError, TypeError):
+        raise ValueError('unknown character storage') from None
+
+
+def refuse_dnd5e_write(legacy_storage):
+    if legacy_storage == 'dnd5e_characters':
+        raise ValueError(DND5E_WRITE_REFUSED)
+
+
 def locator(path):
+    """Return ``(cid, logical_storage, filename)`` for a character payload.
+
+    Only an exact direct file in a known character directory qualifies:
+    ``<cid>/party_data/<file>.json``, ``<cid>/cosmere_pcs/<file>.json`` or
+    ``<cid>/dnd5e/characters/<32-hex>.json``. Anything else returns None.
+    """
     from core import storage
 
     root = Path(os.path.abspath(storage.CAMPAIGNS_DIR))
@@ -21,13 +74,18 @@ def locator(path):
         parts = target.relative_to(root).parts
     except ValueError:
         return None
-    if (len(parts) != 3 or not re.fullmatch(r'[0-9a-f]{32}', parts[0])
-            or parts[1] not in {'party_data', 'cosmere_pcs'}
-            or not parts[2].endswith('.json')):
+    if len(parts) < 3 or not re.fullmatch(r'[0-9a-f]{32}', parts[0]):
+        return None
+    legacy_storage = _STORAGE_BY_DIRS.get(tuple(parts[1:-1]))
+    filename = parts[-1]
+    if legacy_storage is None or not filename.endswith('.json'):
+        return None
+    if (legacy_storage == 'dnd5e_characters'
+            and not is_dnd5e_character_id(filename[:-len('.json')])):
         return None
     if target.resolve() != target:
         raise runtime.StoreUnavailable('Character storage path is unsafe')
-    return parts
+    return parts[0], legacy_storage, filename
 
 
 def authoritative_document(path, document):
@@ -79,6 +137,7 @@ def write_document(path, document, writer, *, owner_user_id=None):
     """
     location = locator(path)
     if location is not None:
+        refuse_dnd5e_write(location[1])
         from core.character_workflows.recovery import pending_for, repair_required
         if pending_for(location[0], store=location[1], filename=location[2]):
             raise repair_required()
@@ -96,7 +155,7 @@ def write_document(path, document, writer, *, owner_user_id=None):
     cid, store, filename = location
     document = dict(document)
     document.setdefault('campaign_id', cid)
-    document.setdefault('system', 'pf2e' if store == 'party_data' else 'cosmere')
+    document.setdefault('system', storage_system(store))
     if store == 'party_data':
         document.setdefault('schema_version', storage.SCHEMA_VERSION)
     ownership.register_character(

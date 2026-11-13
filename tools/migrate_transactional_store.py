@@ -68,6 +68,29 @@ ASSIGNMENT_ROLES = ("owner", "editor", "viewer")
 MEMBERSHIP_ROLES = ("gm", "player")
 CAMPAIGN_ID_RE = re.compile(r"^[0-9a-f]{32}$")
 POSTGRES_INTEGER_MAX = 2_147_483_647
+CAMPAIGN_SYSTEMS = ("pf2e", "dnd5e", "cosmere")
+DND5E_STORAGE = "dnd5e_characters"
+
+
+def _character_files():
+    """The shared storage layout (imported lazily, like the other core modules)."""
+    from core.persistence import character_files
+
+    return character_files
+
+
+def _storage_dir(campaign_dir: Path, legacy_storage: str) -> Path:
+    return campaign_dir.joinpath(*_character_files().storage_relative_parts(legacy_storage))
+
+
+def _symlinked_storage_component(campaign_dir: Path, legacy_storage: str) -> Path | None:
+    """The first symlinked directory on a store's path, if any."""
+    current = campaign_dir
+    for part in _character_files().storage_relative_parts(legacy_storage):
+        current = current / part
+        if current.is_symlink():
+            return current
+    return None
 # A PostgreSQL btree index entry must fit well below one third of an 8 KiB
 # page.  Keep legacy usernames flexible while making the unique normalized
 # username index predictably insertable under every supported collation.
@@ -223,9 +246,12 @@ def _snapshot_files(root: Path) -> list[dict[str, Any]]:
                 campaign_file = campaign_dir / "campaign.json"
                 if campaign_file.is_file() and not campaign_file.is_symlink():
                     candidates.add(campaign_file)
-                for storage_name in ("party_data", "cosmere_pcs"):
-                    storage_dir = campaign_dir / storage_name
-                    if not storage_dir.is_dir() or storage_dir.is_symlink():
+                for storage_name in _character_files().LEGACY_STORAGE_DIRS:
+                    storage_dir = _storage_dir(campaign_dir, storage_name)
+                    if (
+                        _symlinked_storage_component(campaign_dir, storage_name) is not None
+                        or not storage_dir.is_dir()
+                    ):
                         continue
                     candidates.update(
                         item
@@ -718,6 +744,7 @@ def inspect_source(source: os.PathLike[str] | str) -> SourceBundle:
     campaign_ids: set[str] = set()
     character_rows_by_id: dict[str, list[dict[str, Any]]] = defaultdict(list)
     membership_claims: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    dnd5e_character_ids: set[str] = set()
     campaign_member_ids: dict[str, set[str]] = defaultdict(set)
     campaign_dirs: list[tuple[str, Path]] = []
     for campaign_root_name in ("campaigns", "campaigns_trash"):
@@ -840,17 +867,14 @@ def inspect_source(source: os.PathLike[str] | str) -> SourceBundle:
             if raw_campaign_system is None or raw_campaign_system == ""
             else raw_campaign_system
         )
-        if not isinstance(campaign_system, str) or campaign_system not in {
-            "pf2e",
-            "cosmere",
-        }:
+        if not isinstance(campaign_system, str) or campaign_system not in CAMPAIGN_SYSTEMS:
             _conflict(
                 conflicts,
                 "invalid_campaign_system",
                 entity="campaign",
                 entity_id=campaign_id,
                 path=relative_campaign_path,
-                message="campaign system must be pf2e or cosmere",
+                message="campaign system must be pf2e, dnd5e or cosmere",
             )
             campaign_system = "pf2e"
         raw_campaign_name = document.get("name")
@@ -1066,15 +1090,17 @@ def inspect_source(source: os.PathLike[str] | str) -> SourceBundle:
                 message="campaign must retain at least one GM membership",
             )
 
-        for storage_name in ("party_data", "cosmere_pcs"):
-            storage_dir = campaign_dir / storage_name
-            if storage_dir.is_symlink():
+        for storage_name in _character_files().LEGACY_STORAGE_DIRS:
+            is_dnd5e_store = storage_name == DND5E_STORAGE
+            storage_dir = _storage_dir(campaign_dir, storage_name)
+            symlinked = _symlinked_storage_component(campaign_dir, storage_name)
+            if symlinked is not None:
                 _conflict(
                     conflicts,
                     "unsupported_source_symlink",
                     entity="character",
                     entity_id=campaign_id,
-                    path=storage_dir.relative_to(root).as_posix(),
+                    path=symlinked.relative_to(root).as_posix(),
                     message="migration refuses character stores reached through symbolic links",
                 )
                 continue
@@ -1091,6 +1117,23 @@ def inspect_source(source: os.PathLike[str] | str) -> SourceBundle:
                         entity_id=item.stem,
                         path=lexical_path,
                         message="migration refuses character files reached through symbolic links",
+                    )
+                elif (
+                    is_dnd5e_store
+                    and item.is_file()
+                    and item.suffix == ".json"
+                    and not _character_files().is_dnd5e_character_id(item.name[: -len(".json")])
+                ):
+                    _warning(
+                        warnings,
+                        "dnd5e_nonconforming_character_file",
+                        entity="character",
+                        entity_id=item.stem,
+                        path=lexical_path,
+                        message=(
+                            "file is ignored because a D&D character file name must be "
+                            "exactly 32 lowercase hex characters"
+                        ),
                     )
                 elif item.is_file() and item.suffix == ".json":
                     character_paths.append(item)
@@ -1119,6 +1162,16 @@ def inspect_source(source: os.PathLike[str] | str) -> SourceBundle:
                         )
                     continue
                 character_id = character_document.get("id")
+                if is_dnd5e_store and character_id != character_path.name[: -len(".json")]:
+                    _conflict(
+                        conflicts,
+                        "dnd5e_locator_mismatch",
+                        entity="character",
+                        entity_id=character_id if isinstance(character_id, str) else "",
+                        path=relative_character_path,
+                        message="D&D character id must equal its file name",
+                    )
+                    continue
                 if not isinstance(character_id, str) or not character_id:
                     _conflict(
                         conflicts,
@@ -1138,7 +1191,20 @@ def inspect_source(source: os.PathLike[str] | str) -> SourceBundle:
                         message="character id exceeds the 64-character database limit",
                     )
                 declared_campaign_id = character_document.get("campaign_id")
-                if declared_campaign_id is None and storage_name == "cosmere_pcs":
+                if is_dnd5e_store and declared_campaign_id != campaign_id:
+                    # The D&D runtime lets the file location win (store.load_pc).
+                    _warning(
+                        warnings,
+                        "dnd5e_character_campaign_inferred",
+                        entity="character",
+                        entity_id=character_id,
+                        path=relative_character_path,
+                        message=(
+                            "D&D character campaign_id is missing or differs from its "
+                            "containing campaign; the containing campaign will be used"
+                        ),
+                    )
+                elif declared_campaign_id is None and storage_name == "cosmere_pcs":
                     _warning(
                         warnings,
                         "cosmere_character_campaign_inferred",
@@ -1160,24 +1226,38 @@ def inspect_source(source: os.PathLike[str] | str) -> SourceBundle:
                         message="character campaign_id must match its containing campaign",
                     )
                 raw_character_system = character_document.get("system")
+                # The D&D store writes system on every save (store.save_pc) and the
+                # adapter requires it, so only the old stores default it.
                 character_system = (
                     campaign_row["system"]
-                    if raw_character_system is None or raw_character_system == ""
+                    if not is_dnd5e_store
+                    and (raw_character_system is None or raw_character_system == "")
                     else raw_character_system
                 )
-                if not isinstance(character_system, str) or character_system not in {
-                    "pf2e",
-                    "cosmere",
-                }:
+                allowed_systems = {"dnd5e"} if is_dnd5e_store else {"pf2e", "cosmere"}
+                if not isinstance(character_system, str) or character_system not in allowed_systems:
                     _conflict(
                         conflicts,
                         "invalid_character_system",
                         entity="character",
                         entity_id=character_id,
                         path=relative_character_path,
-                        message="character system must be pf2e or cosmere",
+                        message=(
+                            "a D&D character file must have system dnd5e"
+                            if is_dnd5e_store
+                            else "character system must be pf2e or cosmere"
+                        ),
                     )
                     character_system = campaign_row["system"]
+                if is_dnd5e_store and campaign_row["system"] != "dnd5e":
+                    _conflict(
+                        conflicts,
+                        "dnd5e_character_campaign_system",
+                        entity="character",
+                        entity_id=character_id,
+                        path=relative_character_path,
+                        message="D&D characters can only be imported into a dnd5e campaign",
+                    )
                 source_schema_version = character_document.get("schema_version")
                 if source_schema_version is not None and (
                     not isinstance(source_schema_version, int)
@@ -1210,7 +1290,28 @@ def inspect_source(source: os.PathLike[str] | str) -> SourceBundle:
                 }
                 records["characters"].append(character_row)
                 character_rows_by_id[character_id].append(character_row)
-                owners = _string_list(
+                if is_dnd5e_store:
+                    dnd5e_character_ids.add(character_id)
+                    # D&D ownership is the scalar owner_user_id only; the runtime
+                    # ignores the list fields (app.py authorization context).
+                    ignored = [
+                        field
+                        for field in ("owner_user_ids", "editor_user_ids", "viewer_user_ids")
+                        if character_document.get(field) not in (None, [])
+                    ]
+                    if ignored:
+                        _warning(
+                            warnings,
+                            "dnd5e_ignored_grant_field",
+                            entity="character",
+                            entity_id=character_id,
+                            path=relative_character_path,
+                            message=(
+                                "D&D characters take ownership from owner_user_id only; "
+                                "ignored: " + ", ".join(ignored)
+                            ),
+                        )
+                owners = [] if is_dnd5e_store else _string_list(
                     character_document.get("owner_user_ids"),
                     conflicts=conflicts,
                     entity="character",
@@ -1241,7 +1342,7 @@ def inspect_source(source: os.PathLike[str] | str) -> SourceBundle:
                         path=relative_character_path,
                         message="character declares more than one distinct owner",
                     )
-                editors = sorted(
+                editors = [] if is_dnd5e_store else sorted(
                     set(
                         _string_list(
                             character_document.get("editor_user_ids"),
@@ -1253,7 +1354,7 @@ def inspect_source(source: os.PathLike[str] | str) -> SourceBundle:
                         )
                     )
                 )
-                viewers = sorted(
+                viewers = [] if is_dnd5e_store else sorted(
                     set(
                         _string_list(
                             character_document.get("viewer_user_ids"),
@@ -1313,7 +1414,11 @@ def inspect_source(source: os.PathLike[str] | str) -> SourceBundle:
     for character_id, rows in sorted(character_rows_by_id.items()):
         if len(rows) > 1:
             locators = sorted(
-                f"{row['campaign_id']}/{row['legacy_storage']}/{row['legacy_file']}"
+                "/".join((
+                    row["campaign_id"],
+                    *_character_files().storage_relative_parts(row["legacy_storage"]),
+                    row["legacy_file"],
+                ))
                 for row in rows
             )
             _conflict(
@@ -1379,7 +1484,12 @@ def inspect_source(source: os.PathLike[str] | str) -> SourceBundle:
                 message="membership character link does not match document ownership",
             )
     for character_id, owners in sorted(owner_by_character.items()):
-        if owners and character_id not in membership_claims:
+        # D&D never writes membership.character_id, so no link is expected.
+        if (
+            owners
+            and character_id not in membership_claims
+            and character_id not in dnd5e_character_ids
+        ):
             _warning(
                 warnings,
                 "owner_without_membership_character_link",
@@ -2476,11 +2586,12 @@ def export_store(
             for character in characters:
                 campaign = campaign_by_id[character.campaign_id]
                 root_name = "campaigns_trash" if campaign.trashed_at is not None else "campaigns"
+                storage_parts = _character_files().storage_relative_parts(character.legacy_storage)
                 source_character = (
                     bundle.source_root
                     / root_name
                     / character.campaign_id
-                    / character.legacy_storage
+                    / Path(*storage_parts)
                     / character.legacy_file
                 )
                 document = _load_json_strict(source_character)
@@ -2494,7 +2605,7 @@ def export_store(
                     staging
                     / root_name
                     / character.campaign_id
-                    / character.legacy_storage
+                    / Path(*storage_parts)
                     / character.legacy_file
                 )
                 destination.parent.mkdir(parents=True, exist_ok=True)

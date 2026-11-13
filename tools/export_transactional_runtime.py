@@ -43,6 +43,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
 from core.persistence import Database, Invitation, MigrationRun
+from core.persistence.character_files import LEGACY_STORAGE_DIRS
 from core.character_workflows.types import WorkflowError
 from tools import migrate_transactional_store as migration
 
@@ -121,8 +122,8 @@ def _reject_pending_batches(root, campaigns) -> None:
         if campaign["trashed_at"] is not None:
             root_names.append("campaigns_trash")
         for root_name in root_names:
-            for storage in ("party_data", "cosmere_pcs"):
-                directory = root / root_name / campaign["id"] / storage
+            for storage_parts in LEGACY_STORAGE_DIRS.values():
+                directory = root / root_name / campaign["id"] / Path(*storage_parts)
                 current = root
                 for component in directory.relative_to(root).parts:
                     current = current / component

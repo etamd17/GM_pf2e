@@ -898,3 +898,273 @@ def test_legacy_import_ignores_per_campaign_runs(tmp_path):
     assert second["status"] == "already_imported"
     assert second["migration_run_id"] == first["migration_run_id"]
     assert migration.verify_store(source, database_url)["verified"] is True
+
+
+# --- PE-11a: D&D character files -------------------------------------------------
+
+DND5E_OWNED = "d" * 32
+DND5E_UNOWNED = "e" * 32
+DND5E_STALE = "f" * 32
+
+
+def _dnd5e_dir(root: Path) -> Path:
+    return root / "campaigns" / CAMPAIGN_ID / "dnd5e" / "characters"
+
+
+def _dnd5e_document(character_id, owner=PLAYER_ID, **updates):
+    return {
+        "id": character_id,
+        "campaign_id": CAMPAIGN_ID,
+        "system": "dnd5e",
+        "name": f"PC {str(character_id)[:4]}",
+        "owner_user_id": owner,
+        **updates,
+    }
+
+
+def _dnd5e_fixture(tmp_path: Path, *, stale_owner: bool = False) -> Path:
+    """The valid fixture turned into a dnd5e campaign with D&D characters."""
+    source = _copy_fixture(tmp_path / "legacy")
+    campaign = _load(_campaign_path(source))
+    campaign["system"] = "dnd5e"
+    for member in campaign["members"]:
+        member.pop("character_id", None)
+    _write(_campaign_path(source), campaign)
+    shutil.rmtree(source / "campaigns" / CAMPAIGN_ID / "party_data")
+    _write(_dnd5e_dir(source) / f"{DND5E_OWNED}.json", _dnd5e_document(DND5E_OWNED))
+    _write(_dnd5e_dir(source) / f"{DND5E_UNOWNED}.json", _dnd5e_document(DND5E_UNOWNED, None))
+    if stale_owner:
+        _write(
+            _dnd5e_dir(source) / f"{DND5E_STALE}.json",
+            _dnd5e_document(DND5E_STALE, "9" * 32),
+        )
+    # Non-character D&D files sit next to the store and must stay out of it.
+    _write(source / "campaigns" / CAMPAIGN_ID / "dnd5e" / "encounter.json", {"combatants": []})
+    _write(source / "campaigns" / CAMPAIGN_ID / "dnd5e" / "plans" / f"{DND5E_OWNED}.json", {})
+    _write(_dnd5e_dir(source) / "nested" / f"{DND5E_UNOWNED}.json", _dnd5e_document(DND5E_UNOWNED))
+    (_dnd5e_dir(source) / f"{DND5E_OWNED}.json.tmp").write_text("{", encoding="utf-8")
+    return source
+
+
+def _warning_codes(plan: dict) -> list:
+    return sorted(item["code"] for item in plan["warnings"])
+
+
+def _assignments(records: dict) -> list:
+    return sorted(
+        (row["character_id"], row["user_id"], row["role"])
+        for row in records["character_assignments"]
+    )
+
+
+def test_dnd5e_campaign_plans_owned_and_unowned_characters(tmp_path):
+    source = _dnd5e_fixture(tmp_path)
+    bundle = migration.inspect_source(source)
+    plan = bundle.report
+
+    assert plan["import_allowed"] is True, plan["blocking_conflicts"]
+    assert plan["warnings"] == []
+    characters = sorted(
+        (row["id"], row["system"], row["legacy_storage"], row["legacy_file"])
+        for row in bundle.records["characters"]
+    )
+    assert characters == [
+        (DND5E_OWNED, "dnd5e", "dnd5e_characters", f"{DND5E_OWNED}.json"),
+        (DND5E_UNOWNED, "dnd5e", "dnd5e_characters", f"{DND5E_UNOWNED}.json"),
+    ]
+    assert _assignments(bundle.records) == [(DND5E_OWNED, PLAYER_ID, "owner")]
+
+
+def test_dnd5e_stale_owner_blocks_import(tmp_path):
+    plan = migration.build_plan(_dnd5e_fixture(tmp_path, stale_owner=True))
+
+    assert plan["import_allowed"] is False
+    stale = [
+        item for item in plan["blocking_conflicts"]
+        if item["code"] == "assignment_user_not_member"
+    ]
+    assert [item["entity_id"] for item in stale] == [f"{DND5E_STALE}:{'9' * 32}"]
+
+
+def test_dnd5e_nonconforming_stems_warn_and_are_excluded(tmp_path):
+    source = _dnd5e_fixture(tmp_path)
+    # "F" * 32 has no lowercase twin here, so it is safe on case-insensitive disks.
+    stems = ["hero", "F" * 32, "d" * 31]
+    for stem in stems:
+        _write(_dnd5e_dir(source) / f"{stem}.json", _dnd5e_document(stem))
+    newline_stem = "a" * 32 + "\n"
+    try:
+        _write(_dnd5e_dir(source) / f"{newline_stem}.json", _dnd5e_document(newline_stem))
+    except OSError:
+        pass  # Windows cannot create a newline in a file name.
+    else:
+        stems.append(newline_stem)
+
+    bundle = migration.inspect_source(source)
+
+    assert bundle.report["import_allowed"] is True, bundle.report["blocking_conflicts"]
+    assert _warning_codes(bundle.report) == ["dnd5e_nonconforming_character_file"] * len(stems)
+    assert {row["id"] for row in bundle.records["characters"]} == {DND5E_OWNED, DND5E_UNOWNED}
+
+
+@pytest.mark.parametrize("document_id", [DND5E_UNOWNED, "Bram", None, ""])
+def test_dnd5e_id_stem_mismatch_blocks(tmp_path, document_id):
+    source = _dnd5e_fixture(tmp_path)
+    path = _dnd5e_dir(source) / f"{DND5E_STALE}.json"
+    _write(path, _dnd5e_document(DND5E_STALE, id=document_id))
+
+    plan = migration.build_plan(source)
+
+    assert plan["import_allowed"] is False
+    assert "dnd5e_locator_mismatch" in _conflict_codes(plan)
+
+
+@pytest.mark.parametrize("campaign_id", ["b" * 32, None, "missing"])
+def test_dnd5e_stale_campaign_id_warns_and_uses_the_containing_campaign(
+    tmp_path, campaign_id
+):
+    source = _dnd5e_fixture(tmp_path)
+    document = _dnd5e_document(DND5E_OWNED, campaign_id=campaign_id)
+    if campaign_id == "missing":
+        document.pop("campaign_id")
+    _write(_dnd5e_dir(source) / f"{DND5E_OWNED}.json", document)
+
+    bundle = migration.inspect_source(source)
+
+    assert bundle.report["import_allowed"] is True, bundle.report["blocking_conflicts"]
+    assert _warning_codes(bundle.report) == ["dnd5e_character_campaign_inferred"]
+    row = next(r for r in bundle.records["characters"] if r["id"] == DND5E_OWNED)
+    assert row["campaign_id"] == CAMPAIGN_ID
+
+
+def test_dnd5e_grant_lists_warn_and_only_the_scalar_owner_is_assigned(tmp_path):
+    source = _dnd5e_fixture(tmp_path)
+    _write(
+        _dnd5e_dir(source) / f"{DND5E_OWNED}.json",
+        _dnd5e_document(
+            DND5E_OWNED,
+            owner_user_ids=[GM_ID],
+            editor_user_ids=[GM_ID],
+            viewer_user_ids=[],
+        ),
+    )
+
+    bundle = migration.inspect_source(source)
+
+    assert bundle.report["import_allowed"] is True, bundle.report["blocking_conflicts"]
+    assert _warning_codes(bundle.report) == ["dnd5e_ignored_grant_field"]
+    assert "owner_user_ids, editor_user_ids" in bundle.report["warnings"][0]["message"]
+    assert _assignments(bundle.records) == [(DND5E_OWNED, PLAYER_ID, "owner")]
+
+
+def test_dnd5e_file_in_a_pf2e_campaign_blocks(tmp_path):
+    source = _dnd5e_fixture(tmp_path)
+    campaign = _load(_campaign_path(source))
+    campaign["system"] = "pf2e"
+    _write(_campaign_path(source), campaign)
+
+    plan = migration.build_plan(source)
+
+    assert plan["import_allowed"] is False
+    assert "dnd5e_character_campaign_system" in _conflict_codes(plan)
+
+
+@pytest.mark.parametrize("system", ["pf2e", "cosmere", None, ""])
+def test_non_dnd5e_system_in_the_dnd5e_store_blocks(tmp_path, system):
+    source = _dnd5e_fixture(tmp_path)
+    _write(
+        _dnd5e_dir(source) / f"{DND5E_OWNED}.json",
+        _dnd5e_document(DND5E_OWNED, system=system),
+    )
+
+    plan = migration.build_plan(source)
+
+    assert plan["import_allowed"] is False
+    assert "invalid_character_system" in _conflict_codes(plan)
+
+
+@pytest.mark.parametrize("storage", ["party_data", "cosmere_pcs"])
+def test_dnd5e_system_in_an_old_store_blocks(tmp_path, storage):
+    source = _dnd5e_fixture(tmp_path)
+    _write(
+        source / "campaigns" / CAMPAIGN_ID / storage / "hero.json",
+        _dnd5e_document("hero"),
+    )
+
+    plan = migration.build_plan(source)
+
+    assert plan["import_allowed"] is False
+    assert "invalid_character_system" in _conflict_codes(plan)
+
+
+def test_unknown_campaign_system_still_blocks(tmp_path):
+    source = _copy_fixture(tmp_path)
+    campaign = _load(_campaign_path(source))
+    campaign["system"] = "foo"
+    _write(_campaign_path(source), campaign)
+
+    plan = migration.build_plan(source)
+
+    assert "invalid_campaign_system" in _conflict_codes(plan)
+
+
+@pytest.mark.parametrize("parts", [("dnd5e",), ("dnd5e", "characters")])
+def test_symlinked_dnd5e_directory_blocks(tmp_path, parts):
+    source = _dnd5e_fixture(tmp_path)
+    store = source.joinpath("campaigns", CAMPAIGN_ID, *parts)
+    elsewhere = tmp_path / "elsewhere"
+    shutil.move(store, elsewhere)
+    try:
+        store.symlink_to(elsewhere, target_is_directory=True)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlinks are unavailable here")
+
+    plan = migration.build_plan(source)
+
+    assert plan["import_allowed"] is False
+    conflicts = [
+        item for item in plan["blocking_conflicts"]
+        if item["code"] == "unsupported_source_symlink"
+    ]
+    assert [item["path"] for item in conflicts] == ["/".join(("campaigns", CAMPAIGN_ID, *parts))]
+    assert not [
+        entry for entry in migration.build_plan(source)["snapshot"]["files"]
+        if "/dnd5e/characters/" in entry["path"]
+    ]
+
+
+def test_dnd5e_import_verify_and_export_round_trip(tmp_path, monkeypatch):
+    import importlib
+
+    source = _dnd5e_fixture(tmp_path)
+    source_before = _source_bytes(source)
+    plan = migration.build_plan(source)
+    database_url, database = _sqlite_database(tmp_path)
+    database.dispose()
+
+    assert plan["import_allowed"] is True, plan["blocking_conflicts"]
+    migration.import_store(source, database_url, expected_digest=plan["source_digest"])
+    verification = migration.verify_store(source, database_url)
+    assert verification["verified"] is True, verification["mismatches"]
+
+    output = tmp_path / "dnd5e-export"
+    result = migration.export_store(source, database_url, output)
+
+    assert result["verified"] is True
+    for character_id in (DND5E_OWNED, DND5E_UNOWNED):
+        relative = f"campaigns/{CAMPAIGN_ID}/dnd5e/characters/{character_id}.json"
+        assert (output / relative).read_bytes() == source_before[relative]
+    assert not (output / "campaigns" / CAMPAIGN_ID / "dnd5e_characters").exists()
+    assert migration.build_plan(output)["source_digest"] == plan["source_digest"]
+    assert _source_bytes(source) == source_before
+
+    # SQL-mode /me leaves the imported D&D character out until PE-15.
+    runtime = importlib.import_module("core.persistence.runtime")
+    ownership = importlib.import_module("core.persistence.ownership")
+    database = Database(database_url)
+    monkeypatch.setenv("OWNERSHIP_BACKEND", "sql")
+    monkeypatch.setattr(runtime, "database", lambda: database)
+    try:
+        assert ownership.characters_for_user(PLAYER_ID) == []
+    finally:
+        database.dispose()

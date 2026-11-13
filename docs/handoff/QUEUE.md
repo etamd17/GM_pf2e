@@ -18,7 +18,7 @@ ready/priority entries below where they conflict; historical logs remain intact.
 New wiki and VTT/map work is parked, shipped tools retain maintenance, and
 Cosmere/Mistborn expansion follows the PF2e plus D&D 2014/2024 release.
 
-PE-00, PE-01, PE-03, PE-04, PE-10 and PE-12 are done. PE-02, PE-07 and PE-11a are ready.
+PE-00, PE-01, PE-03, PE-04, PE-10 and PE-12 are done. PE-02 and PE-07 are ready; PE-11a is in review.
 Dependencies follow section 11 of the accepted
 [state and command contract](../player-release/state-command-contract.md). Blocked briefs
 cannot be claimed until accepted dependencies are integrated. Needs-brief rows
@@ -36,7 +36,7 @@ before they become ready. Owners review each other's output under PROTOCOL.md.
 | PE-06 | Fix existing level-up HP preview inconsistency | claude | high; select current model | blocked (PE-04, PE-05) | [brief](tasks/PE-06-levelup-hp-consistency.md) |
 | PE-07 | Player journey mockups and UI contract | claude | high; select current model | ready | [brief](tasks/PE-07-player-ux-design.md) |
 | PE-10 | Extend D&D campaign/character identity constraints | claude | high; select current model | done (merged in PR #250) | [brief](tasks/PE-10-dnd5e-identity.md) |
-| PE-11a | D&D locator, read-side identity and forward-import planning | claude | high; select current model | ready | [brief](tasks/PE-11a-dnd5e-locator.md) |
+| PE-11a | D&D locator, read-side identity and forward-import planning | claude | high; select current model | review | [brief](tasks/PE-11a-dnd5e-locator.md) |
 | PE-11b | SQL-mode campaign-archive restore for D&D characters | claude | high; select current model | blocked (PE-11a) | [brief](tasks/PE-11b-dnd5e-archive-restore.md) |
 | PE-11c | Runtime reverse export of D&D characters | claude | high; select current model | blocked (PE-11a) | [brief](tasks/PE-11c-dnd5e-runtime-export.md) |
 | PE-12 | Character/encounter state, session, clock and authority tables; `migration_runs` and `characters.archived_at` changes | claude | high; select current model | done (merged in PR #249) | [brief](tasks/PE-12-game-state-schema.md) |
@@ -242,6 +242,7 @@ Accepted as a design checkpoint. Notes:
 
 ## Log
 
+- 2026-11-13 Claude: built PE-11a. The site now recognises D&D character files at their exact location and refuses to write them through the shared code until PE-15. The migration tool can plan and import D&D campaigns, warning about odd files and blocking unsafe ones. D&D characters stay off the SQL /me list for now. Full persistence suite passes; the two PostgreSQL tests run only in CI. Next: Codex reviews the PR.
 - 2026-11-13 Codex: accepted all three PE-11 split briefs and closed both findings. The export now specifies safe handling of links to omitted D&D characters, and every new ID check uses the exact shared rule. Next: Claude commits the review and two small text clarifications, merges the docs PR after its check passes, then implements PE-11a. PE-11b and PE-11c still wait for PE-11a. No product code changed; nothing was committed or merged by this review.
 - 2026-11-13 Claude: answered Codex's two brief findings for PE-11. If a D&D character's file is gone, the rollback export now keeps the player in the campaign but clears their character choice, and leaves out invites that pointed at that character instead of turning them into open invites; the database and its history copy keep everything. Every D&D character id check is now exact, so an id with a stray line break is refused everywhere. Only the task briefs changed. Next: Codex re-reviews PR #251; PE-11a starts after that.
 - 2026-11-13 Codex: reviewed the three PE-11 briefs and requested two corrections before implementation: handle invitations and membership links when a D&D character file is gone, and require an exact character ID check rather than the current helper that also accepts a trailing newline. The split and dependencies are sound. Next: Claude revises the briefs and returns them for review; do not start PE-11a or merge this brief PR yet. No product code changed, and nothing was committed or merged.

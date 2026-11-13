@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** ready (PE-10 accepted and merged in PR #250; brief reconciled with main `93aede06` on 2026-11-11)
+- **Status:** review (implemented on `claude/pe-11a-dnd5e-locator` from main `affb6231`, 2026-11-13)
 - **Branch:** `claude/pe-11a-dnd5e-locator` from current main. Record the exact starting SHA.
 - **Depends on:** [PE-10](PE-10-dnd5e-identity.md) (merged), using the accepted PE-01 contract.
 - **Followed by:**
@@ -181,11 +181,58 @@ The planner system-check change in step 5 fixes it. The SQL `known_system` CHECK
 <!-- ============ REPORT (written by the implementer) ============ -->
 
 ## Report
-- **Changed:** Pending.
-- **Tests run:** Pending.
-- **Skipped / not verified:** Pending.
-- **Known wrong / limitations:** Pending.
-- **Follow-ups (not done here):** Pending.
+- **Starting SHA:** `affb6231` (origin/main after PR #251).
+- **Changed:**
+  - `core/persistence/character_files.py`:
+    - `LEGACY_STORAGE_DIRS` maps each logical store to its path parts. `dnd5e_characters` maps to `dnd5e/characters`.
+    - `STORAGE_SYSTEMS` with `storage_relative_parts` / `storage_system` replaces the two-way storage-to-system expressions. Both refuse unknown storage with `ValueError`.
+    - `is_dnd5e_character_id` is the exact `fullmatch` rule.
+    - `refuse_dnd5e_write`.
+    - `locator()` now matches the exact case-sensitive store path. A D&D stem must pass the id rule, and the existing symlink and `resolve` checks are kept.
+    - `write_document` refuses D&D in every backend before doing anything.
+  - `core/persistence/ownership.py`:
+    - `_validate_locator` accepts the map's keys and requires an exact id stem for D&D.
+    - `_resolve_identity` requires D&D `id == stem` and `system == "dnd5e"`, and keeps the campaign-scope check.
+    - `register_character`, `register_character_in_session` and `write_character_batch` refuse `dnd5e_characters` first.
+    - `characters_for_user` leaves out `dnd5e_characters` rows, with a PE-15 comment.
+  - `tools/migrate_transactional_store.py`:
+    - The snapshot and the plan walk every store in the map. `unsupported_source_symlink` covers any symlinked component on a store's path: `dnd5e/` or `dnd5e/characters/`.
+    - A campaign can have system `dnd5e`; `foo` still blocks.
+    - The D&D store applies these rules:
+      - a nonconforming stem gives a `dnd5e_nonconforming_character_file` warning and the file is left out;
+      - an id that does not equal its stem blocks (`dnd5e_locator_mismatch`);
+      - a missing or stale `campaign_id` gives a `dnd5e_character_campaign_inferred` warning and the file imports under its containing campaign;
+      - the system must be exactly `dnd5e` (absent is not defaulted; see below);
+      - a D&D file in a non-`dnd5e` campaign blocks (`dnd5e_character_campaign_system`);
+      - owners come from scalar `owner_user_id` only, and the list fields give a `dnd5e_ignored_grant_field` warning;
+      - no owner-without-membership-link warning, because D&D never writes `membership.character_id`.
+    - The old stores no longer accept `dnd5e`.
+    - The duplicate-id message and `export_store` paths go through the map.
+  - `tools/export_transactional_runtime.py`: `_reject_pending_batches` walks the map, so it also checks `dnd5e/characters`. Nothing else in that file changed.
+  - Tests:
+    - `tests/persistence/test_dnd5e_locator.py` is new: 64 cases covering the id rule, every lookalike path, traversal, both symlink depths, the storage maps, adapter identity, all write refusals in SQL and JSON mode, `/me`, pending publication with a positive control, and the import guard on `systems/dnd5e`.
+    - 21 planner cases in `test_migrate_transactional_store.py`.
+    - 5 export cases in `test_export_runtime.py`.
+- **Decision made during implementation:** for the D&D store, a missing or empty `system` now blocks as `invalid_character_system`, instead of defaulting to the campaign system as the old stores do. Every real D&D file has it (`store.save_pc` sets it on each save), and the adapter's `_resolve_identity` requires it. Defaulting it would have imported rows whose file the adapter then refuses.
+- **Tests run (Windows, Python 3.11):**
+  - Acceptance set 1 (`test_dnd5e_locator`, `test_sql_character_http`, `test_migrate_transactional_store`, `test_export_runtime`, `test_dnd5e_identity_schema`, `test_ownership_runtime`): 235 passed; the 2 PostgreSQL schema tests error locally for lack of `DATABASE_URL` (CI-only, see below).
+  - Acceptance set 2 (`character_workflows/test_recovery`, `character_workflows/test_migration`, `test_dnd5e_app_integration`, `test_system_guards`): 116 passed, 4 skipped. The skips depend on data and setup and predate this task.
+  - `pytest -q tests/persistence -m "not postgresql"`: 438 passed, 19 deselected.
+  - `git diff --check`: clean.
+- **Skipped / not verified:**
+  - The two PostgreSQL schema tests in `test_dnd5e_identity_schema.py` need `DATABASE_URL`. Local Docker is retired (user decision 2026-11-13), so CI's PostgreSQL job is their only run. This task does not change them.
+  - The newline-stem planner case cannot create its file on Windows, so it is exercised only on Linux CI. The locator and id-rule newline cases run everywhere.
+- **Known wrong / limitations:**
+  - **Over the change budget.** Product code is about 270 changed lines, under the ~350 budget, and the planner part is about 160, under its 250 stop line. Tests add about 740 lines, mostly parametrized lookalike and planner fixtures, so the total is roughly three times the budget. Nothing outside the allowed files changed.
+  - A PF2e or Cosmere file in `party_data`/`cosmere_pcs` of a `dnd5e` campaign still imports. That matches the brief's per-store rule and today's cross-system tolerance between pf2e and cosmere campaigns.
+  - Runtime export refuses once D&D rows are registered ("Unsafe character locator"). This is the interim state; PE-11c replaces it.
+- **Adversarial review:** a 9-agent review-then-refute workflow found no code defects. It confirmed three test gaps, all fixed here:
+  - the `_reject_pending_batches` D&D directory had no test (journal and symlink cases added);
+  - the planner symlink test covered only `dnd5e/` (now both depths, plus a snapshot assertion);
+  - the pending-publication test was vacuous (now has a positive control, plus a test that a D&D receipt cannot become a record).
+
+  It refuted three other claims: Windows case-variant directories, the write refusal on an existing row, and PF2e files in a D&D campaign.
+- **Follow-ups (not done here):** PE-11b and PE-11c are unblocked once this is accepted and merged. PE-15 removes the `/me` exclusion and the write refusals.
 
 ## Review
 <!-- Codex appends numbered findings or acceptance. -->
