@@ -13,17 +13,9 @@
 
 **Spec:** `docs/superpowers/specs/2026-11-12-pf2e-sheet-edit-design.md`; brief `docs/handoff/tasks/SE-02-pf2e-sheet-edit-lists.md`. Branch `claude/se-02-pf2e-sheet-edit-lists` = SE-01 tip `3fd0c4eb` + main `6fa94aa9` (#252). Rebase onto main once SE-01 merges.
 
-## Decision for review (D1: Import JSON semantics)
+## Decision D1 (user, 2026-11-13): Import JSON keeps the merge semantics
 
-The spec says to run an import through `_merge_pf2e_import`. That merge copies only the Pathbuilder rules keys from the upload and **keeps** the current file's `sheet_edits`, `pets_custom`, notes, HP and so on. A GM who fixes something in a text editor would see those fixes silently dropped, which defeats the request ("fix a sheet in a text editor and re-import it").
-
-This plan does a **full build replace** instead:
-- The uploaded file's `build` becomes the build.
-- The current envelope (`id`, `campaign_id`, `owner_user_id`, `system`) is kept.
-- An upload whose `id` is present and differs from the target gets 409; so does one whose `build.name` differs.
-- The live state is flushed first, and the confirm step warns that HP, conditions and anything else changed since the export are replaced by the file's values.
-
-Approve this, or tell me to keep the merge semantics.
+Import JSON runs the upload through `_merge_pf2e_import`, exactly like an "Update <name>" re-import. Only the Pathbuilder rules keys are taken from the file. HP, conditions, notes, in-app companions, `pets_removed` and `sheet_edits` are kept from the current file. The confirm step says so in plain words. The envelope is kept with `ensure_character_envelope(..., existing=...)`, as in `import_pathbuilder`.
 
 ## Global Constraints
 
@@ -119,7 +111,7 @@ UI:
   - A render test: the Edit button carries `data-se-pet` and no `onclick`.
 - [ ] **Step 2:** Run (fail). **Step 3:** Implement. **Step 4:** Run the tests plus `test_pc_save_reload_race.py`, the route policy tests and the escaping tests. **Step 5:** Commit "SE-02: edit a companion in place".
 
-### Task 4: Import JSON to the same character (per D1)
+### Task 4: Import JSON to the same character (merge, per D1)
 
 **Files:**
 - Modify: `app.py` (`import_character_json` near `export_character`).
@@ -131,10 +123,10 @@ UI:
 **Interfaces:** `POST /api/import_character_json/<pc_name>` with body = an exported document (`{id?, build: {...}}` or a bare build).
 - 400: not a dict, no `build.name`, or `system` present and not `pf2e`.
 - 409: `build.name` differs from `pc_name`, or `id` is present and differs from the current file's `id`.
-- Otherwise: `require_pc_json`, then the new document = the current envelope keys + the uploaded `build`, then `save_and_reload_character` (which constructs the actor first, so an unloadable build aborts 503 without writing), then `_broadcast_pc_state`, then 200.
+- Otherwise: `require_pc_json`, then `_merge_pf2e_import(current, upload)`, then `ensure_character_envelope(merged, cid, existing=current)` when a campaign is active, then `save_and_reload_character` (which constructs the actor first, so an unloadable build aborts 503 without writing), then `_broadcast_pc_state`, then 200 `{success, kept: [...]}` listing the kept runtime fields.
 
 - [ ] **Step 1:** Failing tests:
-  - `test_import_json_round_trip` (export via `/api/export_character`, change the deity and a `sheet_edits` adjustment in the JSON, import; both changes are applied and `id`/`owner_user_id` are unchanged).
+  - `test_import_json_round_trip`: export via `/api/export_character`, change `build.deity` (a rules key) and `build.sheet_edits` in the JSON, import. The deity change is applied; the file's own `sheet_edits` is kept, and the uploaded one is ignored. `id` and the owner are unchanged.
   - `test_import_json_wrong_name_409`.
   - `test_import_json_wrong_id_409`.
   - `test_import_json_bad_body_400_file_unchanged`.
@@ -147,7 +139,7 @@ UI:
   - add, remove and reorder a feat on Go'el;
   - hide a class feature;
   - import `kyle_l10.json` and edit Kyle's imported companion (the card updates and the old one doesn't return after re-import);
-  - export Go'el, edit the deity in the JSON, and import it.
+  - export Go'el, edit a feat level in the JSON, and import it.
   - Screenshots.
 - [ ] A fresh whole-branch reviewer (Opus); then one fix pass, each fix test-first.
 - [ ] Report in `docs/handoff/tasks/SE-02-pf2e-sheet-edit-lists.md`, queue row set to `review`, a log line. Push; open the PR based on `main` (stacked on SE-01: the PR description says to review after #253, and it shows only SE-02 commits once #253 merges).
