@@ -133,6 +133,7 @@ The GM can also add signed adjustments to engine-computed numbers. Both survive 
     - Lore adjustments ignored on builder-made PCs (`lore: x` key).
     - No `pc_update` broadcast after a save.
     - A large negative spell DC adjustment hid the Spell DC row (re-graded to important).
+- **CI fix (`f15f7313`):** the first CI `test` run failed `test_remediation_characterization.py::test_viewing_a_sheet_does_not_change_the_session_actor`. The sheet render read `pc.sheet_edits` on that test's name-only stub actor and returned 500; it now uses `getattr`, with a regression test. Locally that test had been hidden by a macOS temp-path failure (`/var` is a symlink, which makes `Character storage path is unsafe`). With `TMPDIR` set to a real path it passes, and 13 of the 27 "pre-existing" local failures also pass. The other 13 are backup and campaign-delete tests that fail the same way on main.
 - **Skipped / not verified:**
   - `tests/test_pb_import_correctness.py` does not exist on main, so it was not run.
   - Not verified on Railway.
