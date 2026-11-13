@@ -3063,6 +3063,21 @@
     .gm-adj-dot { display: inline-block; margin-left: 4px; padding: 0 4px; border-radius: 3px; font-size: 8px;
         line-height: 13px; letter-spacing: 0.05em; vertical-align: middle;
         color: var(--accent-gold-light); border: 1px solid currentColor; }
+    .se-modal .se-list { list-style: none; margin: 0 0 8px; padding: 0; }
+    .se-modal .se-item { display: flex; align-items: center; gap: 6px; padding: 4px 0;
+        border-bottom: 1px solid var(--border-strong); font-size: 13px; }
+    .se-modal .se-item-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .se-modal .se-item-meta { color: var(--text-muted); font-size: 11px; white-space: nowrap; }
+    .se-modal .se-item.is-hidden-feature .se-item-name { opacity: 0.5; text-decoration: line-through; }
+    .se-modal .se-mini { background: none; border: 1px solid var(--border-strong); border-radius: 4px;
+        color: var(--text-muted); font-size: 11px; padding: 2px 8px; min-height: 28px; cursor: pointer; }
+    .se-modal .se-mini:hover { color: var(--text-primary); }
+    .se-modal .se-add { display: flex; gap: 6px; margin: 6px 0 4px; flex-wrap: wrap; }
+    .se-modal .se-add input, .se-modal .se-add select { background: var(--bg-raised); color: var(--text-primary);
+        border: 1px solid var(--border-strong); border-radius: 6px; padding: 6px 8px; font-size: 13px; min-height: 36px; }
+    .se-modal .se-add input[type="text"] { flex: 1; min-width: 140px; }
+    .se-modal .se-add input[type="number"] { width: 64px; }
+    .se-modal .se-hint[hidden] { display: none; }
     @media (max-width: 600px) { .se-modal .se-row { grid-template-columns: 1fr; } }
     </style>
 </head>

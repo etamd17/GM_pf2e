@@ -23036,6 +23036,29 @@ def _sheet_edit_pathbuilder_meta(pc):
     }
 
 
+def _sheet_edit_feats(pc):
+    """The Feats tab's lists: current feats in display order (with where each
+    came from), feats removed from the import, and every class/ancestry feature
+    with its hidden flag so a hidden one can be restored. SE-02."""
+    if not hasattr(pc, '_all_class_features'):
+        return {'feats': [], 'removed': [], 'features': [], 'custom': []}
+    edits = pc._sheet_section('features')
+    hidden = {str(n).lower() for n in edits.get('hidden') or [] if isinstance(n, str)}
+    features = []
+    for kind, items in (('class', pc._all_class_features()), ('ancestry', pc._all_ancestry_features())):
+        for f in items:
+            name = str(f.get('name', ''))
+            if name:
+                features.append({'name': name, 'kind': kind, 'hidden': name.lower() in hidden})
+    return {
+        'feats': [{'name': f['name'], 'type': f.get('type', ''), 'level': f.get('level', 1),
+                   'source': f.get('source', 'build')} for f in pc.feats],
+        'removed': list(getattr(pc, 'removed_feats', [])),
+        'features': features,
+        'custom': [c for c in edits.get('custom') or [] if isinstance(c, dict) and c.get('name')],
+    }
+
+
 def _render_pf2e_sheet(actor, capabilities=None):
     """Read-only capabilities never select an acting character."""
     interactive = capabilities is None or capabilities.edit
@@ -23052,7 +23075,7 @@ def _render_pf2e_sheet(actor, capabilities=None):
     gm_view = _is_gm()
     return render_template('player_sheet.html', pc=actor, owner_private=owner_private,
         is_gm=gm_view, se_numbers=_sheet_edit_numbers(actor) if gm_view else [],
-        se_pb=_sheet_edit_pathbuilder_meta(actor),
+        se_pb=_sheet_edit_pathbuilder_meta(actor), se_feats=_sheet_edit_feats(actor),
         weapons_json=json.dumps(BUILDER_WEAPONS), builder_armor=BUILDER_ARMOR,
         armor_json=json.dumps(BUILDER_ARMOR), spells_json=json.dumps([
             {'name': s['name'], 'level': s['level'], 'traditions': s['traditions']} for s in BUILDER_SPELLS]),

@@ -469,3 +469,33 @@ def test_hidden_feature_not_listed_and_custom_feature_appended(app_module, goel_
     assert 'Raise Symbol' not in cf and 'Divine Font' in cf and cf[-1] == 'Oath of Ash'
     assert 'Orc Ferocity' not in [f['name'] for f in c.ancestry_features]
     assert sorted(c.hidden_features) == ['Orc Ferocity', 'Raise Symbol']
+
+
+# ---------------------------------------------------------------- SE-02 Task 2: feats tab
+
+def test_feats_tab_for_owner_and_gm(app_module, monkeypatch, goel_doc):
+    for gm in (True, False):
+        html = _render(app_module, monkeypatch, goel_doc, gm=gm)
+        assert 'id="se-feats"' in html and 'data-se-tab="feats"' in html
+        assert 'data-se-feat="Diehard"' in html and 'data-se-feature="Raise Symbol"' in html
+        assert 'id="se-feat-options"' in html
+
+
+def test_feat_names_go_through_data_attributes(app_module, monkeypatch, goel_doc):
+    doc = copy.deepcopy(goel_doc)
+    doc['build']['sheet_edits'] = {'feats': {'added': [["Thieves' Tools", None, 'Skill', 2]],
+                                             'removed': ['Diehard']}}
+    html = _render(app_module, monkeypatch, doc)
+    assert 'data-se-feat="Thieves&#39; Tools"' in html and 'data-se-source="sheet"' in html
+    assert 'data-se-removed-feat="Diehard"' in html
+    panel = html[html.index('id="se-feats"'):html.index('</section>', html.index('id="se-feats"'))]
+    assert 'onclick' not in panel
+
+
+def test_hidden_feature_listed_for_restore(app_module, monkeypatch, goel_doc):
+    doc = copy.deepcopy(goel_doc)
+    doc['build']['sheet_edits'] = {'features': {'hidden': ['Raise Symbol'],
+                                                'custom': [{'name': 'Oath of Ash', 'desc': 'Vow.'}]}}
+    html = _render(app_module, monkeypatch, doc)
+    assert 'data-se-feature="Raise Symbol" data-se-hidden="1"' in html
+    assert 'data-se-custom-name="Oath of Ash"' in html
