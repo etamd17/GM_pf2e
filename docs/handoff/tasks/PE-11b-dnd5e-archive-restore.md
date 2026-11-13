@@ -33,7 +33,7 @@ Allowed files:
    Any staged path whose leading parts casefold to a store prefix (`party_data`, `cosmere_pcs`, `dnd5e/characters`) without being spelled exactly that way refuses the import. Check this in `_json_files` on the walked directory names. app.py pre-creates `party_data/` and `cosmere_pcs/` in canonical case but not `dnd5e/`, so on Windows a `DnD5e/characters/<id>.json` entry would otherwise extract as an unregistered sheet that the case-insensitive D&D runtime still serves.
 
    Character files must sit directly under their prefix. The nested-directory guard in `_json_files` applies under `dnd5e/characters/` only, so `dnd5e/plans/`, `dnd5e/images/` and `dnd5e/encounter.json` still restore as plain campaign files. The store key, not the first path part, goes to `_validate_locator` and the system lookup.
-2. **D&D identities.** The file stem and the document `id` must be equal, and both must pass `store.valid_id` (the same 32-hex rule as `_ID_PATTERN`). Anything else refuses the import. This matches PE-11a's blocking `dnd5e_locator_mismatch` and `load_pc` (`store.py:63-64`). It is deliberately stricter than the planner's warn-and-exclude for non-hex stems, because restore never publishes a partial archive. Each id is remapped to a fresh id exactly as for the other stores.
+2. **D&D identities.** The file stem and the document `id` must be equal, and both must pass PE-11a's `is_dnd5e_character_id` (an exact `re.fullmatch` of 32 lowercase hex characters, the same rule as `_ID_PATTERN.fullmatch`; never `store.valid_id`, which accepts a trailing newline). Anything else refuses the import. This matches PE-11a's blocking `dnd5e_locator_mismatch` and `load_pc` (`store.py:63-64`). It is deliberately stricter than the planner's warn-and-exclude for non-hex stems, because restore never publishes a partial archive. Each id is remapped to a fresh id exactly as for the other stores.
 3. **Campaign id.** The D&D runtime lets the file location win over a stale `campaign_id` (`store.py:63-66`), and archives are expected to carry the source campaign's id. So for D&D only, `_prepare` sets `document["campaign_id"] = cid` before the consistency check at 165-167. It still requires `document["system"] == "dnd5e"` and a `dnd5e` campaign. PF2e and Cosmere keep the strict check.
 4. **File name.** Extend the `<new id>.json` rename (179, Cosmere-only today) to D&D, with the same collision check. Then `legacy_file == id + ".json"` holds and PE-10's `DND5E_LOCATOR_CHECK` accepts the row.
 5. **References and grants.**
@@ -51,7 +51,7 @@ Allowed files:
   - the plan and image unchanged;
   - only the importer as a member.
 - [ ] These are refused with nothing published, and with no campaign directory or SQL row left behind:
-  - a D&D file with a non-32-hex stem or id;
+  - a D&D file with a non-32-hex stem or id, including a 32-hex stem or `id` followed by a newline;
   - a D&D file whose stem differs from its `id` (both 32-hex);
   - a sheet under a case-variant prefix (`DnD5e/characters/<32hex>.json`, `dnd5e/Characters/<32hex>.json`), built directly in the staged tree so the test behaves the same on Linux and Windows;
   - a D&D sheet whose `system` is not `dnd5e`;

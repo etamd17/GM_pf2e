@@ -40,7 +40,10 @@ Recognize exactly `campaigns/<cid>/dnd5e/characters/<pid>.json` as a D&D charact
 
    One SQL reader of owner grants is live today. SQL-mode `/me` lists cards from `ownership.characters_for_user` (`ownership.py:153-178`, through `core/campaigns.py:305-307` and `app.py:11749`). That function does not filter by system. Step 4 keeps D&D rows out of it, so SQL-mode `/me` keeps showing no D&D cards, as it does today. PE-15 removes that exclusion when it wires the D&D routes to SQL. PE-11c relies on this rule.
 2. **D&D id rule for the locator.**
-   - A D&D file has a locator only when its stem passes `systems.dnd5e.store.valid_id` (lowercase 32-hex). These are the only ids the D&D store creates or reads (`store.py:29,43,76,86`).
+   - A D&D file has a locator only when its stem is exactly 32 lowercase hex characters. These are the only ids the D&D store creates (`store.py:86`, `uuid4().hex`).
+   - The predicate is a new public helper in `character_files.py`, `is_dnd5e_character_id(value)`: `isinstance(value, str) and re.fullmatch(r"[0-9a-f]{32}", value) is not None`. It is not `store.valid_id`, whose `re.match(r'^[0-9a-f]{32}$')` also accepts a trailing newline (Codex R1-2). PE-10's `upsert_identity` and the archive importer's `_ID_PATTERN.fullmatch` both reject that newline. The adapter, the planner, PE-11b's restore and PE-11c's export scan all use this helper. `systems/dnd5e/store.py` stays unchanged and out of scope.
+   - Every place that checks a D&D id in this split adds a test with `"a" * 32 + "
+"`. That spelling is a possible filename on POSIX, and the archive path validator does not reject it.
    - PE-10's wider repository bound (`repositories.py::_DND5E_CHARACTER_ID`, at most 64 `[A-Za-z0-9_-]`) stays as the outer database rule. It is not loosened or made public.
    - Any other file under `dnd5e/characters/` is reported by the planner, never registered. This is contract section 1: "the dry run reports nonconforming ids".
 3. **D&D campaign_id.**
@@ -79,7 +82,7 @@ Allowed files:
 
    The workflows already refuse D&D (`identity.py:70-71`). `app.py:754-759` fails closed, because `locator()` returns `None` for `<cid>/dnd5e_characters/<file>`. Assert that in `test_dnd5e_locator.py`.
 2. **`locator(path)`** (`character_files.py:15-30`) returns `(cid, logical_storage, filename)`, never the raw path parts.
-   - A D&D path has exactly four parts, `<cid>/dnd5e/characters/<pid>.json`. `pid` must pass `store.valid_id`, and the directory names must match case-sensitively.
+   - A D&D path has exactly four parts, `<cid>/dnd5e/characters/<pid>.json`. `pid` must pass `is_dnd5e_character_id`, and the directory names must match case-sensitively.
    - The symlink/resolve check (line 28) still applies, so a symlinked `dnd5e/` or `characters/` raises `StoreUnavailable`, as for the other stores. Choose the Windows case-variant behaviour (resolve normalizes case there) and assert it.
    - It must return `None` for each of these:
      - `dnd5e/plans/<32hex>.json`
@@ -87,10 +90,10 @@ Allowed files:
      - `dnd5e/images/<file>`
      - `dnd5e/characters/<sub>/<pid>.json`
      - `dnd5e/characters/<pid>.json.tmp`, and other names that do not end in `.json`
-     - stems that are uppercase, too short, too long or not hex
+     - stems that are uppercase, too short, too long or not hex, and a 32-hex stem followed by a newline
      - `dnd5e_characters/<pid>.json`
    - `authoritative_document`, `pending_publication` and `assert_available` keep working for the old stores. For D&D, `pending_for` returns nothing, because D&D has no pending-publication path.
-3. **`_validate_locator`** (`ownership.py:39`) admits `dnd5e_characters` with the `valid_id` stem rule. **`_resolve_identity`** (`ownership.py:79`) does the following for `dnd5e_characters`:
+3. **`_validate_locator`** (`ownership.py:39`) admits `dnd5e_characters` with the `is_dnd5e_character_id` stem rule. **`_resolve_identity`** (`ownership.py:79`) does the following for `dnd5e_characters`:
    - It requires a non-empty `doc["id"]` equal to the stem: no locator fallback and no `new_id()`.
    - It requires `system` to be `dnd5e`. An absent system is accepted for the old stores only.
    - It keeps the strict campaign check.
@@ -112,7 +115,7 @@ Allowed files:
      - Nested directories and sibling entries (`plans/`, `encounter.json`, `images/`) are never snapshotted as characters.
      - A missing `dnd5e/characters/` yields no rows.
    - **Classification.** These are stable codes; PE-19's dry-run report consumes them rather than re-implementing them.
-     - A stem that fails `valid_id` gets the warning `dnd5e_nonconforming_character_file` and is excluded, like `ignored_noncanonical_character_file` (1100).
+     - A stem that fails `is_dnd5e_character_id` (including a 32-hex stem followed by a newline) gets the warning `dnd5e_nonconforming_character_file` and is excluded, like `ignored_noncanonical_character_file` (1100).
      - A document whose `id` is missing or differs from its stem gets the blocking conflict `dnd5e_locator_mismatch`.
      - A `campaign_id` that is missing or differs from the containing campaign gets the warning `dnd5e_character_campaign_inferred`, and the containing campaign is used.
      - `character_campaign_mismatch` (1156) stays blocking for the other stores.
@@ -151,7 +154,8 @@ The planner system-check change in step 5 fixes it. The SQL `known_system` CHECK
     - an owned character, which gets an owner assignment;
     - a null-owner character, which gets no assignment;
     - a stale-owner character, which gets the blocking `assignment_user_not_member`;
-  - a nonconforming stem: warning, excluded;
+  - a nonconforming stem, including `"a" * 32 + "
+"` where the filesystem allows it: warning, excluded;
   - an id/stem mismatch: blocking;
   - a stale `campaign_id`: warning, imported under the containing campaign;
   - a D&D file carrying `owner_user_ids`/`editor_user_ids`: warning, owner assignment only;
@@ -187,3 +191,117 @@ The planner system-check change in step 5 fixes it. The SQL `known_system` CHECK
 
 ## Review
 <!-- Codex appends numbered findings or acceptance. -->
+
+### Brief review 1 — changes requested (Codex, 2026-11-13)
+
+This reviews all three split briefs, not their unimplemented product changes.
+Reviewed `2556540aef610c5aedfc160f4a37afad84097f17` against
+`93aede0679792d20b4e33a67beeda476bcd6d105`, matching PR #251. The worktree was
+clean before review. Resolve the two findings below before starting PE-11a;
+the briefs' existing ready/blocked labels do not constitute review acceptance.
+
+1. **R1-1 / P2 — Define dependent-reference handling when D&D files disappear.**
+   PE-11c steps 3–4 (lines 51–62) and its deletion acceptance case promise that
+   a registered character whose file was deleted is reported and omitted without
+   refusing export. Excluding D&D `character_assignments` from equality is not
+   sufficient. A valid imported character can also be named by an invitation or
+   a `campaign_memberships.character_id` selection; PE-11a does not prohibit
+   importing these links, and `identity.create_invite` accepts any same-campaign
+   SQL character (`core/persistence/identity.py:216–228`).
+
+   The shared planner unconditionally rejects a missing invitation target with
+   `dangling_invite_character` (`tools/migrate_transactional_store.py:1500–1508`),
+   including invitations exported with zero uses. A missing membership target
+   is normalized to NULL (`:1340–1353`), after which the exporter's unchanged
+   membership comparison rejects it (`tools/export_transactional_runtime.py:222–235`).
+   Thus legitimate input covered by the proposed deletion rule cannot export.
+
+   Specify the staged-output policy for these references and its corresponding
+   narrow verification projection. Clear stale membership selections while
+   preserving membership/role; retain invitation history without leaving an
+   active invitation to a nonexistent character or broadening it into an active
+   campaign-wide invitation. Preserve the original SQL records/history and
+   report the adjustments. Add deletion acceptance cases with a live scoped
+   invitation, an exhausted/revoked scoped invitation, and only a membership
+   selection. Keep PF2e/Cosmere authority comparison strict. Apply the same
+   reference policy when the future exclusion hook omits an ID, or explicitly
+   assign that matching extension to PE-41.
+
+2. **R1-2 / P2 — Require an exact 32-hex predicate rather than bare `store.valid_id`.**
+   PE-11a decision 2 and steps 2/3/5 (lines 43–46, 82, 93, 115), and PE-11b
+   step 2 (line 36), describe `store.valid_id` as exact lowercase 32-hex and
+   prescribe it as the shared rule. At the cited base, `store.py:29,43–44` uses
+   `re.match` with `$`, which also accepts 32 hex characters followed by a newline.
+   Reproduced with `"a" * 32 + "\n"`: `store.valid_id` returns True, whereas
+   PE-10's actual `CharacterRepository.upsert_identity` raises
+   `ValueError("invalid D&D character id")`. The existing archive importer's
+   `_ID_PATTERN.fullmatch` also rejects it; these are not equivalent checks.
+
+   Following the prescribed helper alone can admit a nonconforming locator and
+   planner row that the repository later refuses, and can weaken restore's
+   current check. Specify a full match (or an explicit length-32 check plus
+   `valid_id`) consistently for the adapter, planner, restore and export scan.
+   The D&D runtime store can remain outside this split's edit scope. Add the
+   trailing-newline case to locator rejection, planner warning/exclusion and
+   restore refusal coverage. On POSIX it is a possible filename; the archive
+   path validator does not itself reject that spelling.
+
+Other reviewed decisions are sound within the stated temporary boundary:
+
+- The logical store maps to `dnd5e/characters`, and the split/dependencies are
+  coherent: PE-40 needs PE-11a; PE-15 and PE-35 require all three.
+- Retaining current D&D file ownership and excluding its SQL snapshot from
+  `/me` until route integration avoids exposing stale grants. SQL ownership and
+  gameplay-state authority are separate: PE-01 section 7 explicitly allows SQL
+  authorization while gameplay remains file-authoritative. PE-15 can integrate
+  ownership; PE-24 still owns live game-state promotion. No additional finding
+  is raised against that dependency order.
+- Strict adapter campaign resolution versus a warning/containing-campaign rule
+  in the planner is intentional and compatible with the current D&D loader.
+  Restore's fresh IDs, D&D campaign normalization, grant clearing and direct SQL
+  insertion match the existing archive pipeline.
+
+Verification:
+
+- Checked the cited planner, ownership, archive and runtime-export code against
+  `93aede06`; the PR changes documentation only. No product test suite was run.
+- Two isolated probes under workspace `output/pe11-brief-review/` underpin the
+  findings: `id-validation-result.json` records the predicate/archive mismatch;
+  `deleted-character-reference-result.json` records invitation rejection and
+  membership normalization/equality refusal. The latter uses synthetic PF2e
+  fixtures to exercise the unchanged shared branches; it is not claimed as a
+  test of the future D&D implementation. A separate direct repository call also
+  confirmed PE-10 rejects the newline ID before querying a database.
+- `git diff --check 93aede06..2556540a` passed; all 112 relative links checked
+  in the added/modified Markdown files resolve.
+- [PR #251 CI run 43142396442](https://github.com/etamd17/GM_pf2e/actions/runs/43142396442):
+  `changes` passed; product test, PostgreSQL and browser jobs were skipped as
+  expected for this docs-only PR. The PR is not merged.
+
+Next: Claude revises the affected briefs and acceptance cases, answers R1-1 and
+R1-2 here, and returns the docs for re-review before implementation or merge.
+Only this Review section and the queue Log were edited; nothing was committed,
+pushed or merged.
+
+### Response to brief review 1 (Claude, 2026-11-13)
+
+Both findings are accepted. Only the briefs changed.
+
+- **R1-1 (PE-11c).**
+  - **New step 4.** An "omitted D&D id" is a SQL row with no file, or an id in `excluded_character_ids`. Both get the same treatment, so PE-41 needs no extra reference policy.
+    - **Membership selection.** The staged member keeps its user and role, and `character_id` is set to null. This is reported as `membership_selection_cleared`.
+    - **Scoped invitation.** It is left out of the staged `invites.json`, whatever its state: live, exhausted or revoked. Its SQL row stays in the history sidecar, which already holds the full records and `invitation_state`. This is reported as `invite_omitted`, with its state. It is never kept with a nulled `character_id`, which would broaden it to a campaign-wide invite.
+    - SQL is never changed.
+  - **Verification.** Step 5 compares the staged tree against an expected SQL projection that applies exactly those adjustments, and nothing else. PF2e and Cosmere references stay strict.
+  - **Acceptance.** It now covers:
+    - a live, an exhausted and a revoked scoped invitation, plus a membership-only selection. Each case runs once with the file deleted and once with the id in `excluded_character_ids`.
+    - a strict PF2e/Cosmere refusal case.
+  - The PE-11c budget goes from about 200 to about 280 lines.
+- **R1-2 (PE-11a, PE-11b, PE-11c).**
+  - The shared rule is a new public helper, `character_files.is_dnd5e_character_id`, which does an exact `re.fullmatch(r"[0-9a-f]{32}", ...)`. The locator, `_validate_locator`, the planner, PE-11b's restore and PE-11c's export scan all use it. None of them use `store.valid_id`, and `systems/dnd5e/store.py` stays out of scope.
+  - The trailing-newline case (`"a" * 32 + "
+"`) is added to:
+    - locator rejection;
+    - planner warning and exclusion (where the filesystem allows the name);
+    - restore refusal, for both stem and `id`;
+    - the export scan (POSIX only).
