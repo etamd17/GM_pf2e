@@ -66,6 +66,11 @@
             if (title) title.textContent = 'Edit companion';
             if (saveBtn) saveBtn.textContent = 'Save Companion';
             modal.classList.remove('hidden');
+            // The companion form can render in the page flow rather than as an
+            // overlay; bring it into view so Edit never opens off-screen.
+            modal.scrollIntoView({block: 'start'});
+            var first = document.getElementById('pet-name');
+            if (first) first.focus({preventScroll: true});
         });
     });
     // "+ Add Pet" goes back to adding.
