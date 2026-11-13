@@ -6643,7 +6643,9 @@ class Character:
         # Pets: merge Pathbuilder pets with custom pets
         self.pets = []
         custom_pets = build.get('pets_custom') or []
-        pb_pets = build.get('pets') or []
+        removed_pets = set(n for n in (build.get('pets_removed') or []) if isinstance(n, str))
+        pb_pets = [p for p in (build.get('pets') or [])
+                   if not (isinstance(p, dict) and p.get('name') in removed_pets)]
         
         for pet in custom_pets:
             self.pets.append(pet)
@@ -20070,16 +20072,26 @@ def daily_preparations(pc_name):
     pc, file_path, err = require_pc(pc_name)
     if err: return err
     
+    data = request.get_json(silent=True) or {}
+    heal_full = data.get('heal_full', True)
+    # The Daily Preparation dialog sends the spells chosen for the new day so
+    # the reset and the prep land in ONE write. Omitted -> cleared, as before.
+    new_prep = data.get('prepared_spells', {})
+    if not isinstance(new_prep, dict):
+        return jsonify({"success": False, "error": "prepared_spells must be an object"}), 400
+
+    with _pc_spell_lock(pc_name):
+        return _daily_preparations_locked(pc_name, pc, heal_full, new_prep)
+
+
+def _daily_preparations_locked(pc_name, pc, heal_full, new_prep):
     pc_json, file_path, err = require_pc_json(pc_name)
     if err: return err
     build = pc_json.get('build', pc_json)
-    
-    data = request.json or {}
-    heal_full = data.get('heal_full', True)
-    
-    # Reset expended spell slots, prepared lists, and per-slot cast tracking
+
+    # Reset expended spell slots and per-slot cast tracking; set the day's prep.
     build['expended_slots'] = {}
-    build['prepared_spells'] = {}
+    build['prepared_spells'] = new_prep
     build['cast_prep'] = {}
 
     # Restore focus to max
@@ -25498,15 +25510,39 @@ def remove_pet(pc_name):
     """Remove a pet by name."""
     if pc_name not in PARTY_LIBRARY:
         return jsonify({"error": "Character not found"}), 404
-    data = request.json
-    pet_name = data.get('name', '')
+    data = request.get_json(silent=True) or {}
+    pet_name = data.get('name') if isinstance(data, dict) else None
+    if not isinstance(pet_name, str) or not pet_name:
+        return jsonify({"success": False, "error": "Missing companion name"}), 400
     file_path = get_pc_file_path(pc_name)
     _flush_pc_dirty(pc_name)
     with open(file_path, 'r', encoding='utf-8') as f:
         pc_json = json.load(f)
     build = pc_json.get('build', pc_json)
-    pets = build.get('pets_custom') or []
-    build['pets_custom'] = [p for p in pets if p.get('name') != pet_name]
+
+    def _named(p):
+        return isinstance(p, dict) and p.get('name') == pet_name
+
+    removed = False
+    # A companion lives in one of two buckets: 'pets_custom' (added in-app)
+    # or 'pets' (imported from Pathbuilder). This used to filter only the
+    # first, so an imported companion matched nothing and still returned 200.
+    custom = build.get('pets_custom') or []
+    if any(_named(p) for p in custom):
+        build['pets_custom'] = [p for p in custom if not _named(p)]
+        removed = True
+    imported = build.get('pets') or []
+    if any(_named(p) for p in imported):
+        build['pets'] = [p for p in imported if not _named(p)]
+        # 'pets' is re-imported from Pathbuilder on every Update; remember the
+        # removal so a re-import does not bring the companion back.
+        hidden = [n for n in (build.get('pets_removed') or []) if isinstance(n, str)]
+        if pet_name not in hidden:
+            hidden.append(pet_name)
+        build['pets_removed'] = hidden
+        removed = True
+    if not removed:
+        return jsonify({"success": False, "error": f"No companion named {pet_name!r} on this sheet"}), 404
     save_and_reload_character(pc_name, pc_json, file_path)
     return jsonify({"success": True})
 
@@ -26546,6 +26582,7 @@ def _merge_pf2e_import(existing: dict, imported: dict) -> dict:
         'expended_slots', 'signature_spells', 'active_effects',
         'weapons',  # Preserve custom weapons added in-app
         'pets_custom',  # Preserve custom pets
+        'pets_removed',  # Imported companions the table removed; keep them gone
         'level_history', 'monk_paths', 'half_boosts',
         'persistent_damage',
         'sheet_edits',  # SE-01: sheet corrections outlive a Pathbuilder re-import

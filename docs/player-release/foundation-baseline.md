@@ -56,7 +56,9 @@ integration work; do not assume the older main-branch plugin is the only baselin
 
 The initial concrete briefs are [PE-01](../handoff/tasks/PE-01-state-command-contract.md),
 [PE-10](../handoff/tasks/PE-10-dnd5e-identity.md),
-[PE-11](../handoff/tasks/PE-11-dnd5e-locator.md), and
+PE-11 (split on 2026-11-11 into [PE-11a](../handoff/tasks/PE-11a-dnd5e-locator.md),
+[PE-11b](../handoff/tasks/PE-11b-dnd5e-archive-restore.md) and
+[PE-11c](../handoff/tasks/PE-11c-dnd5e-runtime-export.md)), and
 [PE-12](../handoff/tasks/PE-12-game-state-schema.md). The shared queue controls when
 each is claimable. Further slices should remain separate reviewable changes:
 

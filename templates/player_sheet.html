@@ -5267,27 +5267,33 @@
         } catch(e) { console.error('parchment tooltip init:', e); }
 
         // INIT SLOT TRACKERS — full server-side persistence
+        // Load all spell state from server (expended slots, prepared spells, cast-prep).
+        // Every writer sends the WHOLE slot map, and these three start EMPTY.
+        // A write that lands before this GET resolves would therefore persist
+        // {} and clear the sheet, so writers await this promise first.
+        //
+        // It MUST be created here, at parse time, not inside DOMContentLoaded:
+        // the synchronous initDailyPrep() at the script tail renders the prep
+        // UI (which saves) before any DCL handler runs. When this promise was
+        // created in DCL, that save awaited `undefined`, posted empty slot
+        // arrays, and wiped every prepared spell on each page load (2026-11-12).
+        window._expendedSlots = {};
+        window._preparedSpells = {};
+        window._castPrep = {};
+        window._spellStateLoaded = false;
+        window._spellStateReady = (async () => {
+            try {
+                const res = await fetch(`/api/spell_slots/${pcNameEncoded}`);
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    window._expendedSlots = data.expended_slots || {};
+                    window._preparedSpells = data.prepared_spells || {};
+                    window._castPrep = data.cast_prep || {};
+                    window._spellStateLoaded = true;
+                }
+            } catch(e) { console.error('spell state load failed:', e); }
+        })();
         document.addEventListener("DOMContentLoaded", async () => {
-            // Load all spell state from server (expended slots, prepared spells, cast-prep)
-            window._expendedSlots = {};
-            window._preparedSpells = {};
-            window._castPrep = {};
-            // Every writer below sends the WHOLE slot map, and these three
-            // start EMPTY. A click that lands before this GET resolves would
-            // therefore persist {} and clear every spent slot on the sheet --
-            // real on table wifi, and silent. Writers await this promise
-            // before reading or mutating the maps.
-            window._spellStateReady = (async () => {
-                try {
-                    const res = await fetch(`/api/spell_slots/${pcNameEncoded}`);
-                    const data = await res.json();
-                    if (data.success) {
-                        window._expendedSlots = data.expended_slots || {};
-                        window._preparedSpells = data.prepared_spells || {};
-                        window._castPrep = data.cast_prep || {};
-                    }
-                } catch(e) {}
-            })();
             await window._spellStateReady;
 
             // Spell-slot toggles are buttons now (was <input type=checkbox>).
@@ -5442,8 +5448,14 @@
             // Never write before the initial read has landed -- this posts the
             // whole map, so writing early would clear every spent slot.
             try { await window._spellStateReady; } catch (_) {}
+            // If the initial read failed, the in-memory maps are not the
+            // server's state; posting them would overwrite real data.
+            if (!window._spellStateLoaded) {
+                if (window.pf2eToast) window.pf2eToast('Spell prep not saved: could not load current state. Reload the sheet.', 'danger');
+                return false;
+            }
             try {
-                await fetch(`/api/spell_slots/${pcNameEncoded}`, {
+                const res = await fetch(`/api/spell_slots/${pcNameEncoded}`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
@@ -5452,6 +5464,12 @@
                         cast_prep: window._castPrep
                     })
                 });
+                if (!res.ok) {
+                    let msg = 'HTTP ' + res.status;
+                    try { msg = (await res.json()).error || msg; } catch (_) {}
+                    if (window.pf2eToast) window.pf2eToast('Spell prep not saved: ' + msg, 'danger');
+                    return false;
+                }
                 // Persistence confidence: prep writes to the PC's file on disk, but it
                 // happens silently. Flash a debounced confirmation so the player trusts
                 // their choices carry to the next session (one toast per burst of edits).
@@ -5459,7 +5477,11 @@
                 _spellSaveToastTimer = setTimeout(function () {
                     if (window.pf2eToast) window.pf2eToast('Spell prep saved', 'success');
                 }, 500);
-            } catch(e) {}
+                return true;
+            } catch(e) {
+                if (window.pf2eToast) window.pf2eToast('Spell prep not saved: connection lost.', 'danger');
+                return false;
+            }
         }
 
         async function saveWealth() {
@@ -7941,8 +7963,13 @@
                 }
                 html += `</div></div>`;
             });
-            
-            _setPrepState(cIdx, prepState);
+
+            // Keep the resized slot arrays in memory only. Rendering is not an
+            // edit: persisting here wrote (and toasted "Spell prep saved") on
+            // every page load. Any real change goes through _setPrepState,
+            // which saves the whole map including these arrays.
+            if (!window._preparedSpells) window._preparedSpells = {};
+            window._preparedSpells[cIdx] = prepState;
             ui.innerHTML = html || "<div class='text-xs italic text-center' style='color:var(--text-muted);'>No spell slots available.</div>";
 
             document.querySelectorAll('#prep-ui-'+cIdx+' .spell-slot-cb').forEach((cb) => {
@@ -8085,6 +8112,13 @@
                         }
                     }
                 }
+            }
+            // Cantrips are a flat at-will selection under key '0', not slots.
+            // Without this, the rank-0 row has no slot array, so the search
+            // below skipped it and put the cantrip into a rank-1 slot.
+            if (baseRank === 0) {
+                if (!_getCantripSelection(cIdx).includes(spellName)) toggleCantrip(cIdx, spellName);
+                return;
             }
             // Find first slot rank >= baseRank with an empty seat.
             let prepState = _getPrepState(cIdx);
