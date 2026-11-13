@@ -7,7 +7,7 @@
 **Architecture:**
 - Feats and features extend SE-01's `build['sheet_edits']` layer with two new sections. `Character.__init__` applies `feats.added`/`feats.removed` where `self.raw_feats` is assigned (`app.py`, around line 5275), so the rule engine, the feat loop and domain detection all see the edited list. Ordering and features are display-only.
 - Companion edit reuses #252's two buckets: the edited pet is written to `pets_custom`, and an imported original is tombstoned in `pets_removed`.
-- Import JSON is a new route that replaces the character's build from an uploaded export, after checks (decision D1 below).
+- Import JSON is a new route that merges an uploaded export into the same character, the same way a Pathbuilder update does (decision D1 below).
 
 **Tech Stack:** Flask, Jinja, vanilla JS, pytest; scratch venv Python 3.11.
 
