@@ -23,6 +23,10 @@ def _digest(value) -> str:
     return sha256(payload.encode("utf-8")).hexdigest()
 
 
+_VOID_TAGS = {"area", "base", "br", "col", "embed", "hr", "img", "input",
+              "link", "meta", "source", "track", "wbr"}
+
+
 class SheetInventory(HTMLParser):
     """Capture the behavior-bearing markup that UI-10 must not change."""
 
@@ -34,10 +38,23 @@ class SheetInventory(HTMLParser):
         self.aria = []
         self.forms = []
         self._form = None
+        self._skip_tag = None
+        self._skip_depth = 0
         self.feed(html)
 
     def handle_starttag(self, tag, attrs):
         attributes = dict(attrs)
+        # Later additive features (SE-01 sheet edit) mark their own markup with
+        # data-se-additive and are tested on their own. Skipping that subtree
+        # keeps this inventory pinned to the pre-existing sheet, byte for byte.
+        if self._skip_tag:
+            if tag == self._skip_tag:
+                self._skip_depth += 1
+            return
+        if "data-se-additive" in attributes:
+            if tag not in _VOID_TAGS:
+                self._skip_tag, self._skip_depth = tag, 1
+            return
         key = attributes.get("id") or attributes.get("name") or ""
         if attributes.get("id"):
             self.ids.append((tag, attributes["id"]))
@@ -68,6 +85,12 @@ class SheetInventory(HTMLParser):
             ))
 
     def handle_endtag(self, tag):
+        if self._skip_tag:
+            if tag == self._skip_tag:
+                self._skip_depth -= 1
+                if self._skip_depth == 0:
+                    self._skip_tag = None
+            return
         if tag == "form" and self._form is not None:
             self.forms.append((
                 self._form["action"],
