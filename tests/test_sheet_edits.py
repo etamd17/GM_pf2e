@@ -29,7 +29,10 @@ def test_owner_may_edit_meta():
     {'meta': {'size': 'Colossal'}}, {'meta': {'languages': 'Common'}},
     {'meta': {'languages': ['x'] * 31}}, {'meta': {'languages': ['x' * 41]}},
     {'meta': {'deity': 'x' * 81}}, {'meta': {'deity': 3}}, {'meta': {'bogus': 'x'}},
-    {'feats': {'added': []}}, {'features': {}}, {'other': 1}, {},
+    {'feats': {'added': [{'name': ''}]}}, {'feats': {'added': [{'name': 'X', 'level': 21}]}},
+    {'feats': {'added': 'Toughness'}}, {'feats': {'bogus': []}}, {'features': {}},
+    {'features': {'custom': [{'name': 'X', 'desc': 'y' * 2001}]}}, {'feats': {'removed': ['x' * 81]}},
+    {'other': 1}, {},
     [], 'str', None,
 ])
 def test_invalid_patches_400(bad):
@@ -397,3 +400,309 @@ def test_pathbuilder_meta_tolerates_a_bare_actor(app_module):
     from types import SimpleNamespace
     meta = app_module._sheet_edit_pathbuilder_meta(SimpleNamespace(name='Viewed Character'))
     assert meta['display_name'] == 'Viewed Character' and meta['deity'] == '' and meta['senses'] == ''
+
+
+# ---------------------------------------------------------------- SE-02 Task 1: feats and features
+
+def _fighter(level=5, feats=None):
+    return {'build': {'name': 'Test Fighter', 'class': 'Fighter', 'ancestry': 'Human', 'level': level,
+                      'abilities': {'str': 4, 'dex': 2, 'con': 2, 'int': 0, 'wis': 1, 'cha': 0},
+                      'feats': feats or [['Power Attack', None, 'Class', 1]]}}
+
+
+def test_feat_patch_validation():
+    clean = validate_patch({'feats': {'added': [{'name': ' Toughness ', 'type': 'General', 'level': 3}],
+                                      'removed': ['Diehard'], 'order': ['Toughness', 'Diehard']},
+                            'features': {'hidden': ['Raise Symbol'], 'custom': [{'name': 'Vow', 'desc': 'Text'}]}},
+                           is_gm=False)
+    assert clean['feats']['added'] == [['Toughness', None, 'General', 3]]
+    assert clean['feats']['removed'] == ['Diehard'] and clean['features']['custom'] == [{'name': 'Vow', 'desc': 'Text'}]
+    # Lists replace wholesale; an empty list clears.
+    out = merge_patch({'feats': {'removed': ['Diehard'], 'order': ['A']}}, validate_patch({'feats': {'removed': []}}, is_gm=False))
+    assert out == {'feats': {'order': ['A']}}
+
+
+def test_added_feat_rule_applies(app_module):
+    base = _mk(app_module, _fighter())
+    c = _mk(app_module, _fighter(), {'feats': {'added': [['Toughness', None, 'General', 3]]}})
+    assert c.hp == base.hp + 5
+    assert next(f for f in c.feats if f['name'] == 'Toughness')['source'] == 'sheet'
+    assert next(f for f in c.feats if f['name'] == 'Power Attack')['source'] == 'build'
+
+
+def test_removed_pathbuilder_feat_gone_and_listed(app_module, goel_doc):
+    c = _mk(app_module, goel_doc, {'feats': {'removed': ['diehard']}})
+    assert 'Diehard' not in [f['name'] for f in c.feats]
+    assert c.removed_feats == ['Diehard']
+    assert _mk(app_module, goel_doc).removed_feats == []
+
+
+def test_added_and_removed_same_name_shows_once(app_module, goel_doc):
+    c = _mk(app_module, goel_doc, {'feats': {'removed': ['Toughness'],
+                                             'added': [['Toughness', None, 'General', 3]]}})
+    assert [f['name'] for f in c.feats].count('Toughness') == 1
+    c = _mk(app_module, goel_doc, {'feats': {'added': [['Diehard', None, 'General', 1]]}})
+    assert [f['name'] for f in c.feats].count('Diehard') == 1      # already in the build
+
+
+def test_feat_order_applied(app_module, goel_doc):
+    base = [f['name'] for f in _mk(app_module, goel_doc).feats]
+    got = [f['name'] for f in _mk(app_module, goel_doc, {'feats': {'order': ['Toughness', 'Diehard']}}).feats]
+    assert got[:2] == ['Toughness', 'Diehard']
+    assert got[2:] == [n for n in base if n not in ('Toughness', 'Diehard')]
+
+
+def test_feat_edits_survive_reimport(app_module, goel_doc):
+    existing = copy.deepcopy(goel_doc)
+    existing['build']['sheet_edits'] = {'feats': {'removed': ['Diehard'], 'added': [['Fleet', None, 'General', 3]]}}
+    reimport = copy.deepcopy(goel_doc)
+    reimport['build']['feats'].append(['Fleet', None, 'General', 3])   # Pathbuilder now has it too
+    c = app_module.Character(app_module._merge_pf2e_import(existing, reimport), '')
+    names = [f['name'] for f in c.feats]
+    assert 'Diehard' not in names and names.count('Fleet') == 1
+
+
+def test_hidden_feature_not_listed_and_custom_feature_appended(app_module, goel_doc):
+    c = _mk(app_module, goel_doc, {'features': {'hidden': ['raise symbol', 'Orc Ferocity'],
+                                                'custom': [{'name': 'Oath of Ash', 'desc': 'Homebrew vow.'}]}})
+    cf = [f['name'] for f in c.class_features]
+    assert 'Raise Symbol' not in cf and 'Divine Font' in cf and cf[-1] == 'Oath of Ash'
+    assert 'Orc Ferocity' not in [f['name'] for f in c.ancestry_features]
+    assert sorted(c.hidden_features) == ['Orc Ferocity', 'Raise Symbol']
+
+
+# ---------------------------------------------------------------- SE-02 Task 2: feats tab
+
+def test_feats_tab_for_owner_and_gm(app_module, monkeypatch, goel_doc):
+    for gm in (True, False):
+        html = _render(app_module, monkeypatch, goel_doc, gm=gm)
+        assert 'id="se-feats"' in html and 'data-se-tab="feats"' in html
+        assert 'data-se-feat="Diehard"' in html and 'data-se-feature="Raise Symbol"' in html
+        assert 'id="se-feat-options"' in html
+
+
+def test_feat_names_go_through_data_attributes(app_module, monkeypatch, goel_doc):
+    doc = copy.deepcopy(goel_doc)
+    doc['build']['sheet_edits'] = {'feats': {'added': [["Thieves' Tools", None, 'Skill', 2]],
+                                             'removed': ['Diehard']}}
+    html = _render(app_module, monkeypatch, doc)
+    assert 'data-se-feat="Thieves&#39; Tools"' in html and 'data-se-source="sheet"' in html
+    assert 'data-se-removed-feat="Diehard"' in html
+    panel = html[html.index('id="se-feats"'):html.index('</section>', html.index('id="se-feats"'))]
+    assert 'onclick' not in panel
+
+
+def test_hidden_feature_listed_for_restore(app_module, monkeypatch, goel_doc):
+    doc = copy.deepcopy(goel_doc)
+    doc['build']['sheet_edits'] = {'features': {'hidden': ['Raise Symbol'],
+                                                'custom': [{'name': 'Oath of Ash', 'desc': 'Vow.'}]}}
+    html = _render(app_module, monkeypatch, doc)
+    assert 'data-se-feature="Raise Symbol" data-se-hidden="1"' in html
+    assert 'data-se-custom-name="Oath of Ash"' in html
+
+
+# ---------------------------------------------------------------- SE-02 Task 3: edit a companion
+
+def _route_kyle(body):
+    _route(textwrap.dedent(body).replace('KYLE_SETUP', '''
+kpb = json.load(open('tests/fixtures/kyle_l10.json', encoding='utf-8'))
+assert c.post('/api/import_pathbuilder', json=kpb, headers=J).status_code == 200
+kname = kpb['build']['name']; kurl = '/api/update_pet/' + quote(kname)
+kpath = A.get_pc_file_path(kname)
+def kraw(): return open(kpath, 'rb').read()
+def kbuild(): return json.loads(kraw()).get('build', {})
+def pet_names(): return [p['name'] for p in A.PARTY_LIBRARY[kname].pets]
+PET = {'name': 'Jonathon', 'type': 'Animal Companion', 'size': 'Medium', 'hp': 30, 'ac': 17,
+       'speed': 25, 'fort': 7, 'ref': 7, 'will': 6, 'str_mod': 3, 'dex_mod': 2, 'con_mod': 2,
+       'int_mod': -4, 'wis_mod': 1, 'cha_mod': 0, 'attacks': [{'name': 'Jaws', 'bonus': 7, 'damage': '1d8+2 P'}],
+       'abilities': ''}
+'''))
+
+
+def test_update_imported_pet_moves_to_custom_and_tombstones():
+    _route_kyle('''
+        KYLE_SETUP
+        old = 'Jonathon - Mature Wyvern'
+        assert old in pet_names()
+        r = c.post(kurl, json={'original': old, 'pet': PET}, headers=J)
+        assert r.status_code == 200, r.get_data(as_text=True)
+        assert pet_names().count('Jonathon') == 1 and old not in pet_names()
+        assert old in kbuild()['pets_removed']
+        # A Pathbuilder update must not bring the old card back.
+        assert c.post('/api/import_pathbuilder', json=kpb, headers=J).status_code == 200
+        assert old not in pet_names() and pet_names().count('Jonathon') == 1
+        print('ROUTE_OK')
+    ''')
+
+
+def test_update_custom_pet_in_place():
+    _route_kyle('''
+        KYLE_SETUP
+        assert c.post('/api/add_pet/' + quote(kname), json=dict(PET, name='Bramble'), headers=J).status_code == 200
+        r = c.post(kurl, json={'original': 'Bramble', 'pet': dict(PET, name='Bramble', ac=19)}, headers=J)
+        assert r.status_code == 200
+        custom = [p for p in kbuild()['pets_custom'] if p['name'] == 'Bramble']
+        assert len(custom) == 1 and custom[0]['ac'] == 19
+        assert 'Bramble' not in (kbuild().get('pets_removed') or [])
+        print('ROUTE_OK')
+    ''')
+
+
+def test_update_pet_unknown_404_and_bad_body_400_file_unchanged():
+    _route_kyle('''
+        KYLE_SETUP
+        before = kraw()
+        r = c.post(kurl, json={'original': 'Nobody', 'pet': PET}, headers=J)
+        assert r.status_code == 404 and r.get_json()['error'], r.status_code
+        for body in ({'pet': PET}, {'original': 'Jonathon - Mature Wyvern'},
+                     {'original': 'Jonathon - Mature Wyvern', 'pet': dict(PET, name='')},
+                     {'original': 'Jonathon - Mature Wyvern', 'pet': dict(PET, hp='lots')}, []):
+            r = c.post(kurl, json=body, headers=J)
+            assert r.status_code == 400, (body, r.status_code)
+        assert kraw() == before
+        print('ROUTE_OK')
+    ''')
+
+
+def test_pet_card_has_edit_button_without_inline_js(app_module, monkeypatch):
+    doc = json.loads((_FIXTURES / 'kyle_l10.json').read_text(encoding='utf-8'))
+    html = _render(app_module, monkeypatch, doc)
+    i = html.index('data-se-pet-edit')
+    tag = html[html.rindex('<button', 0, i):html.index('>', i)]
+    assert 'onclick' not in tag and 'data-se-pet=' in tag and 'Jonathon - Mature Wyvern' in tag
+
+
+# ---------------------------------------------------------------- SE-02 Task 4: Import JSON (merge)
+
+def test_import_json_round_trip_merges_rules_keeps_runtime():
+    _route('''
+        iurl = '/api/import_character_json/' + quote(name)
+        assert c.post(url, json={'meta': {'display_name': 'Goel'}}, headers=J).status_code == 200
+        A.PARTY_LIBRARY[name].current_hp = 40; A._persist_pc_combat_state(name)
+        doc = c.get('/api/export_character/' + quote(name), headers=J).get_json()
+        doc['build']['deity'] = 'Ragathiel'                       # a Pathbuilder rules key: applied
+        doc['build']['sheet_edits'] = {'adjust': {'ac': 5}}       # runtime: the sheet's own copy is kept
+        doc['build']['current_hp'] = 1
+        r = c.post(iurl, json=doc, headers=J)
+        assert r.status_code == 200, r.get_data(as_text=True)
+        b = build()
+        assert b['deity'] == 'Ragathiel' and b['sheet_edits'] == {'meta': {'display_name': 'Goel'}}
+        assert b['current_hp'] == 40
+        assert A.PARTY_LIBRARY[name].deity == 'Ragathiel'
+        print('ROUTE_OK')
+    ''')
+
+
+def test_import_json_wrong_name_or_id_409_file_unchanged():
+    _route('''
+        iurl = '/api/import_character_json/' + quote(name)
+        doc = json.loads(raw()); doc['id'] = 'goel-id'
+        A._atomic_write_json(path, doc)
+        before = raw()
+        other = json.loads(raw()); other['build']['name'] = 'Somebody Else'
+        r = c.post(iurl, json=other, headers=J)
+        assert r.status_code == 409 and 'Somebody Else' in r.get_json()['error'], r.status_code
+        wrong = json.loads(raw()); wrong['id'] = 'another-id'
+        assert c.post(iurl, json=wrong, headers=J).status_code == 409
+        assert raw() == before
+        same = json.loads(raw()); same['build']['deity'] = 'Ragathiel'
+        assert c.post(iurl, json=same, headers=J).status_code == 200
+        assert json.loads(raw())['id'] == 'goel-id'
+        print('ROUTE_OK')
+    ''')
+
+
+def test_import_json_bad_body_400_file_unchanged():
+    _route('''
+        iurl = '/api/import_character_json/' + quote(name)
+        before = raw()
+        for body in ([], {'build': {}}, {'build': {'name': ''}}, {'build': 'x'},
+                     {'system': 'cosmere', 'build': {'name': name}}):
+            r = c.post(iurl, json=body, headers=J)
+            assert r.status_code == 400, (body, r.status_code)
+            assert r.get_json()['error']
+        assert raw() == before
+        print('ROUTE_OK')
+    ''')
+
+
+def test_import_json_menu_item(app_module, monkeypatch, goel_doc):
+    html = _render(app_module, monkeypatch, goel_doc)
+    i = html.index('data-se-import-json')
+    tag = html[html.rindex('<button', 0, i):html.index('>', i)]
+    assert 'onclick' not in tag and 'data-se-additive' in tag
+    assert 'data-se-import-file' in html
+
+
+# ---------------------------------------------------------------- SE-02 final review fixes
+
+def test_import_json_is_gm_only():
+    _route('''
+        A._is_gm = lambda: False      # GM_PASSWORD '' keeps @require_pc_self_or_gm open
+        before = raw()
+        doc = c.get('/api/export_character/' + quote(name), headers=J).get_json()
+        doc['build']['abilities']['str'] = 9
+        r = c.post('/api/import_character_json/' + quote(name), json=doc, headers=J)
+        assert r.status_code == 403 and 'GM' in r.get_json()['error'], r.status_code
+        assert raw() == before
+        print('ROUTE_OK')
+    ''')
+
+
+def test_cannot_hide_an_active_toggle_feature():
+    _route('''
+        doc = json.loads(raw()); doc['build']['active_toggles'] = ['Raise Symbol']
+        A._atomic_write_json(path, doc)
+        before = raw()
+        r = c.post(url, json={'features': {'hidden': ['Raise Symbol']}}, headers=J)
+        assert r.status_code == 400 and 'Raise Symbol' in r.get_json()['error'], r.status_code
+        assert raw() == before
+        assert c.post(url, json={'features': {'hidden': ['Divine Font']}}, headers=J).status_code == 200
+        print('ROUTE_OK')
+    ''')
+
+
+def test_feat_type_options_use_pathbuilder_names(app_module, monkeypatch, goel_doc):
+    html = _render(app_module, monkeypatch, goel_doc)
+    panel = html[html.index('data-se-new-type'):html.index('</select>', html.index('data-se-new-type'))]
+    assert '>Class Feat<' in panel and '>General Feat<' in panel and '>General<' not in panel
+
+
+def test_update_pet_keeps_fields_the_form_does_not_carry():
+    _route_kyle('''
+        KYLE_SETUP
+        extra = dict(PET, name='Bramble', senses='low-light vision', perception=9, current_hp=12, level=4)
+        assert c.post('/api/add_pet/' + quote(kname), json=extra, headers=J).status_code == 200
+        form = {k: v for k, v in PET.items() if k != 'senses'}
+        r = c.post(kurl, json={'original': 'Bramble', 'pet': dict(form, name='Bramble', ac=19)}, headers=J)
+        assert r.status_code == 200
+        pet = [p for p in kbuild()['pets_custom'] if p['name'] == 'Bramble'][0]
+        assert pet['ac'] == 19 and pet['senses'] == 'low-light vision'
+        assert pet['perception'] == 9 and pet['current_hp'] == 12 and pet['level'] == 4
+        print('ROUTE_OK')
+    ''')
+
+
+def test_update_pet_rename_onto_another_companion_409():
+    _route_kyle('''
+        KYLE_SETUP
+        assert c.post('/api/add_pet/' + quote(kname), json=dict(PET, name='Bramble'), headers=J).status_code == 200
+        before = kraw()
+        r = c.post(kurl, json={'original': 'Bramble', 'pet': dict(PET, name='Jonathon - Mature Wyvern')}, headers=J)
+        assert r.status_code == 409, r.status_code
+        assert kraw() == before
+        print('ROUTE_OK')
+    ''')
+
+
+def test_levelup_page_renders_with_sheet_feat_edits():
+    # The level-up page serializes the character's attributes to JSON, so no
+    # attribute the sheet edit layer adds may be a set (CI browser job, PR 255).
+    _route_kyle('''
+        KYLE_SETUP
+        assert c.get('/player/levelup/Kyle').status_code == 200
+        edits = {'feats': {'added': [{'name': 'Toughness', 'type': 'General Feat', 'level': 3}]}}
+        assert c.post('/api/sheet_edits/Kyle', json=edits, headers=J).status_code == 200
+        assert c.get('/player/levelup/Kyle').status_code == 200
+        print('ROUTE_OK')
+    ''')

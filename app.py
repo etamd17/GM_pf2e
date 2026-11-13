@@ -5272,7 +5272,9 @@ class Character:
         self.session_notes = build.get('session_notes') or []
         self.expended_slots = build.get('expended_slots') or {}
         
-        self.raw_feats = build.get('feats') or []
+        # SE-02: sheet feat edits apply here, upstream of the rule engine, the
+        # feat loop and domain detection, so an added feat's rules take effect.
+        self.raw_feats = self._edited_feats(build.get('feats') or [])
         self.raw_spellCasters = build.get('spellCasters') or []
         # Stash the raw build dict so downstream property getters (spell_attack
         # for focus-only classes like Champion) can look up build.focus etc.
@@ -5898,6 +5900,8 @@ class Character:
                 if "focus point" in lower_desc and "maximum" in lower_desc: self.focus_max += 1
                 if "darkvision" in lower_desc and "Darkvision" not in self.senses: self.senses.append("Darkvision")
                 if "low-light vision" in lower_desc and "Low-Light vision" not in self.senses: self.senses.append("Low-Light Vision")
+
+        self._order_sheet_feats()
 
         # Track whether this came off disk. The focus pool is recomputed from
         # feats further down and can be revised UPWARD on every single load;
@@ -6698,6 +6702,63 @@ class Character:
         self.pc_active_effects = list(build.get('pc_active_effects') or [])
         self._apply_sheet_meta()
 
+    def _sheet_section(self, name):
+        section = self.sheet_edits.get(name)
+        return section if isinstance(section, dict) else {}
+
+    def _edited_feats(self, raw):
+        """Pathbuilder feats with the sheet's removals and additions applied.
+        Sets removed_feats (for the restore list) and the names the sheet added."""
+        edits = self._sheet_section('feats')
+        removed = {str(n).lower() for n in edits.get('removed') or [] if isinstance(n, str)}
+        kept, self.removed_feats = [], []
+        for feat in raw:
+            name = safe_str(feat[0]) if isinstance(feat, list) and feat else ''
+            if name and name.lower() in removed:
+                if name not in self.removed_feats:
+                    self.removed_feats.append(name)
+                continue
+            kept.append(feat)
+        present = {safe_str(f[0]).lower() for f in kept if isinstance(f, list) and f}
+        # A list, not a set: the level-up page serializes this object to JSON.
+        self._sheet_added_feats = []
+        for feat in edits.get('added') or []:
+            if not (isinstance(feat, list) and feat and isinstance(feat[0], str)):
+                continue
+            if feat[0].lower() in present:
+                continue
+            present.add(feat[0].lower())
+            self._sheet_added_feats.append(feat[0].lower())
+            kept.append(list(feat))
+        return kept
+
+    def _order_sheet_feats(self):
+        for feat in self.feats:
+            feat['source'] = 'sheet' if feat['name'].lower() in self._sheet_added_feats else 'build'
+        order = [str(n).lower() for n in self._sheet_section('feats').get('order') or [] if isinstance(n, str)]
+        if order:
+            rank = {n: i for i, n in enumerate(order)}
+            self.feats.sort(key=lambda f: rank.get(f['name'].lower(), len(order)))
+
+    def _edited_features(self, features, *, custom=False):
+        edits = self._sheet_section('features')
+        hidden = {str(n).lower() for n in edits.get('hidden') or [] if isinstance(n, str)}
+        out = [f for f in features if str(f.get('name', '')).lower() not in hidden]
+        if custom:
+            out += [{'name': c['name'], 'desc': c.get('desc', ''), 'type': 'custom', 'level': self.level}
+                    for c in edits.get('custom') or [] if isinstance(c, dict) and c.get('name')]
+        order = [str(n).lower() for n in edits.get('order') or [] if isinstance(n, str)]
+        if order:
+            rank = {n: i for i, n in enumerate(order)}
+            out.sort(key=lambda f: rank.get(str(f.get('name', '')).lower(), len(order)))
+        return out
+
+    @property
+    def hidden_features(self):
+        hidden = {str(n).lower() for n in self._sheet_section('features').get('hidden') or [] if isinstance(n, str)}
+        names = [f['name'] for f in self._all_class_features() + self._all_ancestry_features()]
+        return [n for n in names if n.lower() in hidden]
+
     def _adj(self, key):
         """GM adjustment for one stat from the sheet edit layer (0 when absent)."""
         adjust = self.sheet_edits.get('adjust')
@@ -6753,16 +6814,22 @@ class Character:
 
     @property
     def class_features(self):
-        """Get class features from CLASS_FEATURES filtered by character level."""
+        """Class features from CLASS_FEATURES up to this level, shaped by the
+        sheet edit layer (hidden, custom, order)."""
+        return self._edited_features(self._all_class_features(), custom=True)
+
+    def _all_class_features(self):
         c_name = self.class_name.lower()
         features = CLASS_FEATURES.get(c_name, [])
         return [f for f in features if f.get('level', 1) <= self.level]
-    
+
     @property
     def ancestry_features(self):
-        """Get ancestry features from ANCESTRY_FEATURES."""
-        a_name = self.ancestry.lower()
-        return ANCESTRY_FEATURES.get(a_name, [])
+        """Ancestry features from ANCESTRY_FEATURES, shaped by the sheet edit layer."""
+        return self._edited_features(self._all_ancestry_features())
+
+    def _all_ancestry_features(self):
+        return ANCESTRY_FEATURES.get(self.ancestry.lower(), [])
     
     @property
     def toggle_effects_summary(self):
@@ -22970,6 +23037,29 @@ def _sheet_edit_pathbuilder_meta(pc):
     }
 
 
+def _sheet_edit_feats(pc):
+    """The Feats tab's lists: current feats in display order (with where each
+    came from), feats removed from the import, and every class/ancestry feature
+    with its hidden flag so a hidden one can be restored. SE-02."""
+    if not hasattr(pc, '_all_class_features'):
+        return {'feats': [], 'removed': [], 'features': [], 'custom': []}
+    edits = pc._sheet_section('features')
+    hidden = {str(n).lower() for n in edits.get('hidden') or [] if isinstance(n, str)}
+    features = []
+    for kind, items in (('class', pc._all_class_features()), ('ancestry', pc._all_ancestry_features())):
+        for f in items:
+            name = str(f.get('name', ''))
+            if name:
+                features.append({'name': name, 'kind': kind, 'hidden': name.lower() in hidden})
+    return {
+        'feats': [{'name': f['name'], 'type': f.get('type', ''), 'level': f.get('level', 1),
+                   'source': f.get('source', 'build')} for f in pc.feats],
+        'removed': list(getattr(pc, 'removed_feats', [])),
+        'features': features,
+        'custom': [c for c in edits.get('custom') or [] if isinstance(c, dict) and c.get('name')],
+    }
+
+
 def _render_pf2e_sheet(actor, capabilities=None):
     """Read-only capabilities never select an acting character."""
     interactive = capabilities is None or capabilities.edit
@@ -22986,7 +23076,7 @@ def _render_pf2e_sheet(actor, capabilities=None):
     gm_view = _is_gm()
     return render_template('player_sheet.html', pc=actor, owner_private=owner_private,
         is_gm=gm_view, se_numbers=_sheet_edit_numbers(actor) if gm_view else [],
-        se_pb=_sheet_edit_pathbuilder_meta(actor),
+        se_pb=_sheet_edit_pathbuilder_meta(actor), se_feats=_sheet_edit_feats(actor),
         weapons_json=json.dumps(BUILDER_WEAPONS), builder_armor=BUILDER_ARMOR,
         armor_json=json.dumps(BUILDER_ARMOR), spells_json=json.dumps([
             {'name': s['name'], 'level': s['level'], 'traditions': s['traditions']} for s in BUILDER_SPELLS]),
@@ -25546,6 +25636,56 @@ def remove_pet(pc_name):
     save_and_reload_character(pc_name, pc_json, file_path)
     return jsonify({"success": True})
 
+@app.route('/api/update_pet/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
+def update_pet(pc_name):
+    """SE-02: edit a companion in place.
+
+    Body {"original": <current name>, "pet": <Add Companion form shape>}. An
+    in-app companion is replaced where it is. An imported (Pathbuilder) one
+    becomes an in-app companion and its original name is tombstoned in
+    pets_removed, the same way remove_pet does, so an Update does not bring
+    the old card back."""
+    from core.sheet_edits import SheetEditError, validate_pet
+    data = request.get_json(silent=True)
+    original = data.get('original') if isinstance(data, dict) else None
+    if not isinstance(original, str) or not original:
+        return jsonify({"success": False, "error": "Missing the companion's current name"}), 400
+    try:
+        pet = validate_pet(data.get('pet'))
+    except SheetEditError as error:
+        return _sheet_edits_error(error)
+    pc_json, file_path, err = require_pc_json(pc_name)
+    if err:
+        return err
+    build = pc_json.get('build', pc_json)
+
+    def _named(p):
+        return isinstance(p, dict) and p.get('name') == original
+
+    custom = [p for p in (build.get('pets_custom') or []) if isinstance(p, dict)]
+    imported = [p for p in (build.get('pets') or []) if isinstance(p, dict)]
+    hidden = [n for n in (build.get('pets_removed') or []) if isinstance(n, str)]
+    in_custom = any(_named(p) for p in custom)
+    in_imported = any(_named(p) for p in imported) and original not in hidden
+    if not (in_custom or in_imported):
+        return jsonify({"success": False, "error": f"No companion named {original!r} on this sheet"}), 404
+    shown = {p.get('name') for p in custom} | {p.get('name') for p in imported if p.get('name') not in hidden}
+    if pet['name'] != original and pet['name'] in shown:
+        return jsonify({"success": False, "error": f"Another companion is already named {pet['name']!r}."}), 409
+    # Merge over the stored companion so fields the form does not carry
+    # (senses, perception, current HP, level...) survive an edit.
+    if in_custom:
+        build['pets_custom'] = [dict(p, **pet) if _named(p) else p for p in custom]
+    else:
+        source = next(p for p in imported if _named(p))
+        build['pets_custom'] = custom + [dict(source, **pet)]
+        build['pets_removed'] = hidden + [original]
+    save_and_reload_character(pc_name, pc_json, file_path)
+    _broadcast_pc_state(pc_name)
+    return jsonify({"success": True})
+
+
 def _sheet_edits_error(error):
     return jsonify({"success": False, "error": str(error)}), error.status
 
@@ -25559,7 +25699,11 @@ def _save_sheet_edits(pc_name, apply):
     if err:
         return err
     build = pc_json.get('build', pc_json)
-    edits = apply(build.get('sheet_edits') if isinstance(build.get('sheet_edits'), dict) else {})
+    from core.sheet_edits import SheetEditError
+    try:
+        edits = apply(build.get('sheet_edits') if isinstance(build.get('sheet_edits'), dict) else {}, build)
+    except SheetEditError as error:
+        return _sheet_edits_error(error)
     if edits:
         build['sheet_edits'] = edits
     else:
@@ -25583,7 +25727,15 @@ def update_sheet_edits(pc_name):
         clean = validate_patch(request.get_json(silent=True), is_gm=_is_gm())
     except SheetEditError as error:
         return _sheet_edits_error(error)
-    return _save_sheet_edits(pc_name, lambda current: merge_patch(current, clean))
+    def apply(current, build):
+        # Hiding a toggle that is switched on would strand its effect with no
+        # switch left on the sheet (toggle effects read active_toggles directly).
+        hidden = {n.lower() for n in (clean.get('features') or {}).get('hidden') or []}
+        active = [t for t in (build.get('active_toggles') or []) if isinstance(t, str) and t.lower() in hidden]
+        if active:
+            raise SheetEditError(f'Turn off {", ".join(active)} before hiding it.')
+        return merge_patch(current, clean)
+    return _save_sheet_edits(pc_name, apply)
 
 
 @app.route('/api/sheet_edits/<pc_name>/reset', methods=['POST'])
@@ -25595,7 +25747,7 @@ def reset_sheet_edits(pc_name):
     if section not in (None, 'meta', 'adjust'):
         return jsonify({"success": False, "error": "Section must be 'meta' or 'adjust'."}), 400
 
-    def apply(current):
+    def apply(current, _build):
         if section is None:
             return {}
         return {k: v for k, v in current.items() if k != section}
@@ -26468,6 +26620,46 @@ def export_character(pc_name):
         with open(file_path, 'r', encoding='utf-8') as f:
             return jsonify(json.load(f))
     return jsonify({"error": "Character not found"}), 404
+
+@app.route('/api/import_character_json/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
+def import_character_json(pc_name):
+    """SE-02: bring an exported (possibly hand-edited) file back into the same
+    character. It merges exactly like an "Update <name>" Pathbuilder import
+    (user decision D1, 2026-11-13): rules data comes from the file; HP,
+    conditions, notes, in-app companions and sheet edits stay as they are."""
+    # GM only: the file carries abilities, proficiencies and level, so an owner
+    # import would get round the GM-only number rule (SE-01 decision 1), and
+    # the Pathbuilder import it mirrors is GM-only too.
+    if not _is_gm():
+        return jsonify({"success": False, "error": "Only the GM can import a character file."}), 403
+    doc = request.get_json(silent=True)
+    build = doc.get('build', doc) if isinstance(doc, dict) else None
+    if not isinstance(build, dict) or not isinstance(build.get('name'), str) or not build['name'].strip():
+        return jsonify({"success": False, "error": "This file is not a character export (it has no character name)."}), 400
+    if doc.get('system') not in (None, 'pf2e'):
+        return jsonify({"success": False, "error": "This file is not a Pathfinder 2e character."}), 400
+    if build['name'] != pc_name:
+        return jsonify({"success": False, "error": (
+            f"This file is for {build['name']}, not {pc_name}. Import it on that character's sheet.")}), 409
+    pc_json, file_path, err = require_pc_json(pc_name)
+    if err:
+        return err
+    if doc.get('id') and pc_json.get('id') and doc['id'] != pc_json['id']:
+        return jsonify({"success": False, "error": (
+            "This file was exported from a different character with the same name.")}), 409
+    existing = _character_files.authoritative_document(file_path, pc_json)
+    merged = _merge_pf2e_import(existing, {'build': build})
+    for key, value in existing.items():          # keep the envelope (id, owner, system...)
+        if key != 'build':
+            merged.setdefault(key, value)
+    cid = _active_campaign_id()
+    if cid:
+        merged = _storage.ensure_character_envelope(merged, cid, existing=existing)
+    save_and_reload_character(pc_name, merged, file_path)
+    _broadcast_pc_state(pc_name)
+    return jsonify({"success": True})
+
 
 @app.route('/api/import_pathbuilder', methods=['POST'])
 def import_pathbuilder():

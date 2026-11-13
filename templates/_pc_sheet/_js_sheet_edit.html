@@ -1,6 +1,94 @@
 {# SE-01: sheet edit modal behaviour. Event listeners only (no inline handlers),
    so a character name with an apostrophe can never break a button. #}
 <script>
+// SE-02: Import JSON. Same merge as a Pathbuilder update, so say what is kept.
+(function () {
+    'use strict';
+    var btn = document.querySelector('[data-se-import-json]');
+    var file = document.querySelector('[data-se-import-file]');
+    var dialog = document.getElementById('se-modal');
+    if (!btn || !file || !dialog) return;
+    var pcName = dialog.getAttribute('data-pc-name') || '';
+    btn.addEventListener('click', function () {
+        if (typeof closePlayerOverflow === 'function') closePlayerOverflow();
+        file.value = '';
+        file.click();
+    });
+    file.addEventListener('change', async function () {
+        var f = file.files && file.files[0];
+        if (!f) return;
+        var doc;
+        try { doc = JSON.parse(await f.text()); } catch (_) { alert('That file is not valid JSON.'); return; }
+        var b = (doc && doc.build) || doc || {};
+        if (!confirm('Import ' + (b.name || 'this file') + ' (level ' + (b.level || '?') + ')?\n\n'
+                + 'Rules data (abilities, feats, spells, gear, deity) comes from the file. '
+                + 'HP, conditions, notes, companions added here and sheet edits stay as they are now.')) return;
+        try {
+            var res = await fetch('/api/import_character_json/' + encodeURIComponent(pcName), {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+                body: JSON.stringify(doc)
+            });
+            var data = null;
+            try { data = await res.json(); } catch (_) { data = null; }
+            if (res.ok && data && data.success) { window.location.reload(); return; }
+            alert((data && (data.error || data.message)) || ('Import failed (HTTP ' + res.status + '). Nothing was changed.'));
+        } catch (_) { alert('Could not reach the server. Nothing was imported.'); }
+    });
+})();
+
+// SE-02: "Edit" on a companion card reuses the Add Companion form, pre-filled.
+(function () {
+    'use strict';
+    var modal = document.getElementById('pet-add-modal');
+    if (!modal) return;
+    var title = modal.querySelector('h3');
+    var saveBtn = modal.querySelector('[onclick="savePet()"]');
+    var addTitle = title ? title.textContent : '', addLabel = saveBtn ? saveBtn.textContent : '';
+    function set(id, value) { var el = document.getElementById(id); if (el) el.value = value; }
+    document.querySelectorAll('[data-se-pet-edit]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var pet;
+            try { pet = JSON.parse(btn.getAttribute('data-se-pet') || '{}'); } catch (_) { return; }
+            window._petEditOriginal = pet.name;
+            set('pet-name', pet.name || '');
+            var typeSel = document.getElementById('pet-type');
+            if (typeSel && pet.type && ![].some.call(typeSel.options, function (o) { return o.value === pet.type; })) {
+                var opt = document.createElement('option');      // keep an imported type the list lacks
+                opt.value = opt.textContent = pet.type;
+                typeSel.appendChild(opt);
+            }
+            set('pet-type', pet.type || 'Animal Companion');
+            set('pet-size', pet.size || 'Medium');
+            [['pet-hp', 'hp'], ['pet-speed', 'speed'], ['pet-ac', 'ac'], ['pet-fort', 'fort'], ['pet-ref', 'ref'],
+             ['pet-will', 'will'], ['pet-str', 'str_mod'], ['pet-dex', 'dex_mod'], ['pet-con', 'con_mod'],
+             ['pet-int', 'int_mod'], ['pet-wis', 'wis_mod'], ['pet-cha', 'cha_mod']].forEach(function (pair) {
+                if (pet[pair[1]] !== undefined && pet[pair[1]] !== null) set(pair[0], pet[pair[1]]);
+            });
+            set('pet-attack', (pet.attacks || []).map(function (a) {
+                return [a.name, a.bonus, a.damage].join(', ');
+            }).join(' | '));
+            set('pet-abilities', pet.abilities || '');
+            if (title) title.textContent = 'Edit companion';
+            if (saveBtn) saveBtn.textContent = 'Save Companion';
+            modal.classList.remove('hidden');
+            // The companion form can render in the page flow rather than as an
+            // overlay; bring it into view so Edit never opens off-screen.
+            modal.scrollIntoView({block: 'start'});
+            var first = document.getElementById('pet-name');
+            if (first) first.focus({preventScroll: true});
+        });
+    });
+    // "+ Add Pet" goes back to adding.
+    document.querySelectorAll('[onclick*="pet-add-modal"][onclick*="remove"]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            window._petEditOriginal = null;
+            if (title) title.textContent = addTitle;
+            if (saveBtn) saveBtn.textContent = addLabel;
+        });
+    });
+})();
+
 (function () {
     'use strict';
     var dialog = document.getElementById('se-modal');
@@ -15,6 +103,164 @@
     dialog.querySelectorAll('[data-se-meta], [data-se-adjust]').forEach(function (el) {
         initial[fieldKey(el)] = el.value;
     });
+
+    // ---- Feats tab (SE-02). Lists are sent whole, and only when they changed.
+    var featList = dialog.querySelector('[data-se-feat-list]');
+    var removedList = dialog.querySelector('[data-se-removed-list]');
+    var customList = dialog.querySelector('[data-se-custom-list]');
+
+    function featsState() {
+        var feats = {order: [], added: [], removed: []};
+        dialog.querySelectorAll('[data-se-feat]').forEach(function (row) {
+            var name = row.getAttribute('data-se-feat');
+            feats.order.push(name);
+            if (row.getAttribute('data-se-source') === 'sheet') {
+                feats.added.push({name: name, type: row.getAttribute('data-se-type') || '',
+                                  level: parseInt(row.getAttribute('data-se-level'), 10) || 1});
+            }
+        });
+        dialog.querySelectorAll('[data-se-removed-feat]').forEach(function (row) {
+            feats.removed.push(row.getAttribute('data-se-removed-feat'));
+        });
+        var features = {hidden: [], custom: []};
+        dialog.querySelectorAll('[data-se-feature][data-se-hidden="1"]').forEach(function (row) {
+            features.hidden.push(row.getAttribute('data-se-feature'));
+        });
+        dialog.querySelectorAll('[data-se-custom-name]').forEach(function (row) {
+            features.custom.push({name: row.getAttribute('data-se-custom-name'),
+                                  desc: row.getAttribute('data-se-custom-desc') || ''});
+        });
+        return {feats: feats, features: features};
+    }
+    var initialLists = featList ? JSON.stringify(featsState()) : '';
+
+    function mini(label, attr, value) {
+        var b = document.createElement('button');
+        b.type = 'button'; b.className = 'se-mini'; b.textContent = label;
+        b.setAttribute(attr, value === undefined ? '' : value);
+        return b;
+    }
+
+    function featRow(name, source, type, level) {
+        var li = document.createElement('li');
+        li.className = 'se-item';
+        li.setAttribute('data-se-feat', name);
+        li.setAttribute('data-se-source', source);
+        li.setAttribute('data-se-type', type || '');
+        li.setAttribute('data-se-level', String(level || 1));
+        var n = document.createElement('span'); n.className = 'se-item-name'; n.textContent = name;
+        var m = document.createElement('span'); m.className = 'se-item-meta';
+        m.textContent = (type ? type + ' · ' : '') + (level || 1) + (source === 'sheet' ? ' · added on sheet' : '');
+        li.append(n, m, mini('Up', 'data-se-move', '-1'), mini('Down', 'data-se-move', '1'), mini('Remove', 'data-se-drop'));
+        return li;
+    }
+
+    function removedRow(name) {
+        var li = document.createElement('li');
+        li.className = 'se-item';
+        li.setAttribute('data-se-removed-feat', name);
+        var n = document.createElement('span'); n.className = 'se-item-name'; n.textContent = name;
+        li.append(n, mini('Restore', 'data-se-restore'));
+        return li;
+    }
+
+    function syncRemovedEmpty() {
+        var empty = dialog.querySelector('[data-se-removed-empty]');
+        if (empty) empty.hidden = !!removedList.querySelector('[data-se-removed-feat]');
+    }
+
+    function hasFeat(name) {
+        var lower = name.toLowerCase(), found = false;
+        dialog.querySelectorAll('[data-se-feat]').forEach(function (row) {
+            if (row.getAttribute('data-se-feat').toLowerCase() === lower) found = true;
+        });
+        return found;
+    }
+
+    if (featList) {
+        dialog.addEventListener('click', function (event) {
+            var btn = event.target.closest('button');
+            if (!btn || !dialog.contains(btn)) return;
+            var row = btn.closest('.se-item');
+            if (btn.hasAttribute('data-se-move') && row) {
+                var dir = parseInt(btn.getAttribute('data-se-move'), 10);
+                var sib = dir < 0 ? row.previousElementSibling : row.nextElementSibling;
+                if (sib) row.parentNode.insertBefore(row, dir < 0 ? sib : sib.nextElementSibling);
+            } else if (btn.hasAttribute('data-se-drop') && row) {
+                if (row.hasAttribute('data-se-feat') && row.getAttribute('data-se-source') === 'build') {
+                    removedList.appendChild(removedRow(row.getAttribute('data-se-feat')));
+                }
+                row.remove();
+                syncRemovedEmpty();
+            } else if (btn.hasAttribute('data-se-restore') && row) {
+                var name = row.getAttribute('data-se-removed-feat');
+                row.remove();
+                if (!hasFeat(name)) featList.appendChild(featRow(name, 'build', '', ''));
+                syncRemovedEmpty();
+            } else if (btn.hasAttribute('data-se-toggle-feature') && row) {
+                var hide = row.getAttribute('data-se-hidden') !== '1';
+                row.setAttribute('data-se-hidden', hide ? '1' : '0');
+                row.classList.toggle('is-hidden-feature', hide);
+                btn.textContent = hide ? 'Show' : 'Hide';
+            } else if (btn.hasAttribute('data-se-add-feat')) {
+                var input = dialog.querySelector('[data-se-new-feat]');
+                var fname = input.value.trim();
+                if (!fname) { showError('Type a feat name to add.'); return; }
+                if (hasFeat(fname)) { showError(fname + ' is already on this sheet.'); return; }
+                showError('');
+                var restoring = null;
+                dialog.querySelectorAll('[data-se-removed-feat]').forEach(function (r) {
+                    if (r.getAttribute('data-se-removed-feat').toLowerCase() === fname.toLowerCase()) restoring = r;
+                });
+                if (restoring) {            // re-adding an imported feat just restores it
+                    restoring.remove();
+                    featList.appendChild(featRow(restoring.getAttribute('data-se-removed-feat'), 'build', '', ''));
+                    syncRemovedEmpty();
+                } else {
+                    featList.appendChild(featRow(fname, 'sheet',
+                        dialog.querySelector('[data-se-new-type]').value,
+                        parseInt(dialog.querySelector('[data-se-new-level]').value, 10) || 1));
+                }
+                input.value = '';
+            } else if (btn.hasAttribute('data-se-add-custom')) {
+                var cn = dialog.querySelector('[data-se-new-custom-name]');
+                var cd = dialog.querySelector('[data-se-new-custom-desc]');
+                if (!cn.value.trim()) { showError('Give the custom feature a name.'); return; }
+                showError('');
+                var li = document.createElement('li');
+                li.className = 'se-item';
+                li.setAttribute('data-se-custom-name', cn.value.trim());
+                li.setAttribute('data-se-custom-desc', cd.value.trim());
+                var span = document.createElement('span'); span.className = 'se-item-name'; span.textContent = cn.value.trim();
+                li.append(span, mini('Remove', 'data-se-drop'));
+                customList.appendChild(li);
+                cn.value = ''; cd.value = '';
+            }
+        });
+
+        // Compendium autocomplete for the add-feat box (debounced).
+        var options = document.getElementById('se-feat-options');
+        var featInput = dialog.querySelector('[data-se-new-feat]');
+        var timer = null;
+        featInput.addEventListener('input', function () {
+            clearTimeout(timer);
+            var q = featInput.value.trim();
+            if (q.length < 2) return;
+            timer = setTimeout(async function () {
+                try {
+                    var res = await fetch('/api/compendium_search?cat=feats&q=' + encodeURIComponent(q));
+                    var data = await res.json();
+                    options.replaceChildren();
+                    (data.results || []).slice(0, 20).forEach(function (r) {
+                        if (!r || !r.name) return;
+                        var o = document.createElement('option');
+                        o.value = r.name;
+                        options.appendChild(o);
+                    });
+                } catch (_) { /* autocomplete is a convenience; typing a name still works */ }
+            }, 250);
+        });
+    }
 
     function fieldKey(el) {
         return el.hasAttribute('data-se-adjust') ? 'adj:' + el.getAttribute('data-se-adjust') : 'meta:' + el.name;
@@ -77,6 +323,11 @@
         var patch = {};
         if (Object.keys(meta).length) patch.meta = meta;
         if (Object.keys(adjust).length) patch.adjust = adjust;
+        if (featList) {
+            var lists = featsState(), before = JSON.parse(initialLists);
+            if (JSON.stringify(lists.feats) !== JSON.stringify(before.feats)) patch.feats = lists.feats;
+            if (JSON.stringify(lists.features) !== JSON.stringify(before.features)) patch.features = lists.features;
+        }
         return patch;
     }
 

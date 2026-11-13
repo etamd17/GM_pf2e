@@ -129,6 +129,8 @@
                                (Con-mod partial heal) in the main toolbar. #}
                             <button onclick="dailyPrep(); closePlayerOverflow();" role="menuitem" title="Reset spell slots, restore focus, clear combat conditions, and heal to full HP">Daily Prep</button>
                             <button type="button" data-sheet-edit-open data-se-additive role="menuitem" title="Fix details such as the deity without re-importing">Edit character</button>
+                            <button type="button" data-se-import-json data-se-additive role="menuitem" title="Bring an exported JSON file back into this character">Import JSON...</button>
+                            <input type="file" accept=".json,application/json" data-se-import-file data-se-additive hidden>
                             <div class="sep"></div>
                             {% if pc.level > 1 %}<button onclick="revertLevel(); closePlayerOverflow();" id="btn-revert" role="menuitem">Undo last level-up</button>{% endif %}
                             <button onclick="window.print(); closePlayerOverflow();" role="menuitem">Print sheet</button>

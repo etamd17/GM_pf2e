@@ -15,6 +15,7 @@
 
         <nav class="se-tabs" role="tablist">
             <button type="button" role="tab" class="se-tab is-active" data-se-tab="details" aria-selected="true">Details</button>
+            <button type="button" role="tab" class="se-tab" data-se-tab="feats" aria-selected="false">Feats</button>
             {% if is_gm %}<button type="button" role="tab" class="se-tab" data-se-tab="numbers" aria-selected="false">Numbers</button>{% endif %}
         </nav>
 
@@ -43,6 +44,62 @@
                 <input name="languages" value="{{ (_se_meta.get('languages') or [])|join(', ') }}" placeholder="{{ se_pb.languages }}" data-se-meta data-se-list></label>
             <label class="se-field"><span>Extra senses <em>comma separated; added to the imported ones</em></span>
                 <input name="senses" value="{{ (_se_meta.get('senses') or [])|join(', ') }}" placeholder="{{ se_pb.senses or 'none imported' }}" data-se-meta data-se-list></label>
+        </section>
+
+        <section id="se-feats" class="se-panel" data-se-panel="feats" hidden>
+            <p class="se-hint">Changes here survive a Pathbuilder update. An added feat's rules apply (Toughness raises HP).</p>
+            <h3 class="se-group">Feats</h3>
+            <ol class="se-list" data-se-feat-list>
+                {% for f in se_feats.feats %}
+                <li class="se-item" data-se-feat="{{ f.name }}" data-se-source="{{ f.source }}" data-se-type="{{ f.type }}" data-se-level="{{ f.level }}">
+                    <span class="se-item-name">{{ f.name }}</span>
+                    <span class="se-item-meta">{{ f.type }}{% if f.type %} · {% endif %}{{ f.level }}{% if f.source == 'sheet' %} · added on sheet{% endif %}</span>
+                    <button type="button" class="se-mini" data-se-move="-1" aria-label="Move up">Up</button>
+                    <button type="button" class="se-mini" data-se-move="1" aria-label="Move down">Down</button>
+                    <button type="button" class="se-mini" data-se-drop>Remove</button>
+                </li>
+                {% endfor %}
+            </ol>
+            <div class="se-add" data-se-feat-adder>
+                <input type="text" list="se-feat-options" placeholder="Add a feat (type to search)" maxlength="80" data-se-new-feat aria-label="Feat name">
+                <datalist id="se-feat-options"></datalist>
+                <select data-se-new-type aria-label="Feat type">
+                    {# Pathbuilder's category names: Kineticist impulse detection reads 'Class Feat'. #}
+                    {% for t in ('General Feat', 'Skill Feat', 'Class Feat', 'Ancestry Feat', 'Archetype Feat', 'Bonus Feat') %}<option>{{ t }}</option>{% endfor %}
+                </select>
+                <input type="number" min="1" max="20" value="{{ pc.level }}" data-se-new-level aria-label="Feat level">
+                <button type="button" class="tb" data-se-add-feat>Add</button>
+            </div>
+            <h3 class="se-group">Removed from the import</h3>
+            <ul class="se-list" data-se-removed-list>
+                {% for name in se_feats.removed %}
+                <li class="se-item" data-se-removed-feat="{{ name }}"><span class="se-item-name">{{ name }}</span>
+                    <button type="button" class="se-mini" data-se-restore>Restore</button></li>
+                {% endfor %}
+            </ul>
+            <p class="se-hint" data-se-removed-empty {% if se_feats.removed %}hidden{% endif %}>None.</p>
+            <h3 class="se-group">Class and ancestry features</h3>
+            <ul class="se-list">
+                {% for f in se_feats.features %}
+                <li class="se-item{% if f.hidden %} is-hidden-feature{% endif %}" data-se-feature="{{ f.name }}" data-se-hidden="{{ 1 if f.hidden else 0 }}">
+                    <span class="se-item-name">{{ f.name }}</span><span class="se-item-meta">{{ f.kind }}</span>
+                    <button type="button" class="se-mini" data-se-toggle-feature>{{ 'Show' if f.hidden else 'Hide' }}</button>
+                </li>
+                {% endfor %}
+            </ul>
+            <h3 class="se-group">Custom features</h3>
+            <ul class="se-list" data-se-custom-list>
+                {% for c in se_feats.custom %}
+                <li class="se-item" data-se-custom-name="{{ c.name }}" data-se-custom-desc="{{ c.desc }}">
+                    <span class="se-item-name">{{ c.name }}</span>
+                    <button type="button" class="se-mini" data-se-drop>Remove</button></li>
+                {% endfor %}
+            </ul>
+            <div class="se-add">
+                <input type="text" maxlength="80" placeholder="Feature name" data-se-new-custom-name aria-label="Custom feature name">
+                <input type="text" maxlength="2000" placeholder="What it does" data-se-new-custom-desc aria-label="Custom feature description">
+                <button type="button" class="tb" data-se-add-custom>Add</button>
+            </div>
         </section>
 
         {% if is_gm %}
