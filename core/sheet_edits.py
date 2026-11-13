@@ -28,7 +28,13 @@ TEXT_MAX = 80
 LIST_MAX = 30
 LIST_ITEM_MAX = 40
 
-_LATER_SECTIONS = ('feats', 'features')
+FEAT_ADDED_MAX = 40
+NAME_LIST_MAX = 200
+CUSTOM_FEATURE_MAX = 30
+FEAT_TYPE_MAX = 30
+DESC_MAX = 2000
+FEAT_KEYS = ('added', 'removed', 'order')
+FEATURE_KEYS = ('hidden', 'custom', 'order')
 
 
 class SheetEditError(ValueError):
@@ -111,15 +117,85 @@ def _clean_meta(section):
     return out
 
 
+def _clean_name_list(label, value):
+    if not isinstance(value, list):
+        raise SheetEditError(f'{label} must be a list of names.')
+    if len(value) > NAME_LIST_MAX:
+        raise SheetEditError(f'{label} is limited to {NAME_LIST_MAX} names.')
+    out, seen = [], set()
+    for item in value:
+        if not isinstance(item, str):
+            raise SheetEditError(f'Each entry in {label} must be text.')
+        item = item.strip()
+        if len(item) > TEXT_MAX:
+            raise SheetEditError(f'Names in {label} are limited to {TEXT_MAX} characters.')
+        if item and item.lower() not in seen:
+            seen.add(item.lower())
+            out.append(item)
+    return out
+
+
+def _clean_added_feats(value):
+    if not isinstance(value, list):
+        raise SheetEditError('Added feats must be a list.')
+    if len(value) > FEAT_ADDED_MAX:
+        raise SheetEditError(f'At most {FEAT_ADDED_MAX} feats can be added on the sheet.')
+    out, seen = [], set()
+    for entry in value:
+        if not isinstance(entry, dict):
+            raise SheetEditError('Each added feat needs a name, type and level.')
+        name, ftype, level = entry.get('name'), entry.get('type', ''), entry.get('level', 1)
+        if not isinstance(name, str) or not name.strip() or len(name.strip()) > TEXT_MAX:
+            raise SheetEditError(f'A feat name is required (at most {TEXT_MAX} characters).')
+        if not isinstance(ftype, str) or len(ftype.strip()) > FEAT_TYPE_MAX:
+            raise SheetEditError(f'Feat type is limited to {FEAT_TYPE_MAX} characters.')
+        if isinstance(level, bool) or not isinstance(level, int) or not 1 <= level <= 20:
+            raise SheetEditError(f'The level for {name.strip()} must be a whole number from 1 to 20.')
+        if name.strip().lower() in seen:
+            continue
+        seen.add(name.strip().lower())
+        # Pathbuilder's feat shape [name, id, category, level]: Character reads
+        # the description from the compendium and applies its rules.
+        out.append([name.strip(), None, ftype.strip(), level])
+    return out
+
+
+def _clean_custom_features(value):
+    if not isinstance(value, list):
+        raise SheetEditError('Custom features must be a list.')
+    if len(value) > CUSTOM_FEATURE_MAX:
+        raise SheetEditError(f'At most {CUSTOM_FEATURE_MAX} custom features are allowed.')
+    out = []
+    for entry in value:
+        if not isinstance(entry, dict):
+            raise SheetEditError('Each custom feature needs a name and a description.')
+        name, desc = entry.get('name'), entry.get('desc', '')
+        if not isinstance(name, str) or not name.strip() or len(name.strip()) > TEXT_MAX:
+            raise SheetEditError(f'A custom feature name is required (at most {TEXT_MAX} characters).')
+        if not isinstance(desc, str) or len(desc) > DESC_MAX:
+            raise SheetEditError(f'A custom feature description is limited to {DESC_MAX} characters.')
+        out.append({'name': name.strip(), 'desc': desc.strip()})
+    return out
+
+
+def _clean_list_section(section, label, keys, cleaners):
+    if not isinstance(section, dict) or not section:
+        raise SheetEditError(f'{label} must be a set of lists.')
+    out = {}
+    for key, value in section.items():
+        if key not in keys:
+            raise SheetEditError(f'Unknown {label.lower()} field: {key!r}.')
+        out[key] = cleaners.get(key, lambda v, k=key: _clean_name_list(f'{label} {k}', v))(value)
+    return out
+
+
 def validate_patch(patch, *, is_gm):
     """Return the cleaned patch, or raise SheetEditError (400, or 403 for a
     non-GM changing numbers). An empty string, empty list or 0 means "clear"."""
     if not isinstance(patch, dict) or not patch:
         raise SheetEditError('Nothing to save.')
     for key in patch:
-        if key in _LATER_SECTIONS:
-            raise SheetEditError('Feat and feature editing is not available yet.')
-        if key not in ('meta', 'adjust'):
+        if key not in ('meta', 'adjust', 'feats', 'features'):
             raise SheetEditError(f'Unknown section: {key!r}.')
     clean = {}
     if 'adjust' in patch:
@@ -128,6 +204,12 @@ def validate_patch(patch, *, is_gm):
         clean['adjust'] = _clean_adjust(patch['adjust'])
     if 'meta' in patch:
         clean['meta'] = _clean_meta(patch['meta'])
+    if 'feats' in patch:
+        clean['feats'] = _clean_list_section(patch['feats'], 'Feats', FEAT_KEYS,
+                                             {'added': _clean_added_feats})
+    if 'features' in patch:
+        clean['features'] = _clean_list_section(patch['features'], 'Features', FEATURE_KEYS,
+                                                {'custom': _clean_custom_features})
     return clean
 
 

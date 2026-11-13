@@ -5272,7 +5272,9 @@ class Character:
         self.session_notes = build.get('session_notes') or []
         self.expended_slots = build.get('expended_slots') or {}
         
-        self.raw_feats = build.get('feats') or []
+        # SE-02: sheet feat edits apply here, upstream of the rule engine, the
+        # feat loop and domain detection, so an added feat's rules take effect.
+        self.raw_feats = self._edited_feats(build.get('feats') or [])
         self.raw_spellCasters = build.get('spellCasters') or []
         # Stash the raw build dict so downstream property getters (spell_attack
         # for focus-only classes like Champion) can look up build.focus etc.
@@ -5898,6 +5900,8 @@ class Character:
                 if "focus point" in lower_desc and "maximum" in lower_desc: self.focus_max += 1
                 if "darkvision" in lower_desc and "Darkvision" not in self.senses: self.senses.append("Darkvision")
                 if "low-light vision" in lower_desc and "Low-Light vision" not in self.senses: self.senses.append("Low-Light Vision")
+
+        self._order_sheet_feats()
 
         # Track whether this came off disk. The focus pool is recomputed from
         # feats further down and can be revised UPWARD on every single load;
@@ -6698,6 +6702,62 @@ class Character:
         self.pc_active_effects = list(build.get('pc_active_effects') or [])
         self._apply_sheet_meta()
 
+    def _sheet_section(self, name):
+        section = self.sheet_edits.get(name)
+        return section if isinstance(section, dict) else {}
+
+    def _edited_feats(self, raw):
+        """Pathbuilder feats with the sheet's removals and additions applied.
+        Sets removed_feats (for the restore list) and the names the sheet added."""
+        edits = self._sheet_section('feats')
+        removed = {str(n).lower() for n in edits.get('removed') or [] if isinstance(n, str)}
+        kept, self.removed_feats = [], []
+        for feat in raw:
+            name = safe_str(feat[0]) if isinstance(feat, list) and feat else ''
+            if name and name.lower() in removed:
+                if name not in self.removed_feats:
+                    self.removed_feats.append(name)
+                continue
+            kept.append(feat)
+        present = {safe_str(f[0]).lower() for f in kept if isinstance(f, list) and f}
+        self._sheet_added_feats = set()
+        for feat in edits.get('added') or []:
+            if not (isinstance(feat, list) and feat and isinstance(feat[0], str)):
+                continue
+            if feat[0].lower() in present:
+                continue
+            present.add(feat[0].lower())
+            self._sheet_added_feats.add(feat[0].lower())
+            kept.append(list(feat))
+        return kept
+
+    def _order_sheet_feats(self):
+        for feat in self.feats:
+            feat['source'] = 'sheet' if feat['name'].lower() in self._sheet_added_feats else 'build'
+        order = [str(n).lower() for n in self._sheet_section('feats').get('order') or [] if isinstance(n, str)]
+        if order:
+            rank = {n: i for i, n in enumerate(order)}
+            self.feats.sort(key=lambda f: rank.get(f['name'].lower(), len(order)))
+
+    def _edited_features(self, features, *, custom=False):
+        edits = self._sheet_section('features')
+        hidden = {str(n).lower() for n in edits.get('hidden') or [] if isinstance(n, str)}
+        out = [f for f in features if str(f.get('name', '')).lower() not in hidden]
+        if custom:
+            out += [{'name': c['name'], 'desc': c.get('desc', ''), 'type': 'custom', 'level': self.level}
+                    for c in edits.get('custom') or [] if isinstance(c, dict) and c.get('name')]
+        order = [str(n).lower() for n in edits.get('order') or [] if isinstance(n, str)]
+        if order:
+            rank = {n: i for i, n in enumerate(order)}
+            out.sort(key=lambda f: rank.get(str(f.get('name', '')).lower(), len(order)))
+        return out
+
+    @property
+    def hidden_features(self):
+        hidden = {str(n).lower() for n in self._sheet_section('features').get('hidden') or [] if isinstance(n, str)}
+        names = [f['name'] for f in self._all_class_features() + self._all_ancestry_features()]
+        return [n for n in names if n.lower() in hidden]
+
     def _adj(self, key):
         """GM adjustment for one stat from the sheet edit layer (0 when absent)."""
         adjust = self.sheet_edits.get('adjust')
@@ -6753,16 +6813,22 @@ class Character:
 
     @property
     def class_features(self):
-        """Get class features from CLASS_FEATURES filtered by character level."""
+        """Class features from CLASS_FEATURES up to this level, shaped by the
+        sheet edit layer (hidden, custom, order)."""
+        return self._edited_features(self._all_class_features(), custom=True)
+
+    def _all_class_features(self):
         c_name = self.class_name.lower()
         features = CLASS_FEATURES.get(c_name, [])
         return [f for f in features if f.get('level', 1) <= self.level]
-    
+
     @property
     def ancestry_features(self):
-        """Get ancestry features from ANCESTRY_FEATURES."""
-        a_name = self.ancestry.lower()
-        return ANCESTRY_FEATURES.get(a_name, [])
+        """Ancestry features from ANCESTRY_FEATURES, shaped by the sheet edit layer."""
+        return self._edited_features(self._all_ancestry_features())
+
+    def _all_ancestry_features(self):
+        return ANCESTRY_FEATURES.get(self.ancestry.lower(), [])
     
     @property
     def toggle_effects_summary(self):

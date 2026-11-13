@@ -29,7 +29,10 @@ def test_owner_may_edit_meta():
     {'meta': {'size': 'Colossal'}}, {'meta': {'languages': 'Common'}},
     {'meta': {'languages': ['x'] * 31}}, {'meta': {'languages': ['x' * 41]}},
     {'meta': {'deity': 'x' * 81}}, {'meta': {'deity': 3}}, {'meta': {'bogus': 'x'}},
-    {'feats': {'added': []}}, {'features': {}}, {'other': 1}, {},
+    {'feats': {'added': [{'name': ''}]}}, {'feats': {'added': [{'name': 'X', 'level': 21}]}},
+    {'feats': {'added': 'Toughness'}}, {'feats': {'bogus': []}}, {'features': {}},
+    {'features': {'custom': [{'name': 'X', 'desc': 'y' * 2001}]}}, {'feats': {'removed': ['x' * 81]}},
+    {'other': 1}, {},
     [], 'str', None,
 ])
 def test_invalid_patches_400(bad):
@@ -397,3 +400,72 @@ def test_pathbuilder_meta_tolerates_a_bare_actor(app_module):
     from types import SimpleNamespace
     meta = app_module._sheet_edit_pathbuilder_meta(SimpleNamespace(name='Viewed Character'))
     assert meta['display_name'] == 'Viewed Character' and meta['deity'] == '' and meta['senses'] == ''
+
+
+# ---------------------------------------------------------------- SE-02 Task 1: feats and features
+
+def _fighter(level=5, feats=None):
+    return {'build': {'name': 'Test Fighter', 'class': 'Fighter', 'ancestry': 'Human', 'level': level,
+                      'abilities': {'str': 4, 'dex': 2, 'con': 2, 'int': 0, 'wis': 1, 'cha': 0},
+                      'feats': feats or [['Power Attack', None, 'Class', 1]]}}
+
+
+def test_feat_patch_validation():
+    clean = validate_patch({'feats': {'added': [{'name': ' Toughness ', 'type': 'General', 'level': 3}],
+                                      'removed': ['Diehard'], 'order': ['Toughness', 'Diehard']},
+                            'features': {'hidden': ['Raise Symbol'], 'custom': [{'name': 'Vow', 'desc': 'Text'}]}},
+                           is_gm=False)
+    assert clean['feats']['added'] == [['Toughness', None, 'General', 3]]
+    assert clean['feats']['removed'] == ['Diehard'] and clean['features']['custom'] == [{'name': 'Vow', 'desc': 'Text'}]
+    # Lists replace wholesale; an empty list clears.
+    out = merge_patch({'feats': {'removed': ['Diehard'], 'order': ['A']}}, validate_patch({'feats': {'removed': []}}, is_gm=False))
+    assert out == {'feats': {'order': ['A']}}
+
+
+def test_added_feat_rule_applies(app_module):
+    base = _mk(app_module, _fighter())
+    c = _mk(app_module, _fighter(), {'feats': {'added': [['Toughness', None, 'General', 3]]}})
+    assert c.hp == base.hp + 5
+    assert next(f for f in c.feats if f['name'] == 'Toughness')['source'] == 'sheet'
+    assert next(f for f in c.feats if f['name'] == 'Power Attack')['source'] == 'build'
+
+
+def test_removed_pathbuilder_feat_gone_and_listed(app_module, goel_doc):
+    c = _mk(app_module, goel_doc, {'feats': {'removed': ['diehard']}})
+    assert 'Diehard' not in [f['name'] for f in c.feats]
+    assert c.removed_feats == ['Diehard']
+    assert _mk(app_module, goel_doc).removed_feats == []
+
+
+def test_added_and_removed_same_name_shows_once(app_module, goel_doc):
+    c = _mk(app_module, goel_doc, {'feats': {'removed': ['Toughness'],
+                                             'added': [['Toughness', None, 'General', 3]]}})
+    assert [f['name'] for f in c.feats].count('Toughness') == 1
+    c = _mk(app_module, goel_doc, {'feats': {'added': [['Diehard', None, 'General', 1]]}})
+    assert [f['name'] for f in c.feats].count('Diehard') == 1      # already in the build
+
+
+def test_feat_order_applied(app_module, goel_doc):
+    base = [f['name'] for f in _mk(app_module, goel_doc).feats]
+    got = [f['name'] for f in _mk(app_module, goel_doc, {'feats': {'order': ['Toughness', 'Diehard']}}).feats]
+    assert got[:2] == ['Toughness', 'Diehard']
+    assert got[2:] == [n for n in base if n not in ('Toughness', 'Diehard')]
+
+
+def test_feat_edits_survive_reimport(app_module, goel_doc):
+    existing = copy.deepcopy(goel_doc)
+    existing['build']['sheet_edits'] = {'feats': {'removed': ['Diehard'], 'added': [['Fleet', None, 'General', 3]]}}
+    reimport = copy.deepcopy(goel_doc)
+    reimport['build']['feats'].append(['Fleet', None, 'General', 3])   # Pathbuilder now has it too
+    c = app_module.Character(app_module._merge_pf2e_import(existing, reimport), '')
+    names = [f['name'] for f in c.feats]
+    assert 'Diehard' not in names and names.count('Fleet') == 1
+
+
+def test_hidden_feature_not_listed_and_custom_feature_appended(app_module, goel_doc):
+    c = _mk(app_module, goel_doc, {'features': {'hidden': ['raise symbol', 'Orc Ferocity'],
+                                                'custom': [{'name': 'Oath of Ash', 'desc': 'Homebrew vow.'}]}})
+    cf = [f['name'] for f in c.class_features]
+    assert 'Raise Symbol' not in cf and 'Divine Font' in cf and cf[-1] == 'Oath of Ash'
+    assert 'Orc Ferocity' not in [f['name'] for f in c.ancestry_features]
+    assert sorted(c.hidden_features) == ['Orc Ferocity', 'Raise Symbol']
