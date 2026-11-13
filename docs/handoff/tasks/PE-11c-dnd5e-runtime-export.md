@@ -54,8 +54,7 @@ Allowed files:
    - a file that has no row;
    - a SQL owner that differs from the file's `owner_user_id`;
    - a file `campaign_id` that is missing or differs from its row, which is PE-11a's warning `dnd5e_character_campaign_inferred`;
-   - `stale_owner_cleared`, from step 2.
-
+   - `stale_owner_cleared`, from step 2;
    - `membership_selection_cleared` and `invite_omitted`, from step 4.
 
    **Not drift.** A copied file whose `id` is missing or differs from its stem, or whose `system` is not `dnd5e`, makes the post-staging planner block, with `dnd5e_locator_mismatch` or `invalid_character_system`. The export then refuses, with an error that names the file. Do not exclude or rewrite such files.
