@@ -229,3 +229,41 @@ def merge_patch(existing, clean):
         if not target:
             out.pop(section)
     return out
+
+
+PET_INT_FIELDS = ('hp', 'ac', 'speed', 'fort', 'ref', 'will',
+                  'str_mod', 'dex_mod', 'con_mod', 'int_mod', 'wis_mod', 'cha_mod')
+PET_TEXT_FIELDS = ('type', 'size', 'abilities', 'senses')
+
+
+def validate_pet(pet):
+    """The Add Companion form's shape, checked before a companion is edited.
+    Returns a clean dict or raises SheetEditError (400)."""
+    if not isinstance(pet, dict):
+        raise SheetEditError('The companion must be a set of fields.')
+    name = pet.get('name')
+    if not isinstance(name, str) or not name.strip() or len(name.strip()) > TEXT_MAX:
+        raise SheetEditError(f'A companion name is required (at most {TEXT_MAX} characters).')
+    out = {'name': name.strip()}
+    for key in PET_INT_FIELDS:
+        value = pet.get(key, 0)
+        if isinstance(value, bool) or not isinstance(value, int) or not -50 <= value <= 999:
+            raise SheetEditError(f'Companion {key.replace("_", " ")} must be a whole number.')
+        out[key] = value
+    for key in PET_TEXT_FIELDS:
+        value = pet.get(key, '')
+        if not isinstance(value, str) or len(value) > DESC_MAX:
+            raise SheetEditError(f'Companion {key} must be text (at most {DESC_MAX} characters).')
+        out[key] = value.strip()
+    attacks = pet.get('attacks', [])
+    if not isinstance(attacks, list) or len(attacks) > 10:
+        raise SheetEditError('Companion attacks must be a list of at most 10.')
+    out['attacks'] = []
+    for atk in attacks:
+        if not (isinstance(atk, dict) and isinstance(atk.get('name'), str)
+                and isinstance(atk.get('damage', ''), str)
+                and not isinstance(atk.get('bonus', 0), bool) and isinstance(atk.get('bonus', 0), int)):
+            raise SheetEditError('Each companion attack needs a name, a whole-number bonus and damage text.')
+        out['attacks'].append({'name': atk['name'].strip()[:TEXT_MAX], 'bonus': atk.get('bonus', 0),
+                               'damage': atk.get('damage', '').strip()[:TEXT_MAX]})
+    return out

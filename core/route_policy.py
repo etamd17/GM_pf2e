@@ -268,6 +268,7 @@ _CHARACTER_OWNER_RESOLUTION_GROUPS: tuple[CharacterResolutionGroup, ...] = (
             "toggle_shield",
             "toggle_two_hand",
             "update_pc_condition",
+            "update_pet",
             "update_portrait_focus",
             "update_sheet",
             "update_sheet_edits",

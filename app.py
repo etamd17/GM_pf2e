@@ -25635,6 +25635,48 @@ def remove_pet(pc_name):
     save_and_reload_character(pc_name, pc_json, file_path)
     return jsonify({"success": True})
 
+@app.route('/api/update_pet/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
+def update_pet(pc_name):
+    """SE-02: edit a companion in place.
+
+    Body {"original": <current name>, "pet": <Add Companion form shape>}. An
+    in-app companion is replaced where it is. An imported (Pathbuilder) one
+    becomes an in-app companion and its original name is tombstoned in
+    pets_removed, the same way remove_pet does, so an Update does not bring
+    the old card back."""
+    from core.sheet_edits import SheetEditError, validate_pet
+    data = request.get_json(silent=True)
+    original = data.get('original') if isinstance(data, dict) else None
+    if not isinstance(original, str) or not original:
+        return jsonify({"success": False, "error": "Missing the companion's current name"}), 400
+    try:
+        pet = validate_pet(data.get('pet'))
+    except SheetEditError as error:
+        return _sheet_edits_error(error)
+    pc_json, file_path, err = require_pc_json(pc_name)
+    if err:
+        return err
+    build = pc_json.get('build', pc_json)
+
+    def _named(p):
+        return isinstance(p, dict) and p.get('name') == original
+
+    custom = [p for p in (build.get('pets_custom') or []) if isinstance(p, dict)]
+    imported = [p for p in (build.get('pets') or []) if isinstance(p, dict)]
+    hidden = [n for n in (build.get('pets_removed') or []) if isinstance(n, str)]
+    if any(_named(p) for p in custom):
+        build['pets_custom'] = [pet if _named(p) else p for p in custom]
+    elif any(_named(p) for p in imported) and original not in hidden:
+        build['pets_custom'] = custom + [pet]
+        build['pets_removed'] = hidden + [original]
+    else:
+        return jsonify({"success": False, "error": f"No companion named {original!r} on this sheet"}), 404
+    save_and_reload_character(pc_name, pc_json, file_path)
+    _broadcast_pc_state(pc_name)
+    return jsonify({"success": True})
+
+
 def _sheet_edits_error(error):
     return jsonify({"success": False, "error": str(error)}), error.status
 

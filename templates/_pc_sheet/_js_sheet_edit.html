@@ -1,6 +1,47 @@
 {# SE-01: sheet edit modal behaviour. Event listeners only (no inline handlers),
    so a character name with an apostrophe can never break a button. #}
 <script>
+// SE-02: "Edit" on a companion card reuses the Add Companion form, pre-filled.
+(function () {
+    'use strict';
+    var modal = document.getElementById('pet-add-modal');
+    if (!modal) return;
+    var title = modal.querySelector('h3');
+    var saveBtn = modal.querySelector('[onclick="savePet()"]');
+    var addTitle = title ? title.textContent : '', addLabel = saveBtn ? saveBtn.textContent : '';
+    function set(id, value) { var el = document.getElementById(id); if (el) el.value = value; }
+    document.querySelectorAll('[data-se-pet-edit]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var pet;
+            try { pet = JSON.parse(btn.getAttribute('data-se-pet') || '{}'); } catch (_) { return; }
+            window._petEditOriginal = pet.name;
+            set('pet-name', pet.name || '');
+            set('pet-type', pet.type || 'Animal Companion');
+            set('pet-size', pet.size || 'Medium');
+            [['pet-hp', 'hp'], ['pet-speed', 'speed'], ['pet-ac', 'ac'], ['pet-fort', 'fort'], ['pet-ref', 'ref'],
+             ['pet-will', 'will'], ['pet-str', 'str_mod'], ['pet-dex', 'dex_mod'], ['pet-con', 'con_mod'],
+             ['pet-int', 'int_mod'], ['pet-wis', 'wis_mod'], ['pet-cha', 'cha_mod']].forEach(function (pair) {
+                if (pet[pair[1]] !== undefined && pet[pair[1]] !== null) set(pair[0], pet[pair[1]]);
+            });
+            set('pet-attack', (pet.attacks || []).map(function (a) {
+                return [a.name, a.bonus, a.damage].join(', ');
+            }).join(' | '));
+            set('pet-abilities', pet.abilities || '');
+            if (title) title.textContent = 'Edit companion';
+            if (saveBtn) saveBtn.textContent = 'Save Companion';
+            modal.classList.remove('hidden');
+        });
+    });
+    // "+ Add Pet" goes back to adding.
+    document.querySelectorAll('[onclick*="pet-add-modal"][onclick*="remove"]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            window._petEditOriginal = null;
+            if (title) title.textContent = addTitle;
+            if (saveBtn) saveBtn.textContent = addLabel;
+        });
+    });
+})();
+
 (function () {
     'use strict';
     var dialog = document.getElementById('se-modal');

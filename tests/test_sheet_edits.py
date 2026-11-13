@@ -499,3 +499,74 @@ def test_hidden_feature_listed_for_restore(app_module, monkeypatch, goel_doc):
     html = _render(app_module, monkeypatch, doc)
     assert 'data-se-feature="Raise Symbol" data-se-hidden="1"' in html
     assert 'data-se-custom-name="Oath of Ash"' in html
+
+
+# ---------------------------------------------------------------- SE-02 Task 3: edit a companion
+
+def _route_kyle(body):
+    _route(textwrap.dedent(body).replace('KYLE_SETUP', '''
+kpb = json.load(open('tests/fixtures/kyle_l10.json', encoding='utf-8'))
+assert c.post('/api/import_pathbuilder', json=kpb, headers=J).status_code == 200
+kname = kpb['build']['name']; kurl = '/api/update_pet/' + quote(kname)
+kpath = A.get_pc_file_path(kname)
+def kraw(): return open(kpath, 'rb').read()
+def kbuild(): return json.loads(kraw()).get('build', {})
+def pet_names(): return [p['name'] for p in A.PARTY_LIBRARY[kname].pets]
+PET = {'name': 'Jonathon', 'type': 'Animal Companion', 'size': 'Medium', 'hp': 30, 'ac': 17,
+       'speed': 25, 'fort': 7, 'ref': 7, 'will': 6, 'str_mod': 3, 'dex_mod': 2, 'con_mod': 2,
+       'int_mod': -4, 'wis_mod': 1, 'cha_mod': 0, 'attacks': [{'name': 'Jaws', 'bonus': 7, 'damage': '1d8+2 P'}],
+       'abilities': ''}
+'''))
+
+
+def test_update_imported_pet_moves_to_custom_and_tombstones():
+    _route_kyle('''
+        KYLE_SETUP
+        old = 'Jonathon - Mature Wyvern'
+        assert old in pet_names()
+        r = c.post(kurl, json={'original': old, 'pet': PET}, headers=J)
+        assert r.status_code == 200, r.get_data(as_text=True)
+        assert pet_names().count('Jonathon') == 1 and old not in pet_names()
+        assert old in kbuild()['pets_removed']
+        # A Pathbuilder update must not bring the old card back.
+        assert c.post('/api/import_pathbuilder', json=kpb, headers=J).status_code == 200
+        assert old not in pet_names() and pet_names().count('Jonathon') == 1
+        print('ROUTE_OK')
+    ''')
+
+
+def test_update_custom_pet_in_place():
+    _route_kyle('''
+        KYLE_SETUP
+        assert c.post('/api/add_pet/' + quote(kname), json=dict(PET, name='Bramble'), headers=J).status_code == 200
+        r = c.post(kurl, json={'original': 'Bramble', 'pet': dict(PET, name='Bramble', ac=19)}, headers=J)
+        assert r.status_code == 200
+        custom = [p for p in kbuild()['pets_custom'] if p['name'] == 'Bramble']
+        assert len(custom) == 1 and custom[0]['ac'] == 19
+        assert 'Bramble' not in (kbuild().get('pets_removed') or [])
+        print('ROUTE_OK')
+    ''')
+
+
+def test_update_pet_unknown_404_and_bad_body_400_file_unchanged():
+    _route_kyle('''
+        KYLE_SETUP
+        before = kraw()
+        r = c.post(kurl, json={'original': 'Nobody', 'pet': PET}, headers=J)
+        assert r.status_code == 404 and r.get_json()['error'], r.status_code
+        for body in ({'pet': PET}, {'original': 'Jonathon - Mature Wyvern'},
+                     {'original': 'Jonathon - Mature Wyvern', 'pet': dict(PET, name='')},
+                     {'original': 'Jonathon - Mature Wyvern', 'pet': dict(PET, hp='lots')}, []):
+            r = c.post(kurl, json=body, headers=J)
+            assert r.status_code == 400, (body, r.status_code)
+        assert kraw() == before
+        print('ROUTE_OK')
+    ''')
+
+
+def test_pet_card_has_edit_button_without_inline_js(app_module, monkeypatch):
+    doc = json.loads((_FIXTURES / 'kyle_l10.json').read_text(encoding='utf-8'))
+    html = _render(app_module, monkeypatch, doc)
+    i = html.index('data-se-pet-edit')
+    tag = html[html.rindex('<button', 0, i):html.index('>', i)]
+    assert 'onclick' not in tag and 'data-se-pet=' in tag and 'Jonathon - Mature Wyvern' in tag
