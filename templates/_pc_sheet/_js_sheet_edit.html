@@ -52,6 +52,12 @@
             try { pet = JSON.parse(btn.getAttribute('data-se-pet') || '{}'); } catch (_) { return; }
             window._petEditOriginal = pet.name;
             set('pet-name', pet.name || '');
+            var typeSel = document.getElementById('pet-type');
+            if (typeSel && pet.type && ![].some.call(typeSel.options, function (o) { return o.value === pet.type; })) {
+                var opt = document.createElement('option');      // keep an imported type the list lacks
+                opt.value = opt.textContent = pet.type;
+                typeSel.appendChild(opt);
+            }
             set('pet-type', pet.type || 'Animal Companion');
             set('pet-size', pet.size || 'Medium');
             [['pet-hp', 'hp'], ['pet-speed', 'speed'], ['pet-ac', 'ac'], ['pet-fort', 'fort'], ['pet-ref', 'ref'],

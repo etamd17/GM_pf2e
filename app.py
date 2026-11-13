@@ -25665,13 +25665,21 @@ def update_pet(pc_name):
     custom = [p for p in (build.get('pets_custom') or []) if isinstance(p, dict)]
     imported = [p for p in (build.get('pets') or []) if isinstance(p, dict)]
     hidden = [n for n in (build.get('pets_removed') or []) if isinstance(n, str)]
-    if any(_named(p) for p in custom):
-        build['pets_custom'] = [pet if _named(p) else p for p in custom]
-    elif any(_named(p) for p in imported) and original not in hidden:
-        build['pets_custom'] = custom + [pet]
-        build['pets_removed'] = hidden + [original]
-    else:
+    in_custom = any(_named(p) for p in custom)
+    in_imported = any(_named(p) for p in imported) and original not in hidden
+    if not (in_custom or in_imported):
         return jsonify({"success": False, "error": f"No companion named {original!r} on this sheet"}), 404
+    shown = {p.get('name') for p in custom} | {p.get('name') for p in imported if p.get('name') not in hidden}
+    if pet['name'] != original and pet['name'] in shown:
+        return jsonify({"success": False, "error": f"Another companion is already named {pet['name']!r}."}), 409
+    # Merge over the stored companion so fields the form does not carry
+    # (senses, perception, current HP, level...) survive an edit.
+    if in_custom:
+        build['pets_custom'] = [dict(p, **pet) if _named(p) else p for p in custom]
+    else:
+        source = next(p for p in imported if _named(p))
+        build['pets_custom'] = custom + [dict(source, **pet)]
+        build['pets_removed'] = hidden + [original]
     save_and_reload_character(pc_name, pc_json, file_path)
     _broadcast_pc_state(pc_name)
     return jsonify({"success": True})
@@ -25690,7 +25698,11 @@ def _save_sheet_edits(pc_name, apply):
     if err:
         return err
     build = pc_json.get('build', pc_json)
-    edits = apply(build.get('sheet_edits') if isinstance(build.get('sheet_edits'), dict) else {})
+    from core.sheet_edits import SheetEditError
+    try:
+        edits = apply(build.get('sheet_edits') if isinstance(build.get('sheet_edits'), dict) else {}, build)
+    except SheetEditError as error:
+        return _sheet_edits_error(error)
     if edits:
         build['sheet_edits'] = edits
     else:
@@ -25714,7 +25726,15 @@ def update_sheet_edits(pc_name):
         clean = validate_patch(request.get_json(silent=True), is_gm=_is_gm())
     except SheetEditError as error:
         return _sheet_edits_error(error)
-    return _save_sheet_edits(pc_name, lambda current: merge_patch(current, clean))
+    def apply(current, build):
+        # Hiding a toggle that is switched on would strand its effect with no
+        # switch left on the sheet (toggle effects read active_toggles directly).
+        hidden = {n.lower() for n in (clean.get('features') or {}).get('hidden') or []}
+        active = [t for t in (build.get('active_toggles') or []) if isinstance(t, str) and t.lower() in hidden]
+        if active:
+            raise SheetEditError(f'Turn off {", ".join(active)} before hiding it.')
+        return merge_patch(current, clean)
+    return _save_sheet_edits(pc_name, apply)
 
 
 @app.route('/api/sheet_edits/<pc_name>/reset', methods=['POST'])
@@ -25726,7 +25746,7 @@ def reset_sheet_edits(pc_name):
     if section not in (None, 'meta', 'adjust'):
         return jsonify({"success": False, "error": "Section must be 'meta' or 'adjust'."}), 400
 
-    def apply(current):
+    def apply(current, _build):
         if section is None:
             return {}
         return {k: v for k, v in current.items() if k != section}
@@ -26607,6 +26627,11 @@ def import_character_json(pc_name):
     character. It merges exactly like an "Update <name>" Pathbuilder import
     (user decision D1, 2026-11-13): rules data comes from the file; HP,
     conditions, notes, in-app companions and sheet edits stay as they are."""
+    # GM only: the file carries abilities, proficiencies and level, so an owner
+    # import would get round the GM-only number rule (SE-01 decision 1), and
+    # the Pathbuilder import it mirrors is GM-only too.
+    if not _is_gm():
+        return jsonify({"success": False, "error": "Only the GM can import a character file."}), 403
     doc = request.get_json(silent=True)
     build = doc.get('build', doc) if isinstance(doc, dict) else None
     if not isinstance(build, dict) or not isinstance(build.get('name'), str) or not build['name'].strip():

@@ -251,7 +251,9 @@ def validate_pet(pet):
             raise SheetEditError(f'Companion {key.replace("_", " ")} must be a whole number.')
         out[key] = value
     for key in PET_TEXT_FIELDS:
-        value = pet.get(key, '')
+        if key not in pet:          # absent = keep the stored value
+            continue
+        value = pet[key]
         if not isinstance(value, str) or len(value) > DESC_MAX:
             raise SheetEditError(f'Companion {key} must be text (at most {DESC_MAX} characters).')
         out[key] = value.strip()

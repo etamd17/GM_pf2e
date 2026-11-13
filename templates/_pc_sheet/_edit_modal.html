@@ -64,7 +64,8 @@
                 <input type="text" list="se-feat-options" placeholder="Add a feat (type to search)" maxlength="80" data-se-new-feat aria-label="Feat name">
                 <datalist id="se-feat-options"></datalist>
                 <select data-se-new-type aria-label="Feat type">
-                    {% for t in ('General', 'Skill', 'Class', 'Ancestry', 'Archetype', 'Bonus') %}<option>{{ t }}</option>{% endfor %}
+                    {# Pathbuilder's category names: Kineticist impulse detection reads 'Class Feat'. #}
+                    {% for t in ('General Feat', 'Skill Feat', 'Class Feat', 'Ancestry Feat', 'Archetype Feat', 'Bonus Feat') %}<option>{{ t }}</option>{% endfor %}
                 </select>
                 <input type="number" min="1" max="20" value="{{ pc.level }}" data-se-new-level aria-label="Feat level">
                 <button type="button" class="tb" data-se-add-feat>Add</button>

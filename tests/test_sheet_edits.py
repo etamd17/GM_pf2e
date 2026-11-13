@@ -632,3 +632,64 @@ def test_import_json_menu_item(app_module, monkeypatch, goel_doc):
     tag = html[html.rindex('<button', 0, i):html.index('>', i)]
     assert 'onclick' not in tag and 'data-se-additive' in tag
     assert 'data-se-import-file' in html
+
+
+# ---------------------------------------------------------------- SE-02 final review fixes
+
+def test_import_json_is_gm_only():
+    _route('''
+        A._is_gm = lambda: False      # GM_PASSWORD '' keeps @require_pc_self_or_gm open
+        before = raw()
+        doc = c.get('/api/export_character/' + quote(name), headers=J).get_json()
+        doc['build']['abilities']['str'] = 9
+        r = c.post('/api/import_character_json/' + quote(name), json=doc, headers=J)
+        assert r.status_code == 403 and 'GM' in r.get_json()['error'], r.status_code
+        assert raw() == before
+        print('ROUTE_OK')
+    ''')
+
+
+def test_cannot_hide_an_active_toggle_feature():
+    _route('''
+        doc = json.loads(raw()); doc['build']['active_toggles'] = ['Raise Symbol']
+        A._atomic_write_json(path, doc)
+        before = raw()
+        r = c.post(url, json={'features': {'hidden': ['Raise Symbol']}}, headers=J)
+        assert r.status_code == 400 and 'Raise Symbol' in r.get_json()['error'], r.status_code
+        assert raw() == before
+        assert c.post(url, json={'features': {'hidden': ['Divine Font']}}, headers=J).status_code == 200
+        print('ROUTE_OK')
+    ''')
+
+
+def test_feat_type_options_use_pathbuilder_names(app_module, monkeypatch, goel_doc):
+    html = _render(app_module, monkeypatch, goel_doc)
+    panel = html[html.index('data-se-new-type'):html.index('</select>', html.index('data-se-new-type'))]
+    assert '>Class Feat<' in panel and '>General Feat<' in panel and '>General<' not in panel
+
+
+def test_update_pet_keeps_fields_the_form_does_not_carry():
+    _route_kyle('''
+        KYLE_SETUP
+        extra = dict(PET, name='Bramble', senses='low-light vision', perception=9, current_hp=12, level=4)
+        assert c.post('/api/add_pet/' + quote(kname), json=extra, headers=J).status_code == 200
+        form = {k: v for k, v in PET.items() if k != 'senses'}
+        r = c.post(kurl, json={'original': 'Bramble', 'pet': dict(form, name='Bramble', ac=19)}, headers=J)
+        assert r.status_code == 200
+        pet = [p for p in kbuild()['pets_custom'] if p['name'] == 'Bramble'][0]
+        assert pet['ac'] == 19 and pet['senses'] == 'low-light vision'
+        assert pet['perception'] == 9 and pet['current_hp'] == 12 and pet['level'] == 4
+        print('ROUTE_OK')
+    ''')
+
+
+def test_update_pet_rename_onto_another_companion_409():
+    _route_kyle('''
+        KYLE_SETUP
+        assert c.post('/api/add_pet/' + quote(kname), json=dict(PET, name='Bramble'), headers=J).status_code == 200
+        before = kraw()
+        r = c.post(kurl, json={'original': 'Bramble', 'pet': dict(PET, name='Jonathon - Mature Wyvern')}, headers=J)
+        assert r.status_code == 409, r.status_code
+        assert kraw() == before
+        print('ROUTE_OK')
+    ''')
