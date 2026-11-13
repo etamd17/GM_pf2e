@@ -43,7 +43,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
 from core.persistence import Database, Invitation, MigrationRun
-from core.persistence.character_files import LEGACY_STORAGE_DIRS
+from core.character_layout import LEGACY_STORAGE_DIRS
 from core.character_workflows.types import WorkflowError
 from tools import migrate_transactional_store as migration
 

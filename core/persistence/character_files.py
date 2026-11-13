@@ -10,52 +10,24 @@ from pathlib import Path
 import re
 
 from . import runtime
+# The layout and id rule live in a dependency-free module so offline planning
+# can use them without SQL packages; they are re-exported here.
+from core.character_layout import (  # noqa: F401
+    DND5E_STORAGE,
+    LEGACY_STORAGE_DIRS,
+    STORAGE_SYSTEMS,
+    is_dnd5e_character_id,
+    storage_relative_parts,
+    storage_system,
+)
 
-
-# Logical character storage -> path parts below ``campaigns/<cid>/``. The
-# storage value is what SQL records; ``dnd5e_characters`` is never a directory.
-LEGACY_STORAGE_DIRS = {
-    'party_data': ('party_data',),
-    'cosmere_pcs': ('cosmere_pcs',),
-    'dnd5e_characters': ('dnd5e', 'characters'),
-}
 _STORAGE_BY_DIRS = {parts: storage for storage, parts in LEGACY_STORAGE_DIRS.items()}
-
-# The only system each storage may hold (mirrors DND5E_LOCATOR_CHECK).
-STORAGE_SYSTEMS = {
-    'party_data': 'pf2e',
-    'cosmere_pcs': 'cosmere',
-    'dnd5e_characters': 'dnd5e',
-}
 
 DND5E_WRITE_REFUSED = 'D&D characters are not written through the shared adapter until PE-15'
 
 
-def is_dnd5e_character_id(value):
-    """Exact D&D character id: 32 lowercase hex characters, nothing else.
-
-    Deliberately not ``systems.dnd5e.store.valid_id``: its ``re.match`` with
-    ``$`` also accepts a trailing newline, which SQL identities refuse.
-    """
-    return isinstance(value, str) and re.fullmatch(r'[0-9a-f]{32}', value) is not None
-
-
-def storage_relative_parts(legacy_storage):
-    try:
-        return LEGACY_STORAGE_DIRS[legacy_storage]
-    except (KeyError, TypeError):
-        raise ValueError('unknown character storage') from None
-
-
-def storage_system(legacy_storage):
-    try:
-        return STORAGE_SYSTEMS[legacy_storage]
-    except (KeyError, TypeError):
-        raise ValueError('unknown character storage') from None
-
-
 def refuse_dnd5e_write(legacy_storage):
-    if legacy_storage == 'dnd5e_characters':
+    if legacy_storage == DND5E_STORAGE:
         raise ValueError(DND5E_WRITE_REFUSED)
 
 

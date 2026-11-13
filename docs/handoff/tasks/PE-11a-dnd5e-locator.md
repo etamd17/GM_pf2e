@@ -405,3 +405,129 @@ the docs-only PR after `changes` passes on the resulting head. PE-11a may then
 be implemented; PE-11b and PE-11c still wait for PE-11a's accepted integration.
 This review edited only this section and the queue Log. Nothing was committed,
 pushed or merged.
+
+### Implementation review 1 — changes requested (Codex, 2026-11-13)
+
+Reviewed `8306c8ea284665fb51cb83317866e8b0df76ab7b` against `affb6231` on
+[draft PR #254](https://github.com/etamd17/GM_pf2e/pull/254). The local branch
+and PR agree on that head; the handoff's `8e06c8ea` spelling was a typo.
+
+1. **Implementation R1-1 (P2): preserve the planner's SQL-free dependency
+   boundary.** `tools/migrate_transactional_store.py:75-79` now imports
+   `core.persistence.character_files` through the package initializer. The
+   snapshot calls it at line 249, before planning any campaign's characters.
+   `core.persistence.__init__` imports `database.py`, which imports SQLAlchemy.
+   An operator can therefore no longer run the read-only planner on an offline
+   backup without SQLAlchemy, even for an unchanged PF2e tree. The retained
+   `_persistence_api` contract (lines 1846-1876) explicitly reserves the optional
+   SQL dependencies for import/verify/export; `tools/workflow_transfer.py:1-5`
+   likewise requires SQL-free discovery. This is a regression in that supported
+   offline path, not an outage in production environments with dependencies
+   installed.
+
+   Reproduced in isolated child processes with SQLAlchemy imports unavailable:
+   `affb6231` plans `tests/persistence/fixtures/valid` with
+   `import_allowed=True`; `8306c8ea` raises `ModuleNotFoundError` through the
+   new import. The normal test environment already imports SQLAlchemy, so it
+   cannot expose this boundary failure. Probe and output are in the parent
+   workspace's `output/pe11a-review/planner_dependency_probe.py` and
+   `planner-dependency-result.json`.
+
+   **Required:** make the shared storage layout and exact ID predicate usable
+   by planning without importing SQL persistence. Keep one definition of those
+   rules; a small dependency-free helper re-exported by `character_files` is
+   an acceptable narrow scope adjustment if needed. Add a subprocess regression
+   test with SQLAlchemy unavailable, covering both an existing-store fixture and
+   a D&D fixture. Preserve the database subcommands' existing dependency errors.
+
+**Acceptance audit and decisions:**
+
+- Exact paths, lookalikes, the fullmatch/newline rule, safe traversal and both
+  symlink depths are covered. Windows case-variant prefixes deliberately have
+  no locator, as permitted by the accepted brief. No product consumer calls
+  `store.valid_id`; its test-only call demonstrates the rejected newline case.
+- Identity resolution checks the valid stem, matching SQL row, system and
+  campaign. Missing identities cannot restore file-supplied SQL ownership.
+  All four specified write entry points refuse before SQL or writer callbacks,
+  including existing/new identities and JSON mode. Independent fail-on-access
+  probes also covered shadow mode and a mixed PF2e/D&D batch.
+- Imported D&D ownership does not produce SQL `/me` cards. The existing PF2e
+  and Cosmere behavior remains covered by the retained regression suites.
+- Planner tests distinguish warnings from blocking conflicts for nonconforming
+  filenames, ID mismatches, stale campaign IDs, grant lists, stale owners,
+  system/store mismatches and unknown campaign systems. Sibling and nested
+  files stay outside character discovery. The exact newline filename case is
+  filesystem-dependent; the predicate/locator cases run on Windows too.
+- **Agree with rejecting a missing or empty D&D `system`.** `new_pc` creates
+  it and `save_pc` writes it on every save (`systems/dnd5e/store.py:86,101`).
+  The strict read adapter already requires it, so silently inferring it during
+  import would admit a file the adapter cannot resolve. Old-store defaults
+  remain unchanged.
+- The clean import/verify/`export_store` test compares actual file bytes and the
+  source digest, checks the mapped output path and proves the source unchanged.
+  Additional review probes passed for active and trashed campaigns with stale
+  campaign IDs and ignored grant lists, preserving bytes and scalar ownership.
+- Runtime export succeeds for an empty D&D campaign and refuses registered D&D
+  rows until PE-11c. Its product diff is limited to the shared-map import and
+  pending-batch directory scan. A mutation omitting D&D from that scan made its
+  refusal test fail. The route-adoption AST guard also rejected representative
+  forbidden import forms.
+- **Accept the disclosed budget overrun for this review:** 268 changed product
+  lines, 737 test lines and 64 documentation lines (1,069 total). The brief's
+  350-line guideline includes tests, so the total exceeds it; the planner's
+  163 changed lines remain below its separate 250-line stop threshold. The
+  additional tests exercise the specified boundaries, and PE-11b/11c product
+  work has not slipped into this diff. The count alone is not another finding.
+
+**Verification (reviewer reruns, repository venv):**
+
+- `python -m pytest -q tests/persistence -m "not postgresql"`: **437 passed,
+  1 failed, 19 deselected** in 586.26 seconds. The failure was the 120-second
+  subprocess timeout in
+  `test_runtime_http.py::test_sql_export_import_roundtrip_creates_new_unclaimed_identities`,
+  rather than a failed product assertion. Its isolated rerun immediately passed:
+  **1 passed** in 18.28 seconds. The first acceptance set's non-PostgreSQL
+  tests are included in the passing results; that timeout is outside that set.
+  The full invocation itself is not reported as a clean pass.
+- The second acceptance command passed with **116 passed, 4 skipped** in
+  92.07 seconds. Those skipped tests predate this change.
+- `git diff --check affb6231..8306c8ea` and the review-only working diff check
+  passed. The independently rerun dependency probe reproduces Implementation
+  R1-1 on the candidate and succeeds on the base.
+
+GitHub confirms the exact PR head. In
+[CI run 43449243261](https://github.com/etamd17/GM_pf2e/actions/runs/43449243261),
+**all four jobs passed: `changes`, `test`, `postgresql` and `browser`.**
+PostgreSQL logs show **19 passed, 438 deselected**,
+including the two schema tests from acceptance set 1, and successful upgrade
+and `alembic check`. `gh pr checks 254` could not connect locally, so CI was
+checked through the GitHub connector. All-green CI is confirmed on the reviewed
+head; it does not exercise the missing-dependency case in Implementation R1-1.
+
+Next: Claude fixes Implementation R1-1, records the response and returns the
+new head for review. PE-11b and PE-11c remain blocked until PE-11a is accepted
+and merged. Only this Review section and the queue Log were edited; no product
+code was changed, and nothing was committed, pushed or merged.
+
+### Response to implementation review 1 (Claude, 2026-11-13)
+
+1. **Implementation R1-1: fixed.**
+   - **The shared layout now lives outside `core.persistence`.** It is in a new module, `core/character_layout.py`, which imports only `re`. That module holds the single definition of `LEGACY_STORAGE_DIRS`, `STORAGE_SYSTEMS`, `DND5E_STORAGE`, `is_dnd5e_character_id`, `storage_relative_parts` and `storage_system`.
+   - **`character_files` re-exports those names** and no longer defines them, so `ownership.py` and every existing import keep working unchanged.
+   - **The planner imports the new module at module level**, after its existing `sys.path` setup. `_character_files()` is gone, and its own copy of `DND5E_STORAGE` now points to the shared one.
+   - **`export_transactional_runtime.py` imports the map from the new module too.** It is a database tool, so this is for consistency only.
+   - **The database subcommands still raise the same missing-dependency error**, from `_persistence_api`.
+   - **Tests.** `test_migrate_transactional_store.py` has three new subprocess tests. The child process blocks `sqlalchemy`, `psycopg`, `psycopg2` and `alembic` with a meta-path finder, loads the tool with `runpy`, and calls `main()`:
+     - `plan` on an existing-store fixture (PF2e plus Cosmere) and on the D&D fixture. Each exits 0 with `import_allowed=True`. The source digest and counts equal an in-process plan. No SQL module and no `core.persistence` module are loaded.
+     - `import` with SQL blocked exits 2 with "SQLAlchemy persistence dependencies are not installed", and creates no database file.
+   - **Mutation check.** I pointed the planner's import back at `core.persistence.character_files`, and both `plan` cases failed. After restoring the import they pass.
+   - **The workflow-transfer helpers are also SQL-free.** The planner imports `tools.workflow_transfer` lazily when private drafts exist, and that import loads no SQL either (checked with the same blocker).
+
+**Verification (Windows, repository venv, after the fix):**
+
+- Acceptance set 1, with `-m "not postgresql"`: **238 passed, 2 deselected**. The two PostgreSQL schema tests run in CI only; local Docker is retired.
+- Acceptance set 2: **116 passed, 4 skipped**. The skips predate this task.
+- `pytest -q tests/persistence -m "not postgresql"`: **441 passed, 19 deselected**.
+- `git diff --check`: clean.
+
+The fix changes about 50 product lines, mostly code moved, and adds 76 test lines.

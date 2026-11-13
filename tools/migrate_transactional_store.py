@@ -46,6 +46,9 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
+# Dependency-free on purpose: offline planning must not need the SQL packages.
+from core import character_layout  # noqa: E402
+
 
 PLAN_SCHEMA_VERSION = 1
 EXPORT_SCHEMA_VERSION = 1
@@ -69,24 +72,17 @@ MEMBERSHIP_ROLES = ("gm", "player")
 CAMPAIGN_ID_RE = re.compile(r"^[0-9a-f]{32}$")
 POSTGRES_INTEGER_MAX = 2_147_483_647
 CAMPAIGN_SYSTEMS = ("pf2e", "dnd5e", "cosmere")
-DND5E_STORAGE = "dnd5e_characters"
-
-
-def _character_files():
-    """The shared storage layout (imported lazily, like the other core modules)."""
-    from core.persistence import character_files
-
-    return character_files
+DND5E_STORAGE = character_layout.DND5E_STORAGE
 
 
 def _storage_dir(campaign_dir: Path, legacy_storage: str) -> Path:
-    return campaign_dir.joinpath(*_character_files().storage_relative_parts(legacy_storage))
+    return campaign_dir.joinpath(*character_layout.storage_relative_parts(legacy_storage))
 
 
 def _symlinked_storage_component(campaign_dir: Path, legacy_storage: str) -> Path | None:
     """The first symlinked directory on a store's path, if any."""
     current = campaign_dir
-    for part in _character_files().storage_relative_parts(legacy_storage):
+    for part in character_layout.storage_relative_parts(legacy_storage):
         current = current / part
         if current.is_symlink():
             return current
@@ -246,7 +242,7 @@ def _snapshot_files(root: Path) -> list[dict[str, Any]]:
                 campaign_file = campaign_dir / "campaign.json"
                 if campaign_file.is_file() and not campaign_file.is_symlink():
                     candidates.add(campaign_file)
-                for storage_name in _character_files().LEGACY_STORAGE_DIRS:
+                for storage_name in character_layout.LEGACY_STORAGE_DIRS:
                     storage_dir = _storage_dir(campaign_dir, storage_name)
                     if (
                         _symlinked_storage_component(campaign_dir, storage_name) is not None
@@ -1090,7 +1086,7 @@ def inspect_source(source: os.PathLike[str] | str) -> SourceBundle:
                 message="campaign must retain at least one GM membership",
             )
 
-        for storage_name in _character_files().LEGACY_STORAGE_DIRS:
+        for storage_name in character_layout.LEGACY_STORAGE_DIRS:
             is_dnd5e_store = storage_name == DND5E_STORAGE
             storage_dir = _storage_dir(campaign_dir, storage_name)
             symlinked = _symlinked_storage_component(campaign_dir, storage_name)
@@ -1122,7 +1118,7 @@ def inspect_source(source: os.PathLike[str] | str) -> SourceBundle:
                     is_dnd5e_store
                     and item.is_file()
                     and item.suffix == ".json"
-                    and not _character_files().is_dnd5e_character_id(item.name[: -len(".json")])
+                    and not character_layout.is_dnd5e_character_id(item.name[: -len(".json")])
                 ):
                     _warning(
                         warnings,
@@ -1416,7 +1412,7 @@ def inspect_source(source: os.PathLike[str] | str) -> SourceBundle:
             locators = sorted(
                 "/".join((
                     row["campaign_id"],
-                    *_character_files().storage_relative_parts(row["legacy_storage"]),
+                    *character_layout.storage_relative_parts(row["legacy_storage"]),
                     row["legacy_file"],
                 ))
                 for row in rows
@@ -2586,7 +2582,7 @@ def export_store(
             for character in characters:
                 campaign = campaign_by_id[character.campaign_id]
                 root_name = "campaigns_trash" if campaign.trashed_at is not None else "campaigns"
-                storage_parts = _character_files().storage_relative_parts(character.legacy_storage)
+                storage_parts = character_layout.storage_relative_parts(character.legacy_storage)
                 source_character = (
                     bundle.source_root
                     / root_name

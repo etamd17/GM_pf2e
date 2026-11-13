@@ -1168,3 +1168,79 @@ def test_dnd5e_import_verify_and_export_round_trip(tmp_path, monkeypatch):
         assert ownership.characters_for_user(PLAYER_ID) == []
     finally:
         database.dispose()
+
+
+# --- Offline planning needs no SQL packages (PE-11a implementation R1-1) -----------
+
+_WITHOUT_SQL = r'''
+import json, runpy, sys
+
+class _NoSql:
+    def find_spec(self, name, path=None, target=None):
+        if name.split(".")[0] in {"sqlalchemy", "psycopg", "psycopg2", "alembic"}:
+            raise ModuleNotFoundError(f"No module named {name!r} (blocked for test)")
+        return None
+
+sys.meta_path.insert(0, _NoSql())
+tool = runpy.run_path(sys.argv[1], run_name="offline_probe")
+code = tool["main"](sys.argv[2:])
+loaded = sorted(
+    name for name in sys.modules
+    if name.split(".")[0] in {"sqlalchemy", "psycopg", "psycopg2", "alembic"}
+    or name.startswith("core.persistence")
+)
+print("\n" + json.dumps({"exit": code, "loaded": loaded}))
+'''
+
+
+def _run_without_sql(*argv: str):
+    import subprocess
+    import sys
+
+    tool = Path(migration.__file__).resolve()
+    completed = subprocess.run(
+        [sys.executable, "-c", _WITHOUT_SQL, str(tool), *argv],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=120,
+        cwd=tool.parents[1],
+    )
+    assert completed.returncode == 0, completed.stderr
+    *output, status = completed.stdout.rstrip("\n").split("\n")
+    return json.loads(status), "\n".join(output), completed.stderr
+
+
+@pytest.mark.parametrize("fixture", ["existing_stores", "dnd5e"])
+def test_plan_runs_without_sql_packages(tmp_path, fixture):
+    if fixture == "dnd5e":
+        source = _dnd5e_fixture(tmp_path)
+    else:
+        source = _copy_fixture(tmp_path)
+        _write(
+            _cosmere_character_path(source),
+            {**_load(_character_path(source)), "id": "hero2", "system": "cosmere"},
+        )
+    expected = migration.build_plan(source)
+
+    status, stdout, stderr = _run_without_sql("plan", "--source", str(source))
+
+    assert status == {"exit": 0, "loaded": []}, stderr
+    report = json.loads(stdout)
+    assert report["import_allowed"] is True
+    assert report["source_digest"] == expected["source_digest"]
+    assert report["entity_counts"] == expected["entity_counts"]
+
+
+def test_database_subcommands_keep_their_missing_dependency_error(tmp_path):
+    source = _copy_fixture(tmp_path)
+    digest = migration.build_plan(source)["source_digest"]
+    url = f"sqlite+pysqlite:///{(tmp_path / 'never.sqlite3').as_posix()}"
+
+    status, _, stderr = _run_without_sql(
+        "import", "--source", str(source), "--expect-digest", digest, "--database-url", url
+    )
+
+    assert status["exit"] == 2
+    assert "SQLAlchemy persistence dependencies are not installed" in stderr
+    assert not (tmp_path / "never.sqlite3").exists()
