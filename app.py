@@ -6720,14 +6720,15 @@ class Character:
                 continue
             kept.append(feat)
         present = {safe_str(f[0]).lower() for f in kept if isinstance(f, list) and f}
-        self._sheet_added_feats = set()
+        # A list, not a set: the level-up page serializes this object to JSON.
+        self._sheet_added_feats = []
         for feat in edits.get('added') or []:
             if not (isinstance(feat, list) and feat and isinstance(feat[0], str)):
                 continue
             if feat[0].lower() in present:
                 continue
             present.add(feat[0].lower())
-            self._sheet_added_feats.add(feat[0].lower())
+            self._sheet_added_feats.append(feat[0].lower())
             kept.append(list(feat))
         return kept
 

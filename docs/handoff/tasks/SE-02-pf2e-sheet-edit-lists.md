@@ -116,6 +116,7 @@ character.
   - Re-graded and fixed:
     - Renaming a companion onto another's name (duplicates, which `remove_pet` then deleted together).
     - An imported companion type missing from the form's list was erased (fixed in JS, browser-only).
+- **CI fix:** PR #255's `browser` job failed because every level-up page returned 500. The page serializes the character object to JSON, and SE-02 had stored the sheet-added feat names as a `set`. It is now a list, with a regression test (`test_levelup_page_renders_with_sheet_feat_edits`). The local suite missed this because the browser tests cannot run here.
 - **Skipped / not verified:**
   - The unknown-type fix has no automated test (JS only).
   - Not verified on Railway.

@@ -693,3 +693,16 @@ def test_update_pet_rename_onto_another_companion_409():
         assert kraw() == before
         print('ROUTE_OK')
     ''')
+
+
+def test_levelup_page_renders_with_sheet_feat_edits():
+    # The level-up page serializes the character's attributes to JSON, so no
+    # attribute the sheet edit layer adds may be a set (CI browser job, PR 255).
+    _route_kyle('''
+        KYLE_SETUP
+        assert c.get('/player/levelup/Kyle').status_code == 200
+        edits = {'feats': {'added': [{'name': 'Toughness', 'type': 'General Feat', 'level': 3}]}}
+        assert c.post('/api/sheet_edits/Kyle', json=edits, headers=J).status_code == 200
+        assert c.get('/player/levelup/Kyle').status_code == 200
+        print('ROUTE_OK')
+    ''')
