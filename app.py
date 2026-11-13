@@ -22945,15 +22945,16 @@ def _sheet_edit_pathbuilder_meta(pc):
     """The imported values the Details tab shows as placeholders, so a player
     can see what clearing a field brings back."""
     build = getattr(pc, '_build_ref', None) or {}
-    meta = pc.sheet_edits.get('meta') if isinstance(pc.sheet_edits.get('meta'), dict) else {}
+    edits = getattr(pc, 'sheet_edits', None) or {}
+    meta = edits.get('meta') if isinstance(edits.get('meta'), dict) else {}
     added = {str(x).lower() for x in meta.get('senses') or []}
     return {
-        'display_name': pc.name,
+        'display_name': getattr(pc, 'name', ''),
         'deity': safe_str(build.get('deity'), ''),
         'sanctification': safe_str(build.get('sanctification'), ''),
         'background': safe_str(build.get('background'), ''),
         'languages': ', '.join(str(x) for x in (build.get('languages') or [])),
-        'senses': ', '.join(s for s in pc.senses if str(s).lower() not in added),
+        'senses': ', '.join(str(s) for s in (getattr(pc, 'senses', None) or []) if str(s).lower() not in added),
     }
 
 

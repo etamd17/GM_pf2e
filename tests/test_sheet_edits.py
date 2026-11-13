@@ -390,3 +390,10 @@ def test_route_save_broadcasts_pc_state():
         assert sent == [name, name], sent
         print('ROUTE_OK')
     ''')
+
+
+def test_pathbuilder_meta_tolerates_a_bare_actor(app_module):
+    # The sheet route's characterization test renders with a name-only stub.
+    from types import SimpleNamespace
+    meta = app_module._sheet_edit_pathbuilder_meta(SimpleNamespace(name='Viewed Character'))
+    assert meta['display_name'] == 'Viewed Character' and meta['deity'] == '' and meta['senses'] == ''
