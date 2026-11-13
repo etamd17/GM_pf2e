@@ -86,7 +86,7 @@ Allowed files:
 - [ ] **Bad file.** A D&D file with an id/stem mismatch, or with a system other than `dnd5e`, makes the export refuse with no output tree and an error naming the file. A stale `campaign_id` exports and is listed in `dnd5e_drift`.
 - [ ] **Trashed campaign.** A trashed `dnd5e` campaign exports correctly from both source locations: one character under `campaigns_trash/<cid>/` and one under `campaigns/<cid>/`. Both land under `staging/campaigns_trash/<cid>/dnd5e/characters/`, and the planner reports `legacy_root='campaigns_trash'`.
 - [ ] **Excluded id.** A file whose id is in `excluded_character_ids` is not copied, not in `dnd5e_drift`, and not counted in the locator check. References to it follow the next item.
-- [ ] **References to a deleted character.** After forward import, delete a D&D character's file. Run each case separately, once with the character deleted and once with it in `excluded_character_ids`:
+- [ ] **References to a deleted character.** After forward import, run each case separately in two variants: a deletion variant, where the character's file is deleted, and an excluded-id variant, where the file stays present and the character's id is passed in `excluded_character_ids`:
   - (a) A live invitation scoped to the character, with uses left and not revoked.
   - (b) An exhausted scoped invitation, with zero uses.
   - (c) A revoked scoped invitation.
@@ -94,8 +94,7 @@ Allowed files:
 
   Each case exports. In (a)-(c) the invitation is absent from the staged `invites.json`, present unchanged in the history sidecar, and reported as `invite_omitted` with the right state. No staged invitation is campaign-wide where the source was scoped. In (d) the member keeps the same user and role with a null `character_id`, and `membership_selection_cleared` is reported. Re-importing the export gives `import_allowed=True`, and SQL is unchanged in every case.
 - [ ] **Old-store references stay strict.** The same reference to a missing PF2e or Cosmere character still refuses the export.
-- [ ] **Newline stem.** On POSIX, a D&D file named `"a" * 32 + "
-" + ".json"` is not copied as a character. Skip this case on Windows, which cannot create the name.
+- [ ] **Newline stem.** On POSIX, a D&D file named `"a" * 32 + "\n" + ".json"` is not copied as a character. Skip this case on Windows, which cannot create the name.
 - [ ] **Changes during export.** Between `_write_legacy_tree` and the post-staging check, editing, adding or deleting a D&D character file makes the export refuse and leaves no output directory.
 - [ ] **Old stores.** PF2e and Cosmere export behaviour and its strict authority check are unchanged. The existing PF2e and Cosmere cases in `test_export_runtime.py` pass unmodified.
 - [ ] `python -m pytest -q tests/persistence/test_export_runtime.py tests/persistence/test_migrate_transactional_store.py tests/persistence/test_dnd5e_locator.py` passes.

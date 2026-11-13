@@ -42,8 +42,7 @@ Recognize exactly `campaigns/<cid>/dnd5e/characters/<pid>.json` as a D&D charact
 2. **D&D id rule for the locator.**
    - A D&D file has a locator only when its stem is exactly 32 lowercase hex characters. These are the only ids the D&D store creates (`store.py:86`, `uuid4().hex`).
    - The predicate is a new public helper in `character_files.py`, `is_dnd5e_character_id(value)`: `isinstance(value, str) and re.fullmatch(r"[0-9a-f]{32}", value) is not None`. It is not `store.valid_id`, whose `re.match(r'^[0-9a-f]{32}$')` also accepts a trailing newline (Codex R1-2). PE-10's `upsert_identity` and the archive importer's `_ID_PATTERN.fullmatch` both reject that newline. The adapter, the planner, PE-11b's restore and PE-11c's export scan all use this helper. `systems/dnd5e/store.py` stays unchanged and out of scope.
-   - Every place that checks a D&D id in this split adds a test with `"a" * 32 + "
-"`. That spelling is a possible filename on POSIX, and the archive path validator does not reject it.
+   - Every place that checks a D&D id in this split adds a test with `"a" * 32 + "\n"`. That spelling is a possible filename on POSIX, and the archive path validator does not reject it.
    - PE-10's wider repository bound (`repositories.py::_DND5E_CHARACTER_ID`, at most 64 `[A-Za-z0-9_-]`) stays as the outer database rule. It is not loosened or made public.
    - Any other file under `dnd5e/characters/` is reported by the planner, never registered. This is contract section 1: "the dry run reports nonconforming ids".
 3. **D&D campaign_id.**
@@ -154,8 +153,7 @@ The planner system-check change in step 5 fixes it. The SQL `known_system` CHECK
     - an owned character, which gets an owner assignment;
     - a null-owner character, which gets no assignment;
     - a stale-owner character, which gets the blocking `assignment_user_not_member`;
-  - a nonconforming stem, including `"a" * 32 + "
-"` where the filesystem allows it: warning, excluded;
+  - a nonconforming stem, including `"a" * 32 + "\n"` where the filesystem allows it: warning, excluded;
   - an id/stem mismatch: blocking;
   - a stale `campaign_id`: warning, imported under the containing campaign;
   - a D&D file carrying `owner_user_ids`/`editor_user_ids`: warning, owner assignment only;
@@ -294,14 +292,69 @@ Both findings are accepted. Only the briefs changed.
     - SQL is never changed.
   - **Verification.** Step 5 compares the staged tree against an expected SQL projection that applies exactly those adjustments, and nothing else. PF2e and Cosmere references stay strict.
   - **Acceptance.** It now covers:
-    - a live, an exhausted and a revoked scoped invitation, plus a membership-only selection. Each case runs once with the file deleted and once with the id in `excluded_character_ids`.
+    - a live, an exhausted and a revoked scoped invitation, plus a membership-only selection. Each case runs in a deletion variant (file deleted) and an excluded-id variant (file kept, id in `excluded_character_ids`).
     - a strict PF2e/Cosmere refusal case.
   - The PE-11c budget goes from about 200 to about 280 lines.
 - **R1-2 (PE-11a, PE-11b, PE-11c).**
   - The shared rule is a new public helper, `character_files.is_dnd5e_character_id`, which does an exact `re.fullmatch(r"[0-9a-f]{32}", ...)`. The locator, `_validate_locator`, the planner, PE-11b's restore and PE-11c's export scan all use it. None of them use `store.valid_id`, and `systems/dnd5e/store.py` stays out of scope.
-  - The trailing-newline case (`"a" * 32 + "
-"`) is added to:
+  - The trailing-newline case (`"a" * 32 + "\n"`) is added to:
     - locator rejection;
     - planner warning and exclusion (where the filesystem allows the name);
     - restore refusal, for both stem and `id`;
     - the export scan (POSIX only).
+
+### Brief review 2 — accepted (Codex, 2026-11-13)
+
+Reviewed `cf37ad1c1c7e0f3d87b94f064e7d6265d6f35dc2` against the prior reviewed
+`2556540aef610c5aedfc160f4a37afad84097f17`, with base main `93aede06`.
+The local branch and PR #251 matched that head, and the worktree was clean.
+**All three split briefs are accepted. R1-1 and R1-2 are closed; no remaining
+blocking findings.** This accepts the briefs, not an implementation of them.
+
+- **R1-1:** Omitting a scoped invitation from the staged legacy tree is
+  acceptable. Keeping it at zero uses would still fail the planner's dangling
+  target check; nulling its target could broaden access. The new policy does
+  neither, retains the original records and revocation state in history, and
+  leaves SQL unchanged. Membership selection clearing preserves the user and
+  role. The rule covers both missing files and explicitly excluded D&D IDs.
+  The expected projection is narrow enough: only references to those omitted
+  D&D IDs receive the two specified adjustments, while all other authority
+  fields and PF2e/Cosmere handling remain strict. This extends the existing
+  verification, including its normal treatment of retained revoked invitations;
+  it does not replace or relax that behavior. The new acceptance cases cover
+  live, exhausted and revoked invitations, membership-only references, history,
+  unchanged SQL, no invitation broadening, re-import and old-store refusals.
+- **R1-2:** PE-11a defines the exact `isinstance` plus `re.fullmatch` helper,
+  and the locator, ownership locator validation and planner all use it.
+  PE-11b uses it for both the stem and document ID; PE-11c uses it for the
+  export scan. Remaining `store.valid_id` mentions explain the old behavior
+  rather than prescribe it. Equality to an already validated stem supplies
+  the same ID boundary in the adapter/planner document checks. The newline
+  cases cover each consumer, with filesystem-dependent cases limited to
+  platforms that can create the filename. The runtime store remains out of scope.
+
+Two nonblocking text clarifications can accompany the review commit; neither
+requires another design review:
+
+- Write the newline examples as the literal code `"a" * 32 + "\n"`. A few
+  examples in PE-11a and PE-11c currently contain an actual line break between
+  the quotes, which Markdown can render as a space. The helper definition and
+  prose already establish the correct behavior.
+- In PE-11c's excluded-ID reference variants, keep the source file present and
+  exclude its ID. The deletion variants should remove it. This makes the two
+  paths independent despite the acceptance item's opening deletion sentence.
+
+Verification: `git diff --check 93aede06..cf37ad1c` passed. Review 1 and its
+queue Log entry are preserved unchanged from `886948ff`. The prescribed helper
+accepts the exact lowercase 32-hex input and rejects a trailing newline,
+uppercase, short/long inputs and a non-string. No product test suite was run
+for this docs-only change. The requested `gh pr checks 251` could not connect
+to `api.github.com` locally; the GitHub connector independently confirmed
+[CI run 43443506807](https://github.com/etamd17/GM_pf2e/actions/runs/43443506807):
+`changes` passed; product, PostgreSQL and browser jobs were skipped as expected.
+
+Next: Claude commits the review/Log and text clarifications, pushes, and merges
+the docs-only PR after `changes` passes on the resulting head. PE-11a may then
+be implemented; PE-11b and PE-11c still wait for PE-11a's accepted integration.
+This review edited only this section and the queue Log. Nothing was committed,
+pushed or merged.
