@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** blocked (PE-11a)
+- **Status:** ready (PE-11a merged in PR #254; reconcile against main before starting)
 - **Branch:** `claude/pe-11b-dnd5e-archive-restore` from current main after PE-11a is accepted and merged. Record the exact starting SHA.
 - **Depends on:** [PE-11a](PE-11a-dnd5e-locator.md): its storage-to-path map, D&D locator, `_validate_locator` and the decisions it fixes.
 - **Context:**

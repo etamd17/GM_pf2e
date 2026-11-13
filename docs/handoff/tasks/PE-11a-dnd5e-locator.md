@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** review (implemented on `claude/pe-11a-dnd5e-locator` from main `affb6231`, 2026-11-13)
+- **Status:** done (accepted by Codex 2026-11-13; merged in PR #254 after green CI)
 - **Branch:** `claude/pe-11a-dnd5e-locator` from current main. Record the exact starting SHA.
 - **Depends on:** [PE-10](PE-10-dnd5e-identity.md) (merged), using the accepted PE-01 contract.
 - **Followed by:**
@@ -531,3 +531,51 @@ code was changed, and nothing was committed, pushed or merged.
 - `git diff --check`: clean.
 
 The fix changes about 50 product lines, mostly code moved, and adds 76 test lines.
+
+### Implementation review 2 — accepted (Codex, 2026-11-13)
+
+Reviewed `8fc2604aa1c54d0478d86e2d41fbb88f28e4fa22` against the previous
+reviewed head `8306c8ea` on [PR #254](https://github.com/etamd17/GM_pf2e/pull/254).
+**Implementation R1-1 is closed. PE-11a is accepted with no remaining findings.**
+
+- `core/character_layout.py` is the single definition of the layout, system map,
+  D&D storage constant and exact ID predicate. Its only import is `re`, and
+  `core/__init__.py` is empty. The planner imports it after its path setup;
+  planning no longer imports the SQL persistence package. Existing consumers
+  retain the same public names through `character_files` re-exports.
+- The map contents, fullmatch rule, write refusals and mapped paths retain the
+  behavior reviewed in round 1. The runtime exporter uses the same shared map.
+  `_persistence_api` and its missing-dependency error are unchanged.
+- The new tests exercise the actual command entry point in fresh subprocesses,
+  blocking SQLAlchemy, psycopg, psycopg2 and Alembic. Both the PF2e/Cosmere and
+  D&D fixtures produce successful plans with matching digests and entity counts,
+  and no SQL or `core.persistence` modules loaded. The database import command
+  still reports exit 2 with its intended dependency error and creates no DB file.
+  These checks cover the dependency boundary missed by the original suite.
+
+Reviewer verification:
+
+- Re-ran `output/pe11a-review/planner_dependency_probe.py` from the parent
+  workspace with the new full SHA: **success, `import_allowed=True`** while
+  SQLAlchemy is unavailable. The base `affb6231` also succeeds; round 1 already
+  demonstrated the failing `8306c8ea` case.
+- Re-ran acceptance set 1 with `-m "not postgresql"`: **238 passed,
+  2 deselected** in 159.91 seconds. A separate focused run of the three new
+  subprocess cases also passed. No broader local rerun was needed for this
+  bounded helper move; Claude's full-suite results remain in the response above.
+- `git diff --check affb6231..8fc2604a` and
+  `git diff --check 8306c8ea..8fc2604a` passed.
+- The PR and local branch agree on the reviewed full SHA. CI run
+  [43457564823](https://github.com/etamd17/GM_pf2e/actions/runs/43457564823)
+  completed with **all four jobs green: `changes`, `test`, `postgresql` and
+  `browser`**. The main job reports **950 passed** in the PF2e contract step
+  and **4,738 passed, 136 skipped, 199 deselected, 1 xfailed** in its main suite.
+  PostgreSQL reports **19 passed, 441 deselected**, with successful schema
+  upgrade and no new Alembic operations. Verified through the GitHub connector;
+  the PR remains unmerged on the reviewed head.
+
+Next: Claude commits this review and the queue Log, pushes, and merges PR #254
+only after all four CI jobs are green on the resulting head. PE-11b and PE-11c
+remain blocked until that merge; then reconcile their briefs against main
+before starting them. This review changed only this section and the queue Log,
+with no commit, push, merge or product change.
