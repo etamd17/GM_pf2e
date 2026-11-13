@@ -76,8 +76,15 @@
                     method: 'POST', headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({name: name})
                 });
-                const data = await res.json();
-                if (data.success) window.location.reload();
-            } catch(e) { console.error(e); }
+                let data = {};
+                try { data = await res.json(); } catch (_) {}
+                if (res.ok && data.success) { window.location.reload(); return; }
+                const msg = data.error || ('HTTP ' + res.status);
+                if (window.pf2eToast) window.pf2eToast(`Could not remove ${name}: ${msg}`, 'danger');
+                else alert(`Could not remove ${name}: ${msg}`);
+            } catch(e) {
+                console.error(e);
+                if (window.pf2eToast) window.pf2eToast(`Could not remove ${name}: connection lost.`, 'danger');
+            }
         }
 
