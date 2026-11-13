@@ -1,6 +1,42 @@
 {# SE-01: sheet edit modal behaviour. Event listeners only (no inline handlers),
    so a character name with an apostrophe can never break a button. #}
 <script>
+// SE-02: Import JSON. Same merge as a Pathbuilder update, so say what is kept.
+(function () {
+    'use strict';
+    var btn = document.querySelector('[data-se-import-json]');
+    var file = document.querySelector('[data-se-import-file]');
+    var dialog = document.getElementById('se-modal');
+    if (!btn || !file || !dialog) return;
+    var pcName = dialog.getAttribute('data-pc-name') || '';
+    btn.addEventListener('click', function () {
+        if (typeof closePlayerOverflow === 'function') closePlayerOverflow();
+        file.value = '';
+        file.click();
+    });
+    file.addEventListener('change', async function () {
+        var f = file.files && file.files[0];
+        if (!f) return;
+        var doc;
+        try { doc = JSON.parse(await f.text()); } catch (_) { alert('That file is not valid JSON.'); return; }
+        var b = (doc && doc.build) || doc || {};
+        if (!confirm('Import ' + (b.name || 'this file') + ' (level ' + (b.level || '?') + ')?\n\n'
+                + 'Rules data (abilities, feats, spells, gear, deity) comes from the file. '
+                + 'HP, conditions, notes, companions added here and sheet edits stay as they are now.')) return;
+        try {
+            var res = await fetch('/api/import_character_json/' + encodeURIComponent(pcName), {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+                body: JSON.stringify(doc)
+            });
+            var data = null;
+            try { data = await res.json(); } catch (_) { data = null; }
+            if (res.ok && data && data.success) { window.location.reload(); return; }
+            alert((data && (data.error || data.message)) || ('Import failed (HTTP ' + res.status + '). Nothing was changed.'));
+        } catch (_) { alert('Could not reach the server. Nothing was imported.'); }
+    });
+})();
+
 // SE-02: "Edit" on a companion card reuses the Add Companion form, pre-filled.
 (function () {
     'use strict';

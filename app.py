@@ -26600,6 +26600,41 @@ def export_character(pc_name):
             return jsonify(json.load(f))
     return jsonify({"error": "Character not found"}), 404
 
+@app.route('/api/import_character_json/<pc_name>', methods=['POST'])
+@require_pc_self_or_gm
+def import_character_json(pc_name):
+    """SE-02: bring an exported (possibly hand-edited) file back into the same
+    character. It merges exactly like an "Update <name>" Pathbuilder import
+    (user decision D1, 2026-11-13): rules data comes from the file; HP,
+    conditions, notes, in-app companions and sheet edits stay as they are."""
+    doc = request.get_json(silent=True)
+    build = doc.get('build', doc) if isinstance(doc, dict) else None
+    if not isinstance(build, dict) or not isinstance(build.get('name'), str) or not build['name'].strip():
+        return jsonify({"success": False, "error": "This file is not a character export (it has no character name)."}), 400
+    if doc.get('system') not in (None, 'pf2e'):
+        return jsonify({"success": False, "error": "This file is not a Pathfinder 2e character."}), 400
+    if build['name'] != pc_name:
+        return jsonify({"success": False, "error": (
+            f"This file is for {build['name']}, not {pc_name}. Import it on that character's sheet.")}), 409
+    pc_json, file_path, err = require_pc_json(pc_name)
+    if err:
+        return err
+    if doc.get('id') and pc_json.get('id') and doc['id'] != pc_json['id']:
+        return jsonify({"success": False, "error": (
+            "This file was exported from a different character with the same name.")}), 409
+    existing = _character_files.authoritative_document(file_path, pc_json)
+    merged = _merge_pf2e_import(existing, {'build': build})
+    for key, value in existing.items():          # keep the envelope (id, owner, system...)
+        if key != 'build':
+            merged.setdefault(key, value)
+    cid = _active_campaign_id()
+    if cid:
+        merged = _storage.ensure_character_envelope(merged, cid, existing=existing)
+    save_and_reload_character(pc_name, merged, file_path)
+    _broadcast_pc_state(pc_name)
+    return jsonify({"success": True})
+
+
 @app.route('/api/import_pathbuilder', methods=['POST'])
 def import_pathbuilder():
     """Import a Pathbuilder 2e JSON export. If character already exists, smart-merges

@@ -570,3 +570,65 @@ def test_pet_card_has_edit_button_without_inline_js(app_module, monkeypatch):
     i = html.index('data-se-pet-edit')
     tag = html[html.rindex('<button', 0, i):html.index('>', i)]
     assert 'onclick' not in tag and 'data-se-pet=' in tag and 'Jonathon - Mature Wyvern' in tag
+
+
+# ---------------------------------------------------------------- SE-02 Task 4: Import JSON (merge)
+
+def test_import_json_round_trip_merges_rules_keeps_runtime():
+    _route('''
+        iurl = '/api/import_character_json/' + quote(name)
+        assert c.post(url, json={'meta': {'display_name': 'Goel'}}, headers=J).status_code == 200
+        A.PARTY_LIBRARY[name].current_hp = 40; A._persist_pc_combat_state(name)
+        doc = c.get('/api/export_character/' + quote(name), headers=J).get_json()
+        doc['build']['deity'] = 'Ragathiel'                       # a Pathbuilder rules key: applied
+        doc['build']['sheet_edits'] = {'adjust': {'ac': 5}}       # runtime: the sheet's own copy is kept
+        doc['build']['current_hp'] = 1
+        r = c.post(iurl, json=doc, headers=J)
+        assert r.status_code == 200, r.get_data(as_text=True)
+        b = build()
+        assert b['deity'] == 'Ragathiel' and b['sheet_edits'] == {'meta': {'display_name': 'Goel'}}
+        assert b['current_hp'] == 40
+        assert A.PARTY_LIBRARY[name].deity == 'Ragathiel'
+        print('ROUTE_OK')
+    ''')
+
+
+def test_import_json_wrong_name_or_id_409_file_unchanged():
+    _route('''
+        iurl = '/api/import_character_json/' + quote(name)
+        doc = json.loads(raw()); doc['id'] = 'goel-id'
+        A._atomic_write_json(path, doc)
+        before = raw()
+        other = json.loads(raw()); other['build']['name'] = 'Somebody Else'
+        r = c.post(iurl, json=other, headers=J)
+        assert r.status_code == 409 and 'Somebody Else' in r.get_json()['error'], r.status_code
+        wrong = json.loads(raw()); wrong['id'] = 'another-id'
+        assert c.post(iurl, json=wrong, headers=J).status_code == 409
+        assert raw() == before
+        same = json.loads(raw()); same['build']['deity'] = 'Ragathiel'
+        assert c.post(iurl, json=same, headers=J).status_code == 200
+        assert json.loads(raw())['id'] == 'goel-id'
+        print('ROUTE_OK')
+    ''')
+
+
+def test_import_json_bad_body_400_file_unchanged():
+    _route('''
+        iurl = '/api/import_character_json/' + quote(name)
+        before = raw()
+        for body in ([], {'build': {}}, {'build': {'name': ''}}, {'build': 'x'},
+                     {'system': 'cosmere', 'build': {'name': name}}):
+            r = c.post(iurl, json=body, headers=J)
+            assert r.status_code == 400, (body, r.status_code)
+            assert r.get_json()['error']
+        assert raw() == before
+        print('ROUTE_OK')
+    ''')
+
+
+def test_import_json_menu_item(app_module, monkeypatch, goel_doc):
+    html = _render(app_module, monkeypatch, goel_doc)
+    i = html.index('data-se-import-json')
+    tag = html[html.rindex('<button', 0, i):html.index('>', i)]
+    assert 'onclick' not in tag and 'data-se-additive' in tag
+    assert 'data-se-import-file' in html

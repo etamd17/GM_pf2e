@@ -219,6 +219,7 @@ _CHARACTER_OWNER_RESOLUTION_GROUPS: tuple[CharacterResolutionGroup, ...] = (
             "add_pc_effect",
             "add_pet",
             "add_weapon",
+            "import_character_json",
             "adjust_consumable",
             "adjust_focus",
             "adjust_hero",
