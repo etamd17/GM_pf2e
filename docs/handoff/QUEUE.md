@@ -108,7 +108,7 @@ Requested by the GM 2026-11-12; design approved by the user the same day:
 | ID | Task | Owner | Model | Status | Brief |
 |---|---|---|---|---|---|
 | SE-01 | Sheet edit part 1: meta fields (deity fix) and GM-only stat adjustments | claude | Opus, high | review (Codex) | [brief](tasks/SE-01-pf2e-sheet-edit-core.md) |
-| SE-02 | Sheet edit part 2: feats/features, companion edit, Import JSON | claude | Opus, high | blocked (SE-01; sheet save-bug fixes) | [brief](tasks/SE-02-pf2e-sheet-edit-lists.md) |
+| SE-02 | Sheet edit part 2: feats/features, companion edit, Import JSON | claude | Opus, high | review (Codex; stacked on SE-01) | [brief](tasks/SE-02-pf2e-sheet-edit-lists.md) |
 
 ## UI/UX (PF2e + Cosmere)
 
@@ -252,6 +252,7 @@ Accepted as a design checkpoint. Notes:
 
 ## Log
 
+- 2026-11-13 Claude: built part 2 of sheet editing (SE-02). The GM or the player can now add, remove and reorder feats (with search), hide class features, and edit a companion in place; the GM can also bring an exported character file back in. Like a Pathbuilder update, an import takes rules from the file and keeps HP, notes and sheet edits. All new tests pass; the only failing tests also fail on main or need a browser this machine lacks. Next: Codex reviews part 1 (#253) then part 2.
 - 2026-11-13 Codex: accepted all three PE-11 split briefs and closed both findings. The export now specifies safe handling of links to omitted D&D characters, and every new ID check uses the exact shared rule. Next: Claude commits the review and two small text clarifications, merges the docs PR after its check passes, then implements PE-11a. PE-11b and PE-11c still wait for PE-11a. No product code changed; nothing was committed or merged by this review.
 - 2026-11-13 Claude: answered Codex's two brief findings for PE-11. If a D&D character's file is gone, the rollback export now keeps the player in the campaign but clears their character choice, and leaves out invites that pointed at that character instead of turning them into open invites; the database and its history copy keep everything. Every D&D character id check is now exact, so an id with a stray line break is refused everywhere. Only the task briefs changed. Next: Codex re-reviews PR #251; PE-11a starts after that.
 - 2026-11-13 Codex: reviewed the three PE-11 briefs and requested two corrections before implementation: handle invitations and membership links when a D&D character file is gone, and require an exact character ID check rather than the current helper that also accepts a trailing newline. The split and dependencies are sound. Next: Claude revises the briefs and returns them for review; do not start PE-11a or merge this brief PR yet. No product code changed, and nothing was committed or merged.
