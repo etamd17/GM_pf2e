@@ -1,0 +1,134 @@
+{# SE-01: edit a character on its sheet without a Pathbuilder re-import.
+   Details: GM and owner. Numbers: GM only, rendered server-side only for the GM,
+   and the route refuses a non-GM adjustment regardless (403).
+   Everything here is marked data-se-additive: the UI-10 behaviour inventory in
+   tests/test_pf2e_player_sheet_ui.py pins the pre-existing sheet and skips this
+   subtree. Names reach JS through data attributes, never inline handlers. #}
+{% set _se_meta = (pc.sheet_edits.get('meta') if pc.sheet_edits.get('meta') is mapping else {}) %}
+<dialog id="se-modal" class="se-modal no-print" data-se-additive
+        data-pc-name="{{ pc.name }}" aria-labelledby="se-title">
+    <form method="dialog" class="se-shell" data-se-form>
+        <header class="se-head">
+            <h2 id="se-title" class="font-header">Edit {{ pc.display_name }}</h2>
+            <button type="button" class="se-x" data-se-close aria-label="Close">&times;</button>
+        </header>
+
+        <nav class="se-tabs" role="tablist">
+            <button type="button" role="tab" class="se-tab is-active" data-se-tab="details" aria-selected="true">Details</button>
+            <button type="button" role="tab" class="se-tab" data-se-tab="feats" aria-selected="false">Feats</button>
+            {% if is_gm %}<button type="button" role="tab" class="se-tab" data-se-tab="numbers" aria-selected="false">Numbers</button>{% endif %}
+        </nav>
+
+        <section class="se-panel" data-se-panel="details">
+            <p class="se-hint">Blank fields use the imported Pathbuilder value, shown in grey.</p>
+            <label class="se-field"><span>Display name</span>
+                <input name="display_name" value="{{ _se_meta.get('display_name', '') }}" placeholder="{{ se_pb.display_name }}" maxlength="80" data-se-meta></label>
+            <div class="se-row">
+                <label class="se-field"><span>Deity</span>
+                    <input name="deity" value="{{ _se_meta.get('deity', '') }}" placeholder="{{ se_pb.deity }}" maxlength="80" data-se-meta></label>
+                <label class="se-field"><span>Sanctification</span>
+                    <input name="sanctification" value="{{ _se_meta.get('sanctification', '') }}" placeholder="{{ se_pb.sanctification }}" maxlength="80" data-se-meta></label>
+            </div>
+            <div class="se-row">
+                <label class="se-field"><span>Background</span>
+                    <input name="background" value="{{ _se_meta.get('background', '') }}" placeholder="{{ se_pb.background }}" maxlength="80" data-se-meta></label>
+                <label class="se-field"><span>Size</span>
+                    <select name="size" data-se-meta>
+                        <option value="">Imported ({{ (pc._build_ref or {}).get('sizeName') or 'default' }})</option>
+                        {% for size in ('Tiny', 'Small', 'Medium', 'Large', 'Huge', 'Gargantuan') %}
+                        <option value="{{ size }}" {% if _se_meta.get('size') == size %}selected{% endif %}>{{ size }}</option>
+                        {% endfor %}
+                    </select></label>
+            </div>
+            <label class="se-field"><span>Languages <em>comma separated; replaces the imported list</em></span>
+                <input name="languages" value="{{ (_se_meta.get('languages') or [])|join(', ') }}" placeholder="{{ se_pb.languages }}" data-se-meta data-se-list></label>
+            <label class="se-field"><span>Extra senses <em>comma separated; added to the imported ones</em></span>
+                <input name="senses" value="{{ (_se_meta.get('senses') or [])|join(', ') }}" placeholder="{{ se_pb.senses or 'none imported' }}" data-se-meta data-se-list></label>
+        </section>
+
+        <section id="se-feats" class="se-panel" data-se-panel="feats" hidden>
+            <p class="se-hint">Changes here survive a Pathbuilder update. An added feat's rules apply (Toughness raises HP).</p>
+            <h3 class="se-group">Feats</h3>
+            <ol class="se-list" data-se-feat-list>
+                {% for f in se_feats.feats %}
+                <li class="se-item" data-se-feat="{{ f.name }}" data-se-source="{{ f.source }}" data-se-type="{{ f.type }}" data-se-level="{{ f.level }}">
+                    <span class="se-item-name">{{ f.name }}</span>
+                    <span class="se-item-meta">{{ f.type }}{% if f.type %} · {% endif %}{{ f.level }}{% if f.source == 'sheet' %} · added on sheet{% endif %}</span>
+                    <button type="button" class="se-mini" data-se-move="-1" aria-label="Move up">Up</button>
+                    <button type="button" class="se-mini" data-se-move="1" aria-label="Move down">Down</button>
+                    <button type="button" class="se-mini" data-se-drop>Remove</button>
+                </li>
+                {% endfor %}
+            </ol>
+            <div class="se-add" data-se-feat-adder>
+                <input type="text" list="se-feat-options" placeholder="Add a feat (type to search)" maxlength="80" data-se-new-feat aria-label="Feat name">
+                <datalist id="se-feat-options"></datalist>
+                <select data-se-new-type aria-label="Feat type">
+                    {# Pathbuilder's category names: Kineticist impulse detection reads 'Class Feat'. #}
+                    {% for t in ('General Feat', 'Skill Feat', 'Class Feat', 'Ancestry Feat', 'Archetype Feat', 'Bonus Feat') %}<option>{{ t }}</option>{% endfor %}
+                </select>
+                <input type="number" min="1" max="20" value="{{ pc.level }}" data-se-new-level aria-label="Feat level">
+                <button type="button" class="tb" data-se-add-feat>Add</button>
+            </div>
+            <h3 class="se-group">Removed from the import</h3>
+            <ul class="se-list" data-se-removed-list>
+                {% for name in se_feats.removed %}
+                <li class="se-item" data-se-removed-feat="{{ name }}"><span class="se-item-name">{{ name }}</span>
+                    <button type="button" class="se-mini" data-se-restore>Restore</button></li>
+                {% endfor %}
+            </ul>
+            <p class="se-hint" data-se-removed-empty {% if se_feats.removed %}hidden{% endif %}>None.</p>
+            <h3 class="se-group">Class and ancestry features</h3>
+            <ul class="se-list">
+                {% for f in se_feats.features %}
+                <li class="se-item{% if f.hidden %} is-hidden-feature{% endif %}" data-se-feature="{{ f.name }}" data-se-hidden="{{ 1 if f.hidden else 0 }}">
+                    <span class="se-item-name">{{ f.name }}</span><span class="se-item-meta">{{ f.kind }}</span>
+                    <button type="button" class="se-mini" data-se-toggle-feature>{{ 'Show' if f.hidden else 'Hide' }}</button>
+                </li>
+                {% endfor %}
+            </ul>
+            <h3 class="se-group">Custom features</h3>
+            <ul class="se-list" data-se-custom-list>
+                {% for c in se_feats.custom %}
+                <li class="se-item" data-se-custom-name="{{ c.name }}" data-se-custom-desc="{{ c.desc }}">
+                    <span class="se-item-name">{{ c.name }}</span>
+                    <button type="button" class="se-mini" data-se-drop>Remove</button></li>
+                {% endfor %}
+            </ul>
+            <div class="se-add">
+                <input type="text" maxlength="80" placeholder="Feature name" data-se-new-custom-name aria-label="Custom feature name">
+                <input type="text" maxlength="2000" placeholder="What it does" data-se-new-custom-desc aria-label="Custom feature description">
+                <button type="button" class="tb" data-se-add-custom>Add</button>
+            </div>
+        </section>
+
+        {% if is_gm %}
+        <section id="se-numbers" class="se-panel" data-se-panel="numbers" hidden>
+            <p class="se-hint">The engine still computes every number. An adjustment is added on top, carries through level-ups, and shows players a GM marker.</p>
+            {% set _se_groups = ['Ability modifiers', 'Defenses and DCs', 'Skills'] %}
+            {% for group in _se_groups %}
+            <h3 class="se-group">{{ group }}</h3>
+            <div class="se-grid">
+                {% for row in se_numbers if row.group == group %}
+                <div class="se-num">
+                    <span class="se-num-lbl">{{ row.label }}</span>
+                    <span class="se-num-calc" title="Computed by the engine">{{ row.computed }}</span>
+                    <input type="number" min="-20" max="20" step="1" class="se-num-adj"
+                           aria-label="{{ row.label }} adjustment"
+                           data-se-adjust="{{ row.key }}" data-se-computed="{{ row.computed }}" value="{{ row.adj }}">
+                    <span class="se-num-out" data-se-out>{{ row.computed + row.adj }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% endfor %}
+            <button type="button" class="se-link" data-se-reset-numbers>Clear all adjustments</button>
+        </section>
+        {% endif %}
+
+        <p class="se-error" data-se-error role="alert" hidden></p>
+        <footer class="se-foot">
+            <button type="button" class="tb" data-se-close>Cancel</button>
+            <button type="button" class="tb primary" data-se-save>Save</button>
+        </footer>
+    </form>
+</dialog>

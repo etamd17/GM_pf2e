@@ -19,6 +19,7 @@
                                 <h4 class="font-header text-lg" style="color:var(--accent-gold-light);">{{ pet.name }}</h4>
                                 <span class="text-xs" style="color:var(--text-muted);">{{ pet.type }} · {{ pet.size }}{% if pet.senses %} · {{ pet.senses }}{% endif %}</span>
                             </div>
+                            <button type="button" data-se-additive data-se-pet-edit data-se-pet='{{ pet|tojson }}' class="text-xs opacity-60 hover:opacity-100 transition-opacity no-print" style="color:var(--text-muted); margin-right:10px;">Edit</button>
                             <button onclick="removePet('{{ pet.name|replace("'", "\\'") }}')" class="text-xs opacity-50 hover:opacity-100 transition-opacity" style="color:#FDA4AF;">Remove</button>
                         </div>
                         

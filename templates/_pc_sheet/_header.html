@@ -1,3 +1,7 @@
+{# SE-01: small marker on a stat the GM has adjusted (sheet_edits.adjust). #}
+{% macro gm_mark(key) -%}
+{%- if key in pc.adjusted_keys %}<span class="gm-adj-dot" data-se-additive title="GM adjustment {{ '%+d'|format(pc._adj(key)) }}">GM</span>{% endif -%}
+{%- endmacro %}
     <!-- ═══════════════════════════════════════════════════════════════ -->
     <!-- CHARACTER HEADER — DDB-style sticky header                     -->
     <!-- ═══════════════════════════════════════════════════════════════ -->
@@ -41,7 +45,7 @@
                     </div>
                     <div class="flex-1 min-w-0">
                         <h1 class="char-name font-header flex items-center gap-2 flex-wrap">
-                            {{ pc.name }}
+                            {{ pc.display_name }}
                             <span class="char-level-badge">Level {{ pc.level }}</span>
                             {# HP chip removed — the under-name vital strip
                                (Hit Points block) is right below this and
@@ -124,6 +128,9 @@
                                here so the action stays reachable. Distinct from Long Rest
                                (Con-mod partial heal) in the main toolbar. #}
                             <button onclick="dailyPrep(); closePlayerOverflow();" role="menuitem" title="Reset spell slots, restore focus, clear combat conditions, and heal to full HP">Daily Prep</button>
+                            <button type="button" data-sheet-edit-open data-se-additive role="menuitem" title="Fix details such as the deity without re-importing">Edit character</button>
+                            <button type="button" data-se-import-json data-se-additive role="menuitem" title="Bring an exported JSON file back into this character">Import JSON...</button>
+                            <input type="file" accept=".json,application/json" data-se-import-file data-se-additive hidden>
                             <div class="sep"></div>
                             {% if pc.level > 1 %}<button onclick="revertLevel(); closePlayerOverflow();" id="btn-revert" role="menuitem">Undo last level-up</button>{% endif %}
                             <button onclick="window.print(); closePlayerOverflow();" role="menuitem">Print sheet</button>
@@ -163,7 +170,7 @@
             <div class="rubric" data-tint="gilt" style="margin-bottom:6px;">Defenses & Rolls</div>
             <!-- AC (just the number + shield badge — actions live in HP/Shield zone) -->
             <div id="ac-block" class="ss-block {% if pc.shield_raised %}shield-raised{% endif %}" title="Armor Class{% if pc.shield_raised %} (Shield Raised +{{ pc.shield_ac_bonus }}){% endif %}">
-                <div class="ss-lbl">Armor Class</div>
+                <div class="ss-lbl">Armor Class{{ gm_mark('ac') }}</div>
                 <div class="ss-val {% if pc.shield_raised %}shield-raised{% endif %}" data-ac-wrap>
                     <span id="ac-current" data-ac-live>{{ pc.ac }}</span>
                     <span id="ac-shield-bonus" class="ac-shield-bonus" {% if not pc.shield_raised or pc.shield_ac_bonus <= 0 %}style="display:none;"{% endif %}>+{{ pc.shield_ac_bonus }} SHIELD</span>
@@ -172,7 +179,7 @@
 
             <!-- Speed -->
             <div class="ss-block" title="Speed">
-                <div class="ss-lbl">Speed</div>
+                <div class="ss-lbl">Speed{{ gm_mark('speed') }}</div>
                 <div class="ss-val">{{ pc.active_speed }}<span style="font-size:11px; color:var(--t3);">ft</span></div>
                 {% if pc.active_speed != pc.base_speed %}<div class="ss-sub" style="color:var(--red-b);">Base {{ pc.base_speed }}</div>{% endif %}
             </div>
@@ -182,7 +189,7 @@
             {% set perc_rank_label = {0:'U', 2:'T', 4:'E', 6:'M', 8:'L'}.get(perc_rank, 'T') %}
             {% set perc_rank_color = {0:'#6b6b8a', 2:'#9b9baf', 4:'#c8c8d4', 6:'#c8a84e', 8:'#c8a84e'}.get(perc_rank, '#4a9696') %}
             <div class="ss-block rollable-element" onclick="rollSkill('Perception', {{ pc.perception }})" data-roll-name="Perception" data-roll-mod="{{ pc.perception }}" role="button" tabindex="0" aria-label="Roll Perception +{{ pc.perception }}" title="{{ pc.perception_breakdown }}">
-                <div class="ss-lbl">Perception</div>
+                <div class="ss-lbl">Perception{{ gm_mark('perception') }}</div>
                 <div class="ss-val">+{{ pc.perception }}</div>
                 <div class="ss-sub"><span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:{{ perc_rank_color }}; margin-right:3px; vertical-align:middle;"></span><span style="font-size:9px; color:{{ perc_rank_color }};">{{ perc_rank_label }}</span></div>
                 {# Initiative — same number by default in PF2e (Perception-based).
@@ -196,7 +203,7 @@
 
             <!-- Class DC -->
             <div class="ss-block" title="Class DC (used for class features, e.g. an Alchemist's Quick Alchemy)">
-                <div class="ss-lbl">Class DC</div>
+                <div class="ss-lbl">Class DC{{ gm_mark('class_dc') }}</div>
                 <div class="ss-val">{{ pc.class_dc }}</div>
             </div>
 
@@ -204,7 +211,7 @@
                buried as a sub-label under Class DC where casters kept missing it. #}
             {% if pc.spell_dc > 0 %}
             <div class="ss-block" title="Spell DC (target DC for enemies saving against your spells)">
-                <div class="ss-lbl">Spell DC</div>
+                <div class="ss-lbl">Spell DC{{ gm_mark('spell_dc') }}</div>
                 <div class="ss-val">{{ pc.spell_dc }}</div>
                 {% if pc.spell_attack is defined and pc.spell_attack != 0 %}
                 <div class="ss-sub">Spell Atk +{{ pc.spell_attack }}</div>
@@ -217,7 +224,7 @@
             {% set fort_rl = {0:'U', 2:'T', 4:'E', 6:'M', 8:'L'}.get(fort_rank, 'T') %}
             {% set fort_rc = {0:'#6b6b8a', 2:'#9b9baf', 4:'#c8c8d4', 6:'#c8a84e', 8:'#c8a84e'}.get(fort_rank, '#4a9696') %}
             <div class="ss-block rollable-element" onclick="rollSkill('Fortitude Save', {{ pc.fort }})" data-roll-name="Fortitude Save" data-roll-mod="{{ pc.fort }}" role="button" tabindex="0" aria-label="Roll Fortitude save +{{ pc.fort }}" title="{{ pc.fort_breakdown }}">
-                <div class="ss-lbl">Fort</div>
+                <div class="ss-lbl">Fort{{ gm_mark('fortitude') }}</div>
                 <div class="ss-val">+{{ pc.fort }}</div>
                 <div class="ss-sub"><span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:{{ fort_rc }}; margin-right:3px; vertical-align:middle;"></span><span style="font-size:9px; color:{{ fort_rc }};">{{ fort_rl }}</span></div>
             </div>
@@ -225,7 +232,7 @@
             {% set ref_rl = {0:'U', 2:'T', 4:'E', 6:'M', 8:'L'}.get(ref_rank, 'T') %}
             {% set ref_rc = {0:'#6b6b8a', 2:'#9b9baf', 4:'#c8c8d4', 6:'#c8a84e', 8:'#c8a84e'}.get(ref_rank, '#4a9696') %}
             <div class="ss-block rollable-element" onclick="rollSkill('Reflex Save', {{ pc.ref }})" data-roll-name="Reflex Save" data-roll-mod="{{ pc.ref }}" role="button" tabindex="0" aria-label="Roll Reflex save +{{ pc.ref }}" title="{{ pc.ref_breakdown }}">
-                <div class="ss-lbl">Reflex</div>
+                <div class="ss-lbl">Reflex{{ gm_mark('reflex') }}</div>
                 <div class="ss-val">+{{ pc.ref }}</div>
                 <div class="ss-sub"><span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:{{ ref_rc }}; margin-right:3px; vertical-align:middle;"></span><span style="font-size:9px; color:{{ ref_rc }};">{{ ref_rl }}</span></div>
             </div>
@@ -233,7 +240,7 @@
             {% set will_rl = {0:'U', 2:'T', 4:'E', 6:'M', 8:'L'}.get(will_rank, 'T') %}
             {% set will_rc = {0:'#6b6b8a', 2:'#9b9baf', 4:'#c8c8d4', 6:'#c8a84e', 8:'#c8a84e'}.get(will_rank, '#4a9696') %}
             <div class="ss-block rollable-element" onclick="rollSkill('Will Save', {{ pc.will }})" data-roll-name="Will Save" data-roll-mod="{{ pc.will }}" role="button" tabindex="0" aria-label="Roll Will save +{{ pc.will }}" title="{{ pc.will_breakdown }}">
-                <div class="ss-lbl">Will</div>
+                <div class="ss-lbl">Will{{ gm_mark('will') }}</div>
                 <div class="ss-val">+{{ pc.will }}</div>
                 <div class="ss-sub"><span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:{{ will_rc }}; margin-right:3px; vertical-align:middle;"></span><span style="font-size:9px; color:{{ will_rc }};">{{ will_rl }}</span></div>
             </div>
@@ -242,7 +249,7 @@
             <!-- HP block -->
             <div class="ss-block hp-area" title="{{ pc.hp_breakdown }}">
                 <div class="rubric" data-tint="verdigris" style="margin-bottom:6px;">Resources</div>
-                <div class="ss-lbl">Hit Points</div>
+                <div class="ss-lbl">Hit Points{{ gm_mark('hp_max') }}</div>
                 {# Dying widget (Wave 2 #4; guided recovery = dying automation).
                    Driven by the dying/wounded values that already exist in the
                    condition tracker. The Recovery Check button rolls SERVER-side

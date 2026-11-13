@@ -37,14 +37,19 @@
                 abilities: document.getElementById('pet-abilities').value.trim(),
             };
             
+            // SE-02: the same form edits an existing companion when the card's
+            // Edit button set window._petEditOriginal.
+            const editing = window._petEditOriginal;
             try {
-                const res = await fetch(`/api/add_pet/${pcNameEncoded}`, {
+                const res = await fetch(editing ? `/api/update_pet/${pcNameEncoded}` : `/api/add_pet/${pcNameEncoded}`, {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(pet)
+                    body: JSON.stringify(editing ? {original: editing, pet: pet} : pet)
                 });
-                const data = await res.json();
-                if (data.success) window.location.reload();
-            } catch(e) { console.error(e); }
+                let data = null;
+                try { data = await res.json(); } catch (_) { data = null; }
+                if (res.ok && data && data.success) { window.location.reload(); return; }
+                alert((data && data.error) || `Saving the companion failed (HTTP ${res.status}). Nothing was changed.`);
+            } catch(e) { console.error(e); alert('Could not reach the server. Nothing was saved.'); }
         }
         
         function fillPetPreset(name, type, size, hp, ac, fort, ref, will, speed, attacks, str, dex, con, int_, wis, cha, abilities) {

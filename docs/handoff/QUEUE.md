@@ -18,7 +18,7 @@ ready/priority entries below where they conflict; historical logs remain intact.
 New wiki and VTT/map work is parked, shipped tools retain maintenance, and
 Cosmere/Mistborn expansion follows the PF2e plus D&D 2014/2024 release.
 
-PE-00, PE-01, PE-03, PE-04, PE-10, PE-11a and PE-12 are done. PE-11a is done. PE-02, PE-07, PE-11b and PE-11c are ready; PE-11b and PE-11c get checked against main first.
+PE-00, PE-01, PE-03, PE-04, PE-10, PE-11a and PE-12 are done. PE-02, PE-07, PE-11b and PE-11c are ready; PE-11b and PE-11c get checked against main first.
 Dependencies follow section 11 of the accepted
 [state and command contract](../player-release/state-command-contract.md). Blocked briefs
 cannot be claimed until accepted dependencies are integrated. Needs-brief rows
@@ -99,6 +99,16 @@ before they become ready. Owners review each other's output under PROTOCOL.md.
 
 Done: 5E-00 data stays out of git; 5E-01 merged as PR #175; 5E-02 data installed on Railway,
 checked live, and survived a redeploy (2026-10-13).
+
+## PF2e sheet maintenance
+
+Requested by the GM 2026-11-12; design approved by the user the same day:
+[spec](../superpowers/specs/2026-11-12-pf2e-sheet-edit-design.md).
+
+| ID | Task | Owner | Model | Status | Brief |
+|---|---|---|---|---|---|
+| SE-01 | Sheet edit part 1: meta fields (deity fix) and GM-only stat adjustments | claude | Opus, high | review (Codex) | [brief](tasks/SE-01-pf2e-sheet-edit-core.md) |
+| SE-02 | Sheet edit part 2: feats/features, companion edit, Import JSON | claude | Opus, high | review (Codex; stacked on SE-01) | [brief](tasks/SE-02-pf2e-sheet-edit-lists.md) |
 
 ## UI/UX (PF2e + Cosmere)
 
@@ -247,9 +257,12 @@ Accepted as a design checkpoint. Notes:
 - 2026-11-13 Claude: fixed Codex's PE-11a finding. Checking an offline backup works again without the database libraries installed, for old and D&D campaigns alike, and a new test proves it. Full persistence suite passes. Next: Codex re-reviews PR #254; PE-11b and PE-11c stay blocked.
 - 2026-11-13 Codex: reviewed PE-11a / PR #254 and requested one fix: checking an offline backup must still work without the database libraries installed. The D&D file rules, ownership safeguards and unchanged-file round trips passed review. Next: Claude fixes Implementation R1-1 and returns the new head for review; PE-11b and PE-11c stay blocked. Review notes are uncommitted; nothing was merged.
 - 2026-11-13 Claude: built PE-11a. The site now recognises D&D character files at their exact location and refuses to write them through the shared code until PE-15. The migration tool can plan and import D&D campaigns, warning about odd files and blocking unsafe ones. D&D characters stay off the SQL /me list for now. Full persistence suite passes; the two PostgreSQL tests run only in CI. Next: Codex reviews the PR.
+- 2026-11-13 Claude: built part 2 of sheet editing (SE-02). The GM or the player can now add, remove and reorder feats (with search), hide class features, and edit a companion in place; the GM can also bring an exported character file back in. Like a Pathbuilder update, an import takes rules from the file and keeps HP, notes and sheet edits. All new tests pass; the only failing tests also fail on main or need a browser this machine lacks. Next: Codex reviews part 1 (#253) then part 2.
 - 2026-11-13 Codex: accepted all three PE-11 split briefs and closed both findings. The export now specifies safe handling of links to omitted D&D characters, and every new ID check uses the exact shared rule. Next: Claude commits the review and two small text clarifications, merges the docs PR after its check passes, then implements PE-11a. PE-11b and PE-11c still wait for PE-11a. No product code changed; nothing was committed or merged by this review.
 - 2026-11-13 Claude: answered Codex's two brief findings for PE-11. If a D&D character's file is gone, the rollback export now keeps the player in the campaign but clears their character choice, and leaves out invites that pointed at that character instead of turning them into open invites; the database and its history copy keep everything. Every D&D character id check is now exact, so an id with a stray line break is refused everywhere. Only the task briefs changed. Next: Codex re-reviews PR #251; PE-11a starts after that.
 - 2026-11-13 Codex: reviewed the three PE-11 briefs and requested two corrections before implementation: handle invitations and membership links when a D&D character file is gone, and require an exact character ID check rather than the current helper that also accepts a trailing newline. The split and dependencies are sound. Next: Claude revises the briefs and returns them for review; do not start PE-11a or merge this brief PR yet. No product code changed, and nothing was committed or merged.
+- 2026-11-12 Claude: built part 1 of sheet editing (SE-01). The GM or the player can now fix a character's details, such as Go'el's deity, on the sheet, and the fix survives re-importing from Pathbuilder. Only the GM can nudge numbers up or down, and players see a small GM marker on those. All new tests pass; the only failing tests also fail on main or need a browser/database this machine lacks. Next: Codex reviews the PR; part 2 waits for the save-bug fixes (#252) to merge.
+- 2026-11-12 Claude: designed a way for the GM and the owning player to fix a character on its own sheet without re-importing from Pathbuilder. The user approved the design: anyone can fix details such as the deity, only the GM can nudge numbers up or down, and the engine still computes every stat. Next: Claude builds part 1 (SE-01) and Codex reviews it; part 2 waits for part 1 and the save-bug fixes.
 - 2026-11-11 Claude: merged PE-10 (PR #250) once all four checks passed, then checked the PE-11 brief against the merged code. It was too big for one change (about 700 lines against a 500-line limit) and missed some of how D&D characters are stored, so it is now three tasks. PE-11a teaches the shared code and the import planner to recognize D&D character files; it is ready. PE-11b (restoring a D&D campaign backup) and PE-11c (the rollback export) wait for it. Until the D&D pages move over (PE-15), the D&D character file stays the source of truth for who owns a character. Found while checking: since PE-10, a database-mode rehearsal that creates a D&D campaign can no longer produce a rollback export. Production runs file mode, so nothing live is affected; PE-11a fixes it. Next: Codex checks the decisions in the three briefs, then Claude builds PE-11a.
 - 2026-11-11 Codex: accepted PE-10 with no findings. D&D identities follow the agreed file names; existing characters and access records survive the schema change and failed-change retries. All four CI jobs are green. One local test timed out and passed alone; PostgreSQL passed in CI. Next: Claude commits the review, confirms green checks and merges, then prepares PE-11 against the merged code. Nothing was committed or merged by this review.
 - 2026-11-11 Claude: merged PE-12 (PR #249) once all four checks passed, then built PE-10. The database can now hold D&D campaigns and characters alongside PF2e and Cosmere ones. Each D&D character's record must point at its own file, and a character can no longer be moved to another campaign or rules system by an ordinary save. Taking the change back out is refused while any D&D record exists. Nothing on the site uses this yet. Persistence tests: 347 passed; PostgreSQL runs in CI. Next: Codex reviews the draft PR; PE-11 waits for its acceptance.
