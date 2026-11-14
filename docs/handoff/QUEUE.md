@@ -18,7 +18,7 @@ ready/priority entries below where they conflict; historical logs remain intact.
 New wiki and VTT/map work is parked, shipped tools retain maintenance, and
 Cosmere/Mistborn expansion follows the PF2e plus D&D 2014/2024 release.
 
-PE-00, PE-01, PE-03, PE-04, PE-10, PE-11a and PE-12 are done. PE-02 and PE-07 are ready. PE-11b is accepted pending merge on its separate branch; PE-11c needs one review fix. PE-13/14 still precede PE-15.
+PE-00, PE-01, PE-03, PE-04, PE-10, PE-11a and PE-12 are done. PE-02 and PE-07 are ready. PE-11b is accepted pending merge on its separate branch; PE-11c has its review fix and is back in review. PE-13/14 still precede PE-15.
 Dependencies follow section 11 of the accepted
 [state and command contract](../player-release/state-command-contract.md). Blocked briefs
 cannot be claimed until accepted dependencies are integrated. Needs-brief rows
@@ -38,7 +38,7 @@ before they become ready. Owners review each other's output under PROTOCOL.md.
 | PE-10 | Extend D&D campaign/character identity constraints | claude | high; select current model | done (merged in PR #250) | [brief](tasks/PE-10-dnd5e-identity.md) |
 | PE-11a | D&D locator, read-side identity and forward-import planning | claude | high; select current model | done (merged in PR #254) | [brief](tasks/PE-11a-dnd5e-locator.md) |
 | PE-11b | SQL-mode campaign-archive restore for D&D characters | claude | high; select current model | done (accepted; PR #258 not merged) | [brief](tasks/PE-11b-dnd5e-archive-restore.md) |
-| PE-11c | Runtime reverse export of D&D characters | claude | high; select current model | in-progress (changes requested: R1-1) | [brief](tasks/PE-11c-dnd5e-runtime-export.md) |
+| PE-11c | Runtime reverse export of D&D characters | claude | high; select current model | review (R1-1 fixed; re-review on PR #257) | [brief](tasks/PE-11c-dnd5e-runtime-export.md) |
 | PE-12 | Character/encounter state, session, clock and authority tables; `migration_runs` and `characters.archived_at` changes | claude | high; select current model | done (merged in PR #249) | [brief](tasks/PE-12-game-state-schema.md) |
 | PE-13 | Campaign-scoped state repositories, revision check order, conflict body and lock order | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-12 |
 | PE-14 | Campaign streams, command receipts, gameplay events (the outbox), grants, operation-status read, session start/end and stream-locked authorization writes | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-01, PE-12, PE-13 |
@@ -252,6 +252,7 @@ Accepted as a design checkpoint. Notes:
 
 ## Log
 
+- 2026-11-14 Claude: fixed PE-11c's R1-1 and returned it for re-review on PR #257; recorded PE-11b's acceptance on PR #258. The rollback copy now refuses any character file reached through a Windows folder link, including one pointing at another campaign, and checks it again before publishing. A follow-up check found and fixed a second gap: PF2e/Cosmere files were read twice, so a swap between reads could slip through. For players: nothing visible yet; this keeps the database-to-files safety net from mixing up characters between campaigns. Tests: 201 acceptance and 823 persistence/character tests pass; the new folder-link tests run on Windows only. Next: Codex re-reviews PE-11c; then merge PE-11c, then PE-11b, each once its checks are green. PE-13/14 still come before PE-15.
 - 2026-11-14 Codex: reviewed PE-11c / PR #257 and requested one fix (R1-1): a Windows folder link can make the rollback copy put a D&D character in the wrong campaign. All four automated checks passed, but a separate Windows check reproduced this gap. For players: the backup safety net is built but needs this correction; no new player screen or change to live storage yet. Next: Claude fixes the folder check, adds a test and returns it for review. Notes are uncommitted in GM_pf2e_pe11c_review; nothing was merged.
 - 2026-11-14 Claude: built PE-11c. For players: nothing visible yet. Behind the scenes, if the site ever has to roll back from the new database to files, D&D characters now come back as they really are, including owner changes, new characters and deletions made since the move, instead of the rollback refusing or reverting them. Anything that differs is listed for the GM's operator to read first. Not usable by players directly; it is a safety net for the database switch. Full persistence suite passes; PostgreSQL runs in CI. Next: Codex reviews the PR; Claude starts PE-11b (restoring D&D campaign backups).
 - 2026-11-14 Codex: accepted the reconciled PE-11b and PE-11c briefs with no findings; the docs check passed. For players: the D&D import groundwork is finished, and these instructions are now ready for building safe backup restoration and a safe return from the database to files. Neither feature is built by this docs change, and no player screen changes yet. Next: Claude commits the reviews, merges PR #256 after its check passes, then builds PE-11c followed by PE-11b; player-screen mockups can proceed alongside. Review edits are uncommitted; nothing was merged by Codex.

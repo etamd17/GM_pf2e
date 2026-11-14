@@ -757,9 +757,151 @@ def test_dnd5e_store_junction_outside_data_dir_refuses_export(dnd5e_store, tmp_p
     if made.returncode != 0:
         pytest.skip("junctions are unavailable here")
     output = tmp_path / "rollback"
-    with pytest.raises(exporter.RuntimeExportError, match="escapes DATA_DIR"):
+    with pytest.raises(exporter.RuntimeExportError, match="not at its own location"):
         exporter.export_runtime(source, url, output, quiesced=True)
     assert not output.exists()
+
+
+OTHER_CAMPAIGN = "b" * 32
+
+
+def _junction(link, target):
+    import subprocess
+
+    made = subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(target)],
+                          capture_output=True)
+    if made.returncode != 0:
+        pytest.skip("junctions are unavailable here")
+
+
+def _assert_nothing_published(source, before, database, records, tmp_path, output):
+    assert not output.exists()
+    assert list(tmp_path.glob(".rollback.staging-*")) == []
+    assert source_bytes(source) == before
+    assert _sql_snapshot(database) == records
+
+
+@pytest.mark.skipif(os.name != "nt", reason="directory junctions are Windows-only")
+def test_dnd5e_store_junction_to_another_campaign_inside_data_dir_refuses(tmp_path):
+    # Codex PE-11c R1-1: containment in DATA_DIR admitted another campaign's store.
+    source, url, database = _dnd5e_store(tmp_path, with_character=False)
+    try:
+        foreign = source / "campaigns" / OTHER_CAMPAIGN / "dnd5e" / "characters"
+        write(foreign / f"{DND5E_NEW}.json", {**_dnd5e_doc(DND5E_NEW), "campaign_id": OTHER_CAMPAIGN})
+        store = _dnd5e_path(source, DND5E_NEW).parent
+        store.parent.mkdir(parents=True, exist_ok=True)
+        _junction(store, foreign)
+        assert not store.is_symlink() and store.resolve().is_relative_to(source.resolve())
+        before, records = source_bytes(source), _sql_snapshot(database)
+        output = tmp_path / "rollback"
+        with pytest.raises(exporter.RuntimeExportError, match="not at its own location"):
+            exporter.export_runtime(source, url, output, quiesced=True)
+        _assert_nothing_published(source, before, database, records, tmp_path, output)
+    finally:
+        database.dispose()
+
+
+@pytest.mark.skipif(os.name != "nt", reason="directory junctions are Windows-only")
+def test_pf2e_store_junction_inside_data_dir_refuses(imported_store, tmp_path):
+    source, url, database = imported_store
+    store = source / "campaigns" / CAMPAIGN / "party_data"
+    moved = source / "campaigns" / OTHER_CAMPAIGN / "party_data"
+    moved.parent.mkdir(parents=True)
+    shutil.move(store, moved)
+    _junction(store, moved)
+    before, records = source_bytes(source), _sql_snapshot(database)
+    output = tmp_path / "rollback"
+    with pytest.raises(exporter.RuntimeExportError, match="not at its own location"):
+        exporter.export_runtime(source, url, output, quiesced=True)
+    _assert_nothing_published(source, before, database, records, tmp_path, output)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="directory junctions are Windows-only")
+def test_identical_store_swapped_for_a_junction_during_export_refuses(
+        dnd5e_store, tmp_path, monkeypatch):
+    # Same bytes and the same listing; the canonical rule in the fingerprint
+    # recheck and the D&D re-listing both refuse it.
+    source, url, database = dnd5e_store
+    store = _dnd5e_path(source, DND5E_PC).parent
+    records = _sql_snapshot(database)
+    original = migration.build_plan
+
+    def swap_after_staging(staging):
+        copy = source / "campaigns" / OTHER_CAMPAIGN / "dnd5e" / "characters"
+        copy.parent.mkdir(parents=True)
+        shutil.move(store, copy)
+        _junction(store, copy)
+        return original(staging)
+
+    monkeypatch.setattr(migration, "build_plan", swap_after_staging)
+    output = tmp_path / "rollback"
+    with pytest.raises(exporter.RuntimeExportError, match="changed during export"):
+        exporter.export_runtime(source, url, output, quiesced=True)
+    assert not output.exists()
+    assert list(tmp_path.glob(".rollback.staging-*")) == []
+    assert _sql_snapshot(database) == records
+
+
+@pytest.mark.skipif(os.name != "nt", reason="directory junctions are Windows-only")
+def test_pf2e_store_swapped_for_a_junction_during_export_refuses(
+        imported_store, tmp_path, monkeypatch):
+    # PF2e/Cosmere files have no re-listing; the fingerprint recheck is the only guard.
+    source, url, database = imported_store
+    store = source / "campaigns" / CAMPAIGN / "party_data"
+    records = _sql_snapshot(database)
+    original = migration.build_plan
+
+    def swap_after_staging(staging):
+        copy = source / "campaigns" / OTHER_CAMPAIGN / "party_data"
+        copy.parent.mkdir(parents=True)
+        shutil.move(store, copy)
+        _junction(store, copy)
+        return original(staging)
+
+    monkeypatch.setattr(migration, "build_plan", swap_after_staging)
+    output = tmp_path / "rollback"
+    with pytest.raises(exporter.RuntimeExportError, match="changed during export"):
+        exporter.export_runtime(source, url, output, quiesced=True)
+    assert not output.exists()
+    assert list(tmp_path.glob(".rollback.staging-*")) == []
+    assert _sql_snapshot(database) == records
+
+
+def test_pf2e_payload_is_read_once_so_its_fingerprint_covers_the_exported_bytes(
+        imported_store, tmp_path, monkeypatch):
+    # A second read by path could see a different file than the fingerprinted one.
+    source, url, _database = imported_store
+    hero = source / "campaigns" / CAMPAIGN / "party_data" / "hero.json"
+    opened, inside_read_bytes = [], []
+    real_read_bytes, real_open = Path.read_bytes, Path.open
+
+    def read_bytes(self):
+        if self == hero:
+            opened.append("read_bytes")
+        inside_read_bytes.append(True)
+        try:
+            return real_read_bytes(self)
+        finally:
+            inside_read_bytes.pop()
+
+    def path_open(self, *args, **kwargs):
+        if self == hero and not inside_read_bytes:  # read_bytes opens through Path.open
+            opened.append("open")
+        return real_open(self, *args, **kwargs)
+
+    reads_before_recheck = []
+    original = migration.build_plan
+
+    def count_at_plan(staging):
+        reads_before_recheck.append(list(opened))
+        return original(staging)
+
+    monkeypatch.setattr(Path, "read_bytes", read_bytes)
+    monkeypatch.setattr(Path, "open", path_open)
+    monkeypatch.setattr(migration, "build_plan", count_at_plan)
+    report = exporter.export_runtime(source, url, tmp_path / "rollback", quiesced=True)
+    assert report["verified"] is True
+    assert reads_before_recheck == [["read_bytes"]]
 
 
 @pytest.mark.parametrize("change", ["edit", "add", "delete"])

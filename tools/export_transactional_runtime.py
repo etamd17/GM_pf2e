@@ -78,6 +78,17 @@ def _metadata(raw: Any) -> dict[str, Any]:
     return migration._json_safe(raw) if isinstance(raw, Mapping) else {}
 
 
+def _require_canonical(path: Path, message: str) -> None:
+    """Refuse a path that resolves anywhere but itself (PE-11a's locator rule).
+
+    ``root`` is already resolved, so a canonical source path equals its own
+    resolution. ``is_symlink()`` misses Windows junctions, and containment in
+    DATA_DIR still admits a junction to another campaign's store.
+    """
+    if path.resolve() != path:
+        raise RuntimeExportError(message)
+
+
 def _source_character(root: Path, character: Mapping[str, Any]) -> Path:
     campaign_id = character["campaign_id"]
     filename = character["legacy_file"]
@@ -103,8 +114,7 @@ def _source_character(root: Path, character: Mapping[str, Any]) -> Path:
             if current.is_symlink():
                 raise RuntimeExportError("Character source uses a symbolic link")
         if candidate.is_file():
-            if not candidate.resolve().is_relative_to(root):
-                raise RuntimeExportError("Character source escapes DATA_DIR")
+            _require_canonical(candidate, "Character source is not at its own location")
             return candidate
     raise RuntimeExportError("Registered character payload is missing")
 
@@ -166,9 +176,7 @@ def _dnd5e_located(root, campaign) -> dict[str, Path]:
                 continue
             if item.is_symlink():
                 raise RuntimeExportError("Character source uses a symbolic link")
-            # is_symlink() misses a Windows junction; containment does not.
-            if not item.resolve().is_relative_to(root):
-                raise RuntimeExportError("Character source escapes DATA_DIR")
+            _require_canonical(item, "Character source is not at its own location")
             if item.is_file():
                 located.setdefault(stem, item)
     return located
@@ -302,8 +310,16 @@ def _write_legacy_tree(staging, root, records, envelopes, invitation_state,
         if row["legacy_storage"] == DND5E_STORAGE:
             continue  # copied by _stage_dnd5e; SQL is not D&D's authority until PE-15
         source_path = _source_character(root, row)
-        fingerprint = hashlib.sha256(source_path.read_bytes()).hexdigest()
-        document = migration._load_json_strict(source_path)
+        # One read: the fingerprint rechecked later must cover the exported bytes.
+        raw = source_path.read_bytes()
+        fingerprint = hashlib.sha256(raw).hexdigest()
+        document = json.loads(
+            raw.decode("utf-8"),
+            object_pairs_hook=migration._pairs_without_duplicates,
+            parse_constant=migration._reject_json_constant,
+            parse_float=migration._parse_json_float,
+        )
+        migration._validate_postgres_json(document)
         if not isinstance(document, dict) or document.get("id") != row["id"]:
             raise RuntimeExportError("Character payload identity differs from its SQL locator")
         payload_fingerprints[source_path] = fingerprint
@@ -498,7 +514,7 @@ def export_runtime(
                     raise RuntimeExportError("Character source path changed during export")
             if (
                 not path.is_file()
-                or not path.resolve().is_relative_to(root)
+                or path.resolve() != path
                 or hashlib.sha256(path.read_bytes()).hexdigest() != expected
             ):
                 raise RuntimeExportError("Character payload changed during export; keep writers quiesced")

@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** in-progress (Codex implementation review 1: changes requested, R1-1; 2026-11-14)
+- **Status:** review (R1-1 fixed; returned for implementation review 2, 2026-11-14)
 - **Branch:** `claude/pe-11c-dnd5e-runtime-export`, from current main after PE-11a is accepted and merged. It does not need PE-11b. Record the exact starting SHA.
 - **Depends on:** [PE-11a](PE-11a-dnd5e-locator.md), for the storage-to-path map, the D&D planner enumeration and codes, and decision 1 (D&D files stay authoritative until PE-15).
 - **Context:**
@@ -153,6 +153,20 @@ Allowed files:
   - A pathologically nested D&D JSON file still ends the CLI with a traceback rather than `error:`, as the planner already does. It still refuses with nothing published.
   - Non-character D&D files (encounter, plans, images) still come back only with the operator's DATA_DIR merge, as the brief specifies.
 - **Follow-ups (not done here):** PE-41 passes archived ids through `excluded_character_ids`. PE-15 moves D&D ownership authority to SQL and removes the assignment exclusion.
+
+### Fix round 1 (R1-1), Claude, 2026-11-14
+
+- **Changed:**
+  - `tools/export_transactional_runtime.py`: new `_require_canonical(path, message)` applies PE-11a's locator rule: `path.resolve()` must equal the path itself (`root` is already resolved by `_safe_source_root`). It replaces the `is_relative_to(root)` containment check in `_source_character` (PF2e/Cosmere), in `_dnd5e_located` (D&D discovery, so it also runs in the post-staging re-listing) and in the post-staging fingerprint recheck. A junction or link anywhere in the path, including one to another campaign inside DATA_DIR, now refuses with "Character source is not at its own location", or "changed during export" when it appears after staging. Normal active/trash selection and stale `campaign_id` inference are unchanged for canonical paths.
+  - Same file, found by my follow-up adversarial review of the fix: `_write_legacy_tree` read each PF2e/Cosmere file twice (`read_bytes` for the fingerprint, then `_load_json_strict` by path). A directory swapped in for the second read and back out before the recheck exported another location's payload with `verified=True` (reproduced natively). It now reads once and hashes and parses the same bytes with the same strict hooks and `_validate_postgres_json`, as `_stage_dnd5e` already did.
+  - `tests/persistence/test_export_runtime.py`: the outside-DATA_DIR junction test now expects the new message. New Windows-native tests: a D&D store junctioned to another campaign's store inside DATA_DIR, a PF2e `party_data` junction inside DATA_DIR, and an identical D&D store and an identical PF2e store each swapped for a junction during export. Each asserts refusal, no output, no leftover staging tree and (for the pre-staging cases) unchanged source bytes and SQL. A cross-platform test asserts the PF2e payload is read exactly once before the recheck.
+- **Tests run (Windows, repository venv):**
+  - Acceptance set (`test_export_runtime.py`, `test_migrate_transactional_store.py`, `test_dnd5e_locator.py`, `-m "not postgresql"`): **201 passed, 1 skipped** (the POSIX newline case).
+  - `tests/persistence tests/character_workflows -m "not postgresql"`: **823 passed, 15 skipped, 19 deselected**. `git diff --check` passes.
+  - Mutation checks on the junction and read-once tests: 6 of 6 caught (containment-only helper, recheck reverted to containment, recheck removed, D&D discovery check removed, PF2e check removed, double read restored).
+  - The four junction tests ran natively here (none skipped). They skip on Linux CI, which cannot create junctions; the read-once test runs everywhere.
+- **Review of the fix:** three lenses (bypass, false refusals, tests), each finding re-verified. Two confirmed and fixed: the double read above, and the missing PF2e recheck test (the D&D swap test's comment also overstated which guard fires; corrected). The false-refusal lens found nothing.
+- **Known wrong / limitations:** a legitimate DATA_DIR whose on-disk directory names differ in case from `campaigns`, `party_data`, `cosmere_pcs` or `dnd5e/characters` would now be refused on Windows, as PE-11a's locator already does; the app only writes the canonical names.
 
 ## Review
 <!-- Codex appends numbered findings or acceptance. -->
