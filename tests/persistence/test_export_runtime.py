@@ -368,3 +368,101 @@ def test_campaign_runs_do_not_change_the_runtime_export(imported_store, tmp_path
     runs = history["migration_runs"]
     assert len(runs) == 3
     assert sorted(run["kind"] for run in runs) == ["export", "import", "import"]
+
+
+# --- PE-11a: D&D campaigns (interim until PE-11c) ----------------------------------
+
+DND5E_PC = "d" * 32
+
+
+def _dnd5e_store(tmp_path, *, with_character):
+    source = tmp_path / "source"
+    shutil.copytree(FIXTURE_ROOT, source)
+    campaign_path = source / "campaigns" / CAMPAIGN / "campaign.json"
+    campaign = load(campaign_path)
+    campaign["system"] = "dnd5e"
+    for member in campaign["members"]:
+        member.pop("character_id", None)
+    write(campaign_path, campaign)
+    shutil.rmtree(source / "campaigns" / CAMPAIGN / "party_data")
+    invites = load(source / "invites.json")
+    for invite in invites["invites"].values():
+        invite["character_id"] = None
+    write(source / "invites.json", invites)
+    write(source / "campaigns" / CAMPAIGN / "dnd5e" / "encounter.json", {"combatants": []})
+    if with_character:
+        write(
+            source / "campaigns" / CAMPAIGN / "dnd5e" / "characters" / f"{DND5E_PC}.json",
+            {"id": DND5E_PC, "campaign_id": CAMPAIGN, "system": "dnd5e",
+             "name": "Bram", "owner_user_id": PLAYER},
+        )
+    url = "sqlite+pysqlite:///" + str(tmp_path / "runtime.sqlite")
+    database = Database(url)
+    database.create_schema()
+    plan = migration.build_plan(source)
+    assert plan["import_allowed"], plan["blocking_conflicts"]
+    migration.import_store(source, url, expected_digest=plan["source_digest"])
+    return source, url, database
+
+
+def test_export_of_a_dnd5e_campaign_without_characters_succeeds(tmp_path):
+    source, url, database = _dnd5e_store(tmp_path, with_character=False)
+    try:
+        before = source_bytes(source)
+        output = tmp_path / "rollback"
+        exporter.export_runtime(source, url, output, quiesced=True)
+        assert load(output / "campaigns" / CAMPAIGN / "campaign.json")["system"] == "dnd5e"
+        assert migration.build_plan(output)["import_allowed"]
+        assert source_bytes(source) == before
+    finally:
+        database.dispose()
+
+
+def test_unresolved_batch_in_the_dnd5e_store_blocks_export(tmp_path):
+    source, url, database = _dnd5e_store(tmp_path, with_character=False)
+    try:
+        journal = (source / "campaigns" / CAMPAIGN / "dnd5e" / "characters"
+                   / ".prepared.character-batch-journal")
+        write(journal, {"status": "prepared"})
+        output = tmp_path / "rollback"
+        with pytest.raises(exporter.RuntimeExportError, match="batch"):
+            exporter.export_runtime(source, url, output, quiesced=True)
+        assert not output.exists()
+    finally:
+        database.dispose()
+
+
+@pytest.mark.parametrize("parts", [("dnd5e",), ("dnd5e", "characters")])
+def test_symlinked_dnd5e_store_blocks_export(tmp_path, parts):
+    source, url, database = _dnd5e_store(tmp_path, with_character=False)
+    try:
+        store = source.joinpath("campaigns", CAMPAIGN, *parts)
+        store.mkdir(parents=True, exist_ok=True)
+        elsewhere = tmp_path / "elsewhere"
+        shutil.move(store, elsewhere)
+        try:
+            store.symlink_to(elsewhere, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            pytest.skip("symlinks are unavailable here")
+        output = tmp_path / "rollback"
+        with pytest.raises(exporter.RuntimeExportError, match="symbolic link"):
+            exporter.export_runtime(source, url, output, quiesced=True)
+        assert not output.exists()
+    finally:
+        database.dispose()
+
+
+def test_export_refuses_registered_dnd5e_characters_until_pe_11c(tmp_path):
+    # Interim state: PE-11c replaces this with the D&D file-authoritative copy.
+    source, url, database = _dnd5e_store(tmp_path, with_character=True)
+    try:
+        with database.session() as session:
+            assert session.get(Character, DND5E_PC).legacy_storage == "dnd5e_characters"
+        before = source_bytes(source)
+        output = tmp_path / "rollback"
+        with pytest.raises(exporter.RuntimeExportError, match="Unsafe character locator"):
+            exporter.export_runtime(source, url, output, quiesced=True)
+        assert not output.exists()
+        assert source_bytes(source) == before
+    finally:
+        database.dispose()

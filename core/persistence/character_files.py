@@ -10,9 +10,34 @@ from pathlib import Path
 import re
 
 from . import runtime
+# The layout and id rule live in a dependency-free module so offline planning
+# can use them without SQL packages; they are re-exported here.
+from core.character_layout import (  # noqa: F401
+    DND5E_STORAGE,
+    LEGACY_STORAGE_DIRS,
+    STORAGE_SYSTEMS,
+    is_dnd5e_character_id,
+    storage_relative_parts,
+    storage_system,
+)
+
+_STORAGE_BY_DIRS = {parts: storage for storage, parts in LEGACY_STORAGE_DIRS.items()}
+
+DND5E_WRITE_REFUSED = 'D&D characters are not written through the shared adapter until PE-15'
+
+
+def refuse_dnd5e_write(legacy_storage):
+    if legacy_storage == DND5E_STORAGE:
+        raise ValueError(DND5E_WRITE_REFUSED)
 
 
 def locator(path):
+    """Return ``(cid, logical_storage, filename)`` for a character payload.
+
+    Only an exact direct file in a known character directory qualifies:
+    ``<cid>/party_data/<file>.json``, ``<cid>/cosmere_pcs/<file>.json`` or
+    ``<cid>/dnd5e/characters/<32-hex>.json``. Anything else returns None.
+    """
     from core import storage
 
     root = Path(os.path.abspath(storage.CAMPAIGNS_DIR))
@@ -21,13 +46,18 @@ def locator(path):
         parts = target.relative_to(root).parts
     except ValueError:
         return None
-    if (len(parts) != 3 or not re.fullmatch(r'[0-9a-f]{32}', parts[0])
-            or parts[1] not in {'party_data', 'cosmere_pcs'}
-            or not parts[2].endswith('.json')):
+    if len(parts) < 3 or not re.fullmatch(r'[0-9a-f]{32}', parts[0]):
+        return None
+    legacy_storage = _STORAGE_BY_DIRS.get(tuple(parts[1:-1]))
+    filename = parts[-1]
+    if legacy_storage is None or not filename.endswith('.json'):
+        return None
+    if (legacy_storage == 'dnd5e_characters'
+            and not is_dnd5e_character_id(filename[:-len('.json')])):
         return None
     if target.resolve() != target:
         raise runtime.StoreUnavailable('Character storage path is unsafe')
-    return parts
+    return parts[0], legacy_storage, filename
 
 
 def authoritative_document(path, document):
@@ -79,6 +109,7 @@ def write_document(path, document, writer, *, owner_user_id=None):
     """
     location = locator(path)
     if location is not None:
+        refuse_dnd5e_write(location[1])
         from core.character_workflows.recovery import pending_for, repair_required
         if pending_for(location[0], store=location[1], filename=location[2]):
             raise repair_required()
@@ -96,7 +127,7 @@ def write_document(path, document, writer, *, owner_user_id=None):
     cid, store, filename = location
     document = dict(document)
     document.setdefault('campaign_id', cid)
-    document.setdefault('system', 'pf2e' if store == 'party_data' else 'cosmere')
+    document.setdefault('system', storage_system(store))
     if store == 'party_data':
         document.setdefault('schema_version', storage.SCHEMA_VERSION)
     ownership.register_character(

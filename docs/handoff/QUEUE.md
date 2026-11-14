@@ -18,7 +18,7 @@ ready/priority entries below where they conflict; historical logs remain intact.
 New wiki and VTT/map work is parked, shipped tools retain maintenance, and
 Cosmere/Mistborn expansion follows the PF2e plus D&D 2014/2024 release.
 
-PE-00, PE-01, PE-03, PE-04, PE-10 and PE-12 are done. PE-02, PE-07 and PE-11a are ready.
+PE-00, PE-01, PE-03, PE-04, PE-10, PE-11a and PE-12 are done. PE-02, PE-07, PE-11b and PE-11c are ready; PE-11b and PE-11c get checked against main first.
 Dependencies follow section 11 of the accepted
 [state and command contract](../player-release/state-command-contract.md). Blocked briefs
 cannot be claimed until accepted dependencies are integrated. Needs-brief rows
@@ -36,9 +36,9 @@ before they become ready. Owners review each other's output under PROTOCOL.md.
 | PE-06 | Fix existing level-up HP preview inconsistency | claude | high; select current model | blocked (PE-04, PE-05) | [brief](tasks/PE-06-levelup-hp-consistency.md) |
 | PE-07 | Player journey mockups and UI contract | claude | high; select current model | ready | [brief](tasks/PE-07-player-ux-design.md) |
 | PE-10 | Extend D&D campaign/character identity constraints | claude | high; select current model | done (merged in PR #250) | [brief](tasks/PE-10-dnd5e-identity.md) |
-| PE-11a | D&D locator, read-side identity and forward-import planning | claude | high; select current model | ready | [brief](tasks/PE-11a-dnd5e-locator.md) |
-| PE-11b | SQL-mode campaign-archive restore for D&D characters | claude | high; select current model | blocked (PE-11a) | [brief](tasks/PE-11b-dnd5e-archive-restore.md) |
-| PE-11c | Runtime reverse export of D&D characters | claude | high; select current model | blocked (PE-11a) | [brief](tasks/PE-11c-dnd5e-runtime-export.md) |
+| PE-11a | D&D locator, read-side identity and forward-import planning | claude | high; select current model | done (merged in PR #254) | [brief](tasks/PE-11a-dnd5e-locator.md) |
+| PE-11b | SQL-mode campaign-archive restore for D&D characters | claude | high; select current model | ready | [brief](tasks/PE-11b-dnd5e-archive-restore.md) |
+| PE-11c | Runtime reverse export of D&D characters | claude | high; select current model | ready | [brief](tasks/PE-11c-dnd5e-runtime-export.md) |
 | PE-12 | Character/encounter state, session, clock and authority tables; `migration_runs` and `characters.archived_at` changes | claude | high; select current model | done (merged in PR #249) | [brief](tasks/PE-12-game-state-schema.md) |
 | PE-13 | Campaign-scoped state repositories, revision check order, conflict body and lock order | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-12 |
 | PE-14 | Campaign streams, command receipts, gameplay events (the outbox), grants, operation-status read, session start/end and stream-locked authorization writes | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-01, PE-12, PE-13 |
@@ -252,6 +252,11 @@ Accepted as a design checkpoint. Notes:
 
 ## Log
 
+- 2026-11-13 Claude: merged PE-11a (PR #254) once all four checks passed. For players: nothing visible yet. Behind the scenes, D&D characters can now be recognised, checked and carried into the new database safely, which later D&D player screens need. Next: check PE-11b (restoring D&D backups) and PE-11c (writing D&D characters back to files) against the merged code, then build them; PE-07 player-screen mockups can go ahead alongside.
+- 2026-11-13 Codex: accepted PE-11a after confirming that offline backup checks work without database libraries again. D&D character files can now be identified and checked for import safely; this prepares the player-data foundation and adds no new player screen yet. Next: Claude commits this review and merges PR #254 after every check is green; backup restoration and reverse export (PE-11b/11c) stay blocked until then. Nothing was committed or merged by this review.
+- 2026-11-13 Claude: fixed Codex's PE-11a finding. Checking an offline backup works again without the database libraries installed, for old and D&D campaigns alike, and a new test proves it. Full persistence suite passes. Next: Codex re-reviews PR #254; PE-11b and PE-11c stay blocked.
+- 2026-11-13 Codex: reviewed PE-11a / PR #254 and requested one fix: checking an offline backup must still work without the database libraries installed. The D&D file rules, ownership safeguards and unchanged-file round trips passed review. Next: Claude fixes Implementation R1-1 and returns the new head for review; PE-11b and PE-11c stay blocked. Review notes are uncommitted; nothing was merged.
+- 2026-11-13 Claude: built PE-11a. The site now recognises D&D character files at their exact location and refuses to write them through the shared code until PE-15. The migration tool can plan and import D&D campaigns, warning about odd files and blocking unsafe ones. D&D characters stay off the SQL /me list for now. Full persistence suite passes; the two PostgreSQL tests run only in CI. Next: Codex reviews the PR.
 - 2026-11-13 Claude: built part 2 of sheet editing (SE-02). The GM or the player can now add, remove and reorder feats (with search), hide class features, and edit a companion in place; the GM can also bring an exported character file back in. Like a Pathbuilder update, an import takes rules from the file and keeps HP, notes and sheet edits. All new tests pass; the only failing tests also fail on main or need a browser this machine lacks. Next: Codex reviews part 1 (#253) then part 2.
 - 2026-11-13 Codex: accepted all three PE-11 split briefs and closed both findings. The export now specifies safe handling of links to omitted D&D characters, and every new ID check uses the exact shared rule. Next: Claude commits the review and two small text clarifications, merges the docs PR after its check passes, then implements PE-11a. PE-11b and PE-11c still wait for PE-11a. No product code changed; nothing was committed or merged by this review.
 - 2026-11-13 Claude: answered Codex's two brief findings for PE-11. If a D&D character's file is gone, the rollback export now keeps the player in the campaign but clears their character choice, and leaves out invites that pointed at that character instead of turning them into open invites; the database and its history copy keep everything. Every D&D character id check is now exact, so an id with a stray line break is refused everywhere. Only the task briefs changed. Next: Codex re-reviews PR #251; PE-11a starts after that.

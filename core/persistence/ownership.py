@@ -15,6 +15,12 @@ from collections.abc import Callable
 from sqlalchemy import select
 
 from . import runtime
+from .character_files import (
+    LEGACY_STORAGE_DIRS,
+    is_dnd5e_character_id,
+    refuse_dnd5e_write,
+    storage_system,
+)
 from .models import (
     AuditEvent,
     Campaign,
@@ -37,12 +43,15 @@ def _checksum(document):
 
 
 def _validate_locator(legacy_storage, filename):
-    if legacy_storage not in {"party_data", "cosmere_pcs"}:
+    if not isinstance(legacy_storage, str) or legacy_storage not in LEGACY_STORAGE_DIRS:
         raise ValueError("unknown character storage")
     if (not isinstance(filename, str) or not filename.endswith(".json")
             or filename in {".json", "..json"}
             or any(char in filename for char in ("/", "\\", "\x00"))):
         raise ValueError("character filename must be one JSON basename")
+    if (legacy_storage == "dnd5e_characters"
+            and not is_dnd5e_character_id(filename[:-len(".json")])):
+        raise ValueError("invalid D&D character file name")
 
 
 def _no_grants(document):
@@ -83,6 +92,10 @@ def _resolve_identity(session, cid, document, legacy_storage=None, filename=None
     if legacy_storage is not None or filename is not None:
         _validate_locator(legacy_storage, filename)
     character_id = document.get("id")
+    if legacy_storage == "dnd5e_characters":
+        # A D&D identity is its file name: no locator fallback, no new id.
+        if character_id != filename[:-len(".json")]:
+            raise ValueError("D&D character id must equal its file name")
     if character_id is not None and character_id != "":
         if not isinstance(character_id, str) or len(character_id) > 64:
             raise ValueError("invalid character identity")
@@ -102,7 +115,10 @@ def _resolve_identity(session, cid, document, legacy_storage=None, filename=None
             character.legacy_storage != legacy_storage or character.legacy_file != filename
         ):
             raise ValueError("character identity does not match its scoped locator")
-        if document.get("system") not in (None, "", character.system):
+        if character.legacy_storage == "dnd5e_characters":
+            if document.get("system") != "dnd5e":
+                raise ValueError("character system does not match its SQL identity")
+        elif document.get("system") not in (None, "", character.system):
             raise ValueError("character system does not match its SQL identity")
     return character
 
@@ -167,7 +183,10 @@ def characters_for_user(user_id) -> list[dict]:
                     & (CampaignMembership.user_id == CharacterAssignment.user_id)
                 ))
                 .where(CharacterAssignment.user_id == user_id,
-                       CharacterAssignment.role == "owner", Campaign.trashed_at.is_(None))
+                       CharacterAssignment.role == "owner", Campaign.trashed_at.is_(None),
+                       # D&D files stay authoritative for ownership until PE-15,
+                       # which removes this exclusion when the D&D routes write SQL.
+                       Character.legacy_storage != "dnd5e_characters")
                 .order_by(Campaign.id, Character.legacy_file, Character.id)
             )
             return [{"campaign_id": campaign.id, "campaign_name": campaign.name,
@@ -227,6 +246,7 @@ def register_character(cid, legacy_storage, filename, doc: dict, *,
     Existing ownership (including an unowned/released identity) never changes.
     ``write_document`` receives the normalized payload inside the SQL transaction.
     """
+    refuse_dnd5e_write(legacy_storage)
     if not runtime.sql_enabled():
         if write_document is not None:
             write_document(doc)
@@ -249,6 +269,7 @@ def register_character(cid, legacy_storage, filename, doc: dict, *,
 def register_character_in_session(session, cid, legacy_storage, filename, doc: dict, *,
                                   owner_user_id=None) -> dict:
     """Register metadata in the caller's transaction; never write or commit."""
+    refuse_dnd5e_write(legacy_storage)
     _validate_locator(legacy_storage, filename)
     if not isinstance(doc, dict):
         raise ValueError("character document must be an object")
@@ -262,7 +283,7 @@ def register_character_in_session(session, cid, legacy_storage, filename, doc: d
         raise ValueError("character identity conflicts with the existing locator")
     created = character is None
     if created:
-        expected_system = "pf2e" if legacy_storage == "party_data" else "cosmere"
+        expected_system = storage_system(legacy_storage)
         system = doc.get("system") or campaign.system
         if system != campaign.system or system != expected_system:
             raise ValueError("character system does not match campaign and storage")
@@ -305,6 +326,8 @@ def write_character_batch(entries, *, write_documents):
     ``register_character`` remains if SQL commit fails after file publication.
     """
     entries = list(entries)
+    for entry in entries:
+        refuse_dnd5e_write(entry[1])
     if not runtime.sql_enabled():
         return write_documents([entry[3] for entry in entries])
 
