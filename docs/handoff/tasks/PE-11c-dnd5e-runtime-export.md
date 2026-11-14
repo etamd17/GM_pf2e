@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** ready (brief reconciled against main `f6636eac`; accepted by Codex 2026-11-14 on PR #256)
+- **Status:** review (implemented on `claude/pe-11c-dnd5e-runtime-export` from main `ec83deb5`, 2026-11-14)
 - **Branch:** `claude/pe-11c-dnd5e-runtime-export`, from current main after PE-11a is accepted and merged. It does not need PE-11b. Record the exact starting SHA.
 - **Depends on:** [PE-11a](PE-11a-dnd5e-locator.md), for the storage-to-path map, the D&D planner enumeration and codes, and decision 1 (D&D files stay authoritative until PE-15).
 - **Context:**
@@ -119,11 +119,40 @@ Allowed files:
 <!-- ============ REPORT (written by the implementer) ============ -->
 
 ## Report
-- **Changed:** Pending.
-- **Tests run:** Pending.
-- **Skipped / not verified:** Pending.
-- **Known wrong / limitations:** Pending.
-- **Follow-ups (not done here):** Pending.
+- **Started from:** main `ec83deb5` (after PE-11a and the reconciled briefs, PR #256), branch `claude/pe-11c-dnd5e-runtime-export`.
+- **Changed:**
+  - `tools/export_transactional_runtime.py`:
+    - `_source_character` builds paths through PE-11a's map.
+    - New `_stage_dnd5e` copies every located D&D file (exact 32-hex stem; the active copy wins over trash) into the campaign's staged root, byte for byte. It never applies the SQL ownership overlay. A scalar `owner_user_id` that is not a current member is nulled in the staged copy only. Grant lists are copied unchanged.
+    - Drift goes into the manifest's `dnd5e_drift` with these kinds: `file_without_row`, `owner_differs`, `dnd5e_character_campaign_inferred`, `stale_owner_cleared`, `row_file_missing`, `membership_selection_cleared` and `invite_omitted` (the last one with state `live`, `exhausted` or `revoked`).
+    - Omitted D&D characters are rows with no staged file, which covers deleted and excluded characters alike. Membership selections of them are cleared in `campaign.json`, and invites scoped to them are left out of `invites.json`. The history sidecar is unchanged.
+    - `_write_legacy_tree` takes `excluded_character_ids` and returns `(fingerprints, dnd5e)`. `export_runtime` takes `excluded_character_ids` as a keyword argument; there is no CLI flag, since PE-41 owns that.
+    - `_verify_authority` leaves D&D assignments out (pointing to PE-15). It applies the membership and invite projection, and partitions the locator check: PF2e and Cosmere are compared exactly against SQL, and D&D against the staged files, sorted.
+    - A bad D&D file now refuses the export with an error naming the file and the code. Other blocking conflicts keep the generic message.
+    - The post-staging check now also refuses when a fingerprinted file is gone or resolves outside DATA_DIR. It also re-lists each D&D store and refuses if the set of located files changed. Both use the existing "changed during export" error.
+    - A located D&D file that resolves outside DATA_DIR is refused, which covers a Windows junction.
+  - `tests/persistence/test_export_runtime.py`:
+    - The interim PE-11a refusal test is replaced. `_dnd5e_store` is extended rather than duplicated, and PE-11a's other three D&D tests and the PF2e and Cosmere tests are untouched.
+    - New cases cover the 13 acceptance items, plus grant lists, the generic message for other conflicts, nonconforming stems, a symlinked file, a Windows junction, and a direct `_verify_authority` D&D locator check.
+  - `docs/remediation/pr4b-runtime-cutover.md`: a short D&D rollback paragraph.
+- **Size:** 262 changed product lines (228 added, 34 removed) against a budget of 280. Tests: 354 changed lines (335 added, 19 removed) against about 600. Docs: 10 lines.
+- **Tests run (Windows, repository venv):**
+  - Acceptance set (`test_export_runtime.py`, `test_migrate_transactional_store.py`, `test_dnd5e_locator.py`, with `-m "not postgresql"`): **196 passed, 1 skipped**.
+  - `tests/persistence -m "not postgresql"`: **472 passed, 1 skipped (the POSIX newline case), 19 deselected**.
+  - `tests/character_workflows`, which exercises `_write_legacy_tree` through a racing-writer test, ran before the review fixes: **346 passed, 14 skipped**.
+  - `git diff --check`: clean.
+- **Verification beyond the suite:**
+  - **Mutation checks.** Each of 12 deliberate mutations makes the D&D tests fail. The mutations removed or broke: stale-owner clear, membership clear, invite omission, listing re-check, excluded skip, active-wins, named error, D&D locator comparison, deleted-file check, the exact stem rule, excluded-in-drift, and the junction containment check.
+  - **Independent adversarial review.** Three lenses, each finding re-verified. Two findings were confirmed and fixed: the junction containment gap, and an under-specified history-sidecar assertion that now compares the whole row. Four were rejected after verification.
+- **Skipped / not verified:**
+  - The POSIX newline-stem case is skipped on Windows; it runs in CI.
+  - The PostgreSQL tests run in CI only, because local Docker is retired.
+  - The Windows junction case only runs on Windows.
+- **Known wrong / limitations:**
+  - A deleted fingerprinted PF2e or Cosmere file now reports "Character payload changed during export" rather than the generic availability error. Only the message changed; both refuse.
+  - A pathologically nested D&D JSON file still ends the CLI with a traceback rather than `error:`, as the planner already does. It still refuses with nothing published.
+  - Non-character D&D files (encounter, plans, images) still come back only with the operator's DATA_DIR merge, as the brief specifies.
+- **Follow-ups (not done here):** PE-41 passes archived ids through `excluded_character_ids`. PE-15 moves D&D ownership authority to SQL and removes the assignment exclusion.
 
 ## Review
 <!-- Codex appends numbered findings or acceptance. -->

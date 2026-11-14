@@ -81,6 +81,16 @@ grants onto current character payloads, verifies source files did not change,
 and validates the resulting legacy migration plan before publishing its output.
 An unresolved character batch journal blocks export until recovery.
 
+D&D characters are the exception until PE-15 moves their pages onto SQL: the D&D
+file is the authority, so every correctly named file under a `dnd5e` campaign's
+`dnd5e/characters/` is copied as it is, with no SQL overlay. Read the manifest's
+`dnd5e_drift` list before rolling back. It names files created or deleted since
+import, owners that differ from SQL, a stale `campaign_id`, an owner who is no
+longer a member (cleared in the copy only), and membership selections or
+character-scoped invites to a missing D&D character (selection cleared, invite
+left out; the SQL row stays in the history sidecar). A D&D file whose id does not
+match its name, or whose `system` is not `dnd5e`, refuses the export by name.
+
 Treat the result as sensitive backup data: it includes password hashes and
 invitations. On POSIX, output directories/files use owner-only permissions. On
 Windows, choose a destination whose inherited ACLs restrict access to the
