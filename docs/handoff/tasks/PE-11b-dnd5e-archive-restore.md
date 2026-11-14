@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** ready (brief reconciled against main `f6636eac`; accepted by Codex 2026-11-14 on PR #256)
+- **Status:** review (implemented from main `ec83deb5`; brief accepted by Codex 2026-11-14 on PR #256)
 - **Branch:** `claude/pe-11b-dnd5e-archive-restore` from current main after PE-11a is accepted and merged. Record the exact starting SHA.
 - **Depends on:** [PE-11a](PE-11a-dnd5e-locator.md): its storage-to-path map, D&D locator, `_validate_locator` and the decisions it fixes.
 - **Context:**
@@ -78,11 +78,24 @@ Allowed files:
 <!-- ============ REPORT (written by the implementer) ============ -->
 
 ## Report
-- **Changed:** Pending.
-- **Tests run:** Pending.
-- **Skipped / not verified:** Pending.
-- **Known wrong / limitations:** Pending.
-- **Follow-ups (not done here):** Pending.
+- **Starting SHA:** main `ec83deb5`.
+- **Changed:**
+  - `core/persistence/campaign_import.py` (+48/-8). Store lookup is now by exact path prefix (`_store`, built from PE-11a's `LEGACY_STORAGE_DIRS`). `_json_files` refuses, in every campaign system: a case-variant store prefix, a nested directory under any store, and (added after the internal review) a case-variant `.json` extension inside a store, such as `<id>.JSON`, which a case-insensitive filesystem would serve as `<id>.json` while registration never saw it. `_prepare` registers `dnd5e/characters/<file>` only in a `dnd5e` campaign. There it requires `stem == id`, both passing `is_dnd5e_character_id`, rewrites the D&D `campaign_id` to the new cid before the strict check (the system is never defaulted), and extends the `<new id>.json` rename and collision check to D&D. A comment in `_import` records why no PE-10 `upsert_identity` refusal can apply.
+  - `tests/persistence/test_campaign_sql_import.py` (+223): the full D&D restore; 9 refusal defects (the duplicate case now pins the `duplicate` message); a newline stem (POSIX only); case-variant prefixes (4 variants x 2 systems); a case-variant `.JSON` extension (D&D and PF2e store x dnd5e and PF2e campaign); a nested D&D directory in a PF2e campaign; the PF2e/Cosmere strict campaign check; a PF2e archive keeping D&D files inert; Cosmere and D&D rename collisions.
+- **Tests run (Windows, SQLite):**
+  - `tests/persistence/test_campaign_sql_import.py`: 47 passed, 1 skipped (the newline-stem test, which Windows cannot create).
+  - Acceptance command (five files, `-m "not postgresql"`): 130 passed, 1 skipped when the three `tests/persistence` files are listed first. In the brief's exact order it gives 108 passed, 1 skipped and 22 errors, all in the unchanged `test_dnd5e_locator.py` with "fixture 'sqlite_database' not found": on pytest 9.1.1, a `tests/persistence` file listed after a file from another directory (with an earlier persistence file already collected) does not get `tests/persistence/conftest.py`. This is a collection-order quirk of the command, not a product failure; the same tests pass in the order above and in the full run below.
+  - `tests/persistence tests/character_workflows -m "not postgresql"`: 815 passed, 15 skipped, 19 deselected. `git diff --check` passes.
+  - Mutation check: 11 mutations of the new code (case-prefix guard, extension guard, nested guard, D&D-in-any-system, stem check, campaign rewrite removed, campaign rewrite for every store, D&D rename, collision check, duplicate check, defaulted system), all caught.
+  - Internal adversarial review (3 reviewers, 6 verifiers): 4 findings confirmed and fixed (the `.JSON` bypass reported three times, the missing strict-campaign test, the vacuous duplicate case); 1 rejected (the encounter set-equality assertion cannot hide a crossed mapping, because one `ids` map drives every rewrite).
+- **Skipped / not verified:** PostgreSQL tests run only in CI. The newline-stem test is POSIX-only. No route-level test was added; the route already hands the stage to `import_staged_campaign` unchanged.
+- **Known wrong / limitations:**
+  - Over budget: about 56 product and 223 test lines against about 200 including tests. The extra lines are tests the brief's acceptance asks for, plus the review fixes.
+  - The `.JSON` extension guard is a path-safety rule beyond the brief's text. It applies only inside store directories, in every system, so non-character files elsewhere restore as before.
+  - JSON-mode restore (`app.py`) still keeps D&D file ids and the source `owner_user_id`, which today's D&D routes trust. Pre-existing; PE-15.
+  - The D&D routes have no campaign-system gate, so PF2e/Cosmere archives can hold `dnd5e/` files; they restore inert. PE-15.
+  - Until PE-11c merges, runtime export refuses a database that holds a registered D&D row, which a SQL-mode D&D restore now creates. Fails closed; production runs JSON mode.
+- **Follow-ups (not done here):** PE-15: JSON-mode restore identities and the D&D route system gate.
 
 ## Review
 <!-- Codex appends numbered findings or acceptance. -->
