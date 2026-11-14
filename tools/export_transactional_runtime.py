@@ -20,15 +20,20 @@ workflow receipts are resumable private records. Unrelated SQL-only history is
 retained in a private sidecar; the application/importer do not replay that
 sidecar. Returning to SQL still requires separate history reconciliation or a
 retained/restored database backup for that history.
+
+D&D character files stay authoritative until PE-15: every located file under a
+dnd5e campaign's dnd5e/characters/ is copied as it is, with no SQL ownership
+overlay, and differences from SQL are listed in the manifest's ``dnd5e_drift``.
 """
 
 from __future__ import annotations
 
 import argparse
+from collections import defaultdict
 import hashlib
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import shutil
 import sys
 import tempfile
@@ -43,13 +48,17 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
 from core.persistence import Database, Invitation, MigrationRun
-from core.character_layout import LEGACY_STORAGE_DIRS
+from core.character_layout import DND5E_STORAGE, LEGACY_STORAGE_DIRS, is_dnd5e_character_id
 from core.character_workflows.types import WorkflowError
 from tools import migrate_transactional_store as migration
 
 
 HISTORY_FILENAME = ".gm-pf2e-runtime-history.json"
 MANIFEST_FILENAME = ".gm-pf2e-runtime-export.json"
+DND5E_PARTS = LEGACY_STORAGE_DIRS[DND5E_STORAGE]
+LOCATOR_KEYS = ("id", "campaign_id", "system", "legacy_root", "legacy_storage", "legacy_file")
+# Planner conflicts that mean a copied D&D file itself is bad (named on refusal).
+DND5E_FILE_CONFLICTS = {"dnd5e_locator_mismatch", "invalid_character_system"}
 
 
 class RuntimeExportError(migration.MigrationToolError):
@@ -69,13 +78,24 @@ def _metadata(raw: Any) -> dict[str, Any]:
     return migration._json_safe(raw) if isinstance(raw, Mapping) else {}
 
 
+def _require_canonical(path: Path, message: str) -> None:
+    """Refuse a path that resolves anywhere but itself (PE-11a's locator rule).
+
+    ``root`` is already resolved, so a canonical source path equals its own
+    resolution. ``is_symlink()`` misses Windows junctions, and containment in
+    DATA_DIR still admits a junction to another campaign's store.
+    """
+    if path.resolve() != path:
+        raise RuntimeExportError(message)
+
+
 def _source_character(root: Path, character: Mapping[str, Any]) -> Path:
     campaign_id = character["campaign_id"]
     filename = character["legacy_file"]
     storage = character["legacy_storage"]
     if (
         migration.CAMPAIGN_ID_RE.fullmatch(campaign_id) is None
-        or storage not in {"party_data", "cosmere_pcs"}
+        or storage not in LEGACY_STORAGE_DIRS
         or Path(filename).name != filename
         or "\\" in filename
         or not filename.endswith(".json")
@@ -87,15 +107,14 @@ def _source_character(root: Path, character: Mapping[str, Any]) -> Path:
     if character["legacy_root"] == "campaigns_trash":
         root_names.append("campaigns_trash")
     for root_name in root_names:
-        candidate = root / root_name / campaign_id / storage / filename
+        candidate = root / root_name / campaign_id / Path(*LEGACY_STORAGE_DIRS[storage]) / filename
         current = root
         for part in candidate.relative_to(root).parts:
             current = current / part
             if current.is_symlink():
                 raise RuntimeExportError("Character source uses a symbolic link")
         if candidate.is_file():
-            if not candidate.resolve().is_relative_to(root):
-                raise RuntimeExportError("Character source escapes DATA_DIR")
+            _require_canonical(candidate, "Character source is not at its own location")
             return candidate
     raise RuntimeExportError("Registered character payload is missing")
 
@@ -136,7 +155,112 @@ def _reject_pending_batches(root, campaigns) -> None:
                     raise RuntimeExportError("Unresolved character batch blocks runtime export")
 
 
-def _write_legacy_tree(staging, root, records, envelopes, invitation_state):
+def _dnd5e_located(root, campaign) -> dict[str, Path]:
+    """Located D&D character files by id; the active copy wins over trash.
+
+    Runs after ``_reject_pending_batches``, which refuses symlinked store
+    directories. Only exact PE-11a stems count; other files are not character
+    payloads and return with the operator's DATA_DIR merge.
+    """
+    root_names = ["campaigns"]
+    if campaign["trashed_at"] is not None:
+        root_names.append("campaigns_trash")
+    located: dict[str, Path] = {}
+    for root_name in root_names:
+        directory = root / root_name / campaign["id"] / Path(*DND5E_PARTS)
+        if not directory.is_dir():
+            continue
+        for item in sorted(directory.iterdir(), key=lambda entry: entry.name):
+            stem = item.name[: -len(".json")]
+            if not item.name.endswith(".json") or not is_dnd5e_character_id(stem):
+                continue
+            if item.is_symlink():
+                raise RuntimeExportError("Character source uses a symbolic link")
+            _require_canonical(item, "Character source is not at its own location")
+            if item.is_file():
+                located.setdefault(stem, item)
+    return located
+
+
+def _strict_document(raw: bytes) -> Any:
+    try:
+        return json.loads(
+            raw.decode("utf-8"),
+            object_pairs_hook=migration._pairs_without_duplicates,
+            parse_constant=migration._reject_json_constant,
+            parse_float=migration._parse_json_float,
+        )
+    except ValueError:  # includes UnicodeDecodeError; the planner reports it
+        return None
+
+
+def _stage_dnd5e(staging, root, records, excluded) -> dict[str, Any]:
+    """Copy D&D files as authoritative; collect drift instead of overlaying SQL."""
+    members = defaultdict(set)
+    for member in records["campaign_memberships"]:
+        members[member["campaign_id"]].add(member["user_id"])
+    sql_owner = {(row["campaign_id"], row["character_id"]): row["user_id"]
+                 for row in records["character_assignments"] if row["role"] == "owner"}
+    rows = {(row["campaign_id"], row["id"]) for row in records["characters"]
+            if row["legacy_storage"] == DND5E_STORAGE}
+    drift, locators, fingerprints, listings = [], [], {}, {}
+    for campaign in records["campaigns"]:
+        if campaign["system"] != "dnd5e":
+            continue
+        cid = campaign["id"]
+        root_name = "campaigns_trash" if campaign["trashed_at"] is not None else "campaigns"
+        located = _dnd5e_located(root, campaign)
+        listings[cid] = located
+        for stem, path in sorted(located.items()):
+            if stem in excluded:
+                continue
+            raw = path.read_bytes()
+            fingerprints[path] = hashlib.sha256(raw).hexdigest()
+            document = _strict_document(raw)
+            entry = {"campaign_id": cid, "character_id": stem}
+            if isinstance(document, dict):
+                owner = document.get("owner_user_id")
+                if (cid, stem) not in rows:
+                    drift.append({"kind": "file_without_row", **entry})
+                elif owner != sql_owner.get((cid, stem)):
+                    drift.append({"kind": "owner_differs", **entry, "file_owner": owner,
+                                  "sql_owner": sql_owner.get((cid, stem))})
+                if document.get("campaign_id") != cid:
+                    drift.append({"kind": "dnd5e_character_campaign_inferred", **entry,
+                                  "file_campaign_id": document.get("campaign_id")})
+                if owner is not None and (not isinstance(owner, str) or owner not in members[cid]):
+                    # A rollback must not depend on GM cleanup; the source is untouched.
+                    drift.append({"kind": "stale_owner_cleared", **entry, "owner_user_id": owner})
+                    document["owner_user_id"] = None
+                    raw = (json.dumps(document, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+            # Malformed files are copied as read; the planner refuses them by name.
+            target = staging / root_name / cid / Path(*DND5E_PARTS) / path.name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(raw)
+            target.chmod(0o600)
+            locators.append({"id": stem, "campaign_id": cid, "system": "dnd5e",
+                             "legacy_root": root_name, "legacy_storage": DND5E_STORAGE,
+                             "legacy_file": path.name})
+    staged = {(locator["campaign_id"], locator["id"]) for locator in locators}
+    omitted = rows - staged
+    for cid, character_id in sorted(omitted):
+        if character_id not in excluded:
+            drift.append({"kind": "row_file_missing", "campaign_id": cid,
+                          "character_id": character_id})
+    return {"drift": drift, "locators": locators, "omitted": omitted,
+            "fingerprints": fingerprints, "listings": listings}
+
+
+def _invite_state(row, invitation_state) -> str:
+    if invitation_state[row["code"]]["revoked_at"] is not None:
+        return "revoked"
+    return "exhausted" if row["remaining_uses"] == 0 else "live"
+
+
+def _write_legacy_tree(staging, root, records, envelopes, invitation_state,
+                       excluded_character_ids=frozenset()):
+    dnd5e = _stage_dnd5e(staging, root, records, frozenset(excluded_character_ids))
+    omitted = dnd5e["omitted"]
     users = {}
     for row in records["users"]:
         document = _metadata(row["source_payload"])
@@ -158,12 +282,22 @@ def _write_legacy_tree(staging, root, records, envelopes, invitation_state):
             for member in source_members
             if isinstance(member, Mapping) and isinstance(member.get("user_id"), str)
         } if isinstance(source_members, list) else {}
-        document["members"] = [
-            {**member_metadata.get(member["user_id"], {}),
-             **{key: member[key] for key in ("user_id", "role", "character_id")}}
-            for member in records["campaign_memberships"]
-            if member["campaign_id"] == row["id"]
-        ]
+        document["members"] = []
+        for member in records["campaign_memberships"]:
+            if member["campaign_id"] != row["id"]:
+                continue
+            character_id = member["character_id"]
+            if (row["id"], character_id) in omitted:
+                # Keep the member; only the selection of a missing D&D character goes.
+                dnd5e["drift"].append({"kind": "membership_selection_cleared",
+                                       "campaign_id": row["id"], "user_id": member["user_id"],
+                                       "character_id": character_id})
+                character_id = None
+            document["members"].append({
+                **member_metadata.get(member["user_id"], {}),
+                "user_id": member["user_id"], "role": member["role"],
+                "character_id": character_id,
+            })
         document.pop("_trashed_at", None)
         root_name = "campaigns"
         if row["trashed_at"] is not None:
@@ -171,11 +305,21 @@ def _write_legacy_tree(staging, root, records, envelopes, invitation_state):
             root_name = "campaigns_trash"
         _private_json(staging / root_name / row["id"] / "campaign.json", document)
 
-    payload_fingerprints = {}
+    payload_fingerprints = dict(dnd5e["fingerprints"])
     for row in records["characters"]:
+        if row["legacy_storage"] == DND5E_STORAGE:
+            continue  # copied by _stage_dnd5e; SQL is not D&D's authority until PE-15
         source_path = _source_character(root, row)
-        fingerprint = hashlib.sha256(source_path.read_bytes()).hexdigest()
-        document = migration._load_json_strict(source_path)
+        # One read: the fingerprint rechecked later must cover the exported bytes.
+        raw = source_path.read_bytes()
+        fingerprint = hashlib.sha256(raw).hexdigest()
+        document = json.loads(
+            raw.decode("utf-8"),
+            object_pairs_hook=migration._pairs_without_duplicates,
+            parse_constant=migration._reject_json_constant,
+            parse_float=migration._parse_json_float,
+        )
+        migration._validate_postgres_json(document)
         if not isinstance(document, dict) or document.get("id") != row["id"]:
             raise RuntimeExportError("Character payload identity differs from its SQL locator")
         payload_fingerprints[source_path] = fingerprint
@@ -203,6 +347,14 @@ def _write_legacy_tree(staging, root, records, envelopes, invitation_state):
 
     invites = {}
     for row in records["invites"]:
+        if (row["campaign_id"], row["character_id"]) in omitted:
+            # Never widen a character-scoped invite to the whole campaign; the
+            # SQL row stays in the history sidecar.
+            dnd5e["drift"].append({"kind": "invite_omitted", "code": row["code"],
+                                   "campaign_id": row["campaign_id"],
+                                   "character_id": row["character_id"],
+                                   "state": _invite_state(row, invitation_state)})
+            continue
         document = _metadata(row["source_payload"])
         document.update({key: value for key, value in row.items()
                          if key not in {"source_payload", "source_checksum", "remaining_uses"}})
@@ -213,34 +365,63 @@ def _write_legacy_tree(staging, root, records, envelopes, invitation_state):
     _private_json(staging / "invites.json", {**envelopes["invites"], "invites": invites})
     from tools.workflow_transfer import write_private
     write_private(staging, records)
-    return payload_fingerprints
+    return payload_fingerprints, dnd5e
 
 
-def _verify_authority(staging, records, invitation_state) -> None:
-    """Check legacy normalization preserves every SQL authorization field."""
+def _locators(rows, *, dnd5e: bool) -> list[dict[str, Any]]:
+    return [{key: row[key] for key in LOCATOR_KEYS} for row in rows
+            if (row["legacy_storage"] == DND5E_STORAGE) == dnd5e]
+
+
+def _verify_authority(staging, records, invitation_state, dnd5e) -> None:
+    """Check legacy normalization preserves every SQL authorization field.
+
+    The expected projection applies exactly the staged D&D adjustments:
+    selections of omitted D&D characters are cleared and invites scoped to them
+    are absent. D&D assignments are left out because the D&D file, not SQL, is
+    the ownership authority until PE-15.
+    """
 
     exported = migration.inspect_source(staging).records
+    omitted = dnd5e["omitted"]
+    dnd5e_characters = {(row["campaign_id"], row["id"]) for row in records["characters"]
+                        if row["legacy_storage"] == DND5E_STORAGE}
+    dnd5e_characters |= {(row["campaign_id"], row["id"]) for row in dnd5e["locators"]}
+
+    def comparable(entity, raw):
+        if entity == "character_assignments" and (
+            (raw["campaign_id"], raw["character_id"]) in dnd5e_characters
+        ):
+            return None  # PE-15 makes SQL the D&D ownership authority
+        return {key: value for key, value in raw.items()
+                if key not in {"source_payload", "source_checksum"}}
+
     for entity in ("users", "campaigns", "campaign_memberships", "character_assignments", "invites"):
         expected = []
-        actual = []
         for raw in records[entity]:
-            row = {key: value for key, value in raw.items()
-                   if key not in {"source_payload", "source_checksum"}}
-            if entity == "invites" and invitation_state[row["code"]]["revoked_at"] is not None:
-                row["remaining_uses"] = 0
+            row = comparable(entity, raw)
+            if row is None:
+                continue
+            reference = (row.get("campaign_id"), row.get("character_id"))
+            if entity == "invites":
+                if reference in omitted:
+                    continue
+                if invitation_state[row["code"]]["revoked_at"] is not None:
+                    row["remaining_uses"] = 0
+            if entity == "campaign_memberships" and reference in omitted:
+                row["character_id"] = None
             expected.append(row)
-        for raw in exported[entity]:
-            actual.append({key: value for key, value in raw.items()
-                           if key not in {"source_payload", "source_checksum"}})
+        actual = [row for row in (comparable(entity, raw) for raw in exported[entity])
+                  if row is not None]
         if expected != actual:
             raise RuntimeExportError("Legacy normalization changed SQL authority; export refused")
-    expected_locators = [{key: row[key] for key in (
-        "id", "campaign_id", "system", "legacy_root", "legacy_storage", "legacy_file"
-    )} for row in records["characters"]]
-    actual_locators = [{key: row[key] for key in (
-        "id", "campaign_id", "system", "legacy_root", "legacy_storage", "legacy_file"
-    )} for row in exported["characters"]]
-    if expected_locators != actual_locators:
+    by_character = lambda locator: (locator["campaign_id"], locator["id"])  # noqa: E731
+    if (
+        _locators(records["characters"], dnd5e=False)
+        != _locators(exported["characters"], dnd5e=False)
+        or sorted(dnd5e["locators"], key=by_character)
+        != sorted(_locators(exported["characters"], dnd5e=True), key=by_character)
+    ):
         raise RuntimeExportError("Character registry changed during export validation")
     for entity in ('character_drafts', 'character_workflow_receipts'):
         expected = [row for row in records[entity] if entity != 'character_drafts'
@@ -255,8 +436,13 @@ def export_runtime(
     output_dir: os.PathLike[str] | str,
     *,
     quiesced: bool = False,
+    excluded_character_ids: frozenset[str] = frozenset(),
 ) -> dict[str, Any]:
-    """Export current relational authority after the operator stops all writers."""
+    """Export current relational authority after the operator stops all writers.
+
+    ``excluded_character_ids`` leaves those D&D character files out (PE-41
+    passes archived ids); references to them are handled as for deleted files.
+    """
 
     if not quiesced:
         raise RuntimeExportError("Application writes must be quiesced; pass --quiesced after stopping writers")
@@ -282,7 +468,9 @@ def export_runtime(
                 }
                 for invite in session.scalars(select(Invitation).order_by(Invitation.code))
             }
-            fingerprints = _write_legacy_tree(staging, root, records, envelopes, invitation_state)
+            fingerprints, dnd5e = _write_legacy_tree(
+                staging, root, records, envelopes, invitation_state, excluded_character_ids
+            )
             history = {
                 "schema_version": 1,
                 "records": records,
@@ -298,8 +486,19 @@ def export_runtime(
 
         plan = migration.build_plan(staging)
         if plan["blocking_conflicts"]:
+            for conflict in plan["blocking_conflicts"]:
+                parts = PurePosixPath(conflict["path"]).parts
+                if (
+                    conflict["code"] in DND5E_FILE_CONFLICTS
+                    and len(parts) == 5
+                    and parts[0] in {"campaigns", "campaigns_trash"}
+                    and parts[2:4] == DND5E_PARTS
+                ):
+                    raise RuntimeExportError(
+                        f"D&D character file {conflict['path']} cannot be exported ({conflict['code']})"
+                    )
             raise RuntimeExportError("Current SQL state cannot form a valid legacy rollback tree")
-        _verify_authority(staging, records, invitation_state)
+        _verify_authority(staging, records, invitation_state, dnd5e)
         # The operator's quiescence acknowledgment is required, but also catch
         # an accidental writer which changed SQL while files were staged.
         with database.session() as current_session:
@@ -313,7 +512,17 @@ def export_runtime(
                 current = current / component
                 if current.is_symlink():
                     raise RuntimeExportError("Character source path changed during export")
-            if hashlib.sha256(path.read_bytes()).hexdigest() != expected:
+            if (
+                not path.is_file()
+                or path.resolve() != path
+                or hashlib.sha256(path.read_bytes()).hexdigest() != expected
+            ):
+                raise RuntimeExportError("Character payload changed during export; keep writers quiesced")
+        # D&D files are discovered on disk, so an added or removed file is a change too.
+        for campaign in records["campaigns"]:
+            if campaign["id"] in dnd5e["listings"] and (
+                _dnd5e_located(root, campaign) != dnd5e["listings"][campaign["id"]]
+            ):
                 raise RuntimeExportError("Character payload changed during export; keep writers quiesced")
         report = {
             "status": "exported",
@@ -323,6 +532,7 @@ def export_runtime(
             "legacy_entity_counts": plan["entity_counts"],
             "entity_digests": plan["entity_digests"],
             "history_digest": migration._canonical_sha256(history),
+            "dnd5e_drift": dnd5e["drift"],
             "verified": True,
         }
         _private_json(staging / MANIFEST_FILENAME, report)

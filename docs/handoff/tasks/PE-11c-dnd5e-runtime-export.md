@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** ready (brief reconciled against main `f6636eac`; accepted by Codex 2026-11-14 on PR #256)
+- **Status:** done (implementation review 2 accepted by Codex 2026-11-14; PR #257 not merged; all-green CI still required)
 - **Branch:** `claude/pe-11c-dnd5e-runtime-export`, from current main after PE-11a is accepted and merged. It does not need PE-11b. Record the exact starting SHA.
 - **Depends on:** [PE-11a](PE-11a-dnd5e-locator.md), for the storage-to-path map, the D&D planner enumeration and codes, and decision 1 (D&D files stay authoritative until PE-15).
 - **Context:**
@@ -119,11 +119,54 @@ Allowed files:
 <!-- ============ REPORT (written by the implementer) ============ -->
 
 ## Report
-- **Changed:** Pending.
-- **Tests run:** Pending.
-- **Skipped / not verified:** Pending.
-- **Known wrong / limitations:** Pending.
-- **Follow-ups (not done here):** Pending.
+- **Started from:** main `ec83deb5` (after PE-11a and the reconciled briefs, PR #256), branch `claude/pe-11c-dnd5e-runtime-export`.
+- **Changed:**
+  - `tools/export_transactional_runtime.py`:
+    - `_source_character` builds paths through PE-11a's map.
+    - New `_stage_dnd5e` copies every located D&D file (exact 32-hex stem; the active copy wins over trash) into the campaign's staged root, byte for byte. It never applies the SQL ownership overlay. A scalar `owner_user_id` that is not a current member is nulled in the staged copy only. Grant lists are copied unchanged.
+    - Drift goes into the manifest's `dnd5e_drift` with these kinds: `file_without_row`, `owner_differs`, `dnd5e_character_campaign_inferred`, `stale_owner_cleared`, `row_file_missing`, `membership_selection_cleared` and `invite_omitted` (the last one with state `live`, `exhausted` or `revoked`).
+    - Omitted D&D characters are rows with no staged file, which covers deleted and excluded characters alike. Membership selections of them are cleared in `campaign.json`, and invites scoped to them are left out of `invites.json`. The history sidecar is unchanged.
+    - `_write_legacy_tree` takes `excluded_character_ids` and returns `(fingerprints, dnd5e)`. `export_runtime` takes `excluded_character_ids` as a keyword argument; there is no CLI flag, since PE-41 owns that.
+    - `_verify_authority` leaves D&D assignments out (pointing to PE-15). It applies the membership and invite projection, and partitions the locator check: PF2e and Cosmere are compared exactly against SQL, and D&D against the staged files, sorted.
+    - A bad D&D file now refuses the export with an error naming the file and the code. Other blocking conflicts keep the generic message.
+    - The post-staging check now also refuses when a fingerprinted file is gone or resolves outside DATA_DIR. It also re-lists each D&D store and refuses if the set of located files changed. Both use the existing "changed during export" error.
+    - A located D&D file that resolves outside DATA_DIR is refused, which covers a Windows junction.
+  - `tests/persistence/test_export_runtime.py`:
+    - The interim PE-11a refusal test is replaced. `_dnd5e_store` is extended rather than duplicated, and PE-11a's other three D&D tests and the PF2e and Cosmere tests are untouched.
+    - New cases cover the 13 acceptance items, plus grant lists, the generic message for other conflicts, nonconforming stems, a symlinked file, a Windows junction, and a direct `_verify_authority` D&D locator check.
+  - `docs/remediation/pr4b-runtime-cutover.md`: a short D&D rollback paragraph.
+- **Size:** 262 changed product lines (228 added, 34 removed) against a budget of 280. Tests: 354 changed lines (335 added, 19 removed) against about 600. Docs: 10 lines.
+- **Tests run (Windows, repository venv):**
+  - Acceptance set (`test_export_runtime.py`, `test_migrate_transactional_store.py`, `test_dnd5e_locator.py`, with `-m "not postgresql"`): **196 passed, 1 skipped**.
+  - `tests/persistence -m "not postgresql"`: **472 passed, 1 skipped (the POSIX newline case), 19 deselected**.
+  - `tests/character_workflows`, which exercises `_write_legacy_tree` through a racing-writer test, ran before the review fixes: **346 passed, 14 skipped**.
+  - `git diff --check`: clean.
+- **Verification beyond the suite:**
+  - **Mutation checks.** Each of 12 deliberate mutations makes the D&D tests fail. The mutations removed or broke: stale-owner clear, membership clear, invite omission, listing re-check, excluded skip, active-wins, named error, D&D locator comparison, deleted-file check, the exact stem rule, excluded-in-drift, and the junction containment check.
+  - **Independent adversarial review.** Three lenses, each finding re-verified. Two findings were confirmed and fixed: the junction containment gap, and an under-specified history-sidecar assertion that now compares the whole row. Four were rejected after verification.
+- **Skipped / not verified:**
+  - The POSIX newline-stem case is skipped on Windows; it runs in CI.
+  - The PostgreSQL tests run in CI only, because local Docker is retired.
+  - The Windows junction case only runs on Windows.
+- **Known wrong / limitations:**
+  - A deleted fingerprinted PF2e or Cosmere file now reports "Character payload changed during export" rather than the generic availability error. Only the message changed; both refuse.
+  - A pathologically nested D&D JSON file still ends the CLI with a traceback rather than `error:`, as the planner already does. It still refuses with nothing published.
+  - Non-character D&D files (encounter, plans, images) still come back only with the operator's DATA_DIR merge, as the brief specifies.
+- **Follow-ups (not done here):** PE-41 passes archived ids through `excluded_character_ids`. PE-15 moves D&D ownership authority to SQL and removes the assignment exclusion.
+
+### Fix round 1 (R1-1), Claude, 2026-11-14
+
+- **Changed:**
+  - `tools/export_transactional_runtime.py`: new `_require_canonical(path, message)` applies PE-11a's locator rule: `path.resolve()` must equal the path itself (`root` is already resolved by `_safe_source_root`). It replaces the `is_relative_to(root)` containment check in `_source_character` (PF2e/Cosmere), in `_dnd5e_located` (D&D discovery, so it also runs in the post-staging re-listing) and in the post-staging fingerprint recheck. A junction or link anywhere in the path, including one to another campaign inside DATA_DIR, now refuses with "Character source is not at its own location", or "changed during export" when it appears after staging. Normal active/trash selection and stale `campaign_id` inference are unchanged for canonical paths.
+  - Same file, found by my follow-up adversarial review of the fix: `_write_legacy_tree` read each PF2e/Cosmere file twice (`read_bytes` for the fingerprint, then `_load_json_strict` by path). A directory swapped in for the second read and back out before the recheck exported another location's payload with `verified=True` (reproduced natively). It now reads once and hashes and parses the same bytes with the same strict hooks and `_validate_postgres_json`, as `_stage_dnd5e` already did.
+  - `tests/persistence/test_export_runtime.py`: the outside-DATA_DIR junction test now expects the new message. New Windows-native tests: a D&D store junctioned to another campaign's store inside DATA_DIR, a PF2e `party_data` junction inside DATA_DIR, and an identical D&D store and an identical PF2e store each swapped for a junction during export. Each asserts refusal, no output, no leftover staging tree and (for the pre-staging cases) unchanged source bytes and SQL. A cross-platform test asserts the PF2e payload is read exactly once before the recheck.
+- **Tests run (Windows, repository venv):**
+  - Acceptance set (`test_export_runtime.py`, `test_migrate_transactional_store.py`, `test_dnd5e_locator.py`, `-m "not postgresql"`): **201 passed, 1 skipped** (the POSIX newline case).
+  - `tests/persistence tests/character_workflows -m "not postgresql"`: **823 passed, 15 skipped, 19 deselected**. `git diff --check` passes.
+  - Mutation checks on the junction and read-once tests: 6 of 6 caught (containment-only helper, recheck reverted to containment, recheck removed, D&D discovery check removed, PF2e check removed, double read restored).
+  - The four junction tests ran natively here (none skipped). They skip on Linux CI, which cannot create junctions; the read-once test runs everywhere.
+- **Review of the fix:** three lenses (bypass, false refusals, tests), each finding re-verified. Two confirmed and fixed: the double read above, and the missing PF2e recheck test (the D&D swap test's comment also overstated which guard fires; corrected). The false-refusal lens found nothing.
+- **Known wrong / limitations:** Windows `Path` equality is case-insensitive, so the canonical check does not refuse a case-only difference between the expected names (`campaigns`, `party_data`, `cosmere_pcs`, `dnd5e/characters`) and their on-disk spelling; such a directory is the same directory on that filesystem, not an alias. Junctions and links to any other location are refused. (Corrected after Codex implementation review 2, which noted the earlier wording overstated this.)
 
 ## Review
 <!-- Codex appends numbered findings or acceptance. -->
@@ -169,3 +212,125 @@ Next: Claude commits both brief reviews and the queue Log, pushes and merges
 the docs PR once `changes` passes on the resulting head. PE-11c can then be
 implemented first from updated main; it does not depend on PE-11b. These review
 edits are uncommitted; Codex did not push, merge or change product code.
+
+### Implementation review 1 — changes requested (Codex, 2026-11-14)
+
+Reviewed `f8e8ddce9dd07e1109020e8789eb722d7757e2a5` against `ec83deb5`
+on [PR #257](https://github.com/etamd17/GM_pf2e/pull/257).
+**One finding; do not merge this head.**
+
+1. **Implementation R1-1 (P2): reject an internal Windows junction before
+   treating its contents as this campaign's characters.** In
+   `tools/export_transactional_runtime.py:167-171`, `is_symlink()` misses a
+   Windows junction and `is_relative_to(root)` accepts a junction whose target
+   is elsewhere inside DATA_DIR. This is weaker than PE-11a's canonical-path
+   check (`core/persistence/character_files.py:58-59`), which rejects the same
+   path. A native Windows reproduction made D&D campaign A's
+   `dnd5e/characters` directory a junction to campaign B's directory. B was a
+   PF2e campaign containing an inert D&D file, a supported legacy case. The
+   exporter copied B's character into A's staged directory and returned
+   `status='exported', verified=True`; the forward planner then registered
+   that character in A. Its stale payload campaign ID only produced drift,
+   as designed, so verification did not stop the wrong-campaign copy. A
+   stable junction also survives the fingerprint and directory re-list checks.
+
+   Reject path aliases/reparse redirects using the canonical locator rule
+   (or an equivalent component check), both while locating files and during
+   revalidation. Keep the normal active/trash selection and stale payload
+   campaign-ID inference for canonical paths. Add a native Windows regression
+   for a junction to another location **inside** DATA_DIR; the existing test
+   only covers an outside target. Assert refusal, no published or leftover
+   staging tree, and unchanged source files and SQL. This is a verified
+   attribution/locator-contract defect in the operator tool, not a claim of a
+   new remote access exploit.
+
+   Reproduction and result are in the workspace parent's
+   `output/pe11bc-impl-review/junction_probe.py` and
+   `junction-probe-result.json`. The result records `is_symlink=false`,
+   `resolved_inside_data_dir=true`, the shared locator's `StoreUnavailable`,
+   and the export's `verified=true` plus A's resulting planner locator.
+
+Other review conclusions: the seven drift kinds, deleted/excluded omitted set,
+scalar-only stale-owner correction, unchanged grant lists and history sidecar,
+and narrow membership/invite projection match the brief. D&D locator checks
+use the staged-file expectation; PF2e/Cosmere remain exact against SQL. Named
+bad-file errors and source-change checks passed review. Supplemental synthetic
+probes covered combined omitted references, owner-only drift, files without
+SQL rows, strict old-store verification, edits after staging and a newly
+preferred active copy. No additional finding was retained.
+
+Verification: the three-file acceptance command passed **195 tests, 2 skipped**
+(POSIX newline on Windows; the existing junction test could not create a
+junction in the restricted test process). The separate native junction probe
+above ran successfully and demonstrated R1-1. `git diff --check ec83deb5..HEAD`
+passed. All four jobs (`changes`, `test`, `browser`, `postgresql`) passed on
+this exact head in [CI run 43607515464](https://github.com/etamd17/GM_pf2e/actions/runs/43607515464).
+The full local persistence suite was not repeated for this review; the
+implementer's wider counts remain identified separately in the Report.
+
+For players: the rollback safety net is built, but needs this one correction
+before acceptance. This review adds no player screen and does not switch
+production away from files. Next: Claude fixes R1-1, adds the regression and
+returns the new head for re-review. Review and queue edits are uncommitted in
+`GM_pf2e_pe11c_review`; Codex did not commit, push or merge.
+
+### Implementation review 2 — accepted (Codex, 2026-11-14)
+
+Reviewed `01e4928e6c3dcff287bc386b9af255133576d392`, including the fix since
+`7fff63ab`, on [PR #257](https://github.com/etamd17/GM_pf2e/pull/257).
+**Accepted. Implementation R1-1 is closed; no new actionable findings.**
+
+- The resolved root is used to construct source paths. Canonical-path equality
+  now rejects an internal junction during D&D discovery, PF2e/Cosmere source
+  selection and the fingerprint recheck. D&D re-listing uses the same discovery
+  check. Normal active/trash precedence and stale payload campaign-ID inference
+  for canonical files are unchanged.
+- The additional PF2e/Cosmere fix is appropriate: the fingerprint and parsed
+  payload now derive from the same read. UTF-8 decoding, duplicate-key and
+  nonstandard/overflow-number rejection, and `_validate_postgres_json` match
+  the former strict loader. No source or SQL writes were introduced.
+- The new initial-junction tests pin the canonical refusal and compare source
+  bytes and SQL. The identical-content swap tests check refusal and cleanup;
+  PF2e's case exercises the fingerprint guard without D&D re-listing masking
+  it. The read-once test distinguishes the former second path read before
+  verification. The change remains within the product stop threshold.
+
+Reviewer verification (Windows, repository venv):
+
+- Three-file acceptance command from the brief, with `-m "not postgresql"`
+  and `-rs`: **196 passed, 6 skipped** in 65.81s. Skips were the POSIX newline
+  case and five junction tests unavailable in the restricted process.
+- Re-ran `test_export_runtime.py -k junction` natively in a fresh workspace
+  scratch directory: **5 passed, 59 deselected**. All five junction cases
+  executed. Together, these runs exercised 201 passing acceptance cases,
+  leaving only the POSIX newline case unexecuted locally.
+- Re-ran the original `output/pe11bc-impl-review/junction_probe.py` against
+  this head. It now raises `RuntimeExportError: Character source is not at
+  its own location`, instead of returning `verified=True`. Its nonzero exit
+  is the expected refusal. The new scratch directory has neither `rollback`
+  nor leftover staging. Evidence: `output/pe11bc-impl-review/junction-probe-r2.log`
+  in the workspace parent.
+- `git diff --check ec83deb5..HEAD` passed. The full persistence/workflow
+  suites were not repeated; the implementer's wider counts remain in the
+  Report. PostgreSQL verification is through CI, not a local database.
+- At review time, [CI run 43619406823](https://github.com/etamd17/GM_pf2e/actions/runs/43619406823)
+  on this exact head has green `changes` and `postgresql`; `test` and `browser`
+  are still running. Acceptance does not waive the all-green merge gate.
+
+Non-blocking report clarification: Windows `Path` equality is case-insensitive,
+so case-only directory spelling differences do not necessarily trigger this
+canonical check. The Report's final limitation overstates that refusal. This
+does not weaken the verified rejection of junctions to other locations and
+requires no runtime change.
+
+For players: the database-to-files safety net now passes review, including the
+fix that prevents folder links from mixing characters between campaigns. Both
+backup/recovery implementations (PE-11b and PE-11c) are accepted pending merge;
+production still uses files and no player screen changes here. Shared saving
+and live-update work (PE-13/14) still precedes the D&D screen conversion (PE-15).
+
+Next: Claude commits this review and the queue edits, corrects the small report
+wording above, and merges PE-11c only after every check on the resulting head
+passes. Then integrate PE-11b, preserving both review logs and checking its
+resulting head before merge. These review edits are uncommitted in
+`GM_pf2e_pe11c_review`; Codex did not commit, push or merge.
