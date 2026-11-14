@@ -16,6 +16,9 @@ import stat
 from sqlalchemy.exc import DataError, IntegrityError
 
 from core import storage
+from core.character_layout import (
+    DND5E_STORAGE, LEGACY_STORAGE_DIRS, STORAGE_SYSTEMS, is_dnd5e_character_id,
+)
 from . import runtime
 from .campaign_runtime import _metadata
 from .models import AuditEvent, Campaign, Character, User, new_id
@@ -23,7 +26,8 @@ from .ownership import _checksum, _validate_locator
 from .repositories import CampaignRepository
 
 
-_CHARACTER_STORES = {'party_data': 'pf2e', 'cosmere_pcs': 'cosmere'}
+# Exact, case-sensitive path prefix -> logical storage (PE-11a layout).
+_STORE_PREFIXES = {parts: store for store, parts in LEGACY_STORAGE_DIRS.items()}
 _ID_PATTERN = re.compile(r'[0-9a-f]{32}')
 _GRANTS = {'owner_user_ids', 'editor_user_ids', 'viewer_user_ids'}
 _WINDOWS = os.name == 'nt'
@@ -57,12 +61,29 @@ def _paths(staging_root, final_dir, cid):
     return stage, final
 
 
+def _store(parts):
+    """The logical storage whose exact prefix ``parts`` starts with, or None."""
+    for prefix, store in _STORE_PREFIXES.items():
+        if tuple(parts[:len(prefix)]) == prefix:
+            return store, prefix
+    return None
+
+
 def _json_files(stage):
     files = []
     for directory, directories, names in os.walk(stage, followlinks=False):
         parent = Path(directory)
         relative_parent = parent.relative_to(stage)
-        if relative_parent.parts and relative_parent.parts[0] in _CHARACTER_STORES and directories:
+        parts = relative_parent.parts
+        # Path-safety rules for every campaign system: the D&D routes have no
+        # system gate, and a case-insensitive filesystem would serve a
+        # case-variant store that registration never saw.
+        for prefix in _STORE_PREFIXES:
+            leading = parts[:len(prefix)]
+            if (len(leading) == len(prefix) and leading != prefix
+                    and tuple(part.casefold() for part in leading) == prefix):
+                raise ValueError('character storage must use its exact name')
+        if _store(parts) is not None and directories:
             raise ValueError('nested character directories are not supported')
         for name in directories + names:
             path = parent / name
@@ -72,6 +93,10 @@ def _json_files(stage):
                     or (stat.S_ISREG(entry.st_mode) and entry.st_nlink != 1)
                     or '\\' in name or ':' in name or name.endswith((' ', '.'))):
                 raise ValueError('unsafe campaign import entry')
+            # A case-insensitive filesystem would serve <id>.JSON as <id>.json.
+            if (_store(parts) is not None and name.casefold().endswith('.json')
+                    and not name.endswith('.json')):
+                raise ValueError('character files must use the exact .json extension')
             if path.is_file() and name.endswith('.json'):
                 files.append(path)
     if stage / 'campaign.json' not in files:
@@ -125,19 +150,26 @@ def _prepare(session, stage, paths, campaign_doc, importer_user_id):
     old_ids = set()
     for path in paths:
         relative = path.relative_to(stage)
-        if relative.parts[0] not in _CHARACTER_STORES:
+        found = _store(relative.parts)
+        if found is None:
             continue
-        if len(relative.parts) != 2:
+        store, prefix = found
+        if store == DND5E_STORAGE and campaign_doc['system'] != 'dnd5e':
+            continue  # inert plain JSON outside a dnd5e campaign (PE-15 gap)
+        if len(relative.parts) != len(prefix) + 1:
             raise ValueError('character files must be directly inside character storage')
         document = _load(path)
         old_id = document.get('id') if isinstance(document, dict) else None
         if not isinstance(old_id, str) or not _ID_PATTERN.fullmatch(old_id):
             raise ValueError('invalid character identity in campaign import')
+        if store == DND5E_STORAGE and (not is_dnd5e_character_id(old_id)
+                                       or relative.name != old_id + '.json'):
+            raise ValueError('D&D character file name must equal its id')
         if old_id in old_ids:
             raise ValueError('duplicate character identity in campaign import')
-        _validate_locator(relative.parts[0], relative.name)
+        _validate_locator(store, relative.name)
         old_ids.add(old_id)
-        character_paths[path] = relative.parts[0]
+        character_paths[path] = store
     ids = {}
     for old_id in sorted(old_ids):
         for _attempt in range(128):
@@ -161,7 +193,12 @@ def _prepare(session, stage, paths, campaign_doc, importer_user_id):
         document = trusted if path == stage / 'campaign.json' else _remap(_load(path), ids)
         if path in character_paths:
             store = character_paths[path]
-            system = _CHARACTER_STORES[store]
+            system = STORAGE_SYSTEMS[store]
+            if store == DND5E_STORAGE:
+                # The D&D runtime lets the file location win (store.load_pc), and
+                # archives carry the source campaign's id. Its system is never
+                # defaulted: a missing or wrong one is refused below.
+                document['campaign_id'] = cid
             if (system != trusted['system'] or document.get('system') != system
                     or document.get('campaign_id') != cid):
                 raise ValueError('character system or campaign does not match the import')
@@ -176,7 +213,8 @@ def _prepare(session, stage, paths, campaign_doc, importer_user_id):
                     or document.get('name') or '?')
             if not isinstance(name, str):
                 raise ValueError('character name must be text')
-            target = path.parent / (document['id'] + '.json') if store == 'cosmere_pcs' else path
+            renamed = store in {'cosmere_pcs', DND5E_STORAGE}
+            target = path.parent / (document['id'] + '.json') if renamed else path
             if target != path and os.path.lexists(target):
                 raise ValueError('character import filename collision')
             records.append({
@@ -229,6 +267,8 @@ def _import(staging_root, final_dir, campaign_doc, importer_user_id):
             for character in characters:
                 # These are new global identities, never an upsert into an
                 # existing campaign's character, even on a UUID collision.
+                # Ids are fresh and each locator is built in _prepare, so none
+                # of PE-10's upsert_identity refusals can apply to D&D rows.
                 columns = dict(character)
                 columns['id'] = columns.pop('character_id')
                 session.add(Character(**columns))
