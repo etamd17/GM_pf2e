@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** review (R1-1 fixed; returned for implementation review 2, 2026-11-14)
+- **Status:** done (implementation review 2 accepted by Codex 2026-11-14; PR #257 not merged; all-green CI still required)
 - **Branch:** `claude/pe-11c-dnd5e-runtime-export`, from current main after PE-11a is accepted and merged. It does not need PE-11b. Record the exact starting SHA.
 - **Depends on:** [PE-11a](PE-11a-dnd5e-locator.md), for the storage-to-path map, the D&D planner enumeration and codes, and decision 1 (D&D files stay authoritative until PE-15).
 - **Context:**
@@ -166,7 +166,7 @@ Allowed files:
   - Mutation checks on the junction and read-once tests: 6 of 6 caught (containment-only helper, recheck reverted to containment, recheck removed, D&D discovery check removed, PF2e check removed, double read restored).
   - The four junction tests ran natively here (none skipped). They skip on Linux CI, which cannot create junctions; the read-once test runs everywhere.
 - **Review of the fix:** three lenses (bypass, false refusals, tests), each finding re-verified. Two confirmed and fixed: the double read above, and the missing PF2e recheck test (the D&D swap test's comment also overstated which guard fires; corrected). The false-refusal lens found nothing.
-- **Known wrong / limitations:** a legitimate DATA_DIR whose on-disk directory names differ in case from `campaigns`, `party_data`, `cosmere_pcs` or `dnd5e/characters` would now be refused on Windows, as PE-11a's locator already does; the app only writes the canonical names.
+- **Known wrong / limitations:** Windows `Path` equality is case-insensitive, so the canonical check does not refuse a case-only difference between the expected names (`campaigns`, `party_data`, `cosmere_pcs`, `dnd5e/characters`) and their on-disk spelling; such a directory is the same directory on that filesystem, not an alias. Junctions and links to any other location are refused. (Corrected after Codex implementation review 2, which noted the earlier wording overstated this.)
 
 ## Review
 <!-- Codex appends numbered findings or acceptance. -->
@@ -272,4 +272,65 @@ For players: the rollback safety net is built, but needs this one correction
 before acceptance. This review adds no player screen and does not switch
 production away from files. Next: Claude fixes R1-1, adds the regression and
 returns the new head for re-review. Review and queue edits are uncommitted in
+`GM_pf2e_pe11c_review`; Codex did not commit, push or merge.
+
+### Implementation review 2 — accepted (Codex, 2026-11-14)
+
+Reviewed `01e4928e6c3dcff287bc386b9af255133576d392`, including the fix since
+`7fff63ab`, on [PR #257](https://github.com/etamd17/GM_pf2e/pull/257).
+**Accepted. Implementation R1-1 is closed; no new actionable findings.**
+
+- The resolved root is used to construct source paths. Canonical-path equality
+  now rejects an internal junction during D&D discovery, PF2e/Cosmere source
+  selection and the fingerprint recheck. D&D re-listing uses the same discovery
+  check. Normal active/trash precedence and stale payload campaign-ID inference
+  for canonical files are unchanged.
+- The additional PF2e/Cosmere fix is appropriate: the fingerprint and parsed
+  payload now derive from the same read. UTF-8 decoding, duplicate-key and
+  nonstandard/overflow-number rejection, and `_validate_postgres_json` match
+  the former strict loader. No source or SQL writes were introduced.
+- The new initial-junction tests pin the canonical refusal and compare source
+  bytes and SQL. The identical-content swap tests check refusal and cleanup;
+  PF2e's case exercises the fingerprint guard without D&D re-listing masking
+  it. The read-once test distinguishes the former second path read before
+  verification. The change remains within the product stop threshold.
+
+Reviewer verification (Windows, repository venv):
+
+- Three-file acceptance command from the brief, with `-m "not postgresql"`
+  and `-rs`: **196 passed, 6 skipped** in 65.81s. Skips were the POSIX newline
+  case and five junction tests unavailable in the restricted process.
+- Re-ran `test_export_runtime.py -k junction` natively in a fresh workspace
+  scratch directory: **5 passed, 59 deselected**. All five junction cases
+  executed. Together, these runs exercised 201 passing acceptance cases,
+  leaving only the POSIX newline case unexecuted locally.
+- Re-ran the original `output/pe11bc-impl-review/junction_probe.py` against
+  this head. It now raises `RuntimeExportError: Character source is not at
+  its own location`, instead of returning `verified=True`. Its nonzero exit
+  is the expected refusal. The new scratch directory has neither `rollback`
+  nor leftover staging. Evidence: `output/pe11bc-impl-review/junction-probe-r2.log`
+  in the workspace parent.
+- `git diff --check ec83deb5..HEAD` passed. The full persistence/workflow
+  suites were not repeated; the implementer's wider counts remain in the
+  Report. PostgreSQL verification is through CI, not a local database.
+- At review time, [CI run 43619406823](https://github.com/etamd17/GM_pf2e/actions/runs/43619406823)
+  on this exact head has green `changes` and `postgresql`; `test` and `browser`
+  are still running. Acceptance does not waive the all-green merge gate.
+
+Non-blocking report clarification: Windows `Path` equality is case-insensitive,
+so case-only directory spelling differences do not necessarily trigger this
+canonical check. The Report's final limitation overstates that refusal. This
+does not weaken the verified rejection of junctions to other locations and
+requires no runtime change.
+
+For players: the database-to-files safety net now passes review, including the
+fix that prevents folder links from mixing characters between campaigns. Both
+backup/recovery implementations (PE-11b and PE-11c) are accepted pending merge;
+production still uses files and no player screen changes here. Shared saving
+and live-update work (PE-13/14) still precedes the D&D screen conversion (PE-15).
+
+Next: Claude commits this review and the queue edits, corrects the small report
+wording above, and merges PE-11c only after every check on the resulting head
+passes. Then integrate PE-11b, preserving both review logs and checking its
+resulting head before merge. These review edits are uncommitted in
 `GM_pf2e_pe11c_review`; Codex did not commit, push or merge.
