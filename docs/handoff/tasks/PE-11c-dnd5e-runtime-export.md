@@ -4,20 +4,20 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** ready (PE-11a merged in PR #254; reconcile against main before starting)
+- **Status:** brief review (reconciled against main `f6636eac` after PE-11a merged in PR #254; Codex checks the corrections before implementation)
 - **Branch:** `claude/pe-11c-dnd5e-runtime-export`, from current main after PE-11a is accepted and merged. It does not need PE-11b. Record the exact starting SHA.
 - **Depends on:** [PE-11a](PE-11a-dnd5e-locator.md), for the storage-to-path map, the D&D planner enumeration and codes, and decision 1 (D&D files stay authoritative until PE-15).
 - **Context:**
   - [PR4B runtime rollback export](../../remediation/pr4b-runtime-cutover.md).
   - [PE-01 contract](../../player-release/state-command-contract.md) section 7, where the PE-41 archived filter wraps this tool.
   - `tools/export_transactional_runtime.py`:
-    - `_source_character`, lines 71-100, which chooses between the active and trash roots at 83-87;
-    - `_reject_pending_batches`, lines 115-136;
-    - `_write_legacy_tree`, lines 138-216, with the campaign root at 167-171 and the character overlay at 173-201;
-    - `_verify_authority`, lines 218-249;
-    - `export_runtime`, lines 251-345, with the post-staging fingerprint check at about 309-316.
-  - Line numbers are from main `93aede06`.
-- **Change budget:** about 280 changed lines including tests (raised from 200 for the reference handling Codex asked for in R1-1). If it goes past about 330, stop and report.
+    - `_source_character`, lines 72-100, which chooses between the active and trash roots at 86-88;
+    - `_reject_pending_batches`, lines 116-136;
+    - `_write_legacy_tree`, lines 139-216, with the campaign root at 168-171 and the character overlay at 174-202;
+    - `_verify_authority`, lines 219-249;
+    - `export_runtime`, lines 252-344, with the history sidecar at 286-297, the planner gate at 299-301 and the post-staging fingerprint check at 310-317.
+  - Line numbers are from main `f6636eac` (after PE-11a). PE-11a's layout names are defined in the dependency-free `core/character_layout.py` and re-exported by `core/persistence/character_files.py`.
+- **Change budget:** about 280 changed product lines in `tools/export_transactional_runtime.py` (raised from 200 for the reference handling Codex asked for in R1-1). Tests in `tests/persistence/test_export_runtime.py` are budgeted separately at about 600 lines, for the 13 acceptance items including the 4x2 reference matrix. The rollback note is not counted. If product code goes past about 330, stop and report; give the test line count separately in the report.
 
 ## Goal
 
@@ -25,7 +25,7 @@ A SQL deployment that holds D&D campaigns and imported D&D characters can produc
 
 ## The problem this brief settles
 
-Until PE-15, the D&D routes write only files: create (`systems/dnd5e/routes.py:192/219/245`), owner reassignment (`878-893`) and delete (`690`). Today's exporter overlays SQL assignments onto every registered payload (173-201). Applied to D&D, that would cause three failures:
+Until PE-15, the D&D routes write only files: create (`systems/dnd5e/routes.py:192/219/245`), owner reassignment (`878-893`) and delete (`690`). Today's exporter overlays SQL assignments onto every registered payload (174-202). Applied to D&D, that would cause three failures:
 
 - **(a)** Any GM owner reassignment made since import is reverted to the import-time SQL assignment.
 - **(b)** D&D characters created since import have no row, so they are left out.
@@ -37,16 +37,16 @@ This follows PE-11a's decision 1: the D&D file is authoritative until PE-15.
 
 Allowed files:
 - `tools/export_transactional_runtime.py`
-- `tests/persistence/test_export_runtime.py`. Replace PE-11a's interim D&D-refusal test there with the cases below, and do not edit the PF2e and Cosmere cases.
+- `tests/persistence/test_export_runtime.py`. Replace PE-11a's interim test `test_export_refuses_registered_dnd5e_characters_until_pe_11c` (it expects "Unsafe character locator") with the cases below, built on PE-11a's `_dnd5e_store(tmp_path, *, with_character)` helper, extended rather than duplicated. Keep PE-11a's other three D&D export tests passing and unweakened (`test_export_of_a_dnd5e_campaign_without_characters_succeeds`, `test_unresolved_batch_in_the_dnd5e_store_blocks_export`, `test_symlinked_dnd5e_store_blocks_export`), and do not edit the PF2e and Cosmere cases.
 - `docs/remediation/pr4b-runtime-cutover.md`, for one short D&D rollback note.
 
 1. **`_source_character`** admits `dnd5e_characters` and builds the path through PE-11a's map.
 2. **D&D payloads are copied, not overlaid.**
    - **Source.** For each `dnd5e` campaign, read `campaigns/<cid>/dnd5e/characters/`. If the campaign has `trashed_at`, also read `campaigns_trash/<cid>/dnd5e/characters/`. When a stem exists under both roots, the active copy wins, as `_source_character` already does.
    - **Which files.** A file counts only when it has a PE-11a locator, whose stem rule is `is_dnd5e_character_id` (exact `fullmatch`, never `store.valid_id`). A 32-hex stem followed by a newline is not copied as a character.
-   - **Destination.** Copy every such file into the same staging root as that campaign's `campaign.json`: `campaigns_trash` when `trashed_at` is set, otherwise `campaigns` (167-171). Copy it whether or not it has a SQL row.
+   - **Destination.** Copy every such file into the same staging root as that campaign's `campaign.json`: `campaigns_trash` when `trashed_at` is set, otherwise `campaigns` (168-171). Copy it whether or not it has a SQL row.
    - **No overlay.** Never apply the SQL ownership overlay to a D&D document.
-   - **Byte-for-byte, with one exception.** Copies are byte for byte. The exception is a file whose `owner_user_id` is not a current member of the campaign, or not a SQL user. The staged copy gets `owner_user_id: null`, the source file is never changed, and the original owner goes in the drift list as `stale_owner_cleared`. The same applies to any non-empty `owner_user_ids`, `editor_user_ids` or `viewer_user_ids`. Without the null, the post-staging planner would block on `assignment_user_not_member`, and a rollback should not depend on GM cleanup.
+   - **Byte-for-byte, with one exception.** Copies are byte for byte. The exception is a file whose `owner_user_id` is not a current member of the campaign, or not a SQL user. The staged copy gets `owner_user_id: null`, the source file is never changed, and the original owner goes in the drift list as `stale_owner_cleared`. `owner_user_ids`, `editor_user_ids` and `viewer_user_ids` are copied unchanged whatever their contents: for D&D the planner only warns `dnd5e_ignored_grant_field` and creates no assignment from them, and the D&D runtime does not read them, so they cannot block re-import. Only the scalar `owner_user_id` is ever nulled. Without the null, the post-staging planner would block on `assignment_user_not_member`, and a rollback should not depend on GM cleanup.
    - **Excluded ids.** `_write_legacy_tree` takes `excluded_character_ids`, an empty set in this task. The D&D scan, the drift list and the locator check in step 5 all skip files whose stem is in that set. PE-41 passes the archived ids there. Because this copy is driven by files on disk, a records-only view cannot exclude an archived D&D row. This task does not read `archived_at`.
    - **Unlocated files.** Files without a locator, such as nonconforming stems, are not character payloads. They come back with the operator's DATA_DIR merge, as every unregistered file does today; this is the module docstring's existing contract.
 3. **Drift is reported, not overlaid.** The export manifest gets a `dnd5e_drift` list, which the operator reads before rollback. None of these entries refuse the export:
@@ -57,25 +57,33 @@ Allowed files:
    - `stale_owner_cleared`, from step 2;
    - `membership_selection_cleared` and `invite_omitted`, from step 4.
 
-   **Not drift.** A copied file whose `id` is missing or differs from its stem, or whose `system` is not `dnd5e`, makes the post-staging planner block, with `dnd5e_locator_mismatch` or `invalid_character_system`. The export then refuses, with an error that names the file. Do not exclude or rewrite such files.
+   **Not drift.** A copied file whose `id` is missing or differs from its stem, or whose `system` is missing, empty or not `dnd5e` (PE-11a blocks a missing D&D system rather than defaulting it), makes the post-staging planner block, with `dnd5e_locator_mismatch` or `invalid_character_system`. The export then refuses, with an error that names the file. Do not exclude or rewrite such files.
+
+   Naming the file is new code. Today the planner gate (`export_runtime`, 299-301) raises only the generic "Current SQL state cannot form a valid legacy rollback tree". Find the first blocking conflict whose `code` is `dnd5e_locator_mismatch` or `invalid_character_system` and whose `path` is under `campaigns/<cid>/dnd5e/characters/` (or the trash root), and raise `RuntimeExportError` naming that `path` and code. Keep the generic message for every other blocking conflict, including `invalid_character_system` on PF2e or Cosmere files. It is raised as `RuntimeExportError`, so the OSError/ValueError handler (339-340) does not replace it.
 4. **References to omitted D&D characters (Codex R1-1).** An omitted D&D id is one whose SQL row has no file (step 3), or one in `excluded_character_ids`. Both cases follow the same rule here; PE-41 needs nothing extra. An omitted character can still be named in two places:
    - a `campaign_memberships.character_id` selection;
    - an invitation's `character_id`. `identity.create_invite` (`core/persistence/identity.py:216-228`) accepts any same-campaign SQL character, and PE-11a does not prohibit importing these links.
 
-   Today the planner blocks a missing invitation target, even with zero uses (`dangling_invite_character`, `tools/migrate_transactional_store.py:1500-1508`). It quietly nulls a missing membership target (1340-1353), and that makes the exporter's unchanged membership comparison (`export_transactional_runtime.py:222-235`) refuse. So the deletion case in step 3 cannot export unless the staged tree handles these references. The staged legacy tree does the following, and only for D&D characters in the omitted set:
+   Today the planner blocks a missing invitation target, even with zero uses (`dangling_invite_character`, `tools/migrate_transactional_store.py:1606-1614`). It quietly nulls a missing membership target (1439-1455), and that makes the exporter's unchanged membership comparison (`export_transactional_runtime.py:223-236`) refuse. So the deletion case in step 3 cannot export unless the staged tree handles these references. The staged legacy tree does the following, and only for D&D characters in the omitted set:
    - **Membership selection.** The staged `campaign.json` member keeps its `user_id` and `role`, with `character_id: null`. Report `membership_selection_cleared` with the campaign, user and original character id.
-   - **Invitation.** The invitation is left out of the staged `invites.json`, whatever its uses or revocation state. The original SQL row stays in the history sidecar (`HISTORY_FILENAME`), which already holds the full `records` and `invitation_state` (export 284-296). Report `invite_omitted` with the code, the original character id and the state: `live`, `exhausted` or `revoked`. The invite is never kept with `character_id` nulled, because that would turn a character-scoped invite into a campaign-wide one. No active invitation to a nonexistent character remains.
+   - **Invitation.** The invitation is left out of the staged `invites.json`, whatever its uses or revocation state. The original SQL row stays in the history sidecar (`HISTORY_FILENAME`), which already holds the full `records` and `invitation_state` (export 286-297). Report `invite_omitted` with the code, the original character id and the state: `live`, `exhausted` or `revoked`. The invite is never kept with `character_id` nulled, because that would turn a character-scoped invite into a campaign-wide one. No active invitation to a nonexistent character remains.
    - **SQL.** SQL is never changed. These are staged-output adjustments only.
 
 5. **Verification.**
-   - `_verify_authority` and the post-staging planner run see the copied D&D files. The D&D character locators the planner finds must equal the copied file set, minus `excluded_character_ids`.
+   - **Partition the existing locator check.** `_verify_authority` currently compares the locators (`id`, `campaign_id`, `system`, `legacy_root`, `legacy_storage`, `legacy_file`) of every SQL `characters` row against every exported row, and raises "Character registry changed during export validation" (237-244). Split both lists by `legacy_storage`:
+     - rows that are not `dnd5e_characters` are compared exactly against SQL, unchanged;
+     - for `dnd5e_characters`, the expected list is built from the D&D files actually staged in step 2, not from SQL rows. That set already leaves out `excluded_character_ids`, rows whose file is missing and unlocated files, and includes files with no row. Each expected locator's `legacy_root` is the campaign's staged root (`campaigns_trash` when `trashed_at` is set, otherwise `campaigns`), whatever the SQL row recorded, and its `campaign_id` is the staged campaign directory;
+     - sort both D&D lists by (`campaign_id`, `id`) before comparing.
+
+     A mismatch in either partition still raises the existing error.
+   - The post-staging planner run sees the copied D&D files, and its D&D locators are checked as in the bullet above.
    - D&D `character_assignments` are left out of the authority-equality check, because SQL is not D&D's authority yet. Name that exclusion in a comment pointing to PE-15.
    - **Expected projection.** `_verify_authority` compares the staged tree against an expected projection of the SQL records. That projection applies exactly the step 4 adjustments:
      - memberships whose `character_id` is an omitted D&D id expect `character_id = None`;
      - invitations whose `character_id` is an omitted D&D id are expected to be absent.
      Everything else in `users`, `campaigns`, `campaign_memberships` and `invites` must match exactly.
    - PF2e and Cosmere verification is unchanged and stays strict.
-   - **Changed during export.** Each copied D&D file is hashed from the bytes actually read, including files without a row, and added to the fingerprint map that `_write_legacy_tree` returns. After staging, `export_runtime` re-checks those paths at about 309-316. It also re-lists each D&D source directory and refuses if the set of located files has changed. The refusal uses the existing "changed during export" error and leaves no output directory.
+   - **Changed during export.** Each copied D&D file is hashed from the bytes actually read, including files without a row, and added to the fingerprint map that `_write_legacy_tree` returns. After staging, `export_runtime` re-checks those paths at 310-317. It also re-lists each D&D source directory and refuses if the set of located files has changed. The refusal uses the existing "changed during export" error and leaves no output directory.
 6. **PE-41 boundary.** PE-41's archived-row filter (contract section 7) wraps these functions, passes `excluded_character_ids`, and adds the D&D archived-row case.
 
 ## Acceptance
@@ -83,7 +91,7 @@ Allowed files:
 - [ ] **Drift after import.** Start from a SQL store forward-imported with the PE-11a planner: one D&D campaign with two D&D characters. Then, file-only: the GM reassigns one character, creates a third and deletes one. The export succeeds and contains the reassigned file's current owner and the new character, and no deleted character. The manifest lists exactly those three drifts.
 - [ ] **No drift.** With no drift, the exported D&D files are byte-identical to the source. Re-importing the export with the PE-11a planner gives `import_allowed=True` with the same D&D locators.
 - [ ] **Stale owner.** A D&D file whose owner was removed from the campaign exports with a null owner in the staged copy, the source unchanged, and one `stale_owner_cleared` entry. Re-import is allowed.
-- [ ] **Bad file.** A D&D file with an id/stem mismatch, or with a system other than `dnd5e`, makes the export refuse with no output tree and an error naming the file. A stale `campaign_id` exports and is listed in `dnd5e_drift`.
+- [ ] **Bad file.** A D&D file with an id/stem mismatch, a missing `system`, or a system other than `dnd5e`, makes the export refuse with no output tree and an error naming the file. A stale `campaign_id` exports and is listed in `dnd5e_drift`.
 - [ ] **Trashed campaign.** A trashed `dnd5e` campaign exports correctly from both source locations: one character under `campaigns_trash/<cid>/` and one under `campaigns/<cid>/`. Both land under `staging/campaigns_trash/<cid>/dnd5e/characters/`, and the planner reports `legacy_root='campaigns_trash'`.
 - [ ] **Excluded id.** A file whose id is in `excluded_character_ids` is not copied, not in `dnd5e_drift`, and not counted in the locator check. References to it follow the next item.
 - [ ] **References to a deleted character.** After forward import, run each case separately in two variants: a deletion variant, where the character's file is deleted, and an excluded-id variant, where the file stays present and the character's id is passed in `excluded_character_ids`:

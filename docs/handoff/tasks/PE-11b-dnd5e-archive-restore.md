@@ -4,15 +4,15 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** ready (PE-11a merged in PR #254; reconcile against main before starting)
+- **Status:** brief review (reconciled against main `f6636eac` after PE-11a merged in PR #254; Codex checks the corrections before implementation)
 - **Branch:** `claude/pe-11b-dnd5e-archive-restore` from current main after PE-11a is accepted and merged. Record the exact starting SHA.
 - **Depends on:** [PE-11a](PE-11a-dnd5e-locator.md): its storage-to-path map, D&D locator, `_validate_locator` and the decisions it fixes.
 - **Context:**
   - [PE-01 contract](../../player-release/state-command-contract.md) section 1 (the D&D locator holds for every row).
   - `core/persistence/campaign_import.py` (`_CHARACTER_STORES` 26, `_ID_PATTERN` 27, `_json_files` 60-80, `_remap` 99-119, `_prepare` 122-193).
-  - The SQL branch of the restore route, `app.py:11516-11519`.
+  - The SQL branch of the restore route, `app.py:11642-11644`.
   - The D&D layout, `systems/dnd5e/store.py:5-8`.
-  - Line numbers are from main `93aede06`.
+  - `app.py` line numbers are from main `f6636eac` (after PE-11a and SE-01/SE-02). `campaign_import.py`, `store.py`, `routes.py` and `backups.py` are unchanged since `93aede06`, so their line numbers still hold. PE-11a's layout names (`LEGACY_STORAGE_DIRS`, `STORAGE_SYSTEMS`, `DND5E_STORAGE`, `is_dnd5e_character_id`) are defined in the dependency-free `core/character_layout.py` and re-exported by `core/persistence/character_files.py`.
 - **Change budget:** about 200 changed lines including tests.
 
 ## Goal
@@ -28,11 +28,13 @@ Allowed files:
 
 1. **Store lookup by path prefix.** Replace the first-part lookup (`relative.parts[0] in _CHARACTER_STORES`, lines 65 and 128) with PE-11a's map, matched case-sensitively on the exact prefix:
    - `party_data/<file>` and `cosmere_pcs/<file>` keep today's rules;
-   - `dnd5e/characters/<file>` is the D&D store, with system `dnd5e`, **only in a `dnd5e` campaign**. In a PF2e or Cosmere campaign, `dnd5e/` files keep today's behaviour and restore as inert plain JSON, unregistered. The D&D routes have no campaign-system gate (`systems/dnd5e/routes.py:62-66, 185-193`), so such files exist in real archives. Record that gap in the report for PE-15.
+   - `dnd5e/characters/<file>` is the D&D store, with system `dnd5e`, **only in a `dnd5e` campaign**. In a PF2e or Cosmere campaign, flat files under `dnd5e/characters/` (including stems or ids that are not 32 hex) and all other `dnd5e/` files restore as inert plain JSON, unregistered. Steps 2-4 (registration, the id rules and the campaign-id rewrite) apply only in a `dnd5e` campaign. The D&D routes have no campaign-system gate (`systems/dnd5e/routes.py:62-66, 185-193`), so such files exist in real archives. Record that gap in the report for PE-15.
 
    Any staged path whose leading parts casefold to a store prefix (`party_data`, `cosmere_pcs`, `dnd5e/characters`) without being spelled exactly that way refuses the import. Check this in `_json_files` on the walked directory names. app.py pre-creates `party_data/` and `cosmere_pcs/` in canonical case but not `dnd5e/`, so on Windows a `DnD5e/characters/<id>.json` entry would otherwise extract as an unregistered sheet that the case-insensitive D&D runtime still serves.
 
    Character files must sit directly under their prefix. The nested-directory guard in `_json_files` applies under `dnd5e/characters/` only, so `dnd5e/plans/`, `dnd5e/images/` and `dnd5e/encounter.json` still restore as plain campaign files. The store key, not the first path part, goes to `_validate_locator` and the system lookup.
+
+   Both `_json_files` guards (the case-variant prefix refusal and the `dnd5e/characters/` nested-directory refusal) are path-safety rules and apply in **every** campaign system: `_json_files` runs before `_prepare` and is not given the system. This deliberately changes today's behaviour for PF2e and Cosmere archives that contain such entries. The D&D routes have no campaign-system gate, so a case-variant D&D directory would still be served there on Windows, and the D&D runtime only ever writes flat `<32hex>.json` files, so nested entries are never legitimate.
 2. **D&D identities.** The file stem and the document `id` must be equal, and both must pass PE-11a's `is_dnd5e_character_id` (an exact `re.fullmatch` of 32 lowercase hex characters, the same rule as `_ID_PATTERN.fullmatch`; never `store.valid_id`, which accepts a trailing newline). Anything else refuses the import. This matches PE-11a's blocking `dnd5e_locator_mismatch` and `load_pc` (`store.py:63-64`). It is deliberately stricter than the planner's warn-and-exclude for non-hex stems, because restore never publishes a partial archive. Each id is remapped to a fresh id exactly as for the other stores.
 3. **Campaign id.** The D&D runtime lets the file location win over a stale `campaign_id` (`store.py:63-66`), and archives are expected to carry the source campaign's id. So for D&D only, `_prepare` sets `document["campaign_id"] = cid` before the consistency check at 165-167. It still requires `document["system"] == "dnd5e"` and a `dnd5e` campaign. PF2e and Cosmere keep the strict check.
 4. **File name.** Extend the `<new id>.json` rename (179, Cosmere-only today) to D&D, with the same collision check. Then `legacy_file == id + ".json"` holds and PE-10's `DND5E_LOCATOR_CHECK` accepts the row.
@@ -53,22 +55,25 @@ Allowed files:
 - [ ] These are refused with nothing published, and with no campaign directory or SQL row left behind:
   - a D&D file with a non-32-hex stem or id, including a 32-hex stem or `id` followed by a newline;
   - a D&D file whose stem differs from its `id` (both 32-hex);
-  - a sheet under a case-variant prefix (`DnD5e/characters/<32hex>.json`, `dnd5e/Characters/<32hex>.json`), built directly in the staged tree so the test behaves the same on Linux and Windows;
-  - a D&D sheet whose `system` is not `dnd5e`;
-  - `dnd5e/characters/<sub>/x.json`;
+  - a sheet under a case-variant prefix (`DnD5e/characters/<32hex>.json`, `dnd5e/Characters/<32hex>.json`), in both a `dnd5e` and a PF2e campaign, built directly in the staged tree so the test behaves the same on Linux and Windows;
+  - a D&D sheet whose `system` is missing, empty or anything other than `dnd5e`, one case each (PE-11a decision: a D&D sheet's system is never defaulted or overwritten, unlike its `campaign_id`; the D&D runtime's `save_pc` forcing `system` is not a precedent for restore);
+  - `dnd5e/characters/<sub>/x.json`, in both a `dnd5e` and a PF2e campaign;
   - a duplicate old id across stores.
-- [ ] PF2e and Cosmere restore behaviour, including the strict campaign check and the Cosmere rename, is unchanged. A PF2e archive that contains `dnd5e/characters/<32hex>.json` still restores, with that file as inert plain JSON and no D&D row.
-- [ ] The `<new id>.json` collision check is covered with a monkeypatched `new_id`.
+- [ ] PF2e and Cosmere restore behaviour, including the strict campaign check and the Cosmere rename, is unchanged. A PF2e archive that contains `dnd5e/characters/<32hex>.json` and `dnd5e/characters/not-hex.json` still restores. Both files stay as inert plain JSON under their original names, and no D&D row is created.
+- [ ] The `<new id>.json` collision check (line 180) is covered for both stores, and each refusal leaves no SQL row and no campaign directory:
+  - **Cosmere.** Stage a sheet `cosmere_pcs/<a>.json` with id A and a sibling `cosmere_pcs/<fresh>.json` whose id B differs from `<fresh>`, with the sheet's path sorting before the sibling's so it is processed first. Monkeypatch `new_id` to return a sequence that gives A `<fresh>` and B a different value (a constant value fails allocation instead).
+  - **D&D.** Here the check is defence in depth: once stem == id is enforced, no `.json` character file can be named after a fresh id, and the only other route (a `<fresh>.JSON` sibling on a case-insensitive filesystem) cannot be tested the same way on Linux and Windows. Cover it by monkeypatching `campaign_import.os.path.lexists` to report the D&D target as present.
 - [ ] `python -m pytest -q tests/persistence/test_campaign_sql_import.py tests/persistence/test_runtime_http.py tests/test_campaign_backup.py tests/character_workflows/test_archive_privacy.py tests/persistence/test_dnd5e_locator.py` passes.
 - [ ] `python -m pytest -q tests/persistence -m "not postgresql"` passes; `git diff --check` passes. The report gives actual counts.
 
 ## Out of scope / do not touch
 
 - `app.py` (PE-15 owns it):
-  - **JSON-mode restore (`app.py:11410-11520`).** It still keeps D&D file ids and the source `owner_user_id`, which today's D&D routes trust (`systems/dnd5e/routes.py:83`). This is a pre-existing limitation; record it in the report for PE-15.
-  - **The import classifier (`app.py:11171`).** D&D sheets keep the general 4 MiB JSON limit rather than the character limits.
+  - **JSON-mode restore (`app.py:11535-11645`).** It still keeps D&D file ids and the source `owner_user_id`, which today's D&D routes trust (`systems/dnd5e/routes.py:83`). This is a pre-existing limitation; record it in the report for PE-15.
+  - **The import classifier (`app.py:11296`).** D&D sheets keep the general 4 MiB JSON limit rather than the character limits.
 - `core/backups.py`: campaign-archive export keeps D&D sheets as raw files. Under PE-11a's decision 1 the file is authoritative until PE-15, so there is no SQL overlay.
 - Runtime export (PE-11c), routes, schema and migrations.
+  - Interim consequence of PE-11a: `_source_character` in `tools/export_transactional_runtime.py` refuses every registered `dnd5e_characters` row with "Unsafe character locator; export refused", and one such row stops the whole export (`tests/persistence/test_export_runtime.py::test_export_refuses_registered_dnd5e_characters_until_pe_11c`). Migration import already registers D&D rows; after this task a SQL-mode restore of a D&D campaign with sheets does too, so runtime export refuses for that database until PE-11c merges. This fails closed and production runs JSON mode. Do not touch the exporter here; record the consequence in the report.
 
 <!-- ============ REPORT (written by the implementer) ============ -->
 
