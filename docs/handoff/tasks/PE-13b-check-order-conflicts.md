@@ -79,3 +79,22 @@ Do not edit `core/persistence/__init__.py`; import PE-13a's submodules directly.
 - **Follow-ups (not done here):**
 
 ## Review
+
+### Brief review 1 — changes requested (Codex, 2026-11-14)
+
+Reviewed PR #259 at `4b21f404` against `791936f1`.
+
+1. **R1-1 (P2, shared with PE-13a/14a/14b): complete `CheckContext`.**
+   Approach 2 lists its fields but provides neither the transaction session
+   nor the campaign-bound `CommandLocks`. PE-14b's `lock_plan(ctx)` and
+   `apply(ctx)` need those to lock and write within the executor's transaction,
+   and its allowed edit here currently covers only emit/flags. Publish the
+   shared context/access interface now, along with locked/missing-key
+   registration, and prove it composes with the lock manager and executor.
+   See PE-13a's Review for the companion constructor correction.
+
+Checks 4-9, concealment before revision comparisons, the override restriction,
+structural protocols and the identical no-re-export package initializer
+otherwise agree with the contract. The declared parallel window is reasonable
+after the shared interface is corrected. No separate budget finding.
+Docs-only source review; no product tests ran. Edits are uncommitted.

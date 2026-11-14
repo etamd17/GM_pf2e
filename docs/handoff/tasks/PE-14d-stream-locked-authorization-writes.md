@@ -83,3 +83,34 @@ Allowed files:
 - **Follow-ups (not done here):**
 
 ## Review
+
+### Brief review 1 — changes requested (Codex, 2026-11-14)
+
+Reviewed PR #259 at `4b21f404` against `791936f1`.
+
+1. **R1-3 (P2): use one invitation/stream order for both redemption paths.**
+   The Decision 1 exception and Approach 1 keep account-creating redemption's
+   invitation lock before the stream (`identity.py:284-298`). Existing-user
+   redemption reaches `TransactionalStore.redeem_invite`, where this brief
+   adds stream before campaign, followed by invitation `FOR UPDATE`
+   (`services.py:103-118`). Thus signup A can hold the invitation while waiting
+   for the stream, and existing-user B can hold the stream while waiting for
+   that invitation. The account-creation advisory lock does not serialize B.
+   The stated exception preserves a lock cycle; racing signup only against a
+   command does not exercise it. Specify one order across both paths (for
+   example, an unlocked locator read, then stream, then authoritative locked
+   invitation re-read). Update the exception in PE-13a, allowed edits and spy
+   expectations. Add a PostgreSQL signup-versus-existing-user redemption race
+   for the same invitation that checks completion and correct use/ownership
+   outcomes, rather than accepting a deadlock/timeout as the loser.
+2. **R1-4 (P2, shared): carry through the token mirror recovery rule.**
+   Decision 6 relies on PE-14c's post-commit mirror. It must follow the durable
+   recovery/rollback gate selected to resolve R1-4 there; a committed SQL revoke
+   must not become an active token after JSON fallback because its file update
+   failed. Keep the user decision pending.
+
+The new-campaign exception, process-lock boundary, shared timeout and existing
+writer inventory are otherwise useful. The product budget is plausible for
+mechanical lock insertion, but re-estimate if redemption restructuring or token
+recovery materially expands it. Docs only; no product tests ran. Edits remain
+uncommitted.

@@ -81,3 +81,37 @@ Allowed files:
 - **Follow-ups (not done here):**
 
 ## Review
+
+### Brief review 1 — changes requested (Codex, 2026-11-14)
+
+Reviewed PR #259 at `4b21f404` against `791936f1`.
+
+1. **R1-9 (P2): evaluate permanent token revocation without an authority row.**
+   Decision 4.3 and Acceptance force `absent_pending` when the authority row
+   is missing, before evaluating the original token's committed revocation.
+   C:275 makes that revocation an independent sufficient condition for
+   `absent_final`. PE-14c/d intentionally support SQL token records in file/
+   no-authority campaigns, and the GM or recorded replacement can read them.
+   After authorization and receipt lookup, a missing authority row should
+   disable only epoch-based finality, not revocation-based finality. Test GM
+   and replacement readers of a revoked original with no authority row, plus
+   a still-valid original that remains pending. Correct the rationale that
+   no receipt can exist yet: Decision 5 correctly allows abandon to create one.
+2. **R1-10 (P2): give the mounted routes a real projection provider.**
+   The dependency/Decision 4/Approach refer to PE-14b's `project` callback, but
+   that task only accepts an injected callback and explicitly leaves real
+   projections to PE-31/adapters. No declared prerequisite provides one for
+   these live HTTP mounts, and the Approach never assigns its implementation.
+   Name a concrete provider/dependency, or assign a small event-ID projector
+   here with an explicit interface and allowed file; otherwise keep the mounts
+   inactive until the provider exists. Test committed event visibility plus
+   current reader authorization, including hidden and later-revealed events.
+   An identity callback, test stub, or unconditional empty list is not an
+   implementation of the promised projected receipt result. Reconcile the
+   dependency cells/parallel window if the chosen provider requires PE-31.
+
+The stream-locked observation, authorization before receipt lookup, stale-epoch
+recovery, token boundary without the active-table gate, and serialized abandon
+otherwise match the accepted contract. The budget is plausible if the projector
+is kept bounded; update it if responsibilities grow. Docs only; no product
+tests ran. Review edits are uncommitted.

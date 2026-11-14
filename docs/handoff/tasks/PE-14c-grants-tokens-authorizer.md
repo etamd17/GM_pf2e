@@ -90,3 +90,34 @@ Allowed files:
 - **Follow-ups (not done here):**
 
 ## Review
+
+### Brief review 1 — changes requested (Codex, 2026-11-14)
+
+Reviewed PR #259 at `4b21f404` against `791936f1`. **The user's token-storage
+decision is still pending; this review does not select Option A or B.**
+
+1. **R1-4 (P2): make Option A's rollback guarantee survive a failed mirror.**
+   Decision 1 commits SQL revocation and only then updates `tokens.json`, but
+   promises that switching to JSON never revives the token. A crash or failed
+   file write after SQL commit leaves an active file token; JSON verification
+   reads that file alone (`core/obsidian_sync.py:108-136`). This is the paired-
+   store non-atomicity already identified by C:458. Specify durable recovery or
+   a mandatory verified rollback reconciliation gate, including its owner,
+   persisted evidence and behavior when the mirror remains unavailable. Do not
+   claim that ordinary post-commit best effort establishes the guarantee.
+   Add failure injection after SQL commit and before/during the mirror, restart
+   recovery, and a JSON rollback that either refuses until repaired or refuses
+   the revoked token. Cover mint failure too, so a successfully stored SQL
+   token is not silently lost at fallback. Reconcile PE-14d and any affected
+   rollback dependency; keep the process lock outside the stream transaction.
+2. **R1-7 (P2, shared with PE-14e): reconcile `session.end` override policy.**
+   Decision 6 and Acceptance allow a token scoped `override:<type>`, including
+   `override:session.end`. PE-14e says every non-GM override is refused by that
+   same check 4. Both cannot pass. Define the type-specific policy consistently
+   with C:137 and C:489-492, update the authorizer and session instructions, and
+   test GM/admin, ordinarily scoped token and override-scoped token explicitly.
+
+The visibility registration signature, grant consume CAS and sole ownership
+of `_0006` otherwise fit the sibling APIs. The estimate must be revisited once
+R1-4's recovery responsibility is concrete; no blanket budget exception is
+granted. Docs only; no product tests ran. Review edits are uncommitted.

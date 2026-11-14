@@ -85,3 +85,45 @@ Allowed files:
 - **Follow-ups (not done here):**
 
 ## Review
+
+### Brief review 1 — changes requested (Codex, 2026-11-14)
+
+Reviewed PR #259 at `4b21f404` against `791936f1`.
+
+1. **R1-5 (P2, shared): place the file reader consistently with the AST guard.**
+   Decision 7 requires the real shared `core.obsidian_sync.campaign_lock`, but
+   Approach places that reader inside `core/commands`, where PE-14b prohibits
+   that import. Move the file-reading half outside the guarded package, or
+   define a narrow, tested exception proving it runs before any transaction.
+   Keep the database backfill half free of file I/O/process locks.
+2. **R1-6 (P2, shared): preserve the session on lifecycle events.** Setting
+   `ended` before `ctx.emit` conflicts with PE-14b deriving event session IDs
+   from the active row. Use the agreed trusted lifecycle context and assert
+   correct IDs on `session.started`, action cancellations and `session.ended`.
+   See PE-14b's Review for the autoflush case and existing-source evidence.
+3. **R1-7 (P2): resolve the scoped-token override contradiction.** Decision 4
+   and Acceptance say check 4 refuses every non-GM override; PE-14c explicitly
+   permits an `override:session.end` scoped token at that check. Specify whether
+   session-end cancellation has a type-specific GM/admin-only restriction or
+   follows the general scoped-token rule, consistently with the accepted
+   contract, and change both briefs and tests. Do not assume the existing
+   generic check implements the narrower rule.
+4. **R1-8 (P2): preserve legitimate legacy history and truthful completeness.**
+   Decision 7 treats every non-string event `session_id` as unreadable. Main
+   legitimately writes `session_id: null` for ordinary events outside a session
+   (`core/obsidian_sync.py:157,230-235`,
+   `services/obsidian_sync.py:746-753`; the ordinary-command fixture in
+   `tests/test_obsidian_sync.py:179-207` exercises that state). Skip absent/null
+   IDs as no session; distinguish malformed non-null IDs and malformed JSON.
+   Otherwise a normal history unnecessarily requires GM quarantine.
+   Separately, Decision 7/Acceptance set `complete=true` after unreadable items
+   are accepted, contrary to C:503-507's distinction between a complete read
+   and an explicitly accepted partial read. Specify separate read-completeness
+   and accepted-quarantine/activation-ready fields. Add a main-format history
+   fixture containing null IDs, and a partial-history case whose acceptance
+   permits the documented gate without claiming the unreadable history was read.
+
+The lossless ID/folder mapping, separate PF2e slot key, session-row serialization
+and default action-provider boundary otherwise fit the plan. Re-estimate the
+budget if these corrections change module ownership. Docs only; no product
+tests ran. Review edits are uncommitted.

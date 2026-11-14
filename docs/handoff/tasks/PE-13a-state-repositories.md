@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** ready
+- **Status:** blocked (brief review 1 changes requested: R1-1, R1-3; before implementation)
 - **Branch:** `claude/pe-13a-state-repositories` from current main. Record the exact starting SHA.
 - **Depends on:** [PE-12](PE-12-game-state-schema.md) (merged), using the accepted [PE-01 contract](../../player-release/state-command-contract.md).
 - **Followed by:** [PE-13b](PE-13b-check-order-conflicts.md) (check runner and conflict body), [PE-13c](PE-13c-reconciliation-hook.md) (max-HP and pool reconciliation) and [PE-14a](PE-14a-streams-receipts-events-schema.md) (binds `lock_stream`); these three may run in parallel after this task. "PE-13" in older documents means 13a+13b+13c. PE-14b's executor uses `CommandLocks` for the stream row and for each command type's `lock_plan(ctx)` (steps 2-5). PE-16 needs only this task: it uses the db-authority reads, and under file authority it reads files, never these rows.
@@ -94,3 +94,38 @@ Allowed files:
 - **Follow-ups (not done here):**
 
 ## Review
+
+### Brief review 1 — changes requested (Codex, 2026-11-14)
+
+Reviewed PR #259 at `4b21f4047b417baa5a08b8d0608705a3c4a50956` against
+its pinned base `791936f1`. Findings use shared R1 numbers across the nine
+briefs. Do not start PE-13a until its interface and lock-order corrections
+are accepted.
+
+1. **R1-1 (P2): make the lock manager and command context compose explicitly.**
+   Approach 4 defines `CommandLocks(session, lock_stream)` and `stream()` with
+   no campaign argument. PE-14a Approach 3/7 requires the default callback
+   `lock_stream(session, campaign_id)`. There is no declared source for that
+   campaign, also needed for campaign-scoped clocks/encounters. PE-13b's
+   enumerated `CheckContext` additionally has no session or lock manager,
+   although PE-14b calls `lock_plan(ctx)` and `apply(ctx)` to use both in its
+   transaction; PE-14b currently permits adding only emit/flags to that type.
+   Specify one complete interface across all four briefs, for example
+   `CommandLocks(session, campaign_id, lock_stream=...)`, its callback
+   signature, and `ctx.session`/`ctx.locks` or explicit equivalent same-session
+   repositories. Define how the lock plan registers locked and missing keys.
+   Add a small composing test that proves campaign scoping and that both
+   callbacks use the executor's session and locks, without hidden global state.
+2. **R1-3 (P2): remove the blanket invitation-before-stream exception.**
+   Decision 3 copies the exception that produces the signup-versus-existing-
+   user redemption cycle detailed in PE-14d's Review. Reconcile the same
+   invitation/stream order in both briefs, including cross-call behavior and
+   the PostgreSQL test. The account advisory lock and new-campaign exception
+   are separate questions; fixing this does not require changing their values.
+
+The revision, authority and schema-version rules otherwise match the accepted
+contract. The large product/test estimate is explicit and plausible for this
+scope; retain the stop threshold and re-estimate if the corrections add scope.
+This review is docs only; no product tests ran. `git diff --check 791936f1..HEAD`
+passed, and PR #259's `changes` job passed (product jobs correctly skipped).
+Review edits are uncommitted; nothing was merged.

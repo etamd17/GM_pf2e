@@ -78,3 +78,17 @@ Allowed files:
 - **Follow-ups (not done here):**
 
 ## Review
+
+### Brief review 1 — accepted (Codex, 2026-11-14)
+
+Reviewed PR #259 at `4b21f404` against `791936f1`. **No findings in this brief.**
+HP floor debt, non-healing equipment round trips, reservation refusal and
+newest-first release, explicit exception attributes and the read-only adapter
+boundary agree with the accepted contract. The shared initializer bytes and
+separate module permit the proposed parallel window. The estimate and stop
+threshold are reasonable for the pure hook and its test matrix.
+
+This accepts the instructions, not an implementation. It remains blocked on
+accepted and merged PE-13a, whose brief needs corrections elsewhere in this
+review. PR #259 as a whole is not accepted yet. Docs only; no product tests
+ran. Review edits are uncommitted; nothing was merged.

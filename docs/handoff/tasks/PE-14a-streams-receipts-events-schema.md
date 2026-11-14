@@ -96,3 +96,31 @@ Allowed files:
 - **Follow-ups (not done here):**
 
 ## Review
+
+### Brief review 1 — changes requested (Codex, 2026-11-14)
+
+Reviewed PR #259 at `4b21f404` against `791936f1`.
+
+1. **R1-1 (P2, shared): bind a campaign-aware `CommandLocks` API.**
+   `lock_stream(session, campaign_id)` cannot be the specified default for
+   PE-13a's `CommandLocks(session, lock_stream).stream()` without an undeclared
+   campaign binding. Reconcile the constructor/callback and command-context
+   surface described in PE-13a's Review; do not leave parallel implementers
+   to choose different closures or globals.
+2. **R1-2 (P2): declare where the authenticated principal enters check 1.**
+   Approach 4 and Acceptance require rejecting unsupported principal kinds
+   and consulting `CommandType.allowed_principals`, but the published
+   `check_envelope(envelope, route_campaign_id)` receives no authenticated
+   principal. PE-14b receives it separately and calls this exact two-argument
+   function before opening a transaction. No authenticated wrapper/preprocessing
+   result is specified. Give principal validation an explicit signature and
+   owner: pass the principal, or define the separate pre-transaction validator
+   and its output. Update PE-14b consistently and test both forbidden principal
+   kinds and a valid kind forbidden by the particular command type. Never take
+   the principal from the request body.
+
+The three-table split, receipt status/digest rules, emit-time sequence contract,
+plain stream reads and sequential `_0005` then `_0006` ownership otherwise
+fit the plan. The dependency graph preserves one head provided later schema
+tasks obey the task-map integration order. No independent budget finding.
+Docs only; no product tests ran. Review edits are uncommitted.

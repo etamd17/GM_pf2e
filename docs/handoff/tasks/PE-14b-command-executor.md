@@ -103,3 +103,47 @@ Do not edit `core/commands/__init__.py` (created by whichever of PE-13b, PE-13c 
 - **Follow-ups (not done here):**
 
 ## Review
+
+### Brief review 1 — changes requested (Codex, 2026-11-14)
+
+Reviewed PR #259 at `4b21f404` against `791936f1`.
+
+1. **R1-1 (P2, shared): wire the campaign-bound locks and same-session context.**
+   Resolve PE-13a/13b's missing constructor/context inputs before specifying
+   `lock_plan(ctx)` and `apply(ctx)` as complete interfaces. Permit the agreed
+   context fields here, and test that callbacks use this transaction rather
+   than creating another session.
+2. **R1-2 (P2, shared): wire authenticated principal validation before the
+   transaction.** The existing check-1 call has no principal argument although
+   PE-14a requires principal checks there. Follow the explicit owner/signature
+   correction in PE-14a's Review.
+3. **R1-5 (P2): reconcile the package-wide import ban with PE-14e's reader.**
+   Acceptance bans every `core/commands` module from importing
+   `core.obsidian_sync`, while PE-14e requires its new
+   `core/commands/session_history.py` to use that module's shared
+   `campaign_lock` and file paths outside the transaction. Both tests cannot
+   pass as prescribed. Prefer placing the file-reading half outside the
+   transaction-only package, or specify a narrow structural exception with a
+   test proving file I/O/process locking precedes the transaction. An indirect
+   import or a duplicate lock is not a correction.
+4. **R1-6 (P2): specify the lifecycle event's session context.** Approach 3
+   obtains an event's `session_id` from the currently active session, but
+   PE-14e sets the row to `ended` before emitting `session.ended`. The normal
+   autoflush before that lookup leaves no active row, so the ending event gets
+   NULL. The current legacy path deliberately retains the ending ID
+   (`services/obsidian_sync.py:746-753`), and C:606-609 uses session identity
+   for mirroring. Define a trusted lifecycle-aware session context or explicit
+   validated event input, covering both start and end; do not accept an
+   arbitrary client session ID. Tests must assert that start, cancellation and
+   end events belong to the correct session even after the row changes state.
+5. **R1-10 (P2, consumer clarification): name the status-route projector.**
+   This task accepts an injected `project` callback and explicitly defers
+   concrete projections. PE-14f incorrectly treats it as an available provider.
+   Clarify that boundary and reconcile PE-14f's concrete implementation or
+   dependency as described in its Review. No permissive default is acceptable.
+
+The fixed check order, fence-before-receipt rule, refusal transaction,
+emit/seq allocation, exception mapping and post-commit notification boundary
+otherwise agree. The estimate is large but bounded; re-estimate any additional
+work required by these interface corrections. Docs only, no product tests;
+review edits are uncommitted.
