@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** review (implemented on `claude/pe-11c-dnd5e-runtime-export` from main `ec83deb5`, 2026-11-14)
+- **Status:** in-progress (Codex implementation review 1: changes requested, R1-1; 2026-11-14)
 - **Branch:** `claude/pe-11c-dnd5e-runtime-export`, from current main after PE-11a is accepted and merged. It does not need PE-11b. Record the exact starting SHA.
 - **Depends on:** [PE-11a](PE-11a-dnd5e-locator.md), for the storage-to-path map, the D&D planner enumeration and codes, and decision 1 (D&D files stay authoritative until PE-15).
 - **Context:**
@@ -198,3 +198,64 @@ Next: Claude commits both brief reviews and the queue Log, pushes and merges
 the docs PR once `changes` passes on the resulting head. PE-11c can then be
 implemented first from updated main; it does not depend on PE-11b. These review
 edits are uncommitted; Codex did not push, merge or change product code.
+
+### Implementation review 1 — changes requested (Codex, 2026-11-14)
+
+Reviewed `f8e8ddce9dd07e1109020e8789eb722d7757e2a5` against `ec83deb5`
+on [PR #257](https://github.com/etamd17/GM_pf2e/pull/257).
+**One finding; do not merge this head.**
+
+1. **Implementation R1-1 (P2): reject an internal Windows junction before
+   treating its contents as this campaign's characters.** In
+   `tools/export_transactional_runtime.py:167-171`, `is_symlink()` misses a
+   Windows junction and `is_relative_to(root)` accepts a junction whose target
+   is elsewhere inside DATA_DIR. This is weaker than PE-11a's canonical-path
+   check (`core/persistence/character_files.py:58-59`), which rejects the same
+   path. A native Windows reproduction made D&D campaign A's
+   `dnd5e/characters` directory a junction to campaign B's directory. B was a
+   PF2e campaign containing an inert D&D file, a supported legacy case. The
+   exporter copied B's character into A's staged directory and returned
+   `status='exported', verified=True`; the forward planner then registered
+   that character in A. Its stale payload campaign ID only produced drift,
+   as designed, so verification did not stop the wrong-campaign copy. A
+   stable junction also survives the fingerprint and directory re-list checks.
+
+   Reject path aliases/reparse redirects using the canonical locator rule
+   (or an equivalent component check), both while locating files and during
+   revalidation. Keep the normal active/trash selection and stale payload
+   campaign-ID inference for canonical paths. Add a native Windows regression
+   for a junction to another location **inside** DATA_DIR; the existing test
+   only covers an outside target. Assert refusal, no published or leftover
+   staging tree, and unchanged source files and SQL. This is a verified
+   attribution/locator-contract defect in the operator tool, not a claim of a
+   new remote access exploit.
+
+   Reproduction and result are in the workspace parent's
+   `output/pe11bc-impl-review/junction_probe.py` and
+   `junction-probe-result.json`. The result records `is_symlink=false`,
+   `resolved_inside_data_dir=true`, the shared locator's `StoreUnavailable`,
+   and the export's `verified=true` plus A's resulting planner locator.
+
+Other review conclusions: the seven drift kinds, deleted/excluded omitted set,
+scalar-only stale-owner correction, unchanged grant lists and history sidecar,
+and narrow membership/invite projection match the brief. D&D locator checks
+use the staged-file expectation; PF2e/Cosmere remain exact against SQL. Named
+bad-file errors and source-change checks passed review. Supplemental synthetic
+probes covered combined omitted references, owner-only drift, files without
+SQL rows, strict old-store verification, edits after staging and a newly
+preferred active copy. No additional finding was retained.
+
+Verification: the three-file acceptance command passed **195 tests, 2 skipped**
+(POSIX newline on Windows; the existing junction test could not create a
+junction in the restricted test process). The separate native junction probe
+above ran successfully and demonstrated R1-1. `git diff --check ec83deb5..HEAD`
+passed. All four jobs (`changes`, `test`, `browser`, `postgresql`) passed on
+this exact head in [CI run 43607515464](https://github.com/etamd17/GM_pf2e/actions/runs/43607515464).
+The full local persistence suite was not repeated for this review; the
+implementer's wider counts remain identified separately in the Report.
+
+For players: the rollback safety net is built, but needs this one correction
+before acceptance. This review adds no player screen and does not switch
+production away from files. Next: Claude fixes R1-1, adds the regression and
+returns the new head for re-review. Review and queue edits are uncommitted in
+`GM_pf2e_pe11c_review`; Codex did not commit, push or merge.
