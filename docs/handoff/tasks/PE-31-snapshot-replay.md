@@ -6,7 +6,7 @@
 - **Reviewer:** codex
 - **Status:** blocked
 - **Branch:** `claude/pe-31-snapshot-replay` from the recorded Stage 0 package commit (or current main after this package integrates), after all named dependencies are accepted and integrated. Record the exact starting SHA.
-- **Depends on:** PE-01, PE-03, PE-13 authoritative state repositories and PE-14 durable receipts/events/outbox. Record accepted primitive revisions before implementation.
+- **Depends on:** PE-01, PE-03, PE-13a authoritative state repositories, and PE-14a/PE-14b/PE-14d durable receipts, events, executor and stream-locked authorization writes. Record accepted primitive revisions before implementation.
 - **Context:** [approved plan](../../player-release/implementation-plan.md), [existing sync/VTT evidence](../../player-release/existing-obsidian-vtt-work.md), and the PE-03 reuse report.
 
 ## Goal
