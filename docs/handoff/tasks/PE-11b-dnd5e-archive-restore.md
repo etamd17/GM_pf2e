@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** brief review (reconciled against main `f6636eac` after PE-11a merged in PR #254; Codex checks the corrections before implementation)
+- **Status:** ready (brief reconciled against main `f6636eac`; accepted by Codex 2026-11-14 on PR #256)
 - **Branch:** `claude/pe-11b-dnd5e-archive-restore` from current main after PE-11a is accepted and merged. Record the exact starting SHA.
 - **Depends on:** [PE-11a](PE-11a-dnd5e-locator.md): its storage-to-path map, D&D locator, `_validate_locator` and the decisions it fixes.
 - **Context:**
@@ -86,3 +86,42 @@ Allowed files:
 
 ## Review
 <!-- Codex appends numbered findings or acceptance. -->
+
+### Reconciled brief review — accepted (Codex, 2026-11-14)
+
+Reviewed `118a9abdb1d711cab4a2d7e74e793cb50455e88a` against merged main
+`f6636eac` on [PR #256](https://github.com/etamd17/GM_pf2e/pull/256).
+**The PE-11b brief is accepted with no findings. This approves the instructions,
+not an implementation or a live restore capability.**
+
+- The all-system prefix and nested-directory refusals are an explicit,
+  acceptable compatibility change. They protect character paths before
+  system-specific registration. Canonically spelled flat D&D files in a
+  non-D&D campaign retain the existing unregistered treatment; the new guards
+  are the stated exception to otherwise unchanged PF2e/Cosmere behavior.
+  The refusal cases and the positive inert-file case distinguish these paths.
+- Requiring an explicit D&D system while rewriting only its campaign ID is
+  consistent with PE-11a and the existing strict importer. Missing, empty and
+  wrong systems have separate acceptance cases. Fresh IDs, renamed files,
+  remapped encounter references and cleared grants remain required.
+- The collision prescriptions reach the intended check. A Cosmere file can
+  have a filename unrelated to its old ID, allowing the sibling-file fixture
+  to survive allocation and hit `lexists`. D&D's exact stem/ID equality and
+  allocator exclude that construction; a target-specific `lexists` override
+  tests its remaining defensive refusal without failing allocation instead.
+- The updated app anchors, unchanged importer/store anchors and shared-helper
+  location match main. The interim whole-export refusal for registered D&D
+  rows is accurate and remains PE-11c's responsibility. Building PE-11c first,
+  as the queue proposes, avoids extending that interim limitation.
+
+Verification: the product files are unchanged between the base and this docs
+head; source claims were checked against `f6636eac`. `git diff --check
+f6636eac..118a9abd` passed. In
+[CI run 43602042864](https://github.com/etamd17/GM_pf2e/actions/runs/43602042864),
+`changes` passed and the three product jobs were skipped as expected. No
+product tests were run for this docs-only review.
+
+Next: Claude commits both brief reviews and the queue Log, pushes and merges
+the docs PR once `changes` passes on the resulting head, then implements the
+accepted briefs from updated main. These review edits are uncommitted; Codex
+did not push, merge or change product code.

@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** brief review (reconciled against main `f6636eac` after PE-11a merged in PR #254; Codex checks the corrections before implementation)
+- **Status:** ready (brief reconciled against main `f6636eac`; accepted by Codex 2026-11-14 on PR #256)
 - **Branch:** `claude/pe-11c-dnd5e-runtime-export`, from current main after PE-11a is accepted and merged. It does not need PE-11b. Record the exact starting SHA.
 - **Depends on:** [PE-11a](PE-11a-dnd5e-locator.md), for the storage-to-path map, the D&D planner enumeration and codes, and decision 1 (D&D files stay authoritative until PE-15).
 - **Context:**
@@ -127,3 +127,45 @@ Allowed files:
 
 ## Review
 <!-- Codex appends numbered findings or acceptance. -->
+
+### Reconciled brief review — accepted (Codex, 2026-11-14)
+
+Reviewed `118a9abdb1d711cab4a2d7e74e793cb50455e88a` against merged main
+`f6636eac` on [PR #256](https://github.com/etamd17/GM_pf2e/pull/256).
+**The PE-11c brief is accepted with no findings. This approves the instructions,
+not an implementation or a live rollback capability.**
+
+- Preserving grant lists is correct for D&D's current authority boundary:
+  the planner warns but creates no assignments from those fields, and D&D
+  authorization uses the scalar owner only. Nulling only a stale scalar owner
+  in the staged copy avoids changing ignored data or the source file.
+- The named-error change is correctly scoped to D&D paths and the two specified
+  conflict codes. Those conflicts include the file path on main. Other planner
+  refusals keep their existing generic message, and `RuntimeExportError` is
+  outside the generic OSError/ValueError handler.
+- Partitioning locator verification is necessary for file-authoritative D&D:
+  new files, deleted files and the campaign's staged trash root cannot be
+  compared to an old SQL snapshot. The specified copied-file expectation and
+  stable sorting cover that partition while preserving exact SQL checks for
+  PF2e/Cosmere. The expected membership/invite projection remains limited to
+  omitted D&D IDs; it neither broadens invitations nor changes SQL/history.
+- The retained source fingerprints and directory re-list checks include files
+  without SQL rows. The existing export tests are identified correctly, with
+  only the interim registered-D&D refusal test replaced. The reference matrix,
+  source-change cases and old-store strictness remain implementation gates.
+- The separately stated test budget is acceptable for this bounded task. It
+  openly exceeds the protocol's rough total-size preference; the 330-line
+  product stop threshold and separate test count keep that visible. This is
+  not permission to include PE-11b, archived filtering or route changes.
+
+Verification: exporter, planner, authorization and test anchors were checked
+against `f6636eac`; product files are unchanged by this PR. `git diff --check
+f6636eac..118a9abd` passed. In
+[CI run 43602042864](https://github.com/etamd17/GM_pf2e/actions/runs/43602042864),
+`changes` passed and the three product jobs were skipped as expected. No
+product tests were run for this docs-only review.
+
+Next: Claude commits both brief reviews and the queue Log, pushes and merges
+the docs PR once `changes` passes on the resulting head. PE-11c can then be
+implemented first from updated main; it does not depend on PE-11b. These review
+edits are uncommitted; Codex did not push, merge or change product code.
