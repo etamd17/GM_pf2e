@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** review (implemented from main `ec83deb5`; brief accepted by Codex 2026-11-14 on PR #256)
+- **Status:** done (implementation accepted by Codex 2026-11-14; PR #258 not merged)
 - **Branch:** `claude/pe-11b-dnd5e-archive-restore` from current main after PE-11a is accepted and merged. Record the exact starting SHA.
 - **Depends on:** [PE-11a](PE-11a-dnd5e-locator.md): its storage-to-path map, D&D locator, `_validate_locator` and the decisions it fixes.
 - **Context:**
@@ -138,3 +138,66 @@ Next: Claude commits both brief reviews and the queue Log, pushes and merges
 the docs PR once `changes` passes on the resulting head, then implements the
 accepted briefs from updated main. These review edits are uncommitted; Codex
 did not push, merge or change product code.
+
+### Implementation review 1 — accepted (Codex, 2026-11-14)
+
+Reviewed `94cf128ff24240821c749cb61778b7bf55547bcb` against `ec83deb5`
+on [PR #258](https://github.com/etamd17/GM_pf2e/pull/258).
+**Accepted with no findings. This is implementation acceptance, not a
+production storage switch or completion of the D&D player screens.**
+
+- Exact prefix lookup and the global case-variant/nested-directory guards
+  match the brief. The added case-variant `.json` extension refusal is an
+  acceptable, narrowly scoped safety correction: otherwise Windows could
+  serve a file that the registration scan skipped. It applies inside the
+  three character stores; ordinary files elsewhere retain their behavior.
+- D&D registration is limited to D&D campaigns. Flat D&D files in PF2e or
+  Cosmere campaigns remain unregistered. D&D IDs and stems must match the
+  exact shared rule; missing, empty and wrong systems are refused. Only
+  D&D's campaign ID is rewritten. Existing PF2e/Cosmere campaign checks
+  remain strict.
+- Fresh IDs, `<new id>.json` names, stored checksums, cleared grants and
+  encounter references agree. The Cosmere collision fixture reaches the
+  actual rename guard; the D&D target-specific `lexists` override exercises
+  the defensive guard without substituting an allocation failure. Refusal
+  tests check for no published campaign or SQL residue. Supplemental
+  synthetic checks covered the global guards in all three systems, inert
+  D&D files in both other systems and the exact two-character encounter map.
+- The 56 product / 223 test line size is acceptable for this bounded change.
+  The extra tests exercise the brief's refusal and collision matrix. No
+  route, schema, JSON-mode restore or runtime-export change was included.
+
+Verification on Windows with the repository venv:
+
+```text
+python -m pytest -q tests/persistence/test_campaign_sql_import.py tests/persistence/test_runtime_http.py tests/persistence/test_dnd5e_locator.py tests/test_campaign_backup.py tests/character_workflows/test_archive_privacy.py
+130 passed, 1 skipped (POSIX newline), in 215.63s
+```
+
+The brief's original interleaved directory order reproduced missing
+`sqlite_database` fixtures in the unchanged locator tests. A minimal
+`--setup-plan` check also reproduced this on the sibling PE-11c worktree,
+without PE-11b's product or test changes; listing persistence files together
+resolved it. Use the ordered command above for this acceptance set. The first
+run also had a failure in the unchanged SQL outage HTTP case; that same case
+and every other acceptance test passed in the complete rerun. Its initial
+cause was not established, so it is not claimed as a proved timeout.
+
+`git diff --check ec83deb5..HEAD` passed. All four jobs (`changes`, `test`,
+`browser`, `postgresql`) passed on this exact head in
+[CI run 43612813169](https://github.com/etamd17/GM_pf2e/actions/runs/43612813169).
+The wider local suite was not repeated for this review; the Report identifies
+the implementer's counts separately. No local PostgreSQL claim is made.
+
+For players: restoring a D&D campaign on the future database now has an
+accepted implementation that creates fresh, private character copies and
+keeps the encounter linked to them. Production still uses files; player
+screens are unchanged. PE-11c's separate rollback-export fix still needs
+review. PE-13/14 shared saving and command/live-update work also precedes
+PE-15, so PE-15 is not ready merely because this restore is accepted.
+
+Next: Claude commits this review and the queue edits on this branch, preserves
+both branches' review logs when integrating them, and follows the planned
+PE-11c-then-PE-11b merge order once PE-11c is accepted. Every check must be
+green on the resulting PR heads. These edits are uncommitted in
+`GM_pf2e_pe01`; Codex did not commit, push or merge.

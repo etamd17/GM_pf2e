@@ -18,7 +18,7 @@ ready/priority entries below where they conflict; historical logs remain intact.
 New wiki and VTT/map work is parked, shipped tools retain maintenance, and
 Cosmere/Mistborn expansion follows the PF2e plus D&D 2014/2024 release.
 
-PE-00, PE-01, PE-03, PE-04, PE-10, PE-11a and PE-12 are done. PE-02, PE-07, PE-11b and PE-11c are ready; Claude builds PE-11c, then PE-11b.
+PE-00, PE-01, PE-03, PE-04, PE-10, PE-11a and PE-12 are done. PE-02 and PE-07 are ready. PE-11b is accepted pending merge; PE-11c needs one review fix on its separate branch. PE-13/14 still precede PE-15.
 Dependencies follow section 11 of the accepted
 [state and command contract](../player-release/state-command-contract.md). Blocked briefs
 cannot be claimed until accepted dependencies are integrated. Needs-brief rows
@@ -37,8 +37,8 @@ before they become ready. Owners review each other's output under PROTOCOL.md.
 | PE-07 | Player journey mockups and UI contract | claude | high; select current model | ready | [brief](tasks/PE-07-player-ux-design.md) |
 | PE-10 | Extend D&D campaign/character identity constraints | claude | high; select current model | done (merged in PR #250) | [brief](tasks/PE-10-dnd5e-identity.md) |
 | PE-11a | D&D locator, read-side identity and forward-import planning | claude | high; select current model | done (merged in PR #254) | [brief](tasks/PE-11a-dnd5e-locator.md) |
-| PE-11b | SQL-mode campaign-archive restore for D&D characters | claude | high; select current model | review | [brief](tasks/PE-11b-dnd5e-archive-restore.md) |
-| PE-11c | Runtime reverse export of D&D characters | claude | high; select current model | ready | [brief](tasks/PE-11c-dnd5e-runtime-export.md) |
+| PE-11b | SQL-mode campaign-archive restore for D&D characters | claude | high; select current model | done (accepted; PR #258 not merged) | [brief](tasks/PE-11b-dnd5e-archive-restore.md) |
+| PE-11c | Runtime reverse export of D&D characters | claude | high; select current model | in-progress (changes requested: R1-1 on PR #257) | [brief](tasks/PE-11c-dnd5e-runtime-export.md) |
 | PE-12 | Character/encounter state, session, clock and authority tables; `migration_runs` and `characters.archived_at` changes | claude | high; select current model | done (merged in PR #249) | [brief](tasks/PE-12-game-state-schema.md) |
 | PE-13 | Campaign-scoped state repositories, revision check order, conflict body and lock order | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-12 |
 | PE-14 | Campaign streams, command receipts, gameplay events (the outbox), grants, operation-status read, session start/end and stream-locked authorization writes | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-01, PE-12, PE-13 |
@@ -252,6 +252,7 @@ Accepted as a design checkpoint. Notes:
 
 ## Log
 
+- 2026-11-14 Codex: accepted PE-11b / PR #258 with no findings. All four automated checks are green, and the reordered local checks passed (130 tests; one Windows skip). For players: the future database can now restore D&D backups as fresh, private characters while keeping their encounter links. No new player screen or change to live storage yet. Next: Claude records this review, fixes PE-11c's rollback issue and gets it re-reviewed before the planned merges; shared saving and live updates (PE-13/14) still come before the D&D screen conversion (PE-15). Notes are uncommitted; nothing was merged.
 - 2026-11-14 Claude: built PE-11b (D&D campaign backup restore on the new database) and returned it for review on a draft PR; PE-11c is also waiting for review on PR #257. For players: once both are merged, a GM can restore a D&D campaign backup on the database and get fresh, private copies of the characters, with the encounter still pointing at them. It is not usable yet: production still runs on files, and the D&D player screens come with PE-15. Tests: 47 restore tests, 130 acceptance tests and 815 persistence/character tests pass; 11 of 11 mutations caught. Next: Codex reviews PE-11c and PE-11b; PE-07 mockups can proceed alongside.
 - 2026-11-14 Codex: accepted the reconciled PE-11b and PE-11c briefs with no findings; the docs check passed. For players: the D&D import groundwork is finished, and these instructions are now ready for building safe backup restoration and a safe return from the database to files. Neither feature is built by this docs change, and no player screen changes yet. Next: Claude commits the reviews, merges PR #256 after its check passes, then builds PE-11c followed by PE-11b; player-screen mockups can proceed alongside. Review edits are uncommitted; nothing was merged by Codex.
 - 2026-11-14 Claude: checked the PE-11b and PE-11c briefs against main now that PE-11a is merged. For players: nothing changes yet; these two tasks let a GM restore a D&D campaign backup on the new database and let the site roll D&D characters back to files safely. Corrections: updated line numbers; backup path-safety checks now apply to every game system; a D&D sheet with no rules system is refused; the export names a bad D&D file and checks D&D characters against the files rather than the database; test lines are budgeted separately. Next: Codex reviews the corrected briefs (docs PR); then Claude builds PE-11c and PE-11b. PE-07 player-screen mockups can go ahead alongside.
