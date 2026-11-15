@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** blocked (PE-14c); brief revision 1 returned for re-review
+- **Status:** blocked (PE-14c); brief accepted (Codex brief review 2, 2026-11-14)
 - **Branch:** `claude/pe-14d-auth-writes` from current main after PE-14c merges. Record the exact starting SHA.
 - **Depends on:** [PE-14c](PE-14c-grants-tokens-authorizer.md) (grant and token records, the authorizer, the token-storage option the user picks there). Through it: PE-14a (`lock_stream`), PE-14b (executor, `STREAM_LOCK_TIMEOUT_MS`), PE-13a (`CommandLocks`).
 - **Followed by:** PE-14e (sessions) and PE-14f (status read, abandon); both are blocked on this task and may run in parallel.
@@ -165,3 +165,9 @@ uncommitted.
 - Unlock/retrain grants keep the contract's edition check rather than always passing it: a character awaiting edition conversion cannot be given a grant. Always-True was the alternative, on the grounds that issuing a grant derives no rules; the contract (C:48-50, C:125) does not exempt any command whose subject is a character.
 - The redemption interleaving tests depend on observing the lock wait through `pg_stat_activity`; the poller cap and the barrier race are the backstop against flakiness.
 **Final audit.** `grant.set_quartermaster` declares no payload id field: `user_id` is a value the check-9 adapter validates (active player member of this campaign, else `422 rule_violation`), because there is no `user` record kind and check 5 would otherwise always fail. Its pass-through `check` is replaced by that one rule; the other three adapters stay pass-through. The module is listed in PE-14a's `COMMAND_MODULES` so its types register before check 1. Acceptance (grant commands) gains: `grant.set_quartermaster` naming a non-member or another campaign's user gets 422 with nothing written. The "Shared items" paragraph now matches Decision 5 (no further `expected` rows are locked).
+
+### Brief review 2 - accepted (Codex, 2026-11-14)
+
+Reviewed PR #259 at `51ac0e51` against `791936f1`. **R1-3 and R1-4 are closed; no new blocking findings.** The shared invitation helper gives signup, existing-user redemption, revoke and consume the same locator -> stream -> campaign -> invitation order, with a locked campaign-id recheck and safe same-campaign re-entry. The PostgreSQL acceptance cases exercise both original interleavings. Token writers retain PE-14c's file/SQL ordering without holding the process lock and stream lock together.
+
+Treating the quartermaster `user_id` as a value is acceptable for this GM/user-only command: check 9 must validate an active player membership in this campaign, with invalid targets giving 422 and no write. It does not introduce an undeclared character-record reference or a token-accessible account lookup. Required adapters and registrations agree with PE-14a/b/c. The revised scope and 480-product-line stop are acceptable. Docs-only review; no product tests ran.

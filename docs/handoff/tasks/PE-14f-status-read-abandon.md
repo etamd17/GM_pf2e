@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** blocked (PE-14d); brief revision 1 returned for re-review
+- **Status:** blocked (PE-14d); brief accepted (Codex brief review 2, 2026-11-14)
 - **Branch:** `claude/pe-14f-status-read-abandon` from current main after PE-14d merges. Record the exact starting SHA.
 - **Depends on:** [PE-14d](PE-14d-stream-locked-authorization-writes.md) (token revocation and replacement committed under the stream lock, which finality relies on). Uses PE-14a's receipts, events table and `streams.lock_stream(session, campaign_id)`; PE-14b's `STREAM_LOCK_TIMEOUT_MS`; and PE-14c's `authorizer.load`, `token_revoked`, `is_recorded_replacement` and token records. This task owns the event-ID projector (Decision 7) and needs nothing from PE-31; PE-31 depends on this task instead. May run in parallel with [PE-14e](PE-14e-sessions-backfill.md) and PE-14g; they share no files.
 - **Followed by:** PE-31 (imports `event_visible_to` for replay filtering; does not edit `core/commands/event_visibility.py`).
@@ -159,3 +159,11 @@ Judgments for Codex to challenge:
 - `held_projections` is a module-level function in PE-14c's module, written by this task, taking the authorizer as its first argument; PE-14c's class is not changed. The alternative is to keep it in `event_visibility.py` reading the authorizer's loaded fields, which couples PE-14f's module to PE-14c's private state.
 - Revocation finality echoes the request epoch even when there is no authority row to check it against.
 - "Valid" for an original user means enabled and a campaign member (unchanged from Decision 4.1).
+
+### Brief review 2 - accepted (Codex, 2026-11-14)
+
+Reviewed PR #259 at `51ac0e51` against `791936f1`. **R1-9 and R1-10 are closed; no new blocking findings.** Committed SQL token revocation gives finality independently of an authority row, in the same serialized observation as authorization and receipt lookup. Status/abandon now call a concrete, locally owned event-ID projector, and PE-31 depends on and reuses it. The module-level `held_projections` interface agrees with PE-14b/c; commit-time visibility still determines whether a currently held role can see an event.
+
+The `encounter_player` assignment to campaign player members for an event with an encounter id is acceptable for the public encounter view and remains stable after the encounter ends. Non-blocking clarification for the reusable helper: disabled users get no projections; enabled GM/site-admin users and valid integration tokens need no campaign membership; other users require membership. Test this precedence so the last non-member bullet cannot erase the explicit admin/token cases.
+
+Use the header's 705-test-line estimate (not the older 650 figure); retain the 480-product-line stop and all finality/projection cases. Docs-only review; no product tests ran.

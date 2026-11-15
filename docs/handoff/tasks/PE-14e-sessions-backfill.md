@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** blocked (PE-14d); brief revision 1 returned for re-review
+- **Status:** blocked (PE-14d); brief accepted (Codex brief review 2, 2026-11-14)
 - **Branch:** `claude/pe-14e-sessions-backfill` from current main after PE-14d merges. Record the exact starting SHA.
 - **Depends on:** [PE-14d](PE-14d-stream-locked-authorization-writes.md) (redeem_invite and the other authorization writers take the stream lock, which the deadlock test below needs). May run in parallel with [PE-14f](PE-14f-status-read-abandon.md); the two share no files.
 - **Context:**
@@ -208,3 +208,15 @@ Judgments for Codex to challenge:
 - A collision whose ids are all existing `file_backfill` rows is not listed again.
 - A `live` `current_session` blocks every insert, not only its own id.
 **Final audit.** `session.start` declares no payload id field: the new `session_id` is a value (declaring it would make check 5 refuse every valid new id). `core.commands.sessions` is appended to PE-14a's `COMMAND_MODULES`, so the session types and the import-time `register_visibility("session", ...)` exist before check 1.
+
+### Brief review 2 - accepted (Codex, 2026-11-14)
+
+Reviewed PR #259 at `51ac0e51` against `791936f1`. **R1-5, R1-6, R1-7 and R1-8 are closed; no new blocking findings.** The reader/database split satisfies the import guard. Start binds its inserted session, while end/cancellation events use the executor's snapshot. Null/absent legacy session ids are ordinary out-of-session history; accepting unreadable history changes `gate_satisfied`, never `read_complete`. The body and acceptance cases agree with the revised interfaces.
+
+Accepted judgments: the new session id is a creation value, so `session.start` declares no existing-record payload ids; GM-only force-end intentionally excludes the token-authenticated Obsidian pane; events from later commands carry NULL session_id after end, as recorded for PE-60.
+
+Non-blocking implementation clarifications:
+1. Check 6 must skip collision lookup/folder conversion for a missing or non-string new session id, leaving the promised check-9 `422 validation_failed` to answer it. Add missing/null/list/object cases alongside the malformed-string cases; do not let a bind/type exception turn them into 500.
+2. Accepting an exact id collision with an existing command-origin row retains that row unchanged and quarantines the collision. Decision 7 inserts only *new* ids; the broader revision-response wording does not authorize a duplicate insert or overwrite. Exercise this accepted-collision case.
+
+The bounded split, dependency window and product stop remain acceptable; preserve the stated acceptance matrix. Docs-only review; no product tests ran.

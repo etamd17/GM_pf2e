@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** blocked (PE-13a); brief revision 1 returned for re-review
+- **Status:** blocked (PE-13a); brief accepted (Codex brief review 2, 2026-11-14)
 - **Branch:** `claude/pe-14a-stream-schema` from current main after PE-13a merges. Record the exact starting SHA.
 - **Depends on:** [PE-13a](PE-13a-state-repositories.md) (lock order, the `LockStream` type and `CommandLocks`, which this task does not edit). PE-01 and PE-12 are done. PE-13b and PE-13c are not needed; this task may run in parallel with them.
 - **Followed by:** PE-14b (executor; calls check 1, passes `lock_stream` to `CommandLocks`), PE-14c (grant and token records, step-4 authorizer; reads `override_gm_only`), PE-14d (stream-locked authorization writes), PE-14e (sessions, folder form, history backfill), PE-14f (status read, abandon, their routes) and PE-14g (token rollback export gate, Option A only). "PE-14 done" means all seven (six if PE-14g is dropped under Option B).
@@ -164,3 +164,11 @@ Judgments for Codex to challenge:
 - A missing required `expected` stays `400 bad_envelope` (unchanged judgment).
 - `EnvelopeRefusal` is a separate exception from PE-13b's `CommandRefusal`, because this task depends on neither PE-13b nor PE-13c; PE-14b maps both by attribute.
 7. **Where real types are imported (final audit).** `registry.py` gains `COMMAND_MODULES` (empty here) and `load_command_modules()`, called first by `check_envelope` (Approach 6). PE-14d and PE-14e append `core.commands.grant_commands` and `core.commands.sessions`. This closes the gap left in item 6 and guarantees import-time registrations (types, `register_visibility`) exist before any command is checked.
+
+### Brief review 2 - accepted (Codex, 2026-11-14)
+
+Reviewed PR #259 at `51ac0e51` against `791936f1`. **R1-1 and R1-2 are closed; no new blocking findings.** The stream callback stays explicit; check 1 receives the verified principal and returns the same `CheckedEnvelope` PE-14b consumes. `EnvelopeRefusal(code)` with `code/http_status`, required per-type `rules_adapter`, `allowed_principals` and `override_gm_only` have matching consumers. Same-campaign re-entry supports PE-14d's invitation helper. Only this task adds `_0005`; PE-14c adds `_0006` later, preserving one head.
+
+Implementation caution, non-blocking for the specified callers: the cache keyed only by the outer `session.get_transaction()` does not establish safety after rolling back a SAVEPOINT in which the stream lock was first acquired. Keep nested-transaction use explicitly unsupported/rejected unless rollback-aware cache invalidation is separately implemented and tested; no current production caller needs it.
+
+The revised estimate and 750-product-line stop are acceptable. This accepts instructions only, subject to their existing dependency order. Docs-only review; no product tests ran.

@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** blocked (PE-14b); token storage: user chose Option A (2026-11-14); brief revision 1 returned for re-review
+- **Status:** blocked (PE-14b); brief accepted (Codex brief review 2, 2026-11-14); token storage: user chose Option A (2026-11-14)
 - **Branch:** `claude/pe-14c-grants-tokens` from current main after PE-14b merges. Record the exact starting SHA.
 - **Depends on:** [PE-14b](PE-14b-command-executor.md) (executor and its authorizer factory slot), and through it PE-14a (`lock_stream`, `_0005`, the `CommandType` registry with `override_gm_only`) and PE-13a (`EncounterStateRepository.is_combatant`, authority rules). The user's answer to Decision 1.
 - **Followed by:** PE-14d (stream lock in every authorization writer; grant and token commands; keeps this task's revoke and mint order). PE-14f (status read and abandon use `authorizer.load` and the replacement and revocation helpers; PE-14f also adds the module-level function `held_projections(authorizer, *, subjects: list[dict], encounter_id: str | None) -> frozenset[str]` to `core/commands/authorizer.py`, called as `held_projections(authorizer, subjects=..., encounter_id=...)` on the object that `load` returns, so that this task stays inside its stop line; this task's authorizer class is not changed). PE-14g (token rollback export gate; Option A only, dropped under Option B; it must merge before production uses SQL token storage).
@@ -166,3 +166,9 @@ Judgments for Codex to challenge:
 8. An import that meets a file id already held in SQL by another campaign skips it and logs, rather than refusing the whole import; the bearer for that id then fails the SQL check (401).
 9. A corrupt `tokens.json` in SQL mode refuses every bearer with 500 until it is fixed, including SQL-live tokens. Failing closed was preferred over ignoring the file, because the file may hold a revocation SQL lacks.
 - **Token storage decided (user, 2026-11-14).** The user chose Option A. Decision 1 now marks A as chosen and B as not chosen; no other text changed, because the brief already assumed A. PE-14g stands.
+
+### Brief review 2 - accepted (Codex, 2026-11-14)
+
+Reviewed PR #259 at `51ac0e51` against `791936f1`. **R1-4 and R1-7 are closed; no new blocking findings.** File-first revocation tombstones, SQL-first minting with insert-if-absent mirroring, strict-file failures, one-way repair and the stated partial-failure tests close the rollback revival gap. PE-14d preserves those orderings when adding stream locks, and required PE-14g handles supported whole-store rollback. The user chose Option A on 2026-11-14; it is not a pending decision.
+
+Including ordinary session start/end in `@live` preserves the plugin workflow. `override_gm_only` explicitly excludes token force-end even with override scope and agrees with PE-14e. Moving the event-ID role helper to PE-14f and token export to PE-14g leaves coherent ownership and a workable 750-product-line stop. Only this task adds `_0006`, after PE-14a's `_0005`. Docs-only review; no product tests ran.

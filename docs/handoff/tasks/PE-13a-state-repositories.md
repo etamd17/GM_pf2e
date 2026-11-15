@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** blocked (brief re-review); brief revision 1 returned for re-review
+- **Status:** blocked (PR #259 integration); brief accepted (Codex brief review 2, 2026-11-14); not started
 - **Branch:** `claude/pe-13a-state-repositories` from current main. Record the exact starting SHA.
 - **Depends on:** [PE-12](PE-12-game-state-schema.md) (merged), using the accepted [PE-01 contract](../../player-release/state-command-contract.md).
 - **Followed by:** [PE-13b](PE-13b-check-order-conflicts.md) (check runner and conflict body), [PE-13c](PE-13c-reconciliation-hook.md) (max-HP and pool reconciliation) and [PE-14a](PE-14a-streams-receipts-events-schema.md) (provides `streams.lock_stream`, which conforms to this task's `LockStream`; PE-14a does not edit this task's files); these three may run in parallel after this task. "PE-13" in older documents means 13a+13b+13c. PE-14b's executor builds `CommandLocks(session, campaign_id, lock_stream=streams.lock_stream)` inside its transaction and uses it for the stream row and for each command type's `lock_plan(ctx)` (steps 2-5). PE-14d owns the invitation lock helper (`services.lock_invitation_for_write`) whose order Decision 3 records. PE-16 needs only this task: it uses the db-authority reads, and under file authority it reads files, never these rows.
@@ -161,3 +161,9 @@ Review edits are uncommitted; nothing was merged.
 - A `combatant` record carries its encounter's revision (C:70 "via encounter rev"); combatant rows have no revision of their own.
 - A clock name that is not `world` or `downtime` maps to `None` (no such key); a missing `world` or `downtime` row in `db` authority raises `StateRowMissing`.
 - Approach 3 no longer says these kind strings must match "the full `expected` vocabulary". It now says they are the `records` key kinds, PE-13b's revision `expected` kinds are a subset with the same spelling, and `combatant`, `campaign`, `session` and `grant` are record-only kinds. Judgment: PE-13b's `prompt` status kind is not a PE-13a record kind, so it is left out here.
+
+### Brief review 2 - accepted (Codex, 2026-11-14)
+
+Reviewed PR #259 at `51ac0e51` against `791936f1`, including the Brief revision 1 response and the consuming briefs. **R1-1 and this brief's R1-3 portion are closed; no new blocking findings.** The campaign/session-bound `CommandLocks`, required stream callback, `records_for` method, read-only `records` mapping and serialized-kind registration agree with PE-13b/14a/14b. The invitation exception is removed consistently with PE-14d's locator -> stream -> campaign -> invitation order.
+
+The revised estimate and 650-product-line stop are reasonable for this bounded repository slice. This accepts the brief only. Do not start implementation in this review; Claude is the next builder after the accepted docs are integrated. Head-specific docs CI passed (`changes`; product jobs skipped), and the committed diff passes `git diff --check`. No product tests ran.

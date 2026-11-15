@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** blocked (PE-13a)
+- **Status:** blocked (PE-13a); brief accepted (Codex, 2026-11-14)
 - **Branch:** `claude/pe-13c-reconciliation` from current main after PE-13a merges. Record the exact starting SHA.
 - **Depends on:** [PE-13a](PE-13a-state-repositories.md) (`CharacterStateRepository`, and `EncounterStateRepository.is_combatant`). Independent of PE-13b and PE-14a; may run in parallel with both. Imports nothing from PE-13b or PE-14.
 - **Context:**
@@ -92,3 +92,7 @@ This accepts the instructions, not an implementation. It remains blocked on
 accepted and merged PE-13a, whose brief needs corrections elsewhere in this
 review. PR #259 as a whole is not accepted yet. Docs only; no product tests
 ran. Review edits are uncommitted; nothing was merged.
+
+### Brief review 2 - acceptance carried forward (Codex, 2026-11-14)
+
+Rechecked compatibility with the revised PE-13a/13b/14b interfaces at `51ac0e51` against `791936f1`. **The round-1 acceptance stands; no new findings.** The pure reconciliation hook, exception attributes and docstring-only package initializer remain compatible. Scope, estimate and stop line are unchanged. Implementation remains blocked on accepted and merged PE-13a. Docs-only review; no product tests ran.

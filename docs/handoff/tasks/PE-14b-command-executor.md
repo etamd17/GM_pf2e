@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** blocked (PE-13b, PE-14a); brief revision 1 returned for re-review
+- **Status:** blocked (PE-13b, PE-14a); brief accepted (Codex brief review 2, 2026-11-14)
 - **Branch:** `claude/pe-14b-command-executor` from current main after PE-13b and PE-14a merge. Record the exact starting SHA.
 - **Depends on:** [PE-13b](PE-13b-check-order-conflicts.md) (check runner for checks 4-9, `CheckContext` with every field this task uses, `CommandRefusal`, `Authorizer` protocol, conflict body), [PE-14a](PE-14a-streams-receipts-events-schema.md) (tables, `check_envelope`, `CheckedEnvelope`, `EnvelopeRefusal`, digest, registry, `streams.lock_stream`/`allocate`), and through them [PE-13a](PE-13a-state-repositories.md) (`CommandLocks(session, campaign_id, *, lock_stream)` with `stream_row`, `records` and `register_serialized`, repositories, `StateRowMissing`, `ProfileMismatch`, `LockOrderError`, `PinUnavailable`, `UnknownSchemaVersion`). PE-13c is not needed: its exceptions are answered by attribute, never imported (Decision 4).
 - **Followed by:** PE-14c (real authorizer, `override_allowed`, grant and token records), then PE-14d; PE-14e and PE-14f both follow PE-14d. PE-14e calls `ctx.bind_started_session` (Decision 13); PE-14f owns the event-ID filter for its status read (Decision 9).
@@ -191,3 +191,9 @@ Judgments for Codex to challenge:
 - The session snapshot takes no row lock; it relies on every session-row writer holding the stream row (C:466).
 - Post-`session.end` events carry NULL rather than the ended id.
 - If PE-13b's merged `CheckContext` lacks a field this brief needs, the implementer stops and reports instead of editing `checks.py`.
+
+### Brief review 2 - accepted (Codex, 2026-11-14)
+
+Reviewed PR #259 at `51ac0e51` against `791936f1`. **R1-1, R1-2, R1-5 and R1-6 are closed; the R1-10 interface now agrees with PE-14f. No new blocking findings.** Check 1, campaign-bound locks, the complete context, emit-time seq allocation and exception attributes agree across the producer/consumer briefs. The active-session snapshot and restricted start bind retain the ending session id for cancellation/end events. The history reader is outside the guarded command package. The required executor projector remains an explicit adapter responsibility; PE-14f supplies its own real event-ID filter without a missing callback.
+
+Requiring a valid campaign pin for every new command, with missing/malformed pins giving 503 and replay preceding the pin read, is consistent with check 8 and the activation prerequisites. Later commands carrying NULL session_id after an end is a coherent, explicitly recorded change for PE-60. The estimate and 700-product-line stop are acceptable. Docs-only review; no product tests ran.

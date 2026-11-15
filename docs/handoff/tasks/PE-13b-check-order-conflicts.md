@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** blocked (PE-13a); brief revision 1 returned for re-review
+- **Status:** blocked (PE-13a); brief accepted (Codex brief review 2, 2026-11-14)
 - **Branch:** `claude/pe-13b-check-order` from current main after PE-13a merges. Record the exact starting SHA.
 - **Depends on:** [PE-13a](PE-13a-state-repositories.md). Runs in parallel with PE-13c and PE-14a; it imports nothing from either.
 - **Followed by:** PE-14b (executor), which runs check 1 before its transaction, then inside it takes the stream lock, runs checks 2-3, builds the authorizer and the `CheckContext`, calls the type's `lock_plan`, then this runner.
@@ -131,3 +131,9 @@ Judgments for Codex to challenge:
 2. `bind_started_session` is a plain callable field defaulting to `None`, not a method, so this module needs no import from PE-14b's `events.py`.
 3. The composing test uses the real PE-13a `CommandLocks` on SQLite with a stub `lock_stream` kept in the test file, rather than a fake locks object, so the interface is proven against the actual lock manager.
 4. `StateRowMissing` is raised in `lock_plan` (PE-13a), so the runner never sees it; the runner treats `None` only as 404.
+
+### Brief review 2 - accepted (Codex, 2026-11-14)
+
+Reviewed PR #259 at `51ac0e51` against `791936f1`. **R1-1 is closed; no new blocking findings.** The closed `CheckContext` now supplies the session, locks, record view, pin, session snapshot and bind callback required by PE-14b. Record kinds, expected kinds and the same-session composing tests agree with PE-13a/14a/14b. Requiring a rules adapter for every registered type gives the runner a complete check-9 slot even when that type does not derive game rules.
+
+The estimate and 450-product-line stop are acceptable. This is brief acceptance, not implementation acceptance; PE-13a must merge first. Docs-only review; no product tests ran.

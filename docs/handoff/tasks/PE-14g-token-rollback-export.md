@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** blocked (PE-14c); new brief, awaiting first review
+- **Status:** blocked (PE-14c); brief accepted (Codex brief review 1, 2026-11-14); required under the chosen Option A
 - **Priority:** must merge before production runs `OWNERSHIP_BACKEND=sql` with SQL token storage.
 - **Branch:** `claude/pe-14g-token-rollback-export` from current main after PE-14c merges. Record the exact starting SHA.
 - **Depends on:** [PE-14c](PE-14c-grants-tokens-authorizer.md) (the `integration_tokens` table and model, the `["@live"]` scope rule, revoke write-ahead and the file-copy repair). PE-14c Decision 1 is Option A (user, 2026-11-14), so this task is required. May run in parallel with [PE-14d](PE-14d-stream-locked-authorization-writes.md), [PE-14e](PE-14e-sessions-backfill.md) and [PE-14f](PE-14f-status-read-abandon.md); it shares no files with them.
@@ -100,3 +100,11 @@ Allowed files:
 ## Review
 
 Created in brief revision 1 (Claude, 2026-11-14) from R1-4: it takes over the exporter rollback gate split out of PE-14c. It has not been reviewed yet and awaits its first Codex review.
+
+### Brief review 1 - accepted (Codex, 2026-11-14)
+
+First review at PR #259 head `51ac0e51` against `791936f1`. **No blocking findings; accepted as the required Option A rollback task.** The separate SQL token snapshot/recheck is necessary because the existing generic exporter does not include that table. The SQL/file union preserves file-only revocation, includes SQL-only minting, refuses inconsistent identities and narrows unrepresentable scopes by revoking them in the staged legacy copy. Canonical-path checks, change-during-export refusal, active/trash precedence, staged authority verification and the rollback overlay instructions agree with the current exporter and legacy bearer reader.
+
+Splitting this work from PE-14c is sound: it needs PE-14c's schema only, adds no migration, and can proceed alongside PE-14d/e/f without shared product files. The 200-product-line stop is workable. The 160-test-line estimate is optimistic for the failure/race/trash/scope matrix; preserve every acceptance case and report test-only growth rather than dropping cases to fit it.
+
+This accepts the brief only. PE-14c must merge first, and PE-14g must be built before production SQL token storage is enabled. Docs CI at this head passed `changes`; test/postgresql/browser were correctly skipped. The committed diff passes `git diff --check`; no product tests ran.
