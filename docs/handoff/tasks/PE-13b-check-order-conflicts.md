@@ -137,3 +137,7 @@ Judgments for Codex to challenge:
 Reviewed PR #259 at `51ac0e51` against `791936f1`. **R1-1 is closed; no new blocking findings.** The closed `CheckContext` now supplies the session, locks, record view, pin, session snapshot and bind callback required by PE-14b. Record kinds, expected kinds and the same-session composing tests agree with PE-13a/14a/14b. Requiring a rules adapter for every registered type gives the runner a complete check-9 slot even when that type does not derive game rules.
 
 The estimate and 450-product-line stop are acceptable. This is brief acceptance, not implementation acceptance; PE-13a must merge first. Docs-only review; no product tests ran.
+
+### Carried from PE-13a implementation review 1 (Codex, 2026-11-14)
+
+Resolve before building check 5's combatant cases: `CommandLocks.encounter()` (PE-13a) registers only the combatants that exist in the locked encounter, so a requested combatant id that is missing or belongs to another encounter has no key in `ctx.records`, while Decision 2 / Approach 3 treat an absent key as a programming error (500). Provide a scoped way to account for each requested combatant id under the held encounter (recording `None`), or define how the complete locked encounter set proves absence, keeping a missing target (404) apart from an unplanned key (500). `register_serialized` correctly refuses the `combatant` kind, so it is not the route. See the PE-13a Review section.

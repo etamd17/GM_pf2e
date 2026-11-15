@@ -309,9 +309,30 @@ def test_profile_mismatch_refuses_before_any_write(sqlite_database):
         assert EncounterStateRepository(session).list("A")[0].rules_profile == "pf2e"
 
 
+SHA = "a" * 64
+DND_CONTENT = {"data_version": "2026.10", "db_sha256": SHA}
+
+
 @pytest.mark.parametrize("settings", [
-    {}, {"rules": "pf2e"}, {"rules": {"profile": "pf3e", "content": {}}},
+    {}, {"rules": "pf2e"}, {"rules": {"profile": "pf3e", "content": CONTENT}},
     {"rules": {"profile": "pf2e"}}, {"rules": {"profile": "pf2e", "content": []}},
+    # PF2e content of the wrong shape
+    {"rules": {"profile": "pf2e", "content": {}}},
+    {"rules": {"profile": "pf2e", "content": DND_CONTENT}},
+    {"rules": {"profile": "pf2e", "content": {"ruleset_id": [], "manifest_sha256": {}}}},
+    {"rules": {"profile": "pf2e", "content": {"ruleset_id": "", "manifest_sha256": SHA}}},
+    {"rules": {"profile": "pf2e", "content": {"ruleset_id": "core", "manifest_sha256": None}}},
+    {"rules": {"profile": "pf2e", "content": {"ruleset_id": "core", "manifest_sha256": "abc"}}},
+    {"rules": {"profile": "pf2e", "content": {"ruleset_id": "core",
+                                              "manifest_sha256": "A" * 64}}},
+    {"rules": {"profile": "pf2e", "content": {**CONTENT, "extra": 1}}},
+    # D&D content of the wrong shape
+    {"rules": {"profile": "dnd5e-2014", "content": CONTENT}},
+    {"rules": {"profile": "dnd5e-2024", "content": {}}},
+    {"rules": {"profile": "dnd5e-2024", "content": {"data_version": "", "db_sha256": SHA}}},
+    {"rules": {"profile": "dnd5e-2024", "content": {"data_version": 7, "db_sha256": SHA}}},
+    {"rules": {"profile": "dnd5e-2014", "content": {"data_version": "v", "db_sha256": None}}},
+    {"rules": {"profile": "dnd5e-2014", "content": {**DND_CONTENT, "extra": 1}}},
 ])
 def test_missing_or_malformed_pin_is_unavailable(sqlite_database, settings):
     _seed(sqlite_database)
@@ -323,8 +344,54 @@ def test_missing_or_malformed_pin_is_unavailable(sqlite_database, settings):
         with pytest.raises(PinUnavailable):
             _insert_state(session, "A", "a1", "play")
         with pytest.raises(PinUnavailable):
+            _insert_encounter(session, "A", "e1")
+        with pytest.raises(PinUnavailable):
             CampaignPinRepository(session).pin("missing-campaign")
         assert CampaignPinRepository(session).pin("B") == PIN
+    assert _all_rows(sqlite_database, CharacterState.__table__) == []
+    assert _all_rows(sqlite_database, EncounterState.__table__) == []
+
+
+def test_malformed_pin_refuses_writes_to_existing_rows(sqlite_database):
+    _seed(sqlite_database)
+    with sqlite_database.transaction() as session:
+        _insert_state(session, "A", "a1", "play")
+        _insert_encounter(session, "A", "e1")
+        session.execute(update(Campaign).where(Campaign.id == "A").values(
+            settings={"rules": {"profile": "pf2e", "content": {}}}))
+    before = (_all_rows(sqlite_database, CharacterState.__table__),
+              _all_rows(sqlite_database, EncounterState.__table__))
+    with sqlite_database.transaction() as session:
+        with pytest.raises(PinUnavailable):
+            _states(session).write("A", "a1", "play", read_revision=1, payload={})
+        with pytest.raises(PinUnavailable):
+            EncounterStateRepository(session).write("A", "e1", read_revision=1, round=2)
+        with pytest.raises(PinUnavailable):
+            EncounterStateRepository(session).add_combatant(
+                "A", "e1", read_revision=1, combatant_id="k", kind="creature")
+    assert before == (_all_rows(sqlite_database, CharacterState.__table__),
+                      _all_rows(sqlite_database, EncounterState.__table__))
+
+
+@pytest.mark.parametrize("rules", [
+    PIN,
+    {"profile": "pf2e", "content": {"ruleset_id": "pf2e-remaster", "manifest_sha256": SHA}},
+    {"profile": "dnd5e-2014", "content": DND_CONTENT},
+    {"profile": "dnd5e-2024", "content": DND_CONTENT},
+])
+def test_well_formed_pins_are_accepted(sqlite_database, rules):
+    _seed(sqlite_database)
+    with sqlite_database.transaction() as session:
+        session.execute(update(Campaign).where(Campaign.id == "A").values(
+            settings={"rules": rules}))
+    with sqlite_database.transaction() as session:
+        assert CampaignPinRepository(session).pin("A") == rules
+        record = _states(session).insert("A", "a1", "play", rules_profile=rules["profile"],
+                                         content=rules["content"], payload={})
+        encounter = EncounterStateRepository(session).insert(
+            "A", "e1", rules_profile=rules["profile"], content=rules["content"])
+    assert (record.revision, record.content) == (1, rules["content"])
+    assert (encounter.revision, encounter.rules_profile) == (1, rules["profile"])
 
 
 # --------------------------------------------------------------------------
@@ -380,6 +447,7 @@ def test_encounter_partial_writes_store_the_upgraded_state(sqlite_database, monk
     _seed(sqlite_database)
     with sqlite_database.transaction() as session:
         _insert_encounter(session, "A", "e1", payload={"old": 1})
+        _insert_encounter(session, "A", "e2", status="ended", payload={"old": 2})
     monkeypatch.setitem(state_repositories.CURRENT_SCHEMA_VERSIONS, "encounter", 2)
     monkeypatch.setattr(state_repositories, "SCHEMA_UPGRADES", {"encounter": {
         1: lambda state: {**state, "payload": {**state["payload"], "new": True}}}})
@@ -388,29 +456,83 @@ def test_encounter_partial_writes_store_the_upgraded_state(sqlite_database, monk
         assert repo.write("A", "e1", read_revision=1, round=3).payload["payload"] == {
             "old": 1, "new": True}
         repo.add_combatant("A", "e1", read_revision=2, combatant_id="k1", kind="creature")
-        stored = session.execute(select(EncounterState.__table__)).first()
+        stored = session.execute(select(EncounterState.__table__)
+                                 .where(EncounterState.encounter_id == "e1")).first()
     assert (stored.schema_version, stored.payload, stored.round, stored.revision) == (
         2, {"old": 1, "new": True}, 3, 3)
+    # A combatant change on a still-old encounter (never written) upgrades it too.
+    with sqlite_database.transaction() as session:
+        EncounterStateRepository(session).add_combatant(
+            "A", "e2", read_revision=1, combatant_id="k2", kind="creature")
+        stored = session.execute(select(EncounterState.__table__)
+                                 .where(EncounterState.encounter_id == "e2")).first()
+    assert (stored.schema_version, stored.payload, stored.status, stored.revision) == (
+        2, {"old": 2, "new": True}, "ended", 2)
 
 
-def test_writes_over_a_newer_stored_version_fail_closed(sqlite_database):
+def _all_rows(database, table):
+    with database.session() as session:
+        return [tuple(row) for row in session.execute(select(table)).all()]
+
+
+@pytest.mark.parametrize("domain", ["build", "play"])
+@pytest.mark.parametrize("operation", ["omitted_profile_write", "explicit_profile_write",
+                                       "delete"])
+def test_character_writes_over_a_newer_stored_version_fail_closed(
+        sqlite_database, domain, operation):
+    _seed(sqlite_database)
+    with sqlite_database.transaction() as session:
+        _insert_state(session, "A", "a1", domain, {"future_field": "must survive"})
+        session.execute(update(CharacterState).values(schema_version=2))
+    before = _all_rows(sqlite_database, CharacterState.__table__)
+    with sqlite_database.transaction() as session:
+        repo = _states(session)
+        with pytest.raises(UnknownSchemaVersion):
+            if operation == "delete":
+                repo.delete("A", "a1", domain, read_revision=1)
+            else:
+                profile = {"rules_profile": "pf2e"} if operation.startswith("explicit") else {}
+                repo.write("A", "a1", domain, read_revision=1, payload={"hp": 4}, **profile)
+    # The whole row, revision, payload and timestamps included, is untouched.
+    assert _all_rows(sqlite_database, CharacterState.__table__) == before
+
+
+def test_character_write_and_delete_keep_compare_and_set(sqlite_database):
     _seed(sqlite_database)
     with sqlite_database.transaction() as session:
         _insert_state(session, "A", "a1", "play")
+        _states(session).write("A", "a1", "play", read_revision=1, payload={"hp": 8},
+                               rules_profile="pf2e")
+    before = _all_rows(sqlite_database, CharacterState.__table__)
+    with sqlite_database.transaction() as session:
+        with pytest.raises(RevisionConflict):
+            _states(session).write("A", "a1", "play", read_revision=1, payload={},
+                                   rules_profile="pf2e")
+        with pytest.raises(RevisionConflict):
+            _states(session).delete("A", "a1", "play", read_revision=1)
+        with pytest.raises(RevisionConflict):
+            _states(session).delete("A", "a2", "play", read_revision=1)
+    assert _all_rows(sqlite_database, CharacterState.__table__) == before
+    with sqlite_database.transaction() as session:
+        _states(session).delete("A", "a1", "play", read_revision=2)
+    assert _all_rows(sqlite_database, CharacterState.__table__) == []
+
+
+def test_encounter_writes_over_a_newer_stored_version_fail_closed(sqlite_database):
+    _seed(sqlite_database)
+    with sqlite_database.transaction() as session:
         _insert_encounter(session, "A", "e1")
-        CampaignClockRepository(session).insert("A", "world")
-        session.execute(update(CharacterState).values(schema_version=2))
         session.execute(update(EncounterState).values(schema_version=2))
+    before = _all_rows(sqlite_database, EncounterState.__table__)
     with sqlite_database.transaction() as session:
         repo = EncounterStateRepository(session)
         with pytest.raises(UnknownSchemaVersion):
-            _states(session).write("A", "a1", "play", read_revision=1, payload={})
-        with pytest.raises(UnknownSchemaVersion):
             repo.write("A", "e1", read_revision=1, round=2)
         with pytest.raises(UnknownSchemaVersion):
+            repo.write("A", "e1", read_revision=1, round=2, rules_profile="pf2e")
+        with pytest.raises(UnknownSchemaVersion):
             repo.add_combatant("A", "e1", read_revision=1, combatant_id="k", kind="creature")
-    stored = _stored_state(sqlite_database, "A", "a1", "play")
-    assert (stored.schema_version, stored.revision) == (2, 1)
+    assert _all_rows(sqlite_database, EncounterState.__table__) == before
 
 
 # --------------------------------------------------------------------------

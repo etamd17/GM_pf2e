@@ -177,6 +177,22 @@ def test_opposite_caller_orders_do_not_deadlock(postgres_database):
         assert second[1] >= first[2], results
 
 
+def _wait_for_lock_waiter(database, timeout=10.0):
+    """True once another backend is waiting on a lock running an UPDATE."""
+
+    deadline = time.monotonic() + timeout
+    with database.session() as session:
+        while time.monotonic() < deadline:
+            waiting = session.scalar(text(
+                "SELECT count(*) FROM pg_stat_activity WHERE pid <> pg_backend_pid() "
+                "AND wait_event_type = 'Lock' AND query ILIKE 'UPDATE character_states%'"))
+            session.rollback()
+            if waiting:
+                return True
+            time.sleep(0.05)
+    return False
+
+
 def test_concurrent_compare_and_set_has_exactly_one_winner(postgres_database):
     _seed(postgres_database)
     updated, release = threading.Event(), threading.Event()
@@ -208,7 +224,9 @@ def test_concurrent_compare_and_set_has_exactly_one_winner(postgres_database):
         winner = executor.submit(first)
         loser = executor.submit(second)
         assert updated.wait(timeout=10)
-        time.sleep(1)
+        # Release the winner only once the loser's UPDATE is observed blocked
+        # on a row lock, so the overlap is proven rather than assumed.
+        assert _wait_for_lock_waiter(postgres_database), "loser never blocked"
         release.set()
         (revision, committed), (outcome, returned) = winner.result(30), loser.result(30)
     assert revision == 2 and isinstance(outcome, RevisionConflict)

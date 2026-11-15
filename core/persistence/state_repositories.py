@@ -35,6 +35,7 @@ frozen and hold deep copies of the stored JSON.
 from __future__ import annotations
 
 import copy
+import re
 from dataclasses import dataclass
 from typing import Any, Callable, Iterable, Mapping
 
@@ -167,6 +168,37 @@ class StateAuthorityRepository:
         return None if row is None else int(row.stream_epoch)
 
 
+_SHA256 = re.compile(r"[0-9a-f]{64}")
+PF2E_LEGACY_RULESET = "pf2e-legacy-unknown"
+
+
+def _valid_content_pin(profile: str, content: Any) -> bool:
+    """Structural check of a content pin (contract section 1 table, C:35-39).
+
+    PF2e: ``{"ruleset_id", "manifest_sha256"}``, where only the
+    ``pf2e-legacy-unknown`` ruleset may carry a null hash.  D&D 2014/2024:
+    ``{"data_version", "db_sha256"}``.  Exactly these keys; ids are non-empty
+    strings and hashes are lowercase 64-hex.  Whether the installed content
+    still matches the pin is PE-13b's check, not this one.
+    """
+
+    def text(value: Any) -> bool:
+        return isinstance(value, str) and bool(value.strip())
+
+    def sha(value: Any) -> bool:
+        return isinstance(value, str) and _SHA256.fullmatch(value) is not None
+
+    if not isinstance(content, dict):
+        return False
+    if profile == "pf2e":
+        if set(content) != {"ruleset_id", "manifest_sha256"} or not text(content["ruleset_id"]):
+            return False
+        manifest = content["manifest_sha256"]
+        return sha(manifest) or (manifest is None and content["ruleset_id"] == PF2E_LEGACY_RULESET)
+    return (set(content) == {"data_version", "db_sha256"} and text(content["data_version"])
+            and sha(content["db_sha256"]))
+
+
 class CampaignPinRepository:
     """The campaign's rules pin, ``campaigns.settings["rules"]``."""
 
@@ -180,7 +212,7 @@ class CampaignPinRepository:
         if (
             not isinstance(rules, dict)
             or rules.get("profile") not in RULES_PROFILES
-            or not isinstance(rules.get("content"), dict)
+            or not _valid_content_pin(rules["profile"], rules.get("content"))
         ):
             raise PinUnavailable(f"campaign {campaign_id} has no valid rules pin")
         return {"profile": rules["profile"], "content": copy.deepcopy(rules["content"])}
@@ -311,7 +343,11 @@ class CharacterStateRepository(_Repository):
         kind = _domain_kind(domain)
         self._check_write(campaign_id)
         key = self._key(campaign_id, character_id=character_id, domain=domain)
-        rules_profile = rules_profile or self._stored(key, kind, read_revision).rules_profile
+        # Always read and validate the stored row (stale or newer-version
+        # rows are refused), even when the caller names the profile; the
+        # revision predicate on the UPDATE below stays the authority.
+        stored = self._stored(key, kind, read_revision)
+        rules_profile = stored.rules_profile if rules_profile is None else rules_profile
         self._check_write(campaign_id, rules_profile)
         values = {"schema_version": CURRENT_SCHEMA_VERSIONS[kind], "rules_profile": rules_profile,
                   "payload": copy.deepcopy(dict(payload))}
@@ -322,9 +358,10 @@ class CharacterStateRepository(_Repository):
 
     def delete(self, campaign_id: str, character_id: str, domain: str, *,
                read_revision: int) -> None:
-        _domain_kind(domain)
+        kind = _domain_kind(domain)
         self._check_write(campaign_id)
         key = self._key(campaign_id, character_id=character_id, domain=domain)
+        self._stored(key, kind, read_revision)  # refuses a newer-version row
         result = self.session.execute(
             delete(self.table).where(key, self.table.c.revision == int(read_revision)))
         if result.rowcount != 1:
@@ -428,7 +465,8 @@ class EncounterStateRepository(_Repository):
         self._check_write(campaign_id)
         key = self._key(campaign_id, encounter_id=encounter_id)
         stored = self._record(self._stored(key, KIND_ENCOUNTER, read_revision))
-        self._check_write(campaign_id, values.get("rules_profile") or stored.rules_profile)
+        profile = values.get("rules_profile")
+        self._check_write(campaign_id, stored.rules_profile if profile is None else profile)
         values = dict(stored.payload, **values, schema_version=stored.schema_version)
         self._cas(key, read_revision, values)
 
