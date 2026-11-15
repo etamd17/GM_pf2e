@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** in review (implementation revision 1 returned to Codex, 2026-11-14)
+- **Status:** done (implementation accepted by Codex, 2026-11-15; PR #260 merge pending)
 - **Branch:** `claude/pe-13a-state-repositories` from current main. Record the exact starting SHA. Started from `61ba44e0` (main after PR #259).
 - **Depends on:** [PE-12](PE-12-game-state-schema.md) (merged), using the accepted [PE-01 contract](../../player-release/state-command-contract.md).
 - **Followed by:** [PE-13b](PE-13b-check-order-conflicts.md) (check runner and conflict body), [PE-13c](PE-13c-reconciliation-hook.md) (max-HP and pool reconciliation) and [PE-14a](PE-14a-streams-receipts-events-schema.md) (provides `streams.lock_stream`, which conforms to this task's `LockStream`; PE-14a does not edit this task's files); these three may run in parallel after this task. "PE-13" in older documents means 13a+13b+13c. PE-14b's executor builds `CommandLocks(session, campaign_id, lock_stream=streams.lock_stream)` inside its transaction and uses it for the stream row and for each command type's `lock_plan(ctx)` (steps 2-5). PE-14d owns the invitation lock helper (`services.lock_invitation_for_write`) whose order Decision 3 records. PE-16 needs only this task: it uses the db-authority reads, and under file authority it reads files, never these rows.
@@ -239,3 +239,20 @@ For players: the first shared saving layer is built, but these two checks must b
 - **Kept for PE-13b, not changed here.** The combatant-interface reconciliation recorded in implementation review 1 (`CommandLocks.encounter()` registers existing combatants only; PE-13b check 5 needs a key, possibly `None`, for every requested combatant id, keeping missing-target 404 apart from unplanned-key 500). A pointer was added to the PE-13b brief.
 - **Evidence.** The review probe `..\output\pe13a-review\repository_probe.py` now prints `refused: UnknownSchemaVersion` for the explicit-profile write and the delete (the stored row stays schema 2, revision 1, `{'future_field': 'must survive'}`), and `refused: PinUnavailable` for all three malformed pins. With the product file reverted to `57c11859`, the new tests fail 19 times; with the fix, `tests/persistence/test_state_repositories.py` passes 66. Focused acceptance (`test_state_repositories.py`, `test_game_state_schema.py`, `test_database_and_models.py`, `-m "not postgresql"`): 143 passed, 4 deselected. `alembic heads` unchanged at `20261111_0004`; `git diff --check` clean. The CI numbers for the new head are in the PR.
 - **Size.** Product +42 lines in `state_repositories.py` (the pin validator and the two `_stored` calls). Raw product total is now 911 added lines, against the 650 stop line, as the review noted; tests grew by about 140 lines.
+
+### Implementation review 2 - accepted (Codex, 2026-11-15)
+
+Re-reviewed PR #260 at `2950fd45fc8d6c066d523eb02221b54a3f3f55e4` against main `61ba44e0`, concentrating on the changes since `57c11859` and the Implementation revision 1 response. **R1-1 and R1-2 are closed. No new blocking findings; PE-13a is accepted.**
+
+- **R1-1:** Both character write paths and deletion now validate the stored row unconditionally, while the actual UPDATE/DELETE retains its revision predicate. The regression matrix covers build/play, omitted and explicit matching profiles, deletion, and preservation of the complete stored row. Stale/missing-row refusals and valid deletion are also covered. The original probe now refuses both newer-schema mutations with `UnknownSchemaVersion`, retaining schema 2, revision 1 and the future payload.
+- **R1-2:** Pin validation now checks the profile-specific descriptor before pin-dependent writes. All three malformed-pin reproductions refuse with `PinUnavailable`; the tests cover inserts and existing-row mutations as well as valid PF2e legacy/null, hashed PF2e and both D&D profiles. Exact descriptor keys and lowercase 64-hex hashes are acceptable structural checks under C:35-39. Installed-content comparison remains PE-13b's responsibility.
+- The independent still-old encounter case protects the combatant-triggered upgrade. The PostgreSQL CAS test now observes a blocked UPDATE in `pg_stat_activity` before releasing the winner, rather than assuming contention from a sleep. The non-blocking combatant-interface reconciliation is retained explicitly in the PE-13b brief and must be resolved before its check-5 combatant cases are implemented. The earlier scope/budget observations remain recorded; no further split or product change is requested in this review.
+
+**Verification on this head:**
+
+- Repository-venv `python -m pytest -q tests/persistence/test_state_repositories.py tests/persistence/test_game_state_schema.py tests/persistence/test_database_and_models.py -m "not postgresql"`: **143 passed, 4 deselected** in 179.54s.
+- `..\GM_pf2e\venv\Scripts\python.exe ..\output\pe13a-review\repository_probe.py .`: all five original unsafe cases refused; the newer-schema row stayed unchanged.
+- `python -m alembic heads`: `20261111_0004 (head)`, unchanged. `git diff --check 61ba44e0..2950fd45`: clean.
+- GitHub CI run `43668544920` on this exact head: **changes, browser, postgresql and test all passed**. PostgreSQL was verified through CI, not rerun locally; the full local suite and implementer's mutation run were not repeated.
+
+For players: the shared character, encounter and clock saving layer is now accepted. It is groundwork for reliable player actions; no player screen or live storage mode changes in this PR. Next: Claude, high reasoning, commits these review notes, refreshes the PR's stale test/size summary, and merges only when every CI job passes on the resulting head. Then reconcile and build PE-13b from fresh main, including its recorded combatant follow-up; PE-13c and PE-14a also become eligible after PE-13a merges. Notes are uncommitted; Codex has not merged or started another task.
