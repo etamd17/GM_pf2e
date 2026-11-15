@@ -23,10 +23,10 @@ Dependencies below follow section 11 of the accepted [state and command contract
 | PE-11b | P1 | Claude | done | PE-11a | [SQL-mode campaign-archive restore for D&D characters](../handoff/tasks/PE-11b-dnd5e-archive-restore.md) |
 | PE-11c | P1 | Claude | done | PE-11a | [Runtime reverse export of D&D characters](../handoff/tasks/PE-11c-dnd5e-runtime-export.md) |
 | PE-12 | P1 | Claude | done (PR #249) | PE-01 | [Character/encounter state, session, clock and authority tables; `migration_runs` and `characters.archived_at` changes](../handoff/tasks/PE-12-game-state-schema.md) |
-| PE-13a | P1 | Claude | in review | PE-12 | [Campaign-scoped state repositories, revisions and lock order](../handoff/tasks/PE-13a-state-repositories.md) |
-| PE-13b | P1 | Claude | blocked | PE-13a | [Fixed check order, `expected` model and conflict body](../handoff/tasks/PE-13b-check-order-conflicts.md) |
-| PE-13c | P1 | Claude | blocked | PE-13a | [Max-HP and pool reconciliation hook](../handoff/tasks/PE-13c-reconciliation-hook.md) |
-| PE-14a | P1 | Claude | blocked | PE-01, PE-12, PE-13a | [Campaign stream, receipt and event tables; envelope, digest and type registry](../handoff/tasks/PE-14a-streams-receipts-events-schema.md) |
+| PE-13a | P1 | Claude | done | PE-12 | [Campaign-scoped state repositories, revisions and lock order](../handoff/tasks/PE-13a-state-repositories.md) |
+| PE-13b | P1 | Claude | in review | PE-13a | [Fixed check order, `expected` model and conflict body](../handoff/tasks/PE-13b-check-order-conflicts.md) |
+| PE-13c | P1 | Claude | ready | PE-13a | [Max-HP and pool reconciliation hook](../handoff/tasks/PE-13c-reconciliation-hook.md) |
+| PE-14a | P1 | Claude | ready | PE-01, PE-12, PE-13a | [Campaign stream, receipt and event tables; envelope, digest and type registry](../handoff/tasks/PE-14a-streams-receipts-events-schema.md) |
 | PE-14b | P1 | Claude | blocked | PE-13b, PE-14a | [Command executor: fence, receipts, replay, refusal transaction and event writer](../handoff/tasks/PE-14b-command-executor.md) |
 | PE-14c | P1 | Claude | blocked | PE-14b | [Grant and token records and the step-4 authorizer](../handoff/tasks/PE-14c-grants-tokens-authorizer.md) |
 | PE-14d | P1 | Claude | blocked | PE-14c | [Stream-locked authorization writes, grant and token commands](../handoff/tasks/PE-14d-stream-locked-authorization-writes.md) |

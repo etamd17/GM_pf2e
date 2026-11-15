@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** blocked (PE-13a); brief accepted (Codex brief review 2, 2026-11-14)
+- **Status:** ready (PE-13a merged); brief accepted (Codex brief review 2, 2026-11-14)
 - **Branch:** `claude/pe-14a-stream-schema` from current main after PE-13a merges. Record the exact starting SHA.
 - **Depends on:** [PE-13a](PE-13a-state-repositories.md) (lock order, the `LockStream` type and `CommandLocks`, which this task does not edit). PE-01 and PE-12 are done. PE-13b and PE-13c are not needed; this task may run in parallel with them.
 - **Followed by:** PE-14b (executor; calls check 1, passes `lock_stream` to `CommandLocks`), PE-14c (grant and token records, step-4 authorizer; reads `override_gm_only`), PE-14d (stream-locked authorization writes), PE-14e (sessions, folder form, history backfill), PE-14f (status read, abandon, their routes) and PE-14g (token rollback export gate, Option A only). "PE-14 done" means all seven (six if PE-14g is dropped under Option B).
