@@ -28,11 +28,11 @@ Dependencies below follow section 11 of the accepted [state and command contract
 | PE-13c | P1 | Claude | blocked | PE-13a | [Max-HP and pool reconciliation hook](../handoff/tasks/PE-13c-reconciliation-hook.md) |
 | PE-14a | P1 | Claude | blocked | PE-01, PE-12, PE-13a | [Campaign stream, receipt and event tables; envelope, digest and type registry](../handoff/tasks/PE-14a-streams-receipts-events-schema.md) |
 | PE-14b | P1 | Claude | blocked | PE-13b, PE-14a | [Command executor: fence, receipts, replay, refusal transaction and event writer](../handoff/tasks/PE-14b-command-executor.md) |
-| PE-14c | P1 | Claude | blocked | PE-14b; user decision (token storage) | [Grant and token records and the step-4 authorizer](../handoff/tasks/PE-14c-grants-tokens-authorizer.md) |
+| PE-14c | P1 | Claude | blocked | PE-14b | [Grant and token records and the step-4 authorizer](../handoff/tasks/PE-14c-grants-tokens-authorizer.md) |
 | PE-14d | P1 | Claude | blocked | PE-14c | [Stream-locked authorization writes, grant and token commands](../handoff/tasks/PE-14d-stream-locked-authorization-writes.md) |
 | PE-14e | P1 | Claude | blocked | PE-14d | [Session start/end commands, folder form and session-history backfill](../handoff/tasks/PE-14e-sessions-backfill.md) |
 | PE-14f | P1 | Claude | blocked | PE-14d | [Operation-status read and operation.abandon](../handoff/tasks/PE-14f-status-read-abandon.md) |
-| PE-14g | P1 | Claude | blocked | PE-14c; user decision (token storage) | [Token rollback export gate (Option A only)](../handoff/tasks/PE-14g-token-rollback-export.md) |
+| PE-14g | P1 | Claude | blocked | PE-14c | [Token rollback export gate (Option A only)](../handoff/tasks/PE-14g-token-rollback-export.md) |
 | PE-15 | P1 | Claude | needs brief | PE-11a, PE-11b, PE-11c, PE-13, PE-14 | D&D state adapter: build, play and encounter commands preserving build revisions (inventory, currency and item charges go to PE-41) |
 | PE-16 | P1 | Claude | needs brief | PE-01, PE-02, PE-13a | PF2e detached read/derive adapter |
 | PE-17 | P1 | Claude | needs brief | PE-16, PE-14 | PF2e vitals command migration, including `shield_block` HP and reaction |

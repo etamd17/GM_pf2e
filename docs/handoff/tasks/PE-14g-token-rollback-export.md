@@ -4,10 +4,10 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** blocked (PE-14c; user token-storage decision); new brief, awaiting first review
+- **Status:** blocked (PE-14c); new brief, awaiting first review
 - **Priority:** must merge before production runs `OWNERSHIP_BACKEND=sql` with SQL token storage.
 - **Branch:** `claude/pe-14g-token-rollback-export` from current main after PE-14c merges. Record the exact starting SHA.
-- **Depends on:** [PE-14c](PE-14c-grants-tokens-authorizer.md) (the `integration_tokens` table and model, the `["@live"]` scope rule, revoke write-ahead and the file-copy repair). The user's answer to PE-14c Decision 1 (Option A; under Option B this task is dropped). May run in parallel with [PE-14d](PE-14d-stream-locked-authorization-writes.md), [PE-14e](PE-14e-sessions-backfill.md) and [PE-14f](PE-14f-status-read-abandon.md); it shares no files with them.
+- **Depends on:** [PE-14c](PE-14c-grants-tokens-authorizer.md) (the `integration_tokens` table and model, the `["@live"]` scope rule, revoke write-ahead and the file-copy repair). PE-14c Decision 1 is Option A (user, 2026-11-14), so this task is required. May run in parallel with [PE-14d](PE-14d-stream-locked-authorization-writes.md), [PE-14e](PE-14e-sessions-backfill.md) and [PE-14f](PE-14f-status-read-abandon.md); it shares no files with them.
 - **Followed by:** PE-15 (rows naming "PE-14" wait for all its children, this one included). Any production use of SQL token storage.
 - **Context:**
   - C = `docs/player-release/state-command-contract.md`: paired file and SQL writes are never atomic (C:458); revocation is permanent (C:275); existing tokens get `@live` (C:851-852); the per-campaign `db -> exporting -> file` transition does not change `OWNERSHIP_BACKEND`, so tokens stay in SQL there (C:668-670).
@@ -85,7 +85,7 @@ Allowed files:
 
 - The token table, mint, revoke, `verify_token`, `list_tokens`, `repair_token_mirror` and the 503 mapping (PE-14c); the stream lock on token writes (PE-14d).
 - The per-campaign `db -> exporting -> file` transition (PE-20, PE-24): tokens stay in SQL there.
-- Option B: if chosen, this task is dropped, since `tokens.json` stays the bearer authority in every mode.
+- Option B: not chosen (user, 2026-11-14); under it this task would have been dropped.
 - `DEPLOY.md`, the planner and the importer: an imported `tokens.json` is not read by the forward migration, and that does not change here.
 
 <!-- ============ REPORT (written by the implementer) ============ -->
