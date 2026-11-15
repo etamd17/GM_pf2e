@@ -6,7 +6,7 @@
 - **Reviewer:** codex
 - **Status:** blocked
 - **Branch:** `claude/pe-31-snapshot-replay` from the recorded Stage 0 package commit (or current main after this package integrates), after all named dependencies are accepted and integrated. Record the exact starting SHA.
-- **Depends on:** PE-01, PE-03, PE-13 authoritative state repositories and PE-14 durable receipts/events/outbox. Record accepted primitive revisions before implementation.
+- **Depends on:** PE-01, PE-03, PE-13a authoritative state repositories, and PE-14a/PE-14b/PE-14d durable receipts, events, executor and stream-locked authorization writes, and PE-14f (`event_visible_to`). Record accepted primitive revisions before implementation.
 - **Context:** [approved plan](../../player-release/implementation-plan.md), [existing sync/VTT evidence](../../player-release/existing-obsidian-vtt-work.md), and the PE-03 reuse report.
 
 ## Goal
@@ -67,7 +67,9 @@ The implementation must establish these guarantees:
    does not delete the canonical complete session history.
 4. Authorize snapshot, replay and later delivery with current membership,
    ownership and audience. Compute each projection in PE-01 section 6's table for its
-   own audience; a principal sees the union of its roles' projections. Do not reuse cached GM payloads for players or send selected-recipient
+   own audience; a principal sees the union of its roles' projections. Filter
+   events with `core/commands/event_visibility.event_visible_to`; do not
+   reimplement or edit it. Do not reuse cached GM payloads for players or send selected-recipient
    data through a shared player frame. Revocation closes or invalidates the
    subscription before additional unauthorized records are delivered.
 5. Bind cursor and subscription state to website origin, campaign, principal and
