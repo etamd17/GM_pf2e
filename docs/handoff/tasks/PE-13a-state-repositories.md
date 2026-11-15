@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** in review (implementation returned to Codex, 2026-11-14)
+- **Status:** changes requested (Codex implementation review 1, 2026-11-14; R1-1 and R1-2)
 - **Branch:** `claude/pe-13a-state-repositories` from current main. Record the exact starting SHA. Started from `61ba44e0` (main after PR #259).
 - **Depends on:** [PE-12](PE-12-game-state-schema.md) (merged), using the accepted [PE-01 contract](../../player-release/state-command-contract.md).
 - **Followed by:** [PE-13b](PE-13b-check-order-conflicts.md) (check runner and conflict body), [PE-13c](PE-13c-reconciliation-hook.md) (max-HP and pool reconciliation) and [PE-14a](PE-14a-streams-receipts-events-schema.md) (provides `streams.lock_stream`, which conforms to this task's `LockStream`; PE-14a does not edit this task's files); these three may run in parallel after this task. "PE-13" in older documents means 13a+13b+13c. PE-14b's executor builds `CommandLocks(session, campaign_id, lock_stream=streams.lock_stream)` inside its transaction and uses it for the stream row and for each command type's `lock_plan(ctx)` (steps 2-5). PE-14d owns the invitation lock helper (`services.lock_invitation_for_write`) whose order Decision 3 records. PE-16 needs only this task: it uses the db-authority reads, and under file authority it reads files, never these rows.
@@ -190,3 +190,43 @@ Review edits are uncommitted; nothing was merged.
 Reviewed PR #259 at `51ac0e51` against `791936f1`, including the Brief revision 1 response and the consuming briefs. **R1-1 and this brief's R1-3 portion are closed; no new blocking findings.** The campaign/session-bound `CommandLocks`, required stream callback, `records_for` method, read-only `records` mapping and serialized-kind registration agree with PE-13b/14a/14b. The invitation exception is removed consistently with PE-14d's locator -> stream -> campaign -> invitation order.
 
 The revised estimate and 650-product-line stop are reasonable for this bounded repository slice. This accepts the brief only. Do not start implementation in this review; Claude is the next builder after the accepted docs are integrated. Head-specific docs CI passed (`changes`; product jobs skipped), and the committed diff passes `git diff --check`. No product tests ran.
+
+### Implementation review 1 - changes requested (Codex, 2026-11-14)
+
+Reviewed PR #260 at `57c11859bd14bb89aceadf2005d161f632b6a152` against `61ba44e0`, including every Decision and Acceptance item and the PE-13b/13c/14a/14b consuming interfaces. **Two fixes are required before implementation acceptance.** The earlier acceptance above was for the brief, not this code.
+
+1. **R1-1 [P2] Always validate the stored schema before character writes and deletes.** In `core/persistence/state_repositories.py:314`, `rules_profile = rules_profile or self._stored(...).rules_profile` calls `_stored` only when the caller omits a truthy profile. An explicit matching `rules_profile="pf2e"` therefore bypasses the newer-version guard: a stored schema-2/revision-1 character is successfully overwritten as schema 1/revision 2, losing its future payload. `delete` at `:323-331` likewise removes that schema-2 row without checking its version. This contradicts Decision 6 / C:153-154 and leaves the reported self-review fix incomplete. Read and validate the stored row unconditionally on both paths, while keeping the revision predicates on the actual UPDATE/DELETE. Extend the newer-version regression to explicit matching profiles and deletion, for both character domains; assert the entire stored row, revision and timestamps remain unchanged. The current test at `tests/persistence/test_state_repositories.py:396-413` exercises only the omitted-profile write and misses both bypasses.
+
+2. **R1-2 [P2] Reject malformed profile-specific content pins.** `CampaignPinRepository.pin` at `core/persistence/state_repositories.py:175-187` accepts any dictionary as `content`. A PF2e pin with `{}`, a D&D descriptor, or `{"ruleset_id": [], "manifest_sha256": {}}` is returned as valid; both character and encounter inserts then commit using it. Decision 5 promises `PinUnavailable` for malformed pins, and C:37-39 supplies the profile-specific descriptor shape. Validate the required descriptor fields and value shapes for PF2e and both D&D profiles, preserving the documented `pf2e-legacy-unknown` / null-hash case. This is structural validation only; do not load installed rules or take over PE-13b's content-mismatch comparison. Add malformed-content cases plus valid PF2e legacy and D&D controls, and prove pin-dependent writes fail before changing state.
+
+**Reproduction evidence.** A disposable in-memory SQLite probe is saved outside the tracked worktree at `../output/pe13a-review/repository_probe.py`. From this worktree, run `..\GM_pf2e\venv\Scripts\python.exe ..\output\pe13a-review\repository_probe.py .`. On this head it prints:
+
+```text
+explicit_profile_write ACCEPTED
+stored: {'schema_version': 1, 'revision': 2, 'payload': {'hp': 4}}
+delete ACCEPTED
+stored: None
+missing_content_keys ACCEPTED
+wrong_profile_descriptor ACCEPTED
+malformed_content_values ACCEPTED
+```
+
+Each malformed-pin case also commits character and encounter rows at revision 1. The probe uses no real campaign data.
+
+**Other decisions and acceptance coverage.** The ordinary revision/CAS paths, independent build/play revisions, encounter/combatant bumps, campaign filters, authority rules, detached records, read-only exports and lock-order checks match the brief. The encounter partial-write fix now carries forward all upgraded fields. Core statements are appropriate for avoiding stale identity-map records; the documented payload shapes and mutable detached dictionaries inside frozen dataclasses are acceptable. Character-only CAS deletion is a reasonable API choice once R1-1 is fixed. Empty lock lists remain harmless no-ops after the stream check. Deferring the order among nonexistent action tables is acceptable, with PE-30 owning it. `RevisionConflict` mapping to 500 in PE-14b is appropriate for an unexpected CAS loss after the stream/record locks and check 7; record that mapping when reconciling its brief. No route, migration, authority setting or worker change was introduced.
+
+**Non-blocking follow-ups, not additional PE-13a acceptance findings:**
+
+- Before PE-13b's combatant checks are built, reconcile a gap in the accepted briefs: `CommandLocks.encounter()` registers existing combatants only, while PE-13b Decision 2 / Approach 3 check 5 requires a key for every requested payload id and treats an absent key as a programming error. A missing or wrong-encounter combatant cannot currently be registered as `None` through the public API (`register_serialized` correctly refuses that kind). Provide a scoped way to account for requested combatant ids under the held encounter, or explicitly define how the complete locked encounter set proves absence. Preserve the distinction between a missing target (404) and an unplanned key (500). PE-13a implements its accepted body here, so this is downstream interface reconciliation rather than a new blocker on this diff.
+- Strengthen the encounter-upgrade regression with a separate still-old encounter for the combatant mutation; the current case upgrades it through `write()` first. The PostgreSQL CAS test's one-second sleep normally creates overlap but does not prove the loser has reached its blocked UPDATE; prefer an explicit contention observation when strengthening it.
+- The raw product diff is about 873 added lines plus the initializer removal, exceeding the stated 650-product-line stop; the report's 558 non-comment/nonblank code lines use a narrower measure. The coherent scope remains reviewable, so no mechanical split is requested here. Keep raw changed-line counts explicit in future budgets and retain the full test matrix.
+
+**Verification:**
+
+- `python -m pytest -q tests/persistence/test_state_repositories.py tests/persistence/test_game_state_schema.py tests/persistence/test_database_and_models.py -m "not postgresql"`: **117 passed, 4 deselected** (160.70s), using the repository venv.
+- The separate repository probe reproduced both findings on this exact head.
+- `python -m alembic heads`: `20261111_0004 (head)`, unchanged.
+- `git diff --check 61ba44e0..57c11859`: clean.
+- GitHub CI run `43663754585` on this head: **changes, test, browser and postgresql all passed**. PostgreSQL was verified through CI, not rerun locally. No full local suite rerun was needed for this inactive slice.
+
+For players: the first shared saving layer is built, but these two checks must be fixed before it is accepted. Existing live data and screens still use the current file system; this PR activates no player feature. Next: Claude, high reasoning, fixes R1-1/R1-2 with regression tests and returns PE-13a for re-review. PE-13b, PE-13c and PE-14a remain blocked on accepted and merged PE-13a. Review edits are uncommitted; nothing was merged.
