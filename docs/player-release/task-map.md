@@ -23,7 +23,7 @@ Dependencies below follow section 11 of the accepted [state and command contract
 | PE-11b | P1 | Claude | done | PE-11a | [SQL-mode campaign-archive restore for D&D characters](../handoff/tasks/PE-11b-dnd5e-archive-restore.md) |
 | PE-11c | P1 | Claude | done | PE-11a | [Runtime reverse export of D&D characters](../handoff/tasks/PE-11c-dnd5e-runtime-export.md) |
 | PE-12 | P1 | Claude | done (PR #249) | PE-01 | [Character/encounter state, session, clock and authority tables; `migration_runs` and `characters.archived_at` changes](../handoff/tasks/PE-12-game-state-schema.md) |
-| PE-13a | P1 | Claude | ready | PE-12 | [Campaign-scoped state repositories, revisions and lock order](../handoff/tasks/PE-13a-state-repositories.md) |
+| PE-13a | P1 | Claude | blocked | PE-12; brief re-review | [Campaign-scoped state repositories, revisions and lock order](../handoff/tasks/PE-13a-state-repositories.md) |
 | PE-13b | P1 | Claude | blocked | PE-13a | [Fixed check order, `expected` model and conflict body](../handoff/tasks/PE-13b-check-order-conflicts.md) |
 | PE-13c | P1 | Claude | blocked | PE-13a | [Max-HP and pool reconciliation hook](../handoff/tasks/PE-13c-reconciliation-hook.md) |
 | PE-14a | P1 | Claude | blocked | PE-01, PE-12, PE-13a | [Campaign stream, receipt and event tables; envelope, digest and type registry](../handoff/tasks/PE-14a-streams-receipts-events-schema.md) |
@@ -32,6 +32,7 @@ Dependencies below follow section 11 of the accepted [state and command contract
 | PE-14d | P1 | Claude | blocked | PE-14c | [Stream-locked authorization writes, grant and token commands](../handoff/tasks/PE-14d-stream-locked-authorization-writes.md) |
 | PE-14e | P1 | Claude | blocked | PE-14d | [Session start/end commands, folder form and session-history backfill](../handoff/tasks/PE-14e-sessions-backfill.md) |
 | PE-14f | P1 | Claude | blocked | PE-14d | [Operation-status read and operation.abandon](../handoff/tasks/PE-14f-status-read-abandon.md) |
+| PE-14g | P1 | Claude | blocked | PE-14c; user decision (token storage) | [Token rollback export gate (Option A only)](../handoff/tasks/PE-14g-token-rollback-export.md) |
 | PE-15 | P1 | Claude | needs brief | PE-11a, PE-11b, PE-11c, PE-13, PE-14 | D&D state adapter: build, play and encounter commands preserving build revisions (inventory, currency and item charges go to PE-41) |
 | PE-16 | P1 | Claude | needs brief | PE-01, PE-02, PE-13a | PF2e detached read/derive adapter |
 | PE-17 | P1 | Claude | needs brief | PE-16, PE-14 | PF2e vitals command migration, including `shield_block` HP and reaction |
@@ -44,7 +45,7 @@ Dependencies below follow section 11 of the accepted [state and command contract
 | PE-23 | P1 | Codex | needs brief | PE-21, PE-22 | Cross-campaign and concurrent-save regression evidence |
 | PE-24 | P1 | Claude | needs brief | PE-18b, PE-19, PE-20 | Per-campaign activation gate: file → migrating → db, migration gate, abort, db → exporting → file |
 | PE-30 | P2 | Claude | blocked | PE-01, PE-02, PE-13, PE-14 | [Pending action, dice, costs and correction contract](../handoff/tasks/PE-30-action-lifecycle.md) |
-| PE-31 | P1/P6 | Claude | blocked | PE-01, PE-03, PE-13a, PE-14a, PE-14b, PE-14d | [Inactive server snapshot/replay primitives](../handoff/tasks/PE-31-snapshot-replay.md) |
+| PE-31 | P1/P6 | Claude | blocked | PE-01, PE-03, PE-13a, PE-14a, PE-14b, PE-14d, PE-14f | [Inactive server snapshot/replay primitives](../handoff/tasks/PE-31-snapshot-replay.md) |
 | PE-31a | P1/P6 | Claude | needs brief | PE-31, PE-24 | Snapshot/replay endpoint adapters and replay activation |
 | PE-31b | P1/P6 | Claude | needs brief | PE-31a | Shared-hub reconnect coordination and client race tests |
 | PE-32 | P2 | Claude | needs brief | PE-30, PE-24, PE-18 | PF2e targeted action resolution; split by action family |
@@ -81,7 +82,7 @@ Dependencies below follow section 11 of the accepted [state and command contract
 
 - PE-01 and PE-03 are accepted; Codex can start PE-02. PE-04 is a review of existing work, not permission to modify its source worktree. PE-07 design may proceed against provisional API bindings, but UI code waits for accepted contracts and the user's visual selection.
 - PE-10, PE-12, PE-14a (`_0005`), PE-14c (`_0006`) and PE-40 add Alembic migrations, as do later schema tasks (PE-41 storage, the action/effect tables from PE-30's follow-ons, and PE-42..48 records): integrate in order, rebase the rest, maintain one migration head, and keep `core/persistence/runtime.py::_REQUIRED_REVISION` on that head. PE-10 and PE-12 both alter `characters`; whichever lands second must keep the other's constraints intact.
-- PE-13 is PE-13a+13b+13c and PE-14 is PE-14a-14f. A row naming PE-13 or PE-14 waits for all their children, except PE-16 (PE-13a), PE-31 (PE-13a, 14a, 14b, 14d) and PE-40 (PE-13a, 13b, 14a, 14b). After PE-13a, PE-13b, PE-13c and PE-14a may run in parallel. After PE-14d, PE-14e and PE-14f may run in parallel. `core/commands/__init__.py` is a docstring only, with no re-exports.
+- PE-13 is PE-13a+13b+13c and PE-14 is PE-14a-14g. A row naming PE-13 or PE-14 waits for all their children, except PE-16 (PE-13a), PE-31 (PE-13a, 14a, 14b, 14d, 14f) and PE-40 (PE-13a, 13b, 14a, 14b). After PE-13a, PE-13b, PE-13c and PE-14a may run in parallel. After PE-14d, PE-14e and PE-14f may run in parallel. PE-14g (after PE-14c) may run in parallel with PE-14d, PE-14e and PE-14f. `core/commands/__init__.py` is a docstring only, with no re-exports.
 - Serialize PE-04, PE-05 and PE-06 around `templates/player_levelup.html`. Review-only verdict, accepted source integration, presentation port, and mechanics correction are distinct steps.
 - Serialize shared `app.py`, route-policy, persistence-model and event-delivery edits by explicit task ownership. Parallel work uses separate modules and tests.
 - PE-01 sets the envelope and invariants; PE-30 only elaborates action lifecycle against them. If PE-30 requires a change, revise/review PE-01 rather than create a second protocol.
