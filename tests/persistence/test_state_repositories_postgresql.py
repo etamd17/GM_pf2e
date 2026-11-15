@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import threading
+import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -11,14 +12,17 @@ from datetime import datetime, timezone
 import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
+from sqlalchemy.exc import OperationalError
 
 from core.persistence import (
     Campaign,
+    CampaignClockRepository,
     CampaignStateAuthority,
     Character,
     CharacterStateRepository,
     CommandLocks,
     Database,
+    EncounterStateRepository,
     RevisionConflict,
     User,
     normalize_database_url,
@@ -76,6 +80,9 @@ def _seed(database):
             CharacterStateRepository(session).insert(
                 "A", character_id, "play", rules_profile="pf2e", content=CONTENT,
                 payload={"hp": 10})
+        EncounterStateRepository(session).insert("A", "e1", rules_profile="pf2e",
+                                                 content=CONTENT)
+        CampaignClockRepository(session).insert("A", "world")
 
 
 def _race(callables):
@@ -100,6 +107,43 @@ def _no_stream(session, campaign_id):
     return None
 
 
+_PROBES = {
+    "character_states": "SELECT 1 FROM character_states WHERE campaign_id = 'A' "
+                        "AND character_id = 'ca' AND domain = 'play' FOR UPDATE NOWAIT",
+    "encounter_states": "SELECT 1 FROM encounter_states WHERE campaign_id = 'A' "
+                        "AND encounter_id = 'e1' FOR UPDATE NOWAIT",
+    "campaign_clocks": "SELECT 1 FROM campaign_clocks WHERE campaign_id = 'A' "
+                       "AND clock = 'world' FOR UPDATE NOWAIT",
+}
+
+
+def _probe(database, table):
+    """True when another connection can take the row lock right now."""
+
+    with database.session() as session:
+        try:
+            session.execute(text(_PROBES[table]))
+            return True
+        except OperationalError as exc:
+            assert "could not obtain lock" in str(exc).lower(), exc
+            return False
+        finally:
+            session.rollback()
+
+
+def test_command_locks_hold_row_locks_until_commit(postgres_database):
+    _seed(postgres_database)
+    assert all(_probe(postgres_database, table) for table in _PROBES)
+    with postgres_database.transaction() as session:
+        locks = CommandLocks(session, "A", lock_stream=_no_stream)
+        locks.stream()
+        locks.encounter("e1")
+        locks.character_states([("ca", "play")])
+        locks.records_for("campaign_clocks", ["world"])
+        assert not any(_probe(postgres_database, table) for table in _PROBES)
+    assert all(_probe(postgres_database, table) for table in _PROBES)
+
+
 def test_opposite_caller_orders_do_not_deadlock(postgres_database):
     _seed(postgres_database)
     holding = threading.Barrier(2)
@@ -111,36 +155,64 @@ def test_opposite_caller_orders_do_not_deadlock(postgres_database):
                 locks = CommandLocks(session, "A", lock_stream=_no_stream)
                 locks.stream()
                 locked = locks.character_states(keys)
+                acquired = time.monotonic()
                 try:
-                    # Hold both rows until the other side has asked for them.
+                    # Hold both rows; the other side is blocked on them, so
+                    # this barrier breaks after its timeout.
                     holding.wait(timeout=2)
                 except threading.BrokenBarrierError:
                     pass
-                return sorted(locked)
+                releasing = time.monotonic()  # taken before the commit releases
+            return sorted(locked), acquired, releasing
         return run
 
-    for _ in range(5):
+    for _ in range(3):
         holding.reset()
         results = _race([lock([("ca", "play"), ("cb", "play")]),
                          lock([("cb", "play"), ("ca", "play")])])
-        assert results == [[("ca", "play"), ("cb", "play")]] * 2, results
+        assert not any(isinstance(r, Exception) for r in results), results
+        assert [r[0] for r in results] == [[("ca", "play"), ("cb", "play")]] * 2
+        first, second = sorted(results, key=lambda r: r[1])
+        # The second acquired its rows only after the first committed.
+        assert second[1] >= first[2], results
 
 
 def test_concurrent_compare_and_set_has_exactly_one_winner(postgres_database):
     _seed(postgres_database)
+    updated, release = threading.Event(), threading.Event()
 
-    def write(hp):
-        def run():
-            with postgres_database.transaction() as session:
-                record = CharacterStateRepository(session).write(
-                    "A", "ca", "play", read_revision=1, payload={"hp": hp})
-                return record.revision
-        return run
+    def first():
+        with postgres_database.transaction() as session:
+            record = CharacterStateRepository(session).write(
+                "A", "ca", "play", read_revision=1, payload={"hp": 5})
+            updated.set()
+            release.wait(timeout=10)
+            committing = time.monotonic()  # taken before the commit releases
+        return record.revision, committing
 
-    results = _race([write(5), write(6)])
-    assert sorted(type(r).__name__ for r in results) == ["RevisionConflict", "int"]
-    assert [r for r in results if isinstance(r, int)] == [2]
-    assert any(isinstance(r, RevisionConflict) for r in results)
+    def second():
+        assert updated.wait(timeout=10)
+        with postgres_database.transaction() as session:
+            session.execute(text("SET LOCAL lock_timeout = '10s'"))
+            try:
+                # The first transaction already holds the row with its
+                # UPDATE applied, so this compare-and-set must wait for it
+                # and then re-check the revision.
+                CharacterStateRepository(session).write(
+                    "A", "ca", "play", read_revision=1, payload={"hp": 6})
+            except RevisionConflict as exc:
+                return exc, time.monotonic()
+        return "won", time.monotonic()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        winner = executor.submit(first)
+        loser = executor.submit(second)
+        assert updated.wait(timeout=10)
+        time.sleep(1)
+        release.set()
+        (revision, committed), (outcome, returned) = winner.result(30), loser.result(30)
+    assert revision == 2 and isinstance(outcome, RevisionConflict)
+    assert returned >= committed
     with postgres_database.session() as session:
         stored = CharacterStateRepository(session).get("A", "ca", "play")
-    assert stored.revision == 2 and stored.payload["hp"] in (5, 6)
+    assert stored.revision == 2 and stored.payload == {"hp": 5}

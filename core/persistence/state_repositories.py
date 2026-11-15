@@ -225,11 +225,15 @@ class _Repository:
         statement = select(t).where(t.c.campaign_id == campaign_id)
         return self.session.execute(statement.order_by(*(t.c[c] for c in order))).all()
 
-    def _stored_profile(self, key) -> str:
-        profile = self.session.scalar(select(self.table.c.rules_profile).where(key))
-        if profile is None:
+    def _stored(self, key, kind: str, read_revision: int):
+        """The row a write replaces, refusing a stale or newer-version row first."""
+
+        row = self._one(key)
+        if row is None or int(row.revision) != int(read_revision):
             raise RevisionConflict("row changed or is missing since it was read")
-        return profile
+        if int(row.schema_version) > CURRENT_SCHEMA_VERSIONS[kind]:
+            raise UnknownSchemaVersion(f"{kind} schema_version {row.schema_version} is newer")
+        return row
 
     def _cas(self, key, read_revision: int, values: dict[str, Any]) -> None:
         """``UPDATE ... WHERE key AND revision = :read`` setting revision + 1."""
@@ -307,7 +311,7 @@ class CharacterStateRepository(_Repository):
         kind = _domain_kind(domain)
         self._check_write(campaign_id)
         key = self._key(campaign_id, character_id=character_id, domain=domain)
-        rules_profile = rules_profile or self._stored_profile(key)
+        rules_profile = rules_profile or self._stored(key, kind, read_revision).rules_profile
         self._check_write(campaign_id, rules_profile)
         values = {"schema_version": CURRENT_SCHEMA_VERSIONS[kind], "rules_profile": rules_profile,
                   "payload": copy.deepcopy(dict(payload))}
@@ -413,12 +417,19 @@ class EncounterStateRepository(_Repository):
 
     def _bump(self, campaign_id: str, encounter_id: str, read_revision: int,
               values: dict[str, Any]) -> None:
-        """Compare-and-set the encounter row at ``read_revision + 1``."""
+        """Compare-and-set the encounter row at ``read_revision + 1``.
+
+        Every encounter column is written: the stored state is upgraded to
+        the current schema version in memory and the caller's fields are laid
+        over it, so a partial write or a combatant bump never labels an old
+        payload with the new version.
+        """
 
         self._check_write(campaign_id)
         key = self._key(campaign_id, encounter_id=encounter_id)
-        self._check_write(campaign_id, values.get("rules_profile") or self._stored_profile(key))
-        values = dict(values, schema_version=CURRENT_SCHEMA_VERSIONS[KIND_ENCOUNTER])
+        stored = self._record(self._stored(key, KIND_ENCOUNTER, read_revision))
+        self._check_write(campaign_id, values.get("rules_profile") or stored.rules_profile)
+        values = dict(stored.payload, **values, schema_version=stored.schema_version)
         self._cas(key, read_revision, values)
 
     def write(self, campaign_id: str, encounter_id: str, *, read_revision: int,

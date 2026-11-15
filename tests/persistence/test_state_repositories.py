@@ -376,6 +376,43 @@ def test_newer_stored_version_fails_closed(sqlite_database):
             EncounterStateRepository(session).get("A", "e1")
 
 
+def test_encounter_partial_writes_store_the_upgraded_state(sqlite_database, monkeypatch):
+    _seed(sqlite_database)
+    with sqlite_database.transaction() as session:
+        _insert_encounter(session, "A", "e1", payload={"old": 1})
+    monkeypatch.setitem(state_repositories.CURRENT_SCHEMA_VERSIONS, "encounter", 2)
+    monkeypatch.setattr(state_repositories, "SCHEMA_UPGRADES", {"encounter": {
+        1: lambda state: {**state, "payload": {**state["payload"], "new": True}}}})
+    with sqlite_database.transaction() as session:
+        repo = EncounterStateRepository(session)
+        assert repo.write("A", "e1", read_revision=1, round=3).payload["payload"] == {
+            "old": 1, "new": True}
+        repo.add_combatant("A", "e1", read_revision=2, combatant_id="k1", kind="creature")
+        stored = session.execute(select(EncounterState.__table__)).first()
+    assert (stored.schema_version, stored.payload, stored.round, stored.revision) == (
+        2, {"old": 1, "new": True}, 3, 3)
+
+
+def test_writes_over_a_newer_stored_version_fail_closed(sqlite_database):
+    _seed(sqlite_database)
+    with sqlite_database.transaction() as session:
+        _insert_state(session, "A", "a1", "play")
+        _insert_encounter(session, "A", "e1")
+        CampaignClockRepository(session).insert("A", "world")
+        session.execute(update(CharacterState).values(schema_version=2))
+        session.execute(update(EncounterState).values(schema_version=2))
+    with sqlite_database.transaction() as session:
+        repo = EncounterStateRepository(session)
+        with pytest.raises(UnknownSchemaVersion):
+            _states(session).write("A", "a1", "play", read_revision=1, payload={})
+        with pytest.raises(UnknownSchemaVersion):
+            repo.write("A", "e1", read_revision=1, round=2)
+        with pytest.raises(UnknownSchemaVersion):
+            repo.add_combatant("A", "e1", read_revision=1, combatant_id="k", kind="creature")
+    stored = _stored_state(sqlite_database, "A", "a1", "play")
+    assert (stored.schema_version, stored.revision) == (2, 1)
+
+
 # --------------------------------------------------------------------------
 # authority (Decision 4)
 

@@ -4,8 +4,8 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** blocked (PR #259 integration); brief accepted (Codex brief review 2, 2026-11-14); not started
-- **Branch:** `claude/pe-13a-state-repositories` from current main. Record the exact starting SHA.
+- **Status:** in review (implementation returned to Codex, 2026-11-14)
+- **Branch:** `claude/pe-13a-state-repositories` from current main. Record the exact starting SHA. Started from `61ba44e0` (main after PR #259).
 - **Depends on:** [PE-12](PE-12-game-state-schema.md) (merged), using the accepted [PE-01 contract](../../player-release/state-command-contract.md).
 - **Followed by:** [PE-13b](PE-13b-check-order-conflicts.md) (check runner and conflict body), [PE-13c](PE-13c-reconciliation-hook.md) (max-HP and pool reconciliation) and [PE-14a](PE-14a-streams-receipts-events-schema.md) (provides `streams.lock_stream`, which conforms to this task's `LockStream`; PE-14a does not edit this task's files); these three may run in parallel after this task. "PE-13" in older documents means 13a+13b+13c. PE-14b's executor builds `CommandLocks(session, campaign_id, lock_stream=streams.lock_stream)` inside its transaction and uses it for the stream row and for each command type's `lock_plan(ctx)` (steps 2-5). PE-14d owns the invitation lock helper (`services.lock_invitation_for_write`) whose order Decision 3 records. PE-16 needs only this task: it uses the db-authority reads, and under file authority it reads files, never these rows.
 - **Context:**
@@ -104,11 +104,34 @@ Allowed files:
 <!-- ============ REPORT (written by the implementer) ============ -->
 
 ## Report
+
 - **Changed:**
+  - New `core/persistence/state_repositories.py` (545 lines, about 359 code lines without docstrings, comments and blanks): `CharacterStateRepository`, `EncounterStateRepository` (owns combatants), `CampaignClockRepository`, `StateAuthorityRepository`, `CampaignPinRepository`, the frozen `StateRecord` with `StateRecord.serialized`, kind constants, the schema-version registry (`CURRENT_SCHEMA_VERSIONS`, `register_schema_upgrade`, `upgrade_payload`) and the exceptions `StateRepositoryError`, `AuthorityMismatch`, `StateRowMissing`, `RevisionConflict`, `ProfileMismatch`, `PinUnavailable`, `UnknownSchemaVersion`.
+  - New `core/persistence/command_locks.py` (287 lines, about 158 code): `LockStream`, `CommandLocks(session, campaign_id, *, lock_stream)` with `stream()`, `encounter()`, `actions()`, `character_states()`, `records_for()`, `register_serialized()` and the read-only `records` mapping; module-level `STREAM_SERIALIZED_KINDS`, `register_stream_serialized_kind`, `register_lock_table` (step 5) and `register_action_table` (step 3). The module docstring states the wider lock rule and the invitation order of Decision 3.
+  - `core/persistence/__init__.py`: exports only (+41 lines). `STREAM_SERIALIZED_KINDS` is deliberately not re-exported, so no importer holds a stale copy after `register_stream_serialized_kind`.
+  - Size: about 873 raw product lines, about 558 code lines, against the ~555 estimate and the 650 stop line (code lines; raw lines including docstrings are over). Tests: 739 SQLite + 218 PostgreSQL lines, against the ~640 estimate; the extra is the authority and lock-order matrices and the strengthened PostgreSQL cases below.
 - **Tests run:**
-- **Skipped / not verified:**
-- **Known wrong / limitations:**
-- **Follow-ups (not done here):**
+  - `python -m pytest -q tests/persistence/test_state_repositories.py`: 40 passed.
+  - `python -m pytest -q tests/persistence/test_state_repositories.py tests/persistence/test_game_state_schema.py tests/persistence/test_database_and_models.py` (first commit): 115 passed, 4 errors. The 4 errors are existing PostgreSQL-marked cases in `test_game_state_schema.py` that need `DATABASE_URL`; CI's `test` job deselects them with `-m "not postgresql"`.
+  - `tests/persistence/test_state_repositories_postgresql.py`: 3 cases collect; they run only in CI's `postgresql` job (local Docker is retired). Check that job's numbers on the PR head.
+  - `python -m alembic heads`: `20261111_0004 (head)`, unchanged. `git diff --check` passes.
+- **Self-review:** an adversarial review workflow (3 reviewers, every finding independently verified) confirmed four defects, all fixed before hand-off:
+  1. A partial encounter `write()` or a combatant bump stamped the current `schema_version` onto columns it did not rewrite, so a future encounter upgrade would have been lost. Now every encounter write upgrades the stored state in memory and writes all encounter columns (`test_encounter_partial_writes_store_the_upgraded_state`).
+  2. Writes overwrote a row stored at a newer schema version. Writes now read the row first and raise `UnknownSchemaVersion` (`test_writes_over_a_newer_stored_version_fail_closed`).
+  3. The PostgreSQL no-deadlock test passed even with no row locks. New `test_command_locks_hold_row_locks_until_commit` probes `FOR UPDATE NOWAIT` from another connection for the encounter, character-state and clock rows; the deadlock test now asserts the second transaction acquired only after the first released.
+  4. The PostgreSQL compare-and-set test also passed when the writes ran one after the other. It now forces the overlap: the loser's `UPDATE` waits on the winner's held row and must re-check the revision.
+  Rejected after verification (recorded for Codex): `register_stream_serialized_kind` accepting state kinds (import-time trusted registration, as the brief designs it); combatant keys colliding across two locked encounters (combatant ids are 32-hex server ids, C:24); step bookkeeping advancing before a raising read (the executor aborts the transaction on any of these errors).
+- **Judgments for Codex to challenge:**
+  - Reads use Core `select` on the tables, not ORM entities, so a record never comes from a stale identity-map object; writes are Core `insert`/`update`/`delete`.
+  - Record shapes: character `payload` is the stored payload; encounter `payload` is `{status, round, turn, initiative, payload, clock_anchors}`; combatant `payload` is `{encounter_id, kind, character_id, creature_ref, legacy_ref}` with the encounter's revision; clock `payload` is `{"value": n}` with `schema_version`, `rules_profile` and `content` `None`. Records hold deep copies; the dataclass is frozen but its dicts are plain dicts.
+  - A write reads the stored row first: a missing or changed row raises `RevisionConflict` before the profile check, and the `UPDATE ... AND revision = :read` remains the authority.
+  - `CharacterStateRepository.delete(..., read_revision=...)` is a compare-and-set delete; there is no encounter or clock delete.
+  - `insert` of a character state for a character not in the campaign raises `StateRepositoryError`; `update_combatant`/`remove_combatant` of a missing combatant do too, before any write.
+  - An empty key list is a no-op that still requires `stream()` and does not advance the step.
+  - Step-3 action tables have no order among themselves yet (they share one key run); PE-30's follow-ons define it when the first table exists.
+- **Skipped / not verified:** the PostgreSQL cases have not run anywhere yet; the CI `postgresql` job on this PR is their first run.
+- **Known wrong / limitations:** none known.
+- **Follow-ups (not done here):** PE-13b (`CheckContext.records` returns `ctx.locks.records`); PE-14a (`streams.lock_stream` conforming to `LockStream`, re-entrant for the same campaign); PE-14b (build `CommandLocks` in its transaction, call `stream()` first, map `StateRowMissing` and `UnknownSchemaVersion` to `503 authority_unavailable` and `ProfileMismatch`, `LockOrderError` and `RevisionConflict` to `500 server_error`); PE-14d (`lock_invitation_for_write`); PE-20 (stale-replace write); PE-19/24 (writing `settings.rules`); PE-30 follow-ons (action-table order).
 
 ## Review
 
