@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** ready (PE-13a merged); brief accepted (Codex, 2026-11-14)
+- **Status:** in review (implementation returned to Codex, 2026-11-15; built from main `737555a2`)
 - **Branch:** `claude/pe-13c-reconciliation` from current main after PE-13a merges. Record the exact starting SHA.
 - **Depends on:** [PE-13a](PE-13a-state-repositories.md) (`CharacterStateRepository`, and `EncounterStateRepository.is_combatant`). Independent of PE-13b and PE-14a; may run in parallel with both. Imports nothing from PE-13b or PE-14.
 - **Context:**
@@ -72,10 +72,31 @@ Allowed files:
 
 ## Report
 - **Changed:**
+  - New `core/commands/reconciliation.py`: `reconcile_hp`, `debt_after_heal`, `reconcile(adapter, *, before, after, play, hp, used, reservations, user_initiated) -> Reconciliation`, `apply` and `preview` (both call `reconcile`), `refuse_publish_in_encounter`, `Reservation(pool, action_id, declare_seq, amount, targets)`, `Snapshot(build, items)`, `ReservationBlocked` and `InEncounter`. Imports only `core.persistence.state_repositories` (for `is_combatant`), nothing from PE-13b or PE-14.
+  - `core/commands/__init__.py` already existed (PE-13b) with the agreed bytes; left as is.
+  - New `tests/persistence/test_reconciliation.py`: 77 tests.
+- **Interface for PE-15, PE-16-18, PE-18b and PE-31** (Decision 4 left the keys to this task):
+  - Adapter methods: `effective_max(build, play, items)`, `is_dead(play)`, `pools(build, play, items) -> {pool: max}`, `invalid_choices(build, play) -> [{"id", ...}]`, `orphaned_effects(build, play, items, removed_pools) -> [{"id", "pool"?, ...}]`. `orphaned_effects` receives the removed pool names so the adapter can end effects that depended on them; `pool` on an effect ties it to that pool's entry.
+  - The caller passes the current `hp` and pool `used` counts, read with its adapter, because both live under system-specific play keys. `used` must name only pools the adapter reports for the before state (anything else is `ValueError`, a caller bug): PE-15 must filter orphaned `item:*` resource keys (C:680) out of it.
+  - `play` keys this hook owns: `hp_floor_debt` (default 0) and `choice_prompts` (a list; each reconciliation prompt is `{"kind": "choice", "origin": "reconciliation", "choice": {...}}`). `Reconciliation.play_updates(play)` returns both, existing prompts kept; the caller writes them with `hp` and `used` in one `play` write. A choice that already has a stored reconciliation prompt is not prompted again.
+  - Entries, in commit order: `hp` (`hp_before`, `hp_after`, `debt_before`, `debt_after`, `effmax_before`, `effmax_after`), then per pool in name order its `reservation_released` entries newest first (`pool`, `action_id`, `declare_seq`, `amount`, `targets`, `reason: "reservation_invalidated"`) and then its `pool_clamped` (`pool`, `max_before`, `max_after`, `used_before`, `used_after`) or `pool_removed` (`pool`, `used`, `effects`), then `effect_ended` (`effect_id`, `pool`, `effect`), then `choice_prompt` (`prompt`). Newest-first is per pool, as the contract words it.
+  - `Reconciliation.released` has one item per reservation; `released_actions` lists each action once, for PE-30's follow-on to hold its targets.
+- **Judgments:**
+  - The HP rule runs only when the effective maximum moves (C:168-170). With the maximum unchanged, HP and debt are left exactly as they are, so a choice-only publish or a pool-only change never charges an outstanding debt as damage. A dead character gets no `hp` entry.
+  - `ReservationBlocked.action_ids` names each blocking action once, in `declare_seq` order, across every pool that blocks; actions on reserved pools that still fit are not named.
+  - `refuse_publish_in_encounter` treats any non-`None` `override` as set; whether the principal may send one is PE-13b check 4.
+  - Counts (HP, debt, maxima, used, amounts) must be non-negative integers; booleans are refused.
 - **Tests run:**
-- **Skipped / not verified:**
+  - `tests/persistence/test_reconciliation.py`: 77 passed. Brief acceptance command with `test_state_repositories.py`: 143 passed.
+  - The never-heals property test runs 40 seeded random sequences of maximum changes and checks `hp - debt - max` is conserved and the start state is restored exactly (no `hypothesis` in the lock file, so it uses `random.Random(seed)`).
+  - Mutation checks: 14 hand mutations (debt charged at an unchanged maximum, preview forcing automatic, every action named, all effects on a removed pool, no de-duplication, oldest-first release, no clamp, no 0-HP clear, no `min`, partial heal clearing debt, duplicate prompts, override ignored, and others). All are killed except one equivalent mutant (`break` to `continue` in the release loop: once a pool fits, later reservations still fit).
+  - `git diff --check` clean. CI numbers for the head are in the PR.
+- **Self-review.** A three-lens adversarial review (contract, pool edge cases, mutation) with two verifiers per finding confirmed two product defects, both fixed: (1) debt was charged as damage whenever the hook ran with an unchanged maximum (37/37 with debt 6 became 31/37 on a choice-only publish); (2) an action holding reservations in two pools was named twice in `ReservationBlocked`. It also confirmed three weak tests, now strengthened: preview was never compared on the refusal path, no refusal case had a reserved pool that still fits, and the `pool_removed` effect list was not asserted exactly. Rejected: unknown `used` keys raising (documented as a caller precondition above), releases ordered per pool rather than globally (the contract orders per pool), and starting states where `used + reserved` already exceeds the maximum (the contract never allows them).
+- **Skipped / not verified:** no real adapter (out of scope); no PostgreSQL case (the hook takes no lock and writes nothing; `is_combatant` is PE-13a's and already covered).
 - **Known wrong / limitations:**
-- **Follow-ups (not done here):**
+  - Over the estimate: 320 raw product lines against about 270 (under the 370 stop), mostly the module docstring that fixes the interface above; 429 test lines against about 380.
+  - A reserved pool already over its maximum before the change (not reachable under the contract) is refused or released like any other: the rule compares only the new maximum with `used + reserved`.
+- **Follow-ups (not done here):** PE-15/16-18 implement the adapters and filter `used`; PE-30's follow-on applies `released_actions`; PE-20's stale-replace write keeps `hp_floor_debt` and `choice_prompts` across a round trip (C:680).
 
 ## Review
 
