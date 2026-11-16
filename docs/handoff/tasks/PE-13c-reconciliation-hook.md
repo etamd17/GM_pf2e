@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** in review (implementation returned to Codex, 2026-11-15; built from main `737555a2`)
+- **Status:** changes requested (Codex implementation review 1, 2026-11-15; R1-1; built from main `737555a2`)
 - **Branch:** `claude/pe-13c-reconciliation` from current main after PE-13a merges. Record the exact starting SHA.
 - **Depends on:** [PE-13a](PE-13a-state-repositories.md) (`CharacterStateRepository`, and `EncounterStateRepository.is_combatant`). Independent of PE-13b and PE-14a; may run in parallel with both. Imports nothing from PE-13b or PE-14.
 - **Context:**
@@ -117,3 +117,35 @@ ran. Review edits are uncommitted; nothing was merged.
 ### Brief review 2 - acceptance carried forward (Codex, 2026-11-14)
 
 Rechecked compatibility with the revised PE-13a/13b/14b interfaces at `51ac0e51` against `791936f1`. **The round-1 acceptance stands; no new findings.** The pure reconciliation hook, exception attributes and docstring-only package initializer remain compatible. Scope, estimate and stop line are unchanged. Implementation remains blocked on accepted and merged PE-13a. Docs-only review; no product tests ran.
+
+### Implementation review 1 - changes requested (Codex, 2026-11-15)
+
+Reviewed PR #262 at `a3940cc1ccab70240f4568f3b4b4a34df162fc77` against `737555a2`, including the Report's interface judgments and every Acceptance item. **One interface fix is required before implementation acceptance.**
+
+1. **R1-1 [P2] Give effect changes distinct before/after play inputs.** `Snapshot` at `core/commands/reconciliation.py:107-111` holds only build/items, and `reconcile` at `:254-260` passes the same `play` object to both effective-max and pool calculations. Owned effects live in play (C:65), and an effect change/expiry is an explicit reconciliation trigger (C:168-175, C:205-211). With unchanged build/items and an HP-bonus effect removed from play, either possible `play` argument makes the hook see identical maxima, so it silently omits the HP adjustment. For an effect-provided pool, supplying post-expiry play makes its legitimate pre-change used count or reservation look like an unknown pool and raises `ValueError` instead of performing the required automatic release/removal. This cannot be implemented by a stateless adapter using the documented inputs; it would need to hide play state in build/items or depend on call order.
+
+   Provide distinct play views for the before/after derivations, or an explicit interface for derived before/after maxima and pools. Keep only the fields with their own HP rules constant as C:172-175 requires, rather than freezing all of play. Document which inputs supply current HP/debt/used counts, death state, prompts and effect inspection so later adapters can apply the returned changes without losing the underlying effect update. Add a stateless adapter regression where only `play.effects` changes: an HP bonus expires; a resource pool disappears with a used count and with a reservation; and preview equals apply without mutating either input. Retain the unknown-pool refusal for keys genuinely absent from the before state.
+
+**Reproduction:** `../output/pe13c-review/play_effect_probe.py`, outside the tracked worktree, uses only synthetic in-memory inputs. Run from this worktree with `..\GM_pf2e\venv\Scripts\python.exe ..\output\pe13c-review\play_effect_probe.py .`. On this head:
+
+```text
+actual effect transition: 18 -> 10
+contract HP result: (1, 3)
+before-expiry play => HP/debt (6, 0) entries ()
+after-expiry play => HP/debt (6, 0) entries ()
+removed pool with used count => refused: used count for unknown pool effect_charge
+removed reserved pool => refused: reservation action-1 holds unknown pool effect_charge
+```
+
+**Accepted judgments and coverage:** The HP floor/debt arithmetic, cap, round-trip cases, partial-heal/full-rest behavior and seeded conservation property agree with the contract. Running the HP rule only when its effective maximum moves is correct under C:168-170; charging debt during an unrelated pool/choice change would be wrong. Omitting an HP entry for a dead character is also correct. For valid before/after pool inputs, user refusals, deduplicated blocking action IDs, newest-first releases within each pool, clamps/removals, exact effect lists and stored prompts match the brief. Caller-supplied HP/used counts, `hp_floor_debt` / `choice_prompts`, passing removed pool names to the effect adapter, and the documented entry shapes/order are otherwise reasonable. Genuine orphaned `item:*` used keys must still be filtered by PE-15. The 320 product lines remain below the 370 stop; the 429 test lines are justified. No route, live writer, authority mode or worker setting changes.
+
+**Non-blocking clarification:** The Report's blanket invalid-count refusal claim exceeds the implementation: before-pool maxima and newly added after-pool maxima are not validated, an existing pool with maximum `None` is treated as removed, and `debt_after_heal` may clear debt without validating it. Either validate both pool maps/count paths consistently or describe these as trusted-caller preconditions rather than guaranteed refusals. This is not an additional acceptance blocker for valid adapter inputs. PE-30 must also use the exact per-reservation targets in `released`/entries when holding affected targets; `released_actions` alone is only the deduplicated action list.
+
+**Verification:**
+
+- Repository-venv `python -m pytest -q tests/persistence/test_reconciliation.py tests/persistence/test_state_repositories.py`: **143 passed** in 1.82s.
+- The separate effect-change probe reproduced R1-1 on this exact head.
+- `git diff --check 737555a2..a3940cc1`: clean. `python -m alembic heads`: unchanged at `20261111_0004 (head)`.
+- GitHub CI run `43782713712` on this head: **changes, browser, postgresql and test all passed**. No new PostgreSQL test is needed for this pure hook; no real adapter or live campaign was exercised. The implementer's mutation run and full local suite were not repeated.
+
+For players: saving and action-validation foundations are already merged. The HP/resource consistency layer works for build and equipment changes, but needs this correction for expiring effects before acceptance. No new player screen or live storage change is active. Next: Claude, high reasoning, fixes R1-1, updates the consumer interface in the Report, adds the effect-transition tests and returns for re-review. PE-14a remains independently ready. Review notes are uncommitted; Codex has not merged or started another task.
