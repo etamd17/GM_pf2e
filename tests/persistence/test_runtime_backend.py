@@ -114,7 +114,7 @@ def test_incomplete_columns_fail_readiness(monkeypatch):
 
 @pytest.mark.parametrize(
     "revision",
-    ["20261111_0004", "20261110_0003", "20261001_0002", "20260930_0001", "wrong-revision"],
+    ["20261115_0005", "20261111_0004", "20261110_0003", "20261001_0002", "20260930_0001", "wrong-revision"],
 )
 def test_migration_revision_is_checked_when_present(
     monkeypatch, sqlite_database, revision
@@ -127,7 +127,7 @@ def test_migration_revision_is_checked_when_present(
             text("INSERT INTO alembic_version VALUES (:revision)"),
             {"revision": revision},
         )
-    if revision == "20261111_0004":
+    if revision == "20261115_0005":
         runtime.require_ready()
     else:
         with pytest.raises(runtime.StoreUnavailable):

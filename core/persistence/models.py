@@ -15,6 +15,7 @@ from typing import Any
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -837,4 +838,138 @@ class CampaignStateAuthority(Base):
             name="known_authority",
         ),
         CheckConstraint("stream_epoch >= 1", name="stream_epoch_positive"),
+    )
+
+
+# --------------------------------------------------------------------------
+# Command stream (contract section 3; PE-14a).  Receipts and events carry no
+# foreign key: both are kept for the campaign's life, across epochs (C:244-245,
+# C:1088).
+
+_PRINCIPAL_KIND_CHECK = "principal_kind in ('user', 'integration_token')"
+
+
+class CampaignStream(Base):
+    """Lock-order step 1 and the campaign's seq counter (``streams.lock_stream``)."""
+
+    __tablename__ = "campaign_streams"
+
+    campaign_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("campaigns.id", ondelete="CASCADE"), primary_key=True
+    )
+    last_seq: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default=text("0")
+    )
+
+    __table_args__ = (CheckConstraint("last_seq >= 0", name="last_seq_nonnegative"),)
+
+
+class CommandReceipt(Base):
+    """One final answer per receipt key; never a response body (C:242-245)."""
+
+    __tablename__ = "command_receipts"
+
+    campaign_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    principal_kind: Mapped[str] = mapped_column(String(32), primary_key=True)
+    principal_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    operation_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    # NULL only for an ``abandoned`` receipt, which has no envelope to hash.
+    digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    # ``committed``/``pending`` on a committed receipt (a replay answers 200 or
+    # 202); NULL on a rejected one.
+    applied_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    code: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    revisions: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict, server_default=text("'{}'")
+    )
+    event_ids: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False, default=list, server_default=text("'[]'")
+    )
+    seq_first: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    seq_last: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    stream_epoch: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+    __table_args__ = (
+        CheckConstraint(_PRINCIPAL_KIND_CHECK, name="known_principal_kind"),
+        CheckConstraint("status in ('committed', 'rejected')", name="known_status"),
+        CheckConstraint(
+            "(status = 'committed' AND applied_status IS NOT NULL"
+            " AND applied_status IN ('committed', 'pending')"
+            " AND code IS NULL)"
+            " OR (status = 'rejected' AND applied_status IS NULL AND code IS NOT NULL"
+            " AND seq_first IS NULL)",
+            name="status_fields",
+        ),
+        CheckConstraint(
+            "(digest IS NULL AND code IS NOT NULL AND code = 'abandoned')"
+            " OR (digest IS NOT NULL AND length(digest) = 64"
+            " AND (code IS NULL OR code <> 'abandoned'))",
+            name="digest_unless_abandoned",
+        ),
+        CheckConstraint(
+            "(seq_first IS NULL AND seq_last IS NULL)"
+            " OR (seq_first IS NOT NULL AND seq_last IS NOT NULL"
+            " AND seq_first >= 1 AND seq_last >= seq_first)",
+            name="seq_range",
+        ),
+        CheckConstraint("stream_epoch >= 1", name="stream_epoch_positive"),
+    )
+
+
+class GameEvent(Base):
+    """One consequence of a command: the permanent history and the outbox (C:394-446)."""
+
+    __tablename__ = "game_events"
+
+    event_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    campaign_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    seq: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    stream_epoch: Mapped[int] = mapped_column(Integer, nullable=False)
+    type: Mapped[str] = mapped_column(String(128), nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    session_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    encounter_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    operation_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    action_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    causation_event_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    origin: Mapped[str] = mapped_column(String(32), nullable=False)
+    principal_kind: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    principal_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    rules_profile: Mapped[str] = mapped_column(String(32), nullable=False)
+    actor: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict, server_default=text("'{}'")
+    )
+    subjects: Mapped[list[Any]] = mapped_column(
+        JSON, nullable=False, default=list, server_default=text("'[]'")
+    )
+    changes: Mapped[list[Any]] = mapped_column(
+        JSON, nullable=False, default=list, server_default=text("'[]'")
+    )
+    dice: Mapped[list[Any]] = mapped_column(
+        JSON, nullable=False, default=list, server_default=text("'[]'")
+    )
+    explain: Mapped[list[Any]] = mapped_column(
+        JSON, nullable=False, default=list, server_default=text("'[]'")
+    )
+    visibility: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict, server_default=text("'{}'")
+    )
+
+    __table_args__ = (
+        UniqueConstraint("campaign_id", "seq", name="uq_game_events_campaign_seq"),
+        Index("ix_game_events_campaign_epoch_seq", "campaign_id", "stream_epoch", "seq"),
+        CheckConstraint("length(event_id) = 32", name="event_id_length"),
+        CheckConstraint("seq >= 1", name="seq_positive"),
+        CheckConstraint("stream_epoch >= 1", name="stream_epoch_positive"),
+        CheckConstraint(_RULES_PROFILE_CHECK, name="known_rules_profile"),
+        CheckConstraint(
+            "(principal_kind IS NULL AND principal_id IS NULL)"
+            " OR (principal_kind IS NOT NULL AND principal_id IS NOT NULL AND "
+            + _PRINCIPAL_KIND_CHECK + ")",
+            name="principal_pair",
+        ),
     )
