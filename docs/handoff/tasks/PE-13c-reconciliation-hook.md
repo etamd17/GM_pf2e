@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** in review (implementation revision 1 returned to Codex, 2026-11-15; R1-1 fixed; built from main `737555a2`)
+- **Status:** done (implementation accepted by Codex, 2026-11-15; R1-1 closed at `7925a6fa`; PR #262 merge pending; built from main `737555a2`)
 - **Branch:** `claude/pe-13c-reconciliation` from current main after PE-13a merges. Record the exact starting SHA.
 - **Depends on:** [PE-13a](PE-13a-state-repositories.md) (`CharacterStateRepository`, and `EncounterStateRepository.is_combatant`). Independent of PE-13b and PE-14a; may run in parallel with both. Imports nothing from PE-13b or PE-14.
 - **Context:**
@@ -219,3 +219,22 @@ reserved => ['hp', 'reservation_released', 'pool_removed'] released ('action-1',
 ```
 
 For players: saving and validation are merged. With this correction, HP and resources stay consistent when an effect expires, not only when gear or a build changes. No new player screen is active.
+
+### Implementation review 2 - accepted (Codex, 2026-11-15)
+
+Re-reviewed PR #262 at `7925a6fab2ff1e13a7453190aa14dc2ad69b2199` against `737555a2`, with the revision checked against implementation review 1 at `a3940cc1`. **Accepted. R1-1 is closed; no new blocking findings.** The unaffected acceptance judgments from review 1 stand.
+
+**R1-1 closure:** `Snapshot.play` now supplies each side's effective maximum and pools exactly once, with `None` falling back to the current row and an explicit empty mapping retained. A stateless adapter can represent an expiring HP bonus or disappearing resource pool without hiding play state in build/items. Used counts and reservations still require a pool from the before side; a pool added only afterwards does not retroactively validate them. Debt and death remain sourced from the current row. Orphaned effects, invalid choices and stored-prompt deduplication use the after view. The Report correctly tells consumers to preserve the triggering play change and merge `play_updates` into that same payload, so the prompt read and write sources agree. The regression tests exercise these distinctions, automatic release, user refusal, preview equality and input immutability.
+
+**Non-blocking notes closed:** Both pool maps now validate their maxima, including new and removed pools; `None` is refused and removal means absence. `debt_after_heal` validates debt before clearing it. The Report explicitly assigns PE-30 the exact targets in each released reservation/entry rather than relying on the deduplicated action list. The 355 raw product lines remain below the 370 stop; the 617 test lines are justified by the effect-transition and interface regression cases.
+
+**Independent verification:**
+
+- Repository-venv `python -m pytest -q tests/persistence/test_reconciliation.py tests/persistence/test_state_repositories.py`: **165 passed** in 4.63s.
+- Adapted synthetic probe `../output/pe13c-review/play_effect_probe_r2.py`: effect expiry at 6/18 produces HP 1/debt 3; a removed pool with used counts is dropped; a removed reserved pool releases the exact reservation/targets automatically and is refused for a user change; restoring the bonus returns HP 6/debt 0. Preview entries match, inputs remain unchanged. The original shared-snapshot probe is preserved; its unchanged output is expected for that old input, not a remaining defect.
+- `git diff --check 737555a2..7925a6fa`: clean.
+- GitHub reports PR #262 at this exact head, with CI run `43788498734`: **changes, test, browser and postgresql all passed**.
+
+No real system adapter, live character command or production campaign was exercised; those remain downstream work. The implementer's mutation suite was not repeated. Callers must still construct the two snapshots under their existing locks, hold fields with their own HP rules constant, filter genuinely orphaned used keys and apply the returned effect/reservation changes in the same transaction.
+
+For players: the shared saving and action checks are already merged; this accepts the next foundation, keeping HP and resources consistent when equipment, builds or effects change. It is not connected to live play yet, so no new player screen or production storage change is active. Next: Claude, high reasoning, commits the review notes, pushes and merges PR #262 only after all four CI jobs pass on the resulting head, then takes the ready PE-14a brief for the shared command/event foundation. Review notes are uncommitted; Codex has not committed, merged or started another implementation task.
