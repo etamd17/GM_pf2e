@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** blocked (PE-13b, PE-14a); brief accepted (Codex brief review 2, 2026-11-14)
+- **Status:** ready (PE-13b and PE-14a merged); brief accepted (Codex brief review 2, 2026-11-14); PE-14a implementation review 1 requirements carried in (Decisions 15-17)
 - **Branch:** `claude/pe-14b-command-executor` from current main after PE-13b and PE-14a merge. Record the exact starting SHA.
 - **Depends on:** [PE-13b](PE-13b-check-order-conflicts.md) (check runner for checks 4-9, `CheckContext` with every field this task uses, `CommandRefusal`, `Authorizer` protocol, conflict body), [PE-14a](PE-14a-streams-receipts-events-schema.md) (tables, `check_envelope`, `CheckedEnvelope`, `EnvelopeRefusal`, digest, registry, `streams.lock_stream`/`allocate`), and through them [PE-13a](PE-13a-state-repositories.md) (`CommandLocks(session, campaign_id, *, lock_stream)` with `stream_row`, `records` and `register_serialized`, repositories, `StateRowMissing`, `ProfileMismatch`, `LockOrderError`, `PinUnavailable`, `UnknownSchemaVersion`). PE-13c is not needed: its exceptions are answered by attribute, never imported (Decision 4).
 - **Followed by:** PE-14c (real authorizer, `override_allowed`, grant and token records), then PE-14d; PE-14e and PE-14f both follow PE-14d. PE-14e calls `ctx.bind_started_session` (Decision 13); PE-14f owns the event-ID filter for its status read (Decision 9).
@@ -18,7 +18,7 @@
   - Process locks that must never be taken while the stream row is held: `_LIVE_CAMPAIGN_DISPATCH_LOCK` (`app.py:535`), `ENCOUNTER_LOCK` (`app.py:2312`), `_CAMPAIGN_STORE_LOCK` (`core/campaigns.py:42`), `campaign_lock` (`core/obsidian_sync.py:52`). `sse_broadcast` is `app.py:2833`; the SSE hub spans `app.py:2638-2958`.
   - Active session row: `CampaignSession` (`core/persistence/models.py:778-814`, `status in ('active','ended')`, one active per campaign). The legacy event path keeps tagging the ending session id after an end (`services/obsidian_sync.py:746-753`).
   - Line numbers are from `791936f1` (main after PE-11c and PE-11b merged); only `core/persistence/campaign_import.py` changed since the `4e5c5059` drafts.
-- **Change budget:** about 600 product lines and 950 test lines. Stop and report past about 700 product lines. (Planning estimate; it grew from 550/750 in brief revision 1 for the campaign-bound locks and same-session context, the authenticated principal, the session snapshot and bind, and the pin read.)
+- **Change budget:** about 630 product lines and 1,000 test lines. Stop and report past about 730 product lines (raised by 30 for Decisions 15-17: client metadata validation in `envelope.py`, the digest re-check and the emit-before-receipt assertion). (Planning estimate; it grew from 550/750 in brief revision 1 for the campaign-bound locks and same-session context, the authenticated principal, the session snapshot and bind, and the pin read.)
 
 ## Goal
 
@@ -48,12 +48,17 @@ One Python entry point, `execute(envelope, principal, *, route_campaign_id, cont
    - Events committed by a later command after `session.end` carry `NULL`, while the legacy path kept tagging the ended id until the next start (`services/obsidian_sync.py:746-753`). This is a recorded semantic change; PE-60's mirror (C:606-609) must expect it.
 14. **Campaign pin.** After the session snapshot and before the ctx is built, the executor reads `pin = CampaignPinRepository(session).pin(campaign_id)` (PE-13a) once, in the same transaction and without a row lock, and stores it as `ctx.pin`. It is read for every command type, because every command must match the pin and check 8's `rules_mismatch` applies to all types (C:31-33, C:122-123). A missing or malformed pin raises PE-13a's `PinUnavailable`, which Decision 4 answers `503 authority_unavailable` with nothing written; `ctx.pin` is never `None`. A replay answers before this read (step 8), so it never needs a pin. No campaign has a pin today (PE-13a Decision 5): a db-authority campaign gets one from the PE-19/24 import, and every test that runs a command through `execute`, here and in PE-14d and PE-14e, writes `campaigns.settings["rules"]` in its fixture.
 
+15. **Client metadata (PE-14a implementation review 1, item 1).** Check 1 (`parse_envelope` in PE-14a's `core/commands/envelope.py`, edited here) validates `client` before any transaction opens: it is absent, `null` or a mapping, else `400 bad_envelope`. Inside a mapping, `origin` is absent, `null`, or a string matching `[a-z0-9][a-z0-9_.-]{0,31}` (1-32 characters, so it always fits `game_events.origin`, `String(32)`), else `400 bad_envelope`. The other client keys (`app_version`, `sent_at`) are not interpreted and are not part of the digest (C:236-240). `envelope.client_origin(envelope) -> str` returns the validated origin, or `"unknown"` when `client` or `origin` is absent or `null`; `ctx.emit` writes only that value, never `client.origin` read directly. Origin is self-reported metadata, never an authority input.
+16. **The hashed envelope is never changed (item 2).** `checked.envelope`'s outer mapping is read-only, but nested mappings and lists are ordinary, mutable detached copies (PE-13b's runner relies on `isinstance(..., list)`). The boundary is: `lock_plan`, the checks, the adapter, `apply` and the projector must not modify `ctx.envelope` or anything inside it; a command that needs a working value copies it first. The executor enforces this: immediately before the receipt insert, on both the commit path and before a refusal receipt is written, it recomputes `command_digest(checked.envelope)`; a value different from `checked.digest` raises `EnvelopeMutated`, answered `500 server_error` with nothing written (the transaction rolls back and no refusal receipt is written).
+17. **An applied command always emits (item 2's companion, from the PE-14a follow-up).** If `apply` returns without emitting at least one event, the executor raises `NoEventsEmitted` before the receipt insert: `500 server_error`, the transaction rolls back, nothing written. So every `committed` receipt has a seq range and event ids, and the post-commit hook's `last_seq` and the response `watermark` are always the receipt's `seq_last`. The schema still allows an event-less committed receipt; this is an executor invariant with its own test, not a CHECK.
+
 ## Approach
 
 Allowed files:
 - new `core/commands/executor.py`, `core/commands/events.py`
 - new `services/session_events.py`
 - new `tests/persistence/test_command_executor.py`, `tests/persistence/test_command_executor_postgresql.py`
+- edit `core/commands/envelope.py` and `tests/persistence/test_command_envelope.py` for Decision 15 only (client validation and `client_origin`)
 
 Do not edit `core/commands/checks.py`: PE-13b's `CheckContext` already declares every field this task uses (`session`, `locks`, `principal`, `campaign_id`, `envelope`, `authorizer`, `project`, `content_descriptor`, `pin`, `emit`, `session_id`, the three flags and the `bind_started_session` slot). If a field is missing when this task starts, stop and report rather than adding it. Do not edit `core/commands/__init__.py` (created by whichever of PE-13b, PE-13c and PE-14a lands first, containing only `"""Command pipeline. Import submodules directly; this package re-exports nothing."""` and a newline; callers import submodules) or `core/persistence/__init__.py`.
 
@@ -72,10 +77,10 @@ Do not edit `core/commands/checks.py`: PE-13b's `CheckContext` already declares 
    12. `lock_plan(ctx)` (Decision 6).
    13. PE-13b `run_checks(ctx, spec, adapter)` for checks 4-9, with `adapter` taken from the command type's `CommandType.rules_adapter` (PE-14a); the runner is built from it. `content_descriptor` and `pin` for check 8 are already in `ctx`.
    14. `apply(ctx)`: writes through PE-13a repositories built from `ctx.session`, emits events via `ctx.emit` (Decision 7).
-   15. Insert the receipt (`status = committed`, `applied_status`, `code` NULL, `checked.principal_kind`, `checked.principal_id`, `checked.digest`, revisions written, event ids, seq range, `stream_epoch`) and the event rows; commit (C:425-443).
+   15. Assert at least one event was emitted (Decision 17) and that `command_digest(checked.envelope) == checked.digest` (Decision 16). Insert the receipt (`status = committed`, `applied_status`, `code` NULL, `checked.principal_kind`, `checked.principal_id`, `checked.digest`, revisions written, event ids, seq range, `stream_epoch`) and the event rows; commit (C:425-443).
    16. After commit: `after_commit(campaign_id, last_seq)`. Body per C:388-392 with `watermark` = last emitted seq, everything projected through `project`.
 2. Refusal path (C:368-378): roll back; a second short transaction builds its own `CommandLocks` on its own session (same `lock_stream`), sets the lock timeout, calls `locks.stream()`, re-runs the fence (changed: insert nothing, answer 503 or 409), re-checks the receipt key in the Decision 3 order (answer from it), otherwise inserts the `rejected` receipt (`applied_status` NULL, the refusal `code`, `checked.principal_kind`, `checked.principal_id`, `checked.digest`, no seq range). Send the refusal only after that commits. Codes whose table row says "nothing" (`bad_envelope`, `operation_id_reused`, `not_permitted`, `resync_required`, every 503) skip the second transaction and write nothing (C:356-364). A `stale_revision` refusal body is PE-13b's `conflict_body`, projected.
-3. `events.py`: `EventDraft` (no `session_id` field), `SessionBindError`, `bind_started_session` (Decision 13), and `ctx.emit` turning a draft into a row with `event_id = new_id()`, the seq allocated from `ctx.locks.stream_row`, the current `stream_epoch`, `occurred_at` UTC, origin from `client.origin`, principal kind and id from `checked`, the visibility rules of Decision 12, and `session_id = ctx.session_id`.
+3. `events.py`: `EventDraft` (no `session_id` field), `SessionBindError`, `bind_started_session` (Decision 13), and `ctx.emit` turning a draft into a row with `event_id = new_id()`, the seq allocated from `ctx.locks.stream_row`, the current `stream_epoch`, `occurred_at` UTC, origin from `client_origin(checked.envelope)` (Decision 15), principal kind and id from `checked`, the visibility rules of Decision 12, and `session_id = ctx.session_id`.
 4. Never inside the transaction (C:455-459): loading rules content (the caller passes `content_descriptor` in), file writes, waiting, taking a process lock, opening another session. The AST and `sys.modules` acceptance tests below pin the import side of this; the same-session test pins the session side.
 
 ## Acceptance
@@ -103,6 +108,9 @@ Do not edit `core/commands/checks.py`: PE-13b's `CheckContext` already declares 
 - [ ] Event rows: unlisted projections `none`, `gm` `full`, unknown class rejected, notes changes reduced, override recorded in `explain[]`.
 - [ ] Session context: `test_event_session_id_survives_row_ending_in_apply` (a test type sets the active row to `ended` with autoflush on, then emits; the event carries the original id); `test_event_session_id_null_without_active_session`; `test_bind_started_session_tags_later_events` (emit before the bind gives NULL, after it the new id); `test_bind_started_session_refuses`, parametrized over an id with no row, a row in another campaign, an ended row, a session already active at the snapshot and a second bind, each answering 500 with nothing written; `test_event_draft_rejects_session_id`.
 - [ ] The post-commit hook runs once after commit and not on refusal or replay; nothing in the transaction calls `sse_broadcast`.
+- [ ] Client metadata (Decision 15, in `test_command_envelope.py`): `client` as a list, integer or string, and `origin` as an integer, an empty string, a 33-character string or one with an upper-case letter or a space, each answer `400 bad_envelope` before any session opens; absent `client`, `client: null` and absent `origin` give events with `origin = "unknown"`; `origin: "obsidian"` is stored as is. Changing only `client` keeps the digest.
+- [ ] Hashed envelope (Decision 16, `test_envelope_mutation_is_500_nothing_written`): a test type whose `apply` appends to a nested payload list, and one whose `lock_plan` changes a nested subject value, each answer `500 server_error` with no receipt, no event and seq unchanged; for a normal command, the digest recomputed from `ctx.envelope` after `apply` equals `checked.digest`.
+- [ ] Emit before receipt (Decision 17, `test_apply_without_event_is_500_nothing_written`): a test type whose `apply` writes a state row and emits nothing answers `500 server_error`; the state write, receipt and seq are all absent. Every committed receipt in the suite has a non-NULL seq range.
 - [ ] PostgreSQL (CI): two commands on one campaign serialize on the stream lock and get contiguous seqs; with `STREAM_LOCK_TIMEOUT_MS` lowered by monkeypatch (the real constant, not a hand-set `SET`), a contended stream lock maps to `503 temporarily_unavailable` with nothing written; both transition races repeated with real contending sessions.
 - [ ] `python -m pytest -q tests/persistence/test_command_executor.py tests/persistence/test_command_envelope.py tests/persistence/test_command_checks.py tests/persistence/test_state_repositories.py tests/persistence/test_command_stream_schema.py` passes.
 - [ ] `python -m pytest -q tests/persistence/test_command_executor_postgresql.py -m postgresql --strict-markers` executes and passes in CI; zero collected or skipped cases are not acceptance.
@@ -110,8 +118,20 @@ Do not edit `core/commands/checks.py`: PE-13b's `CheckContext` already declares 
 
 ## Out of scope / do not touch
 
+(Decision 15 is the one change to PE-14a's modules; nothing else in `envelope.py`, `registry.py` or `digest.py` changes.)
+
 - Owned elsewhere: real authorizer, `override_allowed`, grant and token records (PE-14c); stream-locked authorization writes (PE-14d); session commands and history backfill, including where `session.end` cancels and ends (PE-14e); status read, abandon, their routes, the event-ID filter `core/commands/event_visibility.py` and `held_projections` (PE-14f); the HTTP command route and the first real command types (PE-15 onwards); building the token `Principal` (`Principal.integration_token(token_record['id'], campaign_id=...)`) from the verified bearer record is the route's job (PE-15), and `execute` never builds a principal; hub wake and SSE (PE-31b); record and result projections (PE-31, adapters); event and watermark reads (PE-14a's `stream_watermark`/`events_after`).
 - No route, no `app.py`, no `core/route_policy.py`, no migration, no change to PE-13c's module, no change to `core/commands/checks.py`.
+
+### Carried from PE-14a implementation review 1 (Claude, 2026-11-16)
+
+Codex accepted PE-14a at `83948e45` with three non-blocking requirements for this brief. Each is now a Decision with an acceptance test:
+
+1. Client metadata validated and normalized at check 1 before any event reads it, with an explicit `"unknown"` fallback (Decision 15; `envelope.py` and its tests added to Allowed files).
+2. The complete checked envelope is unchanged after hashing; the boundary is documented and the executor re-checks the digest before every receipt insert (Decision 16).
+3. An applied command must emit an event before its receipt commits (Decision 17).
+
+PE-14a's header and the task map no longer claim PE-14a was independent of PE-13b: as built it imports `expected_kinds`. Budget raised by 30 product and 50 test lines for these.
 
 <!-- ============ REPORT (written by the implementer) ============ -->
 
