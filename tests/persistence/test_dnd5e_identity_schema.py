@@ -30,13 +30,13 @@ from core.persistence import (
     User,
     normalize_database_url,
 )
-from core.persistence import runtime
 from core.persistence.repositories import CampaignRepository, CharacterRepository
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 NOW = datetime(2026, 11, 11, 12, 0, tzinfo=timezone.utc)
-HEAD = runtime._REQUIRED_REVISION
+# The revision this file covers; later revisions have their own tests.
+PE10 = "20261111_0004"
 PREVIOUS = "20261110_0003"
 PID = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6"
 
@@ -391,14 +391,14 @@ def test_sqlite_upgrade_preserves_rows_and_the_pe12_locator_index(sqlite_url):
         before = _snapshot(engine)
         index_before = _sqlite_ddl(engine, "uq_characters_active_legacy_locator")
         assert index_before.endswith("WHERE archived_at IS NULL")
-        _alembic(sqlite_url, "upgrade", "head")
+        _alembic(sqlite_url, "upgrade", PE10)
         assert _snapshot(engine) == before
         assert _sqlite_ddl(engine, "uq_characters_active_legacy_locator") == index_before
         assert _sqlite_ddl(engine, "ix_characters_campaign_id") is not None
         with engine.connect() as connection:
             assert connection.execute(text("PRAGMA foreign_key_check")).all() == []
             assert connection.execute(text(
-                "SELECT version_num FROM alembic_version")).scalar() == HEAD
+                "SELECT version_num FROM alembic_version")).scalar() == PE10
         with engine.begin() as connection:
             connection.execute(text(_DND5E_CAMPAIGN))
             connection.execute(text(_dnd5e_character()))
@@ -431,7 +431,7 @@ def test_sqlite_empty_downgrade_restores_previous_checks(sqlite_url):
             "campaigns", "characters", "uq_characters_active_legacy_locator")}
         _seed_previous(engine)
         before = _snapshot(engine)
-        _alembic(sqlite_url, "upgrade", "head")
+        _alembic(sqlite_url, "upgrade", PE10)
         _alembic(sqlite_url, "downgrade", PREVIOUS)
         assert _snapshot(engine) == before
         # Same index; the tables' checks match the previous revision's.
@@ -446,7 +446,7 @@ def test_sqlite_empty_downgrade_restores_previous_checks(sqlite_url):
             connection.execute(text(_DND5E_CAMPAIGN))
     finally:
         engine.dispose()
-    _alembic(sqlite_url, "upgrade", "head")
+    _alembic(sqlite_url, "upgrade", PE10)
 
 
 @pytest.mark.parametrize("statements, refusal", [
@@ -455,7 +455,7 @@ def test_sqlite_empty_downgrade_restores_previous_checks(sqlite_url):
     ([_dnd5e_character(campaign_id="p1")], "0 D&D campaign(s) and 1 D&D character(s)"),
 ])
 def test_downgrade_refuses_to_discard_dnd5e_rows(sqlite_url, statements, refusal):
-    _alembic(sqlite_url, "upgrade", "head")
+    _alembic(sqlite_url, "upgrade", PE10)
     engine = create_engine(sqlite_url)
     try:
         _seed_previous(engine)
@@ -471,7 +471,7 @@ def test_downgrade_refuses_to_discard_dnd5e_rows(sqlite_url, statements, refusal
         assert _sqlite_ddl(engine, "characters") == ddl_before
         with engine.connect() as connection:
             assert connection.execute(text(
-                "SELECT version_num FROM alembic_version")).scalar() == HEAD
+                "SELECT version_num FROM alembic_version")).scalar() == PE10
             assert connection.execute(text(
                 "SELECT COUNT(*) FROM sqlite_master WHERE name LIKE '_alembic_tmp%'")
             ).scalar() == 0
@@ -480,16 +480,10 @@ def test_downgrade_refuses_to_discard_dnd5e_rows(sqlite_url, statements, refusal
 
 
 def test_offline_downgrade_is_refused(sqlite_url):
-    completed = _alembic(sqlite_url, "downgrade", "%s:%s" % (HEAD, PREVIOUS), "--sql",
+    completed = _alembic(sqlite_url, "downgrade", "%s:%s" % (PE10, PREVIOUS), "--sql",
                          check=False)
     assert completed.returncode != 0
     assert "requires an online check for D&D rows" in completed.stderr
-
-
-def test_runtime_readiness_pin_is_this_revision_and_the_single_head():
-    completed = _alembic("sqlite+pysqlite:///:memory:", "heads")
-    heads = [line.split()[0] for line in completed.stdout.splitlines() if line.strip()]
-    assert heads == [HEAD] == ["20261111_0004"]
 
 
 # --------------------------------------------------------------------------
@@ -550,7 +544,7 @@ def test_postgresql_upgrade_downgrade_round_trip(postgres_schema):
     try:
         _seed_previous(engine, false="false")
         before = _snapshot(engine)
-        _alembic(migrated_url, "upgrade", "head")
+        _alembic(migrated_url, "upgrade", PE10)
         assert _snapshot(engine) == before
         with engine.connect() as connection:
             predicate = connection.execute(text(
@@ -573,6 +567,6 @@ def test_postgresql_upgrade_downgrade_round_trip(postgres_schema):
         assert _snapshot(engine) == before
         with pytest.raises(IntegrityError), engine.begin() as connection:
             connection.execute(text(_DND5E_CAMPAIGN))
-        _alembic(migrated_url, "upgrade", "head")
+        _alembic(migrated_url, "upgrade", PE10)
     finally:
         engine.dispose()
