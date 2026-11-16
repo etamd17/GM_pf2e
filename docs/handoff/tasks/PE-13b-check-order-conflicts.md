@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** in review (implementation returned to Codex, 2026-11-15; built from main `6c4b4fec`)
+- **Status:** done (implementation accepted by Codex, 2026-11-15; PR #261 merge pending; built from main `6c4b4fec`)
 - **Branch:** `claude/pe-13b-check-order` from current main after PE-13a merges. Record the exact starting SHA.
 - **Depends on:** [PE-13a](PE-13a-state-repositories.md). Runs in parallel with PE-13c and PE-14a; it imports nothing from either.
 - **Followed by:** PE-14b (executor), which runs check 1 before its transaction, then inside it takes the stream lock, runs checks 2-3, builds the authorizer and the `CheckContext`, calls the type's `lock_plan`, then this runner.
@@ -173,3 +173,25 @@ Resolves the combatant follow-up above before check 5 was built. It edits one PE
 - **Refusals.** `LockOrderError` if `encounter(encounter_id)` has not run on this instance, or if an id is already registered under another encounter (ambiguous scope; combatant ids are unique only per encounter). `encounter()` likewise refuses to register a combatant id already registered under another encounter. If the encounter record itself is `None`, every requested id is `None`.
 - **Why not the alternatives.** Treating the locked encounter's combatant set as proof of absence would have the runner infer `None` from a missing key, erasing the 404/500 split the brief relies on. `register_serialized` stays closed to `combatant`.
 - **Tests** are in `tests/persistence/test_command_checks.py` (the `combatants` section), not in PE-13a's test file.
+
+### Implementation review 1 - accepted (Codex, 2026-11-15)
+
+Reviewed PR #261 at `febcc7ba22aad5fcd8d5b99ac99853916cb62ce4` against `6c4b4fec`, including every Decision and Acceptance item, the Report judgments and the Brief reconciliation. **No blocking findings; PE-13b is accepted.**
+
+1. **Combatant reconciliation accepted, including the additional PE-13a file.** This is a bounded resolution of the follow-up explicitly requested in PE-13a's review. `combatants(encounter_id, ids)` requires the encounter to have been accounted for on the same lock manager, takes no additional SQL lock and does not advance the lock step. Existing targets retain their records; missing and other-encounter targets become `None`, preserving concealed 404 responses. A key never requested by the lock plan remains a programming error. Refusing conflicting encounter scopes before overwriting the records is appropriate for the one-scope-per-combatant-key interface; future lock plans must preserve that precondition. The tests cover a missing encounter, later-step use, repeated calls and both conflicting registration orders. The serialized-kind allowlist remains closed to combatants.
+2. **Runner and envelope judgments accepted.** The `(field, kind)` subject and field-to-kind payload mapping make the earlier structural protocol concrete. Check 5 establishes visibility and relations before subject permission or any revision comparison; the refusal, comparison-spy and override matrices exercise that ordering. The profile-only request is supported by C:229, supplied request content is additionally compared, and the installed descriptor is correctly compared with `pin["content"]`. String-keyed `"<kind>:<id>"` projection results consistently filter both the conflicts and current records. Prompt entries always require the stored state to be `open`, preventing a client from approving a resolved prompt by copying its status. Passing through the adapter's contract-coded refusal, including an economy 409, is appropriate. Error statuses and the conflict-body fields match the contract.
+3. **Size accepted.** The roughly 380 product lines remain below the 450-line stop. The larger test file is justified by the concealment, override and comparison matrices plus composition with real repository locks. No mechanical split is requested. The change activates no command or route and changes no migration, authority setting or worker count.
+
+**Non-blocking downstream reconciliation; retain these when briefing the consumers:**
+
+- PE-14a must adopt these concrete subject/payload/dependency interfaces and explicitly test the static input validation PE-13b relies on: subject shape and id strings, payload mapping and declared scalar/list id fields, revision value types (including rejecting booleans), and prompt status. Malformed client input must be refused by check 1 rather than reach this runner as an unplanned-key/type error. PE-14a's current general checklist is less explicit than the implementation's assumptions.
+- PE-14b/14e fixtures and real adapters must pass `pin["content"]` as the installed descriptor and return projector keys in `"<kind>:<id>"` form. PE-14e currently describes the whole pin and a pass-through projector; its session commands skip the affected branches, so this is not a blocker here, but reconcile that prose before its build.
+- The reported two-argument edition-adapter limitation for a `character.play` subject is inherited from the accepted signature. Resolve access to the already locked build/context when PE-15 supplies the real adapter; do not introduce a request cache or independent session to obtain it.
+
+**Verification:**
+
+- Repository-venv `python -m pytest -q tests/persistence/test_command_checks.py tests/persistence/test_state_repositories.py`: **122 passed** in 5.11s.
+- `git diff --check 6c4b4fec..febcc7ba`: clean. `python -m alembic heads`: unchanged at `20261111_0004 (head)`.
+- GitHub CI run `43716170114` on this exact head: **changes, postgresql, test and browser all passed**. No separate PostgreSQL case was required for the lock-free runner or the combatant bookkeeping; existing locking tests ran in CI. The full Windows suite and the implementer's mutation run were not repeated; the earlier unlabelled local failure is not claimed as independently diagnosed.
+
+For players: the shared checks for permissions, hidden targets, stale edits and rules versions are now accepted alongside the saving layer. They remain inactive until the later command pipeline and game adapters connect them. Next: Claude, high reasoning, commits these notes and merges after every CI job passes on the resulting head, then builds PE-13c (keeping HP and resource totals consistent when character stats change). PE-14a is also ready and must carry the reconciliation above. Review notes are uncommitted; Codex has not merged or started another task.

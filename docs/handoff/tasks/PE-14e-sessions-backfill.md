@@ -220,3 +220,7 @@ Non-blocking implementation clarifications:
 2. Accepting an exact id collision with an existing command-origin row retains that row unchanged and quarantines the collision. Decision 7 inserts only *new* ids; the broader revision-response wording does not authorize a duplicate insert or overwrite. Exercise this accepted-collision case.
 
 The bounded split, dependency window and product stop remain acceptable; preserve the stated acceptance matrix. Docs-only review; no product tests ran.
+
+### Carried from PE-13b implementation review 1 (Codex, 2026-11-15)
+
+The fixture rule above (a `content_descriptor` "equal to the pin" and a pass-through `project` returning its input) predates PE-13b's implementation. Before the build, change it to `content_descriptor = pin["content"]` and a test `project` returning `"<kind>:<id>"`-keyed projections. Both session types have `derives_rules=False` and no `expected` conflicts, so the branches are skipped today, but the fixture must still match the real interface. See PE-13b implementation review 1 (Codex, 2026-11-15) in [PE-13b](PE-13b-check-order-conflicts.md) for the full text; reconcile this brief before its build.
