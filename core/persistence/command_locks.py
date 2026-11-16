@@ -6,6 +6,7 @@ order every command transaction takes its locks in:
 1. the campaign stream row (``stream()``, through the required
    ``lock_stream`` callback; PE-14a's ``streams.lock_stream``);
 2. the encounter (``encounter()``), which also registers its combatants;
+   ``combatants()`` then accounts for requested combatant ids under it;
 3. action rows (``actions()``; tables register when PE-30's follow-ons add
    them);
 4. ``character_states`` rows in ascending ``(character_id, domain)`` order
@@ -66,6 +67,7 @@ from sqlalchemy.orm import Session
 from .state_repositories import (
     DOMAIN_KINDS,
     KIND_CLOCK,
+    KIND_COMBATANT,
     KIND_ENCOUNTER,
     CampaignClockRepository,
     CharacterStateRepository,
@@ -144,6 +146,10 @@ class CommandLocks:
         self._table_index = -1
         self._records: dict[tuple[str, str], StateRecord | None] = {}
         self._records_view = MappingProxyType(self._records)
+        # Encounters locked so far, and the encounter each combatant key
+        # (found or ``None``) was registered under.
+        self._encounters: set[str] = set()
+        self._combatant_scope: dict[str, str] = {}
 
     @property
     def session(self) -> Session:
@@ -212,11 +218,46 @@ class CommandLocks:
         self._advance(STEP_ENCOUNTER, [encounter_id])
         repository = EncounterStateRepository(self._session)
         record = repository.get(self._campaign_id, encounter_id, for_update=True)
+        found = (repository.combatants(self._campaign_id, encounter_id)
+                 if record is not None else [])
+        for combatant in found:
+            if combatant.id in self._combatant_scope:
+                raise LockOrderError(
+                    f"combatant {combatant.id} is already registered under encounter "
+                    f"{self._combatant_scope[combatant.id]}")
         self._enter(KIND_ENCOUNTER, encounter_id, record)
-        if record is not None:
-            for combatant in repository.combatants(self._campaign_id, encounter_id):
-                self._enter(combatant.kind, combatant.id, combatant)
+        self._encounters.add(encounter_id)
+        for combatant in found:
+            self._combatant_scope[combatant.id] = encounter_id
+            self._enter(KIND_COMBATANT, combatant.id, combatant)
         return record
+
+    def combatants(self, encounter_id: str, ids: Iterable[str]) -> dict[str, StateRecord | None]:
+        """Account for each requested combatant id under a locked encounter.
+
+        Takes no lock (the encounter row serializes its combatants) and does
+        not move the lock step.  An id that is not a combatant of that
+        encounter is registered as ``None`` (404 at check 5, never a missing
+        key).  ``encounter(encounter_id)`` must have run on this instance; an
+        id already registered under another encounter is ambiguous and raises
+        :class:`LockOrderError`.
+        """
+
+        if encounter_id not in self._encounters:
+            raise LockOrderError(f"encounter {encounter_id} has not been locked")
+        ordered = sorted(set(ids))
+        for key in ordered:
+            scope = self._combatant_scope.get(key, encounter_id)
+            if scope != encounter_id:
+                raise LockOrderError(
+                    f"combatant {key} is registered under encounter {scope}")
+        accounted: dict[str, StateRecord | None] = {}
+        for key in ordered:
+            if key not in self._combatant_scope:
+                self._combatant_scope[key] = encounter_id
+                self._enter(KIND_COMBATANT, key, None)
+            accounted[key] = self._records[(KIND_COMBATANT, key)]
+        return accounted
 
     def actions(self, table: str, ids: Iterable[str]) -> dict[str, StateRecord | None]:
         """Step 3: lock rows of a registered action table, ids ascending."""

@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** blocked (PE-13a); brief accepted (Codex brief review 2, 2026-11-14)
+- **Status:** done (implementation accepted by Codex, 2026-11-15; PR #261 merge pending; built from main `6c4b4fec`)
 - **Branch:** `claude/pe-13b-check-order` from current main after PE-13a merges. Record the exact starting SHA.
 - **Depends on:** [PE-13a](PE-13a-state-repositories.md). Runs in parallel with PE-13c and PE-14a; it imports nothing from either.
 - **Followed by:** PE-14b (executor), which runs check 1 before its transaction, then inside it takes the stream lock, runs checks 2-3, builds the authorizer and the `CheckContext`, calls the type's `lock_plan`, then this runner.
@@ -92,10 +92,32 @@ Do not edit `core/persistence/__init__.py`; import PE-13a's submodules directly.
 
 ## Report
 - **Changed:**
+  - `core/commands/__init__.py`: the one-line docstring from Approach, byte for byte.
+  - `core/commands/checks.py`: `CommandRefusal(code, *, conflicts, current)` over the full code table (`CODES`, C:352-366, including `server_error`), `CheckOrderError`, the `Authorizer` and `RulesAdapter` protocols, `CheckSpec`, the `expected` kind registry (`ExpectedKind`, `DEFAULT_KINDS`, `register_expected_kind`, `expected_kinds`), `CheckContext` (closed field list, `records` property over `locks.records`, identity checks in `__post_init__`), `CheckRunner(spec, adapter, kinds=None)` and `run_checks(ctx, spec, adapter)`.
+  - `core/commands/conflicts.py`: `conflict_body(operation_id, conflicts, current)`, exactly the C:147-151 keys.
+  - `core/persistence/command_locks.py` (PE-13a's file, see "Brief reconciliation" above): `CommandLocks.combatants(encounter_id, ids)` and the combatant-scope bookkeeping in `encounter()`.
+  - `tests/persistence/test_command_checks.py`: 56 tests.
+- **How the runner reads the envelope** (judgments, PE-14a/14b should match them):
+  - `CheckSpec.subject` is `(field, record kind)`; the subject id is `envelope["subject"][field]` (C:228 shape `{"character_id": ...}`).
+  - `CheckSpec.payload_ids` maps a payload field to a record kind. A field may hold one id or a list of ids; an absent or `None` field is skipped (optional field). Any other value is `CheckOrderError`, since check 1 owns payload shape.
+  - Check 5 first confirms every key is registered (a missing key, or a key holding a record of another kind or id, is `CheckOrderError`) and only then answers 404, so an unplanned key is never hidden behind an earlier 404. Order inside check 5: subject, payload ids, `expected` references, then each reference's relation. A `campaign` record must also carry `ctx.campaign_id`; every other record is campaign-scoped by `CommandLocks`.
+  - An `expected` kind not in the registry, or not in the spec's dependency set, is `CheckOrderError` (check 1 should have refused it).
+  - Check 7: a rev kind compares `entry["rev"]` with `record.revision`. A `prompt` entry always compares the row's status with `"open"` (`ExpectedKind.fixed`), whatever status the entry carries. All mismatches are collected, then `ctx.project(principal, {(kind, id): record})` is called once; it returns a mapping keyed `"<kind>:<id>"`, and a conflict whose key is absent from it is dropped from `conflicts` (it is already absent from `current`).
+  - Check 8 `rules_mismatch`: the envelope's `rules` must be a mapping whose `profile` equals the pin's, and if it carries `content` that must equal the pin's content. `content_mismatch`: `content_descriptor != pin["content"]`, only when `derives_rules`. `edition_mismatch`: only when the subject kind is `character.build` or `character.play`.
+  - Check 9 refusals pass through unchanged; the runner does not force them to 422 (economy refusals such as `insufficient_funds` are 409).
 - **Tests run:**
-- **Skipped / not verified:**
+  - `tests/persistence/test_command_checks.py`: 56 passed.
+  - Brief acceptance command (`test_command_checks.py` + `test_state_repositories.py`): 122 passed.
+  - `tests/persistence -m "not postgresql"`: first run 626 passed, 1 failed, 2 skipped; the failing test was not captured (output was cut to the summary line). A rerun of everything except the new file passed 571 with 2 skipped, and the 56 new tests pass on their own, so it did not reproduce. This suite has a known load-sensitive timeout in `test_runtime_http`; CI is the authority.
+  - Mutation checks: 20 hand mutations of `checks.py` and `combatants()` (each check removed or reordered, visibility skipped for `expected` references, first-mismatch-only conflicts, prompt status taken from the entry, flag checks dropped, scope checks dropped). All 20 make the file fail.
+  - `git diff --check` clean. CI numbers for the head are in the PR.
+- **Self-review.** A three-lens adversarial review (contract, adversarial inputs, concealment) with two verifiers per finding confirmed three issues, all fixed: (1) a `prompt` entry was compared with the status the client sent, so copying a resolved prompt's status passed check 7; it now always expects `open`; (2) the "hidden `expected` reference" 404 case hid the subject, so visibility of a non-subject reference was untested; it now hides a separate clock reference with a stale revision, also under the revision spy; (3) no test had two visible mismatches, so "lists every mismatch" was unproven; the conflict-body test now has two. Rejected: malformed envelope values giving 500 (check 1's job), boolean `rev` equal to 1 (check 1), and the two-argument `build_edition_matches` (fixed by the accepted briefs).
+- **Skipped / not verified:** no PostgreSQL case, per the brief (the runner takes no lock; `combatants()` takes none either). Not exercised against real PE-14a/14b code, which does not exist yet.
 - **Known wrong / limitations:**
-- **Follow-ups (not done here):**
+  - Over the estimate: about 381 raw product lines (337 in `core/commands/`, 44 in `command_locks.py`) against about 345, under the 450 stop. Tests are 786 lines against about 480, mainly the combatant tests, the parametrized 404/spy/override matrices and the composing tests.
+  - `build_edition_matches(subject_record, pin)` sees only the subject. For a `character.play` subject the adapter has to read the build itself (through `ctx` it does not receive). That is the accepted signature; if PE-15 needs `ctx`, widen it there.
+  - Same-campaign is guaranteed by `CommandLocks` being bound to `ctx.campaign_id`, not re-checked per record (records carry no campaign id), except the `campaign` kind.
+- **Follow-ups (not done here):** PE-14a's `CommandType` must carry the subject as `(field, kind)` and payload ids as field-to-kind, as above, or PE-14b adapts it into a `CheckSpec`. Each type's `lock_plan` must call `locks.combatants(...)` for every combatant id it names.
 
 ## Review
 
@@ -141,3 +163,35 @@ The estimate and 450-product-line stop are acceptable. This is brief acceptance,
 ### Carried from PE-13a implementation review 1 (Codex, 2026-11-14)
 
 Resolve before building check 5's combatant cases: `CommandLocks.encounter()` (PE-13a) registers only the combatants that exist in the locked encounter, so a requested combatant id that is missing or belongs to another encounter has no key in `ctx.records`, while Decision 2 / Approach 3 treat an absent key as a programming error (500). Provide a scoped way to account for each requested combatant id under the held encounter (recording `None`), or define how the complete locked encounter set proves absence, keeping a missing target (404) apart from an unplanned key (500). `register_serialized` correctly refuses the `combatant` kind, so it is not the route. See the PE-13a Review section.
+
+### Brief reconciliation (Claude, 2026-11-15)
+
+Resolves the combatant follow-up above before check 5 was built. It edits one PE-13a file outside this task's allowed files, recorded here for Codex to accept or reject.
+
+- **`CommandLocks.combatants(encounter_id, ids) -> {id: StateRecord | None}`** (PE-13a's `core/persistence/command_locks.py`, about 45 lines). `lock_plan` calls it after `encounter(encounter_id)` for every combatant id the payload names (actor, targets). It accounts for each requested id under that held encounter: an existing combatant of that encounter keeps its record, and any other id is registered as `None`, so check 5 answers a missing target, or one in another encounter, with the same 404 as a hidden one. A key that `lock_plan` never asked about stays absent and is still `CheckOrderError` (500).
+- **No lock and no order change.** Combatants are serialized by the encounter row, so the method takes no row lock and does not move the lock step; it may be called at any later step of the same transaction.
+- **Refusals.** `LockOrderError` if `encounter(encounter_id)` has not run on this instance, or if an id is already registered under another encounter (ambiguous scope; combatant ids are unique only per encounter). `encounter()` likewise refuses to register a combatant id already registered under another encounter. If the encounter record itself is `None`, every requested id is `None`.
+- **Why not the alternatives.** Treating the locked encounter's combatant set as proof of absence would have the runner infer `None` from a missing key, erasing the 404/500 split the brief relies on. `register_serialized` stays closed to `combatant`.
+- **Tests** are in `tests/persistence/test_command_checks.py` (the `combatants` section), not in PE-13a's test file.
+
+### Implementation review 1 - accepted (Codex, 2026-11-15)
+
+Reviewed PR #261 at `febcc7ba22aad5fcd8d5b99ac99853916cb62ce4` against `6c4b4fec`, including every Decision and Acceptance item, the Report judgments and the Brief reconciliation. **No blocking findings; PE-13b is accepted.**
+
+1. **Combatant reconciliation accepted, including the additional PE-13a file.** This is a bounded resolution of the follow-up explicitly requested in PE-13a's review. `combatants(encounter_id, ids)` requires the encounter to have been accounted for on the same lock manager, takes no additional SQL lock and does not advance the lock step. Existing targets retain their records; missing and other-encounter targets become `None`, preserving concealed 404 responses. A key never requested by the lock plan remains a programming error. Refusing conflicting encounter scopes before overwriting the records is appropriate for the one-scope-per-combatant-key interface; future lock plans must preserve that precondition. The tests cover a missing encounter, later-step use, repeated calls and both conflicting registration orders. The serialized-kind allowlist remains closed to combatants.
+2. **Runner and envelope judgments accepted.** The `(field, kind)` subject and field-to-kind payload mapping make the earlier structural protocol concrete. Check 5 establishes visibility and relations before subject permission or any revision comparison; the refusal, comparison-spy and override matrices exercise that ordering. The profile-only request is supported by C:229, supplied request content is additionally compared, and the installed descriptor is correctly compared with `pin["content"]`. String-keyed `"<kind>:<id>"` projection results consistently filter both the conflicts and current records. Prompt entries always require the stored state to be `open`, preventing a client from approving a resolved prompt by copying its status. Passing through the adapter's contract-coded refusal, including an economy 409, is appropriate. Error statuses and the conflict-body fields match the contract.
+3. **Size accepted.** The roughly 380 product lines remain below the 450-line stop. The larger test file is justified by the concealment, override and comparison matrices plus composition with real repository locks. No mechanical split is requested. The change activates no command or route and changes no migration, authority setting or worker count.
+
+**Non-blocking downstream reconciliation; retain these when briefing the consumers:**
+
+- PE-14a must adopt these concrete subject/payload/dependency interfaces and explicitly test the static input validation PE-13b relies on: subject shape and id strings, payload mapping and declared scalar/list id fields, revision value types (including rejecting booleans), and prompt status. Malformed client input must be refused by check 1 rather than reach this runner as an unplanned-key/type error. PE-14a's current general checklist is less explicit than the implementation's assumptions.
+- PE-14b/14e fixtures and real adapters must pass `pin["content"]` as the installed descriptor and return projector keys in `"<kind>:<id>"` form. PE-14e currently describes the whole pin and a pass-through projector; its session commands skip the affected branches, so this is not a blocker here, but reconcile that prose before its build.
+- The reported two-argument edition-adapter limitation for a `character.play` subject is inherited from the accepted signature. Resolve access to the already locked build/context when PE-15 supplies the real adapter; do not introduce a request cache or independent session to obtain it.
+
+**Verification:**
+
+- Repository-venv `python -m pytest -q tests/persistence/test_command_checks.py tests/persistence/test_state_repositories.py`: **122 passed** in 5.11s.
+- `git diff --check 6c4b4fec..febcc7ba`: clean. `python -m alembic heads`: unchanged at `20261111_0004 (head)`.
+- GitHub CI run `43716170114` on this exact head: **changes, postgresql, test and browser all passed**. No separate PostgreSQL case was required for the lock-free runner or the combatant bookkeeping; existing locking tests ran in CI. The full Windows suite and the implementer's mutation run were not repeated; the earlier unlabelled local failure is not claimed as independently diagnosed.
+
+For players: the shared checks for permissions, hidden targets, stale edits and rules versions are now accepted alongside the saving layer. They remain inactive until the later command pipeline and game adapters connect them. Next: Claude, high reasoning, commits these notes and merges after every CI job passes on the resulting head, then builds PE-13c (keeping HP and resource totals consistent when character stats change). PE-14a is also ready and must carry the reconciliation above. Review notes are uncommitted; Codex has not merged or started another task.
