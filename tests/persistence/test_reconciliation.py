@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import copy
 import inspect
 import random
 from datetime import datetime, timezone
@@ -427,3 +428,190 @@ def test_commands_package_has_no_reexports():
     assert init.read_bytes().replace(b"\r\n", b"\n") == (
         b'"""Command pipeline. Import submodules directly; this package re-exports '
         b'nothing."""\n')
+
+
+# --------------------------------------------------------------------------
+# play-only effect changes (implementation review R1-1): a stateless adapter
+# derives everything from the snapshot it is given, effects included.
+
+
+class EffectAdapter:
+    """Max HP and pools come from the build plus the effects in that side's play."""
+
+    def effective_max(self, build, play, items):
+        return build["hp_max"] + sum(e.get("hp_bonus", 0) for e in play.get("effects", ()))
+
+    def is_dead(self, play):
+        return bool(play.get("dead"))
+
+    def pools(self, build, play, items):
+        pools = dict(build.get("pools", {}))
+        pools.update({e["pool"]: e["pool_max"] for e in play.get("effects", ()) if "pool" in e})
+        return pools
+
+    def invalid_choices(self, build, play):
+        return [{"id": c} for c in play.get("needs_choice", ())]
+
+    def orphaned_effects(self, build, play, items, removed_pools):
+        return [{"id": e["id"], "pool": e["uses_pool"]} for e in play.get("effects", ())
+                if e.get("uses_pool") in removed_pools]
+
+
+EFFECTS = EffectAdapter()
+BUILD = {"hp_max": 10}
+BUFF = {"id": "buff", "hp_bonus": 8, "pool": "effect_charge", "pool_max": 2}
+
+
+def effect_run(before_play, after_play, *, current=None, hp=6, used=None, reservations=(),
+               user=False):
+    """Run apply and preview on deep copies' originals and prove neither input changes."""
+
+    current = before_play if current is None else current
+    kwargs = dict(before=Snapshot(BUILD, (), before_play), after=Snapshot(BUILD, (), after_play),
+                  play=current, hp=hp, used=used or {}, reservations=list(reservations),
+                  user_initiated=user)
+    frozen = copy.deepcopy(kwargs)
+    try:
+        result = apply(EFFECTS, **kwargs)
+    except ReservationBlocked as refused:
+        with pytest.raises(ReservationBlocked) as previewed:
+            preview(EFFECTS, **kwargs)
+        assert previewed.value.action_ids == refused.action_ids
+        assert kwargs == frozen
+        raise
+    assert preview(EFFECTS, **kwargs) == list(result.entries)
+    assert kwargs == frozen  # inputs are read, never changed
+    return result
+
+
+def test_expiring_hp_bonus_effect_applies_the_hp_rule():
+    # 6/18 with a +8 effect that expires: 18 -> 10 gives 1 HP and debt 3.
+    result = effect_run({"effects": [BUFF]}, {"effects": []})
+    assert (result.hp, result.hp_floor_debt) == (1, 3)
+    assert result.entries[0] == {"type": "hp", "hp_before": 6, "hp_after": 1,
+                                 "debt_before": 0, "debt_after": 3,
+                                 "effmax_before": 18, "effmax_after": 10}
+
+
+def test_gaining_the_hp_bonus_again_pays_the_debt_back():
+    play = {"effects": [], "hp_floor_debt": 3}
+    result = effect_run(play, {"effects": [BUFF], "hp_floor_debt": 3}, hp=1)
+    assert (result.hp, result.hp_floor_debt) == (6, 0)
+
+
+def test_effect_pool_disappearing_with_a_used_count_is_dropped_and_listed():
+    after = {"effects": [{"id": "aura", "uses_pool": "effect_charge"}]}
+    before = {"effects": [BUFF, *after["effects"]]}
+    result = effect_run(before, after, used={"effect_charge": 1})
+    assert result.dropped_pools == ("effect_charge",) and result.used == {}
+    assert result.entries[1:] == (
+        {"type": "pool_removed", "pool": "effect_charge", "used": 1, "effects": ["aura"]},
+        {"type": "effect_ended", "effect_id": "aura", "pool": "effect_charge",
+         "effect": {"id": "aura", "pool": "effect_charge"}},
+    )
+    # The expired buff itself is gone from after.play, so it is not ended again.
+    assert result.ended_effects == ("aura",)
+
+
+def test_effect_pool_disappearing_with_a_reservation_releases_it_automatically():
+    held = Reservation("effect_charge", "action-1", 1, 1, ("target-1",))
+    result = effect_run({"effects": [BUFF]}, {"effects": []}, used={"effect_charge": 0},
+                        reservations=[held])
+    assert result.released == (held,) and result.released_actions == ("action-1",)
+    assert [e["type"] for e in result.entries] == ["hp", "reservation_released",
+                                                   "pool_removed"]
+    assert result.entries[1]["targets"] == ["target-1"]
+
+
+def test_user_dismissing_an_effect_with_a_reserved_pool_is_refused():
+    held = Reservation("effect_charge", "action-1", 1, 1, ("target-1",))
+    with pytest.raises(ReservationBlocked) as info:
+        effect_run({"effects": [BUFF]}, {"effects": []}, reservations=[held], user=True)
+    assert info.value.action_ids == ("action-1",)
+
+
+def test_choices_are_read_from_the_after_side():
+    result = effect_run({"effects": [BUFF]}, {"effects": [BUFF], "needs_choice": ["c1"]},
+                        current={"effects": [BUFF]})
+    assert [e["type"] for e in result.entries] == ["choice_prompt"]
+
+
+def test_used_counts_must_still_name_a_pool_of_the_before_side():
+    with pytest.raises(ValueError, match="unknown pool"):
+        effect_run({"effects": []}, {"effects": []}, used={"effect_charge": 1})
+    with pytest.raises(ValueError, match="unknown pool"):
+        effect_run({"effects": []}, {"effects": []},
+                   reservations=[Reservation("effect_charge", "action-1", 1, 1)])
+
+
+def test_current_row_supplies_debt_prompts_and_death():
+    # Before/after views carry no debt; the current row's debt is what counts.
+    current = {"effects": [BUFF], "hp_floor_debt": 2}
+    result = effect_run({"effects": [BUFF]}, {"effects": []}, current=current, hp=9)
+    assert (result.hp, result.hp_floor_debt) == (1, 2)  # raw = 9 - 8 - 2 = -1, debt 1 - raw
+    dead = effect_run({"effects": [BUFF]}, {"effects": []}, current={"dead": True}, hp=0)
+    assert dead.entries[0]["type"] == "pool_removed" and "hp" not in [
+        e["type"] for e in dead.entries]
+
+
+@pytest.mark.parametrize("side", ["before", "after"])
+@pytest.mark.parametrize("bad", [None, -1, True, 1.5])
+def test_pool_maxima_on_either_side_must_be_counts(side, bad):
+    pools = {"before": {"p": 2}, "after": {"p": 2}}
+    pools[side]["p"] = bad
+    with pytest.raises(ValueError):
+        run(hp_build(10, pools=pools["before"]), hp_build(10, pools=pools["after"]))
+
+
+def test_debt_after_heal_validates_the_debt():
+    with pytest.raises(ValueError):
+        debt_after_heal(0, -1, rest_to_max=False)
+
+
+def test_before_side_maxima_come_from_before_play_not_the_current_row():
+    # The current row already lacks the buff; before.play still has it.
+    result = effect_run({"effects": [BUFF]}, {"effects": []}, current={"effects": []})
+    assert (result.hp, result.hp_floor_debt) == (1, 3)
+    assert result.entries[0]["effmax_before"] == 18
+
+
+def test_an_effect_the_trigger_removed_is_not_ended_again():
+    # The expiring effect itself depends on the pool that disappears with it.
+    expiring = {**BUFF, "uses_pool": "effect_charge"}
+    aura = {"id": "aura", "uses_pool": "effect_charge"}
+    result = effect_run({"effects": [expiring, aura]}, {"effects": [aura]})
+    assert result.ended_effects == ("aura",)
+
+
+def test_stored_prompts_are_read_from_the_payload_being_written():
+    prompt = {"kind": "choice", "origin": "reconciliation", "choice": {"id": "c1"}}
+    # Already stored in after.play: not prompted again, and kept on write.
+    after = {"effects": [], "needs_choice": ["c1"], "choice_prompts": [prompt]}
+    result = effect_run({"effects": []}, after, current={"effects": []})
+    assert result.prompts == ()
+    assert result.play_updates(after)["choice_prompts"] == [prompt]
+    # Present on the current row but not in the payload being written: the
+    # still-invalid choice is prompted again rather than silently lost.
+    current = {"effects": [], "choice_prompts": [prompt]}
+    result = effect_run({"effects": []}, {"effects": [], "needs_choice": ["c1"]},
+                        current=current)
+    assert result.play_updates({"effects": []})["choice_prompts"] == [prompt]
+
+
+def test_a_pool_only_the_after_side_has_is_still_unknown_to_used_and_reservations():
+    with pytest.raises(ValueError, match="unknown pool"):
+        effect_run({"effects": []}, {"effects": [BUFF]}, used={"effect_charge": 1})
+    with pytest.raises(ValueError, match="unknown pool"):
+        effect_run({"effects": []}, {"effects": [BUFF]},
+                   reservations=[Reservation("effect_charge", "action-1", 1, 1)])
+
+
+def test_a_side_without_play_uses_the_current_row_and_an_empty_play_is_kept():
+    current = {"effects": [BUFF]}
+    kwargs = dict(play=current, hp=6, used={}, user_initiated=False)
+    before = Snapshot(BUILD, ())  # play None: the current row (18)
+    for after_play in ({"effects": []}, {}):  # {} is a real view, not "absent"
+        result = apply(EFFECTS, before=before, after=Snapshot(BUILD, (), after_play), **kwargs)
+        assert (result.hp, result.hp_floor_debt) == (1, 3)
+    unchanged = apply(EFFECTS, before=before, after=Snapshot(BUILD, ()), **kwargs)
+    assert unchanged.entries == ()

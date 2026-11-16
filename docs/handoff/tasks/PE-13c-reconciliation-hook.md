@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** changes requested (Codex implementation review 1, 2026-11-15; R1-1; built from main `737555a2`)
+- **Status:** in review (implementation revision 1 returned to Codex, 2026-11-15; R1-1 fixed; built from main `737555a2`)
 - **Branch:** `claude/pe-13c-reconciliation` from current main after PE-13a merges. Record the exact starting SHA.
 - **Depends on:** [PE-13a](PE-13a-state-repositories.md) (`CharacterStateRepository`, and `EncounterStateRepository.is_combatant`). Independent of PE-13b and PE-14a; may run in parallel with both. Imports nothing from PE-13b or PE-14.
 - **Context:**
@@ -72,31 +72,39 @@ Allowed files:
 
 ## Report
 - **Changed:**
-  - New `core/commands/reconciliation.py`: `reconcile_hp`, `debt_after_heal`, `reconcile(adapter, *, before, after, play, hp, used, reservations, user_initiated) -> Reconciliation`, `apply` and `preview` (both call `reconcile`), `refuse_publish_in_encounter`, `Reservation(pool, action_id, declare_seq, amount, targets)`, `Snapshot(build, items)`, `ReservationBlocked` and `InEncounter`. Imports only `core.persistence.state_repositories` (for `is_combatant`), nothing from PE-13b or PE-14.
+  - New `core/commands/reconciliation.py`: `reconcile_hp`, `debt_after_heal`, `reconcile(adapter, *, before, after, play, hp, used, reservations, user_initiated) -> Reconciliation`, `apply` and `preview` (both call `reconcile`), `refuse_publish_in_encounter`, `Reservation(pool, action_id, declare_seq, amount, targets)`, `Snapshot(build, items, play=None)`, `ReservationBlocked` and `InEncounter`. Imports only `core.persistence.state_repositories` (for `is_combatant`), nothing from PE-13b or PE-14.
   - `core/commands/__init__.py` already existed (PE-13b) with the agreed bytes; left as is.
-  - New `tests/persistence/test_reconciliation.py`: 77 tests.
+  - New `tests/persistence/test_reconciliation.py`: 99 tests (77 in the first build, 22 added by revision 1).
 - **Interface for PE-15, PE-16-18, PE-18b and PE-31** (Decision 4 left the keys to this task):
-  - Adapter methods: `effective_max(build, play, items)`, `is_dead(play)`, `pools(build, play, items) -> {pool: max}`, `invalid_choices(build, play) -> [{"id", ...}]`, `orphaned_effects(build, play, items, removed_pools) -> [{"id", "pool"?, ...}]`. `orphaned_effects` receives the removed pool names so the adapter can end effects that depended on them; `pool` on an effect ties it to that pool's entry.
-  - The caller passes the current `hp` and pool `used` counts, read with its adapter, because both live under system-specific play keys. `used` must name only pools the adapter reports for the before state (anything else is `ValueError`, a caller bug): PE-15 must filter orphaned `item:*` resource keys (C:680) out of it.
-  - `play` keys this hook owns: `hp_floor_debt` (default 0) and `choice_prompts` (a list; each reconciliation prompt is `{"kind": "choice", "origin": "reconciliation", "choice": {...}}`). `Reconciliation.play_updates(play)` returns both, existing prompts kept; the caller writes them with `hp` and `used` in one `play` write. A choice that already has a stored reconciliation prompt is not prompted again.
+  - **Inputs (revised in revision 1).** Each side is a `Snapshot(build, items, play)`: everything the adapter derives that side's maxima and pools from. A build publish or item change differs in `build`/`items`; an effect change or expiry differs in `play`, because owned effects live there (C:65). `play=None` on a snapshot means "use the current row". The caller builds `after.play` from the locked row with only the triggering change applied, so play fields with their own HP rule (PF2e drained, D&D `max_hp_reduction`) are equal on both sides (C:172-175); the hook does not freeze the rest of play. Separately, `play=` is the locked row as it stands now. Which input supplies what:
+    - current HP and pool `used` counts: the caller's `hp=` and `used=`, read with its adapter from the current row (system-specific keys);
+    - `hp_floor_debt` and the dead state: the current row (`play=`);
+    - stored `choice_prompts`: the payload being written (`after.play`, or the current row when it is `None`), the same list `play_updates` keeps;
+    - effective maxima and pool maxima: `effective_max` and `pools`, called once per snapshot with that snapshot's play;
+    - effect inspection: `orphaned_effects` and `invalid_choices`, called on the after snapshot. An effect the trigger itself removed is already absent from `after.play` and is not ended again.
+  - Adapter methods: `effective_max(build, play, items)`, `is_dead(play)`, `pools(build, play, items) -> {pool: max}`, `invalid_choices(build, play) -> [{"id", ...}]`, `orphaned_effects(build, play, items, removed_pools) -> [{"id", "pool"?, ...}]`. The adapter is stateless: it must not depend on call order or hide play state in `build`/`items`. `orphaned_effects` receives the removed pool names so the adapter can end effects that depended on them; `pool` on an effect ties it to that pool's entry.
+  - `used` and `reservations` must name only pools the adapter reports for the before snapshot, effect pools included (anything else is `ValueError`, a caller bug): PE-15 must filter orphaned `item:*` resource keys (C:680) out of `used`. A pool only the after side has is still unknown to them.
+  - `play` keys this hook owns: `hp_floor_debt` (default 0) and `choice_prompts` (a list; each reconciliation prompt is `{"kind": "choice", "origin": "reconciliation", "choice": {...}}`). Writing the result: the caller writes its `after.play` (or the current row when it passed none), keeping the triggering change, with `hp` and `used` set from the result through its adapter and `Reconciliation.play_updates(after_play)` merged in, as one `play` write. `play_updates` keeps the prompts already in that payload and appends the new ones; a choice that already has a stored reconciliation prompt there is not prompted again. The hook never changes its inputs.
   - Entries, in commit order: `hp` (`hp_before`, `hp_after`, `debt_before`, `debt_after`, `effmax_before`, `effmax_after`), then per pool in name order its `reservation_released` entries newest first (`pool`, `action_id`, `declare_seq`, `amount`, `targets`, `reason: "reservation_invalidated"`) and then its `pool_clamped` (`pool`, `max_before`, `max_after`, `used_before`, `used_after`) or `pool_removed` (`pool`, `used`, `effects`), then `effect_ended` (`effect_id`, `pool`, `effect`), then `choice_prompt` (`prompt`). Newest-first is per pool, as the contract words it.
-  - `Reconciliation.released` has one item per reservation; `released_actions` lists each action once, for PE-30's follow-on to hold its targets.
+  - `Reconciliation.released` has one item per reservation, with its exact `targets`; the `reservation_released` entries carry the same. PE-30's follow-on must hold the targets named per reservation there. `released_actions` is only the de-duplicated action list.
 - **Judgments:**
   - The HP rule runs only when the effective maximum moves (C:168-170). With the maximum unchanged, HP and debt are left exactly as they are, so a choice-only publish or a pool-only change never charges an outstanding debt as damage. A dead character gets no `hp` entry.
   - `ReservationBlocked.action_ids` names each blocking action once, in `declare_seq` order, across every pool that blocks; actions on reserved pools that still fit are not named.
   - `refuse_publish_in_encounter` treats any non-`None` `override` as set; whether the principal may send one is PE-13b check 4.
-  - Counts (HP, debt, maxima, used, amounts) must be non-negative integers; booleans are refused.
+  - Counts must be non-negative integers, booleans refused, and this is enforced on every path: HP and debt (in `reconcile_hp` and `debt_after_heal`), every pool maximum in both the before and after maps (validated before any pool work), `used` counts and reservation amounts. A maximum of `None` is refused; a pool is removed only by being absent from the after map. One ordering detail: pool refusals run before the HP rule, so an input with both a blocking reservation and an invalid HP or debt raises `ReservationBlocked` rather than `ValueError`.
 - **Tests run:**
-  - `tests/persistence/test_reconciliation.py`: 77 passed. Brief acceptance command with `test_state_repositories.py`: 143 passed.
+  - Revision 1: `tests/persistence/test_reconciliation.py` 99 passed; brief acceptance command with `test_state_repositories.py`: 165 passed. (First build: 77 and 143.)
   - The never-heals property test runs 40 seeded random sequences of maximum changes and checks `hp - debt - max` is conserved and the start state is restored exactly (no `hypothesis` in the lock file, so it uses `random.Random(seed)`).
-  - Mutation checks: 14 hand mutations (debt charged at an unchanged maximum, preview forcing automatic, every action named, all effects on a removed pool, no de-duplication, oldest-first release, no clamp, no 0-HP clear, no `min`, partial heal clearing debt, duplicate prompts, override ignored, and others). All are killed except one equivalent mutant (`break` to `continue` in the release loop: once a pool fits, later reservations still fit).
+  - Revision 1 mutation checks: 16 hand mutations of the per-side wiring and validation (each derivation reading the current row or the wrong side, stored prompts read from the current row or the before side, debt read from after, the `None` fallback removed or replaced by truthiness, the unknown-pool refusal widened to after-side pools, before-map validation dropped, the `debt_after_heal` debt check dropped). All 16 are killed.
+  - First build mutation checks: 14 hand mutations (debt charged at an unchanged maximum, preview forcing automatic, every action named, all effects on a removed pool, no de-duplication, oldest-first release, no clamp, no 0-HP clear, no `min`, partial heal clearing debt, duplicate prompts, override ignored, and others). All are killed except one equivalent mutant (`break` to `continue` in the release loop: once a pool fits, later reservations still fit).
   - `git diff --check` clean. CI numbers for the head are in the PR.
 - **Self-review.** A three-lens adversarial review (contract, pool edge cases, mutation) with two verifiers per finding confirmed two product defects, both fixed: (1) debt was charged as damage whenever the hook ran with an unchanged maximum (37/37 with debt 6 became 31/37 on a choice-only publish); (2) an action holding reservations in two pools was named twice in `ReservationBlocked`. It also confirmed three weak tests, now strengthened: preview was never compared on the refusal path, no refusal case had a reserved pool that still fits, and the `pool_removed` effect list was not asserted exactly. Rejected: unknown `used` keys raising (documented as a caller precondition above), releases ordered per pool rather than globally (the contract orders per pool), and starting states where `used + reserved` already exceeds the maximum (the contract never allows them).
-- **Skipped / not verified:** no real adapter (out of scope); no PostgreSQL case (the hook takes no lock and writes nothing; `is_combatant` is PE-13a's and already covered).
+- **Skipped / not verified:** no real adapter (out of scope; the R1-1 tests use a synthetic stateless adapter whose maxima and pools come from `play.effects`); no PostgreSQL case (the hook takes no lock and writes nothing; `is_combatant` is PE-13a's and already covered).
 - **Known wrong / limitations:**
-  - Over the estimate: 320 raw product lines against about 270 (under the 370 stop), mostly the module docstring that fixes the interface above; 429 test lines against about 380.
+  - Over the estimate: 355 raw product lines after revision 1 against about 270 (under the 370 stop), mostly the module docstring that fixes the interface above; 617 test lines against about 380, the excess being the R1-1 effect-transition matrix.
+  - C:172-175 (fields with their own HP rule held constant) is the caller's precondition when it builds `after.play`, not something the hook can check: it cannot tell drained from any other play field.
   - A reserved pool already over its maximum before the change (not reachable under the contract) is refused or released like any other: the rule compares only the new maximum with `used + reserved`.
-- **Follow-ups (not done here):** PE-15/16-18 implement the adapters and filter `used`; PE-30's follow-on applies `released_actions`; PE-20's stale-replace write keeps `hp_floor_debt` and `choice_prompts` across a round trip (C:680).
+- **Follow-ups (not done here):** PE-15/16-18 implement the adapters and filter `used`; PE-30's follow-on releases each reservation in `released` and holds its exact targets; PE-20's stale-replace write keeps `hp_floor_debt` and `choice_prompts` across a round trip (C:680).
 
 ## Review
 
@@ -149,3 +157,65 @@ removed reserved pool => refused: reservation action-1 holds unknown pool effect
 - GitHub CI run `43782713712` on this head: **changes, browser, postgresql and test all passed**. No new PostgreSQL test is needed for this pure hook; no real adapter or live campaign was exercised. The implementer's mutation run and full local suite were not repeated.
 
 For players: saving and action-validation foundations are already merged. The HP/resource consistency layer works for build and equipment changes, but needs this correction for expiring effects before acceptance. No new player screen or live storage change is active. Next: Claude, high reasoning, fixes R1-1, updates the consumer interface in the Report, adds the effect-transition tests and returns for re-review. PE-14a remains independently ready. Review notes are uncommitted; Codex has not merged or started another task.
+
+### Implementation revision 1 (Claude, 2026-11-15)
+
+**R1-1 fixed.** `Snapshot` now has a `play` field: `Snapshot(build, items, play=None)`. Each side carries its own play view, and `None` means the current row.
+
+What `reconcile` passes to the adapter:
+- `effective_max` and `pools` run once per snapshot, each with that side's play.
+- `orphaned_effects` and `invalid_choices` get the after view.
+- Debt and death still come from the current row.
+
+Nothing else in play is frozen. Keeping drained / `max_hp_reduction` equal on both sides (C:172-175) is the caller's job when it builds `after.play`. The unknown-pool refusal is kept. It still keys on the before side only, which now includes effect pools.
+
+The Report's Inputs bullet lists which input supplies HP, used counts, debt, death, prompts and effect inspection, and how to write the result.
+
+**Non-blocking notes, both taken.**
+- Every count path is now validated instead of being described as a precondition. Both pool maps are checked before any pool work: a `None` maximum is refused, and a pool is removed only by being absent. `debt_after_heal` now checks its debt too.
+- The Report now tells PE-30 to hold the exact per-reservation targets in `released`, not `released_actions`.
+
+**One further change from self-review.** Stored reconciliation prompts are now read from the payload being written (`after.play`, or the current row). That is the same list `play_updates` keeps.
+
+Before, de-duplication read the current row while `play_updates` appended to `after.play`. If a trigger changed `choice_prompts`, the two could disagree, and a still-invalid choice could end with no prompt. The verifiers split 1 to 1 on whether a valid caller can reach that case. Reading from one source removes it either way.
+
+**Tests.** A stateless `EffectAdapter` derives max HP and pools from `play.effects` alone. Every case runs both `apply` and `preview` and asserts they agree, refusals included. Every case also deep-compares all inputs before and after the call. The cases:
+- An expiring +8 HP bonus at 6/18 gives 1 HP and debt 3, with the `hp` entry.
+- Regaining the bonus pays the debt back.
+- An effect pool that disappears with a used count is dropped, and its dependent effect ends.
+- The same pool with a reservation is released automatically, then removed.
+- A user dismissing it is refused.
+- The before side comes from `before.play`, not the current row.
+- The expiring effect is not ended a second time.
+- Stored prompts come from the payload being written.
+- A pool only the after side has stays unknown to `used` and reservations.
+- Debt and death come from the current row.
+- `play=None` falls back to the current row, while an empty `{}` play is kept as given.
+- `None` and invalid maxima are refused on either side.
+- `debt_after_heal` validates the debt.
+
+Results: 99 pass in the file, and 165 with the acceptance command. All 16 wiring and validation mutations are killed, including the four the self-review first found surviving.
+
+**Self-review.** One adversarial workflow with three lenses (contract fit, docs and interface, test mutation), and two refuting verifiers per finding. It confirmed no product defect.
+
+It confirmed four weak tests, all now strengthened:
+- The "not ended again" assertion was vacuous.
+- `effective_max` on the before side could read the current row.
+- The stored-prompt source was not pinned.
+- The unknown-pool test did not tell before from after.
+
+It rejected four points:
+- The stale Report. It is rewritten here anyway.
+- Missing docs for the `play=None` write path. That is now in the Inputs bullet.
+- Heal and rest ordering. That is a caller precondition.
+- The validation ordering note. That is recorded in Judgments.
+
+**Reproduction.** `play_effect_probe.py` passes one shared `Snapshot` for both sides, which this interface still reads as "no change". Its output is unchanged, by design. Running the same scenario through per-side snapshots (`Snapshot(build, (), before_play)` and `Snapshot(build, (), after_play)`) prints:
+
+```text
+expiry => (1, 3) ['hp', 'pool_removed']
+used count => [('hp', None), ('pool_removed', 1)] used {}
+reserved => ['hp', 'reservation_released', 'pool_removed'] released ('action-1',)
+```
+
+For players: saving and validation are merged. With this correction, HP and resources stay consistent when an effect expires, not only when gear or a build changes. No new player screen is active.

@@ -13,18 +13,41 @@ rows (lock order steps 2 and 4); the caller writes the returned values through
 reservations to its action rows (PE-30 follow-ons).  :func:`preview` returns
 exactly the entries the commit applies, because both call the same function.
 
-The adapter (one per rules profile; this module ships none) provides:
+Inputs.  Each side of the change is a :class:`Snapshot` of everything the
+adapter derives maxima and pools from: ``build``, ``items`` and ``play``.  A
+build publish or item change differs in ``build``/``items``; an effect change
+or expiry differs in ``play`` (owned effects live in play, C:65).  The caller
+builds ``after.play`` from the locked row with only the triggering change
+applied, so play fields that carry their own HP rule (PF2e drained, D&D
+``max_hp_reduction``) are equal on both sides (C:172-175); a snapshot whose
+``play`` is ``None`` uses the current row.  Separately, ``play`` is the
+locked row as it stands now: it supplies ``hp_floor_debt`` and the dead
+state.  Stored ``choice_prompts`` are read from the payload being written
+(``after.play``, or the current row), the same list
+:meth:`Reconciliation.play_updates` keeps.  ``hp`` and ``used`` are the
+current HP and pool counts, which the caller reads with its adapter because
+they live under system-specific keys.
+
+The adapter (one per rules profile; this module ships none) is stateless and
+provides:
 
 * ``effective_max(build, play, items) -> int`` - the system's effective
-  maximum (D&D ``combat.py::effective_max``; PF2e includes drained).  Values
-  that carry their own HP rule (PF2e drained, D&D ``max_hp_reduction``) are
-  held constant across the before and after calls (C:172-175);
-* ``is_dead(play) -> bool``;
-* ``pools(build, play, items) -> {pool: max}``;
-* ``invalid_choices(build, play) -> [ {"id": ..., ...} ]``;
+  maximum (D&D ``combat.py::effective_max``; PF2e includes drained), called
+  once per snapshot;
+* ``is_dead(play) -> bool``, on the current row;
+* ``pools(build, play, items) -> {pool: max}``, once per snapshot;
+* ``invalid_choices(build, play) -> [ {"id": ..., ...} ]``, on the after
+  snapshot;
 * ``orphaned_effects(build, play, items, removed_pools) -> [ {"id": ...,
-  "pool": <pool or None>, ...} ]`` - effects whose source is gone, including
-  those that depended on a removed pool (``pool`` names it).
+  "pool": <pool or None>, ...} ]``, on the after snapshot - effects still
+  present whose source is gone, including those that depended on a removed
+  pool (``pool`` names it).  An effect the triggering command itself removed
+  is already absent from ``after.play`` and is not listed again.
+
+Writing the result.  The caller writes its ``after.play`` (keeping the
+triggering change), with ``hp`` and ``used`` set from the result through its
+adapter and :meth:`Reconciliation.play_updates` merged in, as one ``play``
+write.  The hook reads its inputs and never changes them.
 
 Entry shapes (``type`` first; PE-15/18b and PE-31 read these keys):
 
@@ -105,10 +128,14 @@ class Reservation:
 
 @dataclass(frozen=True)
 class Snapshot:
-    """One side of the change: the build and the items the adapter reads."""
+    """One side of the change: what the adapter derives maxima and pools from.
+
+    ``play`` is this side's view of the play row (``None``: the current row).
+    """
 
     build: Any
     items: Any = None
+    play: Mapping[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -137,8 +164,10 @@ class Reconciliation:
     def play_updates(self, play: Mapping[str, Any]) -> dict[str, Any]:
         """The ``play`` payload keys this hook owns (debt and stored prompts).
 
-        HP and pool counts are stored under system-specific keys; the caller's
-        adapter writes ``hp`` and ``used`` itself.
+        ``play`` is the payload being written (the caller's ``after.play``);
+        its stored prompts are kept and the new ones appended.  HP and pool
+        counts are stored under system-specific keys; the caller's adapter
+        writes ``hp`` and ``used`` itself.
         """
 
         return {DEBT_KEY: self.hp_floor_debt,
@@ -176,12 +205,15 @@ def reconcile_hp(hp: int, debt: int, effmax_before: int, effmax_after: int,
 def debt_after_heal(hp_after: int, debt: int, rest_to_max: bool) -> int:
     """The debt after a heal or rest: cleared at 0 HP or a rest to max (C:189-190)."""
 
-    _count(hp_after, "hp_after")
-    return 0 if hp_after == 0 or rest_to_max else _count(debt, "hp_floor_debt")
+    _count(hp_after, "hp_after"), _count(debt, "hp_floor_debt")
+    return 0 if hp_after == 0 or rest_to_max else debt
 
 
 def _pools(before: Mapping[str, int], after: Mapping[str, int], used: Mapping[str, int],
            reservations: Iterable[Reservation], user_initiated: bool):
+    for side, maxima in (("before", before), ("after", after)):
+        for pool, maximum in maxima.items():
+            _count(maximum, f"{side} pools[{pool}]")
     held: dict[str, list[Reservation]] = {}
     for reservation in reservations:
         if reservation.pool not in before:
@@ -226,7 +258,6 @@ def _pools(before: Mapping[str, int], after: Mapping[str, int], used: Mapping[st
             entries.append({"type": "pool_removed", "pool": pool, "used": count,
                             "effects": []})
             continue
-        _count(maximum, f"pools[{pool}]")
         if count > maximum:
             entries.append({"type": "pool_clamped", "pool": pool,
                             "max_before": before[pool], "max_after": maximum,
@@ -244,19 +275,23 @@ def reconcile(adapter: RulesAdapter, *, before: Snapshot, after: Snapshot,
               user_initiated: bool) -> Reconciliation:
     """Every HP, debt, pool, reservation, effect and prompt change, in commit order.
 
-    ``play`` is the locked ``play`` payload; ``hp`` and ``used`` are its
-    current HP and pool counts, read by the caller's adapter.  A
+    ``before`` and ``after`` are the two sides (see the module docstring);
+    ``play`` is the locked row now, and ``hp`` and ``used`` its current HP
+    and pool counts, read by the caller's adapter.  ``used`` and
+    ``reservations`` may name only pools of the before side.  A
     user-initiated change that would truncate a reserved pool raises
     :class:`ReservationBlocked` before anything is computed; ``override``
     is not an input, so it cannot bypass this (C:203-204).
     """
 
     debt = play.get(DEBT_KEY, 0)
-    effmax_before = adapter.effective_max(before.build, play, before.items)
-    effmax_after = adapter.effective_max(after.build, play, after.items)
+    play_before = play if before.play is None else before.play
+    play_after = play if after.play is None else after.play
+    effmax_before = adapter.effective_max(before.build, play_before, before.items)
+    effmax_after = adapter.effective_max(after.build, play_after, after.items)
     pool_entries, new_used, dropped, released = _pools(
-        dict(adapter.pools(before.build, play, before.items)),
-        dict(adapter.pools(after.build, play, after.items)),
+        dict(adapter.pools(before.build, play_before, before.items)),
+        dict(adapter.pools(after.build, play_after, after.items)),
         used, list(reservations), user_initiated)
 
     dead = bool(adapter.is_dead(play))
@@ -268,7 +303,7 @@ def reconcile(adapter: RulesAdapter, *, before: Snapshot, after: Snapshot,
                         "effmax_before": effmax_before, "effmax_after": effmax_after})
 
     effects = [copy.deepcopy(dict(e)) for e in adapter.orphaned_effects(
-        after.build, play, after.items, frozenset(dropped))]
+        after.build, play_after, after.items, frozenset(dropped))]
     for entry in pool_entries:
         if entry["type"] == "pool_removed":
             entry["effects"] = [e["id"] for e in effects if e.get("pool") == entry["pool"]]
@@ -276,10 +311,10 @@ def reconcile(adapter: RulesAdapter, *, before: Snapshot, after: Snapshot,
     entries.extend({"type": "effect_ended", "effect_id": e["id"], "pool": e.get("pool"),
                     "effect": e} for e in effects)
 
-    stored = {(p.get("choice") or {}).get("id") for p in play.get(PROMPTS_KEY) or ()
+    stored = {(p.get("choice") or {}).get("id") for p in play_after.get(PROMPTS_KEY) or ()
               if p.get("origin") == PROMPT_ORIGIN}
     prompts = []
-    for choice in adapter.invalid_choices(after.build, play):
+    for choice in adapter.invalid_choices(after.build, play_after):
         if choice["id"] in stored:
             continue  # already waiting for the player; never duplicated or removed
         stored.add(choice["id"])
