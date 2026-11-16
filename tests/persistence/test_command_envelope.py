@@ -383,6 +383,31 @@ def test_deeply_nested_body_is_bad_envelope_not_recursion_error(field):
 
 
 # --------------------------------------------------------------------------
+# Client metadata (PE-14b Decision 15)
+
+
+@pytest.mark.parametrize("client", [
+    [], ["website"], 7, "website", True,
+    {"origin": 7}, {"origin": ""}, {"origin": "x" * 33}, {"origin": "Website"},
+    {"origin": "web site"}, {"origin": "-web"}, {"origin": ["website"]},
+])
+def test_malformed_client_is_bad_envelope(client):
+    assert refused(body(client=client)) == ("bad_envelope", 400)
+
+
+@pytest.mark.parametrize("client, origin", [
+    (_DROP, "unknown"), (None, "unknown"), ({}, "unknown"), ({"origin": None}, "unknown"),
+    ({"app_version": "1.2", "sent_at": 5}, "unknown"), ({"origin": "obsidian"}, "obsidian"),
+    ({"origin": "x" * 32}, "x" * 32), ({"origin": "gm-screen_2.v1"}, "gm-screen_2.v1"),
+])
+def test_client_origin_is_validated_or_unknown(client, origin):
+    from core.commands.envelope import client_origin
+    checked = check_envelope(body(client=client), USER, route_campaign_id=CID)
+    assert client_origin(checked.envelope) == origin
+    assert checked.digest == check_envelope(body(), USER, route_campaign_id=CID).digest
+
+
+# --------------------------------------------------------------------------
 # Registry
 
 

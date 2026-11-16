@@ -6,6 +6,12 @@ adds beside them (identity keys included) is ever read.  The checks that need
 the command type (subject field, payload id fields, ``expected`` entries) are in
 ``registry.check_envelope``, which calls this.  Identity never comes from the
 body: ``principal_key`` reads the authenticated ``Principal``.
+
+The copy's outer mapping is read-only; nested values are plain dicts and lists
+so PE-13b's runner can read them, and nothing after check 1 may change them
+(PE-14b re-checks the digest before every receipt).  ``client`` is self-reported
+metadata, never an authority input: it is ``null`` or an object, and its
+``origin`` (read only through :func:`client_origin`) fits ``game_events.origin``.
 """
 
 from __future__ import annotations
@@ -22,6 +28,8 @@ OPERATION_ID = re.compile(r"[A-Za-z0-9_-]{16,128}")
 _STATUS = {"bad_envelope": 400, "not_permitted": 403}
 # Deeper bodies are refused (400) before any recursion could raise RecursionError (500).
 MAX_DEPTH = 32
+ORIGIN = re.compile(r"[a-z0-9][a-z0-9_.-]{0,31}")
+UNKNOWN_ORIGIN = "unknown"
 
 
 class EnvelopeRefusal(Exception):
@@ -94,7 +102,21 @@ def parse_envelope(body: Any) -> Mapping[str, Any]:
                                  or not isinstance(override.get("reason"), str)
                                  or not override["reason"].strip()):
         raise bad("override must be an object with a reason")
+    client = body.get("client")
+    if client is not None:
+        origin = client.get("origin") if isinstance(client, Mapping) else None
+        if not isinstance(client, Mapping) or not (
+                origin is None or (isinstance(origin, str) and ORIGIN.fullmatch(origin))):
+            raise bad("client must be an object with a short lower-case origin")
     parsed = {name: plain(body.get(name))
               for name in ("schema", "operation_id", "campaign_id", "epoch", "type",
                            "subject", "expected", "rules", "override", "payload", "client")}
     return MappingProxyType(parsed)
+
+
+def client_origin(envelope: Mapping[str, Any]) -> str:
+    """The checked envelope's ``client.origin``, or ``"unknown"`` when it has none."""
+
+    client = envelope.get("client")
+    origin = client.get("origin") if isinstance(client, Mapping) else None
+    return origin if isinstance(origin, str) else UNKNOWN_ORIGIN

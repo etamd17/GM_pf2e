@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** ready (PE-13b and PE-14a merged); brief accepted (Codex brief review 2, 2026-11-14); PE-14a implementation review 1 requirements carried in (Decisions 15-17)
+- **Status:** in review (implementation); brief accepted (Codex brief review 2, 2026-11-14); PE-14a implementation review 1 requirements carried in (Decisions 15-17)
 - **Branch:** `claude/pe-14b-command-executor` from current main after PE-13b and PE-14a merge. Record the exact starting SHA.
 - **Depends on:** [PE-13b](PE-13b-check-order-conflicts.md) (check runner for checks 4-9, `CheckContext` with every field this task uses, `CommandRefusal`, `Authorizer` protocol, conflict body), [PE-14a](PE-14a-streams-receipts-events-schema.md) (tables, `check_envelope`, `CheckedEnvelope`, `EnvelopeRefusal`, digest, registry, `streams.lock_stream`/`allocate`), and through them [PE-13a](PE-13a-state-repositories.md) (`CommandLocks(session, campaign_id, *, lock_stream)` with `stream_row`, `records` and `register_serialized`, repositories, `StateRowMissing`, `ProfileMismatch`, `LockOrderError`, `PinUnavailable`, `UnknownSchemaVersion`). PE-13c is not needed: its exceptions are answered by attribute, never imported (Decision 4).
 - **Followed by:** PE-14c (real authorizer, `override_allowed`, grant and token records), then PE-14d; PE-14e and PE-14f both follow PE-14d. PE-14e calls `ctx.bind_started_session` (Decision 13); PE-14f owns the event-ID filter for its status read (Decision 9).
@@ -136,11 +136,39 @@ PE-14a's header and the task map no longer claim PE-14a was independent of PE-13
 <!-- ============ REPORT (written by the implementer) ============ -->
 
 ## Report
+
+Built on `claude/pe-14b-command-executor` from main `3d5e13b8` after PR #263 merged (PE-14a and the review-note commit `7c0fbdb5`). `core/commands/checks.py` already declared every `CheckContext` field this task uses, so it was not edited.
+
 - **Changed:**
+  - `core/commands/executor.py` (new, 379 lines): `execute(envelope, principal, *, route_campaign_id, content_descriptor, project) -> CommandResponse(status, body)`, `Applied(written, pending)`, `EnvelopeMutated`, `STREAM_LOCK_TIMEOUT_MS = 5000`, `RECEIPT_CODES`, and the module slot `authorizer_factory` (PE-14c sets it to `authorizer.load`; with none set a command answers 500). The order is the brief's: check 1 with no transaction, then in one transaction `SET LOCAL lock_timeout` (PostgreSQL only), `locks.stream()`, fence, receipt lookup, authorizer, session snapshot, pin, ctx, `lock_plan`, checks 4-9 (a `CheckSpec` built from the `CommandType`), `apply`, emit and digest assertions, receipt, `COMMIT`, then `after_commit`. Receipt-writing refusals get the second transaction (lock, fence, receipt key, insert). A raising `COMMIT` is detected with a flag set after the transaction body returns, so a body exception is never mistaken for one.
+  - `core/commands/events.py` (new, 154 lines): `EventDraft` (keyword-only, no `session_id`), `EventWriter` (`emit`, `bind_started_session`), `visibility()`, `SessionBindError`, `NoEventsEmitted`.
+  - `services/session_events.py` (new, 34 lines): `after_commit(campaign_id, last_seq)`, `subscribe`, `unsubscribe`. No subscribers; a failing subscriber is logged and never changes the answer.
+  - `core/commands/envelope.py` (+22, Decision 15): `client` must be absent, `null` or an object; `origin` absent, `null` or `[a-z0-9][a-z0-9_.-]{0,31}`; `client_origin()` returns it or `"unknown"`.
+  - Product size: about 589 lines including docstrings (budget 630, stop 730). Tests: about 1,330 lines (estimate 1,000), mostly the parametrized code table and the review cases.
 - **Tests run:**
-- **Skipped / not verified:**
-- **Known wrong / limitations:**
-- **Follow-ups (not done here):**
+  - The brief's acceptance command (`-m "not postgresql"`): **430 passed**. `test_command_executor.py` alone: 111 passed; `test_command_envelope.py`: 147 passed.
+  - All of `tests/persistence` without PostgreSQL: **1034 passed, 2 skipped, 34 deselected**.
+  - `git diff --check`: clean.
+  - `tests/persistence/test_command_executor_postgresql.py` (5 cases, CI only): two commands serialize on the stream row and get seqs 1 and 2; a contended stream row with `STREAM_LOCK_TIMEOUT_MS` monkeypatched to 100 answers `503 temporarily_unavailable` with nothing written (with the default it would wait and answer 200); race (a) with a real writer holding the stream row while it flips authority, the refusal transaction waiting on it; race (b) with a real writer bumping the epoch while the retry waits; a refusal receipt and its replay.
+  - Mutation checks: each guard was disabled in turn and the suite rerun. Disabling the digest/snapshot check, the no-event check, the refusal-path digest check, the receipt lookup, the refusal-path fence, the abandoned branch, the start-bind snapshot rule, a receipt code, the notes key, the event-key fail-closed rule or the read-once origin each fails at least one test. The first pass found two surviving mutations (the no-event check was masked by an `IndexError`; the refusal-path digest check had no test); both now have tests.
+  - Adversarial review (workflow: three reviewers on contract, transactions and trust boundaries, one skeptic per finding): 7 findings, **3 confirmed and fixed**, 4 refuted.
+    1. The response `events[]` filter looked only at `changes[]` keys, so a `notes` change (reduced with no record key) or an event naming its record only in `subjects` was listed even when that record was hidden. Now an event's keys are its `changes` keys plus its `subjects` (`character` is judged by `character.play`); an event with a malformed subject or no record key is omitted (fails closed), fresh and on replay. A reduced notes change keeps its record `kind` and `id` (never the text), a small departure from the literal shape at C:418-419.
+    2. The digest excludes `client`, so a callback could change `client.origin` after hashing, and `emit` re-read it. The executor now also compares the whole envelope with a deep copy taken at check 1 before every receipt insert, and the origin is read once at check 1 and handed to the writer.
+    3. The AST import guard missed `from core import campaigns`, `from core.persistence import character_files` and relative imports. It now resolves every form, with a self-test per form; the subprocess check also covers `core.persistence.character_files` and `class_matrix`.
+
+    Refuted: the same-session test wrapping the wrong object (it wraps the instance `runtime.database()` returns); a NUL character in an id (PE-14a's check-1 scope); two duplicates of finding 2.
+- **Skipped / not verified:** PostgreSQL cases run only in CI (Docker is retired locally); their first run is this PR's `postgresql` job. No route calls `execute`; no real command type exists yet.
+- **Known wrong / limitations:** a replay re-reads only revision records (`character.*`, `encounter`, `clock`) and the campaign itself for its fresh projection, so a replayed event about another kind (a combatant, say) is omitted from `events[]` until its kind has a reader; that fails closed. Receipts and events are checked for an event (Decision 17) by the executor, not by a CHECK.
+- **Judgments for review:**
+  - `execute` returns `CommandResponse(status, body)`; access lost on replay is `CommandResponse(403, None)`.
+  - `apply` returns `Applied(written, pending)` or `None`; `written` maps `(kind, id)` to the record after the write and is the receipt's `revisions`.
+  - The response `result` is the caller's projection of the written records only. `revisions` and `result` keep only keys the projector returned.
+  - `bind_started_session` is a method of the writer bound to `ctx.bind_started_session`, rather than a module function taking `ctx`; behaviour is Decision 13's.
+  - Unknown projections in a draft's visibility map are rejected, as are unknown redaction classes and an empty `redact:[]`.
+  - `AuthorityMismatch` and `RevisionConflict` raised after the fence are 500 (programming errors), as the brief judged.
+  - A replay of a rejected receipt does not re-check access (its body names nothing).
+  - Events are added to the transaction at emit time (and flushed), not at receipt time; both commit or roll back together.
+- **Follow-ups (not done here):** PE-14c sets `executor.authorizer_factory`. PE-31 decides whether a replay's fresh projection should read more kinds.
 
 ## Review
 
