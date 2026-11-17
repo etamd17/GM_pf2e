@@ -25,9 +25,18 @@ Command results (PE-14b R1-2).  A draft's ``result`` maps a section name to an
 ordered list of entries, such as PE-13c's ``reconciliation`` entries.  They are
 stored in the event's ``explain[]`` as ``{"result": name, "entry": entry}``, in
 order, so the response's ``result.<name>[]`` is rebuilt from durable events,
-the same way fresh and on replay, and is shown only to a caller who may see
-every record the event is about.  ``records`` is reserved for the response's
+the same way fresh and on replay.  ``records`` is reserved for the response's
 record projections.
+
+Result visibility (PE-14b R2-1).  An entry is event content, so the event's
+stored ``visibility`` governs it, judged against the projections the caller
+holds now (:func:`event_access`).  Seeing the event's records is necessary
+but never enough.  ``full`` returns the entry; ``redact:[classes]`` passes it
+through the section's registered redactor (:func:`register_result_redactor`),
+once per view the caller holds (:func:`event_views`, :func:`visible_entry`);
+anything that cannot be resolved (a malformed map or value, an unknown
+class, a section with no redactor, an entry its redactor does not know)
+returns nothing.  The stored event is never changed.
 """
 
 from __future__ import annotations
@@ -35,7 +44,7 @@ from __future__ import annotations
 import copy
 import re
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 from sqlalchemy import select
 
@@ -108,6 +117,132 @@ def result_items(result: Mapping[str, Any]) -> list[dict[str, Any]]:
             raise ValueError(f"result section {name} must be a list of objects")
         items += [{"result": name, "entry": copy.deepcopy(dict(entry))} for entry in entries]
     return items
+
+
+def held_set(held: Any) -> frozenset[str]:
+    """Validate what a ``held_projections`` callback returned (a bug is a ``ValueError``)."""
+
+    if not isinstance(held, (set, frozenset)) or not all(
+            isinstance(name, str) and name in PROJECTIONS for name in held):
+        raise ValueError(f"held_projections must return a set of projection names, not {held!r}")
+    return frozenset(held)
+
+
+def _classes(value: Any) -> frozenset[str] | None:
+    match = _REDACT.fullmatch(value) if isinstance(value, str) else None
+    classes = frozenset(match.group(1).split(",")) if match and match.group(1) else None
+    return classes if classes and classes <= REDACTION_CLASSES else None
+
+
+def event_views(stored: Any, held: frozenset[str]) -> tuple[frozenset[str], ...] | None:
+    """The views of an event with visibility ``stored`` that ``held`` gives a caller.
+
+    ``None``: the caller sees nothing of it.  Otherwise one set of redaction
+    classes per held view (``(frozenset(),)`` for ``full``), fewest classes
+    first; the caller sees the union of them (C:647-648), entry by entry
+    (:func:`visible_entry`).  ``gm`` always sees in full.  A missing or
+    non-object map counts as ``none`` for every other projection, as PE-14f
+    states.  One deliberate difference from PE-14f's ``event_visible_to``
+    (which lists an event for any value starting ``redact:``): a malformed
+    ``redact:`` value, an empty or unknown class list, counts as ``none``
+    here, because these views release event content, not just an event id.
+    """
+
+    if "gm" in held:
+        return (frozenset(),)
+    if not isinstance(stored, Mapping):
+        return None
+    views = set()
+    for name in held:
+        value = stored.get(name)
+        if value == "full":
+            return (frozenset(),)
+        if (classes := _classes(value)) is not None:
+            views.add(classes)
+    return tuple(sorted(views, key=lambda v: (len(v), sorted(v)))) or None
+
+
+# Section name -> redactor(entry, classes) -> the entry to show, or None.
+_REDACTORS: dict[str, Callable[[dict[str, Any], frozenset[str]], Mapping[str, Any] | None]] = {}
+
+
+def register_result_redactor(
+        name: str,
+        redactor: Callable[[dict[str, Any], frozenset[str]], Mapping[str, Any] | None]) -> None:
+    """Declare how a result section is redacted; without one it is shown only in full."""
+
+    if not (isinstance(name, str) and _SECTION.fullmatch(name) and name != "records"):
+        raise ValueError(f"invalid result section {name!r}")
+    if name in _REDACTORS:
+        raise ValueError(f"result section {name} already has a redactor")
+    _REDACTORS[name] = redactor
+
+
+def result_entry(name: str, entry: Any, classes: frozenset[str]) -> Any | None:
+    """One stored result entry as the caller may see it (a copy), or ``None``."""
+
+    if not isinstance(entry, Mapping):
+        return None
+    if not classes:
+        return copy.deepcopy(dict(entry))
+    redactor = _REDACTORS.get(name)
+    if redactor is None:
+        return None
+    shown = redactor(copy.deepcopy(dict(entry)), classes)
+    return None if shown is None else copy.deepcopy(dict(shown))
+
+
+def visible_entry(name: str, entry: Any, views: tuple[frozenset[str], ...]) -> Any | None:
+    """The most a caller may see of one entry through any of its views, or ``None``.
+
+    Each view is applied on its own (never a merge of two redacted forms);
+    the form keeping the most fields wins, the earlier view on a tie.
+    """
+
+    best = None
+    for classes in views:
+        shown = result_entry(name, entry, classes)
+        if shown is not None and (best is None or len(shown) > len(best)):
+            best = shown
+    return best
+
+
+# PE-13c entry type -> (classes it is shown in full under, the fields kept otherwise).
+# An entry under any other class, or of a type not listed, is withheld.
+_RECONCILIATION: dict[str, tuple[frozenset[str], tuple[str, ...] | None]] = {
+    "hp": (frozenset({"secret_roll", "hidden_actor"}), ("type",)),
+    "pool_clamped": (frozenset({"exact_hp", "secret_roll", "hidden_actor"}), None),
+    "pool_removed": (frozenset({"exact_hp", "secret_roll"}), None),
+    "reservation_released": (frozenset({"exact_hp", "secret_roll"}), None),
+    "effect_ended": (frozenset({"exact_hp", "secret_roll"}), None),
+    "choice_prompt": (frozenset({"exact_hp", "secret_roll"}), None),
+}
+
+
+def redact_reconciliation(entry: dict[str, Any],
+                          classes: frozenset[str]) -> Mapping[str, Any] | None:
+    """PE-13c's ``reconciliation`` entries under redaction.
+
+    ``exact_hp``, ``unrevealed_effect`` or ``unrevealed_item`` reduces an
+    ``hp`` entry to ``{"type": "hp"}`` (a moving maximum can reveal an
+    effect's or item's size).  Every other entry is shown whole or withheld:
+    pool, reservation, effect and choice entries are withheld under
+    ``unrevealed_effect`` and ``unrevealed_item`` (an effect or item may be
+    behind a pool or a choice), and all but ``pool_clamped`` (numbers and a
+    pool name) under ``hidden_actor`` too (they can name targets, effect
+    bodies or choice sources).
+    """
+
+    rule = _RECONCILIATION.get(entry.get("type"))
+    if rule is None:
+        return None
+    safe, kept = rule
+    if classes <= safe:
+        return entry
+    return None if kept is None else {key: entry[key] for key in kept}
+
+
+register_result_redactor("reconciliation", redact_reconciliation)
 
 
 def _changes(changes: list[Any]) -> list[Any]:

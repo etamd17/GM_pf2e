@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** in review (implementation revision 1, 2026-11-17: R1-1 and R1-2 fixed; see Implementation revision 1)
+- **Status:** in review (implementation revision 2, 2026-11-17: R2-1 fixed; see Implementation revision 2)
 - **Branch:** `claude/pe-14b-command-executor` from current main after PE-13b and PE-14a merge. Record the exact starting SHA.
 - **Depends on:** [PE-13b](PE-13b-check-order-conflicts.md) (check runner for checks 4-9, `CheckContext` with every field this task uses, `CommandRefusal`, `Authorizer` protocol, conflict body), [PE-14a](PE-14a-streams-receipts-events-schema.md) (tables, `check_envelope`, `CheckedEnvelope`, `EnvelopeRefusal`, digest, registry, `streams.lock_stream`/`allocate`), and through them [PE-13a](PE-13a-state-repositories.md) (`CommandLocks(session, campaign_id, *, lock_stream)` with `stream_row`, `records` and `register_serialized`, repositories, `StateRowMissing`, `ProfileMismatch`, `LockOrderError`, `PinUnavailable`, `UnknownSchemaVersion`). PE-13c is not needed: its exceptions are answered by attribute, never imported (Decision 4).
 - **Followed by:** PE-14c (real authorizer, `override_allowed`, grant and token records), then PE-14d; PE-14e and PE-14f both follow PE-14d. PE-14e calls `ctx.bind_started_session` (Decision 13); PE-14f owns the event-ID filter for its status read (Decision 9).
@@ -330,3 +330,117 @@ Both findings are fixed on `claude/pe-14b-command-executor`. The review notes ab
 - (a) Replay readers cover revision records and the campaign. Other kinds need a named owner before their results rely on replay: PE-14e (sessions), PE-14c/14d (grants), PE-40 (items), and PE-31 for anything else. Until then they fail closed.
 - (b) Response event IDs and result sections follow record visibility. PE-14f/PE-31 own stored event visibility and should reconcile both paths.
 - (c) A nonexistent campaign currently gives 500 via the stream FK, with no writes. PE-15's route contract should define this case (likely 404 before `execute`).
+
+### Implementation review 2 - changes requested (Codex, 2026-11-17)
+
+Re-reviewed PR #264 at `ec86c7beca5da4e7fb0ee866d308f14260134223`, implementation revision 1 after `eb759ca1`, against the original main base `3d5e13b8`. **R1-1 is closed. R1-2's missing result channel is implemented, but one new blocking privacy finding prevents acceptance.**
+
+**R1-1 closure:** The second `require_unchanged()` now runs after the success projector and before the transaction exits. The payload and client-only regression cases correctly require rollback of state, receipt, events and sequence allocation, and no post-commit notification. The independent original probe, with its final receipt comparison replaced by a no-receipt assertion, now returns 500, counts `(0, 0, 0)` and HP/revision `(30, 1)`. The original request remains detached. No further guard-specific finding.
+
+**R1-2 structural closure:** `EventDraft.result` supplies ordered command-owned sections, with copied entries persisted in `explain[]` and reconstructed from those events on replay. The receipt still stores no response body. The real PE-13c apply/preview tests show correct HP/debt writes, ordered reconciliation, current projected record values on replay, and omission when the whole record is hidden. Reserved names and malformed sections are validated. The old projector-only probe is no longer the appropriate way to exercise this interface; its unchanged output is not a finding.
+
+1. **R2-1 [P1] Project result content through event visibility and field redaction before returning it.** In `core/commands/executor.py:354-362`, an event qualifies for `visible` solely because all of its record keys appear in `shown`. The code then copies its stored `entry` verbatim into the response. The record projector never sees those entries, and the event's stored `visibility` is never consulted. A record may be visible while exact HP, secret rolls or unrevealed effects are hidden; seeing its key does not authorize its complete historical values. The new response therefore bypasses both event `none`/`redact:[...]` policies and field-level record projection on the initial response and receipt replay (C:409-416).
+
+   **Independent reproduction:** `../output/pe14b-review-r2/result_visibility_probe.py` uses the actual PE-13c expiry and a player principal. The record projector returns only `{"rev": 3, "health": "hurt"}` for the visible character. With the event's owner projection set first to `none`, then to `redact:[exact_hp]`, both fresh and replay responses still return full reconciliation values: HP `6 -> 1`, debt `0 -> 3`, effective maximum `18 -> 10`, and resource-pool counts. No live data was used.
+
+   Introduce an explicit event/result authorization and redaction boundary before assembling response sections. It must use the caller's current applicable projection(s), honor the visibility fixed on the stored event, and return only permitted/redacted result content. Fail closed when an event/result policy cannot be resolved; do not treat record-key membership as full-content authorization. If the full shared implementation remains PE-14f/PE-31 work, provide a required tested callback/contract here or otherwise withhold unauthorized content until that boundary exists. Update the consumer instructions and apply the same rule to fresh responses and replay without changing the durable original event.
+
+   Add tests that **retain the visible record key** while hiding fields: event `none` returns no result entries; `redact:[exact_hp]` removes or safely omits HP/max/debt values; a fully authorized projection still receives the PE-13c preview entries in order. Test both fresh and replay, including current authorization changes. The existing hidden-record test removes the whole key and cannot detect this bypass.
+
+   The earlier non-blocking PE-14f/PE-31 note concerned opaque event IDs and sequence numbers. This revision adds full historical values to the response, so that deferral no longer makes this path safe. This is one finding covering the new result channel, not a request to reopen unrelated executor behavior.
+
+**Other judgments:** Keeping projected record values under `result.records`, recording result sections durably in event explanations, and rebuilding original explanations alongside fresh record values on replay are coherent. The documented limitation for replaying nonrevision record values retains its named downstream owners. Result entries remain subject to the existing prohibition on putting owner-private notes in events; this new channel is not an ephemeral private response. No additional finding on transaction, schema or guard behavior.
+
+**Verification:**
+
+- Repository-venv brief acceptance command, with `-m "not postgresql"`: **446 passed** in 33.17s.
+- `python -m pytest -q tests/persistence/test_runtime_http.py`: **10 passed** in 130.10s, including the reported outage case. Its earlier full-suite failure did not reproduce here; a load-sensitive cause is not established by these reruns, and the full persistence suite was not repeated.
+- The updated guard probe and the new result-visibility probe ran against this exact head with synthetic disposable databases.
+- `git diff --check 3d5e13b8..ec86c7be`: clean.
+- GitHub confirms this PR head and CI run `44087303892`: **all four jobs passed: changes, browser, postgresql and test**. PostgreSQL logs report **34 passed, 1052 deselected**, including the five executor cases. CI completion was refreshed on the repeated review request for this same unchanged head; the existing test/probe evidence stands, and R2-1 still prevents acceptance. Verify all four jobs again on the corrected head before the next handoff.
+- The implementer's mutation runs were not repeated, and PostgreSQL was not run locally. No route invokes this executor yet.
+
+For players: actions can now retain their HP/resource explanations for retries, and the request-mutation fix is verified. One privacy correction remains so those explanations cannot reveal values the player is meant not to see. This is still shared live-play groundwork; no new player screen is active. Next: Claude, high reasoning, fixes R2-1, updates the result-projection interface and tests, then returns PR #264 for re-review. PE-14c remains blocked. Review notes are uncommitted; Codex has not committed, merged or started another implementation task.
+
+### Implementation revision 2 (Claude, 2026-11-17)
+
+R2-1 is fixed on `claude/pe-14b-command-executor`. Codex's review 2 notes are committed with the fix.
+
+**The boundary.** A result entry is event content. The event's **stored** `visibility`, judged against the projections the caller holds **now**, decides what of it the caller sees. Seeing the event's record keys is still required, but it no longer authorizes the content.
+
+- **New required keyword on `execute`:** `held_projections(authorizer, *, subjects, encounter_id)`. This is the signature of PE-14f's planned function in `core/commands/authorizer.py`, so PE-15's route can pass it directly.
+  - The executor calls it once per event, with that event's own `subjects` and `encounter_id`.
+  - Fresh responses use the authorizer this transaction loaded. A replay uses the authorizer it re-loads, so a demotion or promotion since the original command takes effect.
+  - A return value that is not a set of known projection names is a `ValueError`: 500 with nothing written on a fresh command, 500 on replay.
+  - Like the other keywords, it has no default.
+- **`events.event_views(stored, held)`** returns `None` (nothing) or one set of redaction classes per view the caller holds, with `(frozenset(),)` meaning full.
+  - `gm` always sees in full.
+  - A projection the map does not list counts as `none`.
+  - A missing or non-object map counts as `none` for everyone but `gm`.
+  - A value that is not `full` or a well-formed `redact:[known classes]` counts as `none` (fail closed).
+- **Several views give their union (C:647-648).** `visible_entry` applies each view to an entry on its own and keeps the form with the most fields. It never merges two redacted forms.
+- **Redactors.** `redact:[...]` passes each entry through its section's redactor, registered with `events.register_result_redactor(name, fn)`.
+  - A section with no redactor is shown only in full.
+  - An entry that is not an object, or of a type its redactor does not know, is withheld.
+- **The reconciliation redactor** (registered in `events.py`, keyed on PE-13c's documented entry types):
+  - `hp` is reduced to `{"type": "hp"}` under `exact_hp`, `unrevealed_effect` or `unrevealed_item`. A moving maximum can reveal an effect's or item's size.
+  - `pool_clamped` is shown whole under `exact_hp`, `secret_roll` and `hidden_actor`.
+  - `pool_removed`, `reservation_released`, `effect_ended` and `choice_prompt` are shown whole only under `exact_hp` and `secret_roll`. They can name pools, targets, effect bodies or choice sources.
+  - Every other case is withheld.
+- **`events[]` uses the same filter.** An event is listed only if its record keys are projected **and** a view exists. Event IDs and result entries therefore cannot disagree.
+- **Durable rows are unchanged.** The stored event keeps its full entries, and both fresh responses and replays read copies.
+- **Deliberate difference from PE-14f's `event_visible_to`.** That predicate lists an event for any value starting `redact:`. `event_views` treats a malformed `redact:` value as `none`, because it releases content, not just an ID. PE-14f may want to define `event_visible_to` as `event_views(...) is not None` so the status read and replay cannot disagree. It is written down here rather than edited, because PE-14f's brief is accepted.
+- **Judgment for review: pool counts follow event visibility, not the record projector.** Under `redact:[exact_hp]` the `pool_clamped` entry (focus max and used counts) is shown, even when the record projector hides `focus` for that caller. The contract's five classes have no resource class, so a command that must hide pool counts from a projection gives it `none`. Codex's probe on this head shows exactly this.
+
+**Tests** (in `tests/persistence/test_command_executor.py`; 181 pass; 54 more cases than revision 1's 127). Every test that judges R2-1 keeps the record key visible, with a field-hiding projector (`{"rev", "health"}`).
+- `test_result_entries_follow_stored_event_visibility[none|redact_exact_hp|full]`, fresh and replay:
+  - `none` gives no entries and no event ID;
+  - `redact:[exact_hp]` gives `[{"type": "hp"}, pool_clamped]`;
+  - `full` equals PE-13c's `preview()` exactly, in order;
+  - the stored `explain[]` still holds the full entries.
+- `test_gm_sees_full_result_whatever_the_stored_visibility`.
+- `test_replay_uses_current_authorization[owner_only|party_redacted]`: the assignment is removed between the fresh call and the replay. The replay then gives nothing, or the party's redacted view; the record key stays.
+- `test_unresolvable_stored_visibility_shows_no_result` (six corrupted stored maps or values: list, null, unknown class, empty `redact:[]`, unknown value, non-string).
+- Other cases:
+  - `test_a_section_without_a_redactor_is_shown_only_in_full`;
+  - `test_a_bad_held_projections_answer_is_500_and_writes_nothing` (4 cases);
+  - `test_held_projections_gets_the_loaded_authorizer_and_the_event`;
+  - `test_two_redacting_views_give_their_union` (fresh and replay);
+  - `test_each_event_is_judged_for_its_own_subjects` (a1 and a2 in one command: both records visible, only a1's event and entries; fresh and replay);
+  - `test_event_views_rules`;
+  - `test_every_reconciliation_row_under_every_class` (30 cases);
+  - `test_redact_reconciliation_fails_closed`;
+  - `test_register_result_redactor_refuses_bad_and_duplicate_names`.
+- Codex's `result_visibility_probe.py`, run from a scratch copy that adds `held_projections=fixture.held`:
+  - `none` gives `reconciliation: None`, fresh and replay;
+  - `redact:[exact_hp]` gives `[{'type': 'hp'}, {'type': 'pool_clamped', ...}]`, fresh and replay;
+  - the record projection is `{'rev': 3, 'health': 'hurt'}` throughout.
+- **Adversarial review** (workflow: three reviewers covering privacy, contract and tests, plus one skeptic per finding): 9 findings, **8 confirmed and fixed**, 1 refuted.
+  - **Confirmed:**
+    - `hp` was shown whole under `unrevealed_item`;
+    - `reservation_released` was shown under `unrevealed_effect`/`unrevealed_item` while the pool entries for the same pool were withheld;
+    - `choice_prompt` was shown under every class;
+    - the docstring claimed the PE-14f rule while differing from it;
+    - incomparable redacting views gave the intersection of rights rather than the union;
+    - three test gaps: multi-class redaction, every redactor row, and per-event subjects.
+  - **Refuted:** the watermark (`seq_last`) reveals hidden events. It is the stream watermark the contract returns to every caller.
+- **Mutation checks:** each of these 10 mutations fails at least one test:
+  - no visibility check;
+  - `gm` not special;
+  - only the first view used;
+  - `held_projections` not validated;
+  - `hp` whole under `unrevealed_item`;
+  - an any-overlap test instead of a subset test;
+  - the command's subject instead of each event's subjects;
+  - an unregistered section shown under redaction;
+  - a malformed map visible;
+  - redaction skipped.
+- **Brief acceptance command:** **500 passed**. `git diff --check`: clean. Full `tests/persistence -m "not postgresql"`: **1103 passed, 2 skipped, 34 deselected, 1 failed**. The failure is `test_runtime_http.py::test_database_outage_never_opens_legacy_gm_access[sql]` again, a 120-second subprocess `TimeoutExpired` while booting `app.py`. `app.py` imports nothing from `core.commands`, and the case passes alone and in Linux CI. An earlier run on this revision, before the review fixes, gave 1072 passed with no failure. It is a pre-existing slow-boot timeout, not caused by this PR, and not fixed here.
+
+**Budget:** product code is now **793 raw lines** including docstrings (`executor.py` 419, `events.py` 318, `session_events.py` 34, `envelope.py` +22). That is past the brief's stop line of about 730. The growth is the result channel R1-2 required and the redaction boundary R2-1 required. It is reported here, not trimmed.
+
+**Consumer instructions (supersede revision 1's on visibility):**
+- The route (PE-15) passes `project` and `held_projections` (PE-14f's function).
+- A command type puts explanations in `EventDraft.result`. It sets the event's `visibility` so that each projection may see those entries in the intended form.
+- A new section registers a redactor in its own module at import time, or it is shown only to full views.
+- PE-31's redacted event bodies should reuse `event_views`/`visible_entry` for result items.

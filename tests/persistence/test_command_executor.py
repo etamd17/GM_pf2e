@@ -124,7 +124,7 @@ def damage(ctx, character_id=None, *, events=1, pending=False):
             type="character.damaged", subjects=[{"kind": "character", "id": character_id}],
             changes=[{"kind": "character.play", "id": character_id, "rev": new.revision,
                       "path": "hp", "before": before, "after": before - amount}],
-            visibility={"owner": "full", "party": "full"}))
+            visibility={"owner": "full", "party": "full", "gm_integration": "full"}))
     return Applied(written={("character.play", character_id): new}, pending=pending)
 
 
@@ -159,7 +159,8 @@ class Authorizer:
         LOG.append("authorizer")
         SEEN["authorizer_session"] = session
         self.campaign_id = campaign_id
-        if principal.kind is PrincipalKind.INTEGRATION_TOKEN:
+        self.token = principal.kind is PrincipalKind.INTEGRATION_TOKEN
+        if self.token:
             self.role, self.assigned = "gm", set()
             return
         self.role = session.scalar(select(CampaignMembership.role).where(
@@ -186,8 +187,27 @@ class Authorizer:
 
 
 def project(principal, records):
+    if "project" in HOOKS:
+        return HOOKS["project"](principal, records)
     return {f"{kind}:{id}": {"rev": record.revision, **record.payload}
             for (kind, id), record in records.items() if f"{kind}:{id}" not in HIDDEN}
+
+
+def held(authorizer, *, subjects, encounter_id):
+    """PE-14f's ``held_projections`` rules, reduced to this suite's roles."""
+
+    SEEN.setdefault("held", []).append((authorizer, subjects, encounter_id))
+    if "held" in HOOKS:
+        return HOOKS["held"](authorizer, subjects)
+    if authorizer.role == "gm":
+        return frozenset({"gm_integration" if authorizer.token else "gm"})
+    if authorizer.role is None:
+        return frozenset()
+    names = {"member", "party"}
+    if any(s.get("kind") == "character" and s.get("id") in authorizer.assigned
+           for s in subjects):
+        names.add("owner")
+    return frozenset(names)
 
 
 # --------------------------------------------------------------------------
@@ -297,7 +317,7 @@ def env(operation_id=None, *, cid="A", type=DAMAGE, subject="a1", payload=None,
 
 def run(body, principal=GM, *, route=None):
     return execute(body, principal, route_campaign_id=route or body["campaign_id"],
-                   content_descriptor=CONTENT, project=project)
+                   content_descriptor=CONTENT, project=project, held_projections=held)
 
 
 def counts(db, cid="A"):
@@ -337,9 +357,11 @@ def set_authority(database, cid="A", **values):
 # signature, order and check 1
 
 
-@pytest.mark.parametrize("missing", ["route_campaign_id", "content_descriptor", "project"])
+@pytest.mark.parametrize("missing", ["route_campaign_id", "content_descriptor", "project",
+                                     "held_projections"])
 def test_every_keyword_is_required(missing):
-    kwargs = dict(route_campaign_id="A", content_descriptor=CONTENT, project=project)
+    kwargs = dict(route_campaign_id="A", content_descriptor=CONTENT, project=project,
+                  held_projections=held)
     del kwargs[missing]
     with pytest.raises(TypeError):
         execute(env(), GM, **kwargs)
@@ -389,7 +411,8 @@ def test_check1_principal_refusals_write_nothing(db):
     for response in (legacy, token):
         assert (response.status, response.body["code"]) == (403, "not_permitted")
     not_a_principal = execute(env(), {"kind": "user", "user_id": "gm"}, route_campaign_id="A",
-                              content_descriptor=CONTENT, project=project)
+                              content_descriptor=CONTENT, project=project,
+                              held_projections=held)
     assert (not_a_principal.status, not_a_principal.body["code"]) == (500, "server_error")
     assert db.transactions == 0 and counts(db) == (0, 0, 0)
 
@@ -1136,7 +1159,8 @@ def test_projector_mutation_is_500_and_rolls_back(db, change):
     session_events.subscribe(lambda c, s: calls.append(s))
     try:
         response = execute(env(client={"origin": "obsidian"}), GM, route_campaign_id="A",
-                           content_descriptor=CONTENT, project=mutating_project)
+                           content_descriptor=CONTENT, project=mutating_project,
+                           held_projections=held)
     finally:
         session_events._SUBSCRIBERS.clear()
     assert (response.status, response.body["code"]) == (500, "server_error")
@@ -1202,7 +1226,8 @@ def expire_bonus(ctx):
             subjects=[{"kind": "character", "id": character_id}],
             changes=[{"kind": "character.play", "id": character_id, "rev": new.revision,
                       "path": "hp", "before": current.payload["hp"], "after": result.hp}],
-            visibility={"owner": "full"}, result={"reconciliation": list(result.entries)}))
+            visibility=HOOKS.get("visibility", {"owner": "full"}),
+            result={"reconciliation": list(result.entries)}))
         written[("character.play", character_id)] = new
     return Applied(written=written)
 
@@ -1277,3 +1302,247 @@ def test_result_items_refuses_bad_sections(result):
     with pytest.raises(ValueError):
         result_items(result)
     assert result_items({"a_1": ({"n": 1},), "b": []}) == [{"result": "a_1", "entry": {"n": 1}}]
+
+
+# --------------------------------------------------------------------------
+# Implementation review 2: R2-1 (result content follows stored event visibility)
+
+
+def health_only(principal, records):
+    """A player's view: the record key stays, exact HP and resources are hidden."""
+
+    return {f"{kind}:{id}": {"rev": record.revision,
+                             "health": "hurt" if record.payload["hp"] < 10 else "ok"}
+            for (kind, id), record in records.items()}
+
+
+def _reconcile(db, visibility, principal=PLAYER):
+    from core.commands.reconciliation import preview
+    _with_bonus(db.database, "a1")
+    with db.database.session() as session:
+        play = CharacterStateRepository(session).get("A", "a1", "play").payload
+    expected = preview(EffectAdapter(), **_expiry(play)[1])
+    HOOKS.update(apply=expire_bonus, visibility=visibility, project=health_only)
+    body = env(payload={"amount": 0})
+    return body, run(body, principal), expected
+
+
+def _replay(body, principal=PLAYER):
+    HOOKS.pop("apply", None)
+    response = run(body, principal)
+    assert response.status == 200 and response.body["replayed"] is True
+    return response
+
+
+@pytest.mark.parametrize("visibility, shown", [
+    ({"owner": "none", "party": "none"}, None),
+    ({"owner": "redact:[exact_hp]"}, "redacted"),
+    ({"owner": "full"}, "full"),
+], ids=["none", "redact_exact_hp", "full"])
+def test_result_entries_follow_stored_event_visibility(db, visibility, shown):
+    body, response, expected = _reconcile(db, visibility)
+    assert response.status == 200 and hp(db) == (1, 3)
+    want = {None: None, "full": expected,
+            "redacted": [{"type": "hp"}] + expected[1:]}[shown]
+    assert expected[1]["type"] == "pool_clamped"
+    for answer in (response, _replay(body)):
+        result = answer.body["result"]
+        # the record key stays visible in every case; only its permitted fields show
+        assert result["records"] == {"character.play:a1": {"rev": 3, "health": "hurt"}}
+        assert result.get("reconciliation") == want
+        assert len(answer.body["events"]) == (0 if shown is None else 1)
+    stored = [i["entry"] for i in events(db)[0].explain if "result" in i]
+    assert stored == expected  # the durable event keeps the full entries
+
+
+def test_gm_sees_full_result_whatever_the_stored_visibility(db):
+    body, response, expected = _reconcile(db, {"owner": "none"}, principal=GM)
+    assert response.body["result"]["reconciliation"] == expected
+    assert _replay(body, GM).body["result"]["reconciliation"] == expected
+
+
+@pytest.mark.parametrize("visibility, after", [
+    ({"owner": "full"}, None),
+    ({"owner": "full", "party": "redact:[exact_hp]"}, "redacted"),
+], ids=["owner_only", "party_redacted"])
+def test_replay_uses_current_authorization(db, visibility, after):
+    body, response, expected = _reconcile(db, visibility)
+    assert response.body["result"]["reconciliation"] == expected
+    with db.database.transaction() as session:  # u1 no longer owns a1
+        session.execute(CharacterAssignment.__table__.delete())
+    again = _replay(body)
+    assert again.body["result"]["records"] == {"character.play:a1": {"rev": 3, "health": "hurt"}}
+    want = None if after is None else [{"type": "hp"}] + expected[1:]
+    assert again.body["result"].get("reconciliation") == want
+
+
+@pytest.mark.parametrize("stored", [
+    ["owner"], None, {"owner": "redact:[bogus]"}, {"owner": "redact:[]"}, {"owner": "partial"},
+    {"owner": 1},
+], ids=["list", "null", "unknown_class", "empty_redact", "unknown_value", "not_a_string"])
+def test_unresolvable_stored_visibility_shows_no_result(db, stored):
+    body, response, expected = _reconcile(db, {"owner": "full"})
+    assert response.body["result"]["reconciliation"] == expected
+    with db.database.transaction() as session:
+        session.execute(update(GameEvent).values(visibility=stored))
+    again = _replay(body)
+    assert "reconciliation" not in again.body["result"] and again.body["events"] == []
+
+
+def test_a_section_without_a_redactor_is_shown_only_in_full(db):
+    def apply(ctx):
+        result = damage(ctx)
+        ctx.emit(EventDraft(type="x.noted", subjects=A1,
+                            visibility=HOOKS["visibility"], result={"tally": [{"n": 1}]}))
+        return result
+    HOOKS.update(apply=apply, visibility={"owner": "redact:[secret_roll]"})
+    assert "tally" not in run(env(), PLAYER).body["result"]
+    HOOKS["visibility"] = {"owner": "full"}
+    assert run(env(), PLAYER).body["result"]["tally"] == [{"n": 1}]
+
+
+@pytest.mark.parametrize("bad", [["gm"], frozenset({"admin"}), {"owner", 1}, None])
+def test_a_bad_held_projections_answer_is_500_and_writes_nothing(db, bad):
+    HOOKS["held"] = lambda authorizer, subjects: bad
+    response = run(env(), PLAYER)
+    assert (response.status, response.body["code"]) == (500, "server_error")
+    assert counts(db) == (0, 0, 0) and hp(db) == (30, 1)
+
+
+def test_held_projections_gets_the_loaded_authorizer_and_the_event(db):
+    body = env()
+    assert run(body, PLAYER).status == 200
+    authorizer, subjects, encounter_id = SEEN["held"][-1]
+    assert isinstance(authorizer, Authorizer)
+    assert subjects == A1 and encounter_id is None
+    SEEN["held"].clear()
+    assert run(body, PLAYER).body["replayed"] is True
+    assert SEEN["held"][-1][0] is not authorizer  # replay re-reads authorization
+
+
+def test_event_views_rules():
+    from core.commands.events import event_views
+    E, X, S = frozenset(), frozenset({"exact_hp"}), frozenset({"secret_roll"})
+    both = frozenset({"owner", "party"})
+    assert event_views({"owner": "none"}, frozenset({"gm"})) == (E,)
+    assert event_views(None, frozenset({"gm"})) == (E,)
+    assert event_views(None, frozenset({"owner"})) is None
+    assert event_views({"owner": "full"}, frozenset()) is None
+    assert event_views({"owner": "full"}, frozenset({"party"})) is None  # unlisted is none
+    assert event_views({"owner": "redact:[exact_hp]", "party": "full"}, both) == (E,)
+    assert event_views({"owner": "redact:[exact_hp]",
+                        "party": "redact:[exact_hp,secret_roll]"}, both) == (X, X | S)
+    assert event_views({"owner": "redact:[secret_roll]", "party": "redact:[exact_hp]"},
+                       both) == (X, S)
+    assert event_views({"owner": "redact:[exact_hp]", "party": "bogus"}, both) == (X,)
+    for bad in ("redact:[]", "redact:[bogus]", "redact:[exact_hp,bogus]", "redact:exact_hp",
+                "partial", 1, None):
+        assert event_views({"owner": bad}, frozenset({"owner"})) is None
+
+
+HP_ENTRY = {"type": "hp", "hp_before": 6, "hp_after": 1, "debt_before": 0,
+            "debt_after": 3, "effmax_before": 18, "effmax_after": 10}
+ENTRIES = {
+    "hp": HP_ENTRY,
+    "pool_clamped": {"type": "pool_clamped", "pool": "focus", "max_before": 5,
+                     "max_after": 3, "used_before": 4, "used_after": 3},
+    "pool_removed": {"type": "pool_removed", "pool": "charges", "used": 1, "effects": ["e"]},
+    "reservation_released": {"type": "reservation_released", "pool": "charges",
+                             "action_id": "a", "declare_seq": 1, "amount": 1,
+                             "targets": ["x"], "reason": "reservation_invalidated"},
+    "effect_ended": {"type": "effect_ended", "effect_id": "e", "pool": None,
+                     "effect": {"id": "e", "source": "cloak"}},
+    "choice_prompt": {"type": "choice_prompt",
+                      "prompt": {"kind": "choice", "origin": "reconciliation",
+                                 "choice": {"source": "cloak"}}},
+}
+# entry type -> the redaction classes it is shown whole under; otherwise withheld,
+# except hp, which is reduced to its type
+WHOLE = {
+    "hp": {"secret_roll", "hidden_actor"},
+    "pool_clamped": {"exact_hp", "secret_roll", "hidden_actor"},
+    "pool_removed": {"exact_hp", "secret_roll"},
+    "reservation_released": {"exact_hp", "secret_roll"},
+    "effect_ended": {"exact_hp", "secret_roll"},
+    "choice_prompt": {"exact_hp", "secret_roll"},
+}
+CLASSES = ("exact_hp", "secret_roll", "unrevealed_effect", "unrevealed_item", "hidden_actor")
+
+
+@pytest.mark.parametrize("kind", sorted(ENTRIES))
+@pytest.mark.parametrize("cls", CLASSES)
+def test_every_reconciliation_row_under_every_class(kind, cls):
+    from core.commands.events import result_entry
+    entry = ENTRIES[kind]
+    shown = result_entry("reconciliation", entry, frozenset({cls}))
+    if cls in WHOLE[kind]:
+        assert shown == entry
+    else:
+        assert shown == ({"type": "hp"} if kind == "hp" else None)
+    assert result_entry("reconciliation", entry, frozenset()) == entry
+
+
+def test_redact_reconciliation_fails_closed():
+    from core.commands.events import result_entry, visible_entry
+    X = frozenset({"exact_hp"})
+    effect = ENTRIES["effect_ended"]
+    # every class must be safe, not just one of them
+    assert result_entry("reconciliation", effect, X | {"unrevealed_effect"}) is None
+    assert result_entry("reconciliation", HP_ENTRY, X | {"secret_roll"}) == {"type": "hp"}
+    assert result_entry("reconciliation", ENTRIES["pool_clamped"],
+                        X | {"unrevealed_item"}) is None
+    assert result_entry("reconciliation", {"type": "new_kind", "x": 1}, X) is None
+    assert result_entry("reconciliation", {"x": 1}, X) is None
+    assert result_entry("reconciliation", "not an entry", frozenset()) is None
+    assert result_entry("unregistered", {"x": 1}, X) is None
+    assert result_entry("unregistered", {"x": 1}, frozenset()) == {"x": 1}
+    shown = result_entry("reconciliation", HP_ENTRY, frozenset())
+    shown["hp_after"] = 99
+    assert HP_ENTRY["hp_after"] == 1  # a copy
+    # several views: each applied alone, the fullest form wins, never a merge
+    views = (X, frozenset({"unrevealed_effect"}))
+    assert visible_entry("reconciliation", HP_ENTRY, views) == {"type": "hp"}
+    assert visible_entry("reconciliation", ENTRIES["pool_clamped"], views) == \
+        ENTRIES["pool_clamped"]
+    assert visible_entry("reconciliation", effect, (frozenset({"unrevealed_effect"}),)) is None
+    assert visible_entry("reconciliation", HP_ENTRY,
+                         (X, frozenset({"secret_roll"}))) == HP_ENTRY
+
+
+def test_two_redacting_views_give_their_union(db):
+    """owner hides exact HP, party hides effects: the pool clamp shows through owner."""
+
+    def held_both(authorizer, subjects):
+        return frozenset({"owner", "party"})
+    body, response, expected = _reconcile(
+        db, {"owner": "redact:[exact_hp]", "party": "redact:[unrevealed_effect]"})
+    HOOKS["held"] = held_both
+    for answer in (response, _replay(body)):
+        assert answer.body["result"]["reconciliation"] == [{"type": "hp"}] + expected[1:]
+
+
+def test_each_event_is_judged_for_its_own_subjects(db):
+    """The caller owns a1, not a2: both records are visible, only a1's event content is."""
+
+    def owner_of_a1(authorizer, subjects):
+        return frozenset({"member"} | ({"owner"} if subjects == A1 else set()))
+    _with_bonus(db.database, "a1")
+    _with_bonus(db.database, "a2")
+    HOOKS.update(apply=expire_bonus, visibility={"owner": "full"}, held=owner_of_a1)
+    body = env(payload={"amount": 0, "target": "a2"})
+    response = run(body)
+    assert response.status == 200 and hp(db, "a2") == (1, 3)
+    for answer in (response, _replay(body, GM)):
+        result = answer.body["result"]
+        assert set(result["records"]) == {"character.play:a1", "character.play:a2"}
+        assert len(answer.body["events"]) == 1
+        assert [e["type"] for e in result["reconciliation"]] == ["hp", "pool_clamped"]
+    owners = {tuple(subjects[0].values()) for _, subjects, _ in SEEN["held"]}
+    assert owners == {("character", "a1"), ("character", "a2")}
+
+
+def test_register_result_redactor_refuses_bad_and_duplicate_names():
+    from core.commands.events import register_result_redactor
+    for name in ("records", "Bad", "reconciliation"):
+        with pytest.raises(ValueError):
+            register_result_redactor(name, lambda entry, classes: entry)

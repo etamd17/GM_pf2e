@@ -63,7 +63,7 @@ from .checks import CODES, CheckContext, CheckSpec, CommandRefusal, run_checks
 from .conflicts import conflict_body
 from .digest import command_digest
 from .envelope import client_origin
-from .events import EventWriter, NoEventsEmitted
+from .events import EventWriter, NoEventsEmitted, event_views, held_set, visible_entry
 from .registry import CheckedEnvelope, check_envelope
 
 _LOG = logging.getLogger(__name__)
@@ -116,8 +116,8 @@ class CommandResponse:
 
 
 def execute(envelope: Any, principal: Any, *, route_campaign_id: str,
-            content_descriptor: Any, project: Callable[..., Mapping[str, Any]]
-            ) -> CommandResponse:
+            content_descriptor: Any, project: Callable[..., Mapping[str, Any]],
+            held_projections: Callable[..., Any]) -> CommandResponse:
     """Run one command for ``principal``.
 
     ``principal`` is the verified ``core.request_context.Principal`` of the
@@ -125,14 +125,18 @@ def execute(envelope: Any, principal: Any, *, route_campaign_id: str,
     is the installed rules content (``pin["content"]`` shape), loaded by the
     caller before this call.  ``project(principal, records)`` returns the
     caller's view keyed ``"<kind>:<id>"``; a record it omits is never named in
-    the answer.
+    the answer.  ``held_projections(authorizer, *, subjects, encounter_id)``
+    returns the projections the caller holds now for one event (PE-14f's
+    function in ``core/commands/authorizer.py`` has this signature); with the
+    event's stored visibility it decides whether the event is listed and
+    what of its result entries the caller sees (R2-1).
     """
 
     try:
         checked = check_envelope(envelope, principal, route_campaign_id=route_campaign_id)
     except Exception as exc:
         return _failure(exc, None)
-    command = _Command(checked, content_descriptor, project)
+    command = _Command(checked, content_descriptor, project, held_projections)
     try:
         response, last_seq = command.transact(command.run)
     except Exception as exc:
@@ -195,10 +199,12 @@ def _event_keys(event: GameEvent) -> list[tuple[str, str]] | None:
 
 class _Command:
     def __init__(self, checked: CheckedEnvelope, content_descriptor: Any,
-                 project: Callable[..., Mapping[str, Any]]) -> None:
+                 project: Callable[..., Mapping[str, Any]],
+                 held_projections: Callable[..., Any]) -> None:
         self.checked = checked
         self.content_descriptor = content_descriptor
         self.project = project
+        self.held_projections = held_projections
         self.campaign_id = checked.envelope["campaign_id"]
         self.operation_id = checked.envelope["operation_id"]
         self.key = (self.campaign_id, checked.principal_kind, checked.principal_id,
@@ -262,8 +268,8 @@ class _Command:
         keys.update(k for e in events for k in (_event_keys(e) or ()))
         records = {key: record for key in sorted(keys)
                    if (record := self.read_current(session, *key)) is not None}
-        return self.answer(receipt.applied_status, True, dict(receipt.revisions), events,
-                           receipt.seq_last, records, set(receipt.revisions))
+        return self.answer(authorizer, receipt.applied_status, True, dict(receipt.revisions),
+                           events, receipt.seq_last, records, set(receipt.revisions))
 
     def read_current(self, session: Any, kind: str, id: str) -> StateRecord | None:
         """An unlocked read of one revision record for a replay's fresh projection."""
@@ -330,8 +336,8 @@ class _Command:
         records = {key: r for key in (k for e in writer.events for k in (_event_keys(e) or ()))
                    if (r := ctx.records.get(key)) is not None}
         records.update(written)
-        response = self.answer(status, False, revisions, writer.events, last, records,
-                               {f"{kind}:{id}" for kind, id in written})
+        response = self.answer(authorizer, status, False, revisions, writer.events, last,
+                               records, {f"{kind}:{id}" for kind, id in written})
         self.require_unchanged()  # the projector ran after the first check (R1-1)
         return response, last
 
@@ -340,26 +346,40 @@ class _Command:
                 or dict(self.checked.envelope) != self.snapshot):
             raise EnvelopeMutated("a callback changed the hashed envelope")
 
-    def answer(self, status: str, replayed: bool, revisions: Mapping[str, int],
-               events: list[GameEvent], watermark: int,
+    def answer(self, authorizer: Any, status: str, replayed: bool,
+               revisions: Mapping[str, int], events: list[GameEvent], watermark: int,
                records: Mapping[tuple[str, str], StateRecord],
                result_keys: set[str]) -> CommandResponse:
         """The success body (C:388-392), every record-naming field projected.
 
         ``result.records`` is the caller's projection of the records the command
-        wrote (read fresh on replay).  Every other ``result`` section is rebuilt
-        from the events the caller may see, in seq order (``EventDraft.result``).
+        wrote (read fresh on replay).  An event is listed only if the projector
+        returned every record it is about and its stored visibility lets the
+        caller's current projections see it; every other ``result`` section is
+        rebuilt from those events, in seq order, each entry redacted to what
+        that visibility allows (``events.event_views``, ``visible_entry``).
         """
 
         shown = dict(self.project(self.checked.principal, MappingProxyType(dict(records))))
-        visible = [e for e in events
-                   if (keys := _event_keys(e)) and all(f"{k}:{i}" in shown for k, i in keys)]
         result: dict[str, Any] = {
             "records": {key: value for key, value in shown.items() if key in result_keys}}
-        for event in visible:
+        visible = []
+        for event in events:
+            keys = _event_keys(event)
+            if not keys or not all(f"{k}:{i}" in shown for k, i in keys):
+                continue
+            held = held_set(self.held_projections(
+                authorizer, subjects=copy.deepcopy(list(event.subjects)),
+                encounter_id=event.encounter_id))
+            views = event_views(event.visibility, held)
+            if views is None:
+                continue
+            visible.append(event)
             for item in event.explain:
                 if isinstance(item, Mapping) and isinstance(item.get("result"), str):
-                    result.setdefault(item["result"], []).append(copy.deepcopy(item["entry"]))
+                    entry = visible_entry(item["result"], item.get("entry"), views)
+                    if entry is not None:
+                        result.setdefault(item["result"], []).append(entry)
         body = {
             "ok": True, "operation_id": self.operation_id, "status": status,
             "replayed": replayed,
