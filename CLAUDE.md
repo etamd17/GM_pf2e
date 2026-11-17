@@ -45,6 +45,15 @@ python tools/check_templates.py   # Jinja parse check (CI runs this) — run aft
   + report per task in `tasks/`). Check the queue before starting; write a brief before handing
   work over, and a report with real test numbers when finishing.
 
+- **UI/motion skills** (`.claude/skills/`, mirrored in `.agents/skills/` for Codex) are Emil
+  Kowalski's set from `emilkowalski/skills`, pinned in `skills-lock.json`. Use them for UI and
+  animation work, but translate their React/Framer Motion/Tailwind examples into this stack:
+  Jinja templates, vanilla JS and plain CSS (transitions, `@keyframes`, WAAPI). **Never add a
+  framework, npm dependency or build step because a skill suggests one** (Vaul, Sonner, Motion,
+  `pick-ui-library`). `animate-expo`, `ask-sonner`, `write-swift` and `pick-ui-library` were left
+  out deliberately; references to them inside the remaining skills are dead links. Honour
+  `prefers-reduced-motion`, and keep animation on the map confined to the table screen (see the
+  map rules below). Update with `npx skills@latest update -p -y`; do not hand-edit skill files.
 - **No emojis** in code, UI strings, comments, or commit messages unless explicitly asked.
 - **When to commit, push and merge.** Never commit directly on `main`; branch off it, one branch
   per task. For a handoff task, once the reviewer accepts it, commit, push, open the PR and merge
