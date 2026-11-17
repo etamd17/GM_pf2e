@@ -19,7 +19,7 @@ projector do goes through ``ctx.session`` and ``ctx.locks``: they never open a
 session, read ``flask.g``, load rules content, write files, wait or take a
 process lock.  ``ctx.envelope`` is the hashed request and none of them may
 change it, nested values included (copy first); the digest is re-checked
-before every receipt insert, and the whole envelope (``client`` included) is
+before every receipt insert and again after the success projector, and the whole envelope (``client`` included) is
 compared with a copy taken at check 1 (:class:`EnvelopeMutated`, answered 500).
 The event origin is read once, at check 1.  An
 applied command emits at least one event (:class:`~.events.NoEventsEmitted`).
@@ -98,7 +98,12 @@ class _CommitFailed(Exception):
 
 @dataclass(frozen=True)
 class Applied:
-    """What ``apply`` returns: the records it wrote, and whether an action is left open."""
+    """What ``apply`` returns: the records it wrote, and whether an action is left open.
+
+    Records with a revision become the receipt's ``revisions``; every written
+    record is projected into ``result.records``.  Other result values (such as
+    ``reconciliation``) travel on the events, through ``EventDraft.result``.
+    """
 
     written: Mapping[tuple[str, str], StateRecord] = field(default_factory=dict)
     pending: bool = False
@@ -258,7 +263,7 @@ class _Command:
         records = {key: record for key in sorted(keys)
                    if (record := self.read_current(session, *key)) is not None}
         return self.answer(receipt.applied_status, True, dict(receipt.revisions), events,
-                           receipt.seq_last, records)
+                           receipt.seq_last, records, set(receipt.revisions))
 
     def read_current(self, session: Any, kind: str, id: str) -> StateRecord | None:
         """An unlocked read of one revision record for a replay's fresh projection."""
@@ -310,9 +315,9 @@ class _Command:
         if not writer.events:
             raise NoEventsEmitted(f"{t.type} applied without emitting an event")
         self.require_unchanged()
-        written = {key: record for key, record in applied.written.items()
-                   if record is not None and record.revision is not None}
-        revisions = {f"{kind}:{id}": record.revision for (kind, id), record in written.items()}
+        written = {key: record for key, record in applied.written.items() if record is not None}
+        revisions = {f"{kind}:{id}": record.revision for (kind, id), record in written.items()
+                     if record.revision is not None}
         first, last = writer.events[0].seq, writer.events[-1].seq
         status = "pending" if applied.pending else "committed"
         session.add(CommandReceipt(
@@ -325,7 +330,10 @@ class _Command:
         records = {key: r for key in (k for e in writer.events for k in (_event_keys(e) or ()))
                    if (r := ctx.records.get(key)) is not None}
         records.update(written)
-        return self.answer(status, False, revisions, writer.events, last, records), last
+        response = self.answer(status, False, revisions, writer.events, last, records,
+                               {f"{kind}:{id}" for kind, id in written})
+        self.require_unchanged()  # the projector ran after the first check (R1-1)
+        return response, last
 
     def require_unchanged(self) -> None:
         if (command_digest(self.checked.envelope) != self.checked.digest
@@ -334,18 +342,30 @@ class _Command:
 
     def answer(self, status: str, replayed: bool, revisions: Mapping[str, int],
                events: list[GameEvent], watermark: int,
-               records: Mapping[tuple[str, str], StateRecord]) -> CommandResponse:
-        """The success body (C:388-392), every record-naming field projected."""
+               records: Mapping[tuple[str, str], StateRecord],
+               result_keys: set[str]) -> CommandResponse:
+        """The success body (C:388-392), every record-naming field projected.
+
+        ``result.records`` is the caller's projection of the records the command
+        wrote (read fresh on replay).  Every other ``result`` section is rebuilt
+        from the events the caller may see, in seq order (``EventDraft.result``).
+        """
 
         shown = dict(self.project(self.checked.principal, MappingProxyType(dict(records))))
+        visible = [e for e in events
+                   if (keys := _event_keys(e)) and all(f"{k}:{i}" in shown for k, i in keys)]
+        result: dict[str, Any] = {
+            "records": {key: value for key, value in shown.items() if key in result_keys}}
+        for event in visible:
+            for item in event.explain:
+                if isinstance(item, Mapping) and isinstance(item.get("result"), str):
+                    result.setdefault(item["result"], []).append(copy.deepcopy(item["entry"]))
         body = {
             "ok": True, "operation_id": self.operation_id, "status": status,
             "replayed": replayed,
             "revisions": {key: rev for key, rev in revisions.items() if key in shown},
-            "events": [{"event_id": e.event_id, "seq": e.seq} for e in events
-                       if (keys := _event_keys(e)) and all(f"{k}:{i}" in shown for k, i in keys)],
-            "watermark": watermark,
-            "result": {key: value for key, value in shown.items() if key in revisions},
+            "events": [{"event_id": e.event_id, "seq": e.seq} for e in visible],
+            "watermark": watermark, "result": result,
         }
         return CommandResponse(202 if status == "pending" else 200, body)
 

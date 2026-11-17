@@ -99,6 +99,7 @@ class Adapter:
 def _lock_plan(ctx):
     LOG.append("lock_plan")
     SEEN["lock_plan"] = (ctx.session, ctx.locks, ctx.locks.campaign_id, ctx.pin)
+    SEEN["ctx"] = ctx
     if "campaign_id" in ctx.envelope["subject"]:
         cid = ctx.envelope["subject"]["campaign_id"]
         ctx.locks.register_serialized(
@@ -446,7 +447,7 @@ def test_commit_writes_state_receipt_and_events_together(db):
         "ok": True, "operation_id": body["operation_id"], "status": "committed",
         "replayed": False, "revisions": {"character.play:a1": 2},
         "events": [{"event_id": events(db)[0].event_id, "seq": 1}], "watermark": 1,
-        "result": {"character.play:a1": {"rev": 2, "hp": 25, "notes": "secret"}}}
+        "result": {"records": {"character.play:a1": {"rev": 2, "hp": 25, "notes": "secret"}}}}
     stored = receipt(db, body["operation_id"])
     assert (stored.status, stored.applied_status, stored.code, stored.digest) == (
         "committed", "committed", None, command_digest(body))
@@ -497,7 +498,8 @@ def test_same_key_and_digest_replays_with_a_fresh_projection(db):
     assert again.body["replayed"] is True and again.body["status"] == "committed"
     assert again.body["revisions"] == first.body["revisions"]
     assert again.body["events"] == first.body["events"] and again.body["watermark"] == 1
-    assert again.body["result"] == {"character.play:a1": {"rev": 3, "hp": 20, "notes": "secret"}}
+    assert again.body["result"] == {
+        "records": {"character.play:a1": {"rev": 3, "hp": 20, "notes": "secret"}}}
     assert counts(db) == (2, 2, 2) and hp(db) == (20, 3)
 
 
@@ -668,7 +670,8 @@ def test_projection_omits_hidden_records_and_their_events(db):
     response = run(env(payload={"amount": 5, "target": "a2"}))
     assert response.body["revisions"] == {"character.play:a1": 2}
     assert [e["seq"] for e in response.body["events"]] == [1]
-    assert set(response.body["result"]) == {"character.play:a1"}
+    assert response.body["result"].keys() == {"records"}
+    assert set(response.body["result"]["records"]) == {"character.play:a1"}
     assert hp(db, "a2") == (25, 2)
 
 
@@ -1114,3 +1117,163 @@ def test_commands_package_imports_no_process_lock_module():
     out = subprocess.run([sys.executable, "-c", script], cwd=REPO_ROOT, capture_output=True,
                          text=True, check=True)
     assert json.loads(out.stdout.strip().splitlines()[-1]) == []
+
+
+# --------------------------------------------------------------------------
+# Implementation review 1: R1-1 (projector mutation) and R1-2 (command results)
+
+
+@pytest.mark.parametrize("change", [
+    lambda envelope: envelope["payload"].__setitem__("amount", 99),
+    lambda envelope: envelope["client"].__setitem__("origin", "website"),
+], ids=["hashed_payload", "client_only"])
+def test_projector_mutation_is_500_and_rolls_back(db, change):
+    calls = []
+
+    def mutating_project(principal, records):
+        change(SEEN["ctx"].envelope)  # a projector that kept ctx from lock_plan
+        return project(principal, records)
+    session_events.subscribe(lambda c, s: calls.append(s))
+    try:
+        response = execute(env(client={"origin": "obsidian"}), GM, route_campaign_id="A",
+                           content_descriptor=CONTENT, project=mutating_project)
+    finally:
+        session_events._SUBSCRIBERS.clear()
+    assert (response.status, response.body["code"]) == (500, "server_error")
+    assert hp(db) == (30, 1) and counts(db) == (0, 0, 0) and calls == []
+
+
+class EffectAdapter:
+    """A stateless PE-13c adapter: effects add max HP and focus points."""
+
+    def effective_max(self, build, play, items):
+        return build["hp_max"] + sum(e.get("hp_bonus", 0) for e in play["effects"])
+
+    def is_dead(self, play):
+        return False
+
+    def pools(self, build, play, items):
+        return {"focus": build["focus"] + sum(e.get("focus", 0) for e in play["effects"])}
+
+    def invalid_choices(self, build, play):
+        return []
+
+    def orphaned_effects(self, build, play, items, removed_pools):
+        return []
+
+
+BUILD = {"hp_max": 10, "focus": 3}
+
+
+def _with_bonus(database, character_id):
+    with database.transaction() as session:
+        states = CharacterStateRepository(session)
+        before = states.get("A", character_id, "play")
+        states.write("A", character_id, "play", read_revision=before.revision,
+                     payload={**before.payload, "hp": 6, "focus_used": 4, "hp_floor_debt": 0,
+                              "effects": [{"id": "bonus", "hp_bonus": 8, "focus": 2}]})
+
+
+def _expiry(play):
+    from core.commands.reconciliation import Snapshot
+    after = {**play, "effects": []}
+    return after, dict(before=Snapshot(BUILD, (), play), after=Snapshot(BUILD, (), after),
+                       play=play, hp=play["hp"], used={"focus": play["focus_used"]},
+                       user_initiated=False)
+
+
+def expire_bonus(ctx):
+    """Expire a1's (and the payload target's) HP/focus effect through PE-13c."""
+
+    from core.commands.reconciliation import apply as reconcile_apply
+    written = {}
+    ids = [ctx.envelope["subject"]["character_id"]]
+    ids += [ctx.envelope["payload"]["target"]] if ctx.envelope["payload"].get("target") else []
+    for character_id in ids:
+        current = ctx.records[("character.play", character_id)]
+        after, kwargs = _expiry(current.payload)
+        result = reconcile_apply(EffectAdapter(), **kwargs)
+        new = CharacterStateRepository(ctx.session).write(
+            "A", character_id, "play", read_revision=current.revision,
+            payload={**after, "hp": result.hp, "focus_used": result.used["focus"],
+                     **result.play_updates(after)})
+        ctx.emit(EventDraft(
+            type="character.build_reconciled",
+            subjects=[{"kind": "character", "id": character_id}],
+            changes=[{"kind": "character.play", "id": character_id, "rev": new.revision,
+                      "path": "hp", "before": current.payload["hp"], "after": result.hp}],
+            visibility={"owner": "full"}, result={"reconciliation": list(result.entries)}))
+        written[("character.play", character_id)] = new
+    return Applied(written=written)
+
+
+def test_result_reconciliation_is_the_pe13c_entries_fresh_and_on_replay(db):
+    from core.commands.reconciliation import preview
+    _with_bonus(db.database, "a1")
+    with db.database.session() as session:
+        play = CharacterStateRepository(session).get("A", "a1", "play").payload
+    expected = preview(EffectAdapter(), **_expiry(play)[1])
+    assert [e["type"] for e in expected] == ["hp", "pool_clamped"]
+    assert expected[0] == {"type": "hp", "hp_before": 6, "hp_after": 1, "debt_before": 0,
+                           "debt_after": 3, "effmax_before": 18, "effmax_after": 10}
+
+    HOOKS["apply"] = expire_bonus
+    body = env()
+    response = run(body)
+    assert response.status == 200
+    assert response.body["result"]["reconciliation"] == expected
+    assert response.body["result"]["records"]["character.play:a1"]["hp_floor_debt"] == 3
+    assert hp(db) == (1, 3)
+    assert [i for i in events(db)[0].explain if "result" in i] == [
+        {"result": "reconciliation", "entry": entry} for entry in expected]
+
+    HOOKS.clear()
+    assert run(env(payload={"amount": 0})).status == 200  # a1 moves on
+    again = run(body)
+    assert again.body["replayed"] is True
+    assert again.body["result"]["reconciliation"] == expected  # from the event, not a cache
+    assert again.body["result"]["records"]["character.play:a1"]["rev"] == 4  # fresh
+    with db.database.session() as session:
+        stored = session.get(CommandReceipt, ("A", "user", "gm", body["operation_id"]))
+        assert set(stored.revisions) == {"character.play:a1"}  # no response body cached
+
+
+def test_result_entries_for_a_hidden_record_are_omitted(db):
+    _with_bonus(db.database, "a1")
+    _with_bonus(db.database, "a2")
+    HOOKS["apply"] = expire_bonus
+    HIDDEN.add("character.play:a2")
+    body = env(payload={"amount": 0, "target": "a2"})
+    response = run(body)
+    assert response.status == 200 and hp(db, "a2") == (1, 3)
+    shown = response.body["result"]
+    assert set(shown["records"]) == {"character.play:a1"}
+    assert len(shown["reconciliation"]) == 2  # a1's hp and pool_clamped only
+    HOOKS.clear()
+    assert len(run(body).body["result"]["reconciliation"]) == 2
+    HIDDEN.add("character.play:a1")
+    assert "reconciliation" not in run(body).body["result"]
+
+
+@pytest.mark.parametrize("draft", [
+    dict(result={"records": [{"x": 1}]}), dict(result={"Bad": [{"x": 1}]}),
+    dict(result={"reconciliation": [1]}), dict(result={"reconciliation": {"x": 1}}),
+    dict(explain=[{"result": "reconciliation", "entry": {}}]),
+])
+def test_invalid_result_sections_are_500_and_write_nothing(db, draft):
+    def bad(ctx):
+        result = damage(ctx)
+        ctx.emit(EventDraft(type="x", subjects=A1, **draft))
+        return result
+    HOOKS["apply"] = bad
+    assert run(env()).status == 500 and counts(db) == (0, 0, 0)
+
+
+@pytest.mark.parametrize("result", [
+    {"records": []}, {"Bad": []}, {"x" * 65: []}, {1: []}, {"ok": [1]}, {"ok": {"a": 1}}, [],
+])
+def test_result_items_refuses_bad_sections(result):
+    from core.commands.events import result_items
+    with pytest.raises(ValueError):
+        result_items(result)
+    assert result_items({"a_1": ({"n": 1},), "b": []}) == [{"result": "a_1", "entry": {"n": 1}}]

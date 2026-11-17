@@ -20,6 +20,14 @@ Visibility (C:409-419): projections a draft does not list get ``none``,
 reduced to ``{"path": "notes", "changed": true}``, keeping only its record
 ``kind`` and ``id`` so the response filter can still hide it.  An override is recorded
 in ``explain[]`` as ``{"override": {"reason": ...}}``.
+
+Command results (PE-14b R1-2).  A draft's ``result`` maps a section name to an
+ordered list of entries, such as PE-13c's ``reconciliation`` entries.  They are
+stored in the event's ``explain[]`` as ``{"result": name, "entry": entry}``, in
+order, so the response's ``result.<name>[]`` is rebuilt from durable events,
+the same way fresh and on replay, and is shown only to a caller who may see
+every record the event is about.  ``records`` is reserved for the response's
+record projections.
 """
 
 from __future__ import annotations
@@ -40,6 +48,7 @@ PROJECTIONS = frozenset({"gm", "gm_integration", "owner", "editor", "viewer", "p
 REDACTION_CLASSES = frozenset({"exact_hp", "secret_roll", "unrevealed_effect",
                                "unrevealed_item", "hidden_actor"})
 _REDACT = re.compile(r"redact:\[([a-z_,]*)\]")
+_SECTION = re.compile(r"[a-z][a-z0-9_]{0,63}")
 
 
 class SessionBindError(RuntimeError):
@@ -64,6 +73,7 @@ class EventDraft:
     encounter_id: str | None = None
     action_id: str | None = None
     causation_event_id: str | None = None
+    result: Mapping[str, list[Mapping[str, Any]]] = field(default_factory=dict)
 
 
 def visibility(given: Mapping[str, str]) -> dict[str, str]:
@@ -82,6 +92,22 @@ def visibility(given: Mapping[str, str]) -> dict[str, str]:
         out[name] = value
     out["gm"] = "full"
     return out
+
+
+def result_items(result: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """A draft's result sections as ``explain[]`` items, in order."""
+
+    if not isinstance(result, Mapping):
+        raise ValueError("result must map section names to lists of entries")
+    items = []
+    for name, entries in result.items():
+        if not (isinstance(name, str) and _SECTION.fullmatch(name) and name != "records"):
+            raise ValueError(f"invalid result section {name!r}")
+        if not isinstance(entries, (list, tuple)) or not all(
+                isinstance(entry, Mapping) for entry in entries):
+            raise ValueError(f"result section {name} must be a list of objects")
+        items += [{"result": name, "entry": copy.deepcopy(dict(entry))} for entry in entries]
+    return items
 
 
 def _changes(changes: list[Any]) -> list[Any]:
@@ -115,6 +141,9 @@ class EventWriter:
             raise ValueError("an event needs a type")
         ctx, checked = self.ctx, self.checked
         explain = copy.deepcopy(list(draft.explain))
+        if any(isinstance(item, Mapping) and "result" in item for item in explain):
+            raise ValueError("result entries go in EventDraft.result, not explain")
+        explain.extend(result_items(draft.result))
         override = checked.envelope.get("override")
         if override is not None:
             explain.append({"override": {"reason": override["reason"]}})
