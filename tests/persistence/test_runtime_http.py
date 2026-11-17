@@ -10,6 +10,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[2]
+CHILD_LIMIT = 110  # seconds; a healthy child boots and finishes in about 15
 
 
 def run_sql(tmp_path, body, *, schema=True, backend="sql"):
@@ -25,7 +26,11 @@ def run_sql(tmp_path, body, *, schema=True, backend="sql"):
         APP_ENV="development",
         PYTHONDONTWRITEBYTECODE="1",
     )
-    script = "import os, json\nfrom pathlib import Path\n"
+    # A child that hangs dumps every thread's stack and exits before the parent's
+    # limit, so a hang is reported with where it was stuck, not as a bare timeout.
+    script = ("import faulthandler, sys\n"
+              f"faulthandler.dump_traceback_later({CHILD_LIMIT}, exit=True)\n"
+              "import os, json\nfrom pathlib import Path\n")
     if schema:
         script += "from core.persistence import Database\nDatabase(os.environ['DATABASE_URL']).create_schema()\n"
     script += "import app as application\nfrom core import auth, campaigns, storage\n"
@@ -33,7 +38,7 @@ def run_sql(tmp_path, body, *, schema=True, backend="sql"):
     script += textwrap.dedent(body)
     result = subprocess.run(
         [sys.executable, "-c", script], cwd=ROOT, env=environment,
-        capture_output=True, text=True, timeout=120,
+        capture_output=True, text=True, timeout=CHILD_LIMIT + 30,
     )
     assert result.returncode == 0, result.stdout + result.stderr
 
