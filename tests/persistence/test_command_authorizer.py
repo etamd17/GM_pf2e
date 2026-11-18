@@ -14,6 +14,7 @@ from core.commands import authorizer as auth
 from core.commands import registry
 from core.commands.authorizer import RolePolicy, load
 from core.commands.checks import CheckContext, CheckRunner, CheckSpec, CommandRefusal
+from core.persistence.command_locks import CommandLocks
 from core.persistence import (
     Campaign,
     CampaignGrant,
@@ -390,9 +391,10 @@ def test_record_visibility_by_kind(db):
     clock = StateRecord("clock", "world", 1, None, None, None, {})
     camp, other = (StateRecord.serialized("campaign", c, {}) for c in ("A", "B"))
     party, gm, token = _load(db, "party"), _load(db, "gm"), _load(db, "t_live")
-    for record in (pc, shown, enc, clock, camp, _play()):
+    for record in (pc, enc, clock, camp, _play()):
         assert party.visible(record) and gm.visible(record) and token.visible(record)
-    assert not party.visible(foe) and gm.visible(foe) and token.visible(foe)
+    for record in (foe, shown):  # no trusted reveal state yet (PE-30)
+        assert not party.visible(record) and gm.visible(record) and token.visible(record)
     assert not party.visible(_build()) and token.visible(_build())
     for a in (party, gm, token):
         assert not a.visible(other)
@@ -403,9 +405,36 @@ def test_record_visibility_by_kind(db):
 # Override (Decision 6)
 
 
-def test_override_allowed_unrestricted_type_scoped_token(db, command_type):
+def test_override_allowed_unrestricted_type_scoped_token(db, command_type, policy):
     command_type(gm_only=False)
+    policy(token=True)
     assert _load(db, "t_override").override_allowed(T)
+
+
+def test_registered_type_without_a_role_policy_is_gm_and_admin_only(db, command_type):
+    # The type admits token principals at check 1 but has no role policy.
+    command_type(gm_only=False)
+    assert T not in auth._POLICIES
+    for name in ("t_named", "t_override", "t_live"):
+        a = _load(db, name)
+        assert not a.campaign_role_allows(T), name
+        assert not a.subject_role_allows(T, _build()), name
+        assert not a.override_allowed(T), name
+    for name in ("owner", "editor", "qm"):
+        assert not _load(db, name).campaign_role_allows(T), name
+    for name in ("gm", "admin"):
+        a = _load(db, name)
+        assert a.campaign_role_allows(T) and a.override_allowed(T), name
+
+
+def test_an_explicit_token_policy_admits_the_scoped_token(db, command_type, policy):
+    command_type(gm_only=False)
+    policy(token=True)
+    assert _load(db, "t_named").campaign_role_allows(T)
+    assert _load(db, "t_named").subject_role_allows(T, _build())
+    assert not _load(db, "t_named").override_allowed(T)  # no override: scope
+    assert _load(db, "t_override").override_allowed(T)
+    assert not _load(db, "t_live").campaign_role_allows(T)  # not a live type
 
 
 def test_override_gm_only_type_allows_gm_and_site_admin(db, command_type):
@@ -499,27 +528,102 @@ def test_malformed_scope_entries_are_ignored(db):
 # Replacement and revocation (Decision 4; PE-14f helpers)
 
 
-def test_replacement_is_honoured_only_same_campaign_and_gm_minted(db):
+@pytest.fixture
+def mint(db, monkeypatch):
+    """``integration_tokens.insert_minted`` against this test's database."""
+
+    from core.persistence import integration_tokens, runtime
+
+    monkeypatch.setattr(runtime, "database", lambda: db)
+
+    def run(cid, campaign="A", **fields):
+        record = {"id": cid, "label": "Obsidian", "token_hash": uuid.uuid4().hex * 2,
+                  "last_four": "abcd", "created_at": "2026-11-18T12:00:00Z"}
+        integration_tokens.insert_minted(campaign, record, **fields)
+    return run
+
+
+def _set_role(db, user, role):
     with db.transaction() as s:
-        _token(s, "t_new", "A", ["@live"], replaces_credential_id="t_live",
-               minted_by_user_id="gm")
-        _token(s, "t_cross", "A", ["@live"], replaces_credential_id="t_b",
-               minted_by_user_id="gm")
-        _token(s, "t_unminted", "A", ["@live"], replaces_credential_id="t_live")
-        _token(s, "t_player", "A", ["@live"], replaces_credential_id="t_live",
-               minted_by_user_id="owner")
-        _token(s, "t_admin", "A", ["@live"], replaces_credential_id="t_live",
-               minted_by_user_id="admin")
-        _token(s, "t_ghost", "A", ["@live"], replaces_credential_id="t_live",
-               minted_by_user_id="nobody")
+        s.execute(update(CampaignMembership).where(
+            CampaignMembership.campaign_id == "A", CampaignMembership.user_id == user)
+            .values(role=role))
+
+
+def _minted_as(db, cid):
+    with db.transaction() as s:
+        return s.get(IntegrationToken, cid).minted_as
+
+
+def test_replacement_minted_by_the_gm_survives_a_later_demotion(db, mint):
+    mint("t_new", replaces_credential_id="t_live", minted_by_user_id="gm")
+    assert _minted_as(db, "t_new") == "gm"
+    assert _load(db, "t_new").is_recorded_replacement("t_live")
+    _set_role(db, "gm", "player")  # GM handoff after the mint
     assert _load(db, "t_new").is_recorded_replacement("t_live")
     assert not _load(db, "t_new").is_recorded_replacement("t_named")
+
+
+def test_replacement_minted_by_a_site_admin_records_admin(db, mint):
+    mint("t_adm", replaces_credential_id="t_live", minted_by_user_id="admin")
+    assert _minted_as(db, "t_adm") == "admin"
+    assert _load(db, "t_adm").is_recorded_replacement("t_live")
+
+
+@pytest.mark.parametrize("minter, original", [
+    ("owner", "t_live"),      # a player is not the GM at mint
+    ("nobody", "t_live"),     # no such user
+    (None, "t_live"),         # no recorded minter
+    ("gm", "t_b"),            # the original is another campaign's credential
+    ("gm", "missing"),        # no such original
+])
+def test_replacement_mint_without_authority_or_same_campaign_original_writes_nothing(
+        db, mint, minter, original):
+    from core.persistence.integration_tokens import ReplacementNotAuthorized
+
+    with pytest.raises(ReplacementNotAuthorized):
+        mint("t_bad", replaces_credential_id=original, minted_by_user_id=minter)
+    with db.transaction() as s:
+        assert s.get(IntegrationToken, "t_bad") is None
+
+
+def test_a_later_promotion_never_qualifies_a_replacement(db, mint):
+    # A legacy row from before provenance: replacement link and minter, no role at mint.
+    with db.transaction() as s:
+        _token(s, "t_legacy", "A", ["@live"], replaces_credential_id="t_live",
+               minted_by_user_id="owner")
+    _set_role(db, "owner", "gm")  # promoted after the mint
+    assert not _load(db, "t_legacy").is_recorded_replacement("t_live")
+    # An ordinary mint by a non-GM records no role, and promotion does not add one.
+    mint("t_plain", minted_by_user_id="editor")
+    assert _minted_as(db, "t_plain") is None
+
+
+def test_replacement_rows_are_checked_against_this_campaign_at_read(db):
+    with db.transaction() as s:  # forged rows that bypass insert_minted
+        _token(s, "t_cross", "A", ["@live"], replaces_credential_id="t_b",
+               minted_by_user_id="gm", minted_as="gm")
+        _token(s, "t_import", "A", ["@live"], replaces_credential_id="t_live")
     assert not _load(db, "t_cross").is_recorded_replacement("t_b")
-    assert not _load(db, "t_unminted").is_recorded_replacement("t_live")
+    assert not _load(db, "t_import").is_recorded_replacement("t_live")
     assert not _load(db, "gm").is_recorded_replacement("t_live")
-    assert not _load(db, "t_player").is_recorded_replacement("t_live")
-    assert _load(db, "t_admin").is_recorded_replacement("t_live")
-    assert not _load(db, "t_ghost").is_recorded_replacement("t_live")
+
+
+def test_a_revoked_replacement_is_not_a_valid_reader(db, mint):
+    mint("t_new", replaces_credential_id="t_live", minted_by_user_id="gm")
+    with db.transaction() as s:
+        s.get(IntegrationToken, "t_new").revoked_at = NOW
+    assert not _load(db, "t_new").is_recorded_replacement("t_live")
+
+
+@pytest.mark.parametrize("fields", [dict(minted_as="owner", minted_by_user_id="gm"),
+                                    dict(minted_as="gm")])
+def test_minted_as_constraint(db, fields):
+    from sqlalchemy.exc import IntegrityError
+
+    with pytest.raises(IntegrityError, match="minted_as_known"), db.transaction() as s:
+        _token(s, "t_check", "A", ["@live"], **fields)
+        s.flush()
 
 
 def test_token_revoked_reads_sql_in_this_campaign_only(db):
@@ -546,6 +650,81 @@ def _encounter(db, *, session_active):
         repo.insert("A", "e1", rules_profile="pf2e", content=CONTENT)
         repo.add_combatant("A", "e1", read_revision=1, combatant_id="k1", kind="pc",
                            character_id="c1")
+
+
+def _combat(db):
+    _encounter(db, session_active=True)
+    with db.transaction() as s:
+        repo = EncounterStateRepository(s)
+        repo.add_combatant("A", "e1", read_revision=2, combatant_id="k2", kind="pc",
+                           character_id="c2")
+        repo.add_combatant("A", "e1", read_revision=3, combatant_id="k3",
+                           kind="creature", creature_ref="goblin")
+
+
+def _locked_combatants(session):
+    """The combatant records exactly as the executor's lock manager registers them."""
+
+    locks = CommandLocks(session, "A", lock_stream=lambda session, campaign_id: None)
+    locks.stream()
+    locks.encounter("e1")
+    return locks
+
+
+def _declare(db, name):
+    """Run the checks for an actor-subject command on each combatant; the HTTP status."""
+
+    out = {}
+    for combatant in ("k1", "k2", "k3"):
+        with db.transaction() as session:
+            locks = _locked_combatants(session)
+            ctx = CheckContext(
+                session=session, locks=locks, principal=_who(name), campaign_id="A",
+                envelope={"subject": {"actor": combatant}, "payload": {}, "expected": [],
+                          "rules": {"profile": "pf2e"}},
+                authorizer=load(session, _who(name), "A"), project=lambda p, rows: {},
+                content_descriptor=CONTENT, pin=PIN, envelope_checked=True,
+                fence_passed=True, receipt_absent=True)
+            try:
+                CheckRunner(CheckSpec(type=T, subject=("actor", "combatant")),
+                            _Adapter()).run(ctx)
+                out[combatant] = 200
+            except CommandRefusal as refused:
+                out[combatant] = refused.http_status
+    return out
+
+
+@pytest.mark.parametrize("name, expected", [
+    ("owner", {"k1": 200, "k2": 403, "k3": 404}),   # own PC; another's PC; hidden NPC
+    ("editor", {"k1": 200, "k2": 403, "k3": 404}),
+    ("viewer", {"k1": 403, "k2": 403, "k3": 403}),  # check 4: no owner/editor role
+    ("party", {"k1": 403, "k2": 403, "k3": 403}),
+    ("gm", {"k1": 200, "k2": 200, "k3": 200}),
+    ("t_named", {"k1": 200, "k2": 200, "k3": 200}),
+])
+def test_actor_combatant_subject_through_the_real_lock_path(db, policy, name, expected):
+    _combat(db)
+    policy(roles=frozenset({"owner", "editor"}), token=True)
+    assert _declare(db, name) == expected
+
+
+def test_combatant_records_from_the_repository_carry_the_character(db):
+    _combat(db)
+    with db.transaction() as session:
+        records = _locked_combatants(session).records
+        assert records[("combatant", "k1")].payload["character_id"] == "c1"
+        assert records[("combatant", "k3")].payload["character_id"] is None
+        a = load(session, _who("owner"), "A")
+        assert a.visible(records[("combatant", "k2")])  # another player's PC is visible
+        assert not a.visible(records[("combatant", "k3")])
+
+
+def test_a_creature_is_hidden_from_players_whatever_its_payload_claims(db):
+    # No trusted reveal state exists yet (PE-30 owns it): a payload flag is not trusted.
+    forged = StateRecord("combatant", "k9", 1, None, None, None,
+                         {"kind": "creature", "revealed": True, "encounter_id": "e1"})
+    assert not _load(db, "owner").visible(forged)
+    assert _load(db, "gm").visible(forged) and _load(db, "t_live").visible(forged)
 
 
 def test_is_live_needs_an_active_session(db):

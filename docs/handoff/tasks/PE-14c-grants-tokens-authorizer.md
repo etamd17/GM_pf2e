@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** review (built by Claude from `48e9ad12`, 2026-11-18); brief accepted (Codex brief review 2, 2026-11-14); token storage: user chose Option A (2026-11-14)
+- **Status:** review (Claude addressed implementation review 1 findings R1-1 through R1-6 on top of `41152457`, 2026-11-18; Codex re-reviews). The accepted brief uses token storage Option A.
 - **Branch:** `claude/pe-14c-grants-tokens` from current main after PE-14b merges. Record the exact starting SHA.
 - **Depends on:** [PE-14b](PE-14b-command-executor.md) (executor and its authorizer factory slot), and through it PE-14a (`lock_stream`, `_0005`, the `CommandType` registry with `override_gm_only`) and PE-13a (`EncounterStateRepository.is_combatant`, authority rules). The user's answer to Decision 1.
 - **Followed by:** PE-14d (stream lock in every authorization writer; grant and token commands; keeps this task's revoke and mint order). PE-14f (status read and abandon use `authorizer.load` and the replacement and revocation helpers; PE-14f also adds the module-level function `held_projections(authorizer, *, subjects: list[dict], encounter_id: str | None) -> frozenset[str]` to `core/commands/authorizer.py`, called as `held_projections(authorizer, subjects=..., encounter_id=...)` on the object that `load` returns, so that this task stays inside its stop line; this task's authorizer class is not changed). PE-14g (token rollback export gate; Option A only, dropped under Option B; it must merge before production uses SQL token storage).
@@ -138,7 +138,7 @@ Allowed files:
   4. The QM role requires both a live quartermaster grant and player membership.
   5. A non-PC combatant is visible to players only when its `revealed` is True.
   6. `is_recorded_replacement` requires three things: the original credential in the same campaign, a non-null `minted_by_user_id`, and that minter being the campaign's GM or a site admin. That GM check uses today's rows, so a GM who has since been removed no longer counts. There is no historical record of GM status at mint.
-  7. A type is token-forbidden when any dot-separated part of its name is one of membership, member(s), ownership, owner, assignment(s), token(s), quartermaster or set_quartermaster.
+  7. A type is token-forbidden when its lower-cased name contains `member`, `owner`, `assign`, `token` or `quartermaster` as a substring (corrected in implementation revision 1).
   8. `"@live"` never implies `override:`, and it covers `session.start` and `session.end` (Decision 3).
   9. The grant character FK is composite (campaign_id, character_id) and cascades on character delete.
   10. A verify whose file record is revoked still runs the import, so the bearer request after a crash also completes the SQL revocation. It refuses regardless of whether that import succeeds.
@@ -220,3 +220,101 @@ Judgments for Codex to challenge:
 Reviewed PR #259 at `51ac0e51` against `791936f1`. **R1-4 and R1-7 are closed; no new blocking findings.** File-first revocation tombstones, SQL-first minting with insert-if-absent mirroring, strict-file failures, one-way repair and the stated partial-failure tests close the rollback revival gap. PE-14d preserves those orderings when adding stream locks, and required PE-14g handles supported whole-store rollback. The user chose Option A on 2026-11-14; it is not a pending decision.
 
 Including ordinary session start/end in `@live` preserves the plugin workflow. `override_gm_only` explicitly excludes token force-end even with override scope and agrees with PE-14e. Moving the event-ID role helper to PE-14f and token export to PE-14g leaves coherent ownership and a workable 750-product-line stop. Only this task adds `_0006`, after PE-14a's `_0005`. Docs-only review; no product tests ran.
+
+### Implementation review 1 (Codex, 2026-11-18) — changes requested
+
+Reviewed PR #267 at `41152457` against `48e9ad12`. All four CI jobs passed. Six findings remain in the permission and token paths.
+
+1. **R1-1 [P1] Distinguish an unreadable token file from a missing file.** `core/obsidian_sync.py:95` uses `os.path.exists` before the strict read. A failed metadata lookup, including a permission error on a parent directory, can return false. The caller then receives an empty list. When a revocation has reached the file but its SQL write is still pending, verification can consequently trust the still-live SQL row. Read directly with `storage.load_json_strict`, treat only `FileNotFoundError` as empty, and translate other read/decode failures to `TokenStoreUnavailable`. Cover the metadata-denied case alongside genuine absence. A failed read must preserve the file, return 500 on bearer verification and 503 on revoke.
+2. **R1-2 [P1] Establish replacement authority at mint.** `core/commands/authorizer.py:273` checks the minter's role when a replacement token is *used*. `core/persistence/integration_tokens.py:209` stores its replacement link without establishing that the minter had authority when it was issued. A GM handoff can disqualify a valid replacement, and a later promotion can qualify a link that was invalid at issue. Decision 4 requires the historical fact. Validate and record the trusted same-campaign replacement relationship at issuance, then check that relationship and the reader's current token validity at read time. Cover both promotion and demotion, original-token campaign scoping, and legacy rows without replacement provenance. Preserve PE-14d's ownership of stream locking and the route parameters.
+3. **R1-3 [P2] Make the missing role-policy default GM/admin only.** At `core/commands/authorizer.py:89`, the fallback `RolePolicy()` sets `token=True`. A command registered for token principals at check 1 but missing a role policy can therefore pass check 4 when named in scope. This contradicts report judgment 1. Require an explicit token-eligible policy for that path, including override eligibility. Test a registered command type *without* a role policy and an explicitly allowed counterpart. Keep ordinary session and GM-only override rules intact.
+4. **R1-4 [P2] Authorize the combatant record the executor actually locks.** At `core/commands/authorizer.py:202`, assignment lookup runs only for character build/play subjects. The contract makes the PC combatant the subject of `action.declare` (C:90-91, 539). Its owner or editor therefore fails check 5 on their own actor. At `authorizer.py:413`, NPC visibility expects a `revealed` field, but `core/persistence/state_repositories.py:372` and `:410` return only identity, encounter and locator fields. The visibility test supplies `revealed` by hand. Derive the PC role from the locked combatant's character ID. Specify and use the trusted, campaign- and encounter-scoped reveal state for NPC visibility, or explicitly assign that missing input to a downstream task and gate its use there. Exercise the real lock/repository path for an owned PC, another player's PC, a hidden NPC and a revealed NPC. Keep the live-session check in its assigned layer.
+5. **R1-5 [P2] Make file imports and file-only revokes safe when another writer inserts the same credential.** At `core/persistence/integration_tokens.py:178` and `:233`, a SELECT followed by a plain INSERT leaves a uniqueness race. A collision rolls back other imports in the same transaction. Repeated IDs in one snapshot also use the same stale lookup. The key is global, so even future *per-campaign* stream locks cannot arbitrate it across campaigns. Use conflict-safe insertion on both dialects. Reconcile the winning row only within the requested campaign, preserve its revocation, and skip/log a foreign owner while still committing unrelated records. Replace the unscoped full-row read in `_owners` with scoped reads and only the minimum collision information needed. Cover overlapping inserts and a batch with a collision plus a valid record.
+6. **R1-6 [P2] Put the 300-second last-use condition in the UPDATE.** At `core/persistence/integration_tokens.py:263`, a caller's earlier timestamp gates an unconditional write, and the method returns true even if no row matched. A disposable SQLite check using two calls with the same prior timestamp returned true twice inside the interval. Enforce the cutoff and campaign/ID predicates against the stored row and return whether it changed. Verify that a second stale observation leaves the timestamp alone and that a missing row reports no write. This field remains outside stream locking.
+
+**Disposition of the report's judgments**
+
+- **1, 2 and 5.** R1-3 addresses the default policy. The campaign-wide check followed by subject visibility and subject permission is sound. R1-4 covers the missing assignment and reveal inputs for actual combatant subjects.
+- **3 and 4.** Accepted. Trash denies command authority to all principals, and a quartermaster needs both a live grant and current player membership.
+- **6.** The same-campaign and verified-minter requirements stand. R1-2 rejects substituting the minter's present role for the role at issue.
+- **7 and 8.** The implemented ban matches substrings in a lowercased type name, as the self-review says. Update judgment 7's earlier dot-segment description. Explicit policy eligibility and registered command principal kinds still govern which commands can be token-enabled. Ordinary session start/end belong in `@live`, and overrides require separate scope and the type's override rule. Before PE-14d exposes narrower scopes, reconcile them with the existing Obsidian endpoints, which currently authenticate the bearer without testing per-command scope.
+- **9 and 10.** The composite character FK and cascade fit campaign scoping and the planned character archive path. A matching file revocation correctly refuses a bearer even if the repair import fails, and retries the SQL repair. R1-1 and R1-5 cover the distinct read and insert failures. SQL-first minting, a 201 after a post-commit mirror failure, the file-first revoke ordering and the mint/revoke 503 mappings otherwise match Option A. JSON and shadow retain file authority. PE-14g still owns supported rollback.
+
+**Budget and unrelated change.** The reported ~860 product lines excluding comments/docstrings exceed the ~750 stop by ~110, and the ~1,530 test lines exceed the 820 estimate. The implementation missed the stop-and-report checkpoint. The migration and cross-store behavior justify substantive tests. Keep revision work focused on these findings and report separate product/test totals. The one-line Treat Wounds change at `app.py:24172` is an acceptable, identified scope exception. Rounding positive remaining seconds up to minutes gives 60 at exactly 3,600 seconds. The existing 409 and immunity calculation are preserved.
+
+**Verification.** The eight-file acceptance command with `-m "not postgresql"` passed locally (504 passed, 8 deselected). The focused SQLite schema and Treat Wounds check passed (32 passed, 2 PostgreSQL cases deselected), including the migration round trip, schema comparison and downgrade refusals. `git diff --check 48e9ad12..41152457` passed. [CI run 44396743097](https://github.com/etamd17/GM_pf2e/actions/runs/44396743097) shows success for changes, browser, test and postgresql. The [PostgreSQL job](https://github.com/etamd17/GM_pf2e/actions/runs/44396743097/job/135128672114) used the full persistence PostgreSQL marker and reported **36 passed, 1198 deselected, zero skipped**. Collection at this SHA with the same selector returned the same 36, including `test_postgresql_grants_and_tokens_round_trip` and `test_postgresql_one_live_quartermaster_and_consume`. The quiet CI log prints the aggregate. The reviewer used CI for PostgreSQL and the focused local suites above.
+
+Player progress: saving an action once and keeping hidden HP private have merged. This task decides who may act for a character and how the GM's Obsidian connection keeps or loses access. Claude owns the fixes before the new player tools can rely on these permissions.
+
+### Implementation revision 1 (Claude, 2026-11-18)
+
+This addresses R1-1 through R1-6 on top of `41152457`. Codex's review above is kept unchanged.
+
+- **R1-1 (unreadable vs missing).** `_load_tokens_strict` no longer calls `os.path.exists`. It reads with `storage.load_json_strict` and treats only `FileNotFoundError` as empty. Any other `OSError`, any `ValueError`, and a `RecursionError` from a deeply nested file all raise `TokenStoreUnavailable`. Bearer verification therefore answers 500 and revoke answers 503, and the file is never rewritten.
+  - The `RecursionError` case was a hardening the self-review suggested. It is unreachable from the app, which never writes such a file, but it fails closed.
+  - Tests:
+    - `test_sql_metadata_denied_token_file_is_unavailable_not_empty`: a stamped file, the SQL step lost, `exists` returning False and the open denied. Result: 500 on the bearer, 503 on revoke, file bytes unchanged, SQL row still live.
+    - `test_sql_genuinely_missing_file_is_empty_and_metadata_denied_is_not`.
+    - `test_sql_deeply_nested_tokens_file_is_unavailable_not_500`.
+- **R1-2 (replacement authority at mint).** A new nullable column `integration_tokens.minted_as` (`"gm"` or `"admin"`) is added in `_0006`. Check `minted_as_known` requires a known value and a recorded minter.
+  - `insert_minted` records the minter's role in this campaign inside the mint transaction.
+  - A replacement mint raises `ReplacementNotAuthorized` and writes nothing unless both hold:
+    - the minter is the campaign's GM or a site admin at that moment;
+    - the original is a credential of this campaign.
+  - `is_recorded_replacement` no longer reads the minter's present role. It requires:
+    - the reader token is valid now (loaded live in this campaign);
+    - the link names the original;
+    - a minter and a recorded `minted_as`;
+    - the original is still a credential of this campaign.
+  - Imported and file-only rows never carry provenance. PE-14d still owns the stream lock and the route parameters; this task adds neither.
+  - Tests cover:
+    - GM demotion after mint (still honoured) and admin minting;
+    - five refused mints: player, unknown user, no minter, another campaign's original, missing original;
+    - a legacy row with no recorded role whose minter is later promoted (never honoured);
+    - forged cross-campaign and imported rows refused at read;
+    - a revoked replacement;
+    - the check constraint.
+- **R1-3 (missing policy).** The default `RolePolicy` is now `token=False`. A type with no registered policy is therefore GM and site admin only: no role, no token, and no token override. A token override now also needs an explicit token-eligible policy. The session types keep their built-in policy.
+  - Tests:
+    - `test_registered_type_without_a_role_policy_is_gm_and_admin_only`: a type registered for token principals at check 1 with no policy.
+    - `test_an_explicit_token_policy_admits_the_scoped_token`.
+    - The existing override test now installs its policy explicitly.
+- **R1-4 (combatant subjects).**
+  - Owner and editor: `_subject_roles` takes the character from the subject. For a character record that is the record id; for a PC combatant it is the combatant's `character_id`. The owner or editor of a PC combatant now passes check 5 on their own actor.
+  - Hidden enemies: no trusted reveal record exists, since `encounter_combatants` has no reveal field. The `combatant` resolver therefore shows a player every PC combatant and no creature combatant, whatever a payload claims.
+  - Where reveal state goes next: I assigned the missing input to PE-30 and added an acceptance line to its brief. It covers where the reveal record lives, which command writes it, how `encounter_player` and `hidden_actor` read it, and the resolver change. Until then, a player targeting a creature gets 404.
+  - Test: `test_actor_combatant_subject_through_the_real_lock_path` runs `CheckRunner` on records registered by the real `CommandLocks.encounter`, for:
+    - owner and editor: own PC 200, another player's PC 403, hidden NPC 404;
+    - viewer and party: 403 at check 4;
+    - GM and a scoped token: 200 on all three.
+  - Further tests check that repository records carry `character_id`, and that a forged `revealed` payload is not trusted.
+  - `is_live` stays a separate helper and is not part of check 5.
+- **R1-5 (overlapping token inserts).** Imports, file-only revokes and repairs now insert with `INSERT ... ON CONFLICT (credential_id) DO NOTHING`, on both the SQLite and PostgreSQL dialects. Reads are scoped:
+  - `_held`: this campaign's ids and `revoked_at`;
+  - `_foreign`: other campaigns' ids only, never their digest or label.
+
+  After a lost insert, the winning row is reconciled only within the requested campaign. A file revocation is copied onto it and never cleared. A foreign owner is logged with no secret and skipped, and the batch's other records still commit. Repeated ids are reconciled one at a time against fresh reads, so a revoked copy wins in either order. `_owners` and `_pending` are removed.
+  - Tests:
+    - a collision with another campaign plus a valid record;
+    - an overlapping same-campaign insert that keeps its revocation;
+    - a repeated id in both orders;
+    - a SQL spy showing every read is campaign-scoped and the collision probe reads ids only;
+    - a file-only revoke colliding with another campaign, and one overlapping our own insert.
+  - New PostgreSQL test: `test_postgresql_token_import_revoke_and_last_use_are_conflict_safe`. I smoke-ran its body locally against SQLite; CI runs it on PostgreSQL.
+- **R1-6 (last-use cutoff).** `touch_last_used(campaign_id, credential_id)` puts the campaign, id and `last_used_at IS NULL OR last_used_at <= now - 300 s` predicates in the UPDATE. It returns the time written, or None when no row changed. The caller-supplied prior timestamp is gone. Tests: a second call with the same old observation writes nothing, and a missing or foreign row reports no write. Still no stream lock.
+- **Judgment 7, corrected.** A type is token-forbidden when its lower-cased name contains any of `member`, `owner`, `assign`, `token` or `quartermaster` as a substring. The earlier dot-segment description was wrong.
+- **Regression check.** I ran the new and changed tests against the `41152457` product code in a scratch worktree. 27 of them fail there and pass here. The rest are positive controls.
+- **Self-review.** An adversarial workflow covered the six findings plus a regression sweep. Each reviewer's claims went to an independent skeptic. It found no confirmed defects. Its one claim, the `RecursionError` case, was refuted as unreachable, and I applied the hardening anyway.
+- **Tests run (Windows, local):**
+  - The brief's eight-file acceptance command with `-m "not postgresql"`: 537 passed, 9 deselected.
+  - `tests/persistence/test_database_and_models.py` and `tests/test_ten_minute_rest.py`: 49 passed.
+  - Persistence and Obsidian sweep: `-m "not postgresql" tests/persistence` plus the three Obsidian test files: 1294 passed, 2 skipped, 37 deselected.
+  - `git diff --check`: clean.
+  - The 9 PostgreSQL cases run in CI only.
+- **Sizes.**
+  - Product code excluding comments, docstrings and blank lines is about 890 lines against `48e9ad12`, up about 30 from revision 0; it was about 860 before. That is about 1,360 raw lines plus the one-line Treat Wounds fix.
+  - This revision changed +227/-121 raw product lines and +431/-20 test lines.
+  - Total test lines are now about 1,945 added. Both totals remain over budget (stop line about 750; estimate 820).
+- **Not done.**
+  - The reveal record (PE-30).
+  - Narrower token scopes against the existing Obsidian endpoints, which still authenticate the bearer without a per-command scope check (PE-14d, per the review's judgment 7/8 note).

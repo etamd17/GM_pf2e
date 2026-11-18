@@ -91,12 +91,15 @@ def _load_tokens_strict(campaign_id: str) -> dict:
     tombstone rewrite the file from an empty list.
     """
 
-    path = tokens_file(campaign_id)
-    if not os.path.exists(path):
-        return {"schema_version": SCHEMA_VERSION, "tokens": []}
     try:
-        doc = storage.load_json_strict(path)
-    except (OSError, ValueError):
+        doc = storage.load_json_strict(tokens_file(campaign_id))
+    except FileNotFoundError:
+        # Only a genuine absence is empty.  An existence probe is not used:
+        # ``os.path.exists`` also answers False when the lookup itself fails
+        # (a parent directory that cannot be searched), which would read an
+        # unreadable file as "no records" and trust a half-revoked token.
+        return {"schema_version": SCHEMA_VERSION, "tokens": []}
+    except (OSError, ValueError, RecursionError):
         raise TokenStoreUnavailable("token file unreadable") from None
     if not isinstance(doc, dict) or not isinstance(doc.get("tokens", []), list):
         raise TokenStoreUnavailable("token file malformed")
@@ -267,9 +270,9 @@ def _verify_token_sql(campaign_id: str, digest: str) -> dict | None:
             or not hmac.compare_digest(str(row["token_digest"]), digest)):
         return None
     try:
-        if integration_tokens.touch_last_used(campaign_id, row["credential_id"],
-                                              row["last_used_at"]):
-            row = dict(row, last_used_at=integration_tokens.parse_time(utc_now()))
+        touched = integration_tokens.touch_last_used(campaign_id, row["credential_id"])
+        if touched is not None:
+            row = dict(row, last_used_at=touched)
     except Exception:
         logger.warning("obsidian_token_last_used_failed campaign=%s", campaign_id)
     return integration_tokens.public_record(row)

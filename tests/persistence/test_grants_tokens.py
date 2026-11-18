@@ -419,3 +419,78 @@ def test_postgresql_one_live_quartermaster_and_consume(postgres_schema):
             grants.consume(session, unlock, "op-3")
     finally:
         database.dispose()
+
+
+@pytest.mark.postgresql
+def test_postgresql_token_import_revoke_and_last_use_are_conflict_safe(
+        postgres_schema, monkeypatch):
+    from datetime import timedelta
+
+    from core.persistence import CampaignMembership, integration_tokens
+
+    url, schema = postgres_schema
+    database = Database(url, engine_options={
+        "connect_args": {"options": f"-csearch_path={schema}"}})
+    try:
+        database.create_schema()
+        _seed(database, "A")
+        monkeypatch.setattr(runtime, "database", lambda: database)
+        with database.transaction() as session:
+            session.add(Campaign(id="B", slug="B", name="B", system="pf2e",
+                                 created_by_user_id="gm", created_at=NOW))
+            session.flush()
+            session.add(_token("held_b", campaign_id="B"))
+            session.add(_token("live_a", campaign_id="A"))
+            session.add(CampaignMembership(campaign_id="A", user_id="gm", role="gm"))
+
+        def record(cid, revoked=False):
+            return {"id": cid, "label": "file", "token_hash": DIGEST, "last_four": "abcd",
+                    "created_at": "2026-11-18T00:00:00Z", "last_used_at": None,
+                    "revoked_at": "2026-11-18T01:00:00Z" if revoked else None}
+
+        # The import's read misses both rows (another writer committed them just
+        # after it): the conflicts neither raise nor roll back the valid record.
+        real_held, real_foreign = integration_tokens._held, integration_tokens._foreign
+        calls = []
+
+        def stale_held(*args):
+            calls.append(1)
+            return {} if len(calls) == 1 else real_held(*args)
+
+        monkeypatch.setattr(integration_tokens, "_held", stale_held)
+        monkeypatch.setattr(integration_tokens, "_foreign", lambda *args: set())
+        written = integration_tokens.import_file_records(
+            "A", [record("held_b", revoked=True), record("live_a", revoked=True),
+                  record("new_a")])
+        monkeypatch.setattr(integration_tokens, "_held", real_held)
+        monkeypatch.setattr(integration_tokens, "_foreign", real_foreign)
+        assert written == 2
+        with database.transaction() as session:
+            held_b = session.get(IntegrationToken, "held_b")
+            assert held_b.campaign_id == "B" and held_b.revoked_at is None
+            assert session.get(IntegrationToken, "live_a").revoked_at is not None
+            assert session.get(IntegrationToken, "new_a").campaign_id == "A"
+
+        integration_tokens.revoke_row("A", "held_b", record("held_b", revoked=True))
+        with database.transaction() as session:
+            assert session.get(IntegrationToken, "held_b").revoked_at is None
+
+        assert integration_tokens.touch_last_used("A", "new_a") is not None
+        assert integration_tokens.touch_last_used("A", "new_a") is None
+        assert integration_tokens.touch_last_used("A", "held_b") is None
+        with database.transaction() as session:
+            session.get(IntegrationToken, "new_a").last_used_at = (
+                NOW.replace(year=2025) - timedelta(seconds=1))
+        assert integration_tokens.touch_last_used("A", "new_a") is not None
+
+        integration_tokens.insert_minted(
+            "A", {"id": "repl_a", "label": "x", "token_hash": DIGEST, "last_four": "abcd"},
+            replaces_credential_id="new_a", minted_by_user_id="gm")
+        with database.transaction() as session:
+            assert session.get(IntegrationToken, "repl_a").minted_as == "gm"
+        with pytest.raises(integration_tokens.ReplacementNotAuthorized):
+            integration_tokens.insert_minted(
+                "A", {"id": "repl_x", "label": "x", "token_hash": DIGEST, "last_four": "a"},
+                replaces_credential_id="held_b", minted_by_user_id="gm")
+    finally:
+        database.dispose()

@@ -12,8 +12,8 @@ authorized.  This module imports neither ``core.obsidian_sync`` nor
 
 Which non-GM roles may send a command type is a per-type :class:`RolePolicy`,
 registered by the module that owns the type (:func:`register_role_policy`).
-A type with no policy is GM-only, and a token reaches it only by naming it in
-its scope.  ``session.start`` and ``session.end`` carry the built-in session
+A type with no policy is GM and site-admin only: no player role and no
+token, whatever the token's scope, and no token override.  ``session.start`` and ``session.end`` carry the built-in session
 rule (Decision 3).  Visibility for check 5 dispatches on ``record.kind``
 through :func:`register_visibility`; an unregistered kind is not visible.
 """
@@ -26,6 +26,7 @@ from typing import Any, Callable, Mapping
 from sqlalchemy import select
 
 from core.persistence.models import (
+    MINTED_AS,
     Campaign,
     CampaignGrant,
     CampaignMembership,
@@ -86,7 +87,8 @@ class RolePolicy:
 
 _SESSION_POLICY = RolePolicy(roles=frozenset(), live=True, token=True)
 _POLICIES: dict[str, RolePolicy] = {t: _SESSION_POLICY for t in SESSION_TYPES}
-_DEFAULT_POLICY = RolePolicy()
+# No registered policy: GM and site admin only (no roles, no token, no token override).
+_DEFAULT_POLICY = RolePolicy(token=False)
 
 Resolver = Callable[["CommandAuthorizer", StateRecord], bool]
 _RESOLVERS: dict[str, Resolver] = {}
@@ -207,8 +209,9 @@ class CommandAuthorizer:
         if not self._is_player:
             return frozenset()
         roles = {"member"}
-        if subject.kind in (KIND_BUILD, KIND_PLAY):
-            roles.add(self._assignments.get(subject.id, "party"))
+        character_id = _subject_character(subject)
+        if character_id is not None:
+            roles.add(self._assignments.get(character_id, "party"))
         if self._is_qm:
             roles.add("qm")
         return frozenset(roles)
@@ -237,6 +240,7 @@ class CommandAuthorizer:
         if self._is_token:
             command_type = registry.get(type)
             return (command_type is not None and command_type.override_gm_only is False
+                    and type in _POLICIES and _POLICIES[type].token
                     and not token_forbidden(type)
                     and OVERRIDE_PREFIX + type in self._scope)
         return self._is_gm
@@ -266,33 +270,29 @@ class CommandAuthorizer:
             self._campaign_id, character_id)
 
     def is_recorded_replacement(self, original_credential_id: str) -> bool:
-        """This token replaces ``original`` in the same campaign and was minted by its GM."""
+        """This valid token is the recorded replacement of ``original`` (Decision 4).
+
+        The relationship is fixed at mint: ``integration_tokens.insert_minted``
+        refuses a replacement unless the minter was this campaign's GM or a
+        site admin at that moment and the original is a credential of this
+        campaign, and records the minter's role then (``minted_as``).  This
+        reads that historical record and never the minter's present role, so
+        a later demotion keeps a valid replacement and a later promotion does
+        not qualify one.  A row with no recorded minter role (legacy, imported
+        or file-only) is never a replacement.  The original must still be a
+        credential of this campaign.
+        """
 
         token = self._token
         if (not self._is_token or token is None or not isinstance(original_credential_id, str)
                 or token["replaces_credential_id"] != original_credential_id
-                or token["minted_by_user_id"] is None):
+                or token["minted_by_user_id"] is None
+                or token["minted_as"] not in MINTED_AS):
             return False
         t = IntegrationToken.__table__
-        found = self._session.execute(select(t.c.credential_id).where(
+        return self._session.execute(select(t.c.credential_id).where(
             t.c.credential_id == original_credential_id,
-            t.c.campaign_id == self._campaign_id)).first()
-        if found is None:
-            return False
-        # The minter must be this campaign's GM or a site admin.  The rows read
-        # are today's, so a GM who has since been removed no longer counts.
-        minter = token["minted_by_user_id"]
-        users, members = User.__table__, CampaignMembership.__table__
-        admin = self._session.execute(select(users.c.is_admin).where(
-            users.c.id == minter)).first()
-        if admin is None:
-            return False
-        if admin[0] is True:
-            return True
-        role = self._session.execute(select(members.c.role).where(
-            members.c.campaign_id == self._campaign_id,
-            members.c.user_id == minter)).first()
-        return role is not None and role[0] == "gm"
+            t.c.campaign_id == self._campaign_id)).first() is not None
 
     def token_revoked(self, credential_id: str) -> bool:
         """SQL ``revoked_at`` only (C:266, C:275), within this campaign."""
@@ -301,6 +301,17 @@ class CommandAuthorizer:
         revoked = self._session.execute(select(t.c.revoked_at).where(
             t.c.credential_id == credential_id, t.c.campaign_id == self._campaign_id)).first()
         return revoked is not None and revoked[0] is not None
+
+
+def _subject_character(subject: StateRecord) -> str | None:
+    """The character a subject belongs to: a character record, or a PC combatant's character."""
+
+    if subject.kind in (KIND_BUILD, KIND_PLAY):
+        return subject.id
+    if subject.kind == KIND_COMBATANT and subject.payload.get("kind") == "pc":
+        character_id = subject.payload.get("character_id")
+        return character_id if isinstance(character_id, str) and character_id else None
+    return None
 
 
 def _first(session: Any, statement: Any) -> dict[str, Any] | None:
@@ -409,9 +420,12 @@ def _encounter(a: CommandAuthorizer, record: StateRecord) -> bool:
 def _combatant(a: CommandAuthorizer, record: StateRecord) -> bool:
     if _staff(a):
         return True
-    # A player sees PCs, and another combatant only once revealed (``encounter_player``).
-    return a._is_player and (record.payload.get("kind") == "pc"
-                             or record.payload.get("revealed") is True)
+    # A player sees every PC combatant (``encounter_player``).  A creature is
+    # shown only once revealed, and no trusted reveal state exists yet: the
+    # combatant rows carry none, and a payload key is not trusted.  So every
+    # creature combatant is hidden from players until PE-30 specifies a
+    # campaign- and encounter-scoped reveal record and this resolver reads it.
+    return a._is_player and record.payload.get("kind") == "pc"
 
 
 def _clock(a: CommandAuthorizer, record: StateRecord) -> bool:

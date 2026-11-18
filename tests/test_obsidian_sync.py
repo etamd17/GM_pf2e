@@ -495,7 +495,7 @@ import uuid as _uuid
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select, update
+from sqlalchemy import event, select, update
 from sqlalchemy.pool import StaticPool
 
 from core.persistence import Campaign, Database, IntegrationToken, User, runtime
@@ -981,3 +981,170 @@ def test_lock_order_import_revoke_mint_and_repair(sql_sync):
     obsidian_sync.list_tokens(CID)
     assert spy.events[:2] == ["begin", "end"] and spy.events[2:4] == ["lock", "unlock"]
     assert spy.violations == []
+
+
+# --------------------------------------------------------------------------
+# Implementation review 1: R1-1 (unreadable vs missing), R1-5 (insert races),
+# R1-6 (the last-use cutoff lives in the UPDATE)
+
+
+def _metadata_denied(env):
+    """A token file whose lookup fails: ``exists`` answers False, the open is denied."""
+
+    def denied(path):
+        raise PermissionError(13, "Permission denied", path)
+
+    env.monkeypatch.setattr(obsidian_sync.os.path, "exists", lambda path: False)
+    env.monkeypatch.setattr(storage, "load_json_strict", denied)
+
+
+def test_sql_metadata_denied_token_file_is_unavailable_not_empty(sql_sync):
+    raw, token_id = _minted(sql_sync)
+    with sql_sync.monkeypatch.context() as patch:  # file stamped, SQL step lost
+        patch.setattr(integration_tokens, "revoke_row", _boom)
+        assert _revoke(sql_sync, token_id) == 503
+    assert _row(sql_sync, token_id)["revoked_at"] is None
+    before = _file()
+    _metadata_denied(sql_sync)
+    # The SQL row is still live; reading the file as empty would accept it.
+    assert _state(sql_sync, raw) == 500
+    assert _revoke(sql_sync, token_id) == 503
+    assert _file() == before
+    assert _row(sql_sync, token_id)["revoked_at"] is None
+
+
+def test_sql_genuinely_missing_file_is_empty_and_metadata_denied_is_not(sql_sync):
+    raw, _token_id = _minted(sql_sync)
+    os.remove(obsidian_sync.tokens_file(CID))
+    assert _state(sql_sync, raw) == 200  # absence: SQL decides
+    _metadata_denied(sql_sync)
+    assert _state(sql_sync, raw) == 500
+    with pytest.raises(obsidian_sync.TokenStoreUnavailable):
+        obsidian_sync._load_tokens_strict(CID)
+
+
+def _file_record(token_id, *, revoked=False, digest=None):
+    return {"id": token_id, "label": "file", "token_hash": digest or _uuid.uuid4().hex * 2,
+            "last_four": "abcd", "created_at": "2026-11-18T00:00:00Z", "last_used_at": None,
+            "revoked_at": "2026-11-18T01:00:00Z" if revoked else None}
+
+
+def _first_call_misses(env, name, empty):
+    """Make the first call of ``name`` miss a row another writer commits just after it."""
+
+    real = getattr(integration_tokens, name)
+    calls = []
+
+    def stale(*args, **kwargs):
+        calls.append(1)
+        return empty() if len(calls) == 1 else real(*args, **kwargs)
+
+    env.monkeypatch.setattr(integration_tokens, name, stale)
+
+
+def test_import_collision_with_another_campaign_commits_the_other_records(sql_sync, caplog):
+    _raw_b, record_b = obsidian_sync.create_token(OTHER, "other")
+    row_b = _row(sql_sync, record_b["id"])
+    _first_call_misses(sql_sync, "_foreign", set)
+    batch = [_file_record(record_b["id"], revoked=True), _file_record("fresh1")]
+    with caplog.at_level(logging.WARNING):
+        assert integration_tokens.import_file_records(CID, batch) == 1
+    assert _row(sql_sync, record_b["id"]) == row_b  # never moved or revoked
+    assert _row(sql_sync, "fresh1")["campaign_id"] == CID
+    assert any(r.getMessage() == f"obsidian_token_import_conflict campaign={CID}"
+               for r in caplog.records)
+
+
+def test_import_overlapping_same_campaign_insert_keeps_its_revocation(sql_sync):
+    _raw, token_id = _minted(sql_sync)
+    _first_call_misses(sql_sync, "_held", dict)
+    # Another writer inserted the live row after this import read; the insert
+    # loses, and the file's revocation is still copied onto the winning row.
+    batch = [_file_record(token_id, revoked=True), _file_record("fresh2")]
+    assert integration_tokens.import_file_records(CID, batch) == 2
+    assert _row(sql_sync, token_id)["revoked_at"] is not None
+    assert _row(sql_sync, "fresh2")["revoked_at"] is None
+
+
+@pytest.mark.parametrize("order", [(False, True), (True, False)])
+def test_import_repeated_id_in_one_snapshot_ends_revoked(sql_sync, order):
+    digest = _uuid.uuid4().hex * 2
+    batch = [_file_record("twice", revoked=r, digest=digest) for r in order]
+    integration_tokens.import_file_records(CID, batch)
+    assert _row(sql_sync, "twice")["revoked_at"] is not None
+
+
+def test_import_reads_are_scoped_and_read_only_ids_of_other_campaigns(sql_sync):
+    _raw_b, record_b = obsidian_sync.create_token(OTHER, "other")
+    seen = []
+
+    def record(conn, cursor, statement, parameters, context, executemany):
+        if statement.lstrip().upper().startswith("SELECT") and "integration_tokens" in statement:
+            seen.append(statement)
+
+    engine = sql_sync.db.engine
+    event.listen(engine, "before_cursor_execute", record)
+    try:
+        integration_tokens.import_file_records(CID, [_file_record(record_b["id"])])
+    finally:
+        event.remove(engine, "before_cursor_execute", record)
+    assert seen
+    for statement in seen:
+        columns, where = statement.split("FROM", 1)[0], statement.split("WHERE", 1)[1]
+        assert "campaign_id" in where
+        if "!=" in where or "<>" in where:  # the collision probe: ids only
+            assert "token_digest" not in columns and "label" not in columns
+
+
+def test_file_only_revoke_collides_with_another_campaign_without_error(sql_sync, caplog):
+    _raw_b, record_b = obsidian_sync.create_token(OTHER, "other")
+    row_b = _row(sql_sync, record_b["id"])
+    with caplog.at_level(logging.WARNING):
+        integration_tokens.revoke_row(CID, record_b["id"],
+                                      _file_record(record_b["id"], revoked=True))
+    assert _row(sql_sync, record_b["id"]) == row_b
+    assert any("obsidian_token_import_conflict" in r.getMessage() for r in caplog.records)
+
+
+def test_file_only_revoke_overlapping_insert_revokes_the_winning_row(sql_sync):
+    _raw, token_id = _minted(sql_sync)
+    # Both of revoke_row's reads miss the row; its conflict-safe insert loses
+    # to it and the reconcile revokes it instead of raising.
+    _first_call_misses(sql_sync, "_revoke_live", bool)
+    _first_call_misses(sql_sync, "_held", dict)
+    integration_tokens.revoke_row(CID, token_id, _file_record(token_id, revoked=True))
+    assert _row(sql_sync, token_id)["revoked_at"] is not None
+
+
+def test_last_used_cutoff_is_enforced_against_the_stored_row(sql_sync):
+    _raw, token_id = _minted(sql_sync)
+    first = integration_tokens.touch_last_used(CID, token_id)
+    assert first is not None
+    # A second request that observed the same old value must not write again.
+    assert integration_tokens.touch_last_used(CID, token_id) is None
+    stored = _row(sql_sync, token_id)["last_used_at"]
+    assert stored.replace(tzinfo=timezone.utc) == first
+    with sql_sync.db.session() as session:
+        session.execute(update(IntegrationToken).where(
+            IntegrationToken.credential_id == token_id).values(
+            last_used_at=datetime.now(timezone.utc) - timedelta(seconds=301)))
+        session.commit()
+    assert integration_tokens.touch_last_used(CID, token_id) is not None
+    assert integration_tokens.touch_last_used(CID, token_id) is None
+
+
+def test_last_used_reports_no_write_for_a_missing_or_foreign_row(sql_sync):
+    _raw_b, record_b = obsidian_sync.create_token(OTHER, "other")
+    assert integration_tokens.touch_last_used(CID, "missing") is None
+    assert integration_tokens.touch_last_used(CID, record_b["id"]) is None
+    assert _row(sql_sync, record_b["id"])["last_used_at"] is None
+
+
+def test_sql_deeply_nested_tokens_file_is_unavailable_not_500(sql_sync):
+    raw, token_id = _minted(sql_sync)
+    content = b"[" * 200000 + b"]" * 200000  # json.load raises RecursionError
+    with open(obsidian_sync.tokens_file(CID), "wb") as handle:
+        handle.write(content)
+    assert _revoke(sql_sync, token_id) == 503
+    assert _file() == content
+    assert _state(sql_sync, raw) == 500

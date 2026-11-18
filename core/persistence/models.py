@@ -1044,6 +1044,9 @@ class CampaignGrant(Base):
     )
 
 
+MINTED_AS = frozenset({"gm", "admin"})
+
+
 class IntegrationToken(Base):
     """An Obsidian integration token record; SQL is its store in ``sql`` mode (PE-14c D1)."""
 
@@ -1062,6 +1065,9 @@ class IntegrationToken(Base):
     )
     replaces_credential_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     minted_by_user_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # The minter's campaign role at mint ("gm" or "admin"), recorded once by
+    # ``insert_minted``; the replacement check reads this, never today's role.
+    minted_as: Mapped[str | None] = mapped_column(String(8), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
     )
@@ -1070,6 +1076,11 @@ class IntegrationToken(Base):
 
     __table_args__ = (
         CheckConstraint("length(token_digest) = 64", name="token_digest_length"),
+        CheckConstraint(
+            "minted_as IS NULL OR (minted_as IN ('gm', 'admin') "
+            "AND minted_by_user_id IS NOT NULL)",
+            name="minted_as_known",
+        ),
         Index("ix_integration_tokens_campaign_id", "campaign_id"),
         Index("ix_integration_tokens_token_digest", "token_digest"),
     )
