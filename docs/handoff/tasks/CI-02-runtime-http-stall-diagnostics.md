@@ -33,8 +33,22 @@
   - the real file while a full persistence suite ran alongside: 10 passed, slowest case 13.7 s, and that full suite gave 903 passed, 2 skipped, 29 deselected in 338 s.
 - **Change** (`tests/persistence/test_runtime_http.py`, `run_sql` only):
   - The child starts with `faulthandler.dump_traceback_later(CHILD_LIMIT, exit=True)`, with `CHILD_LIMIT = 110`. A child that hangs now dumps every thread's stack to stderr and exits before the parent's limit. The existing `assert result.returncode == 0, stdout + stderr` then shows where it was stuck, instead of a bare `TimeoutExpired` with no output.
-  - The parent's limit is `CHILD_LIMIT + 30` (140 s, was 120 s) so the dump always arrives first. The point at which a hang fails is earlier than before (110 s), so no real hang is hidden.
+  - The parent's limit is `CHILD_LIMIT + 30` (140 s, was 120 s), giving the child's diagnostic exit 30 s of intended headroom. The parent remains a hard fallback if the child cannot arm or run its watchdog. Once armed and able to run, the watchdog fails a hang earlier than before (110 s), so no real hang is hidden.
 - **Skipped / not verified:**
   - The stall itself was never caught with the new dump, so the root cause is still open.
   - Linux CI has never shown the stall.
 - **Follow-up:** the next time this test fails, read the thread dump in the assertion message. It names the blocking call. Fix that then.
+
+## Review
+
+### Implementation review 1 (Codex, 2026-11-18)
+
+**Accepted at `e4587faa` with no blocking findings.** This is a diagnostic improvement; the intermittent stall remains unexplained.
+
+- The watchdog is armed before schema creation, application imports and the test body. `exit=True` produces a nonzero exit, and the unchanged return-code assertion includes both captured output streams. There is no retry, skip or conversion of a failure into success. The 140 s parent timeout remains a fallback.
+- A disposable probe of the actual `run_sql` helper, with only the watchdog interval shortened to one second, injected a blocked main thread and a blocked worker before the application import. Both thread stacks reached the assertion and the child exited with code 1. An injected ordinary exception also failed with its original message. Probe: `../output/ci02-review/timeout_probe.py` (review artifact outside the branch).
+- Reviewer rerun: `python -m pytest -q tests/persistence/test_runtime_http.py` -> **10 passed in 122.59 s**. `git diff --check 3d5e13b8..e4587faa` is clean. The report supplies the three full Windows persistence runs required by the brief; the reviewer did not repeat those broad runs for this helper-only change.
+- GitHub Actions run **44153449911** on the reviewed head completed successfully in all four jobs: `changes`, `test`, `postgresql` and `browser`. The review-note commit must also pass all four before merge under protocol step 6.
+- Non-blocking wording correction applied above: the extra 30 s is intended diagnostic headroom, not a guarantee during process suspension or before the watchdog is armed.
+
+For players: nothing visible changes. This makes an intermittent test failure easier to diagnose while the shared foundations for reliable character actions are being built. PE-14b remains the next pending implementation re-review.
