@@ -24169,7 +24169,7 @@ def pc_treat_wounds(pc_name):
             "success": False,
             "error": "immune to Treat Wounds",
             "needs_override": True,
-            "remaining_minutes": max(1, int((immune_until - now) // 60) + 1),
+            "remaining_minutes": max(1, math.ceil((immune_until - now) / 60)),
         }), 409
     d20 = _activity_d20(data.get('d20'))
     total = d20 + mod

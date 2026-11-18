@@ -26,14 +26,13 @@ from core.persistence import (
     CommandReceipt,
     GameEvent,
     User,
-    runtime,
     streams,
 )
 from core.persistence.streams import StreamLockError
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 NOW = datetime(2026, 11, 15, 12, 0, tzinfo=timezone.utc)
-HEAD = "20261115_0005"
+PE14A = "20261115_0005"  # this module's own revision (PE-14c moved the head on)
 PE10 = "20261111_0004"
 DIGEST = "d" * 64
 
@@ -407,16 +406,15 @@ _EVENT_SQL = ("INSERT INTO game_events (event_id, campaign_id, seq, stream_epoch
 def test_migration_adds_exactly_three_tables_and_round_trips(sqlite_url):
     _alembic(sqlite_url, "upgrade", PE10)
     before = _tables(sqlite_url)
-    _alembic(sqlite_url, "upgrade", "head")
+    _alembic(sqlite_url, "upgrade", PE14A)
     assert _tables(sqlite_url) - before == {"campaign_streams", "command_receipts",
                                             "game_events"}
-    assert before <= _tables(sqlite_url) and _version(sqlite_url) == HEAD
-    _alembic(sqlite_url, "check")
+    assert before <= _tables(sqlite_url) and _version(sqlite_url) == PE14A
     _execute(sqlite_url, "INSERT INTO campaign_streams (campaign_id, last_seq) VALUES ('c1', 0)")
     _alembic(sqlite_url, "downgrade", PE10)  # an empty stream row is only a counter
     assert _tables(sqlite_url) == before and _version(sqlite_url) == PE10
-    _alembic(sqlite_url, "upgrade", "head")
-    assert _version(sqlite_url) == HEAD
+    _alembic(sqlite_url, "upgrade", PE14A)
+    assert _version(sqlite_url) == PE14A
 
 
 @pytest.mark.parametrize("statement, refusal", [
@@ -430,18 +428,18 @@ def test_migration_adds_exactly_three_tables_and_round_trips(sqlite_url):
      " VALUES ('c1', 'exporting', 2, '2026-11-15')", "campaign state authority is not file for c1 (exporting)"),
 ])
 def test_populated_downgrade_is_refused(sqlite_url, statement, refusal):
-    _alembic(sqlite_url, "upgrade", "head")
+    _alembic(sqlite_url, "upgrade", PE14A)
     _execute(sqlite_url, statement)
     completed = _alembic(sqlite_url, "downgrade", PE10, check=False)
     assert completed.returncode != 0
     errors = [line for line in completed.stderr.splitlines() if line.startswith("RuntimeError: ")]
     assert errors and "downgrade refused: " + refusal in errors[-1], completed.stderr
-    assert _version(sqlite_url) == HEAD
+    assert _version(sqlite_url) == PE14A
     assert {"command_receipts", "game_events", "campaign_streams"} <= _tables(sqlite_url)
 
 
 def test_downgrade_allows_file_authority(sqlite_url):
-    _alembic(sqlite_url, "upgrade", "head")
+    _alembic(sqlite_url, "upgrade", PE14A)
     _execute(sqlite_url, "INSERT INTO campaign_state_authority (campaign_id, authority,"
                          " stream_epoch, changed_at) VALUES ('c1', 'file', 2, '2026-11-15')")
     _alembic(sqlite_url, "downgrade", PE10)
@@ -449,12 +447,6 @@ def test_downgrade_allows_file_authority(sqlite_url):
 
 
 def test_offline_downgrade_is_refused(sqlite_url):
-    completed = _alembic(sqlite_url, "downgrade", f"{HEAD}:{PE10}", "--sql", check=False)
+    completed = _alembic(sqlite_url, "downgrade", f"{PE14A}:{PE10}", "--sql", check=False)
     assert completed.returncode != 0
     assert "requires an online check for receipts and events" in completed.stderr
-
-
-def test_runtime_readiness_pin_is_this_revision_and_the_single_head():
-    completed = _alembic("sqlite+pysqlite:///:memory:", "heads")
-    heads = [line.split()[0] for line in completed.stdout.splitlines() if line.strip()]
-    assert heads == [runtime._REQUIRED_REVISION] == [HEAD]

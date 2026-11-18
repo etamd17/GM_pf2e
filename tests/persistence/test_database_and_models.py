@@ -135,6 +135,7 @@ def test_schema_exposes_the_approved_additive_tables():
     assert set(Base.metadata.tables) == {
         "audit_events",
         "campaign_clocks",
+        "campaign_grants",
         "campaign_memberships",
         "campaign_sessions",
         "campaign_streams",
@@ -149,6 +150,7 @@ def test_schema_exposes_the_approved_additive_tables():
         "encounter_combatants",
         "encounter_states",
         "game_events",
+        "integration_tokens",
         "invite_redemptions",
         "invites",
         "migration_runs",

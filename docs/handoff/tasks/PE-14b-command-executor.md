@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** accepted (Codex implementation review 3, 2026-11-18, at `098462a3`; commit review notes and verify resulting-head CI before merge)
+- **Status:** done (accepted by Codex review 3 at `098462a3`; merged in PR #264 as `48e9ad12` after all four checks passed on `b6368b0e`, 2026-11-18)
 - **Branch:** `claude/pe-14b-command-executor` from current main after PE-13b and PE-14a merge. Record the exact starting SHA.
 - **Depends on:** [PE-13b](PE-13b-check-order-conflicts.md) (check runner for checks 4-9, `CheckContext` with every field this task uses, `CommandRefusal`, `Authorizer` protocol, conflict body), [PE-14a](PE-14a-streams-receipts-events-schema.md) (tables, `check_envelope`, `CheckedEnvelope`, `EnvelopeRefusal`, digest, registry, `streams.lock_stream`/`allocate`), and through them [PE-13a](PE-13a-state-repositories.md) (`CommandLocks(session, campaign_id, *, lock_stream)` with `stream_row`, `records` and `register_serialized`, repositories, `StateRowMissing`, `ProfileMismatch`, `LockOrderError`, `PinUnavailable`, `UnknownSchemaVersion`). PE-13c is not needed: its exceptions are answered by attribute, never imported (Decision 4).
 - **Followed by:** PE-14c (real authorizer, `override_allowed`, grant and token records), then PE-14d; PE-14e and PE-14f both follow PE-14d. PE-14e calls `ctx.bind_started_session` (Decision 13); PE-14f owns the event-ID filter for its status read (Decision 9).

@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import logging
 import os
 import secrets
 import threading
@@ -17,6 +18,8 @@ import time
 import uuid
 
 from core import storage
+
+logger = logging.getLogger(__name__)
 
 
 SCHEMA_VERSION = 2
@@ -69,6 +72,46 @@ def _load_tokens(campaign_id: str) -> dict:
     return doc
 
 
+class TokenStoreUnavailable(RuntimeError):
+    """A token store could not be read or written safely (routes answer 503)."""
+
+
+def _sql_tokens() -> bool:
+    """SQL is the token store only with ``OWNERSHIP_BACKEND=sql`` (PE-14c Decision 1)."""
+
+    from core.persistence import runtime
+    return runtime.sql_enabled()
+
+
+def _load_tokens_strict(campaign_id: str) -> dict:
+    """SQL mode's file read: a missing file is empty; anything unreadable raises.
+
+    ``_load_tokens`` turns an unreadable or malformed file into "no records",
+    which in SQL mode would let a partly revoked token pass and let a repair or
+    tombstone rewrite the file from an empty list.
+    """
+
+    path = tokens_file(campaign_id)
+    if not os.path.exists(path):
+        return {"schema_version": SCHEMA_VERSION, "tokens": []}
+    try:
+        doc = storage.load_json_strict(path)
+    except (OSError, ValueError):
+        raise TokenStoreUnavailable("token file unreadable") from None
+    if not isinstance(doc, dict) or not isinstance(doc.get("tokens", []), list):
+        raise TokenStoreUnavailable("token file malformed")
+    doc.setdefault("schema_version", SCHEMA_VERSION)
+    doc.setdefault("tokens", [])
+    return doc
+
+
+def _write_tokens(campaign_id: str, doc: dict) -> None:
+    try:
+        storage.atomic_write_json(tokens_file(campaign_id), doc)
+    except OSError:
+        raise TokenStoreUnavailable("token file write failed") from None
+
+
 def create_token(campaign_id: str, label: str = "Obsidian") -> tuple[str, dict]:
     """Create a campaign-scoped bearer token and return it once.
 
@@ -87,10 +130,37 @@ def create_token(campaign_id: str, label: str = "Obsidian") -> tuple[str, dict]:
         "last_used_at": None,
         "revoked_at": None,
     }
+    if _sql_tokens():
+        return _create_token_sql(campaign_id, raw_token, record)
     with campaign_lock(campaign_id):
         doc = _load_tokens(campaign_id)
         doc["tokens"].append(record)
         storage.atomic_write_json(tokens_file(campaign_id), doc)
+    return raw_token, public_token_record(record)
+
+
+def _create_token_sql(campaign_id: str, raw_token: str, record: dict) -> tuple[str, dict]:
+    """Commit the SQL row first, then copy it to the file, insert-if-absent.
+
+    A SQL failure returns no token and writes no file.  A failed file copy
+    still returns the token (SQL is authoritative); the GM token page repairs
+    the copy (``repair_token_mirror``).
+    """
+
+    from core.persistence import integration_tokens
+    try:
+        integration_tokens.insert_minted(campaign_id, record)
+    except Exception:
+        raise TokenStoreUnavailable("token database unavailable") from None
+    try:
+        with campaign_lock(campaign_id):
+            doc = _load_tokens_strict(campaign_id)
+            if not any(isinstance(r, dict) and r.get("id") == record["id"]
+                       for r in doc["tokens"]):
+                doc["tokens"].append(dict(record))
+                _write_tokens(campaign_id, doc)
+    except Exception:
+        logger.warning("obsidian_token_mirror_failed campaign=%s", campaign_id)
     return raw_token, public_token_record(record)
 
 
@@ -101,14 +171,43 @@ def public_token_record(record: dict) -> dict:
 
 
 def list_tokens(campaign_id: str) -> list[dict]:
+    if _sql_tokens():
+        return _list_tokens_sql(campaign_id)
     with campaign_lock(campaign_id):
         return [public_token_record(r) for r in _load_tokens(campaign_id)["tokens"]]
+
+
+def _list_tokens_sql(campaign_id: str) -> list[dict]:
+    """The GM page: repair the file copy, then list SQL rows plus unimported file rows."""
+
+    from core.persistence import integration_tokens
+    try:
+        integration_tokens.repair_token_mirror(campaign_id)
+    except Exception:
+        logger.warning("obsidian_token_repair_failed campaign=%s", campaign_id)
+    try:
+        rows = integration_tokens.list_rows(campaign_id)
+    except Exception:
+        raise TokenStoreUnavailable("token database unavailable") from None
+    listed = [integration_tokens.public_record(row) for row in rows]
+    known = {row["credential_id"] for row in rows}
+    try:
+        with campaign_lock(campaign_id):
+            records = _load_tokens_strict(campaign_id)["tokens"]
+    except TokenStoreUnavailable:
+        records = []
+    listed.extend(public_token_record(r) for r in records
+                  if isinstance(r, dict) and isinstance(r.get("id"), str)
+                  and r["id"] not in known)
+    return listed
 
 
 def verify_token(campaign_id: str, raw_token: str) -> dict | None:
     if not isinstance(raw_token, str) or not raw_token.startswith(TOKEN_PREFIX + "_"):
         return None
     digest = _token_digest(raw_token)
+    if _sql_tokens():
+        return _verify_token_sql(campaign_id, digest)
     with campaign_lock(campaign_id):
         doc = _load_tokens(campaign_id)
         matched = None
@@ -136,7 +235,49 @@ def verify_token(campaign_id: str, raw_token: str) -> dict | None:
         return public_token_record(matched)
 
 
+def _verify_token_sql(campaign_id: str, digest: str) -> dict | None:
+    """The bearer check in SQL mode (Decision 1).
+
+    The file read decides first: a file record with this digest and a
+    ``revoked_at`` refuses the token whatever the import does.  An
+    unreadable file raises ``TokenStoreUnavailable`` (answered as 500), never
+    "not revoked".  A failing import is logged and the SQL check still runs.
+    """
+
+    from core.persistence import integration_tokens
+    with campaign_lock(campaign_id):
+        records = [dict(r) for r in _load_tokens_strict(campaign_id)["tokens"]
+                   if isinstance(r, dict)]
+    file_revoked = any(
+        record.get("revoked_at")
+        and hmac.compare_digest(str(record.get("token_hash", "")), digest)
+        for record in records)
+    try:
+        # Also completes a revoke whose SQL step never ran.
+        integration_tokens.import_file_records(campaign_id, records)
+    except Exception:
+        logger.warning("obsidian_token_import_failed campaign=%s", campaign_id)
+    if file_revoked:
+        return None
+    try:
+        row = integration_tokens.find_by_digest(campaign_id, digest)
+    except Exception:
+        raise TokenStoreUnavailable("token database unavailable") from None
+    if (row is None or row["revoked_at"] is not None
+            or not hmac.compare_digest(str(row["token_digest"]), digest)):
+        return None
+    try:
+        if integration_tokens.touch_last_used(campaign_id, row["credential_id"],
+                                              row["last_used_at"]):
+            row = dict(row, last_used_at=integration_tokens.parse_time(utc_now()))
+    except Exception:
+        logger.warning("obsidian_token_last_used_failed campaign=%s", campaign_id)
+    return integration_tokens.public_record(row)
+
+
 def revoke_token(campaign_id: str, token_id: str) -> bool:
+    if _sql_tokens():
+        return _revoke_token_sql(campaign_id, token_id)
     with campaign_lock(campaign_id):
         doc = _load_tokens(campaign_id)
         for record in doc["tokens"]:
@@ -145,6 +286,45 @@ def revoke_token(campaign_id: str, token_id: str) -> bool:
                 storage.atomic_write_json(tokens_file(campaign_id), doc)
                 return True
     return False
+
+
+def _revoke_token_sql(campaign_id: str, token_id: str) -> bool:
+    """Write-ahead revoke: SQL read, file tombstone, then the SQL write (Decision 1).
+
+    Every partial state fails closed: before the file write nothing is
+    revoked, and after it the file refuses the token.  True when either store
+    had the id (retry-safe), False only when neither did.
+    """
+
+    from core.persistence import integration_tokens
+    if not isinstance(token_id, str) or not token_id:
+        return False
+    try:
+        row = integration_tokens.get_row(campaign_id, token_id)  # step 0, closed
+    except Exception:
+        raise TokenStoreUnavailable("token database unavailable") from None
+    seen = None
+    with campaign_lock(campaign_id):  # step 1, no transaction open
+        doc = _load_tokens_strict(campaign_id)
+        record = next((r for r in doc["tokens"]
+                       if isinstance(r, dict) and r.get("id") == token_id), None)
+        if record is not None:
+            if not record.get("revoked_at"):
+                record["revoked_at"] = utc_now()
+                _write_tokens(campaign_id, doc)
+            seen = dict(record)
+        elif row is not None:
+            tombstone = integration_tokens.file_record(row)
+            tombstone["revoked_at"] = tombstone["revoked_at"] or utc_now()
+            doc["tokens"].append(tombstone)
+            _write_tokens(campaign_id, doc)
+    if row is None and seen is None:
+        return False
+    try:  # step 2
+        integration_tokens.revoke_row(campaign_id, token_id, None if row is not None else seen)
+    except Exception:
+        raise TokenStoreUnavailable("token database unavailable") from None
+    return True
 
 
 def default_runtime() -> dict:
