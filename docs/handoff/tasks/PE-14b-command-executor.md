@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** in review (implementation revision 2, 2026-11-17: R2-1 fixed; see Implementation revision 2)
+- **Status:** accepted (Codex implementation review 3, 2026-11-18, at `098462a3`; commit review notes and verify resulting-head CI before merge)
 - **Branch:** `claude/pe-14b-command-executor` from current main after PE-13b and PE-14a merge. Record the exact starting SHA.
 - **Depends on:** [PE-13b](PE-13b-check-order-conflicts.md) (check runner for checks 4-9, `CheckContext` with every field this task uses, `CommandRefusal`, `Authorizer` protocol, conflict body), [PE-14a](PE-14a-streams-receipts-events-schema.md) (tables, `check_envelope`, `CheckedEnvelope`, `EnvelopeRefusal`, digest, registry, `streams.lock_stream`/`allocate`), and through them [PE-13a](PE-13a-state-repositories.md) (`CommandLocks(session, campaign_id, *, lock_stream)` with `stream_row`, `records` and `register_serialized`, repositories, `StateRowMissing`, `ProfileMismatch`, `LockOrderError`, `PinUnavailable`, `UnknownSchemaVersion`). PE-13c is not needed: its exceptions are answered by attribute, never imported (Decision 4).
 - **Followed by:** PE-14c (real authorizer, `override_allowed`, grant and token records), then PE-14d; PE-14e and PE-14f both follow PE-14d. PE-14e calls `ctx.bind_started_session` (Decision 13); PE-14f owns the event-ID filter for its status read (Decision 9).
@@ -22,7 +22,7 @@
 
 ## Goal
 
-One Python entry point, `execute(envelope, principal, *, route_campaign_id, content_descriptor, project)`, that runs a registered command type through section 4's single transaction: check 1 before the transaction, then the stream lock, fence, receipt lookup, the authorizer re-read, the session snapshot, the type's lock plan, PE-13b's checks 4-9, `apply` and the receipt, all atomic, answering exactly per the code table, including refusal receipts written in a second transaction. `principal` is a verified `core.request_context.Principal` supplied by the caller and never derived from the body. Only test-only command types use it; no route calls it.
+One Python entry point, `execute(envelope, principal, *, route_campaign_id, content_descriptor, project, held_projections)`, that runs a registered command type through section 4's single transaction: check 1 before the transaction, then the stream lock, fence, receipt lookup, the authorizer re-read, the session snapshot, the type's lock plan, PE-13b's checks 4-9, `apply` and the receipt, all atomic, answering exactly per the code table, including refusal receipts written in a second transaction. `principal` is a verified `core.request_context.Principal` supplied by the caller and never derived from the body. The required `held_projections` callback is the event-content boundary documented in implementation revision 2. Only test-only command types use it; no route calls it.
 
 ## Decisions this brief fixes (reviewer: challenge these first)
 
@@ -444,3 +444,27 @@ R2-1 is fixed on `claude/pe-14b-command-executor`. Codex's review 2 notes are co
 - A command type puts explanations in `EventDraft.result`. It sets the event's `visibility` so that each projection may see those entries in the intended form.
 - A new section registers a redactor in its own module at import time, or it is shown only to full views.
 - PE-31's redacted event bodies should reuse `event_views`/`visible_entry` for result items.
+
+### Implementation review 3 - accepted (Codex, 2026-11-18)
+
+Re-reviewed PR #264 at `098462a32c302fdbf2c1bf64e8a6858dc92f029e`, focusing on implementation revision 2 after `ec86c7be`. **Accepted; R2-1 is closed, with no new blocking findings.** R1-1 and R1-2 remain closed.
+
+- Fresh responses and receipt replay now use the same boundary: every event's own subjects and encounter are passed to required `held_projections`, with the authorizer loaded in that transaction. Its held views are checked against the event's stored visibility before either event IDs or result entries are returned. Seeing a record key no longer grants its historical contents.
+- `none`, malformed policies and unregistered sections under redaction withhold content; `exact_hp` removes HP, maximum and debt values. Full authorization preserves the ordered PE-13c entries. The durable originals are unchanged, and a changed role/assignment is reconsidered on replay. The callback signature matches PE-14f's accepted interface.
+- Independently reran the original result-visibility probe through a small wrapper adding the new callback and assertions: `../output/pe14b-review-r3/result_visibility_probe.py`. A visible `character.play:a1` key remains in both cases. `none` returns no reconciliation or event ID; `redact:[exact_hp]` returns only the HP type marker plus the permitted pool entry, fresh and replay. The probe uses synthetic disposable databases only.
+- **Judgments accepted:** pool counts are governed by the explicit event policy, so `exact_hp` alone does not hide them; command authors must choose `none` when those entries are private. The stricter malformed-policy handling fails closed. The reported 793 product lines are accepted as the bounded extension needed for the two requested result/privacy fixes; this is not authorization to grow the task further.
+
+**Verification:**
+
+- `python -m pytest -q tests/persistence/test_command_executor.py tests/persistence/test_command_envelope.py tests/persistence/test_command_checks.py tests/persistence/test_state_repositories.py tests/persistence/test_command_stream_schema.py -m "not postgresql"` -> **500 passed in 29.26 s**.
+- `git diff --check 3d5e13b8..098462a3` is clean.
+- GitHub confirms the exact PR head and CI run **44139059175**: **changes, browser, postgresql and test all passed**. The PostgreSQL log reports **34 passed, 1106 deselected**, including the five executor cases. PostgreSQL and the full persistence suite were not rerun locally for this focused correction.
+- The previously observed runtime HTTP timeout is tracked separately by CI-02 / PR #266. Its cause remains unestablished; this acceptance does not call it fixed.
+
+**Non-blocking consumer notes:**
+
+1. `visible_entry` selects the redacted form with the most top-level fields. This yields the intended union for today's comparable reconciliation forms (full, type-only or absent). Before registering a new section whose views expose incomparable field sets, require comparable forms or extend the combination policy with tests; arbitrary custom redactors do not yet get a general field union.
+2. PE-14f should align its malformed `redact:` handling with `event_views`, and PE-31 should reuse this result filtering. Keep the report's explicit event-policy requirements in the adapter handoff. The original Goal signature above now includes the required callback.
+3. `test_two_redacting_views_give_their_union` installs its two-view hook after the fresh call, so that particular regression exercises both views on replay only. The shared answer path and direct multi-view unit cases cover the implementation; enable the hook before the fresh call when strengthening that test.
+
+For players: the shared action executor is now accepted. It saves an action and its history together, supports safe retries and keeps hidden HP explanations private. We are still in the foundation stage: permissions and session handling come next, followed by the D&D/PF2e adapters and player workflows. No new player screen is active. Next: Claude commits these review notes, reconciles the branch with main (including CI-02's queue entry), and merges PR #264 only after all four checks pass on that resulting head. These notes are uncommitted; Codex has not merged PR #264 or started PE-14c.
