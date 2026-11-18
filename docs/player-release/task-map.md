@@ -27,7 +27,7 @@ Dependencies below follow section 11 of the accepted [state and command contract
 | PE-13b | P1 | Claude | done | PE-13a | [Fixed check order, `expected` model and conflict body](../handoff/tasks/PE-13b-check-order-conflicts.md) |
 | PE-13c | P1 | Claude | done | PE-13a | [Max-HP and pool reconciliation hook](../handoff/tasks/PE-13c-reconciliation-hook.md) |
 | PE-14a | P1 | Claude | done | PE-01, PE-12, PE-13a, PE-13b (as built) | [Campaign stream, receipt and event tables; envelope, digest and type registry](../handoff/tasks/PE-14a-streams-receipts-events-schema.md) |
-| PE-14b | P1 | Claude | ready | PE-13b, PE-14a | [Command executor: fence, receipts, replay, refusal transaction and event writer](../handoff/tasks/PE-14b-command-executor.md) |
+| PE-14b | P1 | Claude | in review | PE-13b, PE-14a | [Command executor: fence, receipts, replay, refusal transaction and event writer](../handoff/tasks/PE-14b-command-executor.md) |
 | PE-14c | P1 | Claude | blocked | PE-14b | [Grant and token records and the step-4 authorizer](../handoff/tasks/PE-14c-grants-tokens-authorizer.md) |
 | PE-14d | P1 | Claude | blocked | PE-14c | [Stream-locked authorization writes, grant and token commands](../handoff/tasks/PE-14d-stream-locked-authorization-writes.md) |
 | PE-14e | P1 | Claude | blocked | PE-14d | [Session start/end commands, folder form and session-history backfill](../handoff/tasks/PE-14e-sessions-backfill.md) |
