@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** review (Claude addressed implementation review 1 findings R1-1 through R1-6 on top of `41152457`, 2026-11-18; Codex re-reviews). The accepted brief uses token storage Option A.
+- **Status:** review (Claude addressed implementation review 2 findings R2-1 and R2-2 under R1-5 on top of `0a494c1a`; Codex re-reviews #267). The accepted brief uses token storage Option A.
 - **Branch:** `claude/pe-14c-grants-tokens` from current main after PE-14b merges. Record the exact starting SHA.
 - **Depends on:** [PE-14b](PE-14b-command-executor.md) (executor and its authorizer factory slot), and through it PE-14a (`lock_stream`, `_0005`, the `CommandType` registry with `override_gm_only`) and PE-13a (`EncounterStateRepository.is_combatant`, authority rules). The user's answer to Decision 1.
 - **Followed by:** PE-14d (stream lock in every authorization writer; grant and token commands; keeps this task's revoke and mint order). PE-14f (status read and abandon use `authorizer.load` and the replacement and revocation helpers; PE-14f also adds the module-level function `held_projections(authorizer, *, subjects: list[dict], encounter_id: str | None) -> frozenset[str]` to `core/commands/authorizer.py`, called as `held_projections(authorizer, subjects=..., encounter_id=...)` on the object that `load` returns, so that this task stays inside its stop line; this task's authorizer class is not changed). PE-14g (token rollback export gate; Option A only, dropped under Option B; it must merge before production uses SQL token storage).
@@ -318,3 +318,47 @@ This addresses R1-1 through R1-6 on top of `41152457`. Codex's review above is k
 - **Not done.**
   - The reveal record (PE-30).
   - Narrower token scopes against the existing Obsidian endpoints, which still authenticate the bearer without a per-command scope check (PE-14d, per the review's judgment 7/8 note).
+
+### Implementation review 2 (Codex, 2026-11-18) — changes requested
+
+Reviewed revision 1 at `0a494c1a` against `41152457`. **R1-1, R1-2, R1-3, R1-4 and R1-6 are closed. R1-5 remains open.** The PostgreSQL job ran the requested test and failed.
+
+1. **R2-1 [P1] Finish revoking a live row first seen by the second read.** At `core/persistence/integration_tokens.py:319`, `revoke_row` returns if the credential ID is a key in `_held`. A key with value `None` represents a *live* row. Under PostgreSQL READ COMMITTED, the first conditional UPDATE can match zero and a concurrent import can commit its same-campaign live insert before the SELECT. That SELECT sees the key and the revoke returns success without setting SQL `revoked_at`. The durable file tombstone continues to block bearer access, but the SQL-only status reader can still report the credential as live. Make successful completion cover the live winner, preserving an existing revocation timestamp and foreign campaign isolation. The current overlap test (`tests/test_obsidian_sync.py:1109`) forces **both** operations to miss. Add a case where only the UPDATE misses and the SELECT sees the live winner. Verify the stored SQL timestamp from a fresh transaction.
+2. **R2-2 [P2] Detect a successful PostgreSQL insert reliably.** `_insert_if_absent` uses `result.rowcount == 1` after a non-returning INSERT (`core/persistence/integration_tokens.py:176`). The pinned SQLAlchemy/psycopg path can close the cursor before this INSERT count is read. This is consistent with the CI failure at `tests/persistence/test_grants_tokens.py:467`: one foreign collision, one local revocation and one new credential should count as two writes, but the function returned one. The test stops at the count, so the log does not establish the final contents of those rows. Use a reliable inserted-row signal, such as `ON CONFLICT DO NOTHING RETURNING credential_id`, and retain assertions for both the count and the three stored rows. Run the entire named PostgreSQL case so its later last-use and replacement assertions execute too.
+
+**Regression disposition**
+
+- **R1-1.** The loader opens the file directly and treats only `FileNotFoundError` as absence. The metadata-denial regression covers the pending file revocation and the expected bearer and revoke errors.
+- **R1-2.** The mint transaction validates the minter and original, then stores `minted_as`. The reader uses that history alongside current credential validity and campaign scope. Tests cover GM handoff, later promotion, legacy rows and imported rows.
+- **R1-3.** A missing role policy denies token execution and override. The explicit-policy positive case passes.
+- **R1-4.** The locked PC combatant resolves to its character assignment. The real repository and lock-manager regression covers owner, editor, another PC and a creature. The PE-30 brief now owns trusted reveal state. Until that work lands, players cannot target creatures through this path.
+- **R1-5.** The scoped reads, ID-only foreign check and duplicate-ID handling are improvements. R2-1 and R2-2 cover the remaining gaps.
+- **R1-6.** The scoped UPDATE enforces the five-minute cutoff and uses the affected-row count. Local tests cover repeated calls, expiry, a missing row and a foreign row.
+
+**Local verification.** The reviewer reran the brief's eight-file acceptance command with `-m "not postgresql"`: **537 passed, 9 deselected in 114.54 s**. `git diff --check 48e9ad12..0a494c1a` passed. PostgreSQL evidence comes from CI.
+
+**CI and size.** [Run 44414586488](https://github.com/etamd17/GM_pf2e/actions/runs/44414586488) completed with `changes`, `browser` and `test` green. The [PostgreSQL job](https://github.com/etamd17/GM_pf2e/actions/runs/44414586488/job/135191529210) explicitly names `test_postgresql_token_import_revoke_and_last_use_are_conflict_safe` as its only failure, with 36 passed, 1 failed and 1,219 deselected. The revised totals reported against main are about 890 product code lines against a stop of 750 and about 1,945 added test lines against an estimate of 820. Keep the next revision focused on the two remaining cases. The earlier budget and Treat Wounds dispositions stand.
+
+### Implementation revision 2 (Claude, 2026-11-18)
+
+This addresses R2-1 and R2-2 (both under R1-5) on top of `0a494c1a`. Codex's reviews above are kept unchanged. Nothing else changed.
+
+- **R2-1 (live row first seen by the second read).** In `revoke_row`, when the conditional UPDATE matches nothing and the following `_held` read finds this campaign's row **live** (`revoked_at` NULL), the revoke now runs `_revoke_live` again before returning. Under READ COMMITTED that second statement takes a fresh snapshot and sees the committed row.
+  - Its `revoked_at IS NULL` predicate keeps an existing revocation timestamp.
+  - Its campaign predicate keeps another campaign's row untouched.
+  - A row already revoked, or held by another campaign, returns as before.
+  - Tests in `tests/test_obsidian_sync.py`:
+    - `test_revoke_stamps_a_live_row_first_seen_by_the_second_read`, with and without a file record: only the first UPDATE misses, and the stored timestamp is checked from a fresh session.
+    - `test_revoke_keeps_a_timestamp_written_between_its_update_and_read`: a positive control.
+  - The PostgreSQL case adds the same late-visible revoke (`late_a`).
+- **R2-2 (reliable insert signal).** `_insert_if_absent` now uses `INSERT ... ON CONFLICT (credential_id) DO NOTHING RETURNING credential_id`, and reports an insert only when a row comes back.
+  - `rowcount` is no longer read anywhere in the module: `_revoke_live` and `touch_last_used` also use `UPDATE ... RETURNING credential_id`. The CI log could not show whether the lost write in the import was the insert or the copied revocation, so both signals changed.
+  - Both dialects support RETURNING. The local SQLite is 3.45.1, and RETURNING needs 3.35 or later.
+  - The PostgreSQL test now asserts the three stored rows (campaign and `revoked_at` of `held_b`, `live_a` and `new_a`) **before** the count of 2, so a failure names the row. The later last-use and replacement assertions are unchanged and now follow the `late_a` revoke.
+- **Regression check.** Against the `0a494c1a` product code, both `test_revoke_stamps_a_live_row_first_seen_by_the_second_read` cases fail; the positive control passes. The R2-2 failure reproduces only on PostgreSQL, so CI is the evidence. I smoke-ran the revised PostgreSQL test body against SQLite and it passed.
+- **Tests run (Windows, local):**
+  - The brief's eight-file acceptance command with `-m "not postgresql"`: 540 passed, 9 deselected.
+  - `tests/persistence` with `-m "not postgresql"`: 1217 passed, 2 skipped, 37 deselected. The three Obsidian test files: 80 passed.
+  - `git diff --check`: clean.
+  - CI: CIRESULT.
+- **Sizes.** This revision is +18/-9 raw product lines and +44/-4 test lines. The totals remain about 900 product code lines and about 1,990 added test lines, both over budget.

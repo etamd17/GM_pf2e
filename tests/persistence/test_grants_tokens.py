@@ -464,16 +464,33 @@ def test_postgresql_token_import_revoke_and_last_use_are_conflict_safe(
                   record("new_a")])
         monkeypatch.setattr(integration_tokens, "_held", real_held)
         monkeypatch.setattr(integration_tokens, "_foreign", real_foreign)
-        assert written == 2
-        with database.transaction() as session:
+        with database.transaction() as session:  # the stored rows, then the count
             held_b = session.get(IntegrationToken, "held_b")
             assert held_b.campaign_id == "B" and held_b.revoked_at is None
-            assert session.get(IntegrationToken, "live_a").revoked_at is not None
-            assert session.get(IntegrationToken, "new_a").campaign_id == "A"
+            live_a = session.get(IntegrationToken, "live_a")
+            assert live_a.campaign_id == "A" and live_a.revoked_at is not None
+            new_a = session.get(IntegrationToken, "new_a")
+            assert new_a.campaign_id == "A" and new_a.revoked_at is None
+        assert written == 2
 
         integration_tokens.revoke_row("A", "held_b", record("held_b", revoked=True))
         with database.transaction() as session:
             assert session.get(IntegrationToken, "held_b").revoked_at is None
+
+        # The revoke's UPDATE misses a live row its next read sees (R2-1).
+        with database.transaction() as session:
+            session.add(_token("late_a", campaign_id="A"))
+        real_revoke, revokes = integration_tokens._revoke_live, []
+
+        def late(*args):
+            revokes.append(1)
+            return False if len(revokes) == 1 else real_revoke(*args)
+
+        monkeypatch.setattr(integration_tokens, "_revoke_live", late)
+        integration_tokens.revoke_row("A", "late_a", None)
+        monkeypatch.setattr(integration_tokens, "_revoke_live", real_revoke)
+        with database.transaction() as session:
+            assert session.get(IntegrationToken, "late_a").revoked_at is not None
 
         assert integration_tokens.touch_last_used("A", "new_a") is not None
         assert integration_tokens.touch_last_used("A", "new_a") is None

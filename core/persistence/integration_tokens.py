@@ -162,6 +162,8 @@ def _insert_if_absent(session: Any, values: dict[str, Any]) -> bool:
 
     The key is global, so a concurrent writer of any campaign may win the id;
     a collision never raises and never rolls back the caller's transaction.
+    The signal is the RETURNING row, not ``rowcount``: psycopg may close a
+    non-returning cursor before its count is read.
     """
 
     name = session.get_bind().dialect.name
@@ -171,9 +173,9 @@ def _insert_if_absent(session: Any, values: dict[str, Any]) -> bool:
         statement = sqlite.insert(_T)
     else:  # pragma: no cover - only the two supported dialects
         raise RuntimeError(f"unsupported dialect {name}")
-    result = session.execute(statement.values(**values)
-                             .on_conflict_do_nothing(index_elements=["credential_id"]))
-    return result.rowcount == 1
+    return session.execute(statement.values(**values)
+                           .on_conflict_do_nothing(index_elements=["credential_id"])
+                           .returning(_T.c.credential_id)).first() is not None
 
 
 def _file_values(campaign_id: str, record: dict[str, Any], now: datetime) -> dict[str, Any]:
@@ -192,7 +194,8 @@ def _revoke_live(session: Any, campaign_id: str, credential_id: str, when: datet
 
     return session.execute(update(_T).where(
         _T.c.credential_id == credential_id, _T.c.campaign_id == campaign_id,
-        _T.c.revoked_at.is_(None)).values(revoked_at=when)).rowcount == 1
+        _T.c.revoked_at.is_(None)).values(revoked_at=when)
+        .returning(_T.c.credential_id)).first() is not None
 
 
 def _reconcile(session: Any, campaign_id: str, record: dict[str, Any], now: datetime) -> int:
@@ -316,8 +319,14 @@ def revoke_row(campaign_id: str, credential_id: str,
     with runtime.database().transaction() as session:
         if _revoke_live(session, campaign_id, credential_id, now):
             return
-        if credential_id in _held(session, campaign_id, [credential_id]):
-            return  # already revoked here
+        held = _held(session, campaign_id, [credential_id])
+        if credential_id in held:
+            if held[credential_id] is None:
+                # A live row committed after the UPDATE's snapshot (READ
+                # COMMITTED): this statement sees it.  A row revoked meanwhile
+                # keeps its timestamp; another campaign's row never matches.
+                _revoke_live(session, campaign_id, credential_id, now)
+            return
         if file_record_seen is None or not _importable(file_record_seen):
             return
         record = dict(file_record_seen, id=credential_id)
@@ -338,11 +347,11 @@ def touch_last_used(campaign_id: str, credential_id: str) -> datetime | None:
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(seconds=LAST_USED_GRANULARITY_SECONDS)
     with runtime.database().transaction() as session:
-        result = session.execute(update(_T).where(
+        written = session.execute(update(_T).where(
             _T.c.credential_id == credential_id, _T.c.campaign_id == campaign_id,
             or_(_T.c.last_used_at.is_(None), _T.c.last_used_at <= cutoff))
-            .values(last_used_at=now))
-        return now if result.rowcount == 1 else None
+            .values(last_used_at=now).returning(_T.c.credential_id)).first()
+        return None if written is None else now
 
 
 def repair_token_mirror(campaign_id: str) -> bool:

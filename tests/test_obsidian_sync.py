@@ -1116,6 +1116,29 @@ def test_file_only_revoke_overlapping_insert_revokes_the_winning_row(sql_sync):
     assert _row(sql_sync, token_id)["revoked_at"] is not None
 
 
+@pytest.mark.parametrize("file_record", [False, True])
+def test_revoke_stamps_a_live_row_first_seen_by_the_second_read(sql_sync, file_record):
+    _raw, token_id = _minted(sql_sync)
+    # Only the UPDATE misses (READ COMMITTED: the live row committed after its
+    # snapshot); the following SELECT sees it live, so revoke must stamp it.
+    _first_call_misses(sql_sync, "_revoke_live", bool)
+    seen = _file_record(token_id, revoked=True) if file_record else None
+    integration_tokens.revoke_row(CID, token_id, seen)
+    assert _row(sql_sync, token_id)["revoked_at"] is not None  # fresh transaction
+
+
+def test_revoke_keeps_a_timestamp_written_between_its_update_and_read(sql_sync):
+    _raw, token_id = _minted(sql_sync)
+    earlier = datetime(2026, 11, 1, tzinfo=timezone.utc)
+    with sql_sync.db.session() as session:
+        session.execute(update(IntegrationToken).where(
+            IntegrationToken.credential_id == token_id).values(revoked_at=earlier))
+        session.commit()
+    _first_call_misses(sql_sync, "_revoke_live", bool)
+    integration_tokens.revoke_row(CID, token_id, _file_record(token_id, revoked=True))
+    assert _row(sql_sync, token_id)["revoked_at"].replace(tzinfo=timezone.utc) == earlier
+
+
 def test_last_used_cutoff_is_enforced_against_the_stored_row(sql_sync):
     _raw, token_id = _minted(sql_sync)
     first = integration_tokens.touch_last_used(CID, token_id)
