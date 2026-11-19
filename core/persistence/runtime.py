@@ -29,7 +29,7 @@ _cached_database: Database | None = None
 _cached_url: str | None = None
 _database_lock = threading.Lock()
 # The schema revision this runtime requires; update it with every new migration.
-_REQUIRED_REVISION = "20261115_0005"
+_REQUIRED_REVISION = "20261118_0006"
 
 
 class StoreUnavailable(RuntimeError):

@@ -973,3 +973,114 @@ class GameEvent(Base):
             name="principal_pair",
         ),
     )
+
+
+# PE-14c: grants and integration tokens (contract section 8; C:464, C:841-852).
+GRANT_KINDS = ("quartermaster", "level_unlock", "retrain_grant")
+_GRANT_KIND_CHECK = "kind in ('quartermaster', 'level_unlock', 'retrain_grant')"
+_GRANT_SHAPE_CHECK = (
+    "(kind = 'quartermaster' AND user_id IS NOT NULL AND character_id IS NULL"
+    " AND target_level IS NULL AND build_revision IS NULL)"
+    " OR (kind = 'level_unlock' AND user_id IS NULL AND character_id IS NOT NULL"
+    " AND target_level IS NOT NULL AND build_revision IS NULL)"
+    " OR (kind = 'retrain_grant' AND user_id IS NULL AND character_id IS NOT NULL"
+    " AND target_level IS NULL AND build_revision IS NOT NULL)"
+)
+LIVE_GRANT = "consumed_at IS NULL AND revoked_at IS NULL"
+
+
+class CampaignGrant(Base):
+    """A campaign grant: a QM role or a one-use level-up or retrain unlock (C:857-861)."""
+
+    __tablename__ = "campaign_grants"
+
+    grant_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    campaign_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False
+    )
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    user_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    character_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    target_level: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    build_revision: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    issued_by_kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    issued_by_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    issued_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    consumed_by_operation_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint("length(grant_id) = 32", name="grant_id_length"),
+        CheckConstraint(_GRANT_KIND_CHECK, name="known_kind"),
+        CheckConstraint(_GRANT_SHAPE_CHECK, name="kind_fields"),
+        CheckConstraint("target_level IS NULL OR target_level >= 1", name="target_level_positive"),
+        CheckConstraint("build_revision IS NULL OR build_revision >= 0",
+                        name="build_revision_nonnegative"),
+        CheckConstraint("issued_by_kind in ('user', 'integration_token')",
+                        name="known_issuer_kind"),
+        CheckConstraint(
+            "(consumed_at IS NULL AND consumed_by_operation_id IS NULL)"
+            " OR (consumed_at IS NOT NULL AND consumed_by_operation_id IS NOT NULL)",
+            name="consumed_pair",
+        ),
+        ForeignKeyConstraint(
+            ["campaign_id", "character_id"],
+            ["characters.campaign_id", "characters.id"],
+            name="fk_campaign_grants_character_campaign",
+            ondelete="CASCADE",
+        ),
+        Index("ix_campaign_grants_campaign_id", "campaign_id"),
+        Index(
+            "uq_campaign_grants_one_live_quartermaster",
+            "campaign_id",
+            "user_id",
+            unique=True,
+            sqlite_where=text("kind = 'quartermaster' AND " + LIVE_GRANT),
+            postgresql_where=text("kind = 'quartermaster' AND " + LIVE_GRANT),
+        ),
+    )
+
+
+MINTED_AS = frozenset({"gm", "admin"})
+
+
+class IntegrationToken(Base):
+    """An Obsidian integration token record; SQL is its store in ``sql`` mode (PE-14c D1)."""
+
+    __tablename__ = "integration_tokens"
+
+    credential_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    campaign_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False
+    )
+    label: Mapped[str] = mapped_column(Text, nullable=False)
+    token_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    last_four: Mapped[str] = mapped_column(String(8), nullable=False)
+    # Command type names fixed at mint, plus "@live" and "override:<type>" (C:852).
+    scope: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False, default=lambda: ["@live"], server_default=text("'[\"@live\"]'")
+    )
+    replaces_credential_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    minted_by_user_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # The minter's campaign role at mint ("gm" or "admin"), recorded once by
+    # ``insert_minted``; the replacement check reads this, never today's role.
+    minted_as: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint("length(token_digest) = 64", name="token_digest_length"),
+        CheckConstraint(
+            "minted_as IS NULL OR (minted_as IN ('gm', 'admin') "
+            "AND minted_by_user_id IS NOT NULL)",
+            name="minted_as_known",
+        ),
+        Index("ix_integration_tokens_campaign_id", "campaign_id"),
+        Index("ix_integration_tokens_token_digest", "token_digest"),
+    )

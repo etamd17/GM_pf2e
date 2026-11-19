@@ -570,7 +570,11 @@ def create_obsidian_sync_blueprint(adapter: dict) -> Blueprint:
         if not campaign_id:
             return _json_error("activate a campaign first", 409)
         body = request.get_json(silent=True) or {}
-        raw_token, record = sync_store.create_token(campaign_id, body.get("label") or "Obsidian")
+        try:
+            raw_token, record = sync_store.create_token(campaign_id,
+                                                        body.get("label") or "Obsidian")
+        except sync_store.TokenStoreUnavailable:
+            return _json_error("token store unavailable", 503)
         return jsonify({
             "ok": True,
             "campaign_id": campaign_id,
@@ -586,7 +590,11 @@ def create_obsidian_sync_blueprint(adapter: dict) -> Blueprint:
         campaign_id = adapter["active_campaign_id"]()
         if not campaign_id:
             return _json_error("activate a campaign first", 409)
-        if not sync_store.revoke_token(campaign_id, token_id):
+        try:
+            revoked = sync_store.revoke_token(campaign_id, token_id)
+        except sync_store.TokenStoreUnavailable:
+            return _json_error("token store unavailable", 503)
+        if not revoked:
             return _json_error("token not found", 404)
         return jsonify({"ok": True})
 
