@@ -924,3 +924,340 @@ def test_dnd5e_file_change_during_export_refuses(dnd5e_store, tmp_path, monkeypa
         exporter.export_runtime(source, url, output, quiesced=True)
     assert not output.exists()
     assert list(tmp_path.glob(".rollback.staging-*")) == []
+
+
+# --- Obsidian tokens (PE-14g: the rollback export carries tokens from SQL) ---------
+
+from datetime import timedelta  # noqa: E402
+
+from core import obsidian_sync, storage  # noqa: E402
+from core.persistence.models import IntegrationToken  # noqa: E402
+
+TOKEN_TIME = "%Y-%m-%dT%H:%M:%SZ"
+TOKEN_REFUSAL = f"campaign {CAMPAIGN} cannot be exported; repair it first"
+
+
+def _raw_token(token_id):
+    return f"{obsidian_sync.TOKEN_PREFIX}_{token_id}_secret-of-{token_id}"
+
+
+def _token_record(token_id, **changes):
+    """A legacy file record, shaped as ``core.obsidian_sync.create_token`` writes it."""
+    raw = _raw_token(token_id)
+    return {"id": token_id, "label": "Obsidian", "token_hash": obsidian_sync._token_digest(raw),
+            "last_four": raw[-4:], "created_at": "2026-10-01T00:00:00Z",
+            "last_used_at": None, "revoked_at": None, **changes}
+
+
+def _token_row(token_id, campaign_id=CAMPAIGN, **changes):
+    raw = _raw_token(token_id)
+    return IntegrationToken(**{
+        "credential_id": token_id, "campaign_id": campaign_id, "label": "Obsidian",
+        "token_digest": obsidian_sync._token_digest(raw), "last_four": raw[-4:],
+        "scope": ["@live"], "created_at": NOW, **changes})
+
+
+def _mint(database, *rows):
+    with database.transaction() as session:
+        session.add_all(rows)
+
+
+def _token_path(root, location="campaigns", campaign_id=CAMPAIGN):
+    return root / location / campaign_id / "integrations" / "obsidian" / "tokens.json"
+
+
+def _write_tokens(root, *records, location="campaigns", **extra):
+    write(_token_path(root, location), {"schema_version": 2, "tokens": list(records), **extra})
+
+
+def _token_rows(database):
+    with database.session() as session:
+        return exporter._token_rows(session)
+
+
+def _second_campaign(database):
+    with database.transaction() as session:
+        session.add(Campaign(id=OTHER_CAMPAIGN, slug="other", name="Other", system="pf2e",
+                             created_by_user_id=GM, created_at=NOW))
+        session.flush()
+        session.add(CampaignMembership(campaign_id=OTHER_CAMPAIGN, user_id=GM, role="gm",
+                                       joined_at=NOW, updated_at=NOW))
+
+
+def _assert_token_refusal(source, url, tmp_path, match):
+    before = source_bytes(source)
+    output = tmp_path / "rollback"
+    with pytest.raises(exporter.RuntimeExportError, match=match) as refusal:
+        exporter.export_runtime(source, url, output, quiesced=True)
+    assert not output.exists()
+    assert list(tmp_path.glob(".rollback.staging-*")) == []
+    return before, str(refusal.value)
+
+
+def test_export_writes_tokens_from_sql_not_mirror(imported_store, tmp_path, monkeypatch):
+    source, url, database = imported_store
+    used = NOW + timedelta(days=2, seconds=5, microseconds=123456)
+    _mint(database,
+          _token_row("revoked01", revoked_at=NOW + timedelta(hours=1)),
+          _token_row("minted01", created_at=NOW + timedelta(days=1), last_used_at=used))
+    # The mirror is stale both ways: the revocation and the mint never reached it.
+    _write_tokens(source, _token_record("revoked01", label="Stale label"), extra_key="dropped")
+    before = source_bytes(source)
+    output = tmp_path / "rollback"
+    exporter.export_runtime(source, url, output, quiesced=True)
+    assert source_bytes(source) == before
+    # SQL timestamps are written in the legacy file format, whole seconds.
+    assert load(_token_path(output)) == {"schema_version": 2, "tokens": [
+        _token_record("revoked01", revoked_at="2026-10-01T01:00:00Z"),
+        _token_record("minted01", created_at="2026-10-02T00:00:00Z",
+                      last_used_at="2026-10-03T00:00:05Z"),
+    ]}
+    for token in load(_token_path(output))["tokens"]:
+        for key in ("created_at", "last_used_at", "revoked_at"):
+            assert token[key] is None or datetime.strptime(token[key], TOKEN_TIME)
+
+    # The legacy bearer check, in json mode, against the exported tree.
+    monkeypatch.setattr(storage, "CAMPAIGNS_DIR", str(output / "campaigns"))
+    monkeypatch.delenv("OWNERSHIP_BACKEND", raising=False)
+    assert obsidian_sync.verify_token(CAMPAIGN, _raw_token("minted01"))["id"] == "minted01"
+    assert obsidian_sync.verify_token(CAMPAIGN, _raw_token("revoked01")) is None
+
+
+def test_export_keeps_unimported_file_tokens_and_file_revocations(imported_store, tmp_path):
+    source, url, database = imported_store
+    _mint(database, _token_row("live01"))
+    file_only = [_token_record("fileonly01", note="kept as read"),
+                 _token_record("fileonly02", revoked_at="2026-09-01T00:00:00Z")]
+    _write_tokens(source, file_only[0],
+                  _token_record("live01", label="Stale", revoked_at="2026-09-30T12:00:00Z"),
+                  file_only[1])
+    output = tmp_path / "rollback"
+    report = exporter.export_runtime(source, url, output, quiesced=True)
+    # SQL rows first with SQL's fields, then file-only records in file order.
+    assert load(_token_path(output))["tokens"] == [
+        _token_record("live01", revoked_at="2026-09-30T12:00:00Z"), *file_only]
+    assert report["token_scope_revoked"] == []
+    assert _token_rows(database)[0]["revoked_at"] is None
+
+
+def test_export_revokes_non_live_scope_tokens_in_manifest(imported_store, tmp_path):
+    source, url, database = imported_store
+    scopes = {"narrow01": ["session.start"], "override01": ["@live", "override:session.end"],
+              "live01": ["@live"], "gone01": ["session.start"]}
+    _mint(database, *(
+        _token_row(token_id, scope=scope, created_at=NOW + timedelta(minutes=index),
+                   revoked_at=NOW if token_id == "gone01" else None)
+        for index, (token_id, scope) in enumerate(scopes.items())))
+    rows = _token_rows(database)
+    started = datetime.now(timezone.utc).replace(microsecond=0)
+    output = tmp_path / "rollback"
+    report = exporter.export_runtime(source, url, output, quiesced=True)
+    revoked = {token["id"]: token["revoked_at"] for token in load(_token_path(output))["tokens"]}
+    assert list(revoked) == list(scopes)
+    assert revoked["live01"] is None
+    # One shared export timestamp, in the legacy file format.
+    assert revoked["narrow01"] == revoked["override01"]
+    stamp = datetime.strptime(revoked["narrow01"], TOKEN_TIME).replace(tzinfo=timezone.utc)
+    assert started <= stamp <= datetime.now(timezone.utc)
+    # Already revoked in SQL: it keeps SQL's time and is not listed as revoked by the export.
+    assert revoked["gone01"] == "2026-10-01T00:00:00Z"
+    assert report["token_scope_revoked"] == [
+        {"credential_id": "narrow01", "campaign_id": CAMPAIGN},
+        {"credential_id": "override01", "campaign_id": CAMPAIGN}]
+    assert report["integration_tokens"][CAMPAIGN]["revoked"] == 3
+    assert _token_rows(database) == rows
+
+
+@pytest.mark.parametrize("content", [
+    "{not json", "[]", '{"tokens": {}}', '{"tokens": ["record"]}',
+    json.dumps({"tokens": [{"id": "nohash01", "revoked_at": None}]}),
+    '{"tokens": ' + "[" * 100000 + "]" * 100000 + "}",
+], ids=["bad-json", "non-object", "non-list-tokens", "non-object-record", "no-token-hash",
+        "deeply-nested"])
+def test_export_refuses_malformed_token_file(imported_store, tmp_path, content):
+    source, url, database = imported_store
+    path = _token_path(source)
+    path.parent.mkdir(parents=True)
+    path.write_bytes(content.encode("utf-8"))
+    before, _message = _assert_token_refusal(source, url, tmp_path, TOKEN_REFUSAL)
+    assert source_bytes(source) == before
+
+
+@pytest.mark.parametrize("case", ["duplicate", "digest", "other-campaign"])
+def test_export_refuses_duplicate_or_mismatched_token_ids(imported_store, tmp_path, case):
+    source, url, database = imported_store
+    _mint(database, _token_row("live01"))
+    if case == "duplicate":
+        records = [_token_record("fileonly01"), _token_record("fileonly01")]
+    elif case == "digest":
+        records = [_token_record("live01", token_hash="0" * 64)]
+    else:
+        _second_campaign(database)
+        _mint(database, _token_row("foreign01", campaign_id=OTHER_CAMPAIGN))
+        records = [_token_record("foreign01")]
+    _write_tokens(source, *records)
+    rows = _token_rows(database)
+    before, message = _assert_token_refusal(source, url, tmp_path, TOKEN_REFUSAL)
+    assert records[0]["token_hash"] not in message and OTHER_CAMPAIGN not in message
+    assert source_bytes(source) == before
+    assert _token_rows(database) == rows
+
+
+@pytest.mark.parametrize("change", ["change", "add", "remove"])
+def test_export_refuses_token_file_changed_during_export(
+        imported_store, tmp_path, monkeypatch, change):
+    source, url, database = imported_store
+    if change != "add":
+        _write_tokens(source, _token_record("fileonly01"))
+    original = migration.build_plan
+
+    def mutate_after_staging(staging):
+        if change == "remove":
+            _token_path(source).unlink()
+        else:
+            _write_tokens(source, _token_record("fileonly01", revoked_at="2026-10-02T00:00:00Z"))
+        return original(staging)
+
+    monkeypatch.setattr(migration, "build_plan", mutate_after_staging)
+    _assert_token_refusal(source, url, tmp_path, "Obsidian token file changed during export")
+
+
+@pytest.mark.parametrize("change", ["mint", "revoke"])
+def test_export_refuses_token_rows_changed_during_export(
+        imported_store, tmp_path, monkeypatch, change):
+    source, url, database = imported_store
+    _mint(database, _token_row("live01"))
+    original = migration.build_plan
+
+    def write_after_staging(staging):
+        writer = Database(url)  # an accidental writer on its own connection
+        try:
+            with writer.transaction() as session:
+                if change == "mint":
+                    session.add(_token_row("late01", created_at=NOW + timedelta(hours=1)))
+                else:
+                    session.get(IntegrationToken, "live01").revoked_at = NOW
+        finally:
+            writer.dispose()
+        return original(staging)
+
+    monkeypatch.setattr(migration, "build_plan", write_after_staging)
+    _assert_token_refusal(source, url, tmp_path, "SQL state changed during export")
+    assert len(_token_rows(database)) == (2 if change == "mint" else 1)
+
+
+@pytest.mark.parametrize("location", ["campaigns", "campaigns_trash"])
+def test_export_token_files_follow_trashed_campaign_root(imported_store, tmp_path, location):
+    source, url, database = imported_store
+    other = ({"campaigns", "campaigns_trash"} - {location}).pop()
+    if location == "campaigns_trash":
+        with database.transaction() as session:
+            session.get(Campaign, CAMPAIGN).trashed_at = NOW
+        (source / location).mkdir()
+        shutil.move(source / "campaigns" / CAMPAIGN, source / location / CAMPAIGN)
+    _mint(database, _token_row("live01"))
+    _write_tokens(source, _token_record("fileonly01"), location=location)
+    before = source_bytes(source)
+    output = tmp_path / "rollback"
+    exporter.export_runtime(source, url, output, quiesced=True)
+    assert (output / location / CAMPAIGN / "campaign.json").exists()
+    assert [token["id"] for token in load(_token_path(output, location))["tokens"]] == [
+        "live01", "fileonly01"]
+    assert not (output / other / CAMPAIGN).exists()
+    assert source_bytes(source) == before
+
+
+def test_export_reads_token_source_from_active_path_of_sql_trashed_campaign(
+        imported_store, tmp_path):
+    source, url, database = imported_store
+    with database.transaction() as session:  # SQL soft-trash keeps the active directory
+        session.get(Campaign, CAMPAIGN).trashed_at = NOW
+    _write_tokens(source, _token_record("active01"))
+    _write_tokens(source, _token_record("trash01"), location="campaigns_trash")
+    output = tmp_path / "rollback"
+    report = exporter.export_runtime(source, url, output, quiesced=True)
+    assert (output / "campaigns_trash" / CAMPAIGN / "campaign.json").exists()
+    assert load(_token_path(output, "campaigns_trash"))["tokens"] == [_token_record("active01")]
+    assert not (output / "campaigns" / CAMPAIGN).exists()
+    assert report["integration_tokens"][CAMPAIGN]["count"] == 1
+
+
+def test_export_manifest_records_token_counts_and_digest(imported_store, tmp_path):
+    source, url, database = imported_store
+    _second_campaign(database)  # no SQL rows and no file: no entry, no file
+    empty = exporter.export_runtime(source, url, tmp_path / "empty", quiesced=True)
+    assert (empty["integration_tokens"], empty["token_scope_revoked"]) == ({}, [])
+    assert list((tmp_path / "empty").rglob("tokens.json")) == []
+
+    _mint(database, _token_row("live01"),
+          _token_row("revoked01", created_at=NOW + timedelta(hours=1), revoked_at=NOW))
+    _write_tokens(source, _token_record("fileonly01"))
+    output = tmp_path / "rollback"
+    report = exporter.export_runtime(source, url, output, quiesced=True)
+    assert (output / "campaigns" / OTHER_CAMPAIGN / "campaign.json").exists()
+    assert list(output.rglob("tokens.json")) == [_token_path(output)]
+    assert report["integration_tokens"] == {CAMPAIGN: {
+        "count": 3, "revoked": 1,
+        "digest": migration._canonical_sha256(load(_token_path(output)))}}
+    assert report["token_scope_revoked"] == []
+    manifest = load(output / exporter.MANIFEST_FILENAME)
+    for key in ("integration_tokens", "token_scope_revoked"):
+        assert manifest[key] == report[key]
+
+
+def test_authority_check_refuses_a_stray_or_altered_staged_token_file(imported_store, tmp_path):
+    source, url, database = imported_store
+    _mint(database, _token_row("live01"))
+    output = tmp_path / "rollback"
+    exporter.export_runtime(source, url, output, quiesced=True)
+    records = _sql_snapshot(database)
+    state = {row["code"]: {"revoked_at": None} for row in records["invites"]}
+    args = (output, records, state, {"omitted": set(), "locators": []})
+    path = _token_path(output)
+    document = load(path)
+    exporter._verify_authority(*args, expected_tokens={path: document})
+    stray = _token_path(output, "campaigns_trash", OTHER_CAMPAIGN)
+    for expected in (None, {}, {path: {**document, "tokens": []}}, {path: document, stray: document}):
+        with pytest.raises(exporter.RuntimeExportError, match="changed token authority"):
+            if expected is None:
+                exporter._verify_authority(*args)  # the existing four-argument call
+            else:
+                exporter._verify_authority(*args, expected_tokens=expected)
+    write(stray, document)
+    with pytest.raises(exporter.RuntimeExportError, match="changed token authority"):
+        exporter._verify_authority(*args, expected_tokens={path: document})
+
+
+@pytest.mark.parametrize("case", ["sql-revoked", "file-revoked", "scope"])
+def test_export_revocation_covers_every_record_sharing_the_digest(
+        imported_store, tmp_path, monkeypatch, case):
+    # The legacy reader accepts the first live record with the bearer's digest.
+    source, url, database = imported_store
+    _mint(database,
+          _token_row("shared01", revoked_at=NOW if case == "sql-revoked" else None,
+                     scope=["session.start"] if case == "scope" else ["@live"]),
+          _token_row("other01", created_at=NOW + timedelta(hours=1)))
+    _write_tokens(source, _token_record(
+        "copy01", token_hash=obsidian_sync._token_digest(_raw_token("shared01")),
+        revoked_at="2026-09-01T00:00:00Z" if case == "file-revoked" else None))
+    output = tmp_path / "rollback"
+    report = exporter.export_runtime(source, url, output, quiesced=True)
+    revoked = {token["id"]: token["revoked_at"] for token in load(_token_path(output))["tokens"]}
+    assert revoked["shared01"] and revoked["copy01"] and revoked["other01"] is None
+    for stamp in (revoked["shared01"], revoked["copy01"]):
+        assert datetime.strptime(stamp, TOKEN_TIME)
+    assert report["integration_tokens"][CAMPAIGN]["revoked"] == 2
+    assert report["integration_tokens"][CAMPAIGN]["count"] == 3
+
+    monkeypatch.setattr(storage, "CAMPAIGNS_DIR", str(output / "campaigns"))
+    monkeypatch.delenv("OWNERSHIP_BACKEND", raising=False)
+    assert obsidian_sync.verify_token(CAMPAIGN, _raw_token("shared01")) is None
+    assert obsidian_sync.verify_token(CAMPAIGN, _raw_token("other01"))["id"] == "other01"
+
+
+def test_export_refuses_file_only_token_utf8_cannot_encode(imported_store, tmp_path):
+    source, url, database = imported_store
+    _write_tokens(source, _token_record("fileonly01", label="x\ud800y"))
+    assert b"\\ud800" in _token_path(source).read_bytes()  # the escape, not raw bytes
+    before, _message = _assert_token_refusal(source, url, tmp_path, TOKEN_REFUSAL)
+    assert source_bytes(source) == before

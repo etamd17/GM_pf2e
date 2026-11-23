@@ -111,6 +111,19 @@ volume. Restore those from the matching full volume backup. Never simply change
 the setting back to `json` after SQL mutations: the original JSON authorization
 files are stale.
 
+Obsidian tokens are the exception to "restore from the backup". The export
+writes each campaign's `integrations/obsidian/tokens.json` from SQL plus the
+quiesced source file, so a token revoked in SQL stays refused and a token
+minted in SQL keeps working. Restore the volume backup first, then copy the
+export over it: `tokens.json` always comes from the export, never from the
+backup. For a trashed campaign, also delete the backup's
+`campaigns/<cid>/integrations/obsidian/tokens.json`; the export writes that
+campaign's file under `campaigns_trash`, and the stale active-path copy could
+otherwise come back. Tokens listed in the manifest's `token_scope_revoked`
+carried a command scope the legacy file cannot hold; they are exported revoked
+and the GM must mint them again. A source token file that is broken or
+disagrees with SQL refuses the export and must be repaired first.
+
 ## Remaining architecture boundaries
 
 Character payloads, assets, encounter state, and other campaign documents still
