@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** review (Claude addressed implementation review 2 findings R2-1 and R2-2 under R1-5 on top of `0a494c1a`; Codex re-reviews #267). The accepted brief uses token storage Option A.
+- **Status:** done (accepted at `c59c7203` by Claude on 2026-11-22 after the user moved the project to Claude-only work; Codex did not re-review revision 2). The accepted brief uses token storage Option A.
 - **Branch:** `claude/pe-14c-grants-tokens` from current main after PE-14b merges. Record the exact starting SHA.
 - **Depends on:** [PE-14b](PE-14b-command-executor.md) (executor and its authorizer factory slot), and through it PE-14a (`lock_stream`, `_0005`, the `CommandType` registry with `override_gm_only`) and PE-13a (`EncounterStateRepository.is_combatant`, authority rules). The user's answer to Decision 1.
 - **Followed by:** PE-14d (stream lock in every authorization writer; grant and token commands; keeps this task's revoke and mint order). PE-14f (status read and abandon use `authorizer.load` and the replacement and revocation helpers; PE-14f also adds the module-level function `held_projections(authorizer, *, subjects: list[dict], encounter_id: str | None) -> frozenset[str]` to `core/commands/authorizer.py`, called as `held_projections(authorizer, subjects=..., encounter_id=...)` on the object that `load` returns, so that this task stays inside its stop line; this task's authorizer class is not changed). PE-14g (token rollback export gate; Option A only, dropped under Option B; it must merge before production uses SQL token storage).
@@ -360,5 +360,17 @@ This addresses R2-1 and R2-2 (both under R1-5) on top of `0a494c1a`. Codex's rev
   - The brief's eight-file acceptance command with `-m "not postgresql"`: 540 passed, 9 deselected.
   - `tests/persistence` with `-m "not postgresql"`: 1217 passed, 2 skipped, 37 deselected. The three Obsidian test files: 80 passed.
   - `git diff --check`: clean.
-  - CI: CIRESULT.
+  - CI on `c59c7203` (run 44447498934): `changes`, `test`, `browser` and `postgresql` all passed. The PostgreSQL job reports 37 passed, 1,219 deselected; at `0a494c1a` it was 36 passed, 1 failed, so the named test now runs to its end.
 - **Sizes.** This revision is +18/-9 raw product lines and +44/-4 test lines. The totals remain about 900 product code lines and about 1,990 added test lines, both over budget.
+
+### Acceptance (Claude, 2026-11-22)
+
+On 2026-11-22 the user ended the Claude/Codex split: Claude now builds and reviews. Codex did not re-review revision 2, so this acceptance rests on the following instead of a second reviewer:
+
+- Codex closed R1-1 through R1-4 and R1-6 in review 2. Only R2-1 and R2-2 were open.
+- Both new R2-1 cases fail on `0a494c1a` and pass on `c59c7203`.
+- R2-2 reproduced only on PostgreSQL. The failing CI case now passes there, with the stored-row assertions ahead of the count.
+- An adversarial workflow (two reviewers, concurrency and test adequacy) over the `0a494c1a..c59c7203` diff reported no findings.
+- All four CI jobs passed on `c59c7203`.
+
+Carried forward, unchanged: the size overrun (about 900 product lines against a stop of 750), creature combatants hidden from players until PE-30's reveal record, and per-command token scopes on the existing Obsidian endpoints (PE-14d).
