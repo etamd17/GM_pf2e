@@ -300,3 +300,111 @@ def test_shadow_invites_still_detect_authority_changes(
     assert auth._load_invites() == legacy
     assert 'ownership_shadow_mismatch' in caplog.text
     assert code not in caplog.text
+
+
+def _invite_counts(db_session, code):
+    return {
+        'users': db_session.scalar(select(func.count()).select_from(User)),
+        'memberships': db_session.scalar(select(func.count()).select_from(CampaignMembership)),
+        'redemptions': db_session.scalar(select(func.count()).select_from(InviteRedemption)),
+        'uses': db_session.get(Invitation, code).remaining_uses,
+    }
+
+
+def test_invitation_lock_order_signup_existing_revoke_consume(sql_identity):
+    """Every invitation locker: stream, then campaign, then invitation (PE-14d)."""
+    from core.persistence import identity
+    from core.persistence.services import TransactionalStore
+    from tests.persistence.lock_order import first, record_locks
+
+    owner = auth.create_first_admin('owner', 'password')
+    seed_campaign(sql_identity, owner)
+    existing = auth.create_user('existing', 'password')
+    direct = auth.create_user('direct', 'password')
+    store = TransactionalStore(sql_identity.session_factory)
+    paths = {
+        'signup': lambda code: identity.redeem_invite(
+            code, username='new-player', password='password'),
+        'existing': lambda code: identity.redeem_invite(code, user_id=existing['id']),
+        'direct': lambda code: store.redeem_invite(code=code, user_id=direct['id']),
+        'revoke': lambda code: identity.revoke_invite(code, actor_user_id=owner['id']),
+        'consume': lambda code: identity.consume_invite(code),
+    }
+    for name, call in paths.items():
+        code = auth.create_invite('campaign', 'player', created_by=owner['id'])
+        with record_locks() as events:
+            assert call(code), name
+        locks = [event for event in events if event.startswith(('stream:', 'for_update:'))]
+        stream = first(locks, 'stream:campaign')
+        campaign = first(locks, 'for_update:campaigns')
+        invitation = first(locks, 'for_update:invites')
+        assert stream < campaign < invitation, (name, locks)
+        assert 'for_update:invites' not in locks[:stream], (name, locks)
+        assert {event for event in locks if event.startswith('stream:')} == {'stream:campaign'}
+
+
+@pytest.mark.parametrize('path', ['signup', 'existing', 'direct', 'revoke', 'consume'])
+def test_locked_invitation_campaign_mismatch_is_unavailable(sql_identity, monkeypatch, path):
+    """A locked re-read naming another campaign is a missing invitation: no write, no retry."""
+    from sqlalchemy import text
+    from core.persistence import identity, services
+
+    owner = auth.create_first_admin('owner', 'password')
+    seed_campaign(sql_identity, owner)
+    player = auth.create_user('player', 'password')
+    with sql_identity.transaction() as db_session:
+        db_session.add(Campaign(id='elsewhere', slug='elsewhere', name='Elsewhere',
+                                system='pf2e', created_by_user_id=owner['id']))
+    code = auth.create_invite('campaign', 'player', created_by=owner['id'])
+    with sql_identity.session() as db_session:
+        before = _invite_counts(db_session, code)
+    real = services.lock_stream_for_write
+    moved = []
+
+    def move_after_locator(db_session, campaign_id):
+        # Between the locator read and the locked re-read the row changes campaign.
+        row = real(db_session, campaign_id)
+        db_session.execute(text("UPDATE invites SET campaign_id = 'elsewhere' WHERE code = :code"),
+                           {'code': code})
+        moved.append(campaign_id)
+        return row
+
+    monkeypatch.setattr(services, 'lock_stream_for_write', move_after_locator)
+    store = services.TransactionalStore(sql_identity.session_factory)
+    if path == 'revoke':
+        assert identity.revoke_invite(code, actor_user_id=owner['id']) is False
+    elif path == 'consume':
+        assert identity.consume_invite(code) is None
+    else:
+        with pytest.raises(InviteUnavailableError):
+            if path == 'signup':
+                identity.redeem_invite(code, username='new-player', password='password')
+            elif path == 'existing':
+                identity.redeem_invite(code, user_id=player['id'])
+            else:
+                store.redeem_invite(code=code, user_id=player['id'])
+    assert moved == ['campaign']  # one attempt, no retry
+    # revoke and consume return normally, so they commit this test's own
+    # injected campaign_id UPDATE; only the product's writes are checked.
+    with sql_identity.session() as db_session:
+        assert _invite_counts(db_session, code) == before
+        assert db_session.get(Invitation, code).revoked_at is None
+
+
+def test_redeem_invite_trashed_campaign_still_unavailable(sql_identity):
+    """Existing-user redemption keeps the trashed check the lock helper does not make."""
+    from core.persistence import identity
+    from core.persistence.models import utc_now
+
+    owner = auth.create_first_admin('owner', 'password')
+    seed_campaign(sql_identity, owner)
+    player = auth.create_user('player', 'password')
+    code = auth.create_invite('campaign', 'player', character_id='hero', created_by=owner['id'])
+    with sql_identity.transaction() as db_session:
+        db_session.get(Campaign, 'campaign').trashed_at = utc_now()
+        before = _invite_counts(db_session, code)
+    with pytest.raises(InviteUnavailableError, match='^campaign is unavailable$'):
+        identity.redeem_invite(code, user_id=player['id'])
+    with sql_identity.session() as db_session:
+        assert _invite_counts(db_session, code) == before
+        assert db_session.scalar(select(func.count()).select_from(CharacterAssignment)) == 0

@@ -10,9 +10,9 @@ Every read and write selects ``WHERE campaign_id = :campaign_id``: a
 credential id held by another campaign counts as not found here, and an
 import never inserts or changes another campaign's row.
 
-PE-14d later adds its ``lock_timeout`` statement and ``lock_stream`` at the
-start of the import, mint and revoke write transactions; this task leaves
-them as plain SQL transactions.
+The import, mint and revoke write transactions start with
+``lock_stream_for_write`` (``lock_timeout`` on PostgreSQL, then the stream
+row; PE-14d).  Reads and the ``last_used_at`` update take no stream lock.
 """
 
 from __future__ import annotations
@@ -27,6 +27,7 @@ from sqlalchemy.dialects import postgresql, sqlite
 
 from . import runtime
 from .models import CampaignMembership, IntegrationToken, User
+from .streams import lock_stream_for_write
 
 logger = logging.getLogger(__name__)
 _T = IntegrationToken.__table__
@@ -247,6 +248,7 @@ def import_file_records(campaign_id: str, records: Iterable[Any]) -> int:
         return 0
     now = datetime.now(timezone.utc)
     with runtime.database().transaction() as session:
+        lock_stream_for_write(session, campaign_id)
         return sum(_reconcile(session, campaign_id, record, now) for record in pending)
 
 
@@ -284,6 +286,7 @@ def insert_minted(campaign_id: str, record: dict[str, Any], *,
     """
 
     with runtime.database().transaction() as session:
+        lock_stream_for_write(session, campaign_id)
         minted_as = (None if minted_by_user_id is None
                      else _minter_role(session, campaign_id, minted_by_user_id))
         if replaces_credential_id is not None:
@@ -317,6 +320,7 @@ def revoke_row(campaign_id: str, credential_id: str,
 
     now = datetime.now(timezone.utc)
     with runtime.database().transaction() as session:
+        lock_stream_for_write(session, campaign_id)
         if _revoke_live(session, campaign_id, credential_id, now):
             return
         held = _held(session, campaign_id, [credential_id])

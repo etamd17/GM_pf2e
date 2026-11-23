@@ -224,7 +224,12 @@ def test_claim_requires_campaign_membership_and_is_idempotent(sqlite_database):
     assert second.already_owned is True
 
 
-def test_claim_reports_character_deleted_before_authoritative_locked_read():
+def test_claim_reports_character_deleted_before_authoritative_locked_read(monkeypatch):
+    # PE-14d: the claim now takes the stream row first; this fake session has
+    # no bind, so the stream step is stubbed (its order is covered below).
+    from core.persistence import services
+    monkeypatch.setattr(services, "lock_stream_for_write", lambda _session, _cid: None)
+
     class ControlledSession:
         scalar_calls = 0
 
@@ -318,3 +323,51 @@ def test_redeemed_player_can_be_removed_without_losing_redemption_history(
         )
         assert redemption is not None
         assert redemption.campaign_id == "campaign-1"
+
+
+@pytest.mark.parametrize("writer", [
+    "redeem_invite", "claim_character", "set_membership_role", "remove_membership",
+])
+def test_store_writers_lock_stream_before_campaign_row(sqlite_database, writer):
+    """PE-14d Decision 1: stream row, then campaign row, then invitation, then writes."""
+    from tests.persistence.lock_order import assert_stream_first, first, record_locks
+
+    _seed(sqlite_database, character_invite=False, include_second_gm=True)
+    store = TransactionalStore(sqlite_database.session_factory)
+    calls = {
+        "redeem_invite": lambda: store.redeem_invite(
+            code="JOIN-ONE", user_id="player-1", now=NOW),
+        "claim_character": lambda: store.claim_character(
+            character_id="character-1", user_id="gm-2", now=NOW),
+        "set_membership_role": lambda: store.set_membership_role(
+            campaign_id="campaign-1", user_id="gm-2", role="player"),
+        "remove_membership": lambda: store.remove_membership(
+            campaign_id="campaign-1", user_id="gm-2", actor_user_id="gm-1"),
+    }
+    with record_locks() as events:
+        calls[writer]()
+    first(events, "write:")
+    if writer == "redeem_invite":
+        assert_stream_first(
+            events, "campaign-1", before=("for_update:campaigns", "for_update:invites"))
+        assert first(events, "for_update:campaigns") < first(events, "for_update:invites")
+    else:
+        assert_stream_first(events, "campaign-1")
+
+
+def test_redeem_invite_trashed_campaign_still_unavailable(sqlite_database):
+    """The helper never checks ``trashed_at``; the caller's check must survive."""
+    _seed(sqlite_database)
+    with sqlite_database.transaction() as session:
+        session.get(Campaign, "campaign-1").trashed_at = NOW
+    store = TransactionalStore(sqlite_database.session_factory)
+
+    with pytest.raises(InviteUnavailableError, match="^campaign is unavailable$"):
+        store.redeem_invite(code="JOIN-ONE", user_id="player-1", now=NOW)
+
+    with sqlite_database.session() as session:
+        assert session.get(CampaignMembership, ("campaign-1", "player-1")) is None
+        assert session.get(
+            CharacterAssignment, ("campaign-1", "character-1", "player-1")) is None
+        assert session.scalar(select(func.count()).select_from(InviteRedemption)) == 0
+        assert session.get(Invite, "JOIN-ONE").remaining_uses == 1

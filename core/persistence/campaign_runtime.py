@@ -20,6 +20,7 @@ from . import runtime
 from .models import AuditEvent, Campaign, CampaignMembership, Character, User, utc_now
 from .repositories import CampaignRepository
 from .services import LastGameMasterError, TransactionalStore
+from .streams import lock_stream_for_write
 
 
 _IDENTITY_FIELDS = {
@@ -155,6 +156,10 @@ def create_campaign(name, system, created_by):
             source_payload=_metadata(doc),
         )
         repo.upsert_membership(campaign_id=cid, user_id=created_by, role="gm")
+        # The stream row references the campaign, so it can only follow the
+        # insert; nothing else can see this uncommitted campaign (PE-14d).
+        session.flush()
+        lock_stream_for_write(session, cid)
         session.add(AuditEvent(
             actor_user_id=created_by, campaign_id=cid, action="campaign.created",
             target_type="campaign", target_id=cid, details={"system": system},
@@ -167,6 +172,9 @@ def create_campaign(name, system, created_by):
 
 def _locked_campaign(session, cid, *, trashed=False):
     storage._check_id(cid, "campaign_id")
+    if session.get(Campaign, cid) is None:  # the stream row needs the campaign
+        raise ValueError("no such campaign")
+    lock_stream_for_write(session, cid)
     campaign = CampaignRepository(session).get(cid, for_update=True)
     if campaign is None or (campaign.trashed_at is not None) != trashed:
         raise ValueError("no such campaign")
@@ -329,6 +337,9 @@ def delete_campaign(cid, *, actor_user_id=None):
 def restore_campaign(cid, *, actor_user_id=None):
     storage._check_id(cid, "campaign_id")
     with runtime.database().transaction() as session:
+        if session.get(Campaign, cid) is None:  # the stream row needs the campaign
+            return None
+        lock_stream_for_write(session, cid)
         campaign = CampaignRepository(session).get(cid, for_update=True)
         if campaign is None or campaign.trashed_at is None:
             return None

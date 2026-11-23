@@ -15,6 +15,7 @@ from collections.abc import Callable
 from sqlalchemy import select
 
 from . import runtime
+from .streams import lock_stream_for_write
 from .character_files import (
     LEGACY_STORAGE_DIRS,
     is_dnd5e_character_id,
@@ -197,7 +198,16 @@ def characters_for_user(user_id) -> list[dict]:
     return runtime.store_call(read)
 
 
-def _lock_campaign(session, cid):
+def _lock_campaign(session, cid, *, stream=True):
+    """Stream row, then campaign row (PE-14d).
+
+    ``stream=False`` only for a writer that changes no authorization input
+    and may span campaigns.
+    """
+    if stream:
+        if session.get(Campaign, cid) is None:  # the stream row needs the campaign
+            raise ValueError("campaign does not exist or is trashed")
+        lock_stream_for_write(session, cid)
     campaign = session.scalar(select(Campaign).where(Campaign.id == cid).with_for_update())
     if campaign is None or campaign.trashed_at is not None:
         raise ValueError("campaign does not exist or is trashed")
@@ -334,7 +344,8 @@ def write_character_batch(entries, *, write_documents):
     def write():
         with runtime.database().transaction() as session:
             for cid in sorted({entry[0] for entry in entries}):
-                _lock_campaign(session, cid)
+                # Sheet metadata only, possibly several campaigns: no stream.
+                _lock_campaign(session, cid, stream=False)
             normalized = []
             seen_ids = set()
             for cid, legacy_storage, filename, document in entries:

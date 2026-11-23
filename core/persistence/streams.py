@@ -14,13 +14,18 @@ because no writer reaches several campaigns.  The guard lives in
 SAVEPOINT is refused: rolling the SAVEPOINT back would release the row lock
 while the guard still reported it held.
 
+``lock_stream_for_write`` is the form every authorization writer uses
+(PE-14d): on PostgreSQL it first issues ``SET LOCAL lock_timeout`` from the
+executor's ``STREAM_LOCK_TIMEOUT_MS``, then takes the row.  A writer calls it
+before the campaign row and before any state or authorization row.
+
 ``stream_watermark`` and ``events_after`` are plain reads for PE-31: no lock,
 no projection, no page limit of their own.
 """
 
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.dialects import postgresql, sqlite
 from sqlalchemy.orm import Session, object_session
 
@@ -31,6 +36,21 @@ _HELD = "core.persistence.streams.held"
 
 class StreamLockError(RuntimeError):
     """``lock_stream``/``allocate`` was used outside its contract (a caller bug)."""
+
+
+def lock_stream_for_write(session: Session, campaign_id: str) -> CampaignStream:
+    """An authorization writer's first lock: ``lock_timeout`` (PostgreSQL), then the stream.
+
+    A timeout (55P03) surfaces through the caller's database-error path.  The
+    constant is imported here, not at module top: the executor imports this
+    module.  Never call this while holding a process lock.
+    """
+
+    from core.commands.executor import STREAM_LOCK_TIMEOUT_MS
+
+    if session.get_bind().dialect.name == "postgresql":
+        session.execute(text(f"SET LOCAL lock_timeout = '{int(STREAM_LOCK_TIMEOUT_MS)}ms'"))
+    return lock_stream(session, campaign_id)
 
 
 def _held(session: Session):

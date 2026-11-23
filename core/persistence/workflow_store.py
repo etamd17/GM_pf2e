@@ -13,6 +13,7 @@ from core.character_workflows.store import check_scope, decode_draft, encode_dra
 from core.character_workflows.types import WorkflowError, WorkflowReceipt
 from .campaign_runtime import _document
 from .models import Campaign, CharacterWorkflowReceipt, Draft, User
+from .streams import lock_stream_for_write
 
 
 class SqlWorkflowStore:
@@ -28,6 +29,8 @@ class SqlWorkflowStore:
             tx = None
             try:
                 with self.database.transaction() as session:
+                    if session.get(Campaign, context.campaign_id) is not None:
+                        lock_stream_for_write(session, context.campaign_id)
                     campaign = session.scalar(select(Campaign).where(
                         Campaign.id == context.campaign_id).with_for_update())
                     tx = SqlWorkflowTransaction(session, context, campaign)

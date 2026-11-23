@@ -12,7 +12,7 @@ from sqlalchemy import select, text
 
 from . import runtime
 from .models import AuditEvent, Campaign, Character, Invitation, User, new_id, utc_now
-from .services import InviteUnavailableError, TransactionalStore
+from .services import InviteUnavailableError, TransactionalStore, lock_invitation_for_write
 
 
 def _store_operation(fn):
@@ -65,13 +65,8 @@ def invite_document(invitation):
 
 
 def _lock_invitation(db_session, code):
-    """Match the campaign-before-invite lock order of redemption and deletion."""
-    locator = db_session.get(Invitation, code)
-    if locator is None:
-        return None
-    db_session.scalar(select(Campaign).where(Campaign.id == locator.campaign_id).with_for_update())
-    return db_session.scalar(select(Invitation).where(Invitation.code == code)
-                             .execution_options(populate_existing=True).with_for_update())
+    """The shared order: locator, stream, campaign, invitation (PE-14d Decision 1)."""
+    return lock_invitation_for_write(db_session, code)[1]
 
 
 def _check_empty_store(db_session):

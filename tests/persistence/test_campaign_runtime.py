@@ -323,3 +323,31 @@ def test_disappearing_http_actor_does_not_become_trusted_internal_call(sql_campa
         with pytest.raises(ValueError, match="valid account"):
             campaigns.save_campaign(doc)
     assert campaigns.get_campaign(doc["id"]) == doc
+
+
+@pytest.mark.parametrize("writer", [
+    "add_member", "set_member_role", "remove_member",
+    "save_campaign", "delete_campaign", "restore_campaign",
+])
+def test_campaign_writers_lock_stream_before_campaign_row(sql_campaigns, writer):
+    """PE-14d Decision 1: stream row, then campaign row, then any write."""
+    from tests.persistence.lock_order import assert_stream_first, first, record_locks
+
+    doc = campaigns.create_campaign("The Vault", "pf2e", "gm")
+    cid = doc["id"]
+    if writer in ("set_member_role", "remove_member"):
+        campaigns.add_member(cid, "player", "player")
+    if writer == "restore_campaign":
+        campaigns.delete_campaign(cid)
+    calls = {
+        "add_member": lambda: campaigns.add_member(cid, "player", "player"),
+        "set_member_role": lambda: campaigns.set_member_role(cid, "player", "gm"),
+        "remove_member": lambda: campaigns.remove_member(cid, "player"),
+        "save_campaign": lambda: campaigns.save_campaign({**doc, "name": "Renamed"}),
+        "delete_campaign": lambda: campaigns.delete_campaign(cid),
+        "restore_campaign": lambda: campaigns.restore_campaign(cid),
+    }
+    with record_locks() as events:
+        calls[writer]()
+    assert_stream_first(events, cid)
+    first(events, "write:")  # the writer really wrote, after the stream

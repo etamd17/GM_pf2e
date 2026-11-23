@@ -1171,3 +1171,185 @@ def test_sql_deeply_nested_tokens_file_is_unavailable_not_500(sql_sync):
     assert _revoke(sql_sync, token_id) == 503
     assert _file() == content
     assert _state(sql_sync, raw) == 500
+
+
+# --------------------------------------------------------------------------
+# PE-14d: stream-locked token writes, mint scope and replacement (Decision 6)
+
+from sqlalchemy.engine import Engine
+from sqlalchemy.exc import OperationalError
+
+from core.persistence import CampaignMembership, streams
+
+
+@contextmanager
+def _stream_spy(env):
+    """Add "stream" to the spy's events; yields every SQL statement issued meanwhile."""
+
+    spy, real, statements = env.spy, streams.lock_stream, []
+
+    def lock_stream(session, campaign_id):
+        if spy.lock_depth:
+            spy.violations.append("stream inside campaign_lock")
+        spy.events.append("stream")
+        return real(session, campaign_id)
+
+    def on_cursor(conn, cursor, statement, parameters, context, executemany):
+        statements.append(statement)
+
+    event.listen(Engine, "before_cursor_execute", on_cursor)
+    with env.monkeypatch.context() as patch:
+        patch.setattr(streams, "lock_stream", lock_stream)
+        spy.events.clear()
+        try:
+            yield statements
+        finally:
+            event.remove(Engine, "before_cursor_execute", on_cursor)
+
+
+def _lock_timeout(*args, **kwargs):
+    raise OperationalError("SELECT", {}, type("E", (Exception,), {"sqlstate": "55P03"})())
+
+
+def _token_rows(env, cid=CID):
+    with env.db.session() as session:
+        return session.execute(select(IntegrationToken.credential_id).where(
+            IntegrationToken.campaign_id == cid)).scalars().all()
+
+
+def _gm_member(env, cid=CID):
+    with env.db.transaction() as session:
+        session.add(CampaignMembership(campaign_id=cid, user_id="gm", role="gm"))
+
+
+@pytest.mark.parametrize("scope, stored", [
+    (None, ["@live"]), (["grant.issue_retrain", "grant.issue_level_unlock"], None)])
+def test_sql_mint_route_stores_scope(sql_sync, scope, stored):
+    body = {"label": "scoped"} if scope is None else {"label": "scoped", "scope": scope}
+    response = sql_sync.client.post(API + "/tokens", json=body, headers=XHR)
+    assert response.status_code == 201, response.get_json()
+    row = _row(sql_sync, response.get_json()["record"]["id"])
+    assert row["scope"] == (stored or scope) and row["replaces_credential_id"] is None
+
+
+@pytest.mark.parametrize("scope", ["@live", [], [7], ["a", "a"], [""]])
+def test_sql_mint_invalid_scope_is_400_and_writes_nothing(sql_sync, scope):
+    response = sql_sync.client.post(API + "/tokens", json={"scope": scope}, headers=XHR)
+    assert response.status_code == 400
+    assert _token_rows(sql_sync) == [] and _file_records() == {}
+
+
+@pytest.mark.parametrize("mode", ["json", "shadow"])
+def test_json_and_shadow_tokens_take_no_stream_and_refuse_sql_only_fields(sql_sync, mode):
+    sql_sync.monkeypatch.setenv("OWNERSHIP_BACKEND", mode)
+    sql_sync.monkeypatch.setattr(streams, "lock_stream", _boom)
+    for extra in ({"scope": ["grant.issue_retrain"]}, {"replaces_credential_id": "abc"}):
+        refused = sql_sync.client.post(API + "/tokens", json=extra, headers=XHR)
+        assert refused.status_code == 400
+    assert _file_records() == {}
+    explicit = sql_sync.client.post(API + "/tokens", json={"scope": ["@live"]}, headers=XHR)
+    assert explicit.status_code == 201
+    raw, token_id = _minted(sql_sync)
+    assert _state(sql_sync, raw) == 200
+    assert _revoke(sql_sync, token_id) == 200
+    assert _state(sql_sync, raw) == 401
+    assert _token_rows(sql_sync) == []
+
+
+def test_sql_replacement_records_original_and_minter_role(sql_sync):
+    _gm_member(sql_sync)
+    _raw, original = _minted(sql_sync)
+    raw, record = obsidian_sync.create_token(
+        CID, "x", replaces_credential_id=original, minted_by_user_id="gm")
+    row = _row(sql_sync, record["id"])
+    assert row["replaces_credential_id"] == original
+    assert (row["minted_by_user_id"], row["minted_as"]) == ("gm", "gm")
+    assert row["scope"] == ["@live"] and _state(sql_sync, raw) == 200
+
+
+def test_sql_replacement_for_another_campaigns_credential_is_refused(sql_sync):
+    _gm_member(sql_sync)
+    _raw, foreign = obsidian_sync.create_token(OTHER, "other")
+    with pytest.raises(integration_tokens.ReplacementNotAuthorized):
+        obsidian_sync.create_token(
+            CID, "x", replaces_credential_id=foreign["id"], minted_by_user_id="gm")
+    assert _token_rows(sql_sync) == [] and _file_records() == {}
+    assert _token_rows(sql_sync, OTHER) == [foreign["id"]]
+
+
+def test_sql_replacement_through_route_without_a_user_is_403(sql_sync):
+    _gm_member(sql_sync)
+    _raw, original = _minted(sql_sync)
+    before = _file()
+    response = sql_sync.client.post(
+        API + "/tokens", json={"replaces_credential_id": original}, headers=XHR)
+    assert response.status_code == 403
+    assert _token_rows(sql_sync) == [original] and _file() == before
+
+
+def test_sql_second_revoke_keeps_the_first_timestamp(sql_sync):
+    _raw, token_id = _minted(sql_sync)
+    assert _revoke(sql_sync, token_id) == 200
+    stamp, revoked_at = _file_records()[token_id]["revoked_at"], _row(sql_sync, token_id)["revoked_at"]
+    sql_sync.monkeypatch.setattr(obsidian_sync, "utc_now", lambda: "2099-01-01T00:00:00Z")
+    assert _revoke(sql_sync, token_id) == 200
+    integration_tokens.revoke_row(CID, token_id, None)
+    assert _file_records()[token_id]["revoked_at"] == stamp
+    assert _row(sql_sync, token_id)["revoked_at"] == revoked_at
+
+
+def test_stream_order_revoke_and_mint(sql_sync):
+    _raw, token_id = _minted(sql_sync)
+    with _stream_spy(sql_sync) as statements:
+        assert _revoke(sql_sync, token_id) == 200
+        # Read-only read (no stream), file tombstone under the lock, then the stream-first write.
+        assert sql_sync.spy.events == ["begin", "end", "lock", "unlock", "begin", "stream", "end"]
+        sql_sync.spy.events.clear()
+        _minted(sql_sync)
+        assert sql_sync.spy.events == ["begin", "stream", "end", "lock", "unlock"]
+        assert statements and not any("lock_timeout" in s for s in statements)  # SQLite
+    assert sql_sync.spy.violations == []
+
+
+def test_revoke_stream_lock_timeout_is_503_and_next_bearer_completes_it(sql_sync):
+    raw, token_id = _minted(sql_sync)
+    real = integration_tokens.revoke_row
+
+    def timed_out(*args, **kwargs):  # the timeout only inside revoke_row's write transaction
+        with sql_sync.monkeypatch.context() as inner:
+            inner.setattr(streams, "lock_stream", _lock_timeout)
+            return real(*args, **kwargs)
+
+    with sql_sync.monkeypatch.context() as patch:
+        patch.setattr(integration_tokens, "revoke_row", timed_out)
+        assert _revoke(sql_sync, token_id) == 503
+    assert _file_records()[token_id]["revoked_at"]
+    assert _row(sql_sync, token_id)["revoked_at"] is None
+    assert _state(sql_sync, raw) == 401
+    assert _row(sql_sync, token_id)["revoked_at"] is not None
+
+
+@pytest.mark.parametrize("writer", ["lazy_import", "repair_completes_partial_revoke"])
+def test_import_transaction_takes_the_stream_first(sql_sync, writer):
+    if writer == "lazy_import":
+        raw, token_id = _file_token(sql_sync)
+    else:
+        raw, token_id = _minted(sql_sync)
+        with sql_sync.monkeypatch.context() as patch:
+            patch.setattr(integration_tokens, "revoke_row", _boom)
+            assert _revoke(sql_sync, token_id) == 503
+    with _stream_spy(sql_sync) as statements:
+        if writer == "lazy_import":
+            assert _state(sql_sync, raw) == 200
+        else:
+            obsidian_sync.list_tokens(CID)
+        events = sql_sync.spy.events
+        at = events.index("stream")
+        # One stream, first thing in its own write transaction, after the file lock is released.
+        assert events.count("stream") == 1 and events[at - 1] == "begin" and events[at + 1] == "end"
+        assert "unlock" in events[:at] and events[:at].count("lock") == events[:at].count("unlock")
+        writes = [i for i, s in enumerate(statements) if "integration_tokens" in s
+                  and s.lstrip().upper().startswith(("INSERT", "UPDATE"))]
+        streamed = next(i for i, s in enumerate(statements) if "campaign_streams" in s)
+        assert writes and streamed < writes[0]
+    assert (_row(sql_sync, token_id)["revoked_at"] is None) == (writer == "lazy_import")
