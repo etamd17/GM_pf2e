@@ -3,7 +3,9 @@
 Every function works in the caller's session and transaction; none opens a
 transaction of its own.  ``consume`` is a compare-and-set that runs inside a
 command transaction, which already holds the campaign's stream row, so no
-row lock is taken here (contract C:460-466).  Issue and revoke are PE-14d's.
+row lock is taken here (contract C:460-466).  ``issue`` and ``revoke``
+(PE-14d) are command transaction only for the same reason: they are reached
+only from a registered command type's ``apply``.
 """
 
 from __future__ import annotations
@@ -11,9 +13,10 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import and_, select, update
+from sqlalchemy import and_, insert, select, update
 
-from .models import CampaignGrant
+from .models import CampaignGrant, new_id
+from .state_repositories import StateRecord
 
 _T = CampaignGrant.__table__
 
@@ -80,3 +83,55 @@ def consume(session: Any, grant_id: str, operation_id: str, *,
         consumed_at=datetime.now(timezone.utc), consumed_by_operation_id=operation_id))
     if result.rowcount != 1:
         raise GrantNotLive(f"grant {grant_id} is not live")
+
+
+def record(row: dict[str, Any]) -> StateRecord:
+    """The serialized ``grant`` record of one row: what visibility, the terminal
+    check and a projector read."""
+
+    return StateRecord.serialized("grant", row["grant_id"], {
+        "kind": row["kind"], "user_id": row["user_id"], "character_id": row["character_id"],
+        "target_level": row["target_level"], "build_revision": row["build_revision"],
+        "live": row["consumed_at"] is None and row["revoked_at"] is None})
+
+
+def get(session: Any, campaign_id: str, grant_id: str) -> dict[str, Any] | None:
+    """One grant of this campaign, live or not (a plain read)."""
+
+    row = session.execute(select(_T).where(
+        _T.c.campaign_id == campaign_id, _T.c.grant_id == grant_id)).first()
+    return None if row is None else _row(row)
+
+
+def issue(session: Any, campaign_id: str, *, kind: str, issued_by_kind: str,
+          issued_by_id: str, user_id: str | None = None, character_id: str | None = None,
+          target_level: int | None = None, build_revision: int | None = None) -> dict[str, Any]:
+    """Insert a live grant and return its row.
+
+    Command transaction only: the caller's executor holds the stream row.
+    The table's ``kind_fields`` check refuses a shape the kind does not take.
+    """
+
+    grant_id = new_id()
+    session.execute(insert(_T).values(
+        grant_id=grant_id, campaign_id=campaign_id, kind=kind, user_id=user_id,
+        character_id=character_id, target_level=target_level, build_revision=build_revision,
+        issued_by_kind=issued_by_kind, issued_by_id=issued_by_id,
+        issued_at=datetime.now(timezone.utc)))
+    return get(session, campaign_id, grant_id)
+
+
+def revoke(session: Any, campaign_id: str, grant_id: str) -> dict[str, Any]:
+    """Stamp ``revoked_at`` on a live grant of this campaign; ``GrantNotLive`` otherwise.
+
+    Command transaction only: the caller's executor holds the stream row.
+    Revocation is permanent (C:275): a revoked or consumed grant is never
+    changed again.
+    """
+
+    revoked = session.execute(update(_T).where(
+        _T.c.grant_id == grant_id, _T.c.campaign_id == campaign_id, _live())
+        .values(revoked_at=datetime.now(timezone.utc)).returning(_T.c.grant_id)).first()
+    if revoked is None:
+        raise GrantNotLive(f"grant {grant_id} is not live")
+    return get(session, campaign_id, grant_id)

@@ -21,6 +21,37 @@ from .models import (
     utc_now,
 )
 from .repositories import normalize_invite_code
+from .streams import lock_stream_for_write
+
+
+def lock_invitation_for_write(
+    session: Session, code: str,
+) -> tuple[Campaign | None, Invitation | None]:
+    """The one lock order for an existing invitation: locator, stream, campaign, invitation.
+
+    Returns ``(None, None)`` when the code is unknown and ``(campaign, None)``
+    when the locked row is gone or names another campaign (callers treat both
+    as a missing invitation; there is no retry).  It never checks
+    ``trashed_at`` or any invitation field: callers revalidate.
+    """
+
+    locator = session.get(Invitation, code)
+    if locator is None:
+        return None, None
+    # Copied now: the populate_existing re-read refreshes this same object.
+    located_campaign_id = locator.campaign_id
+    lock_stream_for_write(session, located_campaign_id)
+    campaign = session.scalar(
+        select(Campaign).where(Campaign.id == located_campaign_id).with_for_update())
+    invitation = session.scalar(
+        select(Invitation)
+        .where(Invitation.code == code)
+        .execution_options(populate_existing=True)
+        .with_for_update()
+    )
+    if invitation is None or invitation.campaign_id != located_campaign_id:
+        return campaign, None
+    return campaign, invitation
 
 
 class TransactionalStoreError(RuntimeError):
@@ -101,22 +132,11 @@ class TransactionalStore:
             else self._session_factory.begin()
         )
         with transaction as session:
-            locator = session.get(Invitation, normalized_code)
-            if locator is None:
+            campaign, invitation = lock_invitation_for_write(session, normalized_code)
+            if campaign is None and invitation is None:
                 raise InviteUnavailableError("invite does not exist")
-            campaign = session.scalar(
-                select(Campaign)
-                .where(Campaign.id == locator.campaign_id)
-                .with_for_update()
-            )
             if campaign is None or campaign.trashed_at is not None:
                 raise InviteUnavailableError("campaign is unavailable")
-            invitation = session.scalar(
-                select(Invitation)
-                .where(Invitation.code == normalized_code)
-                .execution_options(populate_existing=True)
-                .with_for_update()
-            )
             if invitation is None:
                 raise InviteUnavailableError("invite does not exist")
 
@@ -256,6 +276,7 @@ class TransactionalStore:
             if campaign_id is not None and locator.campaign_id != campaign_id:
                 raise RecordNotFoundError("character does not exist in this campaign")
             campaign_id = locator.campaign_id
+            lock_stream_for_write(session, campaign_id)
             campaign = session.scalar(
                 select(Campaign)
                 .where(Campaign.id == campaign_id)
@@ -384,6 +405,9 @@ class TransactionalStore:
 
     @staticmethod
     def _lock_campaign(session: Session, campaign_id: str) -> Campaign:
+        if session.get(Campaign, campaign_id) is None:  # the stream row needs the campaign
+            raise RecordNotFoundError("campaign does not exist")
+        lock_stream_for_write(session, campaign_id)
         campaign = session.scalar(
             select(Campaign)
             .where(Campaign.id == campaign_id)

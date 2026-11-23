@@ -570,11 +570,20 @@ def create_obsidian_sync_blueprint(adapter: dict) -> Blueprint:
         if not campaign_id:
             return _json_error("activate a campaign first", 409)
         body = request.get_json(silent=True) or {}
+        from core import auth
+        from core.persistence.integration_tokens import ReplacementNotAuthorized
+        minter = auth.current_user()
         try:
-            raw_token, record = sync_store.create_token(campaign_id,
-                                                        body.get("label") or "Obsidian")
+            raw_token, record = sync_store.create_token(
+                campaign_id, body.get("label") or "Obsidian", scope=body.get("scope"),
+                replaces_credential_id=body.get("replaces_credential_id"),
+                minted_by_user_id=minter["id"] if minter else None)
         except sync_store.TokenStoreUnavailable:
             return _json_error("token store unavailable", 503)
+        except ReplacementNotAuthorized:
+            return _json_error("replacement token not permitted", 403)
+        except sync_store.TokenRequestInvalid as exc:
+            return _json_error(str(exc), 400)
         return jsonify({
             "ok": True,
             "campaign_id": campaign_id,

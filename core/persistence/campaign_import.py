@@ -24,6 +24,7 @@ from .campaign_runtime import _metadata
 from .models import AuditEvent, Campaign, Character, User, new_id
 from .ownership import _checksum, _validate_locator
 from .repositories import CampaignRepository
+from .streams import lock_stream_for_write
 
 
 # Exact, case-sensitive path prefix -> logical storage (PE-11a layout).
@@ -264,6 +265,9 @@ def _import(staging_root, final_dir, campaign_doc, importer_user_id):
             session.flush()
             repository = CampaignRepository(session)
             repository.upsert_membership(campaign_id=cid, user_id=importer_user_id, role='gm')
+            # New campaign: the stream row can only follow its insert (PE-14d).
+            session.flush()
+            lock_stream_for_write(session, cid)
             for character in characters:
                 # These are new global identities, never an upsert into an
                 # existing campaign's character, even on a UUID collision.

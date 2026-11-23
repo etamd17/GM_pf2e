@@ -96,32 +96,51 @@ def _write_archive_files(archive, src, *, include_chronicle, campaign=None,
 
 
 def _write_sql_archive(archive, cid, src, *, include_chronicle):
+    # The campaign row is held only while SQL metadata and the character
+    # overlays are read, never across the zip: authorization writers queue
+    # behind this row with a lock timeout (PE-14d), so a long archive must
+    # not hold it.  SNAPSHOT_LOCK still covers local character-file writes.
+    prepared = {}
     with runtime.database().transaction() as session:
         campaign = session.scalar(select(Campaign).where(
             Campaign.id == cid,
         ).with_for_update())
         if campaign is None or campaign.trashed_at is not None:
             return False
+        campaign_document = campaign_runtime._document(session, campaign)
+        for folder in ('party_data', 'cosmere_pcs'):
+            directory = os.path.join(src, folder)
+            if not os.path.isdir(directory):
+                continue
+            for filename in sorted(os.listdir(directory)):
+                full = os.path.join(directory, filename)
+                if (not filename.endswith('.json') or not os.path.isfile(full)
+                        or is_transaction_artifact(full)):
+                    continue
+                with open(full, encoding='utf-8') as source:
+                    document = json.load(source)
+                if not isinstance(document, dict):
+                    raise ValueError('character document must be an object')
+                character = ownership._resolve_identity(session, cid, document, folder, filename)
+                # Preserve orphaned sheet data for recovery without granting any
+                # of its untrusted file permissions to a restored character.
+                prepared[(folder, filename)] = (
+                    ownership._no_grants(document) if character is None
+                    else ownership._overlay(session, character, document))
 
-        def character_document(document, folder, filename):
-            if not isinstance(document, dict):
-                raise ValueError('character document must be an object')
-            character = ownership._resolve_identity(session, cid, document, folder, filename)
-            # Preserve orphaned sheet data for recovery without granting any
-            # of its untrusted file permissions to a restored character.
-            if character is None:
-                return ownership._no_grants(document)
-            return ownership._overlay(session, character, document)
+    def character_document(document, folder, filename):
+        if (folder, filename) in prepared:
+            return prepared[(folder, filename)]
+        # A sheet that appeared after the snapshot read has no SQL identity here.
+        if not isinstance(document, dict):
+            raise ValueError('character document must be an object')
+        return ownership._no_grants(document)
 
-        # Reuse session-bound adapters so metadata and grants share a campaign
-        # row lock with SQL membership/ownership writers, without nested
-        # sessions or inconsistent reads from separate transactions.
-        _write_archive_files(
-            archive, src, include_chronicle=include_chronicle,
-            campaign=campaign_runtime._document(session, campaign),
-            character_document=character_document,
-        )
-        return True
+    _write_archive_files(
+        archive, src, include_chronicle=include_chronicle,
+        campaign=campaign_document, character_document=character_document,
+    )
+    return True
 
 
 def write_campaign_archive(archive, cid, *, include_chronicle=False):

@@ -36,7 +36,7 @@ from typing import Any, Callable, Mapping
 from sqlalchemy import select, text
 from sqlalchemy.exc import DBAPIError
 
-from core.persistence import runtime, streams
+from core.persistence import grants, runtime, streams
 from core.persistence.command_locks import CommandLocks
 from core.persistence.models import (
     CampaignSession,
@@ -269,8 +269,11 @@ class _Command:
         keys.update(k for e in events for k in (_event_keys(e) or ()))
         records = {key: record for key in sorted(keys)
                    if (record := self.read_current(session, *key)) is not None}
+        # A grant record carries no revision, so the receipt cannot name it:
+        # the grant its events are about is the record the command wrote.
+        written = set(receipt.revisions) | {f"{k}:{i}" for k, i in keys if k == "grant"}
         return self.answer(authorizer, receipt.applied_status, True, dict(receipt.revisions),
-                           events, receipt.seq_last, records, set(receipt.revisions))
+                           events, receipt.seq_last, records, written)
 
     def read_current(self, session: Any, kind: str, id: str) -> StateRecord | None:
         """An unlocked read of one revision record for a replay's fresh projection."""
@@ -284,6 +287,9 @@ class _Command:
             return CampaignClockRepository(session).get(cid, id)
         if kind == "campaign" and id == cid:
             return StateRecord.serialized("campaign", id, {})
+        if kind == "grant":
+            row = grants.get(session, cid, id)
+            return None if row is None else grants.record(row)
         return None
 
     def authorizer(self, session: Any) -> Any:

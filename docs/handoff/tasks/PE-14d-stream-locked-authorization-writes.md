@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** blocked (PE-14c); brief accepted (Codex brief review 2, 2026-11-14)
+- **Status:** done (built and accepted by Claude at `88635375`, 2026-11-23; PR #268). Brief accepted by Codex (brief review 2, 2026-11-14).
 - **Branch:** `claude/pe-14d-auth-writes` from current main after PE-14c merges. Record the exact starting SHA.
 - **Depends on:** [PE-14c](PE-14c-grants-tokens-authorizer.md) (grant and token records, the authorizer, the token-storage option the user picks there). Through it: PE-14a (`lock_stream`), PE-14b (executor, `STREAM_LOCK_TIMEOUT_MS`), PE-13a (`CommandLocks`).
 - **Followed by:** PE-14e (sessions) and PE-14f (status read, abandon); both are blocked on this task and may run in parallel.
@@ -101,11 +101,51 @@ Allowed files:
 <!-- ============ REPORT (written by the implementer) ============ -->
 
 ## Report
+
+Built by Claude on 2026-11-22 and 2026-11-23 on `claude/pe-14d-auth-writes` from `a292cb0a` (main after PE-14c). PR #268. Token storage Option A is the one implemented.
+
 - **Changed:**
+  - **Stream lock in every writer.** New `streams.lock_stream_for_write(session, campaign_id)`: `SET LOCAL lock_timeout` on PostgreSQL (from the executor's `STREAM_LOCK_TIMEOUT_MS`, imported inside the function), then `lock_stream`. It is called before the campaign row in:
+    - `services.py`: `lock_invitation_for_write` (new), `claim_character`, `_lock_campaign` (so `set_membership_role` and `remove_membership`);
+    - `campaign_runtime.py`: `_locked_campaign` (so `save_campaign`, `add_member`, `_change_membership`, `delete_campaign`) and `restore_campaign`;
+    - `ownership.py`: `_lock_campaign` (so `register_character`, `register_character_in_session`, `release_character`, `delete_character`);
+    - `workflow_store.py`: `SqlWorkflowStore.transaction`, after the process lock;
+    - `integration_tokens.py`: the import write transaction, `insert_minted` and `revoke_row`.
+  - **New campaigns.** `create_campaign` and `campaign_import._import` take the stream after inserting the campaign and its GM membership, as the brief's exception states.
+  - **Invitations.** `services.lock_invitation_for_write` gives signup, existing-user redemption, `revoke_invite` and `consume_invite` one order: locator, stream, campaign, invitation. `identity._lock_invitation` delegates to it.
+  - **Grant commands.** New `core/commands/grant_commands.py` registers `grant.issue_level_unlock`, `grant.issue_retrain`, `grant.set_quartermaster` and `grant.revoke`, with role policies, and emits `grant.issued` and `grant.revoked`. `core/persistence/grants.py` gains `get`, `record`, `issue` and `revoke`.
+  - **Tokens.** `create_token` takes `scope`, `replaces_credential_id` and `minted_by_user_id`. The mint route passes the body's `scope` and `replaces_credential_id` and the logged-in user, and answers 400 for an invalid request (`TokenRequestInvalid`) and 403 for a refused replacement.
+- **Judgments (mine; there is no second reviewer now):**
+  1. **Helper in `streams.py`.** The lock-timeout statement and the lock live in one function in `streams.py`, which the brief's allowed-files list does not name. Fifteen copies of the same four lines were the alternative.
+  2. **Campaign-lock helpers take the stream.** The AST inventory accepts a call to `_lock_campaign` or `_locked_campaign` as taking the stream only after verifying, statically, that the helper calls `lock_stream_for_write` before its `FOR UPDATE`.
+  3. **Unlocked existence read first.** Writers read the campaign unlocked before the stream, so a missing campaign keeps its old error instead of a foreign-key failure on the stream row.
+  4. **`write_character_batch` takes no stream.** It writes sheet metadata only, may span campaigns (`lock_stream` refuses a second one), and changes no authorization input. It still locks the campaign rows and never asks for a stream, so it cannot form a cycle.
+  5. **`save_campaign` takes the stream** through `_locked_campaign`, although the brief does not list it. It writes the settings that hold the rules pin commands read.
+  6. **Token scope is fixed at mint.** "Scope change" is a replacement mint. No command or route edits a live token's scope.
+  7. **Grant payloads are checked at check 9.** A missing, extra or mistyped field is `422 rule_violation`. So is a second live grant for the same character and target, or the same quartermaster.
+  8. **Character grants lock the play row too.** Their events carry the character as a subject so the owner and editor can hold their projections (C:412-413), and an event's `character` subject is judged by the play record.
+  9. **`expected` builds are locked.** An `expected` entry naming another character is 404 at check 5. Before the fix it was an unregistered key, a 500.
+- **Outside the brief's allowed files, and why:**
+  - `core/commands/executor.py`: a replayed grant command returned no events and no records, because `read_current` had no `grant` branch and a grant record has no revision. Replay now re-reads the grant its events are about.
+  - `core/commands/envelope.py`: a string or key containing NUL is `400 bad_envelope`. PostgreSQL cannot bind it, so it was a 500 there.
+  - `core/backups.py`: the campaign archive held the campaign row for the whole zip. With the new 5-second lock timeout, a writer queued behind a long export would have failed with 503 while holding the stream row, which would also fail commands. The archive now holds the row only while it reads SQL metadata and the character overlays, and zips with no transaction open.
+- **Self-review.** An adversarial workflow (four reviewers, each finding checked by a skeptic) confirmed eight findings and refuted three. All eight are fixed: the three above, the `expected` 500, the grant event subjects, the over-broad 400 on mint, and three test gaps (the inventory missed grant and token writes outside their own modules, accepted a bare `lock_stream`, and accepted a taker inside a nested function). The PostgreSQL fixture also gained the lock and statement timeouts of the pattern the brief names.
 - **Tests run:**
+  - `python -m pytest -q tests/persistence tests/test_obsidian_sync.py -m "not postgresql" --strict-markers` (Windows): 1415 passed, 2 skipped, 51 deselected, and 1 failed under load (`test_sql_character_http.py::test_private_character_routes_use_sql_owner_not_editor_grants[pf2e]`, a subprocess app-import test); that file passes 3 of 3 when run alone, and it passes in CI.
+  - Backup suites after the archive change (`tests/persistence/test_sql_backups.py`, `tests/test_backups.py`, `tests/test_campaign_backup.py`, `tests/character_workflows/test_archive_privacy.py`, `tests/test_scheduled_backups.py`, `tests/test_character_batch_atomicity.py`): 60 passed.
+  - `python -c "import core.persistence"` and `python -c "import core.commands.executor"` each succeed in a fresh interpreter (also asserted by a test).
+  - `git diff --check`: clean.
+  - CI on `88635375`: `changes`, `test`, `browser` and `postgresql` all passed. Full suite: 5721 passed, 141 skipped, 1 xfailed. PostgreSQL job: 51 passed, including the 14 new cases (37 before this task).
+- **Sizes.** Product: about +470/-55 raw lines against `a292cb0a`, against an estimate of about 400 and a stop line of 480. Tests: about +1,880 lines against an estimate of 855. Both are over. The test overrun is mostly the AST inventory with its planted cases, the 14 PostgreSQL race cases and the grant-command matrix.
 - **Skipped / not verified:**
+  - PostgreSQL behaviour is verified only in CI; there is no local PostgreSQL.
+  - The archive change is not exercised against a long export on PostgreSQL. A test proves no transaction is open during the zip.
 - **Known wrong / limitations:**
-- **Follow-ups (not done here):**
+  - A token revoke whose stream lock times out answers 503 with the file revoked and SQL live until the next bearer request or GM token-page visit. It fails closed (brief judgment, unchanged).
+  - A character with a build row and no play row gets `503 authority_unavailable` on a grant command. Both rows exist for every character in db authority.
+  - Other holders of the campaign row that take no stream (`identity.create_invite`, `write_character_batch`) hold it only briefly. A writer queued behind one waits at most the lock timeout.
+  - Subscription closure stays post-commit and unchanged (Decision 7; PE-31b).
+- **Follow-ups (not done here):** none new. PE-14e and PE-14f are unblocked.
 
 ## Review
 
@@ -171,3 +211,7 @@ uncommitted.
 Reviewed PR #259 at `51ac0e51` against `791936f1`. **R1-3 and R1-4 are closed; no new blocking findings.** The shared invitation helper gives signup, existing-user redemption, revoke and consume the same locator -> stream -> campaign -> invitation order, with a locked campaign-id recheck and safe same-campaign re-entry. The PostgreSQL acceptance cases exercise both original interleavings. Token writers retain PE-14c's file/SQL ordering without holding the process lock and stream lock together.
 
 Treating the quartermaster `user_id` as a value is acceptable for this GM/user-only command: check 9 must validate an active player membership in this campaign, with invalid targets giving 422 and no write. It does not introduce an undeclared character-record reference or a token-accessible account lookup. Required adapters and registrations agree with PE-14a/b/c. The revised scope and 480-product-line stop are acceptable. Docs-only review; no product tests ran.
+
+### Acceptance (Claude, 2026-11-23)
+
+Claude builds and reviews since 2026-11-22, so this acceptance rests on the self-review recorded in the Report, not on a second reviewer: an adversarial workflow whose eight confirmed findings are all fixed, the full non-PostgreSQL sweep, and all four CI jobs green on `88635375` with the PostgreSQL job running the 14 new race and timeout cases.

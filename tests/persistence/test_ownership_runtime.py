@@ -350,3 +350,35 @@ def test_claim_rejects_character_outside_explicit_campaign_scope(ownership_store
         TransactionalStore(database.session_factory).claim_character(
             campaign_id="other-campaign", character_id="hero", user_id="owner",
         )
+
+
+@pytest.mark.parametrize("writer", ["register", "release", "delete"])
+def test_character_writers_lock_stream_before_campaign_row(ownership_store, writer):
+    """PE-14d Decision 1: stream row, then campaign row, then any write."""
+    from tests.persistence.lock_order import assert_stream_first, first, record_locks
+
+    ownership, _ = ownership_store
+    calls = {
+        "register": lambda: ownership.register_character(
+            "campaign", "party_data", "new.json", _document(id="new"), owner_user_id="editor"),
+        "release": lambda: ownership.release_character("campaign", "hero", "gm"),
+        "delete": lambda: ownership.delete_character("campaign", "hero", "owner"),
+    }
+    with record_locks() as events:
+        calls[writer]()
+    assert_stream_first(events, "campaign")
+    first(events, "write:")
+
+
+def test_character_batch_takes_no_stream_lock(ownership_store):
+    """Sheet metadata only, possibly several campaigns: campaign row, no stream."""
+    from tests.persistence.lock_order import first, record_locks
+
+    ownership, _ = ownership_store
+    with record_locks() as events:
+        ownership.write_character_batch(
+            [("campaign", "party_data", "hero.json", _document(build={"name": "Renamed"}))],
+            write_documents=lambda documents: documents,
+        )
+    assert first(events, "for_update:campaigns") < first(events, "write:characters")
+    assert not [name for name in events if name.startswith(("stream:", "lock_timeout"))]

@@ -72,6 +72,10 @@ def _load_tokens(campaign_id: str) -> dict:
     return doc
 
 
+class TokenRequestInvalid(ValueError):
+    """A mint asked for a scope or replacement this store cannot record (answered 400)."""
+
+
 class TokenStoreUnavailable(RuntimeError):
     """A token store could not be read or written safely (routes answer 503)."""
 
@@ -115,13 +119,40 @@ def _write_tokens(campaign_id: str, doc: dict) -> None:
         raise TokenStoreUnavailable("token file write failed") from None
 
 
-def create_token(campaign_id: str, label: str = "Obsidian") -> tuple[str, dict]:
+def _checked_scope(scope) -> list[str] | None:
+    """A mint's command scope: None (the default ``["@live"]``) or 1-32 distinct names."""
+
+    if scope is None:
+        return None
+    if (not isinstance(scope, list) or not 1 <= len(scope) <= 32
+            or any(not isinstance(name, str) or not 0 < len(name) <= 128 for name in scope)
+            or len(set(scope)) != len(scope)):
+        raise TokenRequestInvalid("scope must be a list of 1 to 32 distinct command names")
+    return list(scope)
+
+
+def create_token(campaign_id: str, label: str = "Obsidian", *, scope=None,
+                 replaces_credential_id: str | None = None,
+                 minted_by_user_id: str | None = None) -> tuple[str, dict]:
     """Create a campaign-scoped bearer token and return it once.
 
     Only its SHA-256 digest is persisted.  The token carries 256 bits of random
     secret material, so a fast digest is appropriate here (unlike a password).
+
+    ``scope`` (default ``["@live"]``) and ``replaces_credential_id`` exist only
+    on the SQL record (PE-14d): outside ``sql`` mode anything but the default
+    raises ``TokenRequestInvalid``.  A replacement the minter may not make, or one for
+    another campaign's credential, raises ``ReplacementNotAuthorized`` (a
+    ``ValueError``) and writes nothing.
     """
     label = (label or "Obsidian").strip()[:80]
+    scope = _checked_scope(scope)
+    if replaces_credential_id is not None and (
+            not isinstance(replaces_credential_id, str) or not replaces_credential_id):
+        raise TokenRequestInvalid("replaces_credential_id must be a credential id")
+    if not _sql_tokens() and (replaces_credential_id is not None
+                              or scope not in (None, ["@live"])):
+        raise TokenRequestInvalid("a token scope or replacement needs the SQL token store")
     token_id = uuid.uuid4().hex[:12]
     raw_token = f"{TOKEN_PREFIX}_{token_id}_{secrets.token_urlsafe(32)}"
     record = {
@@ -134,7 +165,9 @@ def create_token(campaign_id: str, label: str = "Obsidian") -> tuple[str, dict]:
         "revoked_at": None,
     }
     if _sql_tokens():
-        return _create_token_sql(campaign_id, raw_token, record)
+        return _create_token_sql(campaign_id, raw_token, record, scope=scope,
+                                 replaces_credential_id=replaces_credential_id,
+                                 minted_by_user_id=minted_by_user_id)
     with campaign_lock(campaign_id):
         doc = _load_tokens(campaign_id)
         doc["tokens"].append(record)
@@ -142,7 +175,7 @@ def create_token(campaign_id: str, label: str = "Obsidian") -> tuple[str, dict]:
     return raw_token, public_token_record(record)
 
 
-def _create_token_sql(campaign_id: str, raw_token: str, record: dict) -> tuple[str, dict]:
+def _create_token_sql(campaign_id: str, raw_token: str, record: dict, **minted) -> tuple[str, dict]:
     """Commit the SQL row first, then copy it to the file, insert-if-absent.
 
     A SQL failure returns no token and writes no file.  A failed file copy
@@ -152,7 +185,9 @@ def _create_token_sql(campaign_id: str, raw_token: str, record: dict) -> tuple[s
 
     from core.persistence import integration_tokens
     try:
-        integration_tokens.insert_minted(campaign_id, record)
+        integration_tokens.insert_minted(campaign_id, record, **minted)
+    except integration_tokens.ReplacementNotAuthorized:
+        raise
     except Exception:
         raise TokenStoreUnavailable("token database unavailable") from None
     try:
