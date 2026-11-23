@@ -2,8 +2,8 @@
 
 ``execute`` runs check 1 with no transaction open, then, in one transaction:
 the stream lock (lock-order step 1), the authority fence (check 2), the
-receipt lookup (check 3), the authorizer (PE-14c's ``authorizer.load``;
-:data:`authorizer_factory` until then), the active-session snapshot, the
+receipt lookup (check 3), the authorizer (:data:`authorizer_factory`, bound
+to PE-14c's ``authorizer.load``), the active-session snapshot, the
 campaign pin, the type's ``lock_plan``, PE-13b's checks 4-9, ``apply``, the
 receipt and the events, then ``COMMIT``.  Only after ``COMMIT`` returns is
 ``services.session_events.after_commit`` called.
@@ -59,6 +59,7 @@ from core.persistence.state_repositories import (
 )
 from services import session_events
 
+from .authorizer import load as load_authorizer
 from .checks import CODES, CheckContext, CheckSpec, CommandRefusal, run_checks
 from .conflicts import conflict_body
 from .digest import command_digest
@@ -84,8 +85,8 @@ _DOMAINS = {kind: domain for domain, kind in DOMAIN_KINDS.items()}
 _SUBJECT_KINDS = {"character": "character.play"}
 
 # ``factory(session, principal, campaign_id) -> Authorizer`` (PE-13b's protocol),
-# reading only through ``session``.  PE-14c sets it to ``authorizer.load``.
-authorizer_factory: Callable[..., Any] | None = None
+# reading only through ``session``: PE-14c's ``authorizer.load``.
+authorizer_factory: Callable[..., Any] | None = load_authorizer
 
 
 class EnvelopeMutated(RuntimeError):
