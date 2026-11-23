@@ -203,7 +203,7 @@ def _strict_document(raw: bytes) -> Any:
             parse_constant=migration._reject_json_constant,
             parse_float=migration._parse_json_float,
         )
-    except ValueError:  # includes UnicodeDecodeError; the planner reports it
+    except (ValueError, RecursionError):  # includes UnicodeDecodeError; the planner reports it
         return None
 
 
@@ -441,7 +441,8 @@ def _stage_tokens(staging, root, records, token_rows) -> dict[str, Any]:
     """Write each campaign's ``tokens.json`` from SQL plus the quiesced source file.
 
     SQL supplies every field of a row it holds; a revocation comes from either
-    side and is never cleared. A file-only record is kept as read. A token
+    side and is never cleared, and covers every record of the campaign that
+    shares its digest. A file-only record is otherwise kept as read. A token
     whose scope the legacy file cannot hold is exported revoked. Any source
     file the union cannot trust refuses the export, naming the campaign only.
     """
@@ -495,16 +496,28 @@ def _stage_tokens(staging, root, records, token_rows) -> dict[str, Any]:
                 "revoked_at": revoked_at,
             })
         tokens.extend(file_records.values())  # file-only records, in file order
+        # The legacy reader matches a bearer by digest and accepts the first
+        # live record, so a revocation covers every record sharing its digest.
+        dead = {token["token_hash"] for token in tokens if token.get("revoked_at")}
+        tokens = [
+            {**token, "revoked_at": exported_at}
+            if token["token_hash"] in dead and not token.get("revoked_at") else token
+            for token in tokens
+        ]
         document = {"schema_version": 2, "tokens": tokens}
         root_name = "campaigns_trash" if campaign["trashed_at"] is not None else "campaigns"
         path = staging.joinpath(root_name, campaign_id, *TOKEN_PARTS)
         path.parent.mkdir(parents=True, exist_ok=True)
-        _private_json(path, document)
+        try:
+            _private_json(path, document)
+            digest = migration._canonical_sha256(document)
+        except UnicodeEncodeError:  # a file-only record UTF-8 cannot hold
+            raise refusal from None
         result["expected"][path] = document
         result["manifest"][campaign_id] = {
             "count": len(tokens),
             "revoked": sum(1 for token in tokens if token.get("revoked_at")),
-            "digest": migration._canonical_sha256(document),
+            "digest": digest,
         }
     return result
 

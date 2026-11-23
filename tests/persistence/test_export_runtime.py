@@ -1071,12 +1071,14 @@ def test_export_revokes_non_live_scope_tokens_in_manifest(imported_store, tmp_pa
 @pytest.mark.parametrize("content", [
     "{not json", "[]", '{"tokens": {}}', '{"tokens": ["record"]}',
     json.dumps({"tokens": [{"id": "nohash01", "revoked_at": None}]}),
-], ids=["bad-json", "non-object", "non-list-tokens", "non-object-record", "no-token-hash"])
+    '{"tokens": ' + "[" * 100000 + "]" * 100000 + "}",
+], ids=["bad-json", "non-object", "non-list-tokens", "non-object-record", "no-token-hash",
+        "deeply-nested"])
 def test_export_refuses_malformed_token_file(imported_store, tmp_path, content):
     source, url, database = imported_store
     path = _token_path(source)
     path.parent.mkdir(parents=True)
-    path.write_text(content, encoding="utf-8")
+    path.write_bytes(content.encode("utf-8"))
     before, _message = _assert_token_refusal(source, url, tmp_path, TOKEN_REFUSAL)
     assert source_bytes(source) == before
 
@@ -1224,3 +1226,38 @@ def test_authority_check_refuses_a_stray_or_altered_staged_token_file(imported_s
     write(stray, document)
     with pytest.raises(exporter.RuntimeExportError, match="changed token authority"):
         exporter._verify_authority(*args, expected_tokens={path: document})
+
+
+@pytest.mark.parametrize("case", ["sql-revoked", "file-revoked", "scope"])
+def test_export_revocation_covers_every_record_sharing_the_digest(
+        imported_store, tmp_path, monkeypatch, case):
+    # The legacy reader accepts the first live record with the bearer's digest.
+    source, url, database = imported_store
+    _mint(database,
+          _token_row("shared01", revoked_at=NOW if case == "sql-revoked" else None,
+                     scope=["session.start"] if case == "scope" else ["@live"]),
+          _token_row("other01", created_at=NOW + timedelta(hours=1)))
+    _write_tokens(source, _token_record(
+        "copy01", token_hash=obsidian_sync._token_digest(_raw_token("shared01")),
+        revoked_at="2026-09-01T00:00:00Z" if case == "file-revoked" else None))
+    output = tmp_path / "rollback"
+    report = exporter.export_runtime(source, url, output, quiesced=True)
+    revoked = {token["id"]: token["revoked_at"] for token in load(_token_path(output))["tokens"]}
+    assert revoked["shared01"] and revoked["copy01"] and revoked["other01"] is None
+    for stamp in (revoked["shared01"], revoked["copy01"]):
+        assert datetime.strptime(stamp, TOKEN_TIME)
+    assert report["integration_tokens"][CAMPAIGN]["revoked"] == 2
+    assert report["integration_tokens"][CAMPAIGN]["count"] == 3
+
+    monkeypatch.setattr(storage, "CAMPAIGNS_DIR", str(output / "campaigns"))
+    monkeypatch.delenv("OWNERSHIP_BACKEND", raising=False)
+    assert obsidian_sync.verify_token(CAMPAIGN, _raw_token("shared01")) is None
+    assert obsidian_sync.verify_token(CAMPAIGN, _raw_token("other01"))["id"] == "other01"
+
+
+def test_export_refuses_file_only_token_utf8_cannot_encode(imported_store, tmp_path):
+    source, url, database = imported_store
+    _write_tokens(source, _token_record("fileonly01", label="x\ud800y"))
+    assert b"\\ud800" in _token_path(source).read_bytes()  # the escape, not raw bytes
+    before, _message = _assert_token_refusal(source, url, tmp_path, TOKEN_REFUSAL)
+    assert source_bytes(source) == before
