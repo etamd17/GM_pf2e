@@ -186,3 +186,43 @@ def test_database_failure_never_publishes_legacy_archive(sql_archive, monkeypatc
         backups.snapshot_campaign(cid, stamp="unavailable")
     assert backups.latest_backup(cid) is None
     assert not (Path(backups.BACKUPS_DIR) / cid / "unavailable.zip.tmp").exists()
+
+
+def test_archive_zips_with_no_transaction_open(sql_archive, monkeypatch):
+    # PE-14d: authorization writers queue behind the campaign row with a lock
+    # timeout, so the archive must release it before the (possibly long) zip.
+    database, cid = sql_archive
+    _register(database, cid)
+    path = Path(storage.campaign_dir(cid)) / "party_data" / "hero.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(_sheet(cid)), encoding="utf-8")
+    open_transactions, seen = [], []
+    real_transaction, real_write = database.transaction, backups._write_archive_files
+
+    def transaction():
+        context = real_transaction()
+
+        class Tracked:
+            def __enter__(self):
+                open_transactions.append(1)
+                return context.__enter__()
+
+            def __exit__(self, *exc):
+                open_transactions.pop()
+                return context.__exit__(*exc)
+        return Tracked()
+
+    def write(*args, **kwargs):
+        seen.append(len(open_transactions))
+        return real_write(*args, **kwargs)
+
+    monkeypatch.setattr(database, "transaction", transaction)
+    monkeypatch.setattr(backups, "_write_archive_files", write)
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        assert backups.write_campaign_archive(archive, cid)
+    with zipfile.ZipFile(buffer) as archive:
+        (name,) = [n for n in archive.namelist() if n.endswith("hero.json")]
+        member = json.loads(archive.read(name))
+    assert seen == [0]
+    assert member["owner_user_id"] == "owner"  # the overlay read under the lock is kept
