@@ -21,6 +21,13 @@ retained in a private sidecar; the application/importer do not replay that
 sidecar. Returning to SQL still requires separate history reconciliation or a
 retained/restored database backup for that history.
 
+Obsidian tokens are exported from SQL (PE-14g): each campaign's
+``integrations/obsidian/tokens.json`` is the SQL rows plus the quiesced source
+file, with a revocation kept from either side. A token whose command scope
+the legacy file cannot hold is exported revoked and listed in the manifest's
+``token_scope_revoked``; a source token file that cannot be trusted refuses
+the export.
+
 D&D character files stay authoritative until PE-15: every located file under a
 dnd5e campaign's dnd5e/characters/ is copied as it is, with no SQL ownership
 overlay, and differences from SQL are listed in the manifest's ``dnd5e_drift``.
@@ -30,6 +37,7 @@ from __future__ import annotations
 
 import argparse
 from collections import defaultdict
+from datetime import datetime, timezone
 import hashlib
 import json
 import os
@@ -48,6 +56,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
 from core.persistence import Database, Invitation, MigrationRun
+from core.persistence.models import IntegrationToken
 from core.character_layout import DND5E_STORAGE, LEGACY_STORAGE_DIRS, is_dnd5e_character_id
 from core.character_workflows.types import WorkflowError
 from tools import migrate_transactional_store as migration
@@ -56,6 +65,10 @@ from tools import migrate_transactional_store as migration
 HISTORY_FILENAME = ".gm-pf2e-runtime-history.json"
 MANIFEST_FILENAME = ".gm-pf2e-runtime-export.json"
 DND5E_PARTS = LEGACY_STORAGE_DIRS[DND5E_STORAGE]
+# The legacy Obsidian token file (core/obsidian_sync.py) and its timestamp format.
+TOKEN_PARTS = ("integrations", "obsidian", "tokens.json")
+TOKEN_TIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
+LIVE_TOKEN_SCOPE = ["@live"]
 LOCATOR_KEYS = ("id", "campaign_id", "system", "legacy_root", "legacy_storage", "legacy_file")
 # Planner conflicts that mean a copied D&D file itself is bad (named on refusal).
 DND5E_FILE_CONFLICTS = {"dnd5e_locator_mismatch", "invalid_character_system"}
@@ -373,15 +386,157 @@ def _locators(rows, *, dnd5e: bool) -> list[dict[str, Any]]:
             if (row["legacy_storage"] == DND5E_STORAGE) == dnd5e]
 
 
-def _verify_authority(staging, records, invitation_state, dnd5e) -> None:
+def _token_time(value) -> str | None:
+    """A SQL timestamp in the legacy token-file format (UTC, whole seconds)."""
+    if value is None:
+        return None
+    if value.tzinfo is not None:
+        value = value.astimezone(timezone.utc)
+    return value.strftime(TOKEN_TIME_FORMAT)
+
+
+def _token_rows(session) -> list[dict[str, Any]]:
+    """Every SQL token row, in the order the exported files list them."""
+    table = IntegrationToken.__table__
+    rows = session.execute(select(table).order_by(
+        table.c.campaign_id, table.c.created_at, table.c.credential_id)).all()
+    return [{
+        "credential_id": row.credential_id, "campaign_id": row.campaign_id,
+        "label": row.label, "token_digest": row.token_digest, "last_four": row.last_four,
+        "scope": list(row.scope) if isinstance(row.scope, (list, tuple)) else row.scope,
+        "created_at": _token_time(row.created_at),
+        "last_used_at": _token_time(row.last_used_at),
+        "revoked_at": _token_time(row.revoked_at),
+    } for row in rows]
+
+
+def _token_source(root: Path, campaign: Mapping[str, Any]) -> Path | None:
+    """The campaign's source ``tokens.json``, resolved as ``_source_character`` does."""
+    campaign_id = campaign["id"]
+    if migration.CAMPAIGN_ID_RE.fullmatch(campaign_id) is None:
+        raise RuntimeExportError("Unsafe campaign locator; export refused")
+    # SQL soft-trash retains the active directory; the active copy wins.
+    root_names = ["campaigns"]
+    if campaign["trashed_at"] is not None:
+        root_names.append("campaigns_trash")
+    for root_name in root_names:
+        candidate = root.joinpath(root_name, campaign_id, *TOKEN_PARTS)
+        current = root
+        for part in candidate.relative_to(root).parts:
+            current = current / part
+            if current.is_symlink():
+                raise RuntimeExportError("Obsidian token source uses a symbolic link")
+        if candidate.is_file():
+            _require_canonical(candidate, "Obsidian token source is not at its own location")
+            return candidate
+    return None
+
+
+def _token_fingerprint(root: Path, campaign: Mapping[str, Any]) -> tuple[Path | None, bytes | None]:
+    source = _token_source(root, campaign)
+    return source, None if source is None else source.read_bytes()
+
+
+def _stage_tokens(staging, root, records, token_rows) -> dict[str, Any]:
+    """Write each campaign's ``tokens.json`` from SQL plus the quiesced source file.
+
+    SQL supplies every field of a row it holds; a revocation comes from either
+    side and is never cleared. A file-only record is kept as read. A token
+    whose scope the legacy file cannot hold is exported revoked. Any source
+    file the union cannot trust refuses the export, naming the campaign only.
+    """
+    exported_at = datetime.now(timezone.utc).strftime(TOKEN_TIME_FORMAT)
+    owners = {row["credential_id"]: row["campaign_id"] for row in token_rows}
+    by_campaign = defaultdict(list)
+    for row in token_rows:
+        by_campaign[row["campaign_id"]].append(row)
+    result = {"expected": {}, "sources": {}, "scope_revoked": [], "manifest": {}}
+    for campaign in records["campaigns"]:
+        campaign_id = campaign["id"]
+        refusal = RuntimeExportError(
+            f"Obsidian token file for campaign {campaign_id} cannot be exported; repair it first")
+        source, raw = _token_fingerprint(root, campaign)
+        result["sources"][campaign_id] = (
+            source, None if raw is None else hashlib.sha256(raw).hexdigest())
+        file_records: dict[str, Mapping[str, Any]] = {}
+        if raw is not None:
+            document = _strict_document(raw)
+            listed = document.get("tokens", []) if isinstance(document, dict) else None
+            if not isinstance(listed, list):
+                raise refusal
+            for record in listed:
+                if (
+                    not isinstance(record, dict)
+                    or not isinstance(record.get("id"), str)
+                    or not isinstance(record.get("token_hash"), str)
+                    or record["id"] in file_records
+                    or owners.get(record["id"], campaign_id) != campaign_id
+                ):
+                    raise refusal
+                file_records[record["id"]] = record
+        rows = by_campaign.get(campaign_id, [])
+        if not rows and source is None:
+            continue
+        tokens = []
+        for row in rows:
+            in_file = file_records.pop(row["credential_id"], None)
+            if in_file is not None and in_file["token_hash"] != row["token_digest"]:
+                raise refusal
+            revoked_at = row["revoked_at"] or (in_file or {}).get("revoked_at") or None
+            if row["scope"] != LIVE_TOKEN_SCOPE and not revoked_at:
+                # The legacy file cannot hold a scope: fail closed.
+                revoked_at = exported_at
+                result["scope_revoked"].append(
+                    {"credential_id": row["credential_id"], "campaign_id": campaign_id})
+            tokens.append({
+                "id": row["credential_id"], "label": row["label"],
+                "token_hash": row["token_digest"], "last_four": row["last_four"],
+                "created_at": row["created_at"], "last_used_at": row["last_used_at"],
+                "revoked_at": revoked_at,
+            })
+        tokens.extend(file_records.values())  # file-only records, in file order
+        document = {"schema_version": 2, "tokens": tokens}
+        root_name = "campaigns_trash" if campaign["trashed_at"] is not None else "campaigns"
+        path = staging.joinpath(root_name, campaign_id, *TOKEN_PARTS)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        _private_json(path, document)
+        result["expected"][path] = document
+        result["manifest"][campaign_id] = {
+            "count": len(tokens),
+            "revoked": sum(1 for token in tokens if token.get("revoked_at")),
+            "digest": migration._canonical_sha256(document),
+        }
+    return result
+
+
+def _verify_tokens(staging: Path, expected_tokens: Mapping | None) -> None:
+    """Every staged ``tokens.json`` is one the stager wrote, byte for byte in meaning."""
+    expected = dict(expected_tokens or {})
+    staged = {
+        path
+        for root_name in ("campaigns", "campaigns_trash")
+        for path in staging.joinpath(root_name).glob("*/" + "/".join(TOKEN_PARTS))
+    }
+    if staged != set(expected) or any(
+        _strict_document(path.read_bytes()) != document for path, document in expected.items()
+    ):
+        raise RuntimeExportError("Legacy normalization changed token authority; export refused")
+
+
+def _verify_authority(staging, records, invitation_state, dnd5e, *,
+                      expected_tokens: Mapping | None = None) -> None:
     """Check legacy normalization preserves every SQL authorization field.
 
     The expected projection applies exactly the staged D&D adjustments:
     selections of omitted D&D characters are cleared and invites scoped to them
     are absent. D&D assignments are left out because the D&D file, not SQL, is
     the ownership authority until PE-15.
+
+    ``expected_tokens`` maps each staged ``tokens.json`` to its expected
+    document; ``None`` means no ``tokens.json`` may be staged at all.
     """
 
+    _verify_tokens(staging, expected_tokens)
     exported = migration.inspect_source(staging).records
     omitted = dnd5e["omitted"]
     dnd5e_characters = {(row["campaign_id"], row["id"]) for row in records["characters"]
@@ -471,6 +626,8 @@ def export_runtime(
             fingerprints, dnd5e = _write_legacy_tree(
                 staging, root, records, envelopes, invitation_state, excluded_character_ids
             )
+            token_rows = _token_rows(session)
+            tokens = _stage_tokens(staging, root, records, token_rows)
             history = {
                 "schema_version": 1,
                 "records": records,
@@ -498,12 +655,13 @@ def export_runtime(
                         f"D&D character file {conflict['path']} cannot be exported ({conflict['code']})"
                     )
             raise RuntimeExportError("Current SQL state cannot form a valid legacy rollback tree")
-        _verify_authority(staging, records, invitation_state, dnd5e)
+        _verify_authority(staging, records, invitation_state, dnd5e,
+                          expected_tokens=tokens["expected"])
         # The operator's quiescence acknowledgment is required, but also catch
         # an accidental writer which changed SQL while files were staged.
         with database.session() as current_session:
             current_records = migration._database_records(current_session)
-            if current_records != records:
+            if current_records != records or _token_rows(current_session) != token_rows:
                 raise RuntimeExportError('SQL state changed during export; keep writers quiesced')
         _reject_pending_batches(root, records["campaigns"])
         for path, expected in fingerprints.items():
@@ -518,6 +676,14 @@ def export_runtime(
                 or hashlib.sha256(path.read_bytes()).hexdigest() != expected
             ):
                 raise RuntimeExportError("Character payload changed during export; keep writers quiesced")
+        # A token file that changed, appeared or vanished is a change too.
+        for campaign in records["campaigns"]:
+            source, raw = _token_fingerprint(root, campaign)
+            if tokens["sources"][campaign["id"]] != (
+                source, None if raw is None else hashlib.sha256(raw).hexdigest()
+            ):
+                raise RuntimeExportError(
+                    "Obsidian token file changed during export; keep writers quiesced")
         # D&D files are discovered on disk, so an added or removed file is a change too.
         for campaign in records["campaigns"]:
             if campaign["id"] in dnd5e["listings"] and (
@@ -533,6 +699,8 @@ def export_runtime(
             "entity_digests": plan["entity_digests"],
             "history_digest": migration._canonical_sha256(history),
             "dnd5e_drift": dnd5e["drift"],
+            "integration_tokens": tokens["manifest"],
+            "token_scope_revoked": tokens["scope_revoked"],
             "verified": True,
         }
         _private_json(staging / MANIFEST_FILENAME, report)
