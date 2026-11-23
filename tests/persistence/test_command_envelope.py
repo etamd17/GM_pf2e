@@ -382,6 +382,21 @@ def test_deeply_nested_body_is_bad_envelope_not_recursion_error(field):
     assert check_envelope(body(client=ok), USER, route_campaign_id=CID).envelope["client"] == ok
 
 
+@pytest.mark.parametrize("changes", [
+    {"payload": {"note": "a\x00b"}}, {"payload": {"targets": [["ok", "\x00"]]}},
+    {"payload": {"k\x00": 1}}, {"subject": {"character_id": "c\x007"}},
+    {"client": {"origin": "website", "meta": {"\x00": [1]}}},
+], ids=["string", "nested_list", "key", "subject_id", "nested_key"])
+def test_nul_in_a_string_or_key_is_bad_envelope(changes):
+    """PostgreSQL cannot bind NUL: refused at check 1, not a 500 at the insert."""
+    from core.commands.envelope import plain
+    assert refused(body(**changes)) == ("bad_envelope", 400)
+    with pytest.raises(EnvelopeRefusal) as caught:
+        plain(changes)
+    assert caught.value.code == "bad_envelope"
+    assert plain({"k": ["a", ("b", 0)]}) == {"k": ["a", ["b", 0]]}  # nothing else is refused
+
+
 # --------------------------------------------------------------------------
 # Client metadata (PE-14b Decision 15)
 

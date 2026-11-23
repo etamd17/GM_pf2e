@@ -1239,6 +1239,26 @@ def test_sql_mint_invalid_scope_is_400_and_writes_nothing(sql_sync, scope):
     assert _token_rows(sql_sync) == [] and _file_records() == {}
 
 
+def test_mint_route_answers_400_only_for_an_invalid_request(sql_sync):
+    """Only ``TokenRequestInvalid`` is the caller's fault; another ValueError is not a 400."""
+
+    def broken(*args, **kwargs):
+        raise ValueError("internal detail")
+
+    assert issubclass(obsidian_sync.TokenRequestInvalid, ValueError)
+    invalid = sql_sync.client.post(API + "/tokens", json={"scope": []}, headers=XHR)
+    assert invalid.status_code == 400 and "scope" in invalid.get_json()["error"]
+    sql_sync.monkeypatch.setattr(obsidian_sync, "create_token", broken)
+    try:
+        response = sql_sync.client.post(API + "/tokens", json={"label": "x"}, headers=XHR)
+    except ValueError as exc:  # a test client that propagates: the route did not catch it
+        assert str(exc) == "internal detail"
+    else:
+        assert response.status_code == 500
+        assert "internal detail" not in response.get_data(as_text=True)
+    assert _token_rows(sql_sync) == [] and _file_records() == {}
+
+
 @pytest.mark.parametrize("mode", ["json", "shadow"])
 def test_json_and_shadow_tokens_take_no_stream_and_refuse_sql_only_fields(sql_sync, mode):
     sql_sync.monkeypatch.setenv("OWNERSHIP_BACKEND", mode)

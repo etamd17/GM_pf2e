@@ -86,6 +86,9 @@ def db(sqlite_database, monkeypatch):
         for character_id, cid, payload in builds:
             states.insert(cid, character_id, "build", rules_profile=PINS[cid]["profile"],
                           content=PINS[cid]["content"], payload=payload)
+            # The play row is the record a character grant's event subject is judged by.
+            states.insert(cid, character_id, "play", rules_profile=PINS[cid]["profile"],
+                          content=PINS[cid]["content"], payload={"hp": 30})
     tracked = Tracked(sqlite_database)
     monkeypatch.setattr(runtime, "database", lambda: tracked)
     return tracked
@@ -340,3 +343,65 @@ def test_grant_types_register_rules_adapter(db):
     assert rows(db, "D") == [] and event_types(db, "D") == []
     assert issue(db, subject={"character_id": "d_classic"}, cid="D")
     assert [r.character_id for r in rows(db, "D")] == ["d_classic"]
+
+
+# --------------------------------------------------------------------------
+# adversarial review: expected builds, event subjects, NUL
+
+
+@pytest.mark.parametrize("type, payload", [(UNLOCK, {"target_level": 2}),
+                                           (RETRAIN, {"build_revision": 1})],
+                         ids=[UNLOCK, RETRAIN])
+def test_expected_builds_are_locked_and_checked(db, type, payload):
+    def body(character_id, rev=1):
+        entry = {"kind": "character.build", "id": character_id, "rev": rev}
+        return {**env(type, {"character_id": "a1"}, payload), "expected": [entry]}
+
+    # Another character's build, an unknown id, another campaign's character: 404, not 500.
+    for other in ("a2", "nobody", "b1"):
+        assert run(body(other)) == (404, "not_found"), other
+    stale = execute(body("a1", 7), GM, route_campaign_id="A", content_descriptor=CONTENT,
+                    project=project, held_projections=held)
+    assert (stale.status, stale.body["code"]) == (409, "stale_revision")
+    assert stale.body["conflicts"] == [
+        {"kind": "character.build", "id": "a1", "expected": 7, "current": 1}]
+    assert rows(db) == [] and event_types(db) == [] and counts(db)[1:] == (0, 0)
+    assert run(body("a1")) == (200, None)
+    assert [r.character_id for r in rows(db)] == ["a1"] and event_types(db) == ["grant.issued"]
+
+
+@pytest.mark.parametrize("kind", list(ISSUE))
+def test_event_subjects_and_visibility(db, kind):
+    grant_id = issue(db, kind)
+    response = execute(env(REVOKE, {"grant_id": grant_id}, {}), GM, route_campaign_id="A",
+                       content_descriptor=CONTENT, project=project, held_projections=held)
+    assert response.status == 200
+    # The GM is shown the revoke event of a character grant as of any other.
+    assert [event["event_id"] for event in response.body["events"]] == [
+        event.event_id for event in events(db) if event.type == "grant.revoked"]
+    grant ={"kind": "grant", "id": grant_id}
+    if kind == "quartermaster":
+        subjects, seen = [grant], {"member": "full"}
+    else:
+        subjects, seen = [grant, {"kind": "character", "id": "a1"}], {"owner": "full",
+                                                                      "editor": "full"}
+    stored = events(db)
+    assert [event.type for event in stored] == ["grant.issued", "grant.revoked"]
+    for event in stored:
+        assert event.subjects == subjects, event.type
+        # Stored normalized: every projection is named, the rest "none".
+        full = {name for name, level in event.visibility.items() if level == "full"}
+        assert full == {"gm", "gm_integration", *seen}, event.type
+
+
+@pytest.mark.parametrize("type, subject, payload", [
+    (UNLOCK, {"character_id": "a\x001"}, {"target_level": 2}),
+    (RETRAIN, {"character_id": "a1\x00"}, {"build_revision": 1}),
+    (REVOKE, {"grant_id": "\x00" + MISSING[1:]}, {}),
+    (SET_QM, {"campaign_id": "A"}, {"user_id": "p\x002"}),
+], ids=[UNLOCK, RETRAIN, REVOKE, SET_QM])
+def test_nul_in_an_id_is_a_bad_envelope(db, type, subject, payload):
+    opened, body = db.transactions, env(type, subject, payload)
+    assert run(body) == (400, "bad_envelope")
+    assert db.transactions == opened and counts(db) == (0, 0, 0)  # check 1: no transaction
+    assert receipt(db, body["operation_id"]) is None and rows(db) == []

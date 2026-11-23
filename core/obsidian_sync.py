@@ -72,6 +72,10 @@ def _load_tokens(campaign_id: str) -> dict:
     return doc
 
 
+class TokenRequestInvalid(ValueError):
+    """A mint asked for a scope or replacement this store cannot record (answered 400)."""
+
+
 class TokenStoreUnavailable(RuntimeError):
     """A token store could not be read or written safely (routes answer 503)."""
 
@@ -123,7 +127,7 @@ def _checked_scope(scope) -> list[str] | None:
     if (not isinstance(scope, list) or not 1 <= len(scope) <= 32
             or any(not isinstance(name, str) or not 0 < len(name) <= 128 for name in scope)
             or len(set(scope)) != len(scope)):
-        raise ValueError("scope must be a list of 1 to 32 distinct command names")
+        raise TokenRequestInvalid("scope must be a list of 1 to 32 distinct command names")
     return list(scope)
 
 
@@ -137,7 +141,7 @@ def create_token(campaign_id: str, label: str = "Obsidian", *, scope=None,
 
     ``scope`` (default ``["@live"]``) and ``replaces_credential_id`` exist only
     on the SQL record (PE-14d): outside ``sql`` mode anything but the default
-    raises ``ValueError``.  A replacement the minter may not make, or one for
+    raises ``TokenRequestInvalid``.  A replacement the minter may not make, or one for
     another campaign's credential, raises ``ReplacementNotAuthorized`` (a
     ``ValueError``) and writes nothing.
     """
@@ -145,10 +149,10 @@ def create_token(campaign_id: str, label: str = "Obsidian", *, scope=None,
     scope = _checked_scope(scope)
     if replaces_credential_id is not None and (
             not isinstance(replaces_credential_id, str) or not replaces_credential_id):
-        raise ValueError("replaces_credential_id must be a credential id")
+        raise TokenRequestInvalid("replaces_credential_id must be a credential id")
     if not _sql_tokens() and (replaces_credential_id is not None
                               or scope not in (None, ["@live"])):
-        raise ValueError("a token scope or replacement needs the SQL token store")
+        raise TokenRequestInvalid("a token scope or replacement needs the SQL token store")
     token_id = uuid.uuid4().hex[:12]
     raw_token = f"{TOKEN_PREFIX}_{token_id}_{secrets.token_urlsafe(32)}"
     record = {

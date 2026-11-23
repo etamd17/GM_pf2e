@@ -63,9 +63,13 @@ def plain(value: Any, depth: int = 0) -> Any:
     if depth > MAX_DEPTH:
         raise bad("the envelope is nested too deeply")
     if isinstance(value, Mapping):
+        if any(isinstance(k, str) and "\x00" in k for k in value):
+            raise bad("a key contains NUL")
         return {k: plain(v, depth + 1) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
         return [plain(v, depth + 1) for v in value]
+    if isinstance(value, str) and "\x00" in value:
+        raise bad("a string contains NUL")  # PostgreSQL cannot bind it
     return value
 
 

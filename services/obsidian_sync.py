@@ -582,7 +582,7 @@ def create_obsidian_sync_blueprint(adapter: dict) -> Blueprint:
             return _json_error("token store unavailable", 503)
         except ReplacementNotAuthorized:
             return _json_error("replacement token not permitted", 403)
-        except ValueError as exc:
+        except sync_store.TokenRequestInvalid as exc:
             return _json_error(str(exc), 400)
         return jsonify({
             "ok": True,

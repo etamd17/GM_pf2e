@@ -22,7 +22,9 @@ from tests.persistence.lock_order import assert_stream_first, first, record_lock
 from tests.persistence.test_campaign_sql_import import sql_import, stage_campaign  # noqa: F401
 
 ROOT = Path(__file__).resolve().parents[2]
-TAKERS = {"lock_stream", "lock_stream_for_write", "lock_invitation_for_write"}
+# Decision 4 needs the lock_timeout form: a bare ``lock_stream`` is not a taker.
+TAKERS = {"lock_stream_for_write", "lock_invitation_for_write"}
+ROW_CLASSES = ("CampaignGrant", "IntegrationToken")
 HELPERS = {"_lock_campaign", "_locked_campaign"}  # campaign-lock helpers that take the stream
 ROW_MODULES = ("core/persistence/grants.py", "core/persistence/integration_tokens.py")
 AUTH_WORDS = ("member", "assign", "owner", "character")
@@ -101,8 +103,13 @@ def _write(node, path, function):
     if isinstance(node, ast.Call):
         name = _name(node)
         if name in ("CampaignMembership", "CharacterAssignment", "upsert_membership",
-                    "set_assignment", "_insert_if_absent", "_revoke_live", "_reconcile"):
+                    "set_assignment", "_insert_if_absent", "_revoke_live", "_reconcile",
+                    *ROW_CLASSES):
             return name
+        # A grant or token row written from any module, not only its row module.
+        if name in ("insert", "update", "delete") and node.args and any(
+                row in ast.unparse(node.args[0]) for row in ROW_CLASSES):
+            return f"{name}({ast.unparse(node.args[0])})"
         if _grant_call(node):
             return f"grants.{name}"
         if name == "delete" and isinstance(node.func, ast.Attribute) and node.args \
@@ -139,11 +146,25 @@ def scan(sources, exempt=None):
     for path, source in sorted(sources.items()):
         functions = _functions(ast.parse(source))
         helpers = set()
+        owner = {}  # node -> its innermost function (later entries are deeper)
+        deferred = set()  # nodes inside a lambda: not run where they are written
+        for qualname, function in functions:
+            for node in ast.walk(function):
+                owner[node] = (qualname, function)
+                if isinstance(node, ast.Lambda):
+                    deferred.update(ast.walk(node.body))
+
+        def own(function):
+            """The function's own statements: no nested def's, no lambda's."""
+
+            return [n for n in ast.walk(function)
+                    if owner[n][1] is function and n not in deferred]
+
         for qualname, function in functions:
             locks = [_pos(n) for n in ast.walk(function) if _for_update(n)]
             if function.name not in HELPERS or not locks:
                 continue  # no FOR UPDATE: not a campaign-row helper (a command lock_plan, say)
-            takes = [_pos(n) for n in ast.walk(function)
+            takes = [_pos(n) for n in own(function)
                      if isinstance(n, ast.Call) and _name(n) == "lock_stream_for_write"]
             if not takes or min(takes) > min(locks):
                 problems.append(f"{path}:{qualname} locks the campaign before the stream")
@@ -159,17 +180,15 @@ def scan(sources, exempt=None):
                 k.arg == "stream" and getattr(k.value, "value", None) is False
                 for k in node.keywords))
 
-        owner = {}  # node -> its innermost function (later entries are deeper)
-        for qualname, function in functions:
-            for node in ast.walk(function):
-                owner[node] = (qualname, function)
         for node, (qualname, function) in owner.items():
             label = _write(node, path, function)
             if label is None:
                 continue
             hits.add((path, qualname))
+            # Only a taker in the write's own function counts: one inside a
+            # nested def or a lambda may never run before the write.
             if (path, qualname) not in exempt and not any(
-                    taker(n) and _pos(n) < _pos(node) for n in ast.walk(function)):
+                    taker(n) and _pos(n) < _pos(node) for n in own(function)):
                 problems.append(f"{path}:{node.lineno} {qualname}: {label} with no stream "
                                 "lock earlier in the function and no EXEMPT entry")
     problems += [f"stale EXEMPT entry {key}" for key in sorted(set(exempt) - hits)]
@@ -300,11 +319,47 @@ _BAD_HELPER = _HELPER.format(first="repo.get(cid, for_update=True)",
     (_planted("membership.role = role"), False),
     (_planted("invitation.role = role"), True),
     (_planted("grants.issue(session, cid, kind='level_unlock')"), False),
+    (_planted(_WRITES["trash"], before="streams.lock_stream(session, cid)"), False),
+    (_planted(_WRITES["trash"], before="def later():\n        lock_stream_for_write(session, cid)"),
+     False),
+    (_planted(_WRITES["trash"], before="later = lambda: lock_stream_for_write(session, cid)"),
+     False),
+    (_planted(_WRITES["trash"], before="run(lambda: _lock_campaign(session, cid))",
+              extra=_GOOD_HELPER), False),
+    (_HELPER.format(first="defer(lambda: lock_stream_for_write(session, cid))",
+                    second="session.scalar(select(C).with_for_update())"), False),
 ], ids=("lock-after-write", "invitation-helper", "campaign-helper", "stream-false",
         "helper-locks-campaign-first", "unverified-helper", "role", "invitation-role",
-        "grant-call"))
+        "grant-call", "bare-lock-stream", "taker-in-nested-def", "taker-in-lambda",
+        "helper-in-lambda", "helper-takes-stream-in-lambda"))
 def test_scanner_taker_rules(source, clean):
     assert (scan({"core/planted.py": source}, exempt={})[0] == []) is clean
+
+
+@pytest.mark.parametrize("write", [
+    "session.add(IntegrationToken(campaign_id=cid))",
+    "session.add(CampaignGrant(campaign_id=cid))",
+    "session.execute(update(IntegrationToken.__table__).values(revoked_at=None))",
+    "session.execute(insert(CampaignGrant).values(campaign_id=cid))",
+    "session.execute(delete(models.CampaignGrant.__table__))",
+], ids=("token-row", "grant-row", "token-update", "grant-insert", "grant-delete"))
+def test_scanner_sees_grant_and_token_rows_outside_the_row_modules(write):
+    path = "services/planted.py"
+    problems, hits, _ = scan({path: _planted(write)}, exempt={})
+    assert hits == {(path, "writer")} and len(problems) == 1 and path in problems[0]
+    assert scan({path: _planted(write, before="lock_stream_for_write(session, cid)")},
+                exempt={})[0] == []
+
+
+def test_scanner_ignores_grant_and_token_models_and_reads():
+    quiet = ("class IntegrationToken(Base):\n    __tablename__ = 'integration_tokens'\n"
+             "class CampaignGrant(Base):\n    __tablename__ = 'campaign_grants'\n"
+             "_T = IntegrationToken.__table__\n"
+             "def read(session, cid):\n"
+             "    session.scalars(select(CampaignGrant).where(CampaignGrant.campaign_id == cid))\n"
+             "    session.get(IntegrationToken, cid)\n"
+             "    return session.execute(select(_T).where(_T.c.campaign_id == cid)).first()\n")
+    assert scan({"core/persistence/models.py": quiet}, exempt={}) == ([], set(), set())
 
 
 def test_scanner_row_module_writes_and_stale_exemption(sources):

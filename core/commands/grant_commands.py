@@ -121,8 +121,13 @@ class _RevokeRules:
 def _lock_character(ctx: Any) -> None:
     # Always the subject's build row, whatever ``expected`` holds: an intent
     # command still reaches check 5 with the key registered, and a character
-    # of another campaign registers None (404).
-    ctx.locks.character_states([(_subject_id(ctx), "build")])
+    # of another campaign registers None (404).  Every ``expected`` build is
+    # locked too, so one naming another character is 404 at check 5, not an
+    # unregistered key.  The subject's play row is the record the event's
+    # ``character`` subject is judged by.
+    subject = _subject_id(ctx)
+    builds = {subject} | {entry["id"] for entry in ctx.envelope["expected"]}
+    ctx.locks.character_states([(i, "build") for i in builds] + [(subject, "play")])
 
 
 def _lock_campaign(ctx: Any) -> None:
@@ -134,6 +139,8 @@ def _lock_campaign(ctx: Any) -> None:
 def _lock_grant(ctx: Any) -> None:
     grant_id = _subject_id(ctx)
     row = grants.get(ctx.session, ctx.campaign_id, grant_id)
+    if row is not None and row["character_id"] is not None:
+        ctx.locks.character_states([(row["character_id"], "play")])
     ctx.locks.register_serialized("grant", grant_id, None if row is None else grants.record(row))
 
 
@@ -143,13 +150,17 @@ def _revoke_terminal(ctx: Any, subject: StateRecord) -> bool:
 
 def _emit(ctx: Any, event_type: str, row: Mapping[str, Any]) -> Applied:
     record = grants.record(row)
-    # A character grant concerns that character's owner and editor; who the
-    # quartermaster is concerns every member.
-    seen = ({"member": "full"} if row["kind"] == "quartermaster"
-            else {"owner": "full", "editor": "full"})
-    ctx.emit(EventDraft(
-        type=event_type, subjects=[{"kind": "grant", "id": row["grant_id"]}],
-        visibility={"gm_integration": "full", **seen}))
+    # A character grant concerns that character's owner and editor, who hold
+    # those projections only on an event's subject character (C:412-413); who
+    # the quartermaster is concerns every member.
+    subjects = [{"kind": "grant", "id": row["grant_id"]}]
+    if row["kind"] == "quartermaster":
+        seen = {"member": "full"}
+    else:
+        seen = {"owner": "full", "editor": "full"}
+        subjects.append({"kind": "character", "id": row["character_id"]})
+    ctx.emit(EventDraft(type=event_type, subjects=subjects,
+                        visibility={"gm_integration": "full", **seen}))
     return Applied(written={("grant", row["grant_id"]): record})
 
 

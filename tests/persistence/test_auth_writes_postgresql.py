@@ -73,7 +73,9 @@ def pg(monkeypatch, tmp_path):
     with admin.connect() as connection:
         connection.execute(text(f'CREATE SCHEMA "{schema}"'))
     database = Database(url, engine_options={
-        "connect_args": {"options": f"-csearch_path={schema}"}})
+        # Bounded like the other PostgreSQL suites: a lock bug fails, it never hangs CI.
+        "connect_args": {"options": f"-csearch_path={schema} -clock_timeout=15000 "
+                                    "-cstatement_timeout=20000"}})
     try:
         database.create_schema()
         _prepare(database, monkeypatch, tmp_path)
