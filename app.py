@@ -5099,6 +5099,58 @@ def get_difficulty_label(xp, party_size=None):
     elif xp < th["Extreme"]:   return "Extreme",    "text-red-600 font-bold"
     else:                      return "Impossible", "text-red-600 font-bold animate-pulse"
 
+
+def _raw_feat_type_level(feat):
+    """(type, level) of a raw build feat, read the way Character's feat loop
+    reads it: builder entries carry a long description at index 3."""
+    if len(feat) >= 4 and isinstance(feat[3], str) and len(feat[3]) > 15:
+        return safe_str(feat[1], ''), safe_int(feat[2], 1)
+    level = safe_int(feat[3], 1) if len(feat) >= 4 else safe_int(feat[2], 1) if len(feat) >= 3 else 1
+    return (safe_str(feat[2], '') if len(feat) >= 3 else ''), level
+
+
+def _pb_child_slot(feat):
+    """The parent slot label of a Pathbuilder childChoice feat, else None."""
+    if len(feat) >= 7 and feat[5] == 'childChoice' and isinstance(feat[6], str) and feat[6]:
+        return feat[6]
+    return None
+
+
+def _pb_feat_children(raw):
+    """{parent feat name (lowercased): [child feat names]} for Pathbuilder's
+    parentChoice feats, whose childChoice feats name the parent's slot."""
+    slots = {f[4]: safe_str(f[0]).lower() for f in raw
+             if isinstance(f, list) and len(f) >= 6 and f[5] == 'parentChoice' and isinstance(f[4], str) and f[4]}
+    children = {}
+    for f in raw:
+        slot = _pb_child_slot(f) if isinstance(f, list) else None
+        if slot in slots:
+            children.setdefault(slots[slot], []).append(safe_str(f[0]))
+    return children
+
+
+def _split_sheet_removed_feats(raw, removed):
+    """Split raw build feats by the sheet's removed names (lowercased) into
+    (kept, suppressed). ``suppressed`` holds (feat, parent_name) pairs:
+    parent_name is None for a feat removed by name, or the removed parent a
+    childChoice feat was granted by, which goes with its parent. SE-03."""
+    parents = {}
+    for feat in raw:
+        if (isinstance(feat, list) and len(feat) >= 6 and feat[5] == 'parentChoice'
+                and isinstance(feat[4], str) and feat[4] and safe_str(feat[0]).lower() in removed):
+            parents[feat[4]] = safe_str(feat[0])
+    kept, suppressed = [], []
+    for feat in raw:
+        name = safe_str(feat[0]) if isinstance(feat, list) and feat else ''
+        if name and name.lower() in removed:
+            suppressed.append((feat, None))
+        elif name and _pb_child_slot(feat) in parents:
+            suppressed.append((feat, parents[_pb_child_slot(feat)]))
+        else:
+            kept.append(feat)
+    return kept, suppressed
+
+
 class Character:
     def __init__(self, data, file_path=""):
         self.file_path = file_path
@@ -6708,17 +6760,24 @@ class Character:
 
     def _edited_feats(self, raw):
         """Pathbuilder feats with the sheet's removals and additions applied.
-        Sets removed_feats (for the restore list) and the names the sheet added."""
+        Sets removed_feats (for the restore list) and the names the sheet added.
+        A removed parent's childChoice feats go with it (SE-03)."""
         edits = self._sheet_section('feats')
         removed = {str(n).lower() for n in edits.get('removed') or [] if isinstance(n, str)}
-        kept, self.removed_feats = [], []
-        for feat in raw:
-            name = safe_str(feat[0]) if isinstance(feat, list) and feat else ''
-            if name and name.lower() in removed:
-                if name not in self.removed_feats:
-                    self.removed_feats.append(name)
-                continue
-            kept.append(feat)
+        kept, suppressed = _split_sheet_removed_feats(raw, removed)
+        # removed_feat_rows: what the Feats tab needs to restore a row as it was.
+        self.removed_feats, self.removed_feat_rows, rows = [], [], {}
+        for feat, parent in suppressed:
+            name = safe_str(feat[0])
+            if parent is None and name not in self.removed_feats:
+                self.removed_feats.append(name)
+                ftype, level = _raw_feat_type_level(feat)
+                rows[name.lower()] = {'name': name, 'type': ftype, 'level': level, 'children': []}
+                self.removed_feat_rows.append(rows[name.lower()])
+        for feat, parent in suppressed:
+            if parent is not None and parent.lower() in rows:
+                ftype, level = _raw_feat_type_level(feat)
+                rows[parent.lower()]['children'].append({'name': safe_str(feat[0]), 'type': ftype, 'level': level})
         present = {safe_str(f[0]).lower() for f in kept if isinstance(f, list) and f}
         # A list, not a set: the level-up page serializes this object to JSON.
         self._sheet_added_feats = []
@@ -23042,7 +23101,7 @@ def _sheet_edit_feats(pc):
     came from), feats removed from the import, and every class/ancestry feature
     with its hidden flag so a hidden one can be restored. SE-02."""
     if not hasattr(pc, '_all_class_features'):
-        return {'feats': [], 'removed': [], 'features': [], 'custom': []}
+        return {'feats': [], 'removed': [], 'replaced': [], 'features': [], 'custom': []}
     edits = pc._sheet_section('features')
     hidden = {str(n).lower() for n in edits.get('hidden') or [] if isinstance(n, str)}
     features = []
@@ -23051,10 +23110,19 @@ def _sheet_edit_feats(pc):
             name = str(f.get('name', ''))
             if name:
                 features.append({'name': name, 'kind': kind, 'hidden': name.lower() in hidden})
+    children = _pb_feat_children(getattr(pc, 'raw_feats', None) or [])
+    present = {f['name'].lower() for f in pc.feats}
+    rows = getattr(pc, 'removed_feat_rows', None)
+    if rows is None:
+        rows = [{'name': n, 'type': '', 'level': 1, 'children': []} for n in getattr(pc, 'removed_feats', [])]
     return {
         'feats': [{'name': f['name'], 'type': f.get('type', ''), 'level': f.get('level', 1),
-                   'source': f.get('source', 'build')} for f in pc.feats],
-        'removed': list(getattr(pc, 'removed_feats', [])),
+                   'source': f.get('source', 'build'), 'children': children.get(f['name'].lower(), [])}
+                  for f in pc.feats],
+        # An imported feat the sheet also re-added shows once, as the sheet's
+        # copy; 'replaced' rides along unseen so a save keeps the import's copy out.
+        'removed': [r for r in rows if r['name'].lower() not in present],
+        'replaced': [r for r in rows if r['name'].lower() in present],
         'features': features,
         'custom': [c for c in edits.get('custom') or [] if isinstance(c, dict) and c.get('name')],
     }
@@ -27379,6 +27447,52 @@ def _missing_progression_for_level(build, new_level):
 
     return missing
 
+def _levelup_feats_keep_sheet_edits(previous, submitted, sheet_edits):
+    """Return (feats, sheet_edits) for a level-up's submitted feat list.
+
+    The level-up page starts from the sheet's edited list (pc.raw_feats), so the
+    list it sends has the sheet-added feats in it and the feats the sheet
+    removed missing. Saving it as is baked the additions into the build and lost
+    the removed imports for good. Keep the build as the import plus the new
+    picks, and leave the edits to the edit layer. A new pick that matches a
+    removed feat replaces the old copy and leaves the removed list, so it shows.
+    SE-03."""
+    edits = sheet_edits if isinstance(sheet_edits, dict) else {}
+    feat_edits = edits.get('feats') if isinstance(edits.get('feats'), dict) else {}
+    added = [f for f in feat_edits.get('added') or [] if isinstance(f, list) and f and isinstance(f[0], str)]
+    removed = {str(n).lower() for n in feat_edits.get('removed') or [] if isinstance(n, str)}
+    if not isinstance(submitted, list) or not isinstance(previous, list) or not (added or removed):
+        return submitted, sheet_edits
+
+    def name(feat):
+        return safe_str(feat[0]).lower() if isinstance(feat, list) and feat else ''
+
+    # What the page saw: the import minus the sheet's removals.
+    kept, suppressed = _split_sheet_removed_feats(previous, removed)
+    kept_names = {name(f) for f in kept}
+    feats = list(submitted)
+    for feat in added:                       # echoed sheet additions belong to the edit layer
+        if feat[0].lower() not in kept_names and feat in feats:
+            feats.remove(feat)
+    submitted_names = {name(f) for f in feats}
+    picked_again = removed & (submitted_names - kept_names)
+    for feat, parent in suppressed:
+        owner = name(feat) if parent is None else parent.lower()
+        if owner in picked_again or name(feat) in submitted_names:
+            continue
+        feats.append(feat)                   # hidden by the sheet, not dropped by the player
+    if picked_again:
+        sheet_edits = copy.deepcopy(edits)
+        left = [n for n in feat_edits.get('removed') or [] if not (isinstance(n, str) and n.lower() in picked_again)]
+        if left:
+            sheet_edits['feats']['removed'] = left
+        else:
+            sheet_edits['feats'].pop('removed', None)
+            if not sheet_edits['feats']:
+                sheet_edits.pop('feats')
+    return feats, sheet_edits
+
+
 @app.route('/api/submit_levelup/<pc_name>', methods=['POST'])
 @require_pc_self_or_gm
 def submit_levelup(pc_name):
@@ -27417,7 +27531,18 @@ def submit_levelup(pc_name):
     if 'half_boosts' in data and new_level in ABILITY_BOOST_LEVELS:
         build['half_boosts'] = data['half_boosts']
     
-    if 'feats' in data: build['feats'] = data['feats']
+    if 'feats' in data:
+        before_edits = build.get('sheet_edits')
+        build['feats'], sheet_edits = _levelup_feats_keep_sheet_edits(
+            level_history[str(new_level)]['previous_feats'], data['feats'], before_edits)
+        if sheet_edits is not before_edits:
+            # A new pick took a name off the removed list; undo puts it back.
+            level_history[str(new_level)]['previous_sheet_feats_removed'] = list(
+                before_edits['feats'].get('removed') or [])
+        if sheet_edits:
+            build['sheet_edits'] = sheet_edits
+        else:
+            build.pop('sheet_edits', None)
 
     # Champion Divine Ally choice (L3 only). Stored on the build so it shows
     # on the sheet and survives reloads.
@@ -27707,6 +27832,12 @@ def revert_level(pc_name):
                 build['proficiencies'] = snapshot['previous_proficiencies']
                 build['feats'] = snapshot['previous_feats']
                 build['spellCasters'] = snapshot.get('previous_spellCasters', build.get('spellCasters', []))
+                if snapshot.get('previous_sheet_feats_removed'):
+                    edits = build['sheet_edits'] if isinstance(build.get('sheet_edits'), dict) else {}
+                    if not isinstance(edits.get('feats'), dict):
+                        edits['feats'] = {}
+                    edits['feats']['removed'] = snapshot['previous_sheet_feats_removed']
+                    build['sheet_edits'] = edits
                 # Companion / familiar reverse-bump (mirror of submit_levelup).
                 # Computed from the level delta so a multi-level revert
                 # rolls back the matching number of bumps.

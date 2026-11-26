@@ -5054,6 +5054,9 @@ body.system-cosmere .trk .grid-wrap::after {
     opacity:.04; animation: trkEmber 3.4s steps(6) infinite; pointer-events:none; z-index:0;
 }
 .sheet-ember-host > * { position:relative; z-index:1; }
+/* A fixed overlay that sits directly in the host (the Add Companion form)
+   stays an overlay: the rule above would otherwise put it in the page flow. */
+.sheet-ember-host > .fixed.inset-0 { position: fixed; z-index: 50; }
 
 /* Dying pulse (audit F6) — .hp-area is the Resources/HP card's real class
    (_header.html's "ss-block hp-area"). dying-active is toggled by
