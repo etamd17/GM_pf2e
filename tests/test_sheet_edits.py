@@ -813,6 +813,12 @@ def test_levelup_keeps_sheet_feat_edits_out_of_the_build():
     assert [f[0] for f in feats] == ['Power Attack', 'Diehard', 'Versatile Human', 'Toughness']
     assert feats[1][3] == 5
     assert out['feats'] == {'removed': ['Versatile Human'], 'added': [['Fleet', None, 'General Feat', 3]]}
+    # A child of a removed parent comes back even when a kept feat shares its name.
+    twice = previous + [['Toughness', None, 'General Feat', 3]]
+    page = [['Power Attack', None, 'Class Feat', 1], ['Diehard', None, 'General Feat', 3],
+            ['Toughness', None, 'General Feat', 3]]
+    feats, _ = keep(twice, page, {'feats': {'removed': ['Versatile Human']}})
+    assert feats == page + [previous[1], previous[2]]
     # No sheet feat edits: the submitted list is used as it is.
     assert keep(previous, submitted, {'meta': {'deity': 'X'}}) == (submitted, {'meta': {'deity': 'X'}})
 
@@ -858,3 +864,13 @@ def test_add_pet_button_resets_the_companion_form():
     block = js[js.index('"+ Add Pet" goes back to adding'):]
     block = block[:block.index('})();')]
     assert 'defaultValue' in block and 'defaultSelected' in block
+
+
+def test_hand_edited_list_values_do_not_break_the_sheet(app_module, goel_doc):
+    junk = {'feats': {'removed': 5, 'added': 'Toughness', 'order': None},
+            'features': {'hidden': 3, 'custom': {'name': 'x'}, 'order': 7}}
+    c = _mk(app_module, goel_doc, junk)
+    assert [f['name'] for f in c.feats] == [f['name'] for f in _mk(app_module, goel_doc).feats]
+    assert app_module._sheet_edit_feats(c)['removed'] == []
+    from app import _levelup_feats_keep_sheet_edits as keep
+    assert keep([], [['A', None, 'General Feat', 1]], junk)[0] == [['A', None, 'General Feat', 1]]

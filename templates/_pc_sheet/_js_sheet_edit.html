@@ -204,6 +204,19 @@
                                            parseInt(row.getAttribute('data-se-level'), 10) || 1, children));
     }
 
+    // Dropping the sheet's copy of a feat that also replaced the import's copy
+    // shows the import's copy under Removed, where it can be restored.
+    function showReplacedImport(name) {
+        var lower = name.toLowerCase();
+        dialog.querySelectorAll('[data-se-replaced]').forEach(function (carrier) {
+            if (carrier.getAttribute('data-se-removed-feat').toLowerCase() !== lower) return;
+            removedList.appendChild(removedRow(carrier.getAttribute('data-se-removed-feat'),
+                carrier.getAttribute('data-se-type') || '', parseInt(carrier.getAttribute('data-se-level'), 10) || 1,
+                parseList(carrier, 'data-se-children').filter(function (c) { return c && typeof c.name === 'string'; })));
+            carrier.remove();
+        });
+    }
+
     // Put a removed (or replaced) imported feat back, as it was imported.
     function restoreBuildFeat(row) {
         var name = row.getAttribute('data-se-removed-feat');
@@ -244,6 +257,8 @@
             } else if (btn.hasAttribute('data-se-drop') && row) {
                 if (row.hasAttribute('data-se-feat') && row.getAttribute('data-se-source') === 'build') {
                     dropBuildFeat(row);
+                } else if (row.hasAttribute('data-se-feat')) {
+                    showReplacedImport(row.getAttribute('data-se-feat'));
                 }
                 row.remove();
                 syncRemovedEmpty();

@@ -5100,6 +5100,13 @@ def get_difficulty_label(xp, party_size=None):
     else:                      return "Impossible", "text-red-600 font-bold animate-pulse"
 
 
+def _sheet_list(section, key):
+    """A list from a sheet_edits section, or [] when a hand-edited file holds
+    something else there."""
+    value = section.get(key) if isinstance(section, dict) else None
+    return value if isinstance(value, list) else []
+
+
 def _raw_feat_type_level(feat):
     """(type, level) of a raw build feat, read the way Character's feat loop
     reads it: builder entries carry a long description at index 3."""
@@ -6763,7 +6770,7 @@ class Character:
         Sets removed_feats (for the restore list) and the names the sheet added.
         A removed parent's childChoice feats go with it (SE-03)."""
         edits = self._sheet_section('feats')
-        removed = {str(n).lower() for n in edits.get('removed') or [] if isinstance(n, str)}
+        removed = {str(n).lower() for n in _sheet_list(edits, 'removed') if isinstance(n, str)}
         kept, suppressed = _split_sheet_removed_feats(raw, removed)
         # removed_feat_rows: what the Feats tab needs to restore a row as it was.
         self.removed_feats, self.removed_feat_rows, rows = [], [], {}
@@ -6781,7 +6788,7 @@ class Character:
         present = {safe_str(f[0]).lower() for f in kept if isinstance(f, list) and f}
         # A list, not a set: the level-up page serializes this object to JSON.
         self._sheet_added_feats = []
-        for feat in edits.get('added') or []:
+        for feat in _sheet_list(edits, 'added'):
             if not (isinstance(feat, list) and feat and isinstance(feat[0], str)):
                 continue
             if feat[0].lower() in present:
@@ -6794,19 +6801,19 @@ class Character:
     def _order_sheet_feats(self):
         for feat in self.feats:
             feat['source'] = 'sheet' if feat['name'].lower() in self._sheet_added_feats else 'build'
-        order = [str(n).lower() for n in self._sheet_section('feats').get('order') or [] if isinstance(n, str)]
+        order = [str(n).lower() for n in _sheet_list(self._sheet_section('feats'), 'order') if isinstance(n, str)]
         if order:
             rank = {n: i for i, n in enumerate(order)}
             self.feats.sort(key=lambda f: rank.get(f['name'].lower(), len(order)))
 
     def _edited_features(self, features, *, custom=False):
         edits = self._sheet_section('features')
-        hidden = {str(n).lower() for n in edits.get('hidden') or [] if isinstance(n, str)}
+        hidden = {str(n).lower() for n in _sheet_list(edits, 'hidden') if isinstance(n, str)}
         out = [f for f in features if str(f.get('name', '')).lower() not in hidden]
         if custom:
             out += [{'name': c['name'], 'desc': c.get('desc', ''), 'type': 'custom', 'level': self.level}
-                    for c in edits.get('custom') or [] if isinstance(c, dict) and c.get('name')]
-        order = [str(n).lower() for n in edits.get('order') or [] if isinstance(n, str)]
+                    for c in _sheet_list(edits, 'custom') if isinstance(c, dict) and c.get('name')]
+        order = [str(n).lower() for n in _sheet_list(edits, 'order') if isinstance(n, str)]
         if order:
             rank = {n: i for i, n in enumerate(order)}
             out.sort(key=lambda f: rank.get(str(f.get('name', '')).lower(), len(order)))
@@ -6814,7 +6821,7 @@ class Character:
 
     @property
     def hidden_features(self):
-        hidden = {str(n).lower() for n in self._sheet_section('features').get('hidden') or [] if isinstance(n, str)}
+        hidden = {str(n).lower() for n in _sheet_list(self._sheet_section('features'), 'hidden') if isinstance(n, str)}
         names = [f['name'] for f in self._all_class_features() + self._all_ancestry_features()]
         return [n for n in names if n.lower() in hidden]
 
@@ -23103,7 +23110,7 @@ def _sheet_edit_feats(pc):
     if not hasattr(pc, '_all_class_features'):
         return {'feats': [], 'removed': [], 'replaced': [], 'features': [], 'custom': []}
     edits = pc._sheet_section('features')
-    hidden = {str(n).lower() for n in edits.get('hidden') or [] if isinstance(n, str)}
+    hidden = {str(n).lower() for n in _sheet_list(edits, 'hidden') if isinstance(n, str)}
     features = []
     for kind, items in (('class', pc._all_class_features()), ('ancestry', pc._all_ancestry_features())):
         for f in items:
@@ -23124,7 +23131,7 @@ def _sheet_edit_feats(pc):
         'removed': [r for r in rows if r['name'].lower() not in present],
         'replaced': [r for r in rows if r['name'].lower() in present],
         'features': features,
-        'custom': [c for c in edits.get('custom') or [] if isinstance(c, dict) and c.get('name')],
+        'custom': [c for c in _sheet_list(edits, 'custom') if isinstance(c, dict) and c.get('name')],
     }
 
 
@@ -27459,8 +27466,8 @@ def _levelup_feats_keep_sheet_edits(previous, submitted, sheet_edits):
     SE-03."""
     edits = sheet_edits if isinstance(sheet_edits, dict) else {}
     feat_edits = edits.get('feats') if isinstance(edits.get('feats'), dict) else {}
-    added = [f for f in feat_edits.get('added') or [] if isinstance(f, list) and f and isinstance(f[0], str)]
-    removed = {str(n).lower() for n in feat_edits.get('removed') or [] if isinstance(n, str)}
+    added = [f for f in _sheet_list(feat_edits, 'added') if isinstance(f, list) and f and isinstance(f[0], str)]
+    removed = {str(n).lower() for n in _sheet_list(feat_edits, 'removed') if isinstance(n, str)}
     if not isinstance(submitted, list) or not isinstance(previous, list) or not (added or removed):
         return submitted, sheet_edits
 
@@ -27474,16 +27481,16 @@ def _levelup_feats_keep_sheet_edits(previous, submitted, sheet_edits):
     for feat in added:                       # echoed sheet additions belong to the edit layer
         if feat[0].lower() not in kept_names and feat in feats:
             feats.remove(feat)
-    submitted_names = {name(f) for f in feats}
-    picked_again = removed & (submitted_names - kept_names)
+    new_names = {name(f) for f in feats} - kept_names     # picks the page could not have echoed
+    picked_again = removed & new_names
     for feat, parent in suppressed:
         owner = name(feat) if parent is None else parent.lower()
-        if owner in picked_again or name(feat) in submitted_names:
+        if owner in picked_again or name(feat) in new_names:
             continue
         feats.append(feat)                   # hidden by the sheet, not dropped by the player
     if picked_again:
         sheet_edits = copy.deepcopy(edits)
-        left = [n for n in feat_edits.get('removed') or [] if not (isinstance(n, str) and n.lower() in picked_again)]
+        left = [n for n in _sheet_list(feat_edits, 'removed') if not (isinstance(n, str) and n.lower() in picked_again)]
         if left:
             sheet_edits['feats']['removed'] = left
         else:
@@ -27536,9 +27543,10 @@ def submit_levelup(pc_name):
         build['feats'], sheet_edits = _levelup_feats_keep_sheet_edits(
             level_history[str(new_level)]['previous_feats'], data['feats'], before_edits)
         if sheet_edits is not before_edits:
-            # A new pick took a name off the removed list; undo puts it back.
-            level_history[str(new_level)]['previous_sheet_feats_removed'] = list(
-                before_edits['feats'].get('removed') or [])
+            # A new pick took names off the removed list; undo puts them back.
+            left = {n.lower() for n in _sheet_list(sheet_edits.get('feats', {}), 'removed') if isinstance(n, str)}
+            level_history[str(new_level)]['sheet_feats_unremoved'] = [
+                n for n in _sheet_list(before_edits['feats'], 'removed') if isinstance(n, str) and n.lower() not in left]
         if sheet_edits:
             build['sheet_edits'] = sheet_edits
         else:
@@ -27832,11 +27840,15 @@ def revert_level(pc_name):
                 build['proficiencies'] = snapshot['previous_proficiencies']
                 build['feats'] = snapshot['previous_feats']
                 build['spellCasters'] = snapshot.get('previous_spellCasters', build.get('spellCasters', []))
-                if snapshot.get('previous_sheet_feats_removed'):
+                if snapshot.get('sheet_feats_unremoved'):
                     edits = build['sheet_edits'] if isinstance(build.get('sheet_edits'), dict) else {}
                     if not isinstance(edits.get('feats'), dict):
                         edits['feats'] = {}
-                    edits['feats']['removed'] = snapshot['previous_sheet_feats_removed']
+                    current = edits['feats'].get('removed')
+                    current = [n for n in current if isinstance(n, str)] if isinstance(current, list) else []
+                    have = {n.lower() for n in current}
+                    edits['feats']['removed'] = current + [
+                        n for n in snapshot['sheet_feats_unremoved'] if isinstance(n, str) and n.lower() not in have]
                     build['sheet_edits'] = edits
                 # Companion / familiar reverse-bump (mirror of submit_levelup).
                 # Computed from the level delta so a multi-level revert
