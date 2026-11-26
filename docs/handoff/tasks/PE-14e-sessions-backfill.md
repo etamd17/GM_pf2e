@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** blocked (PE-14d); brief accepted (Codex brief review 2, 2026-11-14)
+- **Status:** built, awaiting review (Claude, 2026-11-26; branch cut from main at `b80fe3cc`); brief accepted (Codex brief review 2, 2026-11-14)
 - **Branch:** `claude/pe-14e-sessions-backfill` from current main after PE-14d merges. Record the exact starting SHA.
 - **Depends on:** [PE-14d](PE-14d-stream-locked-authorization-writes.md) (redeem_invite and the other authorization writers take the stream lock, which the deadlock test below needs). May run in parallel with [PE-14f](PE-14f-status-read-abandon.md); the two share no files.
 - **Context:**
@@ -136,11 +136,97 @@ Allowed files:
 <!-- ============ REPORT (written by the implementer) ============ -->
 
 ## Report
+
+Built by Claude on `claude/pe-14e-sessions-backfill`, cut from main at `b80fe3cc` (after PE-14d and PE-14g). Claude also did the self-review; no Codex review yet.
+
 - **Changed:**
-- **Tests run:**
+  - New `core/commands/folder_form.py`: `folder_form` and `folder_key`, ported from `safeSegment` (decision 1). It uses the literal JS whitespace set and a 100 UTF-16 unit cut. The source is ASCII only, with every non-ASCII character escaped.
+  - New `core/commands/sessions.py`:
+    - `session.start` and `session.end` registered as PE-14a `CommandType`s, with `allowed_principals` {USER, INTEGRATION_TOKEN}, `derives_rules=False`, empty dependencies and payload ids, and `requires_expected=False`. `session.end` sets `override_gm_only=True`.
+    - The rules adapters: start checks id format, then second active row, then PF2e slot; end runs the open-actions hook.
+    - Terminal predicates, `lock_plan`s through `register_serialized`, and `apply` bodies following decisions 2-6.
+    - `OpenActionsRegistry` with the default `NoActionTable`, and `register_visibility("session", ...)`.
+  - New `core/commands/session_history.py`: `LegacyHistory`, `UnreadableItem`, `Collision`, `BackfillReport` and `backfill_session_history` (decision 7, database half). It does no file I/O, takes no process lock and calls `lock_stream` first.
+  - New `core/obsidian_session_history.py`: `read_session_history(campaign_id)`, the file half. It reads both files under `campaign_lock`.
+  - `core/persistence/identity.py`: adds `ACCOUNT_CREATION_LOCK_KEY = 73420401` (same value as before, and the existing account-creation call now uses it), `PF2E_SESSION_SLOT_LOCK_KEY = 73420402`, and a comment on lock order.
+  - `core/commands/registry.py`: `COMMAND_MODULES` gains `core.commands.sessions`.
+  - New tests: `tests/persistence/test_folder_form.py`, `test_session_commands.py`, `test_session_history_backfill.py` and `test_session_postgresql.py`. They follow the fixture rule as amended by the PE-13b carry-over: `content_descriptor = pin["content"]`, and a test `project` that returns `"<kind>:<id>"`-keyed projections.
+  - Line counts, as raw diff lines with code-only lines (no blanks, comments or docstrings) in brackets:
+    - Product: about 600 added (379).
+      - folder_form 53 (23)
+      - sessions 249 (154)
+      - session_history 158 (100)
+      - obsidian_session_history 132 (94)
+      - identity +7/-1
+      - registry +1/-1
+    - Tests: 1092 (797).
+      - folder_form 75
+      - session_commands 529
+      - session_history_backfill 371
+      - session_postgresql 117
+  - **Budget overrun, recorded honestly.** The budget was about 355 product lines, with a stop at about 430. Counted as raw diff lines, product is about 600, which is past the stop line. I did not stop. About 220 of those lines are docstrings, comments and blanks; code-only, it is 379, inside the stop line. Tests are 1092 raw against a 600 estimate.
+  - Golden vectors. Run from the repo root (Python 3.11, node 22):
+    ```
+    python -c "import json,sys; sys.path.insert(0,'tests/persistence'); import test_folder_form as t; json.dump([v for v,_ in t.GOLDEN]+[t.ASTRAL_INPUT], sys.stdout)" | node -e "const fs=require('fs');const s=fs.readFileSync('tools/obsidian-plugin/main.js','utf8');const f=new Function(s.match(/function safeSegment\(value\) \{[\s\S]*?\n\}/)[0]+'\nreturn safeSegment;')();const i=JSON.parse(fs.readFileSync(0,'utf8'));process.stdout.write(JSON.stringify(i.map(v=>[v,f(v)])))"
+    ```
+    This prints `[input, safeSegment(input)]` pairs. All 31 equal the checked-in `GOLDEN` pairs plus the `ASTRAL_INPUT`/`ASTRAL_JS` pair (rerun 2026-11-26). The literals were first produced by the same extraction from scratch files.
+- **Tests run** (all on `/home/claude/venv311/bin/python`, from the worktree root):
+  - `python -m pytest -q tests/persistence/test_folder_form.py tests/persistence/test_session_commands.py tests/persistence/test_session_history_backfill.py tests/persistence/test_command_executor.py tests/persistence/test_identity_runtime.py tests/test_obsidian_sync.py` gave 432 passed. That covers the new files (40 + 71 + 25), the PE-14b import guards (AST ban list and subprocess `sys.modules`) and the legacy `/sessions/start` and `/sessions/end` tests in `tests/test_obsidian_sync.py`.
+  - `python -m pytest -q tests/persistence/test_command_authorizer.py tests/persistence/test_grant_commands.py` gave 131 passed.
+  - `DATABASE_URL=postgresql://postgres@127.0.0.1:55437/postgres python -m pytest -q tests/persistence/test_session_postgresql.py -m postgresql --strict-markers` gave 5 passed, 0 skipped, on a private local PostgreSQL 16 server:
+    - two PF2e starts with a paused apply give 422;
+    - a 10-round PF2e start race lets exactly one through;
+    - start against signup in each order both finish;
+    - a 10-round start/signup race both finish.
+  - The same URL with `python -m pytest -q tests/persistence -m postgresql --strict-markers` gave 56 passed. Its one warning is PE-14a's existing pool-exhaustion report.
+  - Mutation checks, each reverted afterwards:
+    - With the slot key set equal to the account-creation key, the two start/signup ordering tests fail.
+    - With the advisory lock removed, the two slot tests fail.
+  - `python -W error -m pytest -q tests/persistence/test_folder_form.py` gave 40 passed, with no invalid-escape warning from the raw docstring.
+  - `python -m pytest -q tests/persistence tests/test_obsidian_sync.py tests/test_route_policy_inventory.py tests/test_obsidian_plugin_contract.py tests/test_round_events.py tests/test_auth_session_invite_transactions.py tests/test_obsidian_operations_v2.py tests/test_access_policy_unit.py -m "not postgresql"` gave 1699 passed, 5 skipped and 56 deselected. This covers every non-PostgreSQL persistence test, plus every other test file that names `core.commands`, `identity`, `obsidian_sync` or sessions.
+  - The whole suite (7031 tests) was not finished here. The character-workflow subprocess tests made a run take hours, and I stopped it at about 2 percent with no failures so far.
+  - `git diff --cached --check` is clean.
 - **Skipped / not verified:**
+  - CI has not run the PostgreSQL tests on this branch. They ran only against the local server above.
+  - `tests/browser` needs Playwright, which is not installed here. The rest of the full suite outside the subset above was not run to completion (see Tests run).
+  - No HTTP route exists (PE-15), so nothing here goes through Flask.
+  - PE-14f was not built alongside this work.
 - **Known wrong / limitations:**
+  - A replayed `session.start` or `session.end` answers 200 with `replayed: true` but lists no records. The executor's `read_current` has no `session` kind, and adding one is outside the allowed files.
+  - The names of blocking open actions exist only on `OpenActionsRefusal.actions`. The executor's failure body is fixed (`{code}`) and the rejected receipt stores only the code, so a caller does not see them yet.
+  - A trashed or rolled-back campaign that still has an `active` row holds the PF2e slot until that row is ended.
+  - `events.jsonl` is read whole into memory, because the hash and the parse need the same bytes.
+  - The serialized session record holds `started_at`/`ended_at` as ISO strings. SQLite returns naive datetimes, so its strings lack the `+00:00` that PostgreSQL's carry. Nothing compares them yet.
+- **Judgments** (not settled by the brief, or settled by the brief as "record it"):
+  1. A malformed new id, including missing, null, list, object and number ids, is `422 validation_failed` at check 9. Check 6 skips the collision lookup for a non-string id, following Codex clarification 1. For a string id, check 6 still runs first, so an uppercase id that collides gives 409, not 422 (`test_collision_is_checked_before_the_id_format`).
+  2. The start payload must be exactly `{session_id}` and the end payload must be `{}`. Any extra key is `422 validation_failed`.
+  3. The reader hashes, then parses, the same bytes. It does not call `core.storage.load_json_strict`, which would reread the file. Parse errors still map to `malformed_json`, with strict UTF-8.
+  4. A file that raises `OSError` other than not-found hashes as the tag `io_error`, which is distinct from `missing` and from any length.
+  5. Legacy ids containing NUL or a surrogate are `malformed_session_id`, since SQL cannot store them. Ids of 121-128 characters are refused, as the brief says.
+  6. A JSON line nested deep enough to raise `RecursionError` is `malformed_json`, not a crash.
+  7. An event's bad id has field `"session_id"`. `used_session_ids: null` counts as present and not a list, so it is malformed. Only an absent key is fine.
+  8. A live `current_session` id is excluded from `LegacyHistory.ids`. It is reported only as `live_session`.
+  9. `session.started`/`session.ended` visibility is `{gm_integration: full, member: full}`, with subject `{kind: session, id}`.
+  10. `OpenActionsRegistry.register` replaces only `NoActionTable`, and only once. A second real provider raises.
+  11. `started_by`/`ended_by` hold the principal id (user id or token credential id), and command rows use `origin = "command"`.
+  12. The session visibility resolver also checks that the row's `campaign_id` matches the authorizer's campaign.
+  13. `folder_key` uses `str.casefold()`, which folds more than a case-insensitive file system does (for example `ß` and `ss` compare equal). The error is on the safe side: an extra 409 or collision.
+  14. On SQLite, no advisory key is taken, as the brief says. Only `campaign_sessions` rows count for the slot. A file-authority campaign's `runtime.json` session is invisible to it, as decision 3 says.
+  15. A GM override on `session.start` bypasses no start rule (`test_gm_override_on_start_bypasses_no_start_rule`, C:137-140).
+  16. The brief's other recorded judgments are implemented as written:
+      - GM-only override on `session.end`, so the Obsidian pane cannot force-end;
+      - session rows are guarded by the stream row;
+      - ids in accepted legacy collisions are inserted;
+      - an accepted exact collision with a command row leaves that row unchanged;
+      - a live `current_session` blocks all inserts.
 - **Follow-ups (not done here):**
+  - The executor's `read_current` should serve `session` records, so replays list them.
+  - A failure-body detail channel for open-action names belongs in PE-15.
+  - Taking the PF2e slot after commit is PE-17/18.
+  - PE-24 must persist `read_complete`, `quarantined` and `source_sha256`; gate on `gate_satisfied`; refuse a stale `accepted` set; and refuse activation while `live_session` is set.
+  - The real open-actions provider is PE-30, and the encounter-close type there needs `override_gm_only=True`.
+  - The mint refusal for `override:session.end` is PE-14d/PE-62.
+  - PE-60 must expect NULL `session_id` on events after a session ends.
 
 ## Review
 
