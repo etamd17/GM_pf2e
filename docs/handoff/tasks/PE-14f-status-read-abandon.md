@@ -268,3 +268,114 @@ Reviewed PR #259 at `51ac0e51` against `791936f1`. **R1-9 and R1-10 are closed; 
 The `encounter_player` assignment to campaign player members for an event with an encounter id is acceptable for the public encounter view and remains stable after the encounter ends. Non-blocking clarification for the reusable helper: disabled users get no projections; enabled GM/site-admin users and valid integration tokens need no campaign membership; other users require membership. Test this precedence so the last non-member bullet cannot erase the explicit admin/token cases.
 
 Use the header's 705-test-line estimate (not the older 650 figure); retain the 480-product-line stop and all finality/projection cases. Docs-only review; no product tests ran.
+
+### Implementation review 1 (Claude, 2026-11-26)
+
+Reviewed `cd9867c7` (two commits on `b80fe3cc`) against the brief, Codex brief review 2 and the contract (C:253-345, C:352-366, C:409-417, C:635-648, C:846-856). High-risk (auth, route policy, concurrency), so adversarial. Findings come from probes on SQLite and on a scratch PostgreSQL 16 cluster, a SQL statement trace, and fault injection. **Two P2s, both fixed in `5d412818`; no P1.**
+
+**Findings**
+
+1. **R1-1 (P2, fixed): a raising COMMIT answered `500 server_error`.**
+   - Where: `core/commands/operations.py` `_run` (lines 71-82 before the fix).
+   - What: `_run` passed a COMMIT failure straight to `_failure`. That gives `500 server_error`, which the code table defines as "nothing written" (C:365). The contract answers a raising COMMIT with `503 temporarily_unavailable`, outcome unknown (C:364), and the executor does so through `_CommitFailed` (`executor.py` `_Command.transact`).
+   - Confirmed by fault injection: an `after_commit` failure on abandon answered 500 while the `abandoned` receipt was in the table, and the next read returned `abandoned`.
+   - Fix: `_run` records that the transaction body finished and maps a later exception to `_CommitFailed`, so the answer is 503 (`operations.py:72-88`).
+   - Test: `test_a_raising_commit_is_503_never_server_error[before_commit|after_commit]`. It fails on the old code (2 failed) and passes now.
+2. **R1-2 (P2, fixed with tests only): neither mount was tested through the real request guards.**
+   - What: the report says the user mount was only called inside `test_request_context`. The token-mount tests run a bare Flask app holding only the blueprint (`tests/test_obsidian_sync.py`, the `sql_sync` fixture). On this boundary, the app's before_request stack decides the anonymous answer, CSRF on the POST and the live-table behaviour, not the handler.
+   - Probed first: every path already behaved correctly, so no product change.
+   - Added a `site` fixture (the real `app` in account mode over the seeded SQL users, live table = campaign B) and three tests in `tests/persistence/test_operation_status.py`:
+     - `test_user_mount_through_the_real_request_guards`:
+       - the original, the GM and the site admin read;
+       - another editor, a member of B only and B's GM get the identical 404, with and without a receipt;
+       - an anonymous caller gets the guard's `401 login_required`, with no state;
+       - an unauthorized abandon gets 404, and a cross-site abandon gets `400 csrf_failed`, both writing nothing;
+       - a same-origin abandon writes once.
+     - `test_user_mount_in_legacy_mode_answers_404_and_writes_nothing`.
+     - `test_token_mount_through_the_real_request_guards`:
+       - `/state` answers 409 while the status read and abandon answer;
+       - the bearer routes are CSRF-exempt;
+       - no bearer, a wrong bearer, or the token presented for campaign B each get 401;
+       - the mounts do not cross: a GM session on the token mount gets 401, and a bearer on the user mount gets 401.
+   - Mutation checks, each caught:
+     - `api_operation_abandon` declared `INTEGRATION_TOKEN`, which makes it CSRF-exempt: 1 failure;
+     - `api_operation_status` declared `PUBLIC`: 2 failures;
+     - `@token_required` on the two token routes: 1 failure;
+     - a user-mount fallback to a query-supplied user: 1 failure.
+3. **R1-3 (P3, accepted): an unauthorized reader can get 503 instead of 404 under contention.**
+   - Why: the lock is taken before authorization (brief Decision 4; C:263-265).
+   - It reveals that the campaign exists and is busy, never an operation's state, and 503 is not final.
+   - Side effect: any account user, or any valid token of the campaign, takes the campaign's stream row for one short transaction.
+   - An alternative, if wanted, is for Codex or the user to decide. Add an unlocked authorization pre-check that may only refuse (404), and keep the binding re-read under the lock. A refusal is never final, so the single-observation rule still holds.
+   - Not done, because it changes the accepted order.
+4. **R1-4 (P3, accepted): the no-user 404 has `operation_id: null`** (`app.py:11973-11974`), while the handler's 404 echoes a well-formed id.
+   - It is independent of any data. In account mode the guard answers 401 before this branch, so only legacy mode reaches it.
+   - Now pinned by the legacy test.
+5. **R1-5 (P3, follow-up outside the allowed files): the token mount runs under the app's `INTEGRATION_TOKEN` branch** (`app.py:1359-1372`).
+   - That branch holds the process-wide `_LIVE_CAMPAIGN_DISPATCH_LOCK` through the stream-lock wait (up to `STREAM_LOCK_TIMEOUT_MS`).
+   - It can also `abort(503)` for a pending character batch of the live campaign.
+   - Existing token routes behave the same and the effect is transient. I agree with the report's follow-up.
+6. **R1-6 (P3, note for PE-31; from code reading, not tested).** The status read lists an event id from its stored visibility alone. The executor's replay (`executor.py` `answer`) also requires the caller's record projection to show every record the event names.
+   - So a read can list an id that a replay omits. An example is an event about an unrevealed creature combatant whose `encounter_player` value is `redact:[hidden_actor]`.
+   - These are ids only, as Decision 7 and C:409-417 define, and no content is released. No change.
+7. **R1-7 (P3, follow-up): stale docstring.** The docstring of `core/commands/events.py:event_views` still describes a deliberate difference from `event_visible_to` that no longer exists (as the report notes). Out of scope.
+
+**Checked and correct (no finding)**
+
+- **404 concealment.** Authorization precedes the receipt lookup and both finality tests. One body, `{"ok": false, "code": "not_found", "operation_id": <echo>}`, covers:
+  - an unknown or trashed campaign;
+  - an unauthorized reader, with or without a receipt, at any epoch;
+  - an unauthorized abandon, which writes nothing and leaves no stream row.
+
+  Re-probed on PostgreSQL, including a 64-character non-ASCII campaign id.
+- **`absent_final`.** It comes only from SQL `revoked_at`, scoped to the campaign, or from `epoch < stream_epoch` with an authority row, and always after the receipt.
+  - A no-receipt read issues, in order:
+    1. the stream insert and `SELECT ... FOR UPDATE`;
+    2. the campaign, then the user, membership and assignments (or the token);
+    3. grants and the active session;
+    4. the replacement lookup;
+    5. the receipt;
+    6. `integration_tokens.revoked_at`;
+    7. `campaign_state_authority.stream_epoch`.
+  - This is the brief's order.
+- **Identity and authorization.** No `flask.g` read; the reader's identity comes only from the route boundary.
+- **Replacement tokens.** The rules come from PE-14c's `is_recorded_replacement`. A `replaces_credential_id` naming another campaign's credential gets 404.
+- **Abandon.**
+  - It writes its receipt once, with the current `stream_epoch`, or 1 with no authority row.
+  - A late original gets `409 abandoned` under `db` authority, and `503 authority_unavailable` with nothing written when there is no authority row.
+- **`token_verified`.** It is `token_required` without the 409, and `token_required` is unchanged.
+- **`held_projections`.** Its precedence is as Codex brief review 2 asked.
+
+**Judgments**
+
+All accepted; none rejected.
+
+- **Disabled user = an invalid authorizer.** Accepted: the users table has no disabled column, and `load`'s invalid state covers removed users, non-members and trashed campaigns.
+- **"The original while still valid" = a non-empty `held_projections`.** Accepted: it is equivalent to PE-14c's validity plus a role, without new private reads in `operations.py`.
+- **Malformed `redact:` aligned with `event_views`.** Accepted: PE-14b's carried note (`PE-14b-command-executor.md:392`) proposed exactly this. `events.visibility()` refuses such values at write, so only hand-written rows differ.
+- **Missing campaign = 404.** Accepted: it must be indistinguishable from an unauthorized read.
+- **Bodies with `ok: true`; `absent_pending` without `epoch`.** Accepted: only `absent_final` must echo the epoch.
+- **`epoch` accepts 0 and negatives.** Accepted: the floor of `stream_epoch` is 1, so such an envelope never passes the fence, and `absent_final` (with an authority row) is true for it.
+- **Abandon's `stream_epoch`.** Accepted (brief Decision 5).
+- **Unavailable store = 500.** Accepted: the same as the executor, and it fails before any write. A raising COMMIT is now 503 (R1-1).
+- **Reused executor names.** Accepted: one code table. Importing private names (`_failure`, now also `_CommitFailed`) is a coupling cost, acceptable while both modules live in `core/commands`.
+- **`encounter_player`.** Accepted (brief review 2).
+- **503 instead of 404 under contention.** Accepted as R1-3.
+- **Tokens with no SQL row get 404; a non-list `event_ids` is 500.** Accepted (Option A; an integrity error).
+
+**Tests** (Linux, Python 3.11, `/home/claude/venv311`)
+
+- Acceptance command (`tests/persistence/test_operation_status.py tests/persistence/test_event_visibility.py tests/persistence/test_command_authorizer.py tests/persistence/test_command_executor.py tests/test_obsidian_sync.py tests/test_route_policy_inventory.py tests/test_access_policy_unit.py`): 480 passed. This is 475 plus 5 new; the two new files alone: 74 passed.
+- `tests/persistence/test_grant_commands.py tests/persistence/test_auth_writes_stream_lock.py`: 89 passed.
+- `tests/test_route_policy_inventory.py tests/test_access_policy_unit.py`: 57 passed.
+- `tests/persistence -m "not postgresql"`: 1431 passed, 5 skipped, 59 deselected.
+- PostgreSQL ran on a scratch PostgreSQL 16 cluster at `127.0.0.1:55497`, stopped and deleted afterwards:
+  - `tests/persistence/test_operation_status_postgresql.py -m postgresql --strict-markers`: 8 passed;
+  - `tests/persistence -m postgresql --strict-markers`: 59 passed, 1436 deselected. Its one warning is PE-14a's deliberate pool-exhaustion report.
+- `python tools/check_templates.py`: OK, all 113 templates parse.
+- `git diff --check b80fe3cc HEAD`: clean.
+- CI on PR #271 at `cd9867c7`: `postgresql` and `changes` succeeded; `test` and `browser` were still running when this review was written.
+
+**Sizes after the fixes:** product +375 (stop line 480); tests +1419.
+
+**Verdict:** acceptable once R1-1 and R1-2 are fixed (both in `5d412818`); the P3s are notes or follow-ups. Ready to merge when every CI job on the pushed branch is green.
