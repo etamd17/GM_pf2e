@@ -50,6 +50,11 @@ def test_astral_character_straddling_unit_100_drops_the_lone_surrogate():
     assert folder_form(ASTRAL_INPUT) == ASTRAL_JS[:-1] == "x" * 99
 
 
+def test_lone_surrogate_in_the_input_is_dropped_too():
+    # node keeps it ("a\ud800b"); no stored session id can hold one (review 1, R1-3).
+    assert folder_form("a\ud800b") == "ab"
+
+
 def test_js_whitespace_set_is_the_literal_set():
     expected = {0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x20, 0xA0, 0x1680, *range(0x2000, 0x200B),
                 0x2028, 0x2029, 0x202F, 0x205F, 0x3000, 0xFEFF}

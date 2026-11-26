@@ -337,6 +337,25 @@ def test_live_current_session_inserts_nothing(db):
     assert report.inserted == () and rows(db) == {}
 
 
+@pytest.mark.parametrize("current, named", [
+    ({"id": "nul\u0000id", "status": "live"}, '"nul\\u0000id"'),  # main's writer keeps a NUL
+    ({"id": 5, "status": "live"}, "5"),
+    ({"id": "x" * 121, "status": "live"}, json.dumps("x" * 121)[:120]),
+    ({"status": "live"}, "null"),
+], ids=["nul", "number", "121_chars", "no_id"])
+def test_live_current_session_with_unusable_id_still_blocks(db, current, named):
+    """Implementation review 1, R1-2: accepting the unreadable id must not waive C:665."""
+    write_runtime({"current_session": current})
+    write_events(lines({"session_id": "old-1"}, {"session_id": "5"}))
+    read = read_session_history(CID)
+    item = UnreadableItem("runtime.json", None, "current_session", "malformed_session_id")
+    assert read.unreadable == (item,) and read.live_session == named
+    assert read.ids == ("5", "old-1")  # a rendered name never hides a real candidate id
+    report = backfill(db, read, [item.key])
+    assert report.gate_satisfied and report.quarantined == (item,)
+    assert report.live_session == named and report.inserted == () and rows(db) == {}
+
+
 def test_history_refuses_ids_sql_cannot_store():
     for bad in ("", "x" * 121, "nul\u0000", "\ud800", 5):
         with pytest.raises(ValueError):

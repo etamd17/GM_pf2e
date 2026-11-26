@@ -12,7 +12,9 @@ JS whitespace (``\s`` and ``trim``) is the literal set below.  Python's
 ``\s`` and ``str.strip()`` are not used: they also match U+001C-U+001F and
 U+0085 and miss U+FEFF.  The cut is 100 UTF-16 code units.  Where an astral
 character straddles unit 100, JS keeps a lone high surrogate and this port
-drops it (a lone surrogate is not a usable folder name).
+drops it (a lone surrogate is not a usable folder name).  For the same reason
+a lone surrogate already in the input is dropped wherever it stands; no
+stored session id holds one (``session_history.is_legacy_id``).
 
 Two ids collide when their folder forms are equal case-folded
 (:func:`folder_key`).  A new-form id (``[a-z0-9][a-z0-9_-]{7,99}``) is its own

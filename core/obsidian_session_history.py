@@ -19,7 +19,9 @@ import json
 from typing import Any
 
 from core import obsidian_sync
-from core.commands.session_history import LegacyHistory, UnreadableItem, is_legacy_id
+from core.commands.session_history import (
+    MAX_LEGACY_ID, LegacyHistory, UnreadableItem, is_legacy_id,
+)
 
 RUNTIME, EVENTS = "runtime.json", "events.jsonl"
 _IO_ERROR = object()
@@ -47,25 +49,42 @@ def _parse(raw: bytes) -> Any:
         raise ValueError("nested too deeply") from exc
 
 
-def _runtime(raw: bytes, ids: set[str], bad: list[UnreadableItem]) -> str | None:
-    """Collect ``current_session`` and ``used_session_ids``; return a ``live`` session id."""
+def _named(value: Any) -> str:
+    """A storable name for a ``live`` session whose id cannot be stored (never inserted)."""
+
+    try:
+        return json.dumps(value, ensure_ascii=True)[:MAX_LEGACY_ID]
+    except (TypeError, ValueError, RecursionError):
+        return "unreadable"
+
+
+def _runtime(raw: bytes, ids: set[str],
+             bad: list[UnreadableItem]) -> tuple[str | None, str | None]:
+    """Collect ``current_session`` and ``used_session_ids``.
+
+    Returns the ``live`` session's name and, when that name is its real id, the id.
+    """
 
     try:
         doc = _parse(raw)
     except ValueError:
         bad.append(UnreadableItem(RUNTIME, None, None, "malformed_json"))
-        return None
+        return None, None
     if not isinstance(doc, dict):
         bad.append(UnreadableItem(RUNTIME, None, None, "not_object"))
-        return None
-    live = None
+        return None, None
+    live = real = None
     current = doc.get("current_session")
     if current is not None:
-        if not isinstance(current, dict) or not is_legacy_id(current.get("id")):
+        usable = isinstance(current, dict) and is_legacy_id(current.get("id"))
+        if not usable:
             bad.append(UnreadableItem(RUNTIME, None, "current_session", "malformed_session_id"))
-        elif current.get("status") == "live":
-            live = current["id"]
-        else:
+        if isinstance(current, dict) and current.get("status") == "live":
+            # A live legacy session blocks activation (C:665) even when its id is
+            # unusable, so accepting that unreadable item never waives it.
+            real = current["id"] if usable else None
+            live = real if usable else _named(current.get("id"))
+        elif usable:
             ids.add(current["id"])  # main writes awaiting_processing on end
     if "used_session_ids" in doc:  # absent from main's format: not partial (C:499-500)
         used = doc["used_session_ids"]
@@ -78,7 +97,7 @@ def _runtime(raw: bytes, ids: set[str], bad: list[UnreadableItem]) -> str | None
             else:
                 bad.append(UnreadableItem(RUNTIME, None, f"used_session_ids[{i}]",
                                           "malformed_session_id"))
-    return live
+    return live, real
 
 
 def _events(raw: bytes, ids: set[str], bad: list[UnreadableItem]) -> None:
@@ -113,7 +132,7 @@ def read_session_history(campaign_id: str) -> LegacyHistory:
     digest = hashlib.sha256()
     ids: set[str] = set()
     bad: list[UnreadableItem] = []
-    live = None
+    live = real = None
     for name, raw in files:
         # Each file contributes a tag (missing, io_error or its length), then its bytes.
         if raw is None or raw is _IO_ERROR:
@@ -124,9 +143,9 @@ def read_session_history(campaign_id: str) -> LegacyHistory:
         digest.update(b"%d\n" % len(raw))
         digest.update(raw)
         if name == RUNTIME:
-            live = _runtime(raw, ids, bad)
+            live, real = _runtime(raw, ids, bad)
         else:
             _events(raw, ids, bad)
-    ids.discard(live)  # a live session is reported, never a candidate ended row
+    ids.discard(real)  # a live session is reported, never a candidate ended row
     return LegacyHistory(ids=tuple(sorted(ids)), live_session=live, unreadable=tuple(bad),
                          source_sha256=digest.hexdigest())

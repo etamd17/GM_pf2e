@@ -68,6 +68,8 @@ class LegacyHistory:
     """What the reader found: candidate ``ended`` ids, a ``live`` session, unreadable items."""
 
     ids: tuple[str, ...]
+    # The live session's id, or a JSON rendering of an id that cannot be stored
+    # (that id is also unreadable).  Reported only, never inserted (C:665).
     live_session: str | None
     unreadable: tuple[UnreadableItem, ...]
     source_sha256: str

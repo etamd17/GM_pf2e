@@ -338,6 +338,19 @@ def test_start_replays_without_a_second_row(db):
     assert len(rows(db)) == 1 and event_types(db) == ["session.started"]
 
 
+@pytest.mark.xfail(strict=True, reason="review 1 R1-1: the executor's replay reader "
+                   "(read_current) has no session kind; executor.py is outside PE-14e's files")
+@pytest.mark.parametrize("make", [start_env, end_env], ids=["start", "end"])
+def test_replay_lists_the_session_record_and_event(db, make):
+    if make is end_env:
+        assert run(start_env()) == (200, None)
+    body = make()
+    first, again = call(body), call(body)
+    assert again.body["replayed"] is True
+    assert again.body["events"] == first.body["events"] != []
+    assert set(again.body["result"]["records"]) == {f"session:{SID}"}
+
+
 # --------------------------------------------------------------------------
 # the PF2e slot
 
