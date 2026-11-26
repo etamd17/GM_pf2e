@@ -14,6 +14,12 @@ from . import runtime
 from .models import AuditEvent, Campaign, Character, Invitation, User, new_id, utc_now
 from .services import InviteUnavailableError, TransactionalStore, lock_invitation_for_write
 
+# Transaction-scoped PostgreSQL advisory lock keys.  Account creation takes its
+# key before any stream row, and no transaction holding a stream row takes it.
+# A PF2e ``session.start`` (PE-14e) takes the slot key after its stream row.
+ACCOUNT_CREATION_LOCK_KEY = 73420401
+PF2E_SESSION_SLOT_LOCK_KEY = 73420402
+
 
 def _store_operation(fn):
     @wraps(fn)
@@ -31,7 +37,7 @@ def _transaction(*, account_creation=False):
             db_session.execute(text('BEGIN IMMEDIATE'))
         elif account_creation and database.engine.dialect.name == 'postgresql':
             # A row lock cannot protect the absence of the first account.
-            db_session.execute(text('SELECT pg_advisory_xact_lock(73420401)'))
+            db_session.execute(text(f'SELECT pg_advisory_xact_lock({ACCOUNT_CREATION_LOCK_KEY})'))
         yield db_session
         db_session.commit()
 

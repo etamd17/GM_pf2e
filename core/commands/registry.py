@@ -30,7 +30,7 @@ from .envelope import EnvelopeRefusal, bad, is_int, parse_envelope, principal_ke
 
 ACCEPTED_PRINCIPALS = frozenset({PrincipalKind.USER, PrincipalKind.INTEGRATION_TOKEN})
 # Dotted modules whose import registers real command types (PE-14d, PE-14e, ...).
-COMMAND_MODULES: tuple[str, ...] = ("core.commands.grant_commands",)
+COMMAND_MODULES: tuple[str, ...] = ("core.commands.grant_commands", "core.commands.sessions")
 _LOADED: set[str] = set()
 _TYPES: dict[str, "CommandType"] = {}
 _MISSING = object()
