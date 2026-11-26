@@ -220,7 +220,9 @@ def merge_patch(existing, clean):
     for section, value in (existing or {}).items():
         out[section] = dict(value) if isinstance(value, dict) else value
     for section, fields in clean.items():
-        target = out.setdefault(section, {})
+        if not isinstance(out.get(section), dict):
+            out[section] = {}       # a hand-edited non-dict section starts fresh
+        target = out[section]
         for key, value in fields.items():
             if value in ('', [], 0):
                 target.pop(key, None)

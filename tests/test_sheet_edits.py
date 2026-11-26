@@ -706,3 +706,191 @@ def test_levelup_page_renders_with_sheet_feat_edits():
         assert c.get('/player/levelup/Kyle').status_code == 200
         print('ROUTE_OK')
     ''')
+
+
+# ---------------------------------------------------------------- SE-03: known defects from SE-01 and SE-02
+
+def test_merge_replaces_a_non_dict_section():
+    # A hand-edited file can hold a section that is not a dict; patching it
+    # starts that section fresh instead of crashing (SE-01 known defect).
+    cur = {'meta': 'junk', 'adjust': {'ac': 1}, 'feats': ['x']}
+    out = merge_patch(cur, validate_patch({'meta': {'deity': 'Ragathiel'}}, is_gm=False))
+    assert out == {'meta': {'deity': 'Ragathiel'}, 'adjust': {'ac': 1}, 'feats': ['x']}
+    out = merge_patch(cur, validate_patch({'feats': {'removed': []}}, is_gm=False))
+    assert 'feats' not in out and out['meta'] == 'junk'
+
+
+def test_route_saves_over_a_non_dict_section():
+    _route('''
+        doc = json.loads(raw())
+        doc.setdefault('build', doc)['sheet_edits'] = {'meta': 'hand edited', 'adjust': {'ac': 1}}
+        open(path, 'w', encoding='utf-8').write(json.dumps(doc))
+        r = c.post(url, json={'meta': {'deity': 'Ragathiel'}}, headers=J)
+        assert r.status_code == 200, (r.status_code, r.get_data(as_text=True)[:300])
+        assert build()['sheet_edits'] == {'meta': {'deity': 'Ragathiel'}, 'adjust': {'ac': 1}}
+        print('ROUTE_OK')
+    ''')
+
+
+def test_removed_feat_rows_keep_type_and_level(app_module, goel_doc):
+    c = _mk(app_module, goel_doc, {'feats': {'removed': ['Diehard', 'toughness']}})
+    rows = app_module._sheet_edit_feats(c)['removed']
+    assert rows == [{'name': 'Diehard', 'type': 'Awarded Feat', 'level': 1, 'children': [], 'copies': []},
+                    {'name': 'Toughness', 'type': 'General Feat', 'level': 7, 'children': [], 'copies': []}]
+
+
+def test_a_feat_taken_twice_is_removed_and_restored_as_one(app_module, monkeypatch):
+    # Kyle has Additional Lore twice (Awarded at 9, Skill Feat at 4). Removal is
+    # by name, so both go, and the one removed row carries the second copy.
+    doc = json.loads((_FIXTURES / 'kyle_l10.json').read_text(encoding='utf-8'))
+    html = _render(app_module, monkeypatch, doc)
+    assert html.count('data-se-feat="Additional Lore"') == 2
+    doc['build']['sheet_edits'] = {'feats': {'removed': ['Additional Lore']}}
+    c = _mk(app_module, doc)
+    assert 'Additional Lore' not in [f['name'] for f in c.feats]
+    assert app_module._sheet_edit_feats(c)['removed'] == [
+        {'name': 'Additional Lore', 'type': 'Awarded Feat', 'level': 9, 'children': [],
+         'copies': [{'type': 'Skill Feat', 'level': 4}]}]
+    html = _render(app_module, monkeypatch, doc)
+    assert 'data-se-feat="Additional Lore"' not in html
+    i = html.index('data-se-removed-feat="Additional Lore"')
+    row = html[i:html.index('</li>', i)]
+    assert 'data-se-copies=\'[{"level": 4, "type": "Skill Feat"}]\'' in row
+    assert 'Awarded Feat · 9, Skill Feat · 4' in row                   # the row says both go back
+
+
+def test_removed_and_readded_feat_is_not_offered_for_restore(app_module, monkeypatch, goel_doc):
+    edits = {'feats': {'removed': ['Toughness'], 'added': [['Toughness', None, 'General Feat', 3]]}}
+    lists = app_module._sheet_edit_feats(_mk(app_module, goel_doc, edits))
+    assert lists['removed'] == []
+    assert [r['name'] for r in lists['replaced']] == ['Toughness']
+    doc = copy.deepcopy(goel_doc)
+    doc['build']['sheet_edits'] = edits
+    html = _render(app_module, monkeypatch, doc)
+    shown = html[html.index('data-se-removed-list'):html.index('</ul>', html.index('data-se-removed-list'))]
+    assert 'Toughness' not in shown
+    # Still sent back on save, so a save from the modal keeps the import's copy removed.
+    assert 'data-se-removed-feat="Toughness" data-se-replaced' in html
+
+
+def _versatile(removed=None):
+    feats = [['Power Attack', None, 'Class Feat', 1, 'Fighter Feat 1', 'standardChoice', None],
+             ['Versatile Human', None, 'Heritage', 1, 'Heritage Feat', 'parentChoice', None],
+             ['Toughness', None, 'General Feat', 1, 'Heritage Featversatile heritage', 'childChoice', 'Heritage Feat']]
+    doc = _fighter(feats=feats)
+    if removed:
+        doc['build']['sheet_edits'] = {'feats': {'removed': removed}}
+    return doc
+
+
+def test_removing_a_parent_feat_removes_its_child_choice(app_module):
+    base = app_module.Character(_fighter(feats=[['Power Attack', None, 'Class Feat', 1]]), '')
+    full = app_module.Character(_versatile(), '')
+    assert full.hp == base.hp + 5                       # the child Toughness applies
+    assert app_module._sheet_edit_feats(full)['feats'][1]['children'] == ['Toughness']
+    c = app_module.Character(_versatile(['Versatile Human']), '')
+    assert [f['name'] for f in c.feats] == ['Power Attack']
+    assert c.hp == base.hp                              # and goes with its parent
+    assert c.removed_feats == ['Versatile Human']
+    assert app_module._sheet_edit_feats(c)['removed'] == [
+        {'name': 'Versatile Human', 'type': 'Heritage', 'level': 1,
+         'children': [{'name': 'Toughness', 'type': 'General Feat', 'level': 1}], 'copies': []}]
+    # Removing only the child leaves the parent.
+    c = app_module.Character(_versatile(['Toughness']), '')
+    assert [f['name'] for f in c.feats] == ['Power Attack', 'Versatile Human']
+
+
+def test_feats_tab_carries_type_level_and_children(app_module, monkeypatch):
+    html = _render(app_module, monkeypatch, _versatile())
+    assert 'data-se-feat="Versatile Human"' in html and 'data-se-children=\'["Toughness"]\'' in html
+    html = _render(app_module, monkeypatch, _versatile(['Versatile Human']))
+    i = html.index('data-se-removed-feat="Versatile Human"')
+    row = html[i:html.index('</li>', i)]
+    assert 'data-se-type="Heritage"' in row and 'data-se-level="1"' in row
+    assert 'data-se-children=\'[{"level": 1, "name": "Toughness", "type": "General Feat"}]\'' in row
+    assert 'Toughness' in row[row.index('se-item-meta'):]          # the row says what goes with it
+
+
+def test_levelup_keeps_sheet_feat_edits_out_of_the_build():
+    from app import _levelup_feats_keep_sheet_edits as keep
+    previous = [['Power Attack', None, 'Class Feat', 1],
+                ['Versatile Human', None, 'Heritage', 1, 'Heritage Feat', 'parentChoice', None],
+                ['Toughness', None, 'General Feat', 1, 'Heritage Featversatile heritage', 'childChoice', 'Heritage Feat'],
+                ['Diehard', None, 'General Feat', 3]]
+    edits = {'feats': {'removed': ['Versatile Human', 'Diehard'], 'added': [['Fleet', None, 'General Feat', 3]]},
+             'meta': {'deity': 'X'}}
+    # The level-up page starts from the edited list: removed feats missing, added ones present.
+    submitted = [['Power Attack', None, 'Class Feat', 1], ['Fleet', None, 'General Feat', 3],
+                 ['Sudden Charge', None, 'Class Feat', 4]]
+    feats, out = keep(previous, submitted, edits)
+    assert [f[0] for f in feats] == ['Power Attack', 'Sudden Charge', 'Versatile Human', 'Toughness', 'Diehard']
+    assert out == edits
+    # Picking a removed feat again at level-up shows the new pick: the old copy
+    # stays out of the build and the name leaves the removed list.
+    submitted = [['Power Attack', None, 'Class Feat', 1], ['Fleet', None, 'General Feat', 3],
+                 ['Diehard', None, 'General Feat', 5]]
+    feats, out = keep(previous, submitted, copy.deepcopy(edits))
+    assert [f[0] for f in feats] == ['Power Attack', 'Diehard', 'Versatile Human', 'Toughness']
+    assert feats[1][3] == 5
+    assert out['feats'] == {'removed': ['Versatile Human'], 'added': [['Fleet', None, 'General Feat', 3]]}
+    # A child of a removed parent comes back even when a kept feat shares its name.
+    twice = previous + [['Toughness', None, 'General Feat', 3]]
+    page = [['Power Attack', None, 'Class Feat', 1], ['Diehard', None, 'General Feat', 3],
+            ['Toughness', None, 'General Feat', 3]]
+    feats, _ = keep(twice, page, {'feats': {'removed': ['Versatile Human']}})
+    assert feats == page + [previous[1], previous[2]]
+    # No sheet feat edits: the submitted list is used as it is.
+    assert keep(previous, submitted, {'meta': {'deity': 'X'}}) == (submitted, {'meta': {'deity': 'X'}})
+
+
+def test_levelup_route_keeps_removed_feats_and_shows_a_new_pick():
+    _route('''
+        edits = {'feats': {'removed': ['Diehard', 'Toughness'],
+                           'added': [{'name': 'Fleet', 'type': 'General Feat', 'level': 3}]}}
+        assert c.post(url, json=edits, headers=J).status_code == 200
+        pc = A.PARTY_LIBRARY[name]
+        submitted = json.loads(json.dumps(pc.raw_feats)) + [['Toughness', None, 'General Feat', 11]]
+        r = c.post('/api/submit_levelup/' + quote(name),
+                   json={'new_level': 11, 'force_save': True, 'feats': submitted}, headers=J)
+        assert r.status_code == 200, (r.status_code, r.get_data(as_text=True)[:400])
+        names = [f[0] for f in build()['feats']]
+        assert 'Fleet' not in names                             # still a sheet edit, not baked in
+        assert names.count('Diehard') == 1 and names.count('Toughness') == 1
+        assert [f for f in build()['feats'] if f[0] == 'Toughness'][0][3] == 11
+        assert build()['sheet_edits']['feats']['removed'] == ['Diehard']
+        shown = [f['name'] for f in A.PARTY_LIBRARY[name].feats]
+        assert 'Diehard' not in shown and shown.count('Toughness') == 1 and shown.count('Fleet') == 1
+        # Undo puts the removed list back with the old feats.
+        assert c.post('/api/revert_level/' + quote(name), json={}, headers=J).status_code == 200
+        assert build()['level'] == 10 and build()['sheet_edits']['feats']['removed'] == ['Diehard', 'Toughness']
+        shown = [f['name'] for f in A.PARTY_LIBRARY[name].feats]
+        assert 'Diehard' not in shown and 'Toughness' not in shown and 'Fleet' in shown
+        print('ROUTE_OK')
+    ''')
+
+
+def test_pet_overlay_is_fixed_inside_the_ember_host():
+    # system.css makes every child of .sheet-ember-host position:relative,
+    # which put the Add Companion overlay in the page flow (SE-02 known defect).
+    css = (Path(__file__).parent.parent / 'static' / 'css' / 'system.css').read_text(encoding='utf-8')
+    assert '.sheet-ember-host > .fixed.inset-0' in css
+    rule = css[css.index('.sheet-ember-host > .fixed.inset-0'):]
+    rule = rule[:rule.index('}')]
+    assert 'position: fixed' in rule and 'z-index: 50' in rule
+
+
+def test_add_pet_button_resets_the_companion_form():
+    js = (Path(__file__).parent.parent / 'templates' / '_pc_sheet' / '_js_sheet_edit.html').read_text(encoding='utf-8')
+    block = js[js.index('"+ Add Pet" goes back to adding'):]
+    block = block[:block.index('})();')]
+    assert 'defaultValue' in block and 'defaultSelected' in block
+
+
+def test_hand_edited_list_values_do_not_break_the_sheet(app_module, goel_doc):
+    junk = {'feats': {'removed': 5, 'added': 'Toughness', 'order': None},
+            'features': {'hidden': 3, 'custom': {'name': 'x'}, 'order': 7}}
+    c = _mk(app_module, goel_doc, junk)
+    assert [f['name'] for f in c.feats] == [f['name'] for f in _mk(app_module, goel_doc).feats]
+    assert app_module._sheet_edit_feats(c)['removed'] == []
+    from app import _levelup_feats_keep_sheet_edits as keep
+    assert keep([], [['A', None, 'General Feat', 1]], junk)[0] == [['A', None, 'General Feat', 1]]
