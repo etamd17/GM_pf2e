@@ -6773,14 +6773,21 @@ class Character:
         removed = {str(n).lower() for n in _sheet_list(edits, 'removed') if isinstance(n, str)}
         kept, suppressed = _split_sheet_removed_feats(raw, removed)
         # removed_feat_rows: what the Feats tab needs to restore a row as it was.
+        # Removal is by name, so a feat taken twice (Additional Lore at two
+        # levels) is one removed row; 'copies' keeps each later copy's type and
+        # level so Restore brings every copy back.
         self.removed_feats, self.removed_feat_rows, rows = [], [], {}
         for feat, parent in suppressed:
+            if parent is not None:
+                continue
             name = safe_str(feat[0])
-            if parent is None and name not in self.removed_feats:
-                self.removed_feats.append(name)
-                ftype, level = _raw_feat_type_level(feat)
-                rows[name.lower()] = {'name': name, 'type': ftype, 'level': level, 'children': []}
-                self.removed_feat_rows.append(rows[name.lower()])
+            ftype, level = _raw_feat_type_level(feat)
+            if name.lower() in rows:
+                rows[name.lower()]['copies'].append({'type': ftype, 'level': level})
+                continue
+            self.removed_feats.append(name)
+            rows[name.lower()] = {'name': name, 'type': ftype, 'level': level, 'children': [], 'copies': []}
+            self.removed_feat_rows.append(rows[name.lower()])
         for feat, parent in suppressed:
             if parent is not None and parent.lower() in rows:
                 ftype, level = _raw_feat_type_level(feat)
@@ -23121,7 +23128,8 @@ def _sheet_edit_feats(pc):
     present = {f['name'].lower() for f in pc.feats}
     rows = getattr(pc, 'removed_feat_rows', None)
     if rows is None:
-        rows = [{'name': n, 'type': '', 'level': 1, 'children': []} for n in getattr(pc, 'removed_feats', [])]
+        rows = [{'name': n, 'type': '', 'level': 1, 'children': [], 'copies': []}
+                for n in getattr(pc, 'removed_feats', [])]
     return {
         'feats': [{'name': f['name'], 'type': f.get('type', ''), 'level': f.get('level', 1),
                    'source': f.get('source', 'build'), 'children': children.get(f['name'].lower(), [])}

@@ -54,8 +54,10 @@ def test_add_companion_form_is_an_overlay_and_starts_blank(page):
 def test_restored_feat_keeps_its_level(page):
     result = page.evaluate("""() => {
         const dialog = document.getElementById('se-modal');
-        const row = [...dialog.querySelectorAll('[data-se-feat-list] [data-se-source="build"]')]
-            .find(r => r.getAttribute('data-se-level') !== '1');
+        const rows = [...dialog.querySelectorAll('[data-se-feat-list] [data-se-source="build"]')];
+        const count = name => rows.filter(r => r.getAttribute('data-se-feat') === name).length;
+        const row = rows.find(r => r.getAttribute('data-se-level') !== '1'
+                                   && count(r.getAttribute('data-se-feat')) === 1);
         const before = {name: row.getAttribute('data-se-feat'), level: row.getAttribute('data-se-level'),
                         type: row.getAttribute('data-se-type')};
         row.querySelector('[data-se-drop]').click();
@@ -68,3 +70,26 @@ def test_restored_feat_keeps_its_level(page):
     }""")
     assert result["level"] == result["before"]["level"]
     assert result["type"] == result["before"]["type"]
+
+
+def test_a_feat_taken_twice_is_removed_and_restored_whole(page):
+    # Kyle has Additional Lore at levels 9 and 4. Removal is saved by name, so
+    # removing either row removes both, and Restore brings both back.
+    result = page.evaluate("""() => {
+        const dialog = document.getElementById('se-modal');
+        const lore = () => [...dialog.querySelectorAll('[data-se-feat="Additional Lore"]')]
+            .map(r => r.getAttribute('data-se-level')).sort();
+        const before = lore();
+        dialog.querySelector('[data-se-feat="Additional Lore"] [data-se-drop]').click();
+        const afterDrop = lore();
+        const removed = dialog.querySelector('[data-se-removed-list] [data-se-removed-feat="Additional Lore"]');
+        const meta = removed.querySelector('.se-item-meta').textContent;
+        removed.querySelector('[data-se-restore]').click();
+        return {before, afterDrop, meta, restored: lore(),
+                stillRemoved: !!dialog.querySelector('[data-se-removed-list] [data-se-removed-feat="Additional Lore"]')};
+    }""")
+    assert result["before"] == ["4", "9"]
+    assert result["afterDrop"] == []
+    assert "9" in result["meta"] and "4" in result["meta"]
+    assert result["restored"] == ["4", "9"]
+    assert not result["stillRemoved"]

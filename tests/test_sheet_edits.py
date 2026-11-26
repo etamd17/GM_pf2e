@@ -735,8 +735,28 @@ def test_route_saves_over_a_non_dict_section():
 def test_removed_feat_rows_keep_type_and_level(app_module, goel_doc):
     c = _mk(app_module, goel_doc, {'feats': {'removed': ['Diehard', 'toughness']}})
     rows = app_module._sheet_edit_feats(c)['removed']
-    assert rows == [{'name': 'Diehard', 'type': 'Awarded Feat', 'level': 1, 'children': []},
-                    {'name': 'Toughness', 'type': 'General Feat', 'level': 7, 'children': []}]
+    assert rows == [{'name': 'Diehard', 'type': 'Awarded Feat', 'level': 1, 'children': [], 'copies': []},
+                    {'name': 'Toughness', 'type': 'General Feat', 'level': 7, 'children': [], 'copies': []}]
+
+
+def test_a_feat_taken_twice_is_removed_and_restored_as_one(app_module, monkeypatch):
+    # Kyle has Additional Lore twice (Awarded at 9, Skill Feat at 4). Removal is
+    # by name, so both go, and the one removed row carries the second copy.
+    doc = json.loads((_FIXTURES / 'kyle_l10.json').read_text(encoding='utf-8'))
+    html = _render(app_module, monkeypatch, doc)
+    assert html.count('data-se-feat="Additional Lore"') == 2
+    doc['build']['sheet_edits'] = {'feats': {'removed': ['Additional Lore']}}
+    c = _mk(app_module, doc)
+    assert 'Additional Lore' not in [f['name'] for f in c.feats]
+    assert app_module._sheet_edit_feats(c)['removed'] == [
+        {'name': 'Additional Lore', 'type': 'Awarded Feat', 'level': 9, 'children': [],
+         'copies': [{'type': 'Skill Feat', 'level': 4}]}]
+    html = _render(app_module, monkeypatch, doc)
+    assert 'data-se-feat="Additional Lore"' not in html
+    i = html.index('data-se-removed-feat="Additional Lore"')
+    row = html[i:html.index('</li>', i)]
+    assert 'data-se-copies=\'[{"level": 4, "type": "Skill Feat"}]\'' in row
+    assert 'Awarded Feat · 9, Skill Feat · 4' in row                   # the row says both go back
 
 
 def test_removed_and_readded_feat_is_not_offered_for_restore(app_module, monkeypatch, goel_doc):
@@ -774,7 +794,7 @@ def test_removing_a_parent_feat_removes_its_child_choice(app_module):
     assert c.removed_feats == ['Versatile Human']
     assert app_module._sheet_edit_feats(c)['removed'] == [
         {'name': 'Versatile Human', 'type': 'Heritage', 'level': 1,
-         'children': [{'name': 'Toughness', 'type': 'General Feat', 'level': 1}]}]
+         'children': [{'name': 'Toughness', 'type': 'General Feat', 'level': 1}], 'copies': []}]
     # Removing only the child leaves the parent.
     c = app_module.Character(_versatile(['Toughness']), '')
     assert [f['name'] for f in c.feats] == ['Power Attack', 'Versatile Human']

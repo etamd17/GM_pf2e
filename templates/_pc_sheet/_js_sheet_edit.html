@@ -159,18 +159,22 @@
         return li;
     }
 
-    // A removed row keeps the feat's type and level, and the feats its parent
-    // choice granted (Pathbuilder childChoice), so Restore puts them all back.
-    function removedRow(name, type, level, children) {
+    // A removed row keeps the feat's type and level, the feats its parent
+    // choice granted (Pathbuilder childChoice), and, for a feat taken more than
+    // once, every other copy's type and level, so Restore puts them all back.
+    function removedRow(name, type, level, children, copies) {
         var li = document.createElement('li');
         li.className = 'se-item';
         li.setAttribute('data-se-removed-feat', name);
         li.setAttribute('data-se-type', type || '');
         li.setAttribute('data-se-level', String(level || 1));
         li.setAttribute('data-se-children', JSON.stringify(children || []));
+        li.setAttribute('data-se-copies', JSON.stringify(copies || []));
         var n = document.createElement('span'); n.className = 'se-item-name'; n.textContent = name;
         var m = document.createElement('span'); m.className = 'se-item-meta';
-        m.textContent = (type ? type + ' · ' : '') + (level || 1) + ((children || []).length
+        m.textContent = [{type: type, level: level}].concat(copies || []).map(function (c) {
+            return (c.type ? c.type + ' · ' : '') + (c.level || 1);
+        }).join(', ') + ((children || []).length
             ? ' · with ' + children.map(function (c) { return c.name; }).join(', ') : '');
         li.append(n, m, mini('Restore', 'data-se-restore'));
         return li;
@@ -181,6 +185,9 @@
         catch (_) { return []; }
     }
 
+    function isNamed(c) { return c && typeof c.name === 'string'; }
+    function isCopy(c) { return c && typeof c === 'object'; }
+
     function featRowByName(name) {
         var lower = name.toLowerCase(), found = null;
         featList.querySelectorAll('[data-se-feat]').forEach(function (row) {
@@ -190,9 +197,19 @@
     }
 
     // Move an imported feat (and the child feats it granted) to the removed list.
+    // Removal is saved by name, so every imported copy of a feat taken more than
+    // once goes with it, as the save will do.
     function dropBuildFeat(row) {
-        var children = [];
-        parseList(row, 'data-se-children').forEach(function (childName) {
+        var lower = row.getAttribute('data-se-feat').toLowerCase();
+        var copies = [], childNames = parseList(row, 'data-se-children'), children = [];
+        featList.querySelectorAll('[data-se-feat][data-se-source="build"]').forEach(function (other) {
+            if (other === row || other.getAttribute('data-se-feat').toLowerCase() !== lower) return;
+            copies.push({type: other.getAttribute('data-se-type') || '',
+                         level: parseInt(other.getAttribute('data-se-level'), 10) || 1});
+            childNames = childNames.concat(parseList(other, 'data-se-children'));
+            other.remove();
+        });
+        childNames.forEach(function (childName) {
             var child = typeof childName === 'string' ? featRowByName(childName) : null;
             if (!child || child.getAttribute('data-se-source') !== 'build') return;
             children.push({name: child.getAttribute('data-se-feat'),
@@ -201,7 +218,7 @@
             child.remove();
         });
         removedList.appendChild(removedRow(row.getAttribute('data-se-feat'), row.getAttribute('data-se-type') || '',
-                                           parseInt(row.getAttribute('data-se-level'), 10) || 1, children));
+                                           parseInt(row.getAttribute('data-se-level'), 10) || 1, children, copies));
     }
 
     // Dropping the sheet's copy of a feat that also replaced the import's copy
@@ -212,7 +229,7 @@
             if (carrier.getAttribute('data-se-removed-feat').toLowerCase() !== lower) return;
             removedList.appendChild(removedRow(carrier.getAttribute('data-se-removed-feat'),
                 carrier.getAttribute('data-se-type') || '', parseInt(carrier.getAttribute('data-se-level'), 10) || 1,
-                parseList(carrier, 'data-se-children').filter(function (c) { return c && typeof c.name === 'string'; })));
+                parseList(carrier, 'data-se-children').filter(isNamed), parseList(carrier, 'data-se-copies').filter(isCopy)));
             carrier.remove();
         });
     }
@@ -220,12 +237,16 @@
     // Put a removed (or replaced) imported feat back, as it was imported.
     function restoreBuildFeat(row) {
         var name = row.getAttribute('data-se-removed-feat');
-        var children = parseList(row, 'data-se-children').filter(function (c) { return c && typeof c.name === 'string'; });
+        var children = parseList(row, 'data-se-children').filter(isNamed);
+        var copies = parseList(row, 'data-se-copies').filter(isCopy);
         row.remove();
         if (!hasFeat(name)) {
             featList.appendChild(featRow(name, 'build', row.getAttribute('data-se-type') || '',
                                          parseInt(row.getAttribute('data-se-level'), 10) || 1,
                                          children.map(function (c) { return c.name; })));
+            copies.forEach(function (c) {
+                featList.appendChild(featRow(name, 'build', c.type || '', parseInt(c.level, 10) || 1));
+            });
         }
         children.forEach(function (c) {
             if (!hasFeat(c.name)) featList.appendChild(featRow(c.name, 'build', c.type || '', c.level || 1));

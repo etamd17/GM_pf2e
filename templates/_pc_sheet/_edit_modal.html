@@ -73,15 +73,15 @@
             <h3 class="se-group">Removed from the import</h3>
             <ul class="se-list" data-se-removed-list>
                 {% for r in se_feats.removed %}
-                <li class="se-item" data-se-removed-feat="{{ r.name }}" data-se-type="{{ r.type }}" data-se-level="{{ r.level }}" data-se-children='{{ r.children|tojson }}'>
+                <li class="se-item" data-se-removed-feat="{{ r.name }}" data-se-type="{{ r.type }}" data-se-level="{{ r.level }}" data-se-children='{{ r.children|tojson }}' data-se-copies='{{ (r.copies or [])|tojson }}'>
                     <span class="se-item-name">{{ r.name }}</span>
-                    <span class="se-item-meta">{{ r.type }}{% if r.type %} · {% endif %}{{ r.level }}{% if r.children %} · with {{ r.children|map(attribute='name')|join(', ') }}{% endif %}</span>
+                    <span class="se-item-meta">{{ r.type }}{% if r.type %} · {% endif %}{{ r.level }}{% for c in r.copies or [] %}, {{ c.type }}{% if c.type %} · {% endif %}{{ c.level }}{% endfor %}{% if r.children %} · with {{ r.children|map(attribute='name')|join(', ') }}{% endif %}</span>
                     <button type="button" class="se-mini" data-se-restore>Restore</button></li>
                 {% endfor %}
             </ul>
             {# Imported feats the sheet re-added: shown once, as the sheet's copy, but still sent on save. #}
             <div hidden data-se-replaced-list>
-                {% for r in se_feats.replaced %}<span data-se-removed-feat="{{ r.name }}" data-se-replaced data-se-type="{{ r.type }}" data-se-level="{{ r.level }}" data-se-children='{{ r.children|tojson }}'></span>{% endfor %}
+                {% for r in se_feats.replaced %}<span data-se-removed-feat="{{ r.name }}" data-se-replaced data-se-type="{{ r.type }}" data-se-level="{{ r.level }}" data-se-children='{{ r.children|tojson }}' data-se-copies='{{ (r.copies or [])|tojson }}'></span>{% endfor %}
             </div>
             <p class="se-hint" data-se-removed-empty {% if se_feats.removed %}hidden{% endif %}>None.</p>
             <h3 class="se-group">Class and ancestry features</h3>

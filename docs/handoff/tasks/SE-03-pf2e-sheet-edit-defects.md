@@ -121,3 +121,13 @@ were probed and found fine.
   browser test above; the drop/restore-with-children flow is still covered only
   by the one-off jsdom run. The QUEUE.md row is left to a separate docs change so
   the three open pull requests do not conflict on it.
+
+### CI follow-up (claude, 2026-11-26)
+
+- **CI-1 (P3, fixed):** the browser job failed on Kyle, who has Additional Lore
+  twice (Awarded at 9, Skill Feat at 4). Removal is saved by name, so a save drops
+  both copies, but the dialog removed only the clicked row, and Restore put back
+  nothing because the other copy was still listed. Pre-existing since SE-02. Now
+  Remove takes every imported copy of that name, the removed row lists each copy's
+  type and level (`copies`), and Restore puts them all back. Unit and browser
+  tests added; the single-feat browser test now picks a feat taken once.
