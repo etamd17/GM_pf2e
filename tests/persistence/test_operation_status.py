@@ -567,6 +567,32 @@ def test_a_lock_timeout_is_503_temporarily_unavailable(db, monkeypatch):
     assert receipts(db) == 0
 
 
+@pytest.mark.parametrize("hook, landed", [("before_commit", False), ("after_commit", True)])
+def test_a_raising_commit_is_503_never_server_error(db, hook, landed):
+    """Review R1-1: a raising COMMIT is outcome-unknown, 503 (C:364), not 500 "wrote nothing".
+
+    ``after_commit`` is the abandon whose receipt landed before COMMIT raised:
+    a ``server_error`` answer would tell the client nothing was written.
+    """
+
+    def boom(session):
+        raise OperationalError("COMMIT", {}, Exception("connection lost"))
+
+    def arm(session, n):
+        sa_event.listen(session, hook, boom, once=True)
+
+    o = op()
+    busy = {"ok": False, "code": "temporarily_unavailable", "operation_id": o}
+    db.on_open.append(arm)
+    try:
+        assert drop("gm", "user:p1", o) == (503, busy)
+        assert read("gm", "user:p1", o) == (503, busy)
+    finally:
+        db.on_open.remove(arm)
+    assert receipts(db) == int(landed)
+    assert state(read("gm", "user:p1", o)[1]) == ("abandoned" if landed else "absent_pending")
+
+
 def test_missing_event_row_is_server_error(db, caplog):
     o = op()
     with db.database.transaction() as s:
@@ -622,3 +648,128 @@ def test_user_routes_pass_only_the_session_identity(db, monkeypatch):
         response, status = A_.api_operation_status(A, o)
     assert (status, response.get_json()["code"]) == (404, "not_found")
     assert len(calls) == 2
+
+
+# --------------------------------------------------------------------------
+# Both mounts through the real application's request guards (review R1-2)
+
+
+@pytest.fixture
+def site(db, tmp_path, monkeypatch):
+    """The real ``app`` and its before_request stack, in account mode over the SQL store."""
+
+    import app as A_
+
+    for name, path in (("DATA_DIR", tmp_path), ("USERS_FILE", tmp_path / "users.json"),
+                       ("CAMPAIGNS_DIR", tmp_path / "campaigns"),
+                       ("CAMPAIGNS_TRASH_DIR", tmp_path / "trash")):
+        monkeypatch.setattr(storage, name, str(path))
+    for cid in (A, B):
+        storage.ensure_campaign_dirs(cid)
+    monkeypatch.setenv("OWNERSHIP_BACKEND", "sql")  # the account users are the seeded SQL rows
+    monkeypatch.setattr(A_, "ACTIVE_CAMPAIGN_ID", B)  # the website's live table is campaign B
+    return A_
+
+
+def _client(site, uid=None):
+    client = site.app.test_client()
+    if uid is not None:
+        with client.session_transaction() as cookie:
+            cookie["user_id"] = uid
+    return client
+
+
+def _http(response):
+    return response.status_code, response.get_json()
+
+
+def test_user_mount_through_the_real_request_guards(site, db):
+    o, other = op(), op()
+    add_receipt(db, "user:p1", o)
+    url = f"/api/campaigns/{A}/operations/"
+    query = {"principal": "user:p1", "epoch": "1"}
+
+    def status(uid, operation_id, **extra):
+        return _http(_client(site, uid).get(url + operation_id, query_string={**query, **extra}))
+
+    def abandon(uid, operation_id, **headers):
+        return _http(_client(site, uid).post(url + operation_id + "/abandon", headers=headers,
+                                             json={"principal": "user:p1"}))
+
+    for uid in ("p1", "gm", "admin"):
+        assert status(uid, o)[1]["state"] == "committed", uid
+    # another editor of the character, a member of B only, B's GM: one 404, receipt or not
+    for uid in ("p2", "out", "gmb"):
+        for operation_id in (o, other):
+            assert status(uid, operation_id) == (
+                404, {"ok": False, "code": "not_found", "operation_id": operation_id}), uid
+    assert status("p1", o, epoch="") == (
+        400, {"ok": False, "code": "bad_envelope", "operation_id": o})
+    # the account-mode guard refuses an anonymous caller before the handler
+    code, body = status(None, o)
+    assert (code, body["error"]) == (401, "login_required") and "state" not in body
+    # abandon: concealed when unauthorized; CSRF refuses a cross-site POST; then once only
+    assert abandon("p2", other) == (
+        404, {"ok": False, "code": "not_found", "operation_id": other})
+    code, body = abandon("p1", other, Origin="https://evil.example")
+    assert (code, body["error"]) == (400, "csrf_failed")
+    assert receipts(db) == 1
+    abandoned = (200, {"ok": True, "operation_id": other, "state": "abandoned",
+                       "code": "abandoned", "event_ids": []})
+    assert abandon("p1", other, Origin="http://localhost") == abandoned
+    assert abandon("gm", other) == abandoned
+    assert status("p1", other)[1]["state"] == "abandoned"
+    assert receipts(db) == 2
+
+
+def test_user_mount_in_legacy_mode_answers_404_and_writes_nothing(site, db, monkeypatch):
+    monkeypatch.setenv("OWNERSHIP_BACKEND", "json")  # no users store: the legacy single table
+    assert not site._auth.account_mode_initialized()
+    o = op()
+    add_receipt(db, "user:p1", o)
+    url = f"/api/campaigns/{A}/operations/{o}"
+    for uid in ("p1", None):
+        client = _client(site, uid)
+        for response in (client.get(url, query_string={"principal": "user:p1", "epoch": "1"}),
+                         client.post(url + "/abandon", json={"principal": "user:p1"})):
+            assert _http(response) == (
+                404, {"ok": False, "code": "not_found", "operation_id": None}), uid
+    assert receipts(db) == 1
+
+
+def test_token_mount_through_the_real_request_guards(site, db):
+    raw = obsidian_sync.TOKEN_PREFIX + "_" + "z" * 43
+    with db.database.transaction() as s:
+        s.execute(update(IntegrationToken).where(IntegrationToken.credential_id == "t1")
+                  .values(token_digest=obsidian_sync._token_digest(raw)))
+    o, fresh = op(), op()
+    add_receipt(db, "integration_token:t1", o)
+    api = "/api/integrations/obsidian/v1"
+    bearer = {"Authorization": "Bearer " + raw, "X-Campaign-ID": A}
+    query = {"principal": "integration_token:t1", "epoch": "1"}
+    client = _client(site)
+
+    def status(operation_id, headers=bearer, via=client):
+        return _http(via.get(f"{api}/operations/{operation_id}", headers=headers,
+                             query_string=query))
+
+    # A is not the website's live table: an existing token route refuses, recovery answers
+    assert client.get(api + "/state", headers=bearer).status_code == 409
+    assert status(o)[1]["state"] == "committed"
+    assert status(fresh) == (200, {"ok": True, "operation_id": fresh, "state": "absent_pending"})
+    # a bearer route never reads a cookie, so a foreign Origin is no CSRF refusal
+    code, body = _http(client.post(f"{api}/operations/{fresh}/abandon",
+                                   json={"principal": "integration_token:t1"},
+                                   headers={**bearer, "Origin": "https://evil.example"}))
+    assert (code, body["state"]) == (200, "abandoned")
+    # the token boundary: no bearer, a wrong bearer, the token presented for campaign B
+    for headers in ({"X-Campaign-ID": A}, {**bearer, "Authorization": "Bearer obs1_wrong"},
+                    {**bearer, "X-Campaign-ID": B}):
+        code, body = status(o, headers)
+        assert code == 401 and "state" not in body, headers
+    # the mounts do not cross: a GM's session is no bearer, and a bearer is no session
+    assert status(o, {"X-Campaign-ID": A}, _client(site, "gm"))[0] == 401
+    code, body = _http(client.get(f"/api/campaigns/{A}/operations/{o}", headers=bearer,
+                                  query_string=query))
+    assert (code, body["error"]) == (401, "login_required")
+    assert receipts(db) == 2

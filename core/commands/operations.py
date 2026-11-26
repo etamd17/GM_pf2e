@@ -37,9 +37,10 @@ from .authorizer import CommandAuthorizer, held_projections, load
 from .checks import CommandRefusal
 from .envelope import OPERATION_ID, bad
 from .event_visibility import visible_event_ids
-# The executor's code-table mapping (C:352-366), so a lock timeout (55P03) is
-# ``503 temporarily_unavailable`` and anything unexpected ``500 server_error``.
-from .executor import CommandResponse, _failure
+# The executor's code-table mapping (C:352-366), so a lock timeout (55P03) or a
+# raising COMMIT is ``503 temporarily_unavailable`` and anything unexpected
+# ``500 server_error``.
+from .executor import CommandResponse, _CommitFailed, _failure
 
 _TOKEN = PrincipalKind.INTEGRATION_TOKEN.value
 _KINDS = frozenset({PrincipalKind.USER.value, _TOKEN})
@@ -72,14 +73,19 @@ def _run(campaign_id: Any, reader: Principal, original: Any, operation_id: Any, 
          *, write: bool) -> CommandResponse:
     echo = (operation_id if isinstance(operation_id, str) and OPERATION_ID.fullmatch(operation_id)
             else None)
+    finished = False
     try:
         key = _key(campaign_id, original, operation_id)
         if not write:
             epoch = _epoch(epoch)
         with runtime.database().transaction() as session:
-            return _observe(session, campaign_id, reader, key, epoch, write)
+            answer = _observe(session, campaign_id, reader, key, epoch, write)
+            finished = True
+        return answer
     except Exception as exc:
-        return _failure(exc, echo)
+        # A raising COMMIT leaves the outcome unknown (an abandon's receipt may have
+        # landed): 503 ``temporarily_unavailable``, never "nothing written" (C:364-365).
+        return _failure(_CommitFailed() if finished else exc, echo)
 
 
 def _key(campaign_id: Any, original: Any, operation_id: Any) -> tuple[str, str, str]:
