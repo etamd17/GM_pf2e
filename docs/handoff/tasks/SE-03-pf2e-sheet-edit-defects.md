@@ -76,7 +76,8 @@ the Numbers tab baseline note and the `meta.size` token footprint.
     an Edit; a restored feat keeps its level. Not run locally (no Playwright).
   - Level-up chain, engine and prerequisite tests, inline-handler escaping: passed.
   - `tools/check_templates.py`: all templates parse.
-  - Full suite without `tests/persistence`, browser and PostgreSQL: see below.
+  - Full suite without `tests/persistence`, browser and PostgreSQL: stopped at a
+    third with no failures (too slow here); CI runs it whole.
   - The feats-tab and pet-form JS was exercised in jsdom against rendered
     sheets (remove a parent, restore it, restore a server-rendered row,
     Edit then "+ Add Pet", drop the sheet copy of a replaced import); all
