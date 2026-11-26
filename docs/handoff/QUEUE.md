@@ -47,8 +47,8 @@ before they become ready. Owners review each other's output under PROTOCOL.md.
 | PE-14b | Command executor: fence, receipts and replay, lock plan, refusal transaction, event writer, post-commit hook | claude | high; select current model | done (accepted at 098462a3; PR #264 merged as 48e9ad12) | [brief](tasks/PE-14b-command-executor.md) |
 | PE-14c | Grant and token records (`_0006`) and the step-4 SQL authorizer | claude | high; select current model | done (accepted at c59c7203; PR #267 merged) | [brief](tasks/PE-14c-grants-tokens-authorizer.md) |
 | PE-14d | Stream-locked authorization writes; grant and token commands | claude | high; select current model | done (accepted at 88635375; PR #268) | [brief](tasks/PE-14d-stream-locked-authorization-writes.md) |
-| PE-14e | `session.start`/`session.end`, folder form and session-history backfill | claude | high; select current model | ready (brief accepted) | [brief](tasks/PE-14e-sessions-backfill.md) |
-| PE-14f | Operation-status read and `operation.abandon` | claude | high; select current model | ready (brief accepted) | [brief](tasks/PE-14f-status-read-abandon.md) |
+| PE-14e | `session.start`/`session.end`, folder form and session-history backfill | claude | high; select current model | review (built and reviewed; PR #270 waits on the user's merge) | [brief](tasks/PE-14e-sessions-backfill.md) |
+| PE-14f | Operation-status read and `operation.abandon` | claude | high; select current model | review (built and reviewed; PR #271 waits on the user's merge) | [brief](tasks/PE-14f-status-read-abandon.md) |
 | PE-14g | Token rollback export gate (Option A only) | claude | high; select current model | done (accepted 2026-11-23; PR #269) | [brief](tasks/PE-14g-token-rollback-export.md) |
 | PE-15 | D&D state adapter: build, play and encounter commands preserving build revisions (inventory, currency and item charges go to PE-41) | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-11a, PE-11b, PE-11c, PE-13, PE-14 |
 | PE-16 | PF2e detached read/derive adapter | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-01, PE-02, PE-13a |
@@ -117,8 +117,9 @@ Requested by the GM 2026-11-12; design approved by the user the same day:
 
 | ID | Task | Owner | Model | Status | Brief |
 |---|---|---|---|---|---|
-| SE-01 | Sheet edit part 1: meta fields (deity fix) and GM-only stat adjustments | claude | Opus, high | review (Codex) | [brief](tasks/SE-01-pf2e-sheet-edit-core.md) |
-| SE-02 | Sheet edit part 2: feats/features, companion edit, Import JSON | claude | Opus, high | review (Codex; stacked on SE-01) | [brief](tasks/SE-02-pf2e-sheet-edit-lists.md) |
+| SE-01 | Sheet edit part 1: meta fields (deity fix) and GM-only stat adjustments | claude | Opus, high | done (PR #253) | [brief](tasks/SE-01-pf2e-sheet-edit-core.md) |
+| SE-02 | Sheet edit part 2: feats/features, companion edit, Import JSON | claude | Opus, high | done (PR #255) | [brief](tasks/SE-02-pf2e-sheet-edit-lists.md) |
+| SE-03 | Sheet edit known defects from SE-01/SE-02, and level-up keeping sheet feat edits | claude | high; select current model | review (built and reviewed; PR #272 waits on the user's merge) | [brief](tasks/SE-03-pf2e-sheet-edit-defects.md) |
 
 ## UI/UX (PF2e + Cosmere)
 
@@ -263,6 +264,10 @@ Accepted as a design checkpoint. Notes:
 
 ## Log
 
+- 2026-11-26 Claude: built and reviewed PE-14e (PR #270), PE-14f (PR #271) and SE-03 (PR #272); none merged, because a merge deploys to Railway and the user approves each one.
+  - PE-14e and PE-14f are database groundwork; players see no change yet.
+  - SE-03 fixes the sheet edit bugs SE-01 and SE-02 listed, and a level-up bug where removed imported feats were dropped from the character.
+  - Next: the user reviews and merges the three pull requests.
 - 2026-11-23 Claude: built and accepted PE-14g (PR #269).
   - If the site ever has to roll back from the database to files, the GM's Obsidian connections now come across correctly: a revoked connection stays refused and a new one keeps working.
   - A connection limited to named commands is rolled back as revoked, because the old file format cannot record the limit; the GM mints it again.
