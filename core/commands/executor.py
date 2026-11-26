@@ -269,9 +269,9 @@ class _Command:
         keys.update(k for e in events for k in (_event_keys(e) or ()))
         records = {key: record for key in sorted(keys)
                    if (record := self.read_current(session, *key)) is not None}
-        # A grant record carries no revision, so the receipt cannot name it:
-        # the grant its events are about is the record the command wrote.
-        written = set(receipt.revisions) | {f"{k}:{i}" for k, i in keys if k == "grant"}
+        # Grant and session records carry no revision, so the receipt cannot
+        # name them: the one its events are about is the record the command wrote.
+        written = set(receipt.revisions) | {f"{k}:{i}" for k, i in keys if k in ("grant", "session")}
         return self.answer(authorizer, receipt.applied_status, True, dict(receipt.revisions),
                            events, receipt.seq_last, records, written)
 
@@ -290,6 +290,9 @@ class _Command:
         if kind == "grant":
             row = grants.get(session, cid, id)
             return None if row is None else grants.record(row)
+        if kind == "session":
+            from .sessions import session_record  # sessions imports this module
+            return session_record(session, cid, id)
         return None
 
     def authorizer(self, session: Any) -> Any:

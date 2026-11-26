@@ -98,10 +98,15 @@ OPEN_ACTIONS = OpenActionsRegistry(NoActionTable())
 
 
 def _read(ctx: Any, session_id: str) -> StateRecord | None:
-    """This campaign's row as a serialized record (never the raw ORM row), or ``None``."""
+    return session_record(ctx.session, ctx.campaign_id, session_id)
 
-    row = ctx.session.execute(select(_T).where(
-        _T.c.campaign_id == ctx.campaign_id, _T.c.session_id == session_id)).first()
+
+def session_record(session: Any, campaign_id: str, session_id: str) -> StateRecord | None:
+    """This campaign's row as a serialized record (never the raw ORM row), or ``None``.
+    Also the executor's replay reader for the ``session`` kind."""
+
+    row = session.execute(select(_T).where(
+        _T.c.campaign_id == campaign_id, _T.c.session_id == session_id)).first()
     if row is None:
         return None
     payload = dict(row._mapping)
