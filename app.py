@@ -11959,6 +11959,38 @@ def api_my_campaigns():
     return jsonify({'campaigns': out, 'active': active})
 
 
+from core.commands import operations as _operations
+
+
+def _operation_answer(function, campaign_id, operation_id, **fields):
+    """PE-14f: a website user's operation-status read or abandon (C:261-307).
+
+    Only the reader's identity comes from the session. ``core.commands.operations``
+    re-reads authorization from SQL under the stream lock and conceals every
+    unauthorized read with 404, so a request with no account user gets 404 too.
+    """
+    user = _auth.current_user()
+    if not user:
+        return jsonify({'ok': False, 'code': 'not_found', 'operation_id': None}), 404
+    answer = function(campaign_id=campaign_id, operation_id=operation_id,
+                      reader=_request_context.principal_from_user(user), **fields)
+    return jsonify(answer.body), answer.status
+
+
+@app.route('/api/campaigns/<campaign_id>/operations/<operation_id>', methods=['GET'])
+def api_operation_status(campaign_id, operation_id):
+    return _operation_answer(_operations.read_status, campaign_id, operation_id,
+                             original=request.args.get('principal'),
+                             epoch=request.args.get('epoch'))
+
+
+@app.route('/api/campaigns/<campaign_id>/operations/<operation_id>/abandon', methods=['POST'])
+def api_operation_abandon(campaign_id, operation_id):
+    body = request.get_json(silent=True)
+    return _operation_answer(_operations.abandon, campaign_id, operation_id,
+                             original=body.get('principal') if isinstance(body, dict) else None)
+
+
 @app.context_processor
 def _inject_account_ctx():
     """Expose the logged-in account user, the active campaign, and its system to

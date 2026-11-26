@@ -1373,3 +1373,98 @@ def test_import_transaction_takes_the_stream_first(sql_sync, writer):
         streamed = next(i for i, s in enumerate(statements) if "campaign_streams" in s)
         assert writes and streamed < writes[0]
     assert (_row(sql_sync, token_id)["revoked_at"] is None) == (writer == "lazy_import")
+
+
+# --------------------------------------------------------------------------
+# PE-14f: the token mount of the operation-status read and abandon
+
+from core.persistence import CommandReceipt  # noqa: E402
+
+OPS = API + "/operations/"
+
+
+def _op():
+    return "op-" + _uuid.uuid4().hex
+
+
+def _status(env, raw, credential_id, operation_id, epoch="1", cid=CID):
+    query = {"principal": f"integration_token:{credential_id}"}
+    if epoch is not None:
+        query["epoch"] = epoch
+    response = env.client.get(OPS + operation_id, query_string=query,
+                              headers={**headers(raw), "X-Campaign-ID": cid})
+    return response.status_code, response.get_json()
+
+
+def _abandon(env, raw, credential_id, operation_id):
+    response = env.client.post(OPS + operation_id + "/abandon", headers=headers(raw),
+                               json={"principal": f"integration_token:{credential_id}"})
+    return response.status_code, response.get_json()
+
+
+def _receipts(env):
+    with env.db.session() as session:
+        return session.execute(select(CommandReceipt.operation_id)).scalars().all()
+
+
+def test_operation_routes_answer_when_the_campaign_is_not_the_active_table(sql_sync):
+    raw, token_id = _minted(sql_sync)
+    o = _op()
+    with _stream_spy(sql_sync):
+        assert _status(sql_sync, raw, token_id, o) == (
+            200, {"ok": True, "operation_id": o, "state": "absent_pending"})
+        events = sql_sync.spy.events
+        # verify_token's file lock is released before the read's transaction and stream lock
+        at = events.index("stream")
+        assert events[at - 1] == "begin" and "unlock" in events[:at]
+        assert events[:at].count("lock") == events[:at].count("unlock")
+    sql_sync.fake.active_id = OTHER
+    assert _state(sql_sync, raw) == 409  # existing routes keep the active-table check
+    assert _status(sql_sync, raw, token_id, o)[1]["state"] == "absent_pending"
+    assert _abandon(sql_sync, raw, token_id, o) == (200, {
+        "ok": True, "operation_id": o, "state": "abandoned", "code": "abandoned",
+        "event_ids": []})
+    assert _status(sql_sync, raw, token_id, o)[1]["state"] == "abandoned"
+    assert _status(sql_sync, raw, token_id, o, epoch=None)[0] == 400
+    assert _receipts(sql_sync) == [o]
+
+
+def test_operation_routes_refuse_at_the_token_boundary(sql_sync):
+    raw, token_id = _minted(sql_sync)
+    other_raw, other_id = obsidian_sync.create_token(OTHER, "other")
+    o = _op()
+    no_bearer = sql_sync.client.get(OPS + o, query_string={"epoch": 1},
+                                    headers={"X-Campaign-ID": CID})
+    assert no_bearer.status_code == 401
+    assert _status(sql_sync, "obs1_bad_token", token_id, o)[0] == 401
+    assert _status(sql_sync, raw, token_id, o, cid="not-a-campaign")[0] == 400
+    # a token recorded for another campaign is refused before the handler runs
+    for credential in (token_id, other_id["id"]):
+        status, body = _status(sql_sync, other_raw, credential, o)
+        assert status == 401 and "state" not in body
+    assert _revoke(sql_sync, token_id) == 200
+    status, body = _status(sql_sync, raw, token_id, o)
+    assert status == 401 and "state" not in body
+    assert _abandon(sql_sync, raw, token_id, o)[0] == 401
+    assert _receipts(sql_sync) == []
+
+
+def test_operation_routes_conceal_and_honour_the_recorded_replacement(sql_sync):
+    _gm_member(sql_sync)
+    raw, original = _minted(sql_sync)
+    other_raw, _other = _minted(sql_sync)
+    replacement_raw, replacement = obsidian_sync.create_token(
+        CID, "replacement", replaces_credential_id=original, minted_by_user_id="gm")
+    o = _op()
+    for answer in (_status(sql_sync, other_raw, original, o),
+                   _abandon(sql_sync, other_raw, original, o)):
+        assert answer == (404, {"ok": False, "code": "not_found", "operation_id": o})
+    assert _receipts(sql_sync) == []
+    assert _status(sql_sync, replacement_raw, original, o, epoch="4")[1]["state"] == (
+        "absent_pending")
+    assert _revoke(sql_sync, original) == 200
+    assert _status(sql_sync, replacement_raw, original, o, epoch="4") == (
+        200, {"ok": True, "operation_id": o, "state": "absent_final", "epoch": 4})
+    assert _status(sql_sync, other_raw, original, o)[0] == 404
+    assert _abandon(sql_sync, replacement_raw, original, o)[1]["state"] == "abandoned"
+    assert _status(sql_sync, replacement_raw, original, o)[1]["state"] == "abandoned"

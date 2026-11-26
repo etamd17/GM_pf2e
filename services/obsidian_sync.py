@@ -13,6 +13,8 @@ import uuid
 from flask import Blueprint, g, jsonify, render_template, request
 
 from core import obsidian_sync as sync_store
+from core.commands import operations
+from core.request_context import Principal
 
 
 API_PREFIX = "/api/integrations/obsidian/v1"
@@ -540,6 +542,41 @@ def create_obsidian_sync_blueprint(adapter: dict) -> Blueprint:
         wrapped.__name__ = fn.__name__
         return wrapped
 
+    def token_verified(fn):
+        """``token_required`` without the active-table check (PE-14f Decision 2).
+
+        The same bearer check for ``X-Campaign-ID`` and the same 401 and 400
+        answers.  A campaign switch is a quarantine trigger (C:256) and the
+        operation routes are its recovery path, so they answer when the
+        campaign is not the website's active table.  ``verify_token`` releases
+        ``campaign_lock`` before the view opens its transaction.
+        """
+
+        def wrapped(*args, **kwargs):
+            campaign_id = (request.headers.get("X-Campaign-ID") or "").strip()
+            token = _bearer_token()
+            if not campaign_id or not token:
+                return _json_error("campaign id and bearer token are required", 401)
+            try:
+                token_record = sync_store.verify_token(campaign_id, token)
+            except ValueError:
+                return _json_error("invalid campaign id", 400)
+            if token_record is None:
+                return _json_error("invalid or revoked integration token", 401)
+            g.obsidian_campaign_id = campaign_id
+            g.obsidian_token = token_record
+            return fn(*args, **kwargs)
+        wrapped.__name__ = fn.__name__
+        return wrapped
+
+    def operation_call(function, **fields):
+        """Run a PE-14f operation for the verified token; SQL decides who may read."""
+
+        reader = Principal.integration_token(g.obsidian_token["id"],
+                                             campaign_id=g.obsidian_campaign_id)
+        answer = function(campaign_id=g.obsidian_campaign_id, reader=reader, **fields)
+        return jsonify(answer.body), answer.status
+
     @bp.after_request
     def integration_no_store(response):
         if request.path.startswith(API_PREFIX):
@@ -832,6 +869,20 @@ def create_obsidian_sync_blueprint(adapter: dict) -> Blueprint:
             "event_sequence": int(runtime.get("event_sequence", 0) or 0),
             "revision": int(runtime.get("revision", 0) or 0),
         })
+
+    @bp.get(API_PREFIX + "/operations/<operation_id>")
+    @token_verified
+    def operation_status(operation_id):
+        return operation_call(operations.read_status, operation_id=operation_id,
+                              original=request.args.get("principal"),
+                              epoch=request.args.get("epoch"))
+
+    @bp.post(API_PREFIX + "/operations/<operation_id>/abandon")
+    @token_verified
+    def operation_abandon(operation_id):
+        body = request.get_json(silent=True)
+        return operation_call(operations.abandon, operation_id=operation_id,
+                              original=body.get("principal") if isinstance(body, dict) else None)
 
     return bp
 

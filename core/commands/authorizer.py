@@ -447,3 +447,40 @@ for _kind, _resolver in (("campaign", _campaign), (KIND_BUILD, _build), (KIND_PL
                          (KIND_ENCOUNTER, _encounter), (KIND_COMBATANT, _combatant),
                          (KIND_CLOCK, _clock), ("grant", _grant)):
     register_visibility(_kind, _resolver)
+
+
+# -- held projections (task PE-14f, Decision 7; C:635-648, C:846-847) ----------
+
+def held_projections(authorizer: CommandAuthorizer, *, subjects: list[dict],
+                     encounter_id: str | None) -> frozenset[str]:
+    """The projections ``authorizer``'s principal holds now for one event (C:647-648).
+
+    Reads only what :func:`load` already read.  Precedence: an invalid
+    principal (an unknown or removed user, a revoked or foreign token, a
+    trashed campaign: the users table has no disabled column) holds nothing;
+    a GM or site admin holds ``gm`` and a token ``gm_integration``, neither
+    needing a membership; any other user needs player membership.  A player
+    holds ``member``, per ``character`` subject its assignment role or
+    ``party``, ``qm`` with a live grant, and ``encounter_player`` when the
+    event's committed ``encounter_id`` is set (never the live encounter).
+    """
+
+    a = authorizer
+    if not a._valid:
+        return frozenset()
+    if a.is_gm:
+        return frozenset({"gm"})
+    if a._is_token:
+        return frozenset({"gm_integration"})
+    if not a._is_player:
+        return frozenset()
+    held = {"member"}
+    for subject in subjects if isinstance(subjects, list) else ():
+        if (isinstance(subject, Mapping) and subject.get("kind") == "character"
+                and isinstance(subject.get("id"), str)):
+            held.add(a._assignments.get(subject["id"], "party"))
+    if a._is_qm:
+        held.add("qm")
+    if encounter_id is not None:
+        held.add("encounter_player")
+    return frozenset(held)

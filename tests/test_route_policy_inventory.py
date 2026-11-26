@@ -346,3 +346,28 @@ def test_inventory_is_wired_before_legacy_runtime_authorization():
     assert "def _enforce_route_policy" in source
     hooks = [fn.__name__ for fn in A.app.before_request_funcs.get(None, ())]
     assert hooks.index("_enforce_route_policy") < hooks.index("check_gm_access")
+
+
+def test_operation_status_routes_are_declared_on_both_mounts():
+    """PE-14f: two account routes and two token routes, none tied to the live slot."""
+    expected = {
+        ("api_operation_status", "GET"): RoutePolicy.AUTHENTICATED,
+        ("api_operation_abandon", "POST"): RoutePolicy.AUTHENTICATED,
+        ("obsidian_sync.operation_status", "GET"): RoutePolicy.INTEGRATION_TOKEN,
+        ("obsidian_sync.operation_abandon", "POST"): RoutePolicy.INTEGRATION_TOKEN,
+    }
+    rules = {rule.endpoint: rule for rule in A.app.url_map.iter_rules()}
+    for (endpoint, method), policy in expected.items():
+        assert policy_for(endpoint, method) is policy
+        assert not requires_live_campaign_match(policy_for(endpoint, method))
+        assert method in rules[endpoint].methods
+    assert rules["api_operation_status"].rule == (
+        "/api/campaigns/<campaign_id>/operations/<operation_id>"
+    )
+    assert rules["api_operation_abandon"].rule == (
+        "/api/campaigns/<campaign_id>/operations/<operation_id>/abandon"
+    )
+    assert rules["obsidian_sync.operation_status"].rule.endswith("/operations/<operation_id>")
+    assert rules["obsidian_sync.operation_abandon"].rule.endswith(
+        "/operations/<operation_id>/abandon"
+    )

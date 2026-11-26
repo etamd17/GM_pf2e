@@ -520,3 +520,35 @@ def test_flask_adapter_returns_json_redirect_and_status_responses():
         conflict_response = flask_denial_response(conflict, is_api=False)
         assert conflict_response.status_code == 409
         assert b"not the campaign loaded" in conflict_response.data
+
+
+def test_operation_status_policies_leave_reader_checks_to_the_handler():
+    """PE-14f: the status/abandon routes are account or token routes only.
+
+    The user mount is AUTHENTICATED, so any account user reaches the handler,
+    member or not, and the handler answers 404 to every unauthorized reader.
+    The token mount is INTEGRATION_TOKEN, which never consults the live slot.
+    """
+    outsider = _context(Principal.user("stranger-1"), live_campaign_id="campaign-b")
+    assert decide_access(RoutePolicy.AUTHENTICATED, outsider).allowed
+    member = _context(Principal.user("player-1"), live_campaign_id="campaign-b")
+    assert decide_access(RoutePolicy.AUTHENTICATED, member).allowed
+
+    anonymous = decide_access(RoutePolicy.AUTHENTICATED, _context(Principal.anonymous()))
+    assert (anonymous.status_code, anonymous.code) == (401, "login_required")
+    token = Principal.integration_token("obsidian-v1", campaign_id=CAMPAIGN_ID)
+    on_user_mount = decide_access(RoutePolicy.AUTHENTICATED, _context(token))
+    assert (on_user_mount.status_code, on_user_mount.code) == (403, "human_session_required")
+
+    not_live = decide_access(
+        RoutePolicy.INTEGRATION_TOKEN, _context(token, live_campaign_id="campaign-b")
+    )
+    assert not_live.allowed
+    other = Principal.integration_token("obsidian-v1", campaign_id="campaign-b")
+    mismatch = decide_access(RoutePolicy.INTEGRATION_TOKEN, _context(other))
+    assert (mismatch.status_code, mismatch.code) == (403, "token_campaign_mismatch")
+    user_on_token_mount = decide_access(
+        RoutePolicy.INTEGRATION_TOKEN, _context(Principal.user("gm-1"))
+    )
+    assert not user_on_token_mount.allowed
+    assert user_on_token_mount.status_code == 401
