@@ -381,6 +381,9 @@ _POLICY_GROUPS: tuple[PolicyGroup, ...] = (
             "dnd5e.dnd5e_art",
             "api_active_system",
             "api_my_campaigns",
+            # PE-14f: the handler re-authorizes in SQL and conceals with 404.
+            "api_operation_abandon",
+            "api_operation_status",
             "backup_now",
             "campaign_import",
             "change_my_password",
@@ -446,6 +449,9 @@ _POLICY_GROUPS: tuple[PolicyGroup, ...] = (
             "obsidian_sync.commands",
             "obsidian_sync.end_session",
             "obsidian_sync.events",
+            # PE-14f: ``token_verified`` (no active-table check); SQL re-authorizes.
+            "obsidian_sync.operation_abandon",
+            "obsidian_sync.operation_status",
             "obsidian_sync.start_session",
             "obsidian_sync.state",
             "obsidian_sync.status",
