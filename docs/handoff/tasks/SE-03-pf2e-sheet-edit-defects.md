@@ -2,7 +2,7 @@
 
 <!-- ============ BRIEF (written before work starts) ============ -->
 
-- **Status:** review
+- **Status:** done (PR #272 merged as `311f072e`, 2026-11-26)
 - **Owner:** claude
 - **Reviewer:** claude
 - **Branch:** `claude/se-03-sheet-edit-fixes` from main `b80fe3cc`.

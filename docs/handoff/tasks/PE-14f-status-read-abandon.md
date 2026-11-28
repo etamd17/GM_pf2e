@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** built, awaiting review (built by Claude on 2026-11-26 from `b80fe3cc`; Claude builds and reviews from 2026-11-22). Brief accepted by Codex (brief review 2, 2026-11-14).
+- **Status:** done (built and reviewed by Claude on 2026-11-26 from `b80fe3cc`; PR #271 merged as `f0931374`; Claude builds and reviews from 2026-11-22). Brief accepted by Codex (brief review 2, 2026-11-14).
 - **Branch:** `claude/pe-14f-status-read-abandon` from current main after PE-14d merges. Record the exact starting SHA.
 - **Depends on:** [PE-14d](PE-14d-stream-locked-authorization-writes.md) (token revocation and replacement committed under the stream lock, which finality relies on). Uses PE-14a's receipts, events table and `streams.lock_stream(session, campaign_id)`; PE-14b's `STREAM_LOCK_TIMEOUT_MS`; and PE-14c's `authorizer.load`, `token_revoked`, `is_recorded_replacement` and token records. This task owns the event-ID projector (Decision 7) and needs nothing from PE-31; PE-31 depends on this task instead. May run in parallel with [PE-14e](PE-14e-sessions-backfill.md) and PE-14g; they share no files.
 - **Followed by:** PE-31 (imports `event_visible_to` for replay filtering; does not edit `core/commands/event_visibility.py`).
