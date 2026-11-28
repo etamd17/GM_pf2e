@@ -2,7 +2,7 @@
 
 - **Owner:** codex
 - **Reviewer:** claude, including browser/visual acceptance
-- **Status:** blocked on PE-04
+- **Status:** ready (PE-04 is done). It ports the uncommitted UI-11 patch from the user's local `GM_pf2e_ui06_stage` worktree, so it runs on the user's PC.
 - **Branch:** `codex/pe-05-ui11-reconcile` from the recorded Stage 0 package commit (or current main after this package integrates), after all named dependencies are accepted and integrated. Record the exact starting SHA.
 - **Depends on:** [PE-04](PE-04-ui18-review.md); do not race its template changes.
 - **Context:** [UI-11 brief](UI-11-pf2e-levelup-and-builder.md), [existing-work audit](../../player-release/existing-player-work.md), local sibling `GM_pf2e_ui06_stage`, [approved plan](../../player-release/implementation-plan.md).

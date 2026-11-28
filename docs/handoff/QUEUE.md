@@ -18,7 +18,7 @@ ready/priority entries below where they conflict; historical logs remain intact.
 New wiki and VTT/map work is parked, shipped tools retain maintenance, and
 Cosmere/Mistborn expansion follows the PF2e plus D&D 2014/2024 release.
 
-PE-00, PE-01, PE-03, PE-04, PE-10, PE-11a, PE-11b, PE-11c and PE-12 are done. PE-02 and PE-07 are ready. Codex accepted all ten PE-13/14 briefs on PR #259 at 51ac0e51: R1-1 through R1-10 are closed, PE-13c's brief acceptance stands, and new PE-14g is accepted. Non-blocking implementation cautions are recorded in the owning Review sections. PR #259 is merged. PE-13a is accepted and merged (PR #260). PE-13b is accepted and merged (PR #261), including its combatant reconciliation; its concrete input/projection interfaces are carried into the PE-14a/14b/14e briefs. PE-13c is accepted and merged (PR #262). PE-14a is accepted and merged (PR #263); its PE-14b requirements and the dependency correction are carried into the briefs. PE-14b is accepted at 098462a3 in implementation review 3; R1-1, R1-2 and R2-1 are closed. PR #264 merged as 48e9ad12. PE-14c is accepted at c59c7203 and PR #267 merged. From 2026-11-22 Claude both builds and reviews (user decision); no task waits on Codex. PE-14d is accepted at 88635375 (PR #268); PE-14e and PE-14f are ready. PE-14g is accepted (PR #269). The other children retain their build dependencies. Elsewhere "PE-13" and "PE-14" mean all their children, PE-14g included (PE-16, PE-31 and PE-40 name the children they need). The user chose token storage Option A (SQL) on 2026-11-14, so PE-14g is required. All precede PE-15.
+PE-00, PE-01, PE-03, PE-04, PE-10, PE-11a, PE-11b, PE-11c and PE-12 are done. PE-02 and PE-07 are ready. Codex accepted all ten PE-13/14 briefs on PR #259 at 51ac0e51: R1-1 through R1-10 are closed, PE-13c's brief acceptance stands, and new PE-14g is accepted. Non-blocking implementation cautions are recorded in the owning Review sections. PR #259 is merged. PE-13a is accepted and merged (PR #260). PE-13b is accepted and merged (PR #261), including its combatant reconciliation; its concrete input/projection interfaces are carried into the PE-14a/14b/14e briefs. PE-13c is accepted and merged (PR #262). PE-14a is accepted and merged (PR #263); its PE-14b requirements and the dependency correction are carried into the briefs. PE-14b is accepted at 098462a3 in implementation review 3; R1-1, R1-2 and R2-1 are closed. PR #264 merged as 48e9ad12. PE-14c is accepted at c59c7203 and PR #267 merged. From 2026-11-22 Claude both builds and reviews (user decision); no task waits on Codex. PE-14d is accepted at 88635375 (PR #268 merged). PE-14g is accepted (PR #269 merged). PE-14e (PR #270) and PE-14f (PR #271) were merged by the user on 2026-11-26, so every PE-13 and PE-14 child is done and deployed. That makes PE-31 ready, and leaves PE-15 and PE-40 waiting only on their briefs; PE-16 and PE-30 still wait on PE-02. Elsewhere "PE-13" and "PE-14" mean all their children, PE-14g included (PE-16, PE-31 and PE-40 name the children they need). The user chose token storage Option A (SQL) on 2026-11-14, so PE-14g is required. All precede PE-15.
 Dependencies follow section 11 of the accepted
 [state and command contract](../player-release/state-command-contract.md). Blocked briefs
 cannot be claimed until accepted dependencies are integrated. Needs-brief rows
@@ -32,7 +32,7 @@ before they become ready. Owners review each other's output under PROTOCOL.md.
 | PE-02 | Evidence-backed rules coverage and fixture matrix | codex | standard; high for review | ready | [brief](tasks/PE-02-rules-coverage.md) |
 | PE-03 | Review and map unmerged Obsidian recovery work | codex | standard; high for review | done | [brief](tasks/PE-03-obsidian-reuse-review.md) |
 | PE-04 | Review existing UI-18 picker/rail patch | codex | standard; high for review | done (Codex accepted UI-18 with no findings; review in `tasks/UI-18-levelup-picker-rail.md`; PR #245) | [brief](tasks/PE-04-ui18-review.md) |
-| PE-05 | Reconcile UI-11 presentation after UI-18 disposition | codex | standard; high for review | blocked (PE-04) | [brief](tasks/PE-05-ui11-reconcile.md) |
+| PE-05 | Reconcile UI-11 presentation after UI-18 disposition | codex | standard; high for review | ready (PE-04 done); ports the uncommitted UI-11 patch from the user's local worktree, so it runs on the user's PC | [brief](tasks/PE-05-ui11-reconcile.md) |
 | PE-06 | Fix existing level-up HP preview inconsistency | claude | high; select current model | blocked (PE-04, PE-05) | [brief](tasks/PE-06-levelup-hp-consistency.md) |
 | PE-07 | Player journey mockups and UI contract | claude | high; select current model | ready | [brief](tasks/PE-07-player-ux-design.md) |
 | PE-10 | Extend D&D campaign/character identity constraints | claude | high; select current model | done (merged in PR #250) | [brief](tasks/PE-10-dnd5e-identity.md) |
@@ -42,14 +42,14 @@ before they become ready. Owners review each other's output under PROTOCOL.md.
 | PE-12 | Character/encounter state, session, clock and authority tables; `migration_runs` and `characters.archived_at` changes | claude | high; select current model | done (merged in PR #249) | [brief](tasks/PE-12-game-state-schema.md) |
 | PE-13a | Campaign-scoped state repositories, revisions, authority rules and `CommandLocks` lock order | claude | high; select current model | done (accepted at 2950fd45; PR #260 merged) | [brief](tasks/PE-13a-state-repositories.md) |
 | PE-13b | Check runner for checks 4-9, `expected` model and conflict body | claude | high; select current model | done (accepted at febcc7ba; PR #261 merged) | [brief](tasks/PE-13b-check-order-conflicts.md) |
-| PE-13c | Max-HP and pool reconciliation hook | claude | high; select current model | done (implementation accepted; PR #262 merge pending) | [brief](tasks/PE-13c-reconciliation-hook.md) |
+| PE-13c | Max-HP and pool reconciliation hook | claude | high; select current model | done (implementation accepted; PR #262 merged) | [brief](tasks/PE-13c-reconciliation-hook.md) |
 | PE-14a | Campaign stream, receipt and event tables (`_0005`); envelope, digest, type registry, check 1 and stream reads | claude | high; select current model | done (accepted at 83948e45; PR #263 merged) | [brief](tasks/PE-14a-streams-receipts-events-schema.md) |
 | PE-14b | Command executor: fence, receipts and replay, lock plan, refusal transaction, event writer, post-commit hook | claude | high; select current model | done (accepted at 098462a3; PR #264 merged as 48e9ad12) | [brief](tasks/PE-14b-command-executor.md) |
 | PE-14c | Grant and token records (`_0006`) and the step-4 SQL authorizer | claude | high; select current model | done (accepted at c59c7203; PR #267 merged) | [brief](tasks/PE-14c-grants-tokens-authorizer.md) |
-| PE-14d | Stream-locked authorization writes; grant and token commands | claude | high; select current model | done (accepted at 88635375; PR #268) | [brief](tasks/PE-14d-stream-locked-authorization-writes.md) |
-| PE-14e | `session.start`/`session.end`, folder form and session-history backfill | claude | high; select current model | review (built and reviewed; PR #270 waits on the user's merge) | [brief](tasks/PE-14e-sessions-backfill.md) |
-| PE-14f | Operation-status read and `operation.abandon` | claude | high; select current model | review (built and reviewed; PR #271 waits on the user's merge) | [brief](tasks/PE-14f-status-read-abandon.md) |
-| PE-14g | Token rollback export gate (Option A only) | claude | high; select current model | done (accepted 2026-11-23; PR #269) | [brief](tasks/PE-14g-token-rollback-export.md) |
+| PE-14d | Stream-locked authorization writes; grant and token commands | claude | high; select current model | done (accepted at 88635375; PR #268 merged) | [brief](tasks/PE-14d-stream-locked-authorization-writes.md) |
+| PE-14e | `session.start`/`session.end`, folder form and session-history backfill | claude | high; select current model | done (built and reviewed; PR #270 merged 2026-11-26) | [brief](tasks/PE-14e-sessions-backfill.md) |
+| PE-14f | Operation-status read and `operation.abandon` | claude | high; select current model | done (built and reviewed; PR #271 merged 2026-11-26) | [brief](tasks/PE-14f-status-read-abandon.md) |
+| PE-14g | Token rollback export gate (Option A only) | claude | high; select current model | done (accepted 2026-11-23; PR #269 merged) | [brief](tasks/PE-14g-token-rollback-export.md) |
 | PE-15 | D&D state adapter: build, play and encounter commands preserving build revisions (inventory, currency and item charges go to PE-41) | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-11a, PE-11b, PE-11c, PE-13, PE-14 |
 | PE-16 | PF2e detached read/derive adapter | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-01, PE-02, PE-13a |
 | PE-17 | PF2e vitals command migration, including `shield_block` HP and reaction | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-16, PE-14 |
@@ -62,7 +62,7 @@ before they become ready. Owners review each other's output under PROTOCOL.md.
 | PE-23 | Cross-campaign and concurrent-save regression evidence | codex | standard; high for review | needs brief | [map](../player-release/task-map.md); PE-21, PE-22 |
 | PE-24 | Per-campaign activation gate: file → migrating → db, migration gate, abort, db → exporting → file | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-18b, PE-19, PE-20 |
 | PE-30 | Pending action, dice, costs and correction contract | claude | high; select current model | blocked (PE-01, PE-02, PE-13, PE-14) | [brief](tasks/PE-30-action-lifecycle.md) |
-| PE-31 | Inactive server snapshot/replay primitives | claude | high; select current model | blocked (PE-01, PE-03, PE-13a, PE-14a, PE-14b, PE-14d, PE-14f) | [brief](tasks/PE-31-snapshot-replay.md) |
+| PE-31 | Inactive server snapshot/replay primitives | claude | high; select current model | ready (all dependencies merged by 2026-11-26) | [brief](tasks/PE-31-snapshot-replay.md) |
 | PE-31a | Snapshot/replay endpoint adapters and replay activation | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-31, PE-24 |
 | PE-31b | Shared-hub reconnect coordination and client race tests | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-31a |
 | PE-32 | PF2e targeted action resolution; split by action family | claude | high; select current model | needs brief | [map](../player-release/task-map.md); PE-30, PE-24, PE-18 |
@@ -103,7 +103,7 @@ Note: PE-30 follow-up from PE-14e: encounter close registers with `override_gm_o
 |---|---|---|---|---|---|
 | 5E-04 | Species versions as a builder choice (Draconic Ancestry, 2024 lineages) + fix raw text in sheet resistances | codex | standard | done (accepted by Claude) | `tasks/5E-04.md` |
 | 5E-06 | Delete combatant pictures nothing uses | codex | standard | done (PR #180 merged after CI) | `tasks/5E-06.md` |
-| 5E-07 | Monday rehearsal: D&D Beyond PDF Paladin/Warlock, all classes to 20, GM encounter flow; fixes | claude | Opus, high | done (PR #206, merges after CI) | `tasks/5E-07-rehearsal.md` |
+| 5E-07 | Monday rehearsal: D&D Beyond PDF Paladin/Warlock, all classes to 20, GM encounter flow; fixes | claude | Opus, high | done (PR #206 merged) | `tasks/5E-07-rehearsal.md` |
 | 5E-03 | Database ownership for 5e characters (only needed before the site uses PostgreSQL for the web app) | claude | Opus, high | needs brief | - |
 | 5E-05 | Private drafts for 5e characters | claude | Opus, high | needs brief (after 5E-03) | - |
 
@@ -119,7 +119,7 @@ Requested by the GM 2026-11-12; design approved by the user the same day:
 |---|---|---|---|---|---|
 | SE-01 | Sheet edit part 1: meta fields (deity fix) and GM-only stat adjustments | claude | Opus, high | done (PR #253) | [brief](tasks/SE-01-pf2e-sheet-edit-core.md) |
 | SE-02 | Sheet edit part 2: feats/features, companion edit, Import JSON | claude | Opus, high | done (PR #255) | [brief](tasks/SE-02-pf2e-sheet-edit-lists.md) |
-| SE-03 | Sheet edit known defects from SE-01/SE-02, and level-up keeping sheet feat edits | claude | high; select current model | review (built and reviewed; PR #272 waits on the user's merge) | [brief](tasks/SE-03-pf2e-sheet-edit-defects.md) |
+| SE-03 | Sheet edit known defects from SE-01/SE-02, and level-up keeping sheet feat edits | claude | high; select current model | done (built and reviewed; PR #272 merged 2026-11-26) | [brief](tasks/SE-03-pf2e-sheet-edit-defects.md) |
 
 ## UI/UX (PF2e + Cosmere)
 
@@ -146,7 +146,7 @@ UI/UX design is Claude's by default; Codex implements mechanical parts from Clau
 | UI-13 | Cosmere GM dashboard (hybrid) + GM Screen (B) + 3 hub error-handling fixes | codex | standard, medium | ready | `tasks/UI-13-cosmere-dashboard-and-gmscreen.md` |
 | UI-14 | Cosmere tracker (B: phase/turn first, phase band) + check the Archer's missing strikes | claude | Opus, high | done (PR #205 merged after CI) | `tasks/UI-14-cosmere-tracker.md` |
 | UI-15 | Cosmere Party Vitals (B) + roster (A cards + attention summary) | codex | standard, high | ready | `tasks/UI-15-cosmere-vitals-and-roster.md` |
-| UI-16 | Cosmere loot (B: form beside searchable history, draft worth from the server table) | codex | standard, medium | ready after UI-05 | `tasks/UI-16-cosmere-loot.md` |
+| UI-16 | Cosmere loot (B: form beside searchable history, draft worth from the server table) | codex | standard, medium | ready (UI-05 done) | `tasks/UI-16-cosmere-loot.md` |
 | UI-18 | PF2e level-up: the gains rail covered the open picker (search field, locked rows and their reasons); keyboard focus on a locked row was hidden under it | claude | Opus, high | done (accepted by Codex; PR #245) | `tasks/UI-18-levelup-picker-rail.md` |
 | UI-03 | Fix the seven confirmed bugs from the UI review | codex | standard | done (accepted by Claude) | `tasks/UI-03.md` |
 | UI-04 | Cosmere tracker: hide every PF2e-only control (user: each system stays separate) | codex | standard, high | done (accepted by Claude) | `tasks/UI-04-cosmere-tracker-separation.md` |
@@ -188,8 +188,8 @@ answered its five questions on 2026-10-28 (section 12); PF2e goes back to the wa
 
 | ID | Task | Owner | Model | Status | Brief |
 |---|---|---|---|---|---|
-| CI-01 | Run PF2e rules tests once in CI, keeping the same coverage | codex | standard | accepted (Claude); publish after green CI | `tasks/CI-01-pf2e-once.md` |
-| CI-02 | Make the intermittent runtime HTTP outage-test timeout report where it hangs (root cause not reproduced) | claude | high | done (accepted; merge after final-head CI) | `tasks/CI-02-runtime-http-stall-diagnostics.md` |
+| CI-01 | Run PF2e rules tests once in CI, keeping the same coverage | codex | standard | done (accepted by Claude; PR #210 merged) | `tasks/CI-01-pf2e-once.md` |
+| CI-02 | Make the intermittent runtime HTTP outage-test timeout report where it hangs (root cause not reproduced) | claude | high | done (accepted; PR #266 merged) | `tasks/CI-02-runtime-http-stall-diagnostics.md` |
 
 ## Cosmere: Mistborn
 
@@ -246,8 +246,8 @@ only track where it stands.
 |---|---|---|---|---|---|
 | VTT-017 | Fix the session issue Codex flagged; review Codex's first contract batch; publish handoff 017 | claude | Opus, high | done (handoff `VTT-20261015-017`, client commits `44650296`, `97f1eef9`); waiting on Codex's reply | `GM_pf2e_vtt/docs/vtt/handoffs/VTT-20261015-017-claude.md` |
 | VTT-ALPHA | First usable milestone: GM workspace + shared table display talking to the new backend, on a Railway **staging** environment of the same project (ADR-0003). Production untouched until the user merges | claude (Codex reviews) | Opus, high | in progress: M0 accepted (handoff 022); M1 accepted (handoff 027); M2 in review (handoff 029) | `GM_pf2e_vtt/docs/vtt/design/vtt-alpha-plan.md` |
-| MAP-R2 | Live `/map`: prep scenes leak to the player event stream (`_broadcast_scene` sends every saved scene's player view, not only the active one) | claude (Codex reviews) | Opus, high | done (accepted by Codex; merge after green CI) | `tasks/MAP-R2-scene-frames-gm-only.md` |
-| MAP-R3 | Live `/map`: the TV runs as a GM session and gets the GM payload (exact NPC HP, GM-only lights); give `/map/table` its own server-side table projection | claude (Codex reviews) | Opus, high | done (accepted by Codex; merge after green CI), with MAP-R2 | `tasks/MAP-R3-table-screen-projection.md` |
+| MAP-R2 | Live `/map`: prep scenes leak to the player event stream (`_broadcast_scene` sends every saved scene's player view, not only the active one) | claude (Codex reviews) | Opus, high | done (accepted by Codex; PR #209 merged) | `tasks/MAP-R2-scene-frames-gm-only.md` |
+| MAP-R3 | Live `/map`: the TV runs as a GM session and gets the GM payload (exact NPC HP, GM-only lights); give `/map/table` its own server-side table projection | claude (Codex reviews) | Opus, high | done (accepted by Codex; PR #209 merged), with MAP-R2 | `tasks/MAP-R3-table-screen-projection.md` |
 | VTT-PLAYERS | Per-player screens and per-player vision | - | - | deferred by the user (ADR-0001) | - |
 
 Order: finish the Cosmere UI-02 screens first, then pick VTT back up at VTT-017. Creating the
@@ -264,6 +264,11 @@ Accepted as a design checkpoint. Notes:
 
 ## Log
 
+- 2026-11-28 Claude: brought this queue, the task map and seven task headers in line with what is merged on main (`7b8f9d5b`).
+  - Marked done: PE-14e, PE-14f and SE-03 (merged 2026-11-26), plus older rows whose PRs had already merged (PE-13c #262, 5E-07 #206, CI-01 #210, CI-02 #266, MAP-R2/R3 #209).
+  - PE-31 is now ready, since every dependency is merged. PE-05 is ready too, but it ports a patch that only exists on the user's PC. UI-16 is ready, since UI-05 is done.
+  - Players see no change. Next: the user picks the next build item.
+- 2026-11-26 User: merged PE-14e (PR #270), PE-14f (PR #271), SE-03 (PR #272) and the queue update (PR #273). Each Railway deploy succeeded and the combined CI run on `7b8f9d5b` passed. Every PE-13 and PE-14 child is now done.
 - 2026-11-26 Claude: built and reviewed PE-14e (PR #270), PE-14f (PR #271) and SE-03 (PR #272); none merged, because a merge deploys to Railway and the user approves each one.
   - PE-14e and PE-14f are database groundwork; players see no change yet.
   - SE-03 fixes the sheet edit bugs SE-01 and SE-02 listed, and a level-up bug where removed imported feats were dropped from the character.

@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** done (implementation accepted by Codex, 2026-11-16, at `83948e45`; PR #263 merges once all four checks pass on the notes commit)
+- **Status:** done (implementation accepted by Codex, 2026-11-16, at `83948e45`; PR #263 merged as `3d5e13b8`)
 - **Branch:** `claude/pe-14a-stream-schema` from current main after PE-13a merges. Record the exact starting SHA.
 - **Depends on:** [PE-13a](PE-13a-state-repositories.md) (lock order, the `LockStream` type and `CommandLocks`, which this task does not edit). PE-01 and PE-12 are done. As drafted, PE-13b and PE-13c were not needed and this task could run in parallel with them. **As built** (from main `13f72414`), `registry.py` imports PE-13b's `checks.expected_kinds`, so PE-14a depends on PE-13b; PE-13c is still not needed (corrected after implementation review 1).
 - **Followed by:** PE-14b (executor; calls check 1, passes `lock_stream` to `CommandLocks`), PE-14c (grant and token records, step-4 authorizer; reads `override_gm_only`), PE-14d (stream-locked authorization writes), PE-14e (sessions, folder form, history backfill), PE-14f (status read, abandon, their routes) and PE-14g (token rollback export gate, Option A only). "PE-14 done" means all seven (six if PE-14g is dropped under Option B).

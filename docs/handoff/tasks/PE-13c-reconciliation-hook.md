@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** done (implementation accepted by Codex, 2026-11-15; R1-1 closed at `7925a6fa`; PR #262 merge pending; built from main `737555a2`)
+- **Status:** done (implementation accepted by Codex, 2026-11-15; R1-1 closed at `7925a6fa`; PR #262 merged as `13f72414`; built from main `737555a2`)
 - **Branch:** `claude/pe-13c-reconciliation` from current main after PE-13a merges. Record the exact starting SHA.
 - **Depends on:** [PE-13a](PE-13a-state-repositories.md) (`CharacterStateRepository`, and `EncounterStateRepository.is_combatant`). Independent of PE-13b and PE-14a; may run in parallel with both. Imports nothing from PE-13b or PE-14.
 - **Context:**

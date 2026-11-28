@@ -4,7 +4,7 @@
 
 - **Owner:** claude
 - **Reviewer:** codex
-- **Status:** built, awaiting review (Claude, 2026-11-26; branch cut from main at `b80fe3cc`); brief accepted (Codex brief review 2, 2026-11-14)
+- **Status:** done (built and reviewed by Claude, 2026-11-26, from main `b80fe3cc`; PR #270 merged as `f2401922`); brief accepted (Codex brief review 2, 2026-11-14)
 - **Branch:** `claude/pe-14e-sessions-backfill` from current main after PE-14d merges. Record the exact starting SHA.
 - **Depends on:** [PE-14d](PE-14d-stream-locked-authorization-writes.md) (redeem_invite and the other authorization writers take the stream lock, which the deadlock test below needs). May run in parallel with [PE-14f](PE-14f-status-read-abandon.md); the two share no files.
 - **Context:**
